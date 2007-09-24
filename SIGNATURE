@@ -1,1 +1,43 @@
+This file contains message digests of all files listed in MANIFEST,
+signed via the Module::Signature module, version 0.55.
 
+To verify the content in this distribution, first make sure you have
+Module::Signature installed, then type:
+
+    % cpansign -v
+
+It will check each file's integrity, as well as the signature's
+validity.  If "==> Signature verified OK! <==" is not displayed,
+the distribution may already have been compromised, and you should
+not run its Makefile.PL or Build.PL.
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: RIPEMD160
+
+SHA1 767028e9c89445bb6ab6ea54f00c90a6aeeb690c .perlcriticrc
+SHA1 88f91b7b4f0df480caa951bd56496cf26269f247 Bucardo.pm
+SHA1 d9f640519673c3a5c38b8aa1a2c60395cf28dc90 Bucardo.pm.html
+SHA1 24fa6ee09c687f598a777a267ca927b5278f67c9 INSTALL
+SHA1 c811e5ddfc5b995c1d73069b0172c7d4b4799338 LICENSE
+SHA1 a44005609fe8ce32d1cc00f9b5ba608e8dd52b91 MANIFEST
+SHA1 1bac0e74078ead96bb410399deca22d8af66822a MANIFEST.SKIP
+SHA1 d8cdcb4f932ccb90d4229e5abaf84288efce4908 META.yml
+SHA1 00cfa5e6e73c6192357eb4944bc4f3702b9a8085 Makefile.PL
+SHA1 34bf5e7051ae7e060901b5b48bbfe93e9cfb9405 README
+SHA1 4652227f1b65351dcc1e959a3022bd24d87a2c31 TODO
+SHA1 a84b01705b015589e71ac1fd15a4e92b4e1d5dae bucardo.html
+SHA1 805521f947a184b47e2777670b88bdaab837f757 bucardo.schema
+SHA1 b012179e4d78c86fa9e1c61e76f141fc4a68b2a4 bucardo_ctl
+SHA1 eebad7579695a0c9fe3a88ff4d460671c6e8ee52 bucardo_ctl.html
+SHA1 289294f92454751a6c597c5c0e97dc92b669520f scripts/bucardo-report
+SHA1 13fa21e81efbe00c5b646aae719cf0e8ae387809 scripts/bucardo_rrd
+SHA1 2b22ff4568837f86548b785ef259fa0c91d7af7a scripts/check_bucardo_sync
+SHA1 142d54063d7c1164c14d01475123c2c23578d15c t/01bc.t
+SHA1 993c225242b5ed3d819c04363b2df7e7b1941a27 t/bucardo.test.data
+SHA1 75d0ce444c268f87e387b6611e8148eba6788827 t/bucardo.test.helper
+-----BEGIN PGP SIGNATURE-----
+
+iD8DBQFG9+L9vJuQZxSWSsgRAwWsAJ9WOR8/b6QIAyauWFs3rJdgNvOpiQCgol2g
+d5BhtsPyG3DNwrltv2PSP6c=
+=hCYr
+-----END PGP SIGNATURE-----
