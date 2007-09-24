@@ -1,0 +1,38 @@
+Install Bucardo like any other Perl module:
+
+perl Makefile.PL
+make
+make test
+make install
+
+Note that make test is a rather involved process and involves editing the 
+t/bucardo.test.data file before beginning. However, because Bucardo 
+is fairly complex, testing is highly recommended before installing.
+
+It is recommended that you create a new user named bucardo on your system 
+that will contain the Bucardo files.
+
+Once the above has been run, you will need to create a Bucardo database. 
+Create a superuser named "bucardo" and then create a database named 
+"bucardo" owned by the same. Make sure that both Pl/pgsql and Pl/perlU 
+are installed and available in this database. Then, import the schema:
+
+psql -U bucardo bucardo -f bucardo.schema
+
+There should be no errors: if there are, please report them to 
+bugs@bucardo.org or ask on the main mailing list for help.
+
+Bucardo by deafult logs to syslog, and does so very verbosely. It is 
+recommended that you reroute your bucardo log traffic to another file. 
+This can be done by adding this line to your /etc/syslog.conf file:
+
+local1.*      -/var/log/bucardo.log
+
+Of course, if "local1" is already being used for something else, you will 
+need to change it - see the "syslog_facility" entry in the bucardo_config 
+table.
+
+Once this is done, make sure you restart your syslog daemon so it rereads the 
+new configuration file.
+
+

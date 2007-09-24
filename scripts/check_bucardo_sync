@@ -1,0 +1,201 @@
+#!/usr/local/bin/perl -- -*-cperl-*-
+
+## Check the status of Bucardo through the stats page
+##
+## Copyright 2007 Greg Sabino Mullane <greg@endpoint.com>
+
+use strict;
+use warnings;
+use 5.8.0;
+use Data::Dumper;
+use Getopt::Long;
+use File::Temp qw(tempfile);
+File::Temp->safe_level( File::Temp::HIGH );
+use lib "/usr/local/groundwork/nagios/libexec";
+## Avoid the extraordinarily ill-named "utils.pm" from Nagios and do it ourself:
+my %ERRORS=('OK'=>0,'WARNING'=>1,'CRITICAL'=>2,'UNKNOWN'=>3,'DEPENDENT'=>4);
+
+my $USAGE =
+qq{Usage: $0 --url <url> [-t timeout] \n};
+## Plus -d debugfile
+
+my $VERBOSE = 0;
+
+my $VERSION = '1.2';
+my $WGET = '/usr/bin/wget';
+my %opt;
+
+## Default combined timeout option in seconds for wget
+$opt{timeout} = 25;
+$opt{verbose} = 0;
+GetOptions(\%opt,
+		   'version',
+		   'verbose',
+		   'help',
+		   'url=s',
+		   'timeout=i',
+		   'delta=i',
+		   'track=i',
+		   'debug=s',
+);
+
+$opt{version} and print qq{$0 Version $VERSION\n} and exit $ERRORS{'OK'};
+
+$opt{help} and print $USAGE and exit $ERRORS{'OK'};
+
+$opt{url} or print "ERROR: No URL was passed in\n$USAGE" and exit $ERRORS{'UNKNOWN'};
+
+## Special url shortcuts
+if ($opt{url} eq 'all') {
+	$opt{url} = 'http://www.example.com/cgi-bin/bucardo-report?host=all';
+}
+
+my $MAX_DELTA = $opt{delta} || 50_000;
+my $MAX_TRACK = $opt{track} || 50_000;
+
+## If the url is not in a standard format, prepend 'http://'
+my $url = $opt{url};
+$url =~ m{^\w+://} or $url = qq{http://$url};
+
+## Attempt to download the page
+my ($tempfh, $tempfile);
+if ($opt{debug}) {
+  if (! open $tempfh, '<', $opt{debug}) {
+    print qq{ERROR: Could not open debug file "$opt{debug}": $!\n};
+    exit $ERRORS{'WARNING'};
+  }
+}
+else {
+  ($tempfh, $tempfile) = tempfile('/tmp/nagios_bucardocheck_XXXXXX', UNLINK => 1, SUFFIX => '.tmp');
+  my ($errfh, $errfile) = tempfile('/tmp/nagios_bucardocheck_XXXXXX', UNLINK => 1, SUFFIX => '.tmp');
+
+  my $COM = qq{$WGET --output-document=$tempfile --output-file=$errfile --timeout=$opt{timeout} "$opt{url}"};
+
+  $VERBOSE and warn "Running $COM\n";
+
+  system($COM);
+
+  my $error = '';
+  if (-s $errfile) {
+    my $res = seek $errfh, 0, 0;
+    { local $/; $error = <$errfh>; }
+    if ($error =~ /Host not found/) {
+      ## Mark as a warning because this is not our main job
+      print qq{ERROR: Could not find the host for "$url"\n};
+      exit $ERRORS{'WARNING'};
+    }
+    ## Other common errors?
+  }
+  close $errfh or die qq{Could not close temp file $errfile: $!\n};
+
+  if (! -s $tempfile) {
+    print qq{ERROR: Zero-length download for "$url"\n};
+    exit $ERRORS{'UNKNOWN'};
+  }
+}
+
+seek $tempfh, 0, 0;
+
+## Look for nagios blocks
+my $inner=0;
+my (%bc,$host);
+while (<$tempfh>) {
+  if (!$inner) {
+    /Begin Nagios/ and ++$inner;
+    next;
+  }
+  if (/End Nagios/) {
+    $inner=0;
+    next;
+  }
+  if (/Host: (\w+)/) {
+    $host=$1;
+  }
+  elsif (/(Expired|Overdue|Death): (\d+)/) {
+    $bc{$host}{lc $1} = $2;
+  }
+  elsif (/bucardo_(delta|track) rows: (\d+)/) {
+    $bc{$host}{$1} = $2;
+  }
+  elsif (/(Expired|Overdue|Death) (\w+) \| (\w+) \| (.+)/) {
+    push @{$bc{$host}{lc$1.'detail'}}, {sync=>$2, target=>$3, time=>$4};
+  }
+}
+
+#print Dumper \%bc;
+
+if (!%bc) {
+  print qq{ERROR: Nagios information not found\n};
+}
+
+my ($wmsg,$emsg,$wdetail,$edetail,$ddetail) = ('','','','','');
+my $SEP=' ';
+for my $host (sort keys %bc) {
+  my $B = $bc{$host};
+  ## Check for overdue
+  if (exists $B->{overdue} and $B->{overdue} > 0) {
+    $wmsg .= "$host overdue: $B->{overdue} ";
+    $wdetail .= " $host overdue details: ";
+    for my $host
+      (
+       sort {
+	$a->{sync} cmp $b->{sync}
+	or $a->{target} cmp $b->{target}
+	}
+	@{$B->{overduedetail}}) {
+      $wdetail .= "$host->{sync}${SEP}$host->{target}${SEP}$host->{time} ";
+    }
+  }
+  ## Check for expired
+  if (exists $B->{expired} and $B->{expired} > 0) {
+    $emsg .= "$host expired: $B->{expired} ";
+    $edetail .= " $host expired details: ";
+    for my $host
+      (
+       sort {
+	$a->{sync} cmp $b->{sync}
+	or $a->{target} cmp $b->{target}
+	}
+	@{$B->{expireddetail}}) {
+      $edetail .= "$host->{sync}${SEP}$host->{target}${SEP}$host->{time} ";
+    }
+  }
+  ## Check for syncs that are dying
+  if (exists $B->{death} and $B->{death} > 0) {
+	$wmsg .= "$host failed syncs: $B->{death} ";
+    $ddetail .= " $host failure details: ";
+	if ($B->{deathdetail}) {
+	  for my $host
+		(
+		 sort {
+		   $a->{sync} cmp $b->{sync}
+			 or $a->{target} cmp $b->{target}
+		   }
+		 @{$B->{deathdetail}}) {
+		  $ddetail .= "$host->{sync}${SEP}$host->{target}${SEP}$host->{time} ";
+		}
+	}
+	else {
+	  $ddetail .= '???';
+	}
+  }
+  ## Check for bloat in the support tables
+  if ($B->{delta} > $MAX_DELTA) {
+    $wmsg .= "$host bucardo_delta bloat: $B->{delta} ";
+  }
+  if ($B->{track} > $MAX_TRACK) {
+    $wmsg .= "$host bucardo_track bloat: $B->{track} ";
+  }
+}
+
+if (!$wmsg and !$emsg) {
+  print "All bucardo syncs are running normally\n";
+  exit $ERRORS{'OK'};
+}
+
+print "ERROR: Bucardo $emsg$wmsg$edetail$wdetail$ddetail\n";
+
+$emsg or exit $ERRORS{'WARNING'};
+
+exit $ERRORS{'CRITICAL'};
+

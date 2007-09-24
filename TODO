@@ -1,0 +1,18 @@
+
+TODO list for Bucardo
+=====================
+
+- Death-level custom code hooks
+- Better conflict example in test suite, uses database handles
+- Allow adjustable criteria for going into lock before sync mode
+- Make child_q creation more dynamic and not relying on cronjobs
+- Use triggers, not rules, for master_q inheritance
+- Make timeslices for master_q adjustable
+- Allow more data types for pkey on goats
+- Automatic detection of primary keys
+- Strip out large src_code from the email dumps
+- Handle partitioned tables
+- Allow notification emails to be regex sorted, e.g. serialization warnings
+- Make bucardo_ctl use same algorithm as bucardo-report for grabbing sync history
+- Have bucardo_ctl give details on KILLED syncs while kicking
+- See also XXX and TODO inside Bucardo.pm

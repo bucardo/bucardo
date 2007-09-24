@@ -1,0 +1,1587 @@
+#!/usr/local/bin/perl -- -*-cperl-*-
+
+## Web-based report on Bucardo activity
+##
+## Copyright 2007 Greg Sabino Mullane <greg@endpoint.com>
+
+use strict;
+use warnings;
+use Data::Dumper;
+use IO::Handle;
+use DBI;
+use CGI;
+
+BEGIN {
+	my $fingerofblame = 'your_email@example.com';
+	use CGI::Carp qw(fatalsToBrowser set_message);
+	set_message("Something went wrong?! Inconceivable! Email $fingerofblame to get 'er fixed.");
+	use Time::HiRes qw(gettimeofday tv_interval);
+	use vars qw($scriptstart);
+	$scriptstart = [gettimeofday()];
+};
+
+use vars qw($q @q %q %dbh $dbh $SQL $sth $info $x $cols @cols $t %info);
+
+$q = new CGI; @q = $q->param; undef %q; for (@q) { $q{$_} = $q->param($_); }
+for (qw(host showhost db sync syncinfo)) { delete $q{$_}; @{$q{$_}} = $q->param($_); }
+my $PORT = $ENV{SERVER_PORT} != 80 ? ":$ENV{SERVER_PORT}" : '';
+my $PROTO = $ENV{HTTPS} ? 'https' : 'http';
+my $HERE = "$PROTO://$ENV{SERVER_NAME}$PORT$ENV{SCRIPT_NAME}";
+my $DONEHEADER = 0;
+my $old_q = "freezer.master_q";
+my @otherargs = qw(started ended);
+my @showargs = qw(showsql showexplain showanalyze daysback);
+
+*STDOUT->autoflush(1);
+print "Content-type: text/html\n\n";
+
+my $MAXDAYSBACK = 7;
+
+## Flags to document
+
+## Basic stuff:
+## host=<hostname>
+## host=<hostname>;sync=<syncname>
+## host=<hostname>;db=<targetdbname>
+## Most of the above can be combined to appear on one screen, e.g.
+## host=<hostname>;db=db1;db=db2;db=db3
+## host=<hostname>;sync=sync1
+
+## More control:
+## host=all - show current status of all known hosts (see <DATA>)
+## showhost=<hostname> - force a host to be shown even if other args are given
+
+## Detailed information
+## host=<hostname>;syncinfo=<syncname> Detailed information about a specific sync
+## host=<hostname>;syncinfo=all Detailed information about all sync on a host
+
+## Set with form boxes:
+## started - go back in time a certain amount (e.g. 2h20m) or to a time (14:34) or a date (20071212 12:30)
+## ended - same as started, but sets upper limit
+## limit - maximum number of rows to return
+## sort - which column to sort on
+
+## Debugging:
+## nonagios - do not produce the hidden nagios output
+## shownagios - show the nagios output on the screen
+## showsql - show SQL on the screen
+## showexplain - show explain plan on the screen
+## showanalyze - show explain analyze output on the screen
+## hidetime - do not show the "Total time" at the bottom of the screen
+
+## Read in the connection information
+my (@dbs,%db,$tempdb);
+while (<DATA>) {
+	next if /^#/ or ! /^([A-Z]+)\s*:\s*(.+)\s*$/;
+	my ($name,$value) = ($1,$2);
+	if ('DATABASE' eq $name) {
+		$tempdb = lc $value;
+		push @dbs, $tempdb;
+	}
+	$db{$tempdb}{$name} = $value;
+}
+
+## Common modifiers
+my $WHERECLAUSE = '';
+my (%where, @adjust, %adjust);
+my %int = (s=>'second',m=>'minute','h'=>'hour',d=>'day',n=>'month',y=>'year');
+my $validtime = join '|' => values %int, map { "${_}s" } values %int;
+$validtime = qr{$validtime}i;
+if (exists $q{started}) {
+	## May be negative offset
+	if ($q{started} =~ /\-?\d+\s*[smhd]/i) {
+		## May be multiples
+		my $time = '';
+		while ($q{started} =~ /(\d+)\s*([a-z]+)/gi) {
+			my ($offset,$int) = ($1, length $2>1 ? $2 : $2==1 ? $int{lc $2} : $int{lc $2}."s");
+			$int = "minutes" if $int eq "min";
+			$int =~ /^$validtime$/ or &Error("Unknown time period: $int");
+			$time .= "$offset $int ";
+		}
+		chop $time;
+		$where{started} = "started >= now() - '$time'::interval";
+		push @adjust, [Started => "-$time"];
+		$adjust{started} = $time;
+	}
+	## May be a simple time HH:MI[:SS]
+	elsif ($q{started} =~ /^\-?\s*(\d\d:[0123456]\d(?::?[0123456]\d)?)/) {
+		my $dbh = connect_database($q{host}->[0]);
+		my $yymmdd = $dbh->selectall_arrayref("select to_char(now(),'YYYYMMDD')")->[0][0];
+		my $time = "$yymmdd $1";
+		$where{started} = "started >= '$time'";
+		push @adjust, [Started => $time];
+		$adjust{started} = $time;
+	}
+	## May be a simple date of YYYYMMDD
+	elsif ($q{started} =~ /^\s*(\d\d\d\d\d\d\d\d)\s*$/) {
+		my $time = "$1 00:00";
+		$where{started} = "started >= '$time'";
+		push @adjust, [Started => $time];
+		$adjust{started} = $time;
+	}
+	## May be a date of YYYYMMDD HH:MI[:SS]
+	elsif ($q{started} =~ /^\s*(\d\d\d\d\d\d\d\d)\s+(\d\d?:[0123456]\d(?::?[0123456]\d)?)/) {
+		my $time = "$1 $2";
+		$where{started} = "started >= '$time'";
+		push @adjust, [Started => $time];
+		$adjust{started} = $time;
+	}
+}
+if (exists $where{started}) {
+	$WHERECLAUSE = "WHERE $where{started}";
+}
+
+if (exists $q{ended}) {
+	if ($q{ended} =~ /\-?\d+\s*[smhd]/i) {
+		my $time = '';
+		while ($q{ended} =~ /(\d+)\s*([a-z]+)/gi) {
+			my ($offset,$int) = ($1, length $2>1 ? $2 : $2==1 ? $int{lc $2} : $int{lc $2}."s");
+			$int = "minutes" if $int eq "min";
+			$int =~ /^$validtime$/ or &Error("Unknown time period: $int");
+			$time .= "$offset $int ";
+		}
+		chop $time;
+		$where{ended} = "started <= now() - '$time'::interval";
+		push @adjust, [Ended => "$time"];
+		$adjust{ended} = $time;
+	}
+	## May be a simple time HH:MI[:SS]
+	elsif ($q{ended} =~ /^\-?\s*(\d\d?:[0123456]\d(?::?[0123456]\d)?)/) {
+		my $dbh = connect_database($q{host}->[0]);
+		my $yymmdd = $dbh->selectall_arrayref("select to_char(now(),'YYYYMMDD')")->[0][0];
+		my $time = "$yymmdd $1";
+		$where{ended} = "started <= '$time'";
+		push @adjust, [Ended => $time];
+		$adjust{ended} = $time;
+	}
+	## May be a simple date of YYYYMMDD
+	elsif ($q{ended} =~ /^\s*(\d\d\d\d\d\d\d\d)\s*$/) {
+		my $time = "$1 00:00";
+		$where{ended} = "started >= '$time'";
+		push @adjust, [Ended => $time];
+		$adjust{ended} = $time;
+	}
+	## May be a date of YYYYMMDD HH:MI[:SS]
+	elsif ($q{ended} =~ /^\s*(\d\d\d\d\d\d\d\d)\s+(\d\d?:[0123456]\d(?::?[0123456]\d)?)/) {
+		my $time = "$1 $2";
+		$where{ended} = "started >= '$time'";
+		push @adjust, [Ended => $time];
+		$adjust{ended} = $time;
+	}
+}
+if (exists $where{ended}) {
+	$WHERECLAUSE .= $WHERECLAUSE ? " AND $where{ended}" : " WHERE $where{ended}";
+}
+$WHERECLAUSE and $WHERECLAUSE .= "\n";
+
+my $DEFLIMIT = 300;
+my $LIMIT = $DEFLIMIT;
+if (exists $q{limit} and $q{limit} =~ /^\d+$/) {
+	$LIMIT = $q{limit};
+	$adjust{limit} = $q{limit};
+	## Keep this last
+	push @adjust, ['Maximum rows to pull' => $q{limit}];
+}
+
+my $SQLSTART = 
+qq{  sync,targetdb,
+  COALESCE(to_char(started, 'DDMon HH24:MI:SS'::text), '???'::text) AS started2,
+  COALESCE(to_char(ended, 'HH24:MI:SS'::text), '???'::text) AS ended2,
+  COALESCE(to_char(aborted, 'HH24:MI:SS'::text), ''::text) AS aborted2,
+  CASE WHEN aborted IS NOT NULL THEN to_char(aborted - started, 'MI:SS'::text) ELSE ''::text END AS atime,
+  CASE WHEN inserts IS NOT NULL THEN to_char(ended - started, 'MI:SS'::text) ELSE ''::text END AS runtime,
+  inserts, updates, deletes, COALESCE(whydie,'') AS whydie, pid, ppid,
+  started, ended, aborted, ended-started AS endinterval, aborted-started AS abortinterval,
+  extract(epoch FROM ended) AS endedsecs,
+  extract(epoch FROM started) AS startedsecs,
+  extract(epoch FROM aborted) AS abortedsecs,
+  extract(epoch FROM aborted-started) AS atimesecs,
+  extract(epoch FROM ended-started) AS runtimesecs,
+  CASE
+    WHEN started IS NULL THEN '? &nbsp;'
+    WHEN now()-ended <= '1 minute'::interval THEN ceil(extract(epoch FROM now()-ended))::text || 's'
+    WHEN now()-ended <= '100 minutes'::interval THEN ceil(extract(epoch FROM now()-ended)/60)::text || ' m'
+    WHEN now()-ended > '24 hours'::interval THEN ceil(extract(epoch FROM now()-ended)/60/60/24)::text || ' Days'
+    ELSE ceil(extract(epoch FROM now()-ended)/60/60)::text || ' h'
+  END AS minutes,
+  floor(CASE
+    WHEN ENDED IS NOT NULL THEN extract(epoch FROM now()-ended)
+    WHEN ABORTED IS NOT NULL THEN extract(epoch FROM now()-aborted)
+    WHEN STARTED IS NOT NULL THEN extract(epoch FROM now()-started)
+    ELSE extract(epoch FROM now()-cdate)
+  END) AS age
+};
+
+my $found=0;
+
+## View one or more databases
+if (@{$q{db}}) {
+	if (! @{$q{host}}) {
+		## Must have a host, unless there is only one
+		my $count = keys %db;
+		1==$count or &Error("Must specify a host");
+	}
+	for my $host (@{$q{host}}) {
+		for my $database (@{$q{db}}) {
+			&showdatabase($host,$database); $found++;
+		}
+	}
+}
+
+## View one or more syncs
+if (@{$q{sync}}) {
+	if (! @{$q{host}}) {
+		## Must have a host, unless there is only one
+		my $count = keys %db;
+		1==$count or &Error("Must specify a host");
+	}
+	for my $host (@{$q{host}}) {
+		for my $sync (@{$q{sync}}) {
+			&showsync($host,$sync); $found++;
+		}
+	}
+}
+
+## View meta-information about a sync
+if (@{$q{syncinfo}}) {
+	my @hostlist;
+	if (! @{$q{host}}) {
+		## Must have a host, unless there is only one
+		my $count = keys %db;
+		1==$count or &Error("Must specify a host");
+		push @hostlist, keys %db;
+	}
+	elsif (1==@{$q{host}} and $q{host}->[0] eq 'all') {
+		@hostlist = sort keys %db;
+	}
+	else {
+		@hostlist = @{$q{host}};
+	}
+	for my $host (@hostlist) {
+		next if $db{$host}{SKIP};
+		if (1==@{$q{syncinfo}} and $q{syncinfo}->[0] eq 'all') {
+			$dbh = connect_database($host);
+			$SQL = "SELECT name FROM bucardo.sync ORDER BY 1 WHERE status = 'active'";
+			for my $sync (@{$dbh->selectall_arrayref($SQL)}) {
+				&showsyncinfo($host,$sync->[0]); $found++;
+			}
+		}
+		else {
+			for my $sync (@{$q{syncinfo}}) {
+				&showsyncinfo($host,$sync); $found++;
+			}
+		}
+	}
+}
+
+## Don't show these if part of another query
+if (exists $q{host} and !$found) {
+	## Hope nobody has named their host "all"
+	if (1==@{$q{host}} and $q{host}->[0] eq 'all') {
+		for (@dbs) {
+			&showhost($_); $found++;
+		}
+	}
+	else {
+		for (@{$q{host}}) {
+			&showhost($_); $found++;
+		}
+	}
+}
+## But they can be forced to show:
+elsif (exists $q{showhost}) {
+	for (@{$q{showhost}}) {
+		&showhost($_); $found++;
+	}
+}
+
+if (!$found or exists $q{overview}) {
+	## Default action:
+	&Header("Bucardo stats");
+	print qq{<h2 class="s">Bucardo stats</h2>\n};
+	print "<ul>";
+	for (grep { ! $db{$_}{SKIP} } @dbs) {
+		print qq{<li><a href="$HERE?host=$_">$db{$_}{DATABASE} stats</a></li>\n};
+	}
+}
+
+&Footer();
+
+
+sub showhost {
+
+	my $host = shift;
+
+	exists $db{$host} or &Error("Unknown database: $host");
+	my $d = $db{$host};
+	return if $d->{SKIP};
+
+	&Header("Bucardo stats for $d->{DATABASE}");
+
+	my $maxdaysback = (exists $q{daysback} and $q{daysback} =~ /^\d$/) ? $q{daysback} : $MAXDAYSBACK;
+
+
+	## Connect to the main database to check on the health
+	$info{dcount} = '?'; $info{tcount} = '?';
+	unless ($q{norowcount}) {
+		$dbh = connect_database($host."_real");
+		$SQL = "SELECT count(*) FROM bucardo.bucardo_delta UNION SELECT count(*) FROM bucardo.bucardo_track";
+		$info = $dbh->selectall_arrayref($SQL);
+		$info{dcount} = $info->[1][0];
+		$info{tcount} = $info->[0][0];
+		$dbh->disconnect();
+	}
+	print qq{<h3 class="s">$d->{DATABASE} latest <a href="$HERE">Bucardo</a> sync results &nbsp; &nbsp; };
+	print qq{</h3>\n};
+
+	## Gather all sync information
+	$dbh = connect_database($host);
+	$SQL = "SELECT *, extract(epoch FROM checktime) AS checksecs, ".
+		"extract(epoch FROM overdue) AS overduesecs, ".
+			"extract(epoch FROM expired) AS expiredsecs ".
+				"FROM bucardo.sync";
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	my $sync = $sth->fetchall_hashref('name');
+
+	## Gather all database group information
+	$SQL = "SELECT dbgroup,db,priority FROM bucardo.dbmap ORDER BY dbgroup, priority, db";
+	my $dbg;
+	my $order = 1;
+	my $oldgroup = '';
+	for my $row (@{$dbh->selectall_arrayref($SQL)}) {
+	  if ($oldgroup ne $row->[0]) {
+		$order = 0;
+	  }
+	  $dbg->{$row->[0]}{$row->[1]} = {order=>$order++, pri=>$row->[2]};
+	}
+	## Put the groups into the sync structure
+	for my $s (values %$sync) {
+		$s->{running} = undef;
+		if (defined $s->{targetgroup}) {
+			my $x = $dbg->{$s->{targetgroup}};
+			for my $t (keys %$x) {
+				for my $t2 (keys %{$x->{$t}}) {
+					$s->{dblist}{$t}{$t2} = $x->{$t}{$t2};
+				}
+			}
+		}
+		else {
+			$s->{dblist}{$s->{targetdb}} = {order=>1, pri=>1};
+		}
+	}
+	## Grab any that are queued but not started for each sync/target combo
+	$SQL = "SELECT $SQLSTART FROM (SELECT * FROM bucardo.q ".
+	  "NATURAL JOIN (SELECT sync, targetdb, max(ended) AS ended FROM bucardo.q ".
+		"WHERE started IS NULL GROUP BY 1,2) q2) AS q3";
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	for my $row (@{$sth->fetchall_arrayref({})}) {
+	  $sync->{ $row->{sync} }{ dblist }{ $row->{targetdb} }{queued} = $row;
+	}
+
+	## Grab any that are currently in progress
+	$SQL = "SELECT $SQLSTART FROM (SELECT * FROM bucardo.q ".
+	  "NATURAL JOIN (SELECT sync, targetdb, max(ended) AS ended FROM bucardo.q ".
+		"WHERE started IS NOT NULL and ENDED IS NULL GROUP BY 1,2) q2) AS q3";
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	for my $row (@{$sth->fetchall_arrayref({})}) {
+	  $sync->{ $row->{sync} }{ dblist }{ $row->{targetdb} }{current} = $row;
+	}
+	## Grab the last successful
+	$SQL = "SELECT $SQLSTART FROM (SELECT * FROM bucardo.q ".
+	  "NATURAL JOIN (SELECT sync, targetdb, max(ended) AS ended FROM bucardo.q ".
+		"WHERE ended IS NOT NULL AND aborted IS NULL GROUP BY 1,2) q2) AS q3";
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	for my $row (@{$sth->fetchall_arrayref({})}) {
+	  $sync->{$row->{sync}}{dblist}{$row->{targetdb}}{success} = $row;
+	}
+
+	## Grab the last aborted
+	$SQL = "SELECT $SQLSTART FROM (SELECT * FROM bucardo.q ".
+	  "NATURAL JOIN (SELECT sync, targetdb, max(ended) AS ended FROM bucardo.q ".
+		"WHERE aborted IS NOT NULL GROUP BY 1,2) q2) AS q3";
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	for my $row (@{$sth->fetchall_arrayref({})}) {
+	  $sync->{ $row->{sync} }{ dblist }{ $row->{targetdb} }{aborted} = $row;
+	}
+
+
+	## While we don't have all syncs, keep going backwards
+	my $TSQL = "SELECT $SQLSTART FROM (SELECT * FROM freezer.child_q_DATE ".
+	  "NATURAL JOIN (SELECT sync, targetdb, max(ended) AS ended FROM freezer.child_q_DATE ".
+		"WHERE CONDITION GROUP BY 1,2) AS q2) AS q3";
+
+	my $done = 0;
+	my $daysback = 0;
+  WAYBACK: {
+
+		## Do we have all sync information yet?
+		## We want to find either 'success' or 'aborted' for each sync/target combo
+		$done = 1;
+	  SYNC: for my $s (keys %$sync) {
+			next if $sync->{$s}{status} ne 'active';
+			next if $sync->{$s}{expiredsecs}==0;
+			my $list = $sync->{$s}{dblist};
+			for my $t (keys %$list) {
+				if (!exists $list->{$t}{success} and ! exists $list->{$t}{aborted}) {
+					$done = 0;
+					last SYNC;
+				}
+			}
+		} ## end check syncs
+		
+		last WAYBACK if $done;
+
+		## Grab aborted runs from this time period
+		$SQL = "SELECT TO_CHAR(now()- interval '$daysback days', 'YYYYMMDD')";
+		my $date = $dbh->selectall_arrayref($SQL)->[0][0];
+
+		($SQL = $TSQL) =~ s/DATE/$date/g;
+		$SQL =~ s/CONDITION/aborted IS NOT NULL/;
+		$sth = $dbh->prepare($SQL);
+		eval {
+			$sth->execute();
+		};
+		if ($@) {
+			if ($@ =~ /relation .+ does not exist/) {
+				last WAYBACK;
+			}
+			die $@;
+		}
+		for my $row (@{$sth->fetchall_arrayref({})}) {
+			$sync->{ $row->{sync} }{ dblist }{ $row->{targetdb} }{aborted} = $row
+				if exists $sync->{$row->{sync}}{dblist}{$row->{targetdb}}
+					and ! exists $sync->{$row->{sync}}{dblist}{$row->{targetdb}}{aborted};
+		}
+
+		## Grab succesful runs from this time period
+		$SQL = "SELECT TO_CHAR(now()- interval '$daysback days', 'YYYYMMDD')";
+		$date = $dbh->selectall_arrayref($SQL)->[0][0];
+		($SQL = $TSQL) =~ s/DATE/$date/g;
+		$SQL =~ s/CONDITION/ended IS NOT NULL AND aborted IS NULL/;
+		$sth = $dbh->prepare($SQL);
+		$sth->execute();
+		for my $row (@{$sth->fetchall_arrayref({})}) {
+			$sync->{ $row->{sync} }{ dblist }{ $row->{targetdb} }{success} = $row
+				if exists $sync->{$row->{sync}}{dblist}{$row->{targetdb}}
+					and ! exists $sync->{$row->{sync}}{dblist}{$row->{targetdb}}{success};
+		}
+
+		last if $daysback >= $maxdaysback;
+		$daysback++;
+		redo;
+
+	} ## end of WAYBACK
+
+	## Quick count of problems for nagios
+	unless ($q{nonagios}) {
+		my %problem = (overdue => 0, expired => 0, death=>0);
+		my (@odetail,@edetail,@death);
+		for my $s (sort keys %$sync) {
+			next if $sync->{$s}{expiredsecs} == 0;
+			for my $t (sort { 
+				$sync->{$s}{dblist}{$a}{order} <=> $sync->{$s}{dblist}{$b}{order}
+			} keys %{$sync->{$s}{dblist}}) {
+				my $x = $sync->{$s}{dblist}{$t};
+				my $sc = $x->{success}; ## may be undef
+				if (! defined $sc or ! exists $sc->{minutes}) {
+					$x->{expired} = 2;
+					$problem{expired}++;
+					push @edetail, "Expired $s | $t | ?\n";
+					next;
+				}
+				(my $shortmin = $sc->{minutes}) =~ s/\s//g;
+				## We have an age
+				if ($sc->{age} > $sync->{$s}{expiredsecs}) {
+					$x->{expired} = 1;
+					$problem{expired}++;
+					push @edetail, "Expired $s | $t | $shortmin\n";
+				}
+				elsif ($sc->{age} > $sync->{$s}{overduesecs}) {
+					$x->{overdue} = 1;
+					$problem{overdue}++;
+					push @odetail, "Overdue $s | $t | $shortmin\n";
+				}
+				if (length $sc->{whydie}) {
+					$x->{death} = 1;
+					$problem{death}++;
+					(my $flatdie = $sc->{whydie}) =~ s/\n/  /g;
+					push @death, "Death $s | $t | $flatdie\n";
+				}
+			}
+		}
+		print $q{shownagios} ? "<pre>\n" : "\n<!-- \n";
+		print qq{\nBegin Nagios\nHost: $host\nExpired: $problem{expired}\nOverdue: $problem{overdue}\n};
+		print qq{Death: $problem{death}\n};
+		print qq{bucardo_delta rows: $info{dcount}\nbucardo_track rows: $info{tcount}\n};
+		print @edetail;
+		print @odetail;
+		print @death;
+		print "End Nagios\n\n";
+		print $q{shownagios} ? "</pre>\n" : "-->\n";
+	}
+
+	my $time = $dbh->selectall_arrayref("select to_char(now(),'DDMon HH24:MI:SS')")->[0][0];
+	print qq{<table class="tb1" border="1"><caption><span class="c">Current time: $time</span> (days back: $daysback)</caption><tr class="t0">};
+
+	$cols = q{
+	Started
+	Ended
+	Aborted
+	Atime
+	Runtime
+	Inserts
+	Updates
+	Deletes
+	Whydie
+	Last Good
+	};
+
+	@cols = map { s/^\s+//; $_ } grep /\w/ => split /\n/ => $cols;
+
+	unshift @cols, $d->{SINGLE} ? ('Sync type', 'Sync name', '?') : ('Sync type', 'Sync name', 'Databases');
+
+	my $otherarg = '';
+	for (@showargs) {
+		if (exists $q{$_} and length $q{$_}) {
+			$otherarg .= qq{;$_=$q{$_}};
+		}
+	}
+
+
+	our $OCOL = 2;
+	if (exists $q{sort} and $q{sort} =~ /^(\-?\d+)$/) {
+		$OCOL = $1;
+	}
+
+	for ($x=1; $cols[$x-1]; $x++) {
+		if ($d->{SINGLE} and $x==3) {
+			next;
+		}
+		if ($x == $OCOL) {
+			print qq{<th class="t0"><a href="$HERE?host=$host$otherarg;sort=-$x">$cols[$x-1]</a> ^</th>\n};
+		}
+		elsif ($x == abs($OCOL)) {
+			print qq{<th class="t0"><a href="$HERE?host=$host$otherarg;sort=$x">$cols[$x-1]</a> v</th>\n};
+		}
+		else {
+			print qq{<th class="t0"><a href="$HERE?host=$host$otherarg;sort=$x">$cols[$x-1]</a></th>\n};
+		}
+	}
+	print qq{</tr>};
+
+	my $z=1;
+	our %row;
+	$order=1;
+	for my $s (sort keys %$sync) {
+		for my $t (sort { 
+			$sync->{$s}{dblist}{$a}{order} <=> $sync->{$s}{dblist}{$b}{order}
+		} keys %{$sync->{$s}{dblist}}) {
+			my $x = $sync->{$s}{dblist}{$t};
+			my $class = 'xxx';
+			$class = "overdue" if $x->{overdue};
+			$class = "expired" if $x->{expired};
+			$class = "error" if exists $x->{error};
+			$order++;
+			$row{$order}{syncinfo} = $sync->{$s};
+			$row{$order}{sync} = $s;
+			$row{$order}{target} = $t;
+			$row{$order}{html} = qq{<tr class="$class">\n};
+			if (! $d->{SINGLE}) {
+				$row{$order}{html} .= qq{
+<th>$sync->{$s}{synctype}</th>
+<th align="center"><a href="$HERE?host=$host;sync=$s">$s</a></th>
+<th><a href="$HERE?host=$host;db=$t">$t</a></th>
+};
+			}
+			else {
+				$row{$order}{html} .= qq{
+<th>$sync->{$s}{synctype}</th>
+<th><a href="$HERE?host=$host;sync=$s">$s</a></th>
+};
+			}
+
+			## May be undef: pid, whydie, deletes, updates, inserts, ppid
+			my $safe = {};
+			my $info = $x->{success} || $x->{aborted} || 
+				{
+				 started2 => '???',
+				 ended2 => '???',
+				 aborted2 => '???',
+				 atime => '???',
+				 runtime => '???',
+				 inserts => '',
+				 updates => '',
+				 deletes => '',
+				 minutes => '',
+				 };
+			$row{$order}{tinfo} = $info;
+			for my $var (keys %$info) {
+				$safe->{$var} = defined $info->{$var} ? $info->{$var} : '?';
+			}
+			my $whydie = exists $info->{death} ? "PID: $safe->{pid}<br />PPID: $safe->{ppid}<br />$x->{whydie}" : '';
+
+			## Interval rounding errors makes 0:00 time common. Boost to 1 as needed
+			if (defined $safe->{endinterval} and $safe->{endinterval} =~ /00:00:00./o and $safe->{endinterval} !~ /000000$/o) {
+				$safe->{runtime} = '00:01';
+			}
+			if (defined $safe->{abortinterval} and $safe->{abortinterval} =~ /00:00:00./o and $safe->{abortinterval} !~ /000000$/o) {
+				$safe->{atime} = '00:01';
+			}
+
+			$row{$order}{html} .= qq{
+<th class="ts">$safe->{started2}</th>
+<th>$safe->{ended2}</th>
+<th>$safe->{aborted2}</th>
+<th>$safe->{atime}</th>
+<th>$safe->{runtime}</th>
+<th align="right">$safe->{inserts}</th>
+<th align="right">$safe->{updates}</th>
+<th align="right">$safe->{deletes}</th>
+<th align="left"><pre>$whydie</pre></th>
+<th align="right" class="ts"><div class="overdue" id="o$z">Sync: $s<br />Overdue time: $sync->{$s}{overdue}<br />Expire time: $sync->{$s}{expired}</div><span 
+ onmouseover="showdue('o$z')" onmouseout="hidegoat('o$z')">$safe->{minutes}</span></th>
+</tr>\n};
+	$z++;
+	}
+	}
+
+	## Sort and print
+	my $class = "t2";
+	for my $r (sort megasort
+			   keys %row) {
+		$class = $class eq "t1" ? "t2" : "t1";
+		$row{$r}{html} =~ s/class="xxx"/class="$class"/;
+		print $row{$r}{html};
+	}
+
+
+	sub megasort {
+		## sync type, sync name, target database
+		if (1 == $OCOL) {
+			return (
+					$row{$a}{syncinfo}{synctype} cmp $row{$b}{syncinfo}{synctype}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+		if (-1 == $OCOL) {
+			return (
+					$row{$b}{syncinfo}{synctype} cmp $row{$a}{syncinfo}{synctype}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+
+		## sync name, target database
+		if (2 == $OCOL) {
+			return ($row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target})
+		}
+		if (-2 == $OCOL) {
+			return ($row{$b}{sync} cmp $row{$a}{sync}
+					or $row{$b}{target} cmp $row{$a}{target})
+		}
+
+		## target database, sync name
+		if (3 == $OCOL) {
+			return ($row{$a}{target} cmp $row{$b}{target}
+					or $row{$a}{sync} cmp $row{$b}{sync});
+		}
+		if (-3 == $OCOL) {
+			return ($row{$b}{target} cmp $row{$a}{target}
+					or $row{$b}{sync} cmp $row{$a}{sync});
+		}
+
+		## start time, sync name, target database
+		if (4 == $OCOL) {
+			return -1 if exists $row{$a}{tinfo}{startedsecs} and ! exists $row{$b}{tinfo}{startedsecs};
+			return +1 if !exists $row{$a}{tinfo}{startedsecs} and exists $row{$b}{tinfo}{startedsecs};
+			return ($row{$a}{tinfo}{startedsecs} <=> $row{$b}{tinfo}{startedsecs}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+		if (-4 == $OCOL) {
+			return +1 if exists $row{$a}{tinfo}{startedsecs} and ! exists $row{$b}{tinfo}{startedsecs};
+			return -1 if !exists $row{$a}{tinfo}{startedsecs} and exists $row{$b}{tinfo}{startedsecs};
+			return ($row{$b}{tinfo}{startedsecs} <=> $row{$a}{tinfo}{startedsecs}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+
+
+		## end time, sync name, target database
+		if (5 == $OCOL) {
+			return -1 if exists $row{$a}{tinfo}{endedsecs} and ! exists $row{$b}{tinfo}{endedsecs};
+			return +1 if !exists $row{$a}{tinfo}{endedsecs} and exists $row{$b}{tinfo}{endedsecs};
+			return ($row{$a}{tinfo}{endedsecs} <=> $row{$b}{tinfo}{endedsecs}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+		if (-5 == $OCOL) {
+			return +1 if exists $row{$a}{tinfo}{endedsecs} and ! exists $row{$b}{tinfo}{endedsecs};
+			return -1 if !exists $row{$a}{tinfo}{endedsecs} and exists $row{$b}{tinfo}{endedsecs};
+			return ($row{$b}{tinfo}{endedsecs} <=> $row{$a}{tinfo}{endedsecs}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+
+		## aborted time, sync name, target database
+		if (6 == $OCOL) {
+			return -1 if exists $row{$a}{tinfo}{abortedsecs} and ! exists $row{$b}{tinfo}{abortedsecs};
+			return +1 if !exists $row{$a}{tinfo}{abortedsecs} and exists $row{$b}{tinfo}{abortedsecs};
+			return ($row{$a}{tinfo}{abortedsecs} <=> $row{$b}{tinfo}{abortedsecs}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+		if (-6 == $OCOL) {
+			return +1 if exists $row{$a}{tinfo}{abortedsecs} and ! exists $row{$b}{tinfo}{abortedsecs};
+			return -1 if !exists $row{$a}{tinfo}{abortedsecs} and exists $row{$b}{tinfo}{abortedsecs};
+			return ($row{$b}{tinfo}{abortedsecs} <=> $row{$a}{tinfo}{abortedsecs}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+
+		## abort time, sync name, target database
+		if (7 == $OCOL) {
+			return -1 if exists $row{$a}{tinfo}{atimesecs} and ! exists $row{$b}{tinfo}{atimesecs};
+			return +1 if !exists $row{$a}{tinfo}{atimesecs} and exists $row{$b}{tinfo}{atimesecs};
+			return ($row{$a}{tinfo}{atimesecs} <=> $row{$b}{tinfo}{atimesecs}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+		if (-7 == $OCOL) {
+			return +1 if exists $row{$a}{tinfo}{atimesecs} and ! exists $row{$b}{tinfo}{atimesecs};
+			return -1 if !exists $row{$a}{tinfo}{atimesecs} and exists $row{$b}{tinfo}{atimesecs};
+			return ($row{$b}{tinfo}{atimesecs} <=> $row{$a}{tinfo}{atimesecs}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+
+		## run time, sync name, target database
+		if (8 == $OCOL) {
+			return -1 if exists $row{$a}{tinfo}{runtimesecs} and ! exists $row{$b}{tinfo}{runtimesecs};
+			return +1 if !exists $row{$a}{tinfo}{runtimesecs} and exists $row{$b}{tinfo}{runtimesecs};
+			return ($row{$a}{tinfo}{runtimesecs} <=> $row{$b}{tinfo}{runtimesecs}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+		if (-8 == $OCOL) {
+			return +1 if exists $row{$a}{tinfo}{runtimesecs} and ! exists $row{$b}{tinfo}{runtimesecs};
+			return -1 if !exists $row{$a}{tinfo}{runtimesecs} and exists $row{$b}{tinfo}{runtimesecs};
+			return ($row{$b}{tinfo}{runtimesecs} <=> $row{$a}{tinfo}{runtimesecs}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+
+		## inserts, sync name, target database
+		if (9 == $OCOL) {
+			return -1 if exists $row{$a}{tinfo}{inserts} and ! exists $row{$b}{tinfo}{inserts};
+			return +1 if !exists $row{$a}{tinfo}{inserts} and exists $row{$b}{tinfo}{inserts};
+			return ($row{$a}{tinfo}{inserts} <=> $row{$b}{tinfo}{inserts}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+		if (-9 == $OCOL) {
+			return +1 if exists $row{$a}{tinfo}{inserts} and ! exists $row{$b}{tinfo}{inserts};
+			return -1 if !exists $row{$a}{tinfo}{inserts} and exists $row{$b}{tinfo}{inserts};
+			return ($row{$b}{tinfo}{inserts} <=> $row{$a}{tinfo}{inserts}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+	
+		## updates, sync name, target database
+		if (10 == $OCOL) {
+			return -1 if exists $row{$a}{tinfo}{updates} and ! exists $row{$b}{tinfo}{updates};
+			return +1 if !exists $row{$a}{tinfo}{updates} and exists $row{$b}{tinfo}{updates};
+			return ($row{$a}{tinfo}{updates} <=> $row{$b}{tinfo}{updates}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+		if (-10 == $OCOL) {
+			return +1 if exists $row{$a}{tinfo}{updates} and ! exists $row{$b}{tinfo}{updates};
+			return -1 if !exists $row{$a}{tinfo}{updates} and exists $row{$b}{tinfo}{updates};
+			return ($row{$b}{tinfo}{updates} <=> $row{$a}{tinfo}{updates}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+
+
+		## deletes, sync name, target database
+		if (11 == $OCOL) {
+			return -1 if exists $row{$a}{tinfo}{deletes} and ! exists $row{$b}{tinfo}{deletes};
+			return +1 if !exists $row{$a}{tinfo}{deletes} and exists $row{$b}{tinfo}{deletes};
+			return ($row{$a}{tinfo}{deletes} <=> $row{$b}{tinfo}{deletes}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+		if (-11 == $OCOL) {
+			return +1 if exists $row{$a}{tinfo}{deletes} and ! exists $row{$b}{tinfo}{deletes};
+			return -1 if !exists $row{$a}{tinfo}{deletes} and exists $row{$b}{tinfo}{deletes};
+			return ($row{$b}{tinfo}{deletes} <=> $row{$a}{tinfo}{deletes}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+
+
+		## whydie, sync name, target database
+		if (12 == $OCOL) {
+			return -1 if exists $row{$a}{tinfo}{whydie} and ! exists $row{$b}{tinfo}{whydie};
+			return +1 if !exists $row{$a}{tinfo}{whydie} and exists $row{$b}{tinfo}{whydie};
+			return ($row{$a}{tinfo}{whydie} cmp $row{$b}{tinfo}{whydie}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+		if (-12 == $OCOL) {
+			return +1 if exists $row{$a}{tinfo}{whydie} and ! exists $row{$b}{tinfo}{whydie};
+			return -1 if !exists $row{$a}{tinfo}{whydie} and exists $row{$b}{tinfo}{whydie};
+			return ($row{$b}{tinfo}{whydie} cmp $row{$a}{tinfo}{whydie}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+
+
+		## last good, sync name, target database
+		## XXX bubble bad to top?
+		if (13 == $OCOL) {
+			return -1 if exists $row{$a}{tinfo}{endedsecs} and ! exists $row{$b}{tinfo}{endedsecs};
+			return +1 if !exists $row{$a}{tinfo}{endedsecs} and exists $row{$b}{tinfo}{endedsecs};
+			return ($row{$b}{tinfo}{endedsecs} <=> $row{$a}{tinfo}{endedsecs}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+		if (-13 == $OCOL) {
+			return +1 if exists $row{$a}{tinfo}{endedsecs} and ! exists $row{$b}{tinfo}{endedsecs};
+			return -1 if !exists $row{$a}{tinfo}{endedsecs} and exists $row{$b}{tinfo}{endedsecs};
+			return ($row{$a}{tinfo}{endedsecs} <=> $row{$b}{tinfo}{endedsecs}
+					or $row{$a}{sync} cmp $row{$b}{sync}
+					or $row{$a}{target} cmp $row{$b}{target}
+					);
+		}
+
+		## Default: sync name, target database
+		return ($row{$a}{sync} cmp $row{$b}{sync}
+				or $row{$a}{target} cmp $row{$b}{target})
+
+	}
+
+
+
+
+
+	print "</table>\n";
+
+	return $daysback;
+
+} ## end of showhost
+
+
+sub D {
+  my $info = shift;
+  print "<hr /><pre>\n";
+  my $dump = Dumper $info;
+  $dump =~ s/&/&amp;/go;
+  $dump =~ s/</&lt;/go;
+  $dump =~ s/>/&gt;/go;
+  print $dump;
+  print "</pre><hr />\n";
+} ## end of D
+
+
+sub runsql {
+	my $arg = shift;
+	my $SQL = $arg->{sql};
+	my $dbh = $arg->{dbh};
+	$sth = $dbh->prepare($SQL);
+	my $querystart = [gettimeofday()];
+	$sth->execute();
+	my $querytime = tv_interval($querystart);
+	my $fetchstart = [gettimeofday()];
+	$info = $sth->fetchall_arrayref({});
+	my $fetchtime = tv_interval($fetchstart);
+	if ($q{showsql}) {
+		print qq{<div class="showsql"><h3>SQL:</h3><pre>$SQL</pre>};
+		print qq{<span class="showtime">Execute time: $querytime<br />Fetch time: $fetchtime</span></div>\n};
+	}
+	for (1..2) {
+		if (1==$_) {
+			next if ! $q{showexplain};
+			$sth = $dbh->prepare("EXPLAIN $SQL");
+		}
+		else {
+			next if ! $q{showanalyze};
+			$sth = $dbh->prepare("EXPLAIN ANALYZE $SQL");
+		}
+		$sth->execute();
+		my $plan = join "\n" => map { $_->[0] } @{$sth->fetchall_arrayref()};
+		$plan =~ s/^/ /;                               ## Allow first keyword to show up
+		$plan =~ s/  / /g;                             ## Shrink whitespace
+		$plan =~ s/ width=\d+\)/\)/g;                  ## Remove dump stat
+		$plan =~ s#cost=(\d+\.\d+\.\.\d+\.\d+)#C=$1#g; ## Shrink cost
+		$plan =~ s/rows=/R=/g;                         ## Shrink rows
+		$plan =~ s#actual time=(\S+)#AT=<span class="actualtime">$1</span>#g;
+		$plan =~ s#loops=#L=#g;
+		$plan =~ s#Scan (on )?(\w+)#Scan $1<span class="relname">$2</span>#g;
+		$plan =~ s#^(\s*)->(\s+[A-Z][a-zA-Z]+)+#$1<span class="parrow">-&gt;</span><span class="pword">$2</span>#gm;
+		$plan =~ s#^(\s*)(\s+[A-Z][a-zA-Z]+)+#$1<span class="pword2">$2</span>#gm;
+		$plan =~ s#^(\s*Total runtime: )(\d+\.\d+ ms)#<span class="runtime1">$1</span><span class="runtime2">$2</span>#m;
+		printf qq{<div class="showsql"><h3>Explain %s:</h3><pre>$plan</pre></div>},
+			1==$_ ? "plan" : "analyze";
+	}
+	exit if $q{showanalyze}; ## XXXX GREG
+
+	print qq{<form method="get" action="$HERE">\n};
+	for (sort keys %{$arg->{hidden}}) {
+		print qq{<input type="hidden" name="$_" value="$arg->{hidden}{$_}" />};
+	}
+
+	if (exists $q{sort}) {
+		print qq{<input type="hidden" name="sort" value="$q{sort}" />};
+	}
+	for (@showargs) {
+		next if $_ eq 'daysback';
+		if (exists $q{$_} and length $q{$_}) {
+			print qq{<input type="hidden" name="$_" value="$q{$_}" />};
+		}
+	}
+
+	if ($arg->{type} eq 'host') {
+		printf qq{<span class="maxrows">Earliest date: <strong>$arg->{earliest}</strong> &nbsp; &nbsp; Maximum days back: <input type="text" name="daysback" size="%d" value="$arg->{daysback}"/></span>}, length($arg->{daysback}) + 3;
+	}
+	else {
+		print qq{<span class="maxrows">Maximum rows: <input type="text" name="limit" size="4" value="$LIMIT"/></span>};
+		printf qq{<span class="timeshift">Start time: <input type="text" name="started" size="*%d"%s/></span>},
+			$adjust{started} ? 2+length($adjust{started}) : 4,
+			$adjust{started} ? qq{ value="$adjust{started}" } : "";
+		printf qq{<span class="timeshift">End time: <input type="text" name="ended" size="*%d"%s/></span>},
+			$adjust{ended} ? 2+length($adjust{ended}) : 4,
+			$adjust{ended} ? qq{ value="$adjust{ended}" } : "";
+	}
+	print qq{&nbsp; <input type="submit" value="Change" />};
+	print qq{</form>};
+
+	if (@adjust) {
+		print qq{<p><span class="adjust1">Adjustments:</span>};
+		for (@adjust) {
+			print qq{<span class="adjust2">$_->[0] </span><span class="adjust3">$_->[1] </span> };
+		}
+		print "</p>\n";
+	}
+
+	my $time = $dbh->selectall_arrayref("select to_char(now(),'DDMon HH24:MI:SS')")->[0][0];
+	print qq{<table class="tb1" border="1"><caption><span class="c">Current time: $time</span></caption><tr class="t0">};
+	return $info;
+
+} ## end of runsql
+
+sub showdatabase {
+
+	my ($host,$name) = @_;
+
+	exists $db{$host} or &Error("No such host: $host");
+	my $d = $db{$host};
+
+	&Header("$d->{DATABASE} Bucardo stats for target database $name");
+
+	print qq{<h3 class="s"><a href="$HERE?host=$host">$d->{DATABASE}</a> <a href="$HERE">Bucardo</a> stats for target database "$name"</h3>\n};
+
+	## Default sort
+	my $OCOL = 2;
+	my $ODIR = $where{started} ? "ASC" : "DESC";
+	if (exists $q{sort} and $q{sort} =~ /^(\-?)(\d+)$/) {
+		$OCOL = $2;
+		$ODIR = (length $1 ? "DESC" : "ASC");
+	}
+	my $OCOL2 = $OCOL;
+	$OCOL2 = "started" if 2 == $OCOL;
+	$OCOL2 = "ended" if 3 == $OCOL;
+	$OCOL2 = "aborted" if 4 == $OCOL;
+
+	$SQL = 
+qq{SELECT
+  sync,
+$SQLSTART
+FROM (SELECT * FROM bucardo.q WHERE targetdb=\$1 UNION ALL SELECT * FROM bucardo.$old_q WHERE targetdb=\$1) q
+${WHERECLAUSE}ORDER BY $OCOL2 $ODIR, 1 ASC, started DESC
+LIMIT $LIMIT};
+
+	## XXX Same as the sync - do a pre-scan to get the magic number of days
+	$dbh = connect_database($host);
+	$SQL =~ s/\$1/$dbh->quote($name)/ge;
+	$info = runsql({dbh => $dbh, sql => $SQL, hidden => {host=>$host,db=>$name}});
+
+	$cols = q{
+	Sync name
+	Started
+	Ended
+	Aborted
+	Atime
+	Runtime
+	Inserts
+	Updates
+	Deletes
+	Whydie
+	};
+
+	@cols = map { s/^\s+//; $_ } grep /\w/ => split /\n/ => $cols;
+
+	my $otherarg = '';
+	if ($LIMIT != $DEFLIMIT) {
+		$otherarg .= qq{;limit=$LIMIT};
+	}
+	for (@otherargs, @showargs) {
+		if (exists $q{$_} and length $q{$_}) {
+			$otherarg .= qq{;$_=$q{$_}};
+		}
+	}
+	for ($x=1; $cols[$x-1]; $x++) {
+		if ($x != $OCOL) {
+			print qq{<th class="t0"><a href="$HERE?host=$host;db=$name$otherarg;sort=$x">$cols[$x-1]</a></th>\n};
+		}
+		elsif ($ODIR eq "ASC") {
+			print qq{<th class="t0"><a href="$HERE?host=$host;db=$name$otherarg;sort=-$x">$cols[$x-1]</a> ^</th>\n};
+		}
+		else {
+			print qq{<th class="t0"><a href="$HERE?host=$host;db=$name$otherarg;sort=$x">$cols[$x-1]</a> v</th>\n};
+		}
+	}
+	print qq{</tr>};
+
+	$t = "t2";
+	for (@$info) {
+		$t = $t eq "t1" ? "t2" : "t1";
+		my $whydie = length $_->{whydie} ? "PID: $_->{pid}<br />PPID: $_->{ppid}<br />$_->{whydie}" : '';
+		print qq{
+<tr class="$t">
+<th><a href="$HERE?host=$host;sync=$_->{sync}">$_->{sync}</a></th>
+<th class="ts">$_->{started2}</th>
+<th>$_->{ended2}</th>
+<th>$_->{aborted2}</th>
+<th>$_->{atime}</th>
+<th>$_->{runtime}</th>
+<th align="right">$_->{inserts}</th>
+<th align="right">$_->{updates}</th>
+<th align="right">$_->{deletes}</th>
+<th align="left"><pre>$whydie</pre></th>
+</tr>
+	};
+	}
+	print "</table>\n";
+
+} ## end of showdatabase
+
+
+sub showsync {
+
+	my ($host,$name) = @_;
+
+	exists $db{$host} or &Error("No such host: $host");
+	my $d = $db{$host};
+
+	&Header("$d->{DATABASE} Bucardo stats for sync $name");
+
+	## Default order by
+	my $OCOL = 2;
+	my $ODIR = $where{started} ? "ASC" : "DESC";
+	if (exists $q{sort} and $q{sort} =~ /^(\-?)(\d+)$/) {
+		$OCOL = $2;
+		$ODIR = (length $1 ? "DESC" : "ASC");
+	}
+	my $OCOL2 = $OCOL;
+	$OCOL2 = "started" if 2 == $OCOL;
+	$OCOL2 = "ended"   if 3 == $OCOL;
+	$OCOL2 = "aborted" if 4 == $OCOL;
+
+	$dbh = connect_database($host);
+
+	## Quick check that this is a valid sync
+	$SQL = "SELECT * FROM bucardo.sync WHERE name = ?";
+	$sth = $dbh->prepare($SQL);
+	my $count = $sth->execute($name);
+	if ($count eq '0E0') {
+		&Error("That sync does not exist");
+	}
+	my $syncinfo = $sth->fetchall_arrayref({})->[0];
+
+	printf qq{<h3 class="s"><a href="%s">%s</a> <a href="%s">Bucardo</a> sync <a href="%s">"%s"</a>\n},
+	"$HERE?host=$host", $d->{DATABASE}, $HERE, "$HERE?host=$host;syncinfo=$name", $name;
+	my $space = '&nbsp; ' x 10;
+	my $mouseover = qq{onmouseover="showgoat('info',+50)"};
+	my $mouseout = qq{onmouseout="hidegoat('info')"};
+	print qq{$space<a class="headerhide" href="" $mouseover $mouseout>$space$space quickinfo $space$space</a></h3>\n};
+	my $INFO = '';
+	for (sort keys %$syncinfo) {
+		next if ! defined $syncinfo->{$_} or ! length $syncinfo->{$_};
+		if ($_ eq 'conflict_code') {
+			$syncinfo->{conflict_code} = '(NOT SHOWN)';
+		}
+		$INFO .= qq{$_: <b>$syncinfo->{$_}</b><br />};
+	}
+	print qq{<div class="hiddengoat" id="info">$INFO</div>};
+
+	my $daysback = $q{daysback} || $d->{DAYSBACKSYNC} || 7;
+	$daysback =~ /^\d+$/ or &Error("Invalid number of days");
+	$SQL = "SELECT TO_CHAR(now()-'$daysback days'::interval, 'DD FMMonth YYYY')";
+	my $earliest = $dbh->selectall_arrayref($SQL)->[0][0];
+	my $oldwhere = " WHERE sync=\$1 AND cdate >= '$earliest'";
+
+	$SQL = $d->{SINGLE} ? 
+qq{SELECT
+  synctype,
+$SQLSTART
+FROM (SELECT * FROM bucardo.q WHERE sync=\$1 UNION ALL SELECT * FROM bucardo.$old_q $oldwhere) q
+${WHERECLAUSE}ORDER BY $OCOL2 $ODIR, 1 ASC
+LIMIT $LIMIT} :
+qq{SELECT
+  targetdb,
+$SQLSTART
+FROM (SELECT * FROM bucardo.q WHERE sync=\$1 UNION ALL SELECT * FROM bucardo.$old_q $oldwhere) q
+${WHERECLAUSE}ORDER BY $OCOL2 $ODIR, 1 ASC
+LIMIT $LIMIT};
+
+	$SQL =~ s/\$1/$dbh->quote($name)/ge;
+	$info = runsql({dbh => $dbh, sql => $SQL, hidden => {host=>$host,sync=>$name}});
+
+	$cols = q{
+	Started
+	Ended
+	Aborted
+	Atime
+	Runtime
+	Inserts
+	Updates
+	Deletes
+	Whydie
+	};
+
+	@cols = map { s/^\s+//; $_ } grep /\w/ => split /\n/ => $cols;
+
+	unshift @cols, $d->{SINGLE} ? ('Sync type') : ('Database');
+
+	my $otherarg = '';
+	if ($LIMIT != $DEFLIMIT) {
+		$otherarg .= qq{;limit=$LIMIT};
+	}
+	for (@otherargs, @showargs) {
+		if (exists $q{$_} and length $q{$_}) {
+			$otherarg .= qq{;$_=$q{$_}};
+		}
+	}
+	for ($x=1; $cols[$x-1]; $x++) {
+		if (!@$info) {
+			print qq{<th class="t0">$cols[$x-1]</th>\n};
+		}
+		else {
+			my $c = 't0';
+			if ($x != $OCOL) {
+				print qq{<th class="$c"><a href="$HERE?host=$host;sync=$name$otherarg;sort=$x">$cols[$x-1]</a></th>\n};
+			}
+			elsif ($ODIR eq "ASC") {
+				print qq{<th class="$c"><a href="$HERE?host=$host;sync=$name$otherarg;sort=-$x">$cols[$x-1]</a> ^</th>\n};
+			}
+			else {
+				print qq{<th class="$c"><a href="$HERE?host=$host;sync=$name$otherarg;sort=$x">$cols[$x-1]</a> v</th>\n};
+			}
+		}
+	}
+	print qq{</tr>};
+
+	$t = "t2";
+	for (@$info) {
+		$t = $t eq "t1" ? "t2" : "t1";
+		print qq{<tr class="$t">};
+		if ($d->{SINGLE}) {
+			print qq{<th>$_->{synctype}</th>\n};
+		}
+		else {
+			print qq{<th><a href="$HERE?host=$host;db=$_->{targetdb}">$_->{targetdb}</a></th>\n};
+		}
+my $whydie = length $_->{whydie} ? "PID: $_->{pid}<br />PPID: $_->{ppid}<br />$_->{whydie}" : '';
+print qq{
+<th class="ts">$_->{started2}</th>
+<th>$_->{ended2}</th>
+<th>$_->{aborted2}</th>
+<th>$_->{atime}</th>
+<th>$_->{runtime}</th>
+<th align="right">$_->{inserts}</th>
+<th align="right">$_->{updates}</th>
+<th align="right">$_->{deletes}</th>
+<th align="left"><pre>$whydie</pre></th>
+</tr>
+	};
+	}
+	print "</table>\n";
+
+} ## end of showsync
+
+
+sub showsyncinfo {
+
+	my ($host,$name) = @_;
+
+	exists $db{$host} or &Error("No such host: $host");
+	my $d = $db{$host};
+
+	&Header("$d->{DATABASE} Bucardo information on sync $name");
+
+	printf qq{<h3 class="s"><a href="%s">%s</a> <a href="%s">Bucardo</a> sync %s (<a href="%s">view stats</a>)</h3>\n},
+	"$HERE?host=$host", $d->{DATABASE}, $HERE, $name, "$HERE?host=$host;sync=$name";
+
+	$dbh = connect_database($host);
+	if (! exists $info{$host}{syncinfo}) {
+		$SQL = "SELECT * FROM bucardo.sync";
+		$sth = $dbh->prepare($SQL);
+		$sth->execute();
+		$info{$host}{syncinfo} = $sth->fetchall_hashref('name');
+	}
+	if (! exists $info{$host}{syncinfo}{$name}) {
+		&Error("Sync not found: $name");
+	}
+	$info = $info{$host}{syncinfo}{$name};
+
+	## Grab all herds if not loaded
+	if (! exists $info{$host}{herds} ) {
+		$SQL = qq{
+			SELECT *
+			FROM bucardo.herdmap h, bucardo.goat g
+			WHERE g.id = h.goat
+			ORDER BY priority DESC, tablename ASC
+		
+		};
+		$sth = $dbh->prepare_cached($SQL);
+		$sth->execute();
+		$info{$host}{herds} = $sth->fetchall_arrayref({});
+	}	
+	## Get the goats for this herd:
+	my @goats = grep { $_->{herd} eq $info->{source} } @{$info{$host}{herds}};
+
+	my $goatinfo = qq{Goats in herd <em>$info->{source}</em>:};
+	for (@goats) {
+		$goatinfo .= sprintf qq{<br />$_->{tablename}%s%s},
+		$_->{ghost} ? " GHOST!" : '',
+		$_->{pkey} ? " (pkey: <em>$_->{pkey}</em>)" : '';
+	}
+
+	my $target = qq{Target database:</th><td class="syncinfo">$info->{targetdb}</th>};
+	if ($info->{targetgroup}) {
+		my $t = $info->{targetgroup};
+		if (! exists $info{$host}{dbs}{$t}) {
+			$SQL = "SELECT db FROM bucardo.dbmap WHERE dbgroup = ? ORDER BY priority DESC, db ASC";
+			$sth = $dbh->prepare_cached($SQL);
+			$sth->execute($t);
+			$info{$host}{dbs}{$t} = $sth->fetchall_arrayref({});
+		}
+		my $dbinfo = "Databases in group <em>$t</em>:";
+		for (@{$info{$host}{dbs}{$t}}) {
+			$dbinfo .= "<br />$_->{db}";
+		}
+		$target = qq{Target database group:</th><td class="syncinfo2" };
+		$target .= qq{onmouseover="showgoat('db$t',-100)" onmouseout="hidegoat('db$t')">};
+		$target .= qq{<div class="hiddengoat" id="db$t">$dbinfo</div>$t</th>};
+	}
+
+	print qq{<table class="syncinfo" border="1">\n};
+	$x = $info->{name};
+
+	for (qw(ping kidsalive stayalive)) {
+		$info->{"YN$_"} = $info->{$_} ? "Yes" : "No";
+	}
+
+	my $fullcopy = '';
+	if ($info->{synctype} eq 'fullcopy') {
+		$fullcopy = qq{<tr><th class="syncinfo">Delete method:</th><td class="syncinfo">$info->{deletemethod}</th></tr>};
+	}
+	my $delta = '';
+	if ($info->{synctype} ne 'fullcopy') {
+		$delta = qq{<tr><th class="syncinfo">Ping:</th><td class="syncinfo">$info->{YNping}</th></tr>};
+	}
+
+	print qq{
+<tr><th class="syncinfo">Sync name:</th><td class="syncinfo">$info->{name}</th></tr>
+<tr><th class="syncinfo">Status:</th><td class="syncinfo">$info->{status}</th></tr>
+<tr><th class="syncinfo">Sync type:</th><td class="syncinfo">$info->{synctype}</th></tr>
+<tr><th class="syncinfo">Source:</th><td class="syncinfo2" onmouseover="showgoat('o$x',-100)" onmouseout="hidegoat('o$x')">
+<div class="goatinfo" id="o$x">$goatinfo</div>$info->{source}</th></tr>
+<tr><th class="syncinfo">$target</tr>
+$delta
+<tr><th class="syncinfo">Check time:</th><td class="syncinfo">$info->{checktime}</th></tr>
+<tr><th class="syncinfo">Overdue limit:</th><td class="syncinfo">$info->{overdue}</th></tr>
+<tr><th class="syncinfo">Expired limit:</th><td class="syncinfo">$info->{expired}</th></tr>
+$fullcopy
+<tr><th class="syncinfo">Controller stays alive:</th><td class="syncinfo">$info->{YNstayalive}</th></tr>
+<tr><th class="syncinfo">Kids stay alive:</th><td class="syncinfo">$info->{YNkidsalive}</th></tr>
+<tr><th class="syncinfo">Limit databases:</th><td class="syncinfo">$info->{limitdbs}</th></tr>
+<tr><th class="syncinfo">Priority:</th><td class="syncinfo">$info->{priority}</th></tr>
+	};
+
+
+	print "</table>\n";
+
+} ## end of showsyncinfo
+
+
+sub Header {
+
+	return if $DONEHEADER++;
+	my $title = shift || "Bucardo Stats";
+	print qq{<html>
+<head>
+<title>$title</title>
+<script type="text/javascript">
+<!--
+var X = 0;
+var Y = 0;
+window.captureEvents(Event.MOUSEMOVE)
+window.onmousemove=Move;
+function Move(e) { X = e.pageX; Y = e.pageY; }
+function showdue(o) {
+var obj = document.getElementById(o);
+obj.style.top=Y-100;
+obj.style.visibility = 'visible';
+return false;
+}
+function hidegoat(g) {
+  var obj = document.getElementById(g);
+  obj.style.visibility = 'hidden';
+  return false;
+}
+function showgoat(g,offset) {
+  var obj = document.getElementById(g);
+  obj.style.top=Y+offset;
+  obj.style.visibility = 'visible';
+  return false;
+}
+// -->
+</script>
+
+<style type="text/css">
+body { margin-left: 1em;
+font-family: arial, sans-serif;
+}
+h1.s, h2.s, h3.s {
+  background-color: #3399ff;
+  border: solid 1px #999999;
+  padding: 0.2em;
+  padding-left: 0.5em;
+  -moz-border-radius: 20px;
+}
+a.headerhide {
+  color: #3399ff;
+}
+span.hideheader {
+  color: #3399ff;
+  font-size: smaller;
+}
+h3.error {
+  background-color: #ff3333;
+  border: solid 1px #999999;
+  padding: 0.5em;
+  padding-left: 0.5em;
+  -moz-border-radius: 20px;
+}
+p.error {
+  padding-left: 0.5em;
+  font-family: monospace;
+  font-weight: bolder;
+}
+span.adjust0 { margin-bottom: 10px; }
+span.adjust1 { background-color: #bbeeee; font-weight: bolder; }
+span.adjust2 { background-color: #aaffaa; margin-left: 1em;}
+span.adjust3 { background-color: #dede88;}
+span.maxrows { padding-left: 1em; }
+span.timeshift { padding-left: 1.5em; }
+span.error { }
+span.c {
+  background-color: #66ccee;
+  -moz-border-radius: 10px;
+  font-weight: bolder;
+  padding-left: 10px;
+  padding-right: 10px;
+  padding-top: 2px;
+}
+table.tb1 { empty-cells: show; font-size: 14px; }
+th { padding-left: 10px; padding-right: 10px; }
+th.ts { white-space: nowrap; }
+th.t0 { padding: 5px; }
+th.t0l { padding: 5px; text-align: left; }
+tr.t0 { background-color: #ccffcc; }
+tr.t1 { background-color: #ffdddd; }
+tr.t2 { background-color: #ddddff; }
+tr.overdue { background-color: red; color: white; }
+tr.overdue a:visited { color: cyan; }
+tr.overdue a:active { color: black; }
+tr.overdue a { color: yellow; }
+tr.expired { background-color: black; color: white; }
+tr.expired a:visited { color: cyan; }
+tr.expired a:active { color: black; }
+tr.expired a { color: yellow; }
+tr.error { background-color: purple; color: white; }
+tr.error a:visited { color: cyan; }
+tr.error a:active { color: black; }
+tr.error a { color: yellow; }
+div.overdue {
+  visibility: hidden;
+  z-index: 1;
+  text-align: center;
+  padding: 1em;
+  background-color: #ff00ff;
+  color: white;
+  position: absolute;
+  right: 40%;
+  right: 40%;
+  top: 40%;
+}
+div.goatinfo {
+  visibility: hidden;
+  z-index: 1;
+  text-align: left;
+  padding: 1em;
+  background-color: #cc00cc;
+  color: white;
+  position: absolute;
+  right: 40%;
+  top: 20%;
+}
+div.hiddengoat {
+  visibility: hidden;
+  z-index: 1;
+  text-align: left;
+  padding: 1em;
+  background-color: #33FFFF;
+  color: black;
+  position: absolute;
+  right: 40%;
+  top: 20%;
+}
+div.showsql {
+  font-family: monospace;
+  color: blue;
+  background-color: #ccccff;
+  -moz-border-radius: 10px;
+  padding-bottom: 1em;
+}
+span.showtime { font-weight: bolder; }
+span.relname { color: #cc0000; }
+span.parrow { color: #000000; font-weight: bold; } 
+span.pword { font-weight: bold; }
+span.pword2 { font-weight: bold; color: #330033; }
+span.actualtime { color: #000000; font-weight: bold; }
+span.runtime1 { font-weight: bold; }
+span.runtime2 { background-color: white; color: black; font-size: 110%; font-weight: 800; }
+table.syncinfo { background-color: #ccffff; border: 1px solid black; empty-cells: show; font-size: 16px; margin-left: 10px;}
+th.syncinfo { color: black; text-align: left; }
+td.syncinfo { color: blue; font-weight: 800; padding-left: .5em; padding-right: .5em; }
+td.syncinfo2 { color: #cc0000; font-weight: 800; padding-left: .5em; padding-right: .5em; }
+</style>
+</head>
+
+<body>
+};
+
+} ## end of Header
+
+sub Footer {
+	my $scripttime = tv_interval($scriptstart);
+	unless ($q{hidetime}) {
+		printf "<p><small>Total time: %.2f", $scripttime;
+		if (exists $info{dcount}) {
+			print " &nbsp; Rows in bucardo_delta: $info{dcount} &nbsp; Rows in bucardo_track: $info{tcount}";
+		}
+		print "</small></p>";
+	}
+	print "</body></html>\n";
+	exit;
+} ## end of Footer
+
+sub connect_database {
+
+	my $name = shift;
+
+	if (!exists $db{$name}) {
+		&Error("No such database: $name");
+	}
+	if (exists $dbh{$name}) {
+		return $dbh{$name};
+	}
+	my $d = $db{$name};
+	$dbh = DBI->connect_cached($d->{DSN},$d->{DBUSER},$d->{DBPASS}, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+	$dbh{$name} = $dbh;
+	## Be explicit: this is okay for this particular script
+	$dbh->{AutoCommit} = 1;
+	$dbh->do("SET statement_timeout = 0");
+	$dbh->do("SET constraint_exclusion = 'on'");
+	$dbh->do("SET random_page_cost = 1.2");
+	return $dbh;
+
+} ## end of connect_database
+
+sub Error {
+	my $msg = shift;
+	my $line = (caller)[2];
+	&Header("Error");
+	print qq{<h3 class="error">Bucardo stats error</h3>\n};
+	print qq{<p class="error"><span class="error">$msg</span></p>\n};
+	&Footer();
+}
+
+__DATA__
+
+## List each database you want to monitor here
+## Format is NAME: VALUE
+## DATABASE: Name of the database, will appear in the headers
+## DSN: Connection information string.
+## DBUSER: Who to connect as
+## DBPASS: Password to connect with
+## SINGLE: Optional, set to target database if that is the only one
+## SKIP: Used for row counts, do not list anywhere
+
+DATABASE: RootDB
+DSN: dbi:Pg:database=bucardo;port=5432;host=rootdb.backcountry.com
+DBUSER: bucardo_readonly
+DBPASS: icdeadtuples
+SINGLE: livedb
+DAYSBACK: 2
+DAYSBACKSYNC: 3
+
+DATABASE: LiveDB
+DSN: dbi:Pg:database=bucardo;port=5432;host=livedb.backcountry.com
+DBUSER: bucardo_readonly
+DBPASS: icdeadtuples
+DAYSBACK: 5
+DAYSBACKSYNC: 30
+DAYSBACKDB: 30
+
+DATABASE: RootDB_real
+DSN: dbi:Pg:database=bcs;port=5432;host=rootdb.backcountry.com
+DBUSER: bucardo_readonly
+DBPASS: icdeadtuples
+SKIP: Yes
+
+DATABASE: LiveDB_real
+DSN: dbi:Pg:database=bcs;port=5432;host=livedb.backcountry.com
+DBUSER: bucardo_readonly
+DBPASS: icdeadtuples
+SKIP: Yes

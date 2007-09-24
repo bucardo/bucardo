@@ -1,0 +1,114 @@
+<?xml version="1.0" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>Bucardo - Postgres multi-master replication system</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link rev="made" href="mailto:root@lt2.endpoint.com" />
+</head>
+
+<body style="background-color: white">
+
+<p><a name="__index__"></a></p>
+<!-- INDEX BEGIN -->
+
+<ul>
+
+	<li><a href="#name">NAME</a></li>
+	<li><a href="#version">VERSION</a></li>
+	<li><a href="#synopsis">SYNOPSIS</a></li>
+	<li><a href="#website">WEBSITE</a></li>
+	<li><a href="#description">DESCRIPTION</a></li>
+	<li><a href="#dependencies">DEPENDENCIES</a></li>
+	<li><a href="#bugs">BUGS</a></li>
+	<li><a href="#credits">CREDITS</a></li>
+	<li><a href="#author">AUTHOR</a></li>
+	<li><a href="#license_and_copyright">LICENSE AND COPYRIGHT</a></li>
+</ul>
+<!-- INDEX END -->
+
+<hr />
+<p>
+</p>
+<hr />
+<h1><a name="name">NAME</a></h1>
+<p>Bucardo - Postgres multi-master replication system</p>
+<p>
+</p>
+<hr />
+<h1><a name="version">VERSION</a></h1>
+<p>This documents describes Bucardo version 3.0.6</p>
+<p>
+</p>
+<hr />
+<h1><a name="synopsis">SYNOPSIS</a></h1>
+<pre>
+  ## Import the schema into the main Bucardo database:
+  $ psql -U bucardo bucardo -f bucardo.schema</pre>
+<pre>
+  ## Populate the tables within</pre>
+<pre>
+  ## Start Bucardo up
+  $ ./bucardo_ctl start &quot;Initial startup - Jean&quot;</pre>
+<pre>
+  ## Kick off a sync manually
+  $ ./bucardo_ctl kick prices</pre>
+<pre>
+  ## Check on the status of all syncs
+  $ ./bucardo_ctl status</pre>
+<pre>
+  ## Shut Bucardo down
+  $ ./bucardo_ctl stop &quot;Bringing new server online - Adele&quot;</pre>
+<p>
+</p>
+<hr />
+<h1><a name="website">WEBSITE</a></h1>
+<p>The latest news and documentation can always be found at:</p>
+<p><a href="http://bucardo.org/">http://bucardo.org/</a></p>
+<p>
+</p>
+<hr />
+<h1><a name="description">DESCRIPTION</a></h1>
+<p>Bucardo is a Perl module that replicates Postgres databases using a combination 
+of Perl, a custom database schema, Pl/Perlu, and Pl/Pgsql.</p>
+<p>Bucardo is unapologetically extremely verbose in its logging.</p>
+<p>Full documentation can be found on the website, or in the files that came with 
+this distribution.</p>
+<p>
+</p>
+<hr />
+<h1><a name="dependencies">DEPENDENCIES</a></h1>
+<p>* DBI
+* DBD::Pg
+* Moose
+* IO::Handle
+* Mail::Sendmail
+* Sys::Hostname
+* Sys::Syslog</p>
+<p>
+</p>
+<hr />
+<h1><a name="bugs">BUGS</a></h1>
+<p>Bugs should be reported to <a href="mailto:bucardo-general@bucardo.org.">bucardo-general@bucardo.org.</a> A list of bugs can be found at 
+<a href="http://bucardo.org/bugs.html">http://bucardo.org/bugs.html</a></p>
+<p>
+</p>
+<hr />
+<h1><a name="credits">CREDITS</a></h1>
+<p>Bucardo was originally developed and funded by Backcountry.com, who have been using it in production 
+since November 2006.</p>
+<p>
+</p>
+<hr />
+<h1><a name="author">AUTHOR</a></h1>
+<p>Greg Sabino Mullane &lt;<a href="mailto:greg@endpoint.com">greg@endpoint.com</a>&gt;</p>
+<p>
+</p>
+<hr />
+<h1><a name="license_and_copyright">LICENSE AND COPYRIGHT</a></h1>
+<p>Copyright (c) 2005-2007 Greg Sabino Mullane &lt;<a href="mailto:greg@endpoint.com">greg@endpoint.com</a>&gt;.</p>
+<p>This software is free to use: see the LICENSE file for details.</p>
+
+</body>
+
+</html>

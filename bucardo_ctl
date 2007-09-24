@@ -1,0 +1,1336 @@
+#!/usr/local/bin/perl -- -*-cperl-*-
+
+## Script to control Bucardo
+##
+## Copyright 2006-2007 Greg Sabino Mullane <greg@endpoint.com>
+
+use strict;
+use warnings;
+use DBI;
+use IO::Handle;
+use Getopt::Long;
+use Time::HiRes 'sleep';
+use POSIX 'ceil';
+use Data::Dumper;
+
+our $VERSION = '1.1.18';
+
+*STDOUT->autoflush(1);
+*STDERR->autoflush(1);
+
+
+use vars qw/$dbh $SQL $sth %sth $count/;
+my $DEBUG            = 0;
+my $DATEFORMAT       = q{Mon DD, YYYY HH24:MI:SS};
+my $DEFAULT_DAYSBACK = 3;
+my $WAITSLEEP        = 1;
+my $PROGRESS         = 1;
+
+help() unless @ARGV;
+
+## Default arguments - most are for the bc constructor
+my $bcargs = {
+			  ctlquiet     => 0,
+			  ctlverbose   => 0,
+			  dbname       => 'bucardo',
+			  dbuser       => 'bucardo',
+			  dbpass       => 'bucardo_password',
+			  verbose      => 1, ## Highly recommended to leave this on
+			  sendmail     => 1,
+			  extraname    => '',
+			  debugfilesep => 0,
+			  debugname    => '',
+			  debugstderr  => 0,
+			  debugstdout  => 0,
+			  debugsyslog  => 1,
+			  debugdir     => '',
+			  debugfile    => 0,
+			  cleandebugs  => 1,
+		  };
+
+GetOptions
+	($bcargs,
+	 'ctlverbose+',
+	 'ctlquiet+',
+	 'notimer',
+	 'help',
+	 'daysback=i',
+	 'sort=i',
+	 'showdays',
+	 'compress',
+	 'retry=i',
+	 'retrysleep=i',
+
+	 ## These are sent to the constructor:
+	 'dbport=i',
+	 'dbhost=s',
+	 'dbname=s',
+	 'dbuser=s',
+	 'dbpass=s',
+	 'verbose=i',
+	 'sendmail=i',
+	 'extraname=s',
+	 'debugfilesep',
+	 'debugname=s',
+	 'debugstderr=i',
+	 'debugstdout=i',
+	 'debugsyslog=i',
+	 'debugdir=s',
+	 'debugfile=i',
+	 'cleandebugs=i',
+) or die "\n";
+
+my $QUIET      = delete $bcargs->{ctlquiet};
+help() if $bcargs->{help};
+
+my $VERBOSE    = delete $bcargs->{ctlverbose};
+my $DAYSBACK   = delete $bcargs->{daysback} || $DEFAULT_DAYSBACK;
+my $COMPRESS   = delete $bcargs->{compress};
+my $SHOWDAYS   = delete $bcargs->{showdays} || 1;
+my $RETRY      = delete $bcargs->{retry} || 0;
+my $RETRYSLEEP = delete $bcargs->{retrysleep} || 0;
+my $NOTIMER    = delete $bcargs->{notimer} || 0;
+
+my $DBCONN = "User: $bcargs->{dbuser}  Database: $bcargs->{dbname}";
+$bcargs->{dbhost} and length $bcargs->{dbhost} and $DBCONN .= "  Host: $bcargs->{dbhost}";
+$bcargs->{dbport} and length $bcargs->{dbport} and $DBCONN .= "  Port: $bcargs->{dbport}";
+
+## Anything left over is the verb and noun(s)
+
+my $verb = shift || '';
+help() unless $verb;
+$verb = lc $verb;
+my @nouns = @ARGV;
+my $nouns = join ' ' => @nouns;
+
+## Grab curent information from the bucardo_config file
+my $DSN = "dbi:Pg:dbname=$bcargs->{dbname}";
+$bcargs->{dbhost} and length $bcargs->{dbhost} and $DSN .= ";host=$bcargs->{dbhost}";
+$bcargs->{dbport} and length $bcargs->{dbport} and $DSN .= ";port=$bcargs->{dbport}";
+$dbh = DBI->connect($DSN, $bcargs->{dbuser}, $bcargs->{dbpass}, {AutoCommit=>0,RaiseError=>1});
+
+my $REASONFILE = get_config('reason_file') or die "Invalid reason_file!\n";
+my $PIDDIR     = get_config('piddir') or die "Invalid piddir!\n";
+my $pidfile    = get_config('pidfile') or die "Invalid pidfile!\n";
+my $stopfile   = get_config('stopfile') or die "Invalid stopfile!\n";
+
+my $PIDFILE        = "$PIDDIR/$pidfile";
+my $REASONFILE_LOG = "$REASONFILE.log";
+my $STOPFILE       = "$PIDDIR/$stopfile";
+
+## Handle all the verbs
+status_all()    if $verb eq 'status' and ! @nouns;
+status_detail() if $verb eq 'status';
+start()         if $verb eq 'start';
+stop()          if $verb eq 'stop';
+reload_config() if $verb eq 'reload_config';
+ping()          if $verb eq 'ping';
+
+## For the rest, we expect a list of sync with an optional decimal "timeout"
+my $adverb;
+my $syncs = get_syncs();
+my @syncs;
+for my $sync (@nouns) {
+	if ($sync =~ /^\d+$/) {
+		$adverb = $sync;
+		next;
+	}
+	if (! exists $syncs->{$sync}) {
+		die qq{Sync "$sync" does not appear to exist\n};
+	}
+	push @syncs, $sync;
+}
+vate_sync() if $verb eq 'activate' or $verb eq 'deactivate';
+kick() if $verb eq 'kick';
+
+help();
+
+sub help {
+	warn qq{Usage: $0 args
+  start <reason>  -- force existing sync(s) to quit, then start
+  stop <reason>   -- tell everyone to stop permanently, even the MCP
+  kick <syncname(s)> [timeout] -- kick off one or more syncs, optionally wait for result (0 = wait until done)
+  ping [timeout] -- ping the MCP for a response
+  status [--sort=col#] [--daysback=#]  -- list information about all syncs
+  status syncname[s] [--daysback=#] -- list detailed information about one or more syncs
+  reload_config  -- force a running Bucardo to reload the bucardo_config table
+For more details, try 'man bucardo_ctl'
+} unless $QUIET; ## Mostly for the test suite
+	exit 0;
+}
+
+
+sub start {
+
+	## Attempt to start Bucardo
+
+	## Refuse to go on if we get a ping response within 5 seconds
+	$QUIET or print "Checking for existing processes\n";
+
+	my $oldpid = ping({quiet => 1, timeout => 5, noexit => 1});
+
+	if ($oldpid) {
+		$QUIET or print "Cannot start, process $oldpid is already running\n";
+		exit 1;
+	}
+
+	## Create a new Bucardo instance and connect to its database
+	require Bucardo;
+	my $bc = Bucardo->new($bcargs);
+
+	set_reason();
+
+	stop_bucardo();
+
+	sleep 2; ## Give everyone a chance to notice it
+	## TODO: be smarter about this by scanning PIDDIR
+
+	if (-e $STOPFILE) {
+		print "Removing $STOPFILE\n" unless $QUIET;
+		unlink $STOPFILE;
+	}
+	if (-e $PIDFILE) {
+		print "Removing $STOPFILE\n" unless $QUIET;
+		unlink $PIDFILE;
+	}
+
+	$QUIET or print qq{Starting Bucardo\n};
+
+	$bc->start_mcp();
+
+    exit 0;
+}
+
+
+sub stop {
+
+	## Attempt to stop Bucardo
+	
+	set_reason();
+
+	print "Creating $STOPFILE ... " unless $QUIET;
+	stop_bucardo();
+	print "Done\n" unless $QUIET;
+
+	exit 0;
+}
+
+
+sub reload_config {
+
+	## Reload configuration settings from the DB, restart all controllers and kids
+	for (@nouns) {
+		if (/^\d+$/) {
+			$adverb = $1;
+			last;
+		}
+	}
+
+	$QUIET or print qq{Forcing Bucardo to reload the bucardo_config table};
+
+	my $done = 'bucardo_reload_config_finished';
+	$dbh->do("NOTIFY bucardo_reload_config");
+	if (defined $adverb) {
+		print '...';
+		$dbh->do("LISTEN $done");
+	}
+	$dbh->commit();
+
+	if (!defined $adverb) {
+		print "\n";
+		exit 0;
+	}
+	sleep 0.1;
+  WAITIN: {
+		while (my $notify = $dbh->func('pg_notifies')) {
+			my ($name, $pid) = @$notify;
+			last WAITIN if $name eq $done;
+		}
+		$dbh->commit();
+		sleep($WAITSLEEP);
+		redo;
+	}
+	print "DONE!\n";
+
+	exit 0;
+
+} ## end of reload_config
+
+
+sub ping {
+
+	## See if the MCP is alive and responds to pings
+	## Default is to wait 15 seconds
+
+	my $arg = shift || {};
+
+	my $timeout = exists $arg->{timeout} ? $arg->{timeout} : 15;
+	my $quiet = exists $arg->{quiet} ? $arg->{quiet} : $QUIET;
+
+	if (defined $nouns[0] and $nouns[0] =~ /^\d+$/) {
+		$timeout = $nouns[0];
+	}
+
+	$VERBOSE and print "Pinging MCP, timeout = $timeout\n";
+	$dbh->do("LISTEN bucardo_mcp_pong");
+	$dbh->do("NOTIFY bucardo_mcp_ping");
+	$dbh->commit();
+	my $starttime = time;
+	sleep 0.1;
+	
+  P:{
+		my $notify = $dbh->func('pg_notifies');
+		if (defined $notify) {			
+			my ($name, $pid) = @$notify;
+			$quiet or print "OK: Got response from PID $pid\n";
+			return $pid if $arg->{noexit};
+			exit 0;
+		}
+		$dbh->rollback();
+		sleep 0.5;
+		my $totaltime = time - $starttime;
+		if ($timeout and $totaltime >= $timeout) {
+			$quiet or print "CRITICAL: Timed out ($totaltime s), no ping response from MCP\n";
+			return 0 if $arg->{noexit};
+			exit 1;
+		}
+		redo;
+	}
+
+	return;
+
+} ## end of ping
+
+sub kick {
+
+	@nouns or die qq{kick requires at least one sync name\n};
+
+	my ($exitstatus, $retries, $do_retry) = (0,0,0);
+
+  RETRY: {
+		$dbh->rollback();
+		$exitstatus = 0;
+	  SYNC: for my $sync (@syncs) {
+			$dbh->do("NOTIFY bucardo_kick_sync_$sync");
+			my $done = "bucardo_syncdone_$sync";
+			my $killed = "bucardo_synckill_$sync";
+			if (! defined $adverb) {
+				$dbh->commit();
+				$QUIET or print qq{Kicked sync $sync\n};
+				next;
+			}
+
+			$QUIET or print qq{Kick $sync: };
+			$dbh->do("LISTEN $done");
+			$dbh->do("LISTEN $killed");
+			my $s = $syncs->{$sync};
+			if ($s->{targetgroup}) {
+				for (@{$s->{targets}}) {
+					$dbh->do("LISTEN bucardo_syncdone_${sync}_$_");
+					$dbh->do("LISTEN bucardo_synckill_${sync}_$_");
+				}
+			}
+			else {
+				$dbh->do("LISTEN bucardo_syncdone_${sync}_$s->{targetdb}");
+				$dbh->do("LISTEN bucardo_synckill_${sync}_$s->{targetdb}");
+			}
+			$dbh->commit();
+
+			my $time = time;
+			sleep 0.1;
+
+			my $timeout = (defined $adverb and $adverb > 0) ? $adverb : 0;
+
+			my $printstring = $NOTIMER ? '' : '[0 s] ';
+			print $printstring unless $QUIET or $NOTIMER;
+			my $oldtime = 0;
+			local $SIG{ALRM} = sub { die 'Timed out' };
+			$do_retry = 0;
+			eval {
+				if ($timeout) {
+					alarm $timeout;
+				}
+			  WAITIN: {
+					my $last = '';
+					if ($PROGRESS and time - $time != $oldtime) {
+						$oldtime = time - $time;
+						if (!$QUIET and !$NOTIMER) {
+							print "\b" x length($printstring);
+							$printstring =~ s/\d+/$oldtime/;
+							print $printstring;
+						}
+					}
+				  W: while (my $notify = $dbh->func('pg_notifies')) {
+						my ($name, $pid) = @$notify;
+						if ($name eq $done) {
+							$last = 'DONE!';
+						}
+						elsif ($name eq $killed) {
+							$last = 'KILLED!';
+							$exitstatus = 2;
+						}
+						elsif ($name =~ /^bucardo_syncdone_${sync}_(.+)$/) {
+							my $new = sprintf "$1(%ds) ", ceil(time-$time);
+							print $new unless $QUIET;
+							$printstring .= $new;
+						}
+						elsif ($name =~ /^bucardo_synckill_${sync}_(.+)$/) {
+							my $new = sprintf "$1 KILLED (%ds) ", ceil(time-$time);
+							print $new unless $QUIET;
+							$printstring .= $new;
+							$exitstatus = 2;
+							$last = " ";
+						}
+					}
+					$dbh->rollback();
+					if ($last) {
+						print $last unless $QUIET;
+						if ($last ne 'DONE!' and $RETRY and ++$retries <= $RETRY) {
+							print "Retry #$retries\n";
+							$do_retry = 1;
+							die "Forcing eval to exit for retry attempt\n";
+						}
+						last WAITIN;
+					}
+					sleep($WAITSLEEP);
+					redo WAITIN;
+				}
+				alarm 0 if $timeout;
+			};
+			alarm 0 if $timeout;
+			if ($do_retry) {
+				$do_retry = 0;
+				redo RETRY;
+			}
+			if ($@) {
+				if ($@ =~ /Timed out/o) {
+					$exitstatus = 1;
+					warn "Timed out!\n";
+				}
+				else {
+					$exitstatus = 2;
+					warn "Error: $@\n";
+				}
+				next SYNC;
+			}
+
+			next SYNC if $QUIET;
+
+			if ($PROGRESS) {
+				print "\n";
+			}
+			else {
+				printf "(%ds)\n", ceil(time - $time);
+			}
+		} ## end each sync
+
+	} ## end RETRY
+
+	exit $exitstatus;
+
+} ## end of kick
+
+
+sub status_all {
+
+	## Show status of all syncs in the database
+
+	print "Days back: $DAYSBACK  $DBCONN  ";
+
+	## See if the MCP is running and what its PID is
+	if (! -e $PIDFILE) {
+		print "\nBucardo may not be running. No file found at $PIDFILE";
+	}
+	else {
+		my $fh;
+		if (!open $fh, '<', $PIDFILE) {
+			print "\nERROR: Could not open $PIDFILE: $!";
+		}
+		else {
+			my $pid = <$fh>;
+			chomp $pid;
+			close $fh or warn qq{Could not close $PIDFILE: $!\n};
+			if ($pid =~ /^\d+$/) {
+				print "PID of Bucardo MCP: $pid";
+			}
+			else {
+				print "\nERROR: $PIDFILE contained: $pid";
+			}
+		}
+	}
+	print "\n";
+
+	my $orderby = $bcargs->{sort} || '1';
+	if ($orderby !~ /^\+?\-?\d$/) {
+		die "Invalid sort option, must be +- 1 through 9\n";
+	}
+
+	our $syncs;
+	my $max;
+	($syncs,$max) = get_detailed_syncs();
+
+	printf qq{%-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s\n},
+		$max->{name},'Name',
+		$max->{type}, 'Type',
+		$max->{stat}, 'State',
+		$max->{pid}, 'PID',
+		$max->{good}, 'Last_good',
+		$max->{total}, 'Time',
+		$max->{iud}, 'I/U/D',
+		$max->{bad}, 'Last_bad',
+		$max->{totalbad}, 'Time';
+
+	printf qq{%s+%s+%s+%s+%s+%s+%s+%s+%s\n},
+		'=' x $max->{name},
+		'=' x $max->{type},
+		'=' x $max->{stat},
+		'=' x $max->{pid},
+		'=' x $max->{good},
+		'=' x $max->{total},
+		'=' x $max->{iud},
+		'=' x $max->{bad},
+		'=' x $max->{totalbad};
+
+	## If fancy sorting desired, call the list ourself to sort
+	sub sortme {
+		my $sortcol = $bcargs->{sort} || 1;
+
+		+1 == $sortcol and return $a cmp $b;
+		-1 == $sortcol and return $b cmp $a;
+
+		my ($uno,$dos) = ($syncs->{$a}, $syncs->{$b});
+
+		## Synctype
+		+2 == $sortcol and return ($uno->{synctype} cmp $dos->{synctype} or $a cmp $b);
+		-2 == $sortcol and return ($dos->{synctype} cmp $uno->{synctype} or $a cmp $b);
+
+		## Status
+		+3 == $sortcol and return ($uno->{state} cmp $dos->{state} or $a cmp $b);
+		-3 == $sortcol and return ($dos->{state} cmp $uno->{state} or $a cmp $b);
+
+		## PID
+		+4 == $sortcol and return $uno->{PID} <=> $dos->{PID};
+		-4 == $sortcol and return $dos->{PID} <=> $uno->{PID};
+
+		## Last good
+		+5 == $sortcol and return ($uno->{lastgoodsecs} <=> $dos->{lastgoodsecs} or $a cmp $b);
+		-5 == $sortcol and return ($dos->{lastgoodsecs} <=> $uno->{lastgoodsecs} or $a cmp $b);
+
+		## Good time
+		+6 == $sortcol and return ($uno->{lastgoodtime} <=> $dos->{lastgoodtime} or $a cmp $b);
+		-6 == $sortcol and return ($dos->{lastgoodtime} <=> $uno->{lastgoodtime} or $a cmp $b);
+
+		if ($sortcol == 7 or $sortcol == -7) {
+			my ($total1,$total2) = (0,0);
+			while ($uno->{iud} =~ /(\d+)/go) {
+				$total1 += $1;
+			}
+			while ($dos->{iud} =~ /(\d+)/go) {
+				$total2 += $1;
+			}
+
+			7 == $sortcol and return ($total1 <=> $total2 or $a cmp $b);
+
+			return ($total2 <=> $total1 or $a cmp $b);
+		}
+
+		## Last bad
+		+8 == $sortcol and return ($uno->{lastbadsecs} <=> $dos->{lastbadsecs} or $a cmp $b);
+		-8 == $sortcol and return ($dos->{lastbadsecs} <=> $uno->{lastbadsecs} or $a cmp $b);
+
+		## Bad time
+		+9 == $sortcol and return ($uno->{lastbadtime} <=> $dos->{lastbadtime} or $a cmp $b);
+		-9 == $sortcol and return ($dos->{lastbadtime} <=> $uno->{lastbadtime} or $a cmp $b);
+
+
+		return $a cmp $b;
+
+	}
+
+	for my $sync (sort sortme keys %$syncs) {
+		my $s = $syncs->{$sync};
+		my $X = '|';
+		printf qq{%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s\n},
+			$max->{name},$sync,
+			$max->{type},$s->{typetext},
+			$max->{stat}, $s->{state},
+			$max->{pid}, $s->{PID} || '',
+			$max->{good}, $s->{lastgood},
+			$max->{total}, $s->{timegood},
+			$max->{iud}, $s->{iud},
+			$max->{bad}, $s->{lastbad},
+			$max->{totalbad}, $s->{timebad};
+	}
+
+
+	exit 0;
+
+} ## end of status_all
+
+
+sub status_detail {
+
+	## Show detailed information about one or more syncs
+
+	## Verify that all named syncs exist
+	my ($syncs,$max) = get_detailed_syncs({syncs => \@nouns});
+
+	for my $sync (sort @nouns) {
+		$DEBUG and warn "Verify sync: $sync\n";
+		if (!exists $syncs->{lc $sync}) {
+			die "No such sync: $sync\n";
+		}
+	}
+
+	print "Days back: $DAYSBACK  $DBCONN\n";
+
+	## Present each ordered by name
+	for my $sync (sort { lc $a cmp lc $b } @nouns) {
+		print '=' x 70; print "\n";
+		my $s = $syncs->{$sync};
+
+		## Undefined should be written as 'none'
+		for (qw/checktime/) {
+			$s->{$_} ||= 'none';
+		}
+		## Not true should be empty
+		for (qw/PID PIDFILE CREATED/) {
+			$s->{$_} ||= '';
+		}
+
+		my $morepid = '';
+		if ($s->{stayalive} or $s->{kidsalive}) {
+			$morepid = " (PID = $s->{PID})";
+		}
+
+		## Should be 'yes' or 'no'
+		for (qw/makedelta analyze_after_copy stayalive kidsalive ping rebuild_index do_listen usecustomselect/) {
+			$s->{$_} = (defined $s->{$_} and $s->{$_}) ? 'yes' : 'no ';
+		}
+
+		my $target;
+		if ($s->{targetdb}) {
+			$target = "Target database:   $s->{targetdb}";
+		}
+		else {
+			$target = "Target group:      $s->{targetgroup} (";
+			$target .= join ',' => @{$s->{targets}};
+			$target .= ')';
+		}
+				
+		$s->{iud} =~ s#/# / #g;
+		$s->{state} =~ s/>/ > /;
+
+		my $moregood = '';
+		if ($s->{lastgood} ne 'unknown') {
+			$moregood .= " (time to run: $s->{timegood})";
+			$moregood .= "\nLast good time:    $s->{latest_good}{last_ended_date}";
+			$moregood .= "  Target: $s->{latest_good}{targetdb}";
+		}
+
+		my $morebad = '';
+		if ($s->{lastbad} ne 'unknown') {
+			$morebad = " (time to run: $s->{timebad})";
+			$morebad .= "\nLast bad time:     $s->{latest_bad}{last_aborted_date}";
+			$morebad .= "  Target: $s->{latest_bad}{targetdb}";
+			(my $why = $s->{latest_bad}{whydie}) =~ s/\s+$//;
+			$why =~ s/^/                  /mg;
+
+			$why =~ s/^\s+//;
+			$morebad .= "\nLatest bad reason: $why";
+		}
+
+		print qq{Sync name:         $sync
+Current state:     $s->{state}$morepid
+Type:              $s->{synctype}
+Source database:   $s->{source}
+$target
+Last good:         $s->{lastgood}$moregood
+Ins/Upd/Del:       $s->{iud}
+Last bad:          $s->{lastbad}$morebad
+PID file:          $s->{PIDFILE}
+PID file created:  $s->{CREATED}
+Status:            $s->{status}
+Limitdbs:          $s->{limitdbs}
+Priority:          $s->{priority}
+Checktime:         $s->{checktime}
+Overdue time:      $s->{overdue}
+Expired time:      $s->{expired}
+Stayalive:         $s->{stayalive}          Kidsalive: $s->{kidsalive}
+Rebuild index:     $s->{rebuild_index}          Do_listen: $s->{do_listen}
+Ping:              $s->{ping}          Makedelta: $s->{makedelta}
+};
+		if ($s->{synctype} eq 'fullcopy'){
+			print qq{Custom select:     $s->{usecustomselect} $s->{copyextra}\n};
+			print qq{Post-copy analyze: $s->{analyze_after_copy}\n};
+			print qq{Delete method:     $s->{deletemethod}\n};
+		}
+
+	}
+	exit 0;
+
+} ## end of status_detail
+
+sub get_config {
+
+	my $name = shift;
+
+	$SQL = "SELECT value FROM bucardo_config WHERE lower(setting) = ?";
+	$sth = $dbh->prepare_cached($SQL);
+	$count = $sth->execute(lc $name);
+	if ($count < 1) {
+		$sth->finish();
+		die "Invalid bucardo_config setting: $name\n";
+	}
+	return $sth->fetchall_arrayref()->[0][0];
+}
+
+
+sub set_reason {
+
+	if (! length $nouns) {
+		warn qq{Please provide a reason. For example:\n$0 $verb "Adding new table -Greg"\n};
+		exit 1;
+	}
+
+	open my $fh, '>', $REASONFILE or die qq{Could not open "$REASONFILE": $!\n};
+	print $fh (scalar localtime) . " | $nouns\n";
+	close $fh or warn qq{Could not close $REASONFILE: $!\n};
+	open $fh, '>>', $REASONFILE_LOG or die qq{Could not open "$REASONFILE_LOG": $!\n};
+	print $fh (scalar localtime) . " | $verb | $nouns\n";
+	close $fh or warn qq{Could not close $REASONFILE_LOG: $!\n};
+	return 1;
+}
+
+
+sub stop_bucardo {
+	open my $stop, '>', $STOPFILE or die qq{Could not create "$STOPFILE": $!\n};
+	print {$stop} "Stopped by $0 on " . (scalar localtime) . "\n";
+	close $stop or warn qq{Could not close "$STOPFILE": $!\n};
+	return;
+}
+
+
+sub get_detailed_syncs {
+
+	my $arg = shift || {};
+
+	my $syncs = get_syncs();
+
+	## Now see exactly what's going on with it at this moment (according to q)
+
+	## First, we need to hard-code our time backwards
+
+	$SQL = "SELECT date (now() - '$DAYSBACK days'::interval)";
+	my $oldtime = $dbh->selectall_arrayref($SQL)->[0][0];
+	$dbh->do("SET constraint_exclusion = true");
+
+	## We want information about the last time it ran successfully
+	$SQL = qq{
+SELECT *, 
+TO_CHAR(ended,'$DATEFORMAT') AS last_ended_date,
+TO_CHAR(aborted,'$DATEFORMAT') AS last_aborted_date,
+round(extract(epoch FROM ended-started)) AS total_time_ended,
+round(extract(epoch FROM aborted-started)) AS total_time_aborted,
+round(extract(epoch FROM now()-ended)) AS last_ended_secs,
+round(extract(epoch FROM now()-aborted)) AS last_aborted_secs
+FROM
+(SELECT * FROM q WHERE sync = \$1 AND cdate >= '$oldtime'
+UNION ALL
+SELECT * FROM freezer.master_q WHERE sync = \$1 AND cdate >= '$oldtime') AS foo
+WHERE ended is NOT NULL AND aborted IS NULL
+ORDER BY ended DESC LIMIT 1;
+};
+	$sth{latest_good} = $dbh->prepare($SQL);
+
+	## If the last one was an abort, find the latest good run:
+	$SQL =~ s/IS NULL/IS NOT NULL/;
+	$sth{latest_bad} = $dbh->prepare($SQL);
+
+	## Is it running right now?
+	$SQL = qq{
+SELECT *,
+round(extract(epoch FROM now()-cdate)) AS q1,
+round(extract(epoch FROM now()-started)) AS q2
+FROM q
+WHERE sync = \$1
+AND ended IS NULL
+AND aborted IS NULL
+ORDER BY started DESC LIMIT 1
+};
+	$sth{active_now} = $dbh->prepare($SQL);
+
+	my %max = (
+			   name     => 4,
+			   type     => 5,
+			   stat     => 5,
+			   pid      => 3,
+			   q1       => 6,
+			   q2       => 6,
+			   iud      => 5,
+			   good     => 9,
+			   total    => 5,
+			   bad      => 8,
+			   totalbad => 4,
+			   );
+	for my $sync (sort keys %$syncs) {
+		if ($arg->{syncs}) {
+			next unless grep { $_ eq $sync } @{$arg->{syncs}};
+		}
+		$DEBUG and warn "Reading sync $sync...\n";
+
+		my $s = $syncs->{$sync};
+
+		## Normal types are too long
+		$s->{typetext} = ' ' . uc(substr $s->{synctype},0,1);
+
+		## Set some basic lengths
+		$max{name} = length($sync) if length($sync) > $max{name};
+		$s->{PID} = 0 if ! defined $s->{PID};
+		$max{pid} = length($s->{PID}) if length($s->{PID}) > $max{pid};
+
+		## Grab information from the q tables
+		$sth{latest_good}->execute($sync);
+		$s->{latest_good}  = $sth{latest_good}->fetchall_arrayref({})->[0];
+
+		$sth{latest_bad}->execute($sync);
+		$s->{latest_bad} = $sth{latest_bad}->fetchall_arrayref({})->[0];
+
+		$sth{active_now}->execute($sync);
+		$s->{active_now} = $sth{active_now}->fetchall_arrayref({});
+
+		## Pretty up the times
+		$s->{lastgoodsecs} = $s->{lastgoodtime} = 0;
+		$s->{lastbadsecs} = $s->{lastbadtime} = 0;
+		$s->{lastgood} = $s->{lastbad} = 'unknown';
+		$s->{timegood} = $s->{timebad} = '';
+		$s->{iud} = '';
+		$s->{is_overdue} = $s->{is_expired} = '?';
+		if (defined $s->{latest_good}) {
+			my $g = $s->{latest_good};
+			$s->{iud} = "$g->{inserts}/$g->{updates}/$g->{deletes}";
+			$max{iud} = length($s->{iud}) if length($s->{iud}) > $max{iud};
+
+			$s->{timegood} = pretty_time($g->{total_time_ended});
+			$max{total} = length($s->{timegood}) if length($s->{timegood}) > $max{total};
+			$s->{lastgoodtime} = $g->{total_time_ended};
+
+			$s->{lastgood} = pretty_time($g->{last_ended_secs});
+			$max{good} = length($s->{lastgood}) if length($s->{lastgood}) > $max{good};
+			$s->{lastgoodsecs} = $g->{last_ended_secs};
+
+			$s->{is_overdue} = ($g->{last_ended_secs} > $s->{overdue_secs}) ? 'yes' : 'no';
+			$s->{is_expired} = ($g->{last_ended_secs} > $s->{expired_secs}) ? 'yes' : 'no';
+
+		}
+		$s->{is_expired} = 'no' if $s->{expired_secs} < 1;
+		$s->{is_overdue} = 'no' if $s->{overdue_secs} < 1;
+
+		if (defined $s->{latest_bad}) {
+			$s->{timebad} = pretty_time($s->{latest_bad}{total_time_aborted});
+			$max{totalbad} = length($s->{timebad}) if length($s->{timebad}) > $max{totalbad};
+			$s->{lastbadtime} = $s->{latest_bad}{total_time_aborted};
+
+			$s->{lastbad} = pretty_time($s->{latest_bad}{last_aborted_secs});
+			$max{bad} = length($s->{lastbad}) if length($s->{lastbad}) > $max{bad};
+			$s->{lastbadsecs} = $s->{latest_bad}{last_aborted_secs};
+		}
+
+		## Check for current activity
+		$s->{timeq1} = $s->{timeq2} = '';
+		for my $row (@{$s->{active_now}}) {
+			$s->{timeq} = $s->{timeq1} = pretty_time($row->{q1});
+			if (defined $row->{q2}) {
+				$s->{timeq} = $s->{timeq2} = pretty_time($row->{q2});
+			}
+			my $len = length('WAIT:') + length($s->{timeq});
+			if (length $s->{timeq2}) {
+				$len += (1 + length($s->{targetdb}));
+			}
+			$max{stat} = $len if $len > $max{stat};
+			last;
+		}
+
+		$s->{state} = length($s->{timeq2}) ? "RUN:$s->{timeq}>$s->{targetdb}" :
+			length($s->{timeq1}) ? "WAIT:$s->{timeq}" :
+			($s->{status} eq 'active') ? 'idle' : 'off';
+
+		## Is anything overdue or expired?
+		if ($s->{is_expired} eq 'yes') {
+			$s->{typetext} .= ' E!'
+		}
+		elsif ($s->{is_overdue} eq 'yes') {
+			$s->{typetext} .= ' O!';
+		}
+		elsif ($s->{is_expired} ne 'no') {
+			$s->{typetext} .= ' ?';
+		}
+
+	}
+
+	return $syncs, \%max;
+
+} ## end of get_detailed_syncs
+
+
+sub pretty_time {
+
+	my $secs = shift;
+	return '?' if ! defined $secs or $secs !~ /^\-?\d+$/o or $secs < 0;
+	my ($D,$H,$M,$S) = (0,0,0,0);
+
+	if ($bcargs->{showdays}) {
+		if ($secs > 60*60*24) {
+			$D = int $secs/(60*60*24);
+			$secs -= $D*60*60*24;
+		}
+	}
+	if ($secs > 60*60) {
+		$H = int $secs/(60*60);
+		$secs -= $H*60*60;
+	}
+	if ($secs > 60) {
+		$M = int $secs/60;
+		$secs -= $M*60;
+	}
+	$secs = int $secs;
+	my $answer = sprintf "%s%s%s${secs}s",$D ? "${D}d " : '',$H ? "${H}h " : '',$M ? "${M}m " : '';
+
+	## Detailed listings get compressed
+	if ((defined $COMPRESS and $COMPRESS) or (!defined $COMPRESS and !@nouns)) {
+		$answer =~ s/ //g;
+	}
+	return $answer;
+}
+
+
+sub get_syncs {
+
+	my %dbgroup;
+	$SQL = "SELECT dbgroup, db FROM dbmap ORDER BY priority, db";
+	for my $row (@{$dbh->selectall_arrayref($SQL)}) {
+		push @{$dbgroup{$row->[0]}}, $row->[1];
+	}
+
+	$SQL = qq{
+        SELECT *,
+            COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs,
+            now()-overdue AS overdue_time,
+            now()-expired AS expired_time,
+            extract(epoch FROM overdue) AS overdue_secs,
+            extract(epoch FROM expired) AS expired_secs
+        FROM     bucardo.sync
+        ORDER BY priority DESC, name DESC
+    };
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	my $sync = $sth->fetchall_hashref("name");
+
+	## Expand any targetgroups in use
+	for (keys %$sync) {
+		my $s = $sync->{$_};
+		if (defined $s->{targetgroup}) {
+			$s->{targets} = $dbgroup{$s->{targetgroup}};
+		}
+	}
+	## Check what exists in the pid directory
+	opendir my $sdir, $PIDDIR or die qq{Could not opendir "$PIDDIR": $!\n};
+	my $pidfile;
+	while (defined ($pidfile = readdir($sdir))) {
+		next if $pidfile =~ /^\.\.?$/
+			or "$PIDDIR/$pidfile" eq $STOPFILE
+			or "$PIDDIR/$pidfile" eq $PIDFILE;
+		if ($pidfile !~ /^bucardo_sync_(.+)\.pid$/) {
+			warn "Skipping unknown file in pid directory: $pidfile\n";
+			next;
+		}
+		my $syncname = $1; ## no critic
+
+		## Is this a valid syncname?
+		if (! exists $sync->{$syncname}) {
+			warn qq{Invalid pid file found: $PIDDIR/$pidfile - removing it\n};
+			unlink "$PIDDIR/$pidfile";
+			next;
+		}
+
+		my $cdate = localtime ($^T - (-C "$PIDDIR/$pidfile")*24*60*60);
+		$sync->{$syncname}{PIDFILE} = "$PIDDIR/$pidfile";
+		$sync->{$syncname}{CREATED} = $cdate;
+
+		## Does it contain a pid?
+		open my $fh, '<', "$PIDDIR/$pidfile" or die qq{Could not open "$PIDDIR/$pidfile": $!\n};
+		my $pid = <$fh>;
+		chomp $pid;
+		close $fh or warn qq{Could not close $PIDDIR/$pidfile: $!\n};
+		if ($pid !~ /^\d+$/) {
+			$sync->{$syncname}{NOPID} = 1;
+		}
+		else {
+			$sync->{$syncname}{PID} = $pid;
+			$sync->{$syncname}{PIDPING} = kill 0, $pid;
+		}
+	}
+	return $sync;
+
+} ## end of get_syncs
+
+
+sub vate_sync {
+
+	my $name = lc $verb;
+	my $ucname = ucfirst $name;
+	@nouns or die qq{${name}_sync requires at least one sync name\n};
+
+	my $wait = (defined $adverb and $adverb eq '0') ? 1 : 0;
+	for my $sync (@syncs) {
+		$QUIET or print qq{$ucname sync $sync};
+		my $done = "bucardo_${name}d_sync_$sync";
+		$dbh->do("NOTIFY bucardo_${name}_sync_$sync");
+		if ($wait) {
+			print "...";
+			$dbh->do("LISTEN $done");
+		}
+		$dbh->commit();
+		if (!$wait) {
+			print "\n";
+			next;
+		}
+		sleep 0.1;
+	  WAITIN: {
+			while (my $notify = $dbh->func('pg_notifies')) {
+				my ($name, $pid) = @$notify;
+				last WAITIN if $name eq $done;
+			}
+			$dbh->commit();
+			sleep($WAITSLEEP);
+			redo;
+		}
+		print "OK\n";
+	} ## end each sync
+	exit 0;
+}
+
+
+
+__END__
+
+=head1 NAME
+
+bucardo_ctl - utility script for controlling the Bucardo program
+
+=head1 VERSION
+
+This documents describes bucardo_ctl version 1.1.17
+
+=head1 SYNOPSIS
+
+  ./bucardo_ctl start "Starting up - Greg"
+
+  ./bucardo_ctl stop "Bringing down for debugging - Raul E."
+
+  ./bucardo_ctl ping
+
+  ./bucardo_ctl status
+
+  ./bucardo_ctl status sync1 sync2
+
+  ./bucardo_ctl kick sync1 sync2
+
+  ./bucardo_ctl kick sync1 0 --retry=10
+
+  ./bucardoctl reload_config
+
+=head1 DESCRIPTION
+
+The bucardo_ctl script is used to control the operation of a Bucardo process. Primarily it is 
+used for stopping and starting Bucardo, viewing current information, and for kicking off named 
+syncs. The script needs to know how to connect to the Bucardo database: this information can 
+be passed as arguments or hard-coded into the script itself. If you have multiple Bucardos 
+running, it is recommended that you create aliases for each database.
+
+=head1 COMMANDS
+
+=over 4
+
+=item B<start>
+
+Usage: ./bucardo_ctl start "Reason --name"
+
+Restarts Bucardo cleanly by first issuing the equivalent of a stop to ask any existing Bucardo 
+proceses to exit, and then starting a new Bucardo MCP process. A short reason and name should 
+be provided - these are logged in the reason_file file and sent in the email sent when Bucardo 
+has been started up.
+
+Before attempting to kill any old processes, a ping command with a timeout of 5 seconds is issued. 
+If this returns successfully (indicating an active MCP process already running), the script will 
+exit with a return value of 2.
+
+=item B<stop>
+
+Usage: ./bucardo_ctl stop "Reason --name"
+
+Forces Bucardo to quit by creating a stop file which all MCP, CTL, and KID processes should 
+detect and cause them to exit. Note that active syncs will not exit right away, as they 
+will not look for the stop file until they have finished their current run. Typically, 
+you should scan the list of processes after running this program to make sure that all Bucardo 
+processes have stopped. One should also provide a reason for issuing the stop - usually 
+this is a short explanation and your name. This is logged in the reason_file file and 
+is also used by Bucardo when it exits and sends out mail about its death.
+
+=item B<kick>
+
+Usage: ./bucardo_ctl kick <syncname(s)> [timeout]
+
+Tells one or more named syncs to fire as soon as possible. Note that this simply sends a request that 
+the sync fire: it may not start right away if the same sync is already running, or if the source or 
+target database has exceeded the number of allowed Bucardo connections. If the final argument is a 
+number, it is treated as a timeout. If this number is zero, the bucardo_ctl command will not return 
+until the sync has finished. For any other number, the sync will wait at most that number of seconds. 
+If any sync has not finished before the timeout, a false value is returned. In all other cases, a 
+true value is returned.
+
+If a timeout is given, the total completion time in seconds is also displayed. If the sync is going to 
+multiple targets, the time that each target takes from the start of the kick is also shown as each 
+target finishes.
+
+=item B<reload_config>
+
+Forces Bucardo to reload the bucardo_config file, and then restart all processes to ensure that the new 
+information is loaded.
+
+=item B<ping>
+
+Sends a ping notice to the MCP process to see if it will respond. By default, it will wait 15 seconds. A 
+numeric argument will change this timeout. Using a 0 as the timeout indicates waiting forever. If a response 
+was returned, the program will exit with a value of 0. If it times out, the value will be 1.
+
+=item B<status>
+
+Usage: ./bucardo_ctl status [syncname(s)] [--sort=#] [--daysback=#] [--showdays]
+
+Shows the current status of all known syncs in a tabular format. If given one or more syncnames, 
+shows detailed information for each one.
+
+When showing all syncs, the columns are:
+
+=over 8
+
+=item 1. B<Name>
+
+The name of the sync
+
+=item 2. B<Type>
+
+The type of the sync. C<F> = fullcopy, C<S> = swap, C<P> = pushdelta. In addition, if a sync is overdue, a C<O!> will 
+appear, and if it is expired, a C<E!> will appear.
+
+=item 3. B<State>
+
+The current status of this sync. If no sync is running, C<idle> will appear. If a sync has been rquested, but has not 
+started yet, C<WAIT> will appear, along with how long since the sync was requested. If a sync is 
+currently running, C<RUN> will appear, followed by the amount of time the sync has been running, followed by which 
+target the sync is running against. Note that syncs running to more than one database at a time will only show 
+the one most recently started.
+
+=item 4. B<PID>
+
+The PID of the current sync's controller (CTL). Note that if this is not a persistent sync and the state is C<idle>, 
+this is merely a historical record and does not represent an active process.
+
+=item 5. B<Last_good>
+
+How long since this sync last ran succesfully. Remember that this is affected by the --daysback parameter.
+
+=item 6. B<Time>
+
+The amount of time the last successful sync took to run.
+
+=item 7. B<I/U/D>
+
+The number of inserts. updates, and deletes performed by the last successful sync.
+
+=item 8. B<Last_bad>
+
+How long since this sync failed to run successfully. Strongly affected by the --daysback parameter.
+
+=item 9. B<Time>
+
+The amount of time the last failed sync took before it was aborted.
+
+=back
+
+
+=item B<activate> syncname [syncname2 syncname3 ...] [timeout]
+
+Activates one or more named syncs. If given a timeout argument, it will wait until it has received 
+confirmation from Bucardo that each sync has been successfully activated.
+
+=item B<deactivate> syncname [syncname2 syncname3 ...] [timeout]
+
+Deactivates one or more named syncs. If given a timeout argument, it will wait until it has received 
+confirmation from Bucardo that the sync has been successfully deactivated.
+
+=back
+
+=head1 OPTIONS
+
+It is usually easier to set most of these options at the top of the script, or make an alias for them, 
+as they will not change very often if at all.
+
+=over 4
+
+=item B<--dbport=number>
+
+=item B<--dbhost=string>
+
+=item B<--dbname=string>
+
+=item B<--dbuser=string>
+
+=item B<--dbpass=string>
+
+The port, host, and name of the Bucardo database, the user to connect as, and the password to use.
+
+=item B<--verbose>
+
+Tells Bucardo (not bucardo_ctl) to run in verbose mode. Default is on. Turning this off is not recommended.
+
+=item B<--ctlverbose>
+
+Makes bucardo_ctl run verbosely. Default is off.
+
+=item B<--ctlquiet>
+
+Tells bucardo_ctl to be as quiet as possible. Default is off.
+
+=item B<--help>
+
+Shows a brief summary of usage for bucardo_ctl.
+
+=back
+
+=head2 Kick arguments
+
+The following arguments are only used with the 'kick' command:
+
+=over 4
+
+=item B<--retry=#>
+
+The number of times to retry a sync if it fails. Defaults to 0.
+
+=item B<--retrysleep>
+
+How long to sleep, in seconds, between each retry attempt.
+
+=item B<--notimer>
+
+By default, kicks with a timeout argument give a running real-time summary of time elapsed by 
+using the backspace character. This may not be wanted if running a kick, for example, 
+via a cronjob, so turning --notimer on will simply print the entire message without backspaces.
+
+=back
+
+=head2 Status arguments
+
+The following arguments are only used with the 'status' command:
+
+=over 4
+
+=item B<--daysback=#>
+
+Sets how many days backwards to search the old 'q' logs for information. Defaults to 3 days.
+
+=item B<--showdays>
+
+Specifies whether or not do list the time interval with days, or simply show the hours. For example, 
+"3d 12h 6m 3s" vs. "48h 6m 3s"
+
+=item B<--compress>
+
+Specifies whether or not to compress the time interval by removing spaces. Mostly used to limit 
+the width of the 'status' display.
+
+=item B<--sort=#>
+
+Requests sorting of the 'status' output by one of the nine columns. Use a negative number to reverse 
+the sort order.
+
+=back
+
+=head2 Startup arguments
+
+The following arguments are only applicable when using the "start" command:
+
+=over 4
+
+=item B<--sendmail>
+
+Tells Bucardo whether or not to send mail on interesting events: startup, shutdown, and errors. Default is on.
+Only applicable when using ./bucardo_ctl start.
+
+=item B<--extraname=string>
+
+A short string that will be appended to the version string as output by the Bucardo process names. Mostly 
+useful for debugging.
+
+=item B<--debugfilesep>
+
+Forces creation of separate log files for each Bucardo process of the form "log.bucardo.X.Y", 
+where X is the type of process (MCP, CTL, or KID), and Y is the process ID.
+
+=item B<--debugstderr>
+
+Sends all log messages to standard error. Off by default.
+
+=item B<--debugstdout>
+
+Sends all log messages to standard out. Off by default.
+
+=item B<--debugsyslog>
+
+Sends all log messages to the syslog daemon. On by default. The facility used is controlled by 
+the row "syslog_facility" in the bucardo_config table, and defaults to "LOG_LOCAL1".
+
+=item B<--debugfile>
+
+If set, writes detailed debugging information to one or more files.
+
+=item B<--debugdir=directory name>
+
+Directory where the debug files should go.
+
+=item B<--debugname=string>
+
+Appends the given string to the end of the default debug file name, "log.bucardo". A dot is added 
+before the name as well, so a debugname of "rootdb" would produce a log file named "log.bucardo.rootdb".
+
+=item B<--cleandebugs>
+
+Forces removal of all old debug files before running.
+
+=back
+
+=head1 ENVIRONMENT VARIABLES
+
+The bucardo_ctl script does not use any environment variables at this time.
+
+=head1 BUGS
+
+The 'status' command does not yet return current information, and the start time in particular should be 
+taken with a grain of salt.
+
+Bug reports and feature requests are always welcome, please visit http://bucardo.org or email bugs@bucardo.org.
+
+=head1 SEE ALSO
+
+Bucardo
+
+=head1 COPYRIGHT
+
+Copyright 2006-2007 Greg Sabino Mullane <greg@endpoint.com>
+
+This program is free to use, subject to the limitations in the LICENSE file.
+
+=cut
+

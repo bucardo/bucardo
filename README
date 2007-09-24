@@ -1,0 +1,67 @@
+
+Bucardo - a table-based replication system
+
+DESCRIPTION:
+------------
+
+This is version 3.0.6 of Bucardo.
+
+
+COPYRIGHT:
+----------
+
+	Copyright (c) 2005-2007 Greg Sabino Mullane <greg@endpoint.com>
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.8.3 or,
+at your option, any later version of Perl 5 you may have available.
+
+
+REQUIREMENTS:
+-------------
+
+    build, test, and install Perl 5             (at least 5.8.3)
+    build, test, and install Postgres           (at least 8.1)
+    build, test, and install the DBI module     (at least 1.51)
+    build, test, and install the DBD::Pg module (at least 1.49)
+    
+    You must have at least one database that has Pl/Pgsql and Pl/Perl installed.
+	Target databases may need Pl/Pgsql.
+
+
+INSTALLATION:
+-------------
+To install this module type the following:
+
+   perl Makefile.PL
+   make
+   make test (but see below first)
+   make install
+
+EXAMPLES:
+---------
+
+See the test suite in the t/ subdirectory for some examples.
+
+
+TESTING:
+--------
+
+Because Test::Harness does not play well with forking, the Makefile will attempt to 
+start a small helper daemon for controlling Bucardo from within the tests. You will 
+need to tell the test script where it can find some databases to test with by 
+editing this file:
+
+	t/bucardo.test.data
+
+Once that is set, simply do the usual:
+
+	make test
+
+Or better still:
+
+	make test TEST_VERBOSE=1
+
+
+
+

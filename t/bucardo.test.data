@@ -1,0 +1,34 @@
+
+## This file contains the connection information needed for "make test"
+
+## Master database. This must be a superuser, as we will create a bucardo_test database
+DBNAME: postgres
+DBUSER: bucardo
+DBHOST: 
+DBPORT: 5432
+TESTDB: bucardo_test
+TESTBC: bucardo_test
+
+## First database
+DBNAME1: postgres
+DBUSER1: bucardo
+DBHOST1: 
+DBPORT1: 5432
+TESTDB1: bucardo_test1
+TESTBC1: bucardo_test1
+
+## Second database:
+DBNAME2: postgres
+DBUSER2: bucardo
+DBHOST2: 
+DBPORT2: 5432
+TESTDB2: bucardo_test2
+TESTBC2: bucardo_test2
+
+## Third database:
+DBNAME3: postgres
+DBUSER3: bucardo
+DBHOST3: 
+DBPORT3: 5432
+TESTDB3: bucardo_test3
+TESTBC3: bucardo_test3

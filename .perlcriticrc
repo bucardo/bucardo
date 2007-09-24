@@ -1,0 +1,61 @@
+
+## perlcritic file for Bucardo scripts
+## Usage: perlcritic -profile <thisfile> <scriptname>
+
+verbose = 8
+severity = 1
+
+[-Bangs::ProhibitNumberedNames]
+[-Bangs::ProhibitFlagComments]
+[-Bangs::ProhibitVagueNames]
+
+[-CodeLayout::ProhibitHardTabs]
+[-CodeLayout::ProhibitParensWithBuiltins]
+[-ControlStructures::ProhibitCascadingIfElse]
+[-ControlStructures::ProhibitCStyleForLoops]
+[-ControlStructures::ProhibitDeepNests]
+[-ControlStructures::ProhibitPostfixControls]
+[-ControlStructures::ProhibitUnlessBlocks]
+
+[-Documentation::RequirePodSections]
+
+[-ErrorHandling::RequireCarping]
+
+[-InputOutput::RequireBracedFileHandleWithPrint]
+
+[-Lax::ProhibitEmptyQuotes::ExceptAsFallback]
+
+[-Miscellanea::ProhibitTies]
+[-Miscellanea::RequireRcsKeywords]
+
+[-Modules::ProhibitMultiplePackages]
+
+[-References::ProhibitDoubleSigils]
+
+[-RegularExpressions::RequireExtendedFormatting]
+[-RegularExpressions::RequireLineBoundaryMatching]
+
+[-Subroutines::ProhibitExcessComplexity]
+
+[-TestingAndDebugging::ProhibitNoWarnings]
+
+[-ValuesAndExpressions::ProhibitCommaSeparatedStatements]
+[-ValuesAndExpressions::ProhibitEmptyQuotes]
+[-ValuesAndExpressions::ProhibitInterpolationOfLiterals]
+[-ValuesAndExpressions::ProhibitMixedBooleanOperators]
+[-ValuesAndExpressions::ProhibitNoisyQuotes]
+[-ValuesAndExpressions::ProhibitVersionStrings]
+[-ValuesAndExpressions::RequireNumberSeparators]
+
+[-Variables::ProhibitLocalVars]
+[-Variables::ProhibitPackageVars]
+[-Variables::ProhibitPunctuationVars]
+
+[-Modules::RequireVersionVar]
+
+[CodeLayout::ProhibitTrailingWhitespace]
+severity = 5
+
+[Subroutines::ProhibitBuiltinHomonyms]
+severity = 5
+
