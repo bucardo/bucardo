@@ -1,7 +1,5 @@
 #!perl
 
-## $Id: 01bc.t,v 1.54 2007/06/18 16:06:54 greg Exp greg $
-
 use strict;
 use warnings;
 use Data::Dumper;
