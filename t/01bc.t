@@ -7,7 +7,7 @@ use DBI;
 use IO::Handle;
 use Test::More;
 use Time::HiRes qw/sleep gettimeofday tv_interval/;
-use Test::Dynamic '1.0.3';
+use Test::Dynamic '1.3.1';
 
 ## Running all the tests can take quite a while
 ## This allows us to only run a subset while debugging
