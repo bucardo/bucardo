@@ -19,6 +19,7 @@ our $TEST_MAKEDELTA     = 1;
 our $TEST_COPY          = 1;
 our $TEST_SWAP          = 1;
 our $TEST_CUSTOM_CODE   = 1;
+our $TEST_PING          = 1;
 
 our $TEST_RANDOM_SWAP   = 0;
 
@@ -469,12 +470,24 @@ for my $table (sort keys %tabletype) {
 	}
 }
 
+if ($TEST_PING) { ## START_TEST_PING
+
+	$location = 'ping';
+	pass(" Begin TEST_PING section");
+
+	ping_testing();
+
+} ## STOP_TEST_PING
+
+
 if ($TEST_METHODS) { ## START_TEST_METHODS
 
 	## Test methods to change things in the Bucardo database
 
 	$location = 'methods';
 	pass(" Begin TEST_METHODS section");
+
+	clean_all_tables();
 
 	shutdown_bucardo();
 
@@ -490,6 +503,7 @@ if ($TEST_METHODS) { ## START_TEST_METHODS
 
 if ($TEST_CONFIG) { ## START_TEST_CONFIG
 
+	$location = 'config';
 	pass(" Begin TEST_CONFIG section");
 
 	shutdown_bucardo();
@@ -500,6 +514,7 @@ if ($TEST_CONFIG) { ## START_TEST_CONFIG
 
 if ($TEST_PURGE) { ## START_TEST_PURGE
 
+	$location = 'purge';
 	pass(" Begin TEST_PURGE section");
 
 	shutdown_bucardo();
@@ -512,6 +527,7 @@ if ($TEST_PURGE) { ## START_TEST_PURGE
 
 if ($TEST_PUSHDELTA) { ## START_TEST_PUSHDELTA
 
+	$location = 'pushdelta';
 	pass(" Begin TEST_PUSHDELTA section");
 
 	shutdown_bucardo();
@@ -540,6 +556,7 @@ if ($TEST_PUSHDELTA) { ## START_TEST_PUSHDELTA
 
 if ($TEST_MAKEDELTA) { ## START_TEST_MAKEDELTA
 
+	$location = 'makedelta';
 	pass(" Begin TEST_MAKEDELTA section");
 
 	shutdown_bucardo();
@@ -569,6 +586,7 @@ if ($TEST_MAKEDELTA) { ## START_TEST_MAKEDELTA
 
 if ($TEST_COPY) { ## START_TEST_COPY
 
+	$location = 'copy';
 	pass(" Begin TEST_COPY section");
 
 	shutdown_bucardo();
@@ -603,6 +621,7 @@ if ($TEST_COPY) { ## START_TEST_COPY
 
 if ($TEST_SWAP) { ## START_TEST_SWAP
 
+	$location = 'swap';
 	pass(" Begin TEST_SWAP section");
 
 	shutdown_bucardo();
@@ -640,6 +659,7 @@ if ($TEST_SWAP) { ## START_TEST_SWAP
 
 if ($TEST_CUSTOM_CODE) { ## START_TEST_CUSTOM_CODE
 
+	$location = 'customcode';
 	pass(" Begin TEST_CUSTOM_CODE section");
 
 	shutdown_bucardo();
@@ -668,6 +688,7 @@ if ($TEST_CUSTOM_CODE) { ## START_TEST_CUSTOM_CODE
 
 if ($TEST_RANDOM_SWAP) { ## START_TEST_RANDOM_SWAP
 
+	$location = 'randomswap';
 	pass(" Begin TEST_RANDOM_SWAP section");
 
 	shutdown_bucardo();
@@ -1733,6 +1754,85 @@ sub test_config {
 	return;
 
 } ## end of test_config
+
+
+sub ping_testing {
+
+	## Setup a pushdelta sync
+	$bc->sync
+		({
+		  name             => 'pingtest',
+		  source           => 'bctestherd1',
+		  targetdb         => 'bctest2',
+		  synctype         => 'pushdelta',
+	  });
+
+	$masterdbh->do("LISTEN bucardo_started");
+	$masterdbh->commit();
+	pass(" Waiting for bucardo to start up");
+	bucardo_ctl("start 'Ping testing'");
+	{
+		last if $masterdbh->func('pg_notifies');
+		sleep 0.1;
+		redo;
+	}
+	pass("Bucardo started up for ping testing");
+
+	$masterdbh->do("UNLISTEN *");
+	$masterdbh->do("LISTEN bucardo_mcp_pong");
+	$masterdbh->commit();
+	$masterdbh->do("NOTIFY bucardo_mcp_ping");
+	## This should return very quickly, but we'll give it 5 whole seconds
+	my $found = 0;
+	for (1..50) {
+		$masterdbh->commit();
+		if ($masterdbh->func('pg_notifies')) {
+			$found = 1;
+			last;
+		}
+		sleep 0.1;
+	}
+	is($found, 1, qq{MCP responds to bucardo_mcp_ping});
+
+	# We will need the PID to test the CTL ping
+	$SQL = "SELECT pid FROM audit_pid WHERE type='CTL' ORDER BY birthdate DESC LIMIT 1";
+	my $pid = $masterdbh->selectall_arrayref($SQL)->[0][0];
+
+	$masterdbh->do("LISTEN bucardo_ctl_${pid}_pong");
+	$masterdbh->commit();
+	$masterdbh->do("NOTIFY bucardo_ctl_${pid}_ping");
+	$found = 0;
+	for (1..50) {
+		$masterdbh->commit();
+		if ($masterdbh->func('pg_notifies')) {
+			$found = 1;
+			last;
+		}
+		sleep 0.1;
+	}
+	is($found, 1, qq{CTL responds to bucardo_ctl_<pid>_ping});
+
+	$SQL = "SELECT pid FROM audit_pid WHERE type='KID' ORDER BY birthdate DESC LIMIT 1";
+	$pid = $masterdbh->selectall_arrayref($SQL)->[0][0];
+
+	$masterdbh->do("LISTEN bucardo_kid_${pid}_pong");
+	$masterdbh->commit();
+	$masterdbh->do("NOTIFY bucardo_kid_${pid}_ping");
+	$found = 0;
+	for (1..50) {
+		$masterdbh->commit();
+		if ($masterdbh->func('pg_notifies')) {
+			$found = 1;
+			last;
+		}
+		sleep 0.1;
+	}
+	is($found, 1, qq{KID responds to bucardo_kid_<pid>_ping});
+
+	bucardo_ctl("stop 'Ping testing'");
+
+} ## end of ping_testing
+
 
 
 sub test_purge {

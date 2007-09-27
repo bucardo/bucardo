@@ -2342,8 +2342,11 @@ sub start_controller {
 		## Listen for a kid announcing that they are done for each target database
 		my $listen = "bucardo_syncdone_${syncname}_$db";
 		$maindbh->do("LISTEN $listen") or die "LISTEN $listen failed";
-		$maindbh->commit;
 	}
+
+	## Listen for a ping request
+	$maindbh->do('LISTEN bucardo_ctl_'.$$.'_ping');
+	$maindbh->commit();
 
 	## Make sure we are checking the source database as well
 	$limitperdb += $dbinfo->{$sourcedb}{sourcelimit};
@@ -2564,6 +2567,12 @@ sub start_controller {
 				if ($name eq $kicklisten) {
 					$kicked = 1;
 					## TODO: Reset the abort count for all targets?
+				}
+				## Got a ping?
+				elsif ($name eq 'bucardo_ctl_'.$$.'_ping') {
+					$self->glog("Got a ping, issuing pong");
+					$maindbh->do('NOTIFY bucardo_ctl_'.$$.'_pong');
+					$maindbh->commit();
 				}
 				## A kid has finished?
 				elsif ($name =~ /^bucardo_syncdone_${syncname}_(.+)$/o) {
@@ -3236,10 +3245,12 @@ sub start_kid {
 	$sth->execute($syncname);
 
 	## Listen for important changes to the q table, if we are persistent
+	my $listenq = "bucardo_q_${syncname}_$targetdb";
 	if ($kidsalive) {
-		my $listenq = "bucardo_q_${syncname}_$targetdb";
 		$maindbh->do("LISTEN $listenq") or die "LISTEN $listenq failed";
 	}
+	## Listen for a ping, even if not persistent
+	$maindbh->do('LISTEN bucardo_kid_'.$$.'_ping');
 	$maindbh->commit();
 
 	## Prepare to update the q table when we start...
@@ -3598,9 +3609,18 @@ sub start_kid {
 
 		## If persistent, do an occasional ping. Listen for our only possible message.
 		if ($kidsalive) {
-			if (defined $maindbh->func('pg_notifies')) {
-				$self->glog("Got a notice for $syncname: $sourcedb -> $targetdb");
-				$checkq = 1;
+			while (my $notify = $maindbh->func('pg_notifies')) {
+				my ($name, $pid) = @$notify;
+				if ($name eq $listenq) {
+					$self->glog("Got a notice for $syncname: $sourcedb -> $targetdb");
+					$checkq = 1;
+				}
+				## Got a ping?
+				elsif ($name eq 'bucardo_kid_'.$$.'_ping') {
+					$self->glog("Got a ping, issuing pong");
+					$maindbh->do('NOTIFY bucardo_kid_'.$$.'_pong');
+					$maindbh->commit();
+				}
 			}
 			if (time() - $lastpingcheck >= $config{kid_pingtime}) {
 				## If this fails, simply have the CTL restart it
