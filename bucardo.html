@@ -14,6 +14,9 @@ p.code { white-space: pre; font-family: monospace; font-weight: bolder; padding:
 <p>
 Bucardo is an asynchonous master-master and master-slave replication system for Postgres. It uses triggers on individual tables. It supports conflict resolution and exception handling through the use of custom Perl subroutines.
 </p>
+<p>
+This document covers Bucardo 3.0.7. The latest version of this document can always be found at http://bucardo.org/bucardo.html
+</p>
 <ul class-"toc">
  <li><a href="#Bucardorequirements">Bucardo requirements</a></li>
  <li><a href="#BucardoFeatures">Bucardo Features</a></li>
@@ -34,6 +37,7 @@ Bucardo is an asynchonous master-master and master-slave replication system for 
  <li><a href="#BucardoConflictHandling">Bucardo Conflict Handling</a></li>
  <li><a href="#BucardoExceptionHandling">Bucardo Exception Handling</a></li>
  <li><a href="#TheBucardoFreezer">The Bucardo Freezer</a></li>
+ <li><a href="#Bucardopinging">Bucardo pinging</a></li>
  <li><a href="#BucardoDevelopment">Bucardo Development</a></li>
  <li><a href="#HowBucardoWorks">How Bucardo Works</a></li>
  <li><a href="#Acknowledgments">Acknowledgments</a></li>
@@ -899,6 +903,13 @@ It is expected that the excpetion code will change the rows directly via the sou
 <h2><a name="TheBucardoFreezer">The Bucardo Freezer</a></h2>
 <p>
 Bucardo tracks many things about each sync: when it completed, how long it took, how many rows were processed, etc. This data is stored in the <b>q</b> table, but this table can grow very quickly. To prevent access to this table from getting too slow, older data is moved from the q table to a table called <b>master_q</b> inside of the <b>freezer</b> schema. The master_q table is partitioned by date, so that the stats page only has to select from a few child tables, depending on the date range that is set. The moving of the old rows from the q table to the master_q table is accomplished by the bucardo_purge_q_table() function, which is usually called regularly (e.g. every five minutes) by a cronjob.
+</p>
+
+<br clear="all" />
+<hr />
+<h2><a name="Bucardopinging">Bucardo pinging</a></h2>
+<p>
+All the bucardo processes will respond to a specific NOTIFY message. This can be used to verify that the process is still alive and working normally. For the MCP, the name of the message is "bucardo_mcp_ping". It will issue a "bucardo_mcp_pong" NOTIFY when it receives the message. (This is what "./bucardo_ctl ping" does). The controller and children use their PID (Process Identification number) to construct the ping and pong names. For controllers, the name is "bucardo_ctl_#_ping", where '#' is the PID, and for kids, the name is "bucardo_kid_#_ping". Both will return a "_pong" NOTIFY when they receive the ping.
 </p>
 
 <br clear="all" />
