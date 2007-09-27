@@ -10,6 +10,7 @@ TODO list for Bucardo
 - Make timeslices for master_q adjustable
 - Allow more data types for pkey on goats
 - Automatic detection of primary keys
+- Allow goats to have multi-column primary keys
 - Strip out large src_code from the email dumps
 - Handle partitioned tables
 - Allow notification emails to be regex sorted, e.g. serialization warnings
