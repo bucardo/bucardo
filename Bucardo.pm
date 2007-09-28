@@ -2743,7 +2743,7 @@ sub start_controller {
 		}
 
 		## If a custom code handler needs a database handle, create one
-		our ($sourcedbh,$safe_sourcedbh);
+		our ($cc_sourcedbh,$safe_sourcedbh);
 
 		## Run all before_sync code
 		for my $code (@{$sync->{code_before_sync}}) {
@@ -2760,13 +2760,13 @@ sub start_controller {
 			$self->glog("Running $c->{whenrun} controller custom code $c->{id}: $c->{name}");
 
 			if (!defined $safe_sourcedbh) {
-				$sourcedbh = $self->connect_database($sync->{sourcedb});
+				$cc_sourcedbh = $self->connect_database($sync->{sourcedb});
 				my $darg;
 				for my $arg (sort keys %{$dbix{source}{notstrict}}) {
 					next if ! length $dbix{source}{notstrict}{$arg};
 					$darg->{$arg} = $dbix{source}{notstrict}{$arg};
 				}
-				$darg->{dbh} = $sourcedbh;
+				$darg->{dbh} = $cc_sourcedbh;
 				$safe_sourcedbh = DBIx::Safe->new($darg);
 			}
 
@@ -2790,8 +2790,10 @@ sub start_controller {
 
 			## TODO: Think about wrapping in an eval?
 			$maindbh->{InactiveDestroy} = 1;
+			$cc_sourcedbh->{InactiveDestroy} = 1;
 			&{$c->{coderef}}($input);
 			$maindbh->{InactiveDestroy} = 0;
+			$cc_sourcedbh->{InactiveDestroy} = 0;
 			$self->glog("Finished custom code $c->{id}");
 			if (length $input->{message}) {
 				$self->glog("Message from $c->{whenrun} code $c->{id}: $input->{message}");
@@ -2809,7 +2811,7 @@ sub start_controller {
 			if (length $input->{endsync}) {
 				$self->glog("Code $c->{whenrun} requests a cancellation of the rest of the sync");
 				## before_txn and after_txn only should commit themselves
-				$sourcedbh->rollback();
+				$cc_sourcedbh->rollback();
 				$maindbh->commit();
 				sleep $config{endsync_sleep};
 				return 'redo';
