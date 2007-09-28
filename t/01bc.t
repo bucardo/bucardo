@@ -877,10 +877,28 @@ sub shutdown_bucardo {
 
 	pass(" Existing Bucardo asked to shut down");
 
-	## May not work on your system... XXX make portable
+    ## Find a grep we can use.
+
+    my $grep_path = $ENV{GREP_PATH}     ||
+                    qx!which grep!      ||
+                    qx!whereis -b grep!;
+    if (defined $grep_path) {
+        $grep_path =~ s!\Agrep: /!!;
+        $grep_path =~ s!\n\z!!;
+    }
+    else {
+        for my $path (grep { -x } qw!/bin/grep /usr/bin/grep /usr/local/bin/grep!) {
+            $grep_path = $path;
+            last;
+        }
+    }
+
+    BAIL_OUT q!Cannot find a usable "grep"; set GREP_PATH!
+        unless -x $grep_path;
+
 	my $loop = 1;
 	{
-		my $res = qx{/bin/ps -Afwww | /bin/grep Bucardo | /bin/grep $xname | /bin/grep -v grep}; ## no critic
+		my $res = qx{/bin/ps -Afwww | $grep_path Bucardo | $grep_path $xname | $grep_path -v grep}; ## no critic
 		last if $res !~ /Bucardo/m;
 		if ($loop++ > 10) {
 			BAIL_OUT "Could not persuade existing Bucardo to shut down\n";
