@@ -141,6 +141,7 @@ while (<$bct>) {
 $bc{TESTPW}  ||= 'pie';
 $bc{TESTPW1} ||= 'pie';
 $bc{TESTPW2} ||= 'pie';
+$bc{TESTPW3} ||= 'pie';
 ## Quick sanity check
 for my $req (qw(DBNAME DBUSER TESTDB TESTBC)) {
 	for my $suffix ('','1','2') {
@@ -809,7 +810,7 @@ sub setup_database {
 			}
 		}
 		
-		$SQL = "CREATE USER $testuser SUPERUSER PASSWORD 'pie'";
+		$SQL = "CREATE USER $testuser SUPERUSER PASSWORD '$testpass'";
 		eval { $dbh->do($SQL); };
 		$@ and BAIL_OUT qq{Could not create test superuser "$testuser": $@\n};
 		pass(qq{ Created test super user "$testuser"});
