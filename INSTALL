@@ -20,7 +20,7 @@ are installed and available in this database. Then, import the schema:
 psql -U bucardo bucardo -f bucardo.schema
 
 There should be no errors: if there are, please report them to 
-bugs@bucardo.org or ask on the main mailing list for help.
+bucardo-general@bucardo.org or ask on the main mailing list for help.
 
 Bucardo by deafult logs to syslog, and does so very verbosely. It is 
 recommended that you reroute your bucardo log traffic to another file. 

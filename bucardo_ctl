@@ -1320,7 +1320,7 @@ The bucardo_ctl script does not use any environment variables at this time.
 The 'status' command does not yet return current information, and the start time in particular should be 
 taken with a grain of salt.
 
-Bug reports and feature requests are always welcome, please visit http://bucardo.org or email bugs@bucardo.org.
+Bug reports and feature requests are always welcome, please visit http://bucardo.org or email bucardo-general@bucardo.org.
 
 =head1 SEE ALSO
 
