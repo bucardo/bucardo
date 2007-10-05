@@ -2606,8 +2606,11 @@ sub start_controller {
 									my $safepkeytype = $g->{pkeytype} =~ /timestamp|date/o ? 'text' : $g->{pkeytype};
 									my $x=0;
 									my $aliaslist = join ',' => map { "$_ AS $g->{cols}[$x++]" } @{$g->{safecols}};
+									if (length $aliaslist) {
+										$aliaslist = ", $aliaslist";
+									}
 									$SQL{trix} = qq{
-                                      SELECT    DISTINCT d.rowid AS "BUCARDO_ID", t.$namepk, $aliaslist
+                                      SELECT    DISTINCT d.rowid AS "BUCARDO_ID", t.$namepk $aliaslist
                                       FROM      bucardo.bucardo_delta d
                                       LEFT JOIN $S.$T t ON (t.${namepk}::$safepkeytype = d.rowid::$safepkeytype)
                                       WHERE     d.tablename = \$1::oid
@@ -3318,11 +3321,14 @@ sub start_kid {
 			my $safepkeytype = $g->{pkeytype} =~ /timestamp|date/o ? 'text' : $g->{pkeytype};
 			my $x=0;
 			my $aliaslist = join ',' => map { "$_ AS $g->{cols}[$x++]" } @{$g->{safecols}};
+			if (length $aliaslist) {
+				$aliaslist = ", $aliaslist";
+			}
 			my $safesourcedb;
 			## Note: column order important for splice and defined calls later
 			$SQL{delta} = qq{
 				SELECT    DISTINCT d.rowid AS "BUCARDO_ID",
-							  t.$namepk, $aliaslist
+							  t.$namepk $aliaslist
 				FROM      bucardo.bucardo_delta d
 				LEFT JOIN $S.$T t ON (t.${namepk}::$safepkeytype = d.rowid::$safepkeytype)
 				WHERE     d.tablename = \$1::oid
