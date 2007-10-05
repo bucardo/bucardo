@@ -2,6 +2,9 @@
 
 3.0.7 (unreleased)
 
+ - Fix error for tables with primary key and no other columns in pushdelta/swap syncs, 
+   per report from Ben Allen. [GSM]
+
  - Change pid and ppid columns in table "q" from smallint to integer. [Ben Allen <bsa@lanl.gov>]
 
  - Ensure sourcedbh used by customcode has inactivedestroy set. [GSM]
