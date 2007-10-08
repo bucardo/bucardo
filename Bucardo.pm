@@ -1895,11 +1895,11 @@ sub start_mcp {
 			my $colinfo = $sth->fetchall_arrayref();
 			my $pkey = grep { $_->[0] eq $g->{pkey} } @$colinfo;
 			my @cols = map { $_->[0] } grep { $_->[0] ne $g->{pkey} } @$colinfo;
-			$g->{columnlist} = join ',' => @cols;
 			$g->{cols} = \@cols;
 			my @cols2 = map { $_->[1] } grep { $_->[0] ne $g->{pkey} } @$colinfo;
-			$g->{safecolumnlist} = join ',' => @cols2;
 			$g->{safecols} = \@cols2;
+			$g->{columnlist} = join ',' => @cols;
+			$g->{safecolumnlist} = join ',' => @cols2;
 
 			## Verify tables and columns on remote databases
 			for my $db (sort keys %targetdbh) {
@@ -2014,7 +2014,7 @@ sub start_mcp {
 
 			## Sync must have a way to handle conflicts
 			if ($s->{synctype} eq 'swap' and !$g->{standard_conflict} and !exists $g->{code_conflict}) {
-				$self->glog(qq{Warning! Tables used in swaps must specify a conflict handler});
+				$self->glog(qq{Warning! Tables used in swaps must specify a conflict handler. $g->{schemaname}.$g->{tablename} appears to have neither});
 				return 0;
 			}
 
@@ -3303,17 +3303,27 @@ sub start_kid {
 		for my $g (@$goatlist) {
 			($S,$T,$namepk) = ($g->{safeschema},$g->{safetable},$g->{safepkey});
 
-			$SQL = "INSERT INTO $S.$T($namepk,$g->{safecolumnlist}) VALUES (?,";
-			$SQL .= join ',' => map {'?'} @{$g->{cols}};
-			$SQL .= ")";
-			#$self->glog("INSERT SQL: $SQL");
+			if (length $g->{safecolumnlist}) {
+				$SQL = "INSERT INTO $S.$T ($namepk, $g->{safecolumnlist}) VALUES (?,";
+				$SQL .= join ',' => map {'?'} @{$g->{cols}};
+				$SQL .= ")";
+			}
+			else {
+				$SQL = "INSERT INTO $S.$T ($namepk) VALUES (?)";
+			}
+			# $self->glog("INSERT SQL: $SQL");
 			$sth{target}{$g}{insertrow} = $targetdbh->prepare($SQL);
 			$synctype eq 'swap' and $sth{source}{$g}{insertrow} = $sourcedbh->prepare($SQL);
 
-			$SQL = "UPDATE $S.$T SET ";
-			$SQL .= join ',' => map { "$_=?" } @{$g->{safecols}};
-			$SQL .= " WHERE $namepk = ?";
-			#$self->glog("UPDATE SQL: $SQL");
+			if (length $g->{safecolumnlist}) {
+				$SQL = "UPDATE $S.$T SET ";
+				$SQL .= join ',' => map { "$_=?" } @{$g->{safecols}};
+				$SQL .= " WHERE $namepk = ?";
+			}
+			else {
+				$SQL = "UPDATE $S.$T SET $namepk=$namepk WHERE $namepk = ?";
+			}
+			# $self->glog("UPDATE SQL: $SQL");
 			$sth{target}{$g}{updaterow} = $targetdbh->prepare($SQL);
 			$synctype eq 'swap' and $sth{source}{$g}{updaterow} = $sourcedbh->prepare($SQL);
 

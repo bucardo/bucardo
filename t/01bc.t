@@ -38,7 +38,7 @@ plan tests => $tests;
 my $location = 'setup';
 my $testmsg  = ' ?';
 my $testline = '?';
-my $showline = 0;
+my $showline = 1;
 my $showtime = 0;
 
 ## Run perlcritic against the main source file, using custom rules
@@ -295,6 +295,7 @@ my %db = (
 ## Create our test tables, one for each major data type we handle
 my %tabletype =
 	(
+	 'bucardo_test0' => 'BIGINT',
 	 'bucardo_test1' => 'INT',
 	 'bucardo_test2' => 'TEXT',
 	 'bucardo_test3' => 'DATE',
@@ -327,7 +328,15 @@ $SQL = q{
 		INSERT INTO droptest(name,type,inty) VALUES (TG_RELNAME, 'trigger', NEW.inty);
 		RETURN NULL;
 		END;
-	$_$
+	$_$;
+	CREATE OR REPLACE FUNCTION trigger_test_zero()
+	RETURNS trigger
+	LANGUAGE plpgsql
+	AS $_$ BEGIN
+		INSERT INTO droptest(name,type,inty) VALUES (TG_RELNAME, 'trigger', 0);
+		RETURN NULL;
+		END;
+	$_$;
 };
 ## use critic
 
@@ -339,7 +348,8 @@ $dbh3->do($SQL);
 for my $table (sort keys %tabletype) {
 	$SQL = qq{
 		CREATE TABLE $table (
-			id    $tabletype{$table} NOT NULL PRIMARY KEY,
+			id    $tabletype{$table} NOT NULL PRIMARY KEY};
+	$SQL .= $table =~ /0/ ? "\n)" : qq{,
         	data1 TEXT                   NULL,
 	        inty  SMALLINT               NULL,
     	    email TEXT                   NULL UNIQUE
@@ -351,29 +361,7 @@ for my $table (sort keys %tabletype) {
 		$dbh3->do($SQL);
 	}
 
-	## Create a trigger to test trigger supression during syncs
-	$SQL = qq{
-		CREATE TRIGGER bctrig_$table
-		AFTER INSERT OR UPDATE ON $table
-		FOR EACH ROW EXECUTE PROCEDURE trigger_test()
-	};
-	unless ($ENV{BUCARDO_TEST_NOCREATEDB}) {
-		$dbh1->do($SQL);
-		$dbh2->do($SQL);
-		$dbh3->do($SQL);
-	}
-
-	## Create a rule to test rule supression during syncs
-	$SQL = qq{
-		CREATE OR REPLACE RULE bcrule_$table
-		AS ON INSERT TO $table
-		DO ALSO INSERT INTO droptest(name,type,inty) VALUES ('$table','rule',NEW.inty)
-	};
-	$dbh1->do($SQL);
-	$dbh2->do($SQL);
-	$dbh3->do($SQL);
-
-	## Get the oid back out:
+	## Get the oids back out:
 	$SQL = qq{
 		SELECT c.oid
 		FROM   pg_catalog.pg_class c, pg_catalog.pg_namespace n
@@ -397,7 +385,33 @@ for my $table (sort keys %tabletype) {
 	BAIL_OUT(qq{No oid for "$table"}) unless 1==$count;
 	$table{$dbh3}{$table} = $sth->fetchall_arrayref()->[0][0];
 
+	## Create a trigger to test trigger supression during syncs
+	$SQL = qq{
+		CREATE TRIGGER bctrig_$table
+		AFTER INSERT OR UPDATE ON $table
+		FOR EACH ROW EXECUTE PROCEDURE trigger_test()
+	};
+	$table =~ /0/ and ($SQL =~ s/trigger_test/trigger_test_zero/);
+	unless ($ENV{BUCARDO_TEST_NOCREATEDB}) {
+		$dbh1->do($SQL);
+		$dbh2->do($SQL);
+		$dbh3->do($SQL);
+	}
+
+	## Create a rule to test rule supression during syncs
+	$SQL = qq{
+		CREATE OR REPLACE RULE bcrule_$table
+		AS ON INSERT TO $table
+		DO ALSO INSERT INTO droptest(name,type,inty) VALUES ('$table','rule',NEW.inty)
+	};
+	$table =~ /0/ and $SQL =~ s/NEW.inty/0/;
+	$dbh1->do($SQL);
+	$dbh2->do($SQL);
+	$dbh3->do($SQL);
+
+
 } ## end creating each table
+
 pass(" Create test tables on remote databases");
 
 ## We must commit as we will not be connecting from this session
@@ -408,6 +422,7 @@ $dbh3->commit();
 ## Prepare some test values for easy use
 my %val;
 for (1..30) {
+	$val{BIGINT}{$_} = $_;
 	$val{INT}{$_} = $_;
 	$val{TEXT}{$_} = "bc$_";
 	$val{DATE}{$_} = sprintf "2001-10-%02d", $_;
@@ -548,7 +563,7 @@ if ($TEST_PUSHDELTA) { ## START_TEST_PUSHDELTA
 	pass(" Bucardo was started");
 
 	for my $table (sort keys %tabletype) {
-		basic_pushdelta_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 4
+		basic_pushdelta_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 5
 	}
 
 	pass(" Finished with pushdelta tests");
@@ -578,6 +593,7 @@ if ($TEST_MAKEDELTA) { ## START_TEST_MAKEDELTA
 	pass(" Bucardo was started");
 
 	for my $table (sort keys %tabletype) {
+		next if $table =~ /0/;
 		makedelta_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 4
 	}
 
@@ -611,7 +627,7 @@ if ($TEST_COPY) { ## START_TEST_COPY
 	pass(" Bucardo was started");
 
 	for my $table (sort keys %tabletype) {
-		basic_copy_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 4
+		basic_copy_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 5
 	}
 
 	analyze_after_copy('bucardo_test1',$dbh1,$dbh2);
@@ -642,6 +658,7 @@ if ($TEST_SWAP) { ## START_TEST_SWAP
 
 	## Check that each table type populates bucardo_delta
 	for my $table (sort keys %tabletype) {
+		next if $table =~ /0/;
 		bucardo_delta_populate($table,$dbh1); ## TESTCOUNT * 4
 		bucardo_delta_populate($table,$dbh2); ## TESTCOUNT * 4
 	}
@@ -650,8 +667,8 @@ if ($TEST_SWAP) { ## START_TEST_SWAP
 
 	## Test the swap sync method
 	for my $table (sort keys %tabletype) {
-		basic_swap_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 4
-		basic_swap_testing($table,$dbh2,$dbh1); ## TESTCOUNT * 4
+		basic_swap_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 5
+		basic_swap_testing($table,$dbh2,$dbh1); ## TESTCOUNT * 5
 	}
 
 	pass(" Finished with swap tests");
@@ -680,6 +697,7 @@ if ($TEST_CUSTOM_CODE) { ## START_TEST_CUSTOM_CODE
 	pass(" Bucardo was started");
 
 	for my $table (sort keys %tabletype) {
+		next if $table =~ /0/;
 		test_customcode($table,$dbh1,$dbh2); ## TESTCOUNT * 4
 	}
 
@@ -1162,6 +1180,64 @@ sub wait_for_notice {
 } ## end of wait_for_notice
 
 
+## no critic
+{
+	no warnings; ## Yes, we know they are being redefined!
+	sub is_deeply {
+		t($_[2],$_[3] || (caller)[2]);
+		return if Test::More::is_deeply($_[0],$_[1],$testmsg);
+		if ($bail_on_error > $total_errors++) {
+			my $line = (caller)[2];
+			my $time = time;
+			diag("GOT: ".Dumper $_[0]);
+			diag("EXPECTED: ". Dumper $_[1]);
+			BAIL_OUT "Stopping on a failed 'is_deeply' test from line $line. Time: $time";
+		}
+	} ## end of is_deeply
+	sub like {
+		t($_[2],(caller)[2]);
+		return if Test::More::like($_[0],$_[1],$testmsg);
+		if ($bail_on_error > $total_errors++) {
+			my $line = (caller)[2];
+			my $time = time;
+			BAIL_OUT "Stopping on a failed 'like' test from line $line. Time: $time";
+		}
+	} ## end of like
+	sub pass {
+		t($_[0],$_[1]||(caller)[2]);
+		Test::More::pass($testmsg);
+	} ## end of pass
+	sub is {
+		t($_[2],(caller)[2]);
+		return if Test::More::is($_[0],$_[1],$testmsg);
+		if ($bail_on_error > $total_errors++) {
+			my $line = (caller)[2];
+			my $time = time;
+			BAIL_OUT "Stopping on a failed 'is' test from line $line. Time: $time";
+		}
+	} ## end of is
+	sub isa_ok {
+		t("Object isa $_[1]",(caller)[2]);
+		my ($name, $type, $msg) = ($_[0],$_[1]);
+		if (ref $name and ref $name eq $type) {
+			Test::More::pass($testmsg);
+			return;
+		}
+		$bail_on_error > $total_errors++ and BAIL_OUT "Stopping on a failed test";
+	} ## end of isa_ok
+	sub ok {
+		t($_[1]||$testmsg);
+		return if Test::More::ok($_[0],$testmsg);
+		if ($bail_on_error > $total_errors++) {
+			my $line = (caller)[2];
+			my $time = time;
+			BAIL_OUT "Stopping on a failed 'ok' test from line $line. Time: $time";
+		}
+	} ## end of ok
+}
+## use critic
+
+
 sub now_time {
 	my $dbh = shift;
 	return $dbh->selectall_arrayref("SELECT now()")->[0][0];
@@ -1171,15 +1247,22 @@ sub now_time {
 sub bc_deeply {
 
 	my ($exp,$dbh,$sql,$msg) = @_;
-	my ($line) = (caller)[2];
-	$msg .= " (line $line)";
+	my $line = (caller)[2];
 
 	local $Data::Dumper::Terse = 1;
 	local $Data::Dumper::Indent = 0;
 
-	my $got = $dbh->selectall_arrayref($sql);
+	die "Very invalid statement from line $line: $sql\n" if $sql !~ /^\s*select/i;
 
-	return is_deeply($got,$exp,$msg);
+	my $got;
+	eval {
+		$got = $dbh->selectall_arrayref($sql);
+	};
+	if ($@) {
+		die "bc_deeply failed from line $line. SQL=$sql\n";
+	}
+
+	return is_deeply($got,$exp,$msg,(caller)[2]);
 
 } ## end of bc_deeply
 
@@ -1193,17 +1276,17 @@ sub compare_tables {
 	local $Data::Dumper::Terse = 1;
 	local $Data::Dumper::Indent = 0;
 
-	my $msg = " ($location)  Table $table is the same on both databases";
-	$DEBUG and $msg .= " (line $line)";
+	my $msg = "Table $table is the same on both databases";
 	$SQL = "SELECT * FROM $table ORDER BY inty, id";
+	$SQL =~ s/inty, // if $table =~ /0/;
 	my $uno = $sdbh->selectall_arrayref($SQL);
 	my $dos = $rdbh->selectall_arrayref($SQL);
 	if ((Dumper $uno) eq (Dumper $dos)) {
-		pass($msg);
+		pass($msg,$line);
 		return 1;
 	}
 
-	return is_deeply($uno,$dos,$msg);
+	return is_deeply($uno,$dos,$msg,$line);
 
 } ## end of compare_tables
 
@@ -1238,62 +1321,6 @@ sub t {
 	}
 } ## end of t
 
-## no critic
-{
-	no warnings; ## Yes, we know they are being redefined!
-	sub is_deeply {
-		t($_[2],(caller)[2]);
-		return if Test::More::is_deeply($_[0],$_[1],$testmsg);
-		if ($bail_on_error > $total_errors++) {
-			my $line = (caller)[2];
-			my $time = time;
-			diag("GOT: ".Dumper $_[0]);
-			diag("EXPECTED: ". Dumper $_[1]);
-			BAIL_OUT "Stopping on a failed 'is_deeply' test from line $line. Time: $time";
-		}
-	} ## end of is_deeply
-	sub like {
-		t($_[2],(caller)[2]);
-		return if Test::More::like($_[0],$_[1],$testmsg);
-		if ($bail_on_error > $total_errors++) {
-			my $line = (caller)[2];
-			my $time = time;
-			BAIL_OUT "Stopping on a failed 'like' test from line $line. Time: $time";
-		}
-	} ## end of like
-	sub pass {
-		t($_[0],(caller)[2]);
-		Test::More::pass($testmsg);
-	} ## end of pass
-	sub is {
-		t($_[2],(caller)[2]);
-		return if Test::More::is($_[0],$_[1],$testmsg);
-		if ($bail_on_error > $total_errors++) {
-			my $line = (caller)[2];
-			my $time = time;
-			BAIL_OUT "Stopping on a failed 'is' test from line $line. Time: $time";
-		}
-	} ## end of is
-	sub isa_ok {
-		t("Object isa $_[1]",(caller)[2]);
-		my ($name, $type, $msg) = ($_[0],$_[1]);
-		if (ref $name and ref $name eq $type) {
-			Test::More::pass($testmsg);
-			return;
-		}
-		$bail_on_error > $total_errors++ and BAIL_OUT "Stopping on a failed test";
-	} ## end of isa_ok
-	sub ok {
-		t($_[1]||$testmsg);
-		return if Test::More::ok($_[0],$testmsg);
-		if ($bail_on_error > $total_errors++) {
-			my $line = (caller)[2];
-			my $time = time;
-			BAIL_OUT "Stopping on a failed 'ok' test from line $line. Time: $time";
-		}
-	} ## end of ok
-}
-## use critic
 
 sub exitnow {
 	$need_shutdown = 0;
@@ -1930,13 +1957,10 @@ sub test_purge {
 	for (@{$dbh1->selectall_arrayref($getoids)}) {
 		$oid{source}{$_->[0]} = $_->[1];
 	}
-	$oid{sourceresult} = [
-	   [$oid{source}{'bucardo_test1'},'bctest2'],
-	   [$oid{source}{'bucardo_test2'},'bctest2'],
-	   [$oid{source}{'bucardo_test3'},'bctest2'],
-	   [$oid{source}{'bucardo_test4'},'bctest2'],
-    ];
-	my $view_targets = "SELECT * FROM bucardo_delta_targets";
+	for (sort keys %tabletype) {
+		push @{$oid{sourceresult}} => [$oid{source}{$_},'bctest2'];
+	}
+	my $view_targets = "SELECT * FROM bucardo_delta_targets ORDER BY tablename";
 	$got = $dbh1->selectall_arrayref($view_targets);
 	is_deeply($got, $oid{sourceresult}, $t);
 
@@ -1944,7 +1968,6 @@ sub test_purge {
 	$masterdbh->commit();
 
 	$t=q{ Delete from sync removes the bucardo_delta_targets row};
-	$view_targets = "SELECT * FROM bucardo_delta_targets";
 	$got = $dbh1->selectall_arrayref($view_targets);
 	is_deeply($got, [], $t);
 
@@ -1994,12 +2017,9 @@ sub test_purge {
 	for (@{$dbh2->selectall_arrayref($getoids)}) {
 		$oid{target}{$_->[0]} = $_->[1];
 	}
-	$oid{targetresult} = [
-			   [$oid{target}{'bucardo_test1'},'bctest1'],
-			   [$oid{target}{'bucardo_test2'},'bctest1'],
-			   [$oid{target}{'bucardo_test3'},'bctest1'],
-			   [$oid{target}{'bucardo_test4'},'bctest1'],
-			   ];
+	for (sort keys %tabletype) {
+		push @{$oid{targetresult}} => [$oid{target}{$_},'bctest1'];
+	}
 	$got = $dbh2->selectall_arrayref($view_targets);
 	is_deeply($got, $oid{targetresult}, $t);
 
@@ -2070,11 +2090,10 @@ sub test_purge {
 	is (object_count($dbh3, 'bucardo', 'function', 'bucardo_purge_delta'), 0, $t);
 
 	$t=q{ Table bucardo_delta_targets is populated on source database at pushdelta sync creation};
-	push @{$oid{sourceresult}},
-			   [$oid{source}{'bucardo_test1'},'bctest3'],
-			   [$oid{source}{'bucardo_test2'},'bctest3'],
-			   [$oid{source}{'bucardo_test3'},'bctest3'],
-			   [$oid{source}{'bucardo_test4'},'bctest3'];
+	$oid{sourceresult} = [];
+	for (sort { $oid{target}{$a} <=> $oid{source}{$b} } keys %tabletype) {
+		push @{$oid{sourceresult}} => [$oid{source}{$_},'bctest2'], [$oid{source}{$_},'bctest3'];
+	}
 	$got = $dbh1->selectall_arrayref($view_targets);
 	is_deeply($got, $oid{sourceresult}, $t);
 
@@ -2186,18 +2205,25 @@ sub basic_pushdelta_testing {
 	$masterdbh->do("LISTEN bucardo_syncdone_pushdeltatest");
 	$masterdbh->commit();
 
-	$SQL = "INSERT INTO $table(id,data1,inty) VALUES ('$val','one',1)";
+	$SQL = $table =~ /0/ 
+		? "INSERT INTO $table(id) VALUES ('$val')"
+		: "INSERT INTO $table(id,data1,inty) VALUES ('$val','one',1)";
 	$sdbh->do($SQL);
 	$sdbh->commit;
 
 	$t=qq{ Second table $table still empty before commit };
-	$SQL = "SELECT id,data1 FROM $table";
+	$SQL = $table =~ /0/
+		? "SELECT id FROM $table"
+		: "SELECT id,data1 FROM $table";
 	$result = [];
 	bc_deeply($result, $rdbh, $SQL, $t);
 
 	$t=q{ After insert, trigger and rule both populate droptest table };
-	my $DROPSQL = "SELECT type,inty FROM droptest WHERE name = ".$sdbh->quote($table)." ORDER BY 1,2";
-	$result = [['rule',1],['trigger',1]];
+	my $DROPSQL = $table =~ /0/
+		? "SELECT type,0 FROM droptest WHERE name = ".$sdbh->quote($table)." ORDER BY 1,2"
+		: "SELECT type,inty FROM droptest WHERE name = ".$sdbh->quote($table)." ORDER BY 1,2";
+	my $tval = $table =~ /0/ ? 0 : 1;
+	$result = [['rule',$tval],['trigger',$tval]];
 	bc_deeply($result, $sdbh, $DROPSQL, $t);
    
 	$t=q{ Table droptest is empty on remote database };
@@ -2208,7 +2234,9 @@ sub basic_pushdelta_testing {
 
 	## Insert to 1 should be echoed to two, after a slight delay:
 	$t=qq{ Second table $table got the pushdelta row};
-	$SQL = "SELECT id,data1 FROM $table";
+	$SQL = $table =~ /0/
+		? "SELECT id,'one' FROM $table"
+		: "SELECT id,data1 FROM $table";
 	$result = [[qq{$val},'one']];
 	bc_deeply($result, $rdbh, $SQL, $t);
 
@@ -2218,7 +2246,9 @@ sub basic_pushdelta_testing {
 
 	## Add a row to two, should not get removed or replicated
 	my $rval = $val{$type}{9};
-	$SQL = "INSERT INTO $table(id,data1,inty) VALUES ('$rval','nine',9)";
+	$SQL = $table =~ /0/
+		? "INSERT INTO $table(id) VALUES ('$rval')"
+		: "INSERT INTO $table(id,data1,inty) VALUES ('$rval','nine',9)";
 	$rdbh->do($SQL);
 	$rdbh->commit;
 
@@ -2229,47 +2259,59 @@ sub basic_pushdelta_testing {
 	$masterdbh->commit();
 
 	$val = $val{$type}{2};
-	$SQL = "INSERT INTO $table(id,data1,inty) VALUES ('$val','two',2)";
+	$SQL = $table =~ /0/
+		? "INSERT INTO $table(id) VALUES ('$val')"
+		: "INSERT INTO $table(id,data1,inty) VALUES ('$val','two',2)";
 	$sdbh->do($SQL);
 	$sdbh->commit;
 
 	$t=q{ After insert, trigger and rule both populate droptest table4 };
-	$result = [['rule',1],['rule',2],['trigger',1],['trigger',2]];
+	$result = $table =~ /0/
+		? [['rule',0],['rule',0],['trigger',0],['trigger',0]]
+		: [['rule',1],['rule',2],['trigger',1],['trigger',2]];
 	bc_deeply($result, $sdbh, $DROPSQL, $t);
    
 	$t=q{ Table droptest has correct entries on remote database };
-	$result = [['rule',9],['trigger',9]];
+	my $ninezero = $table =~ /0/ ? 0 : 9;
+	$result = [['rule',$ninezero],['trigger',$ninezero]];
 	bc_deeply($result, $rdbh, $DROPSQL, $t);
 
 	wait_for_notice($masterdbh, 'bucardo_syncdone_pushdeltatest');
 
 	## Insert to 1 should be echoed to two, after a slight delay:
 	$t=qq{ Second table $table got the pushdelta row};
-	$SQL = "SELECT data1,inty FROM $table ORDER BY inty";
-	$result = [['one',1],['two',2],['nine',9]];
+	$SQL = $table =~ /0/
+		? "SELECT id FROM $table ORDER BY id"
+		: "SELECT data1,inty FROM $table ORDER BY inty";
+	$result = $table =~ /0/
+		? [[1],[2],[9]]
+		: [['one',1],['two',2],['nine',9]];
 	bc_deeply($result, $rdbh, $SQL, $t);
 
 	$t=q{ Triggers and rules did not fire on remote table };
-	$result = [['rule',9],['trigger',9]];
+	$result = [['rule',$ninezero],['trigger',$ninezero]];
 	bc_deeply($result, $rdbh, $DROPSQL, $t);
 
 	$t=q{ Source table did not get updated for pushdelta sync };
-	$SQL = "SELECT count(*) FROM $table WHERE inty = 9";
+	my $col = $table =~ /0/ ? 'id' : 'inty';
+	$SQL = "SELECT count(*) FROM $table WHERE $col = 9";
 	$count = $sdbh->selectall_arrayref($SQL)->[0][0];
 	is($count, 0, $t);
 
 	## Now with many rows
-	$SQL = "INSERT INTO $table(id,data1,inty) VALUES (?,?,?)";
+	$SQL = $table =~ /0/
+		? "INSERT INTO $table(id) VALUES (?)"
+		: "INSERT INTO $table(id,data1,inty) VALUES (?,?,?)";
 	$sth = $sdbh->prepare($SQL);
 	for (3..6) {
 		$val = $val{$type}{$_};
-		$sth->execute($val,'bob',$_);
+		$table =~ /0/ ? $sth->execute($val) : $sth->execute($val,'bob',$_);
 	}
 	$sdbh->commit;
 
 	## Sanity check
 	$t=qq{ Rows are not in target table before the kick for $table};
-	$sth = $rdbh->prepare("SELECT 1 FROM $table WHERE inty BETWEEN 3 and 6");
+	$sth = $rdbh->prepare("SELECT 1 FROM $table WHERE $col BETWEEN 3 and 6");
 	$count = $sth->execute();
 	$sth->finish();
 	is($count, '0E0', $t);
@@ -2277,7 +2319,7 @@ sub basic_pushdelta_testing {
 	wait_for_notice($masterdbh, 'bucardo_syncdone_pushdeltatest');
 
 	$t=qq{ Second table $table got the pushdelta rows};
-	$SQL = "SELECT inty FROM $table ORDER BY 1";
+	$SQL = "SELECT $col FROM $table ORDER BY 1";
 	$result = [['1'],['2'],['3'],['4'],['5'],['6'],['9']];
 	bc_deeply($result, $rdbh, $SQL, $t);
 	$sdbh->commit();
@@ -2529,12 +2571,15 @@ sub basic_copy_testing {
 
 	$val = $val{$type}{1};
 
-	$SQL = "INSERT INTO $table(id,data1,inty) VALUES ('$val','one',1)";
+	$SQL = $table =~ /0/
+		? "INSERT INTO $table(id) VALUES ('$val')"
+		: "INSERT INTO $table(id,data1,inty) VALUES ('$val','one',1)";
 	$sdbh->do($SQL);
 	$sdbh->commit;
 
 	$t=q{ After insert, trigger and rule both populate droptest table };
 	my $DROPSQL = "SELECT type,inty FROM droptest WHERE name = ".$sdbh->quote($table)." ORDER BY 1,2";
+	$table =~ /0/ and $DROPSQL =~ s/inty/1/;
 	$result = [['rule',1],['trigger',1]];
 	bc_deeply($result, $sdbh, $DROPSQL, $t);
 
@@ -2543,16 +2588,16 @@ sub basic_copy_testing {
 	bc_deeply($result, $rdbh, $DROPSQL, $t);
 
 	$t=qq{ Second table $table still empty before kick };
-	$SQL = "SELECT id,data1 FROM $table";
+	my $SELECTSQL = "SELECT inty FROM $table ORDER BY id";
+	$table =~ /0/ and $SELECTSQL =~ s/inty/id/;
 	$result = [];
-	bc_deeply($result, $rdbh, $SQL, $t);
+	bc_deeply($result, $rdbh, $SELECTSQL, $t);
    
 	bucardo_ctl("Kick copytest 0");
 
 	$t=qq{ Second table $table got the fullcopy row};
-	$SQL = "SELECT id,data1 FROM $table";
-	$result = [[qq{$val},'one']];
-	bc_deeply($result, $rdbh, $SQL, $t);
+	$result = [[1]];
+	bc_deeply($result, $rdbh, $SELECTSQL, $t);
 
 	$t=q{ Triggers and rules did NOT fire on remote table };
 	$result = [];
@@ -2564,13 +2609,18 @@ sub basic_copy_testing {
 	$masterdbh->do("NOTIFY bucardo_reload_sync_copytest");
 	$masterdbh->commit();
 
+	my $oneval = $val;
 	$val = $val{$type}{2};
-	$SQL = "INSERT INTO $table(id,data1,inty) VALUES ('$val','two',2)";
+	$SQL = $table =~ /0/
+		? "INSERT INTO $table(id) VALUES ('$val')"
+		: "INSERT INTO $table(id,data1,inty) VALUES ('$val','two',2)";
 	$sdbh->do($SQL);
 	$sdbh->commit;
 
 	$t=q{ After insert, trigger and rule both populate droptest table };
-	$result = [['rule',1],['rule',2],['trigger',1],['trigger',2]];
+	$result = $table =~ /0/
+		? [['rule',1],['rule',1],['trigger',1],['trigger',1]]
+		: [['rule',1],['rule',2],['trigger',1],['trigger',2]];
 	bc_deeply($result, $sdbh, $DROPSQL, $t);
    
 	$t=q{ Table droptest is empty on remote database };
@@ -2580,9 +2630,8 @@ sub basic_copy_testing {
 	bucardo_ctl("kick copytest 0");
 
 	$t=qq{ Second table $table got the fullcopy row};
-	$SQL = "SELECT id,data1 FROM $table WHERE inty=2";
-	$result = [[qq{$val},'two']];
-	bc_deeply($result, $rdbh, $SQL, $t);
+	$result = [[1],[2]];
+	bc_deeply($result, $rdbh, $SELECTSQL, $t);
 
 	$t=q{ Triggers and rules did NOT fire on remote table };
 	$result = [];
@@ -2590,27 +2639,28 @@ sub basic_copy_testing {
 
 	$rdbh->commit; $sdbh->commit; $masterdbh->commit;
 	## Now with many rows
-	$SQL = "INSERT INTO $table(id,data1,inty) VALUES (?,?,?)";
+	$SQL = $table =~ /0/
+		? "INSERT INTO $table(id) VALUES (?)"
+		: "INSERT INTO $table(id,data1,inty) VALUES (?,?,?)";
 	$sth = $sdbh->prepare($SQL);
 	for (3..6) {
 		$val = $val{$type}{$_};
-		$sth->execute($val,'bob',$_);
+		$table =~ /0/ ? $sth->execute($val) : $sth->execute($val,'bob',$_);
 	}
 	$sdbh->commit;
 
 	## Sanity check
 	$t=qq{ Rows are not in target table before the kick for $table};
-	$sth = $rdbh->prepare("SELECT 1 FROM $table WHERE inty >= 3");
+	$sth = $rdbh->prepare($SELECTSQL);
 	$count = $sth->execute();
 	$sth->finish();
-	is($count, '0E0', $t);
+	is($count, 2, $t);
 
 	bucardo_ctl("kick copytest 0");
 
-	$t=q{ Second table $table got the fullcopy rows};
-	$SQL = "SELECT inty FROM $table ORDER BY 1";
-	$result = [['1'],['2'],['3'],['4'],['5'],['6']];
-	bc_deeply($result, $rdbh, $SQL, $t);
+	$t=qq{ Second table $table got the fullcopy rows};
+	$result = [[1],[2],[3],[4],[5],[6]];
+	bc_deeply($result, $rdbh, $SELECTSQL, $t);
 	$sdbh->commit();
 	$rdbh->commit();
 	pass(" End of basic_copy_testing for $table");
@@ -2746,15 +2796,18 @@ sub basic_swap_testing {
 
 	compare_tables($table,$sdbh,$rdbh) or BAIL_OUT "Compare tables failed?!\n";
 
-	$val = $val{$type}{1};
+	my ($val1,$val2,$val3,$val4) = 
+		($val{$type}{1},$val{$type}{2},$val{$type}{3},$val{$type}{4});
 
-	$SQL = "INSERT INTO $table(id,data1,inty) VALUES ('$val','one',1)";
+	$SQL = $table =~ /0/
+		? "INSERT INTO $table(id) VALUES ('$val1')"
+		: "INSERT INTO $table(id,data1,inty) VALUES ('$val1','one',1)";
 	$sdbh->do($SQL);
 
 	$t=qq{ Second table $table still empty before commit};
-	$SQL = "SELECT id,data1 FROM $table";
+	my $SELECTID = "SELECT id FROM $table";
 	$result = [];
-	bc_deeply($result, $rdbh, $SQL, $t);
+	bc_deeply($result, $rdbh, $SELECTID, $t);
 
 	$t=qq{ Sync on $table does not create a bucardo_track entry before commit};
 	$SQL = "SELECT * FROM bucardo.bucardo_track WHERE tablename = $oid";
@@ -2762,6 +2815,7 @@ sub basic_swap_testing {
 
 	$t=q{ After insert, trigger and rule both populate droptest table };
 	my $DROPSQL = "SELECT type,inty FROM droptest WHERE name = ".$sdbh->quote($table)." ORDER BY 1,2";
+	$table =~ /0/ and $DROPSQL =~ s/inty/1/;
 	$result = [['rule',1],['trigger',1]];
 	bc_deeply($result, $sdbh, $DROPSQL, $t);
    
@@ -2773,10 +2827,9 @@ sub basic_swap_testing {
 	$t=qq{ Second table $table got the sync insert row};
 	$now = now_time($sdbh);
 	$sdbh->commit();
-	wait_until_true($rdbh => "SELECT 1 FROM $table");
-	$SQL = "SELECT id,data1 FROM $table";
-	$result = [[qq{$val},'one']];
-	bc_deeply($result, $rdbh, $SQL, $t);
+	wait_until_true($rdbh => "SELECT 1 FROM $table WHERE id = '$val1'");
+	$result = [[qq{$val1}]];
+	bc_deeply($result, $rdbh, $SELECTID, $t);
 
 	$t=qq{ Sync on $table creates a valid bucardo_track entry};
 	$SQL = "SELECT * FROM bucardo.bucardo_track WHERE tablename = $oid";
@@ -2787,52 +2840,73 @@ sub basic_swap_testing {
 	$result = [];
 	bc_deeply($result, $rdbh, $DROPSQL, $t);
 
+	my $SELECTDATA = "SELECT id,data1 FROM $table";
 	## An update should echo
-	$t=qq{ Second table $table caught the sync update};
-	$SQL = "UPDATE $table SET data1 = 'upper' WHERE id = '$val'";
-	$sdbh->do($SQL);
-	$now = now_time($sdbh);
-	$sdbh->commit();
-	wait_until_true($rdbh => "SELECT 1 FROM $table WHERE data1 = 'upper'");
-	$SQL = "SELECT id,data1 FROM $table";
-	$result = [[qq{$val},'upper']];
+	if ($table =~ /0/) {
+		$t=qq{ Skipping update test - only one column};
+		$result = [['skip']];
+		$SQL = "SELECT 'skip'";
+	}
+	else {
+		$t=qq{ Second table $table caught the sync update};
+		$SQL = "UPDATE $table SET data1 = 'upper' WHERE id = '$val1'";
+		$sdbh->do($SQL);
+		$now = now_time($sdbh);
+		$sdbh->commit();
+		wait_until_true($rdbh => "SELECT 1 FROM $table WHERE data1 = 'upper'");
+		$SQL = $SELECTDATA;
+		$result = [[qq{$val1},'upper']];
+	}
 	bc_deeply($result, $rdbh, $SQL, $t);
 
 	$t=qq{ Second sync on $table creates a valid bucardo_track entry};
 	$SQL = "SELECT * FROM bucardo.bucardo_track WHERE tablename = $oid ORDER BY txntime";
-	push @$result2, [$now,$oid,$db{$rdbh}];
+	push @$result2, [$now,$oid,$db{$rdbh}] unless $table =~ /0/;
 	## XX Sometimes make test fails here - race condition?
 	bc_deeply($result2, $sdbh, $SQL, $t);
 
 	$t=qq{ Second table $table caught the delete};
-	$SQL = "DELETE FROM $table WHERE id = '$val'";
+	$SQL = "DELETE FROM $table WHERE id = '$val1'";
 	$sdbh->do($SQL);
 	$sdbh->commit();
-	wait_until_false($rdbh => "SELECT 1 FROM $table WHERE id = '$val'");
-	$SQL = "SELECT id,data1 FROM $table";
+	wait_until_false($rdbh => "SELECT 1 FROM $table WHERE id = '$val1'");
 	$result = [];
+	$SQL = $table =~ /0/ ? $SELECTID : $SELECTDATA;
 	bc_deeply($result, $rdbh, $SQL, $t);
 
-	## False update, just because
-	$SQL = "UPDATE $table SET data1 = 'foobar' WHERE id = '$val'";
-	$sdbh->do($SQL);
-	$rdbh->do($SQL);
+	## Quick test of a noop update. Tables are empty at this point.
+	$SQL = "UPDATE $table SET data1 = 'foobar' WHERE id = '$val1'";
+	if ($table !~ /0/) {
+		$sdbh->do($SQL);
+		$rdbh->do($SQL);
+	}
 
 	## Insert, reverse direction
 	$t=qq{ First table $table synced the insert};
-	$val = $val{$type}{3};
-	$SQL = "INSERT INTO $table(id,data1,inty) VALUES ('$val','revins',3)";
+	$SQL = $table =~ /0/
+		? "INSERT INTO $table(id) VALUES ('$val2')"
+		: "INSERT INTO $table(id,data1,inty) VALUES ('$val2','revins',2)";
 	$rdbh->do($SQL);
 	$rdbh->commit();
-	wait_until_true($sdbh => "SELECT 1 FROM $table WHERE inty = 3");
-	$SQL = "SELECT id,data1 FROM $table";
-	$result = [[qq{$val},'revins']];
-	bc_deeply($result, $sdbh, $SQL, $t);
+	wait_until_true($sdbh => "SELECT 1 FROM $table WHERE id = '$val2'");
+	$result = [[qq{$val2}]];
+	bc_deeply($result, $sdbh, $SELECTID, $t);
+
+
+	## Rest of the tests do not apply for test0
+	if ($table =~ /test0/) {
+		for (1..4) {
+			pass(qq{ Skipping update tests as $table only has one column }); ## TESTCOUNT - 1
+		}
+		$sdbh->do("DELETE FROM droptest");
+		$rdbh->do("DELETE FROM droptest");
+		$sdbh->commit();
+		$rdbh->commit();
+		return;
+	}
 
 	## Insert, forward direction, and update, reverse
-	$val2 = $val;
-	$val = $val{$type}{4};
-	$SQL = "INSERT INTO $table(id,data1,inty) VALUES ('$val','insert',4)";
+	$SQL = "INSERT INTO $table(id,data1,inty) VALUES ('$val3','insert',3)";
 	$sdbh->do($SQL);
 
 	$SQL = "UPDATE $table SET data1 = 'gator' WHERE id = '$val2'";
@@ -2842,10 +2916,9 @@ sub basic_swap_testing {
 	$sdbh->commit();
 	$rdbh->commit();
 	wait_until_true($sdbh => "SELECT 1 FROM $table WHERE data1 = 'gator'");
-	$SQL = "SELECT id,data1 FROM $table WHERE id = '$val'";
-	$result = [[qq{$val},'insert']];
+	$SQL = "SELECT id,data1 FROM $table WHERE id = '$val3'";
+	$result = [[qq{$val3},'insert']];
 	bc_deeply($result, $rdbh, $SQL, $t);
-
 	$t=qq{ Sync on $table updated first};
 	$SQL = "SELECT id,data1 FROM $table WHERE id = '$val2'";
 	$result = [[qq{$val2},'gator']];
@@ -2853,8 +2926,8 @@ sub basic_swap_testing {
 
 	## Add to both sides, delete from both sides, update both sides
 	## They currently both have:
-	# 3 | gator
-	# 4 | insert
+	# 2 | gator
+	# 3 | insert
 	## Add to second: 12, 14, 16
 
 	$rdbh->do("INSERT INTO $table(id,data1,inty) VALUES ('$val{$type}{12}','insert',12)");
@@ -2865,14 +2938,14 @@ sub basic_swap_testing {
 	$sdbh->do("INSERT INTO $table(id,data1,inty) VALUES ('$val{$type}{15}','insert',15)");
 	$sdbh->do("INSERT INTO $table(id,data1,inty) VALUES ('$val{$type}{17}','insert',17)");
 
-	## Delete one from each
+	## Delete one from each: 14, 13
 	$rdbh->do("DELETE FROM $table WHERE id = '$val{$type}{14}'");
 	$sdbh->do("DELETE FROM $table WHERE id = '$val{$type}{13}'");
 
-	## Update one old and one new
-	$sdbh->do("UPDATE $table SET data1 = 'updated' WHERE id = '$val{$type}{3}'");
+	## Update one old and one new: 2,17,3,12
+	$sdbh->do("UPDATE $table SET data1 = 'updated' WHERE id = '$val2'");
 	$sdbh->do("UPDATE $table SET data1 = 'updated' WHERE id = '$val{$type}{17}'");
-	$rdbh->do("UPDATE $table SET data1 = 'updated' WHERE id = '$val{$type}{4}'");
+	$rdbh->do("UPDATE $table SET data1 = 'updated' WHERE id = '$val3'");
 	$rdbh->do("UPDATE $table SET data1 = 'updated' WHERE id = '$val{$type}{12}'");
 
 	$sdbh->commit();
@@ -2881,14 +2954,14 @@ sub basic_swap_testing {
 
 	$SQL = "SELECT id,data1 FROM $table ORDER BY inty";
 	$result = [
+			   [qq{$val{$type}{2}},'updated'],
 			   [qq{$val{$type}{3}},'updated'],
-			   [qq{$val{$type}{4}},'updated'],
 			   [qq{$val{$type}{12}},'updated'],
 			   [qq{$val{$type}{15}},'insert'],
 			   [qq{$val{$type}{16}},'insert'],
 			   [qq{$val{$type}{17}},'updated'],
 			   ];
-	bc_deeply($result, $sdbh,  $SQL, " Complex sync of $table looks good on first database");
+	bc_deeply($result, $sdbh, $SQL, " Complex sync of $table looks good on first database");
 	bc_deeply($result, $rdbh, $SQL, " Complex sync of $table looks good on second database");
 
 	$sdbh->do("DELETE FROM droptest");
@@ -2923,7 +2996,7 @@ sub bucardo_delta_populate {
 	my $sourcerows = "SELECT * FROM bucardo.bucardo_delta WHERE tablename = $oid ".
 		"ORDER BY txntime DESC, rowid DESC";
 
-	$t=q{ Insert to $table populated bucardo_delta correctly};
+	$t=qq{ Insert to $table populated bucardo_delta correctly};
 	$SQL = "INSERT INTO $table(id,data1,inty) VALUES ('$val','one',1)";
 	$dbh->do($SQL);
 	$now = now_time($dbh);
@@ -2932,7 +3005,7 @@ sub bucardo_delta_populate {
 	is_deeply($info, $result, $t);
 
 	## Does an update do the same?
-	$t=q{ Update to $table populated bucardo_delta correctly};
+	$t=qq{ Update to $table populated bucardo_delta correctly};
 	$SQL = "UPDATE $table SET data1='changed' WHERE id = '$val'";
 	$dbh->do($SQL);
 	$now = now_time($dbh);
@@ -2940,7 +3013,7 @@ sub bucardo_delta_populate {
 	unshift @$result, [$oid,$val,$now];
 	is_deeply($info, $result, $t);
 
-	$t=q{ Update to $table populated bucardo_delta correctly};
+	$t=qq{ Update to $table populated bucardo_delta correctly};
 	$val2 = $val;
 	$val = $val{$type}{18};
 	$SQL = "UPDATE $table SET id='$val' WHERE id = '$val2'";
@@ -2958,7 +3031,7 @@ sub bucardo_delta_populate {
 	is_deeply($info, $result, $t);
 
 	## Two inserts at once
-	$t=q{ Double insert to $table populated bucardo_delta correctly};
+	$t=qq{ Double insert to $table populated bucardo_delta correctly};
 	$val = $val{$type}{22};
 	$val2 = $val{$type}{23};
 	$SQL = qq{
@@ -2987,7 +3060,7 @@ sub test_customcode {
 	my $oid = $table{$sdbh}{$table};
 	my $toid = $table{$tdbh}{$table};
 	die unless $table =~ /(\d+)/;
-	my $goatnumber = ($1*2)-1; ## no critic
+	my $goatnumber = ($1*2)+1; ## no critic
 
 	clean_swap_table($table,[$sdbh,$tdbh]);
 	## Make sure Bucardo has a controller out for this code
@@ -3030,9 +3103,9 @@ sub test_customcode {
 
 	$badcode = q{use strict; my ($arg) = @_; return if $arg->{dummy}; throwerror; return 1; }; ## no critic
 
-	$SQL = "UPDATE customcode SET src_code =?";
+	$SQL = "UPDATE customcode SET name = ?, src_code = ?";
 	$sth = $masterdbh->prepare($SQL);
-	$sth->execute($badcode);
+	$sth->execute($badcode,"custom code test 'bad'");
 
 	$t=q{ Bucardo was reloaded };
 	$masterdbh->do("NOTIFY bucardo_mcp_reload");
@@ -3077,9 +3150,9 @@ return;
 
 	## XXX Make this into a $bc method
 	$t=q{ Update of customcode worked};
-	$SQL = "UPDATE customcode SET src_code =? WHERE id = ?";
+	$SQL = "UPDATE customcode SET name = ?, src_code = ? WHERE id = ?";
 	$sth = $masterdbh->prepare($SQL);
-	$count = $sth->execute($testcode{1},$codeid);
+	$count = $sth->execute("custom code test '1'",$testcode{1},$codeid);
 	is($count, 1, $t);
 
 	$masterdbh->do("NOTIFY bucardo_mcp_reload");
@@ -3111,7 +3184,7 @@ return;
 		$bc->customcode
 			({
 			  src_code => $testcode{$number},
-			  name     => "${name}_test",
+			  name     => "${name}_test '$number'",
 			  sync     => 'customcode',
 			  whenrun  => $name,
 			  });
@@ -3179,7 +3252,7 @@ return;
 	$code = $bc->customcode
 		({
 		  src_code => $conflict_code,
-		  name     => 'custom code test',
+		  name     => "custom code test '8'",
 		  goat     => $goatnumber,
 		  whenrun  => 'conflict',
 		  });
@@ -3187,6 +3260,11 @@ return;
 	$t=q{ The customcode method returned a number };
 	$codeid = $code->{id};
 	like($codeid, qr{^\d+$}, $t);
+
+	## Turn off the standard conflict for this table
+	$SQL = "UPDATE goat SET standard_conflict = NULL WHERE tablename = '$table'";
+	$masterdbh->do($SQL);
+	$masterdbh->commit();
 
 	## Create the conflict
 	$val = $val{$type}{3};
@@ -3208,7 +3286,11 @@ return;
 
 	$t=qq{ Test file "$testfile{8}" was created by 'conflict' custom code };
 	is(-e $testfile{8}, 1, $t);
-	unlink $testfile{8};
+
+
+	$SQL = "UPDATE goat SET standard_conflict = 'source'";
+	$masterdbh->do($SQL);
+	$masterdbh->commit();
 
 	## Try out 'exception'
 
