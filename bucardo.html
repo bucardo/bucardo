@@ -355,7 +355,7 @@ Each table that needs to be replicated needs to be added to the <b>goat</b> tabl
 <tr>
 <td class="lcol" >rebuild_index</td> <td>Text</td> <td>Null</td> <td>No</td> <td>Whether to turn off indexes and then rebuild</td> </tr>
 <tr>
-<td class="lcol" >standard_conflict</td> <td>Text</td> <td>Null</td> <td>No</td> <td>The method to resolve collisions for this table, one of: 'source','target','skip','random','abort'. Only needed for 'swap' syncs.</td> </tr>
+<td class="lcol" >standard_conflict</td> <td>Text</td> <td>Null</td> <td>No</td> <td>The method to resolve collisions for this table, one of: 'source','target','skip','random','latest','abort'. Only needed for 'swap' syncs.</td> </tr>
 <tr>
 <td class="lcol" >analyze_after_copy</td> <td>Boolean</td> <td>True</td> <td>No</td> <td>Whether to run an ANALYZE on the table after a fullcopy sync</td> </tr>
 </table>
@@ -809,6 +809,8 @@ Master to master replication requires a way to handle conflict, in the cases whe
 <td class="lcol" >target</td> <td>The target database always wins.</td> </tr>
 <tr>
 <td class="lcol" >random</td> <td>One of the two sides is chosen at random as the winner.</td> </tr>
+<tr>
+<td class="lcol" >latest</td> <td>The side most recently changed wins.</td> </tr>
 <tr>
 <td class="lcol" >abort</td> <td>The sync is aborted, and will not continue.</td> </tr>
 <tr>

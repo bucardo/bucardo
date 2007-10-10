@@ -2008,6 +2008,7 @@ sub start_mcp {
 					'target' eq $sc or
 					'skip'   eq $sc or
 					'random' eq $sc or
+					'latest' eq $sc or
 					'abort'  eq $sc;
 				$self->glog(qq{    Standard conflict method "$sc" chosen});
 			} ## end standard conflict

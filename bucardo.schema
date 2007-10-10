@@ -210,7 +210,7 @@ ALTER TABLE goat ADD CONSTRAINT custom_needs_pkey CHECK (customselect IS NULL OR
 ALTER TABLE goat ADD CONSTRAINT pkey_needs_type CHECK (pkey = '' OR pkeytype IS NOT NULL);
 
 ALTER TABLE goat ADD CONSTRAINT standard_conflict CHECK (standard_conflict IS NULL
-  OR standard_conflict IN ('source','target','skip','random','abort'));
+  OR standard_conflict IN ('source','target','skip','random','latest','abort'));
 
 -- CREATE UNIQUE INDEX goats_r_unique ON goat(db,schemaname,tablename,reltype);
 
