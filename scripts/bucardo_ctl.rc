@@ -1,0 +1,98 @@
+#!/bin/sh
+
+# PROVIDE: bucardo_ctl 
+# REQUIRE: LOGIN postgresql 
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="bucardo_ctl"
+rcvar=`set_rcvar`
+
+command="/usr/local/sbin/${name}"
+
+rc_usage="start|stop|reload|restart|status|kick [sync_name]"
+extra_commands="reload kick"
+
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+reload_cmd="${name}_reload"
+restart_cmd="${name}_restart"
+kick_cmd="${name}_kick"
+status_cmd="${name}_status"
+
+
+bucardo_ctl_start()
+{
+	if [ -x ${command} ]; then
+		${command} start "Started by rc script."
+	else
+		echo "${command} not found or not executable!"
+		exit 1
+	fi
+}
+
+bucardo_ctl_stop()
+{
+	if [ -x ${command} ]; then
+		${command} stop "Stopped by rc script."
+	else
+		echo "${command} not found or not executable!"
+		exit 1
+	fi
+}
+
+bucardo_ctl_reload()
+{
+	if [ -x ${command} ]; then
+		${command} reload_config
+	else
+		echo "${command} not found or not executable!"
+		exit 1
+	fi
+}
+
+bucardo_ctl_restart()
+{
+	if [ -x ${command} ]; then
+		${command} stop "Restarting: Stopped by rc script"
+		${command} start "Restarting: Started by rc script"
+	else
+		echo "${command} not found or not executable!"
+		exit 1
+	fi
+}
+
+bucardo_ctl_kick()
+{
+	if [ -x ${command} ]; then
+		if [ $# -gt 0 ]; then
+			${command} kick $*
+		else
+			echo "Specifiy sync name to kick off"
+			exit 1
+		fi
+	else
+		echo "${command} not found or not executable!"
+		exit 1
+	fi
+}
+
+bucardo_ctl_status()
+{
+	if [ -x ${command} ]; then
+		if [ $# -gt 0 ]; then
+			${command} status $*
+		else
+			${command} status
+		fi
+	else
+		echo "${command} not found or not executable!"
+		exit 1
+	fi
+
+}
+
+load_rc_config $name
+run_rc_command "$@"
+
