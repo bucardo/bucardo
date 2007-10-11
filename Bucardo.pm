@@ -4908,8 +4908,8 @@ http://bucardo.org/bugs.html
 
 =head1 CREDITS
 
-Bucardo was originally developed and funded by Backcountry.com, who have been using it in production 
-since November 2006.
+Bucardo was originally developed and funded by Backcountry.com, who have been using versions 
+of it in production since 2002.
 
 =head1 AUTHOR
 
