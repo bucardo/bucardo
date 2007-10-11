@@ -5,8 +5,9 @@ abstract            : Postgres multi-master replication system
 author:              
   - Greg Sabino Mullane <greg@endpoint.com>
 
-license             : BSD
+license             : bsd
 dynamic_config      : 1
+distribution_type   : module
 
 requires:
   DBI               : 1.49
@@ -24,10 +25,10 @@ build_requires:
   Module::Signature : 0.50
 
 provides:
-  Bucardo
+  Bucardo:
     file            : Bucardo.pm
     version         : 3.0.7
-  bucardo_ctl
+  bucardo_ctl:
     file            : bucardo_ctl
     version         : 1.1.15
 
@@ -35,7 +36,7 @@ resources:
   homepage          : http://bucardo.org/index.html
   MailingList       : http://bucardo.org/list.html
   bugtracker        : http://bucardo.org/bugs.html
-  epository         : http://bucardo.org/repo.html
+  repository        : http://bucardo.org/repo.html
   license           : http://bucardo.org/license.html
 meta-spec:
   version           : 1.3
