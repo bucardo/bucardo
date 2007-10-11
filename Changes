@@ -2,6 +2,14 @@
 
 3.0.7 (unreleased)
 
+ - Allow bucardo_ctl options to be specified in a .bucardorc file. [GSM]
+
+ - Add new index to bucardo_delta for faster purging. [GSM]
+
+ - Add a BSD-style rc file in the scripts directory. [Ben Allen <bsa@lanl.gov>]
+
+ - Activate the "latest" standard_conflict method. [GSM]
+
  - Fix error for tables with primary key and no other columns in pushdelta/swap syncs, 
    per report from Ben Allen. [GSM]
 
