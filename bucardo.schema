@@ -865,7 +865,7 @@ $bc$
 	}
 	for (keys %$targetdb) {
 		if ($dbstatus{$_} ne 'active') {
-			elog(NOTICE, qq{Skipping inactive target database "$_". This may affect puring of bucardo_delta});
+			elog(NOTICE, qq{Skipping inactive target database "$_". This may affect pruning of bucardo_delta});
 			delete $targetdb->{$_};
 		}
 	}
@@ -1152,13 +1152,14 @@ $bc$
 		my $index2 = "bucardo_delta_${schema}_${table}_rowid";
 		my $index3 = "bucardo_track_target";
 		my $index4 = "bucardo_delta_targetdb_unique";
+		my $index5 = "bucardo_delta_txntime";
 		my $safeindex1 = $index1;
 		if ($safeindex1 =~ s/"/""/g or $safeindex1 =~ / /) {
 			$safeindex1 = qq{"$safeindex1"};
 		}
 
 		if (!$found{bc_table1}) {
-			$found{index1} = $found{index2} = $found{index3} = $found{index4} = 0;
+			$found{index1} = $found{index2} = $found{index3} = $found{index4} = $found{index5} = 0;
 		}
 		else {
 			$SQL = qq{
@@ -1178,6 +1179,8 @@ $bc$
 			$found{index3} = $sth->fetchall_arrayref()->[0][0];
 			$sth->execute($bc_schema,$index4);
 			$found{index4} = $sth->fetchall_arrayref()->[0][0];
+			$sth->execute($bc_schema,$index5);
+			$found{index5} = $sth->fetchall_arrayref()->[0][0];
 		}
 
 		## Goat-level ping overrides the sync-level ping - source only
@@ -1314,6 +1317,9 @@ $bc$
 			}
 			if (! $found{index4}) {
 				$dbh->do("CREATE UNIQUE INDEX $index4 ON $bc_schema.$bc_table3(tablename,targetdb)");
+			}
+			if (! $found{index5}) {
+				$dbh->do("CREATE INDEX $index5 ON $bc_schema.$bc_table1(txntime)");
 			}
 			if (! $found{func1}) {
 				## Make sure you use tabs in all these functions for leading whitespace
