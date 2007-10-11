@@ -1,6 +1,10 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-3.0.7 (unreleased)
+3.0.8 (unreleased)
+
+
+
+3.0.7 Released October 11, 2007
 
  - Allow bucardo_ctl options to be specified in a .bucardorc file. [GSM]
 
@@ -24,5 +28,5 @@
  - Add ping method to CTL and KID processes. [GSM]
 
 
-3.0.6 - First public release
+3.0.6 - First public release, September 2007
 
