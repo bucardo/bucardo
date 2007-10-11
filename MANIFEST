@@ -12,10 +12,12 @@ MANIFEST
 MANIFEST.SKIP
 META.yml
 Makefile.PL
+Changes
 
 scripts/bucardo_rrd
 scripts/bucardo-report
 scripts/check_bucardo_sync
+scripts/bucardo_ctl.rc
 
 bucardo.html
 Bucardo.pm.html
