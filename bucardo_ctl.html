@@ -26,6 +26,7 @@
 		<li><a href="#startup_arguments">Startup arguments</a></li>
 	</ul>
 
+	<li><a href="#files">FILES</a></li>
 	<li><a href="#environment_variables">ENVIRONMENT VARIABLES</a></li>
 	<li><a href="#bugs">BUGS</a></li>
 	<li><a href="#see_also">SEE ALSO</a></li>
@@ -42,7 +43,7 @@
 </p>
 <hr />
 <h1><a name="version">VERSION</a></h1>
-<p>This documents describes bucardo_ctl version 1.1.17</p>
+<p>This documents describes bucardo_ctl version 1.1.19</p>
 <p>
 </p>
 <hr />
@@ -394,15 +395,23 @@ before the name as well, so a debugname of ``rootdb'' would produce a log file n
 <p>
 </p>
 <hr />
+<h1><a name="files">FILES</a></h1>
+<p>In addition to command-line configurations, you can put any options inside of a file. The file <em>.bucardorc</em> in 
+the current directory will be used if found. If not found, then the file <em>~/.bucardorc</em> will be used. The format 
+of the file is option = value, one per line. Any line starting with a '#' will be skipped. Any values loaded 
+from a .bucardorc file will be overwritten by command-line options.</p>
+<p>
+</p>
+<hr />
 <h1><a name="environment_variables">ENVIRONMENT VARIABLES</a></h1>
-<p>The bucardo_ctl script does not use any environment variables at this time.</p>
+<p>The bucardo_ctl script uses <em>$ENV{HOME}</em> to look for a <em>.bucardorc</em> file.</p>
 <p>
 </p>
 <hr />
 <h1><a name="bugs">BUGS</a></h1>
 <p>The 'status' command does not yet return current information, and the start time in particular should be 
 taken with a grain of salt.</p>
-<p>Bug reports and feature requests are always welcome, please visit <a href="http://bucardo.org">http://bucardo.org</a> or email <a href="mailto:bucardo-general@bucardo.org.">bugs@bucardo.org.</a></p>
+<p>Bug reports and feature requests are always welcome, please visit <a href="http://bucardo.org">http://bucardo.org</a> or email <a href="mailto:bucardo-general@bucardo.org.">bucardo-general@bucardo.org.</a></p>
 <p>
 </p>
 <hr />

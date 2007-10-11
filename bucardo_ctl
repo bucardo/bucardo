@@ -13,7 +13,7 @@ use Time::HiRes 'sleep';
 use POSIX 'ceil';
 use Data::Dumper;
 
-our $VERSION = '1.1.18';
+our $VERSION = '1.1.19';
 
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
@@ -47,6 +47,26 @@ my $bcargs = {
 			  debugfile    => 0,
 			  cleandebugs  => 1,
 		  };
+
+## Values are first read from a .bucardorc, either in the current dir, or the home dir.
+## These will be overwritten by command-line args.
+my $file;
+if (-e '.bucardorc') {
+	$file = '.bucardorc';
+}
+elsif (-e "$ENV{HOME}/.bucardorc") {
+	$file = "$ENV{HOME}/.bucardorc";
+}
+if (defined $file) {
+	open my $rc, '<', $file or die qq{Could not open "$file": $!\n};
+	while (<$rc>) {
+		next if /^\s*#/;
+		next unless /^\s*(\w+)\s*=\s*(.+?)\s*$/o;
+		my ($name,$value) = ($1,$2);
+                $bcargs->{$name} = $value;
+	}
+	close $rc;
+}
 
 GetOptions
 	($bcargs,
@@ -1020,7 +1040,7 @@ bucardo_ctl - utility script for controlling the Bucardo program
 
 =head1 VERSION
 
-This documents describes bucardo_ctl version 1.1.17
+This documents describes bucardo_ctl version 1.1.19
 
 =head1 SYNOPSIS
 
@@ -1311,9 +1331,16 @@ Forces removal of all old debug files before running.
 
 =back
 
+=head1 FILES
+
+In addition to command-line configurations, you can put any options inside of a file. The file F<.bucardorc> in 
+the current directory will be used if found. If not found, then the file F<~/.bucardorc> will be used. The format 
+of the file is option = value, one per line. Any line starting with a '#' will be skipped. Any values loaded 
+from a .bucardorc file will be overwritten by command-line options.
+
 =head1 ENVIRONMENT VARIABLES
 
-The bucardo_ctl script does not use any environment variables at this time.
+The bucardo_ctl script uses I<$ENV{HOME}> to look for a F<.bucardorc> file.
 
 =head1 BUGS
 
