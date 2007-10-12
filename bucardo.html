@@ -1,23 +1,23 @@
 <html>
 <head>
-<title>Bucardo - an asynchronous multi-master replication system</title>
+<title>Bucardo - an asynchronous multi-master replication system for PostgreSQL</title>
 <style type="text/css">
-table.db { background-color: #ddeedd; }
-table.env { background-color: #ddffff; }
-table.conf { background-color: #ffccff; }
-td.lcol { color: black; font-weight: bolder; background-color: #bbffbb; }
-p.code { white-space: pre; font-family: monospace; font-weight: bolder; padding: 1em; padding-left: 2em; padding-right: 2em; background-color: black; color: yellow; margin-right: 3em;}
+ table.db { background-color: #ddeedd; }
+ table.env { background-color: #ddffff; }
+ table.conf { background-color: #ffccff; }
+ td.lcol { color: black; font-weight: bolder; background-color: #bbffbb; }
+ p.code { white-space: pre; font-family: monospace; font-weight: bolder; padding: 1em; padding-left: 2em; padding-right: 2em; background-color: black; color: yellow; margin-right: 3em;}
 </style>
 </head>
 
 <h1>Bucardo</h1>
 <p>
-Bucardo is an asynchonous master-master and master-slave replication system for Postgres. It uses triggers on individual tables. It supports conflict resolution and exception handling through the use of custom Perl subroutines.
+Bucardo is an asynchronous master-master and master-slave replication system for <a href="http://www.postgresql.org/">PostgreSQL</a>. It uses triggers on individual tables. It supports conflict resolution and exception handling through the use of custom Perl subroutines.
 </p>
 <p>
-This document covers Bucardo 3.0.8. The latest version of this document can always be found at http://bucardo.org/bucardo.html
+This document covers Bucardo 3.0.8. The latest version of this document can always be found at <a href="http://bucardo.org/bucardo.html">http://bucardo.org/bucardo.html</a>.
 </p>
-<ul class-"toc">
+<ul class="toc">
  <li><a href="#Bucardorequirements">Bucardo requirements</a></li>
  <li><a href="#BucardoFeatures">Bucardo Features</a></li>
  <li><a href="#BucardoLimitations">Bucardo Limitations</a></li>
@@ -54,12 +54,12 @@ Bucardo requires no modification to your installation of Postgres, and runs as a
 
 <h3>Postgres</h3>
 <p>
-Bucardo requires that all databases involved in the replication be running version 8.1 or greater, and that they have the Pl/Pgsql language installed. The database that Bucardo itself uses must have the Pl/Perlu language installed.
+Bucardo requires that all databases involved in the replication be running version 8.1 or greater, and that they have the PL/pgSQL language installed. The database that Bucardo itself uses must have the PL/Perlu language installed.
 </p>
 
 <h3>Perl</h3>
 <p>
-Bucardo runs as a series of Perl daemons, and requires version 5.8.3 of Perl or better.The following modules are also required to run Bucardo:
+Bucardo runs as a series of Perl daemons, and requires version 5.8.3 of Perl or better. The following modules are also required to run Bucardo:
 </p>
 
 <ul>
@@ -73,7 +73,7 @@ Bucardo runs as a series of Perl daemons, and requires version 5.8.3 of Perl or 
  <li>Mail::Sendmail 0.79</li>
  <li>ExtUtils::MakeMaker 6.32</li>
 </ul>
-</ul>
+
 <p>
 In order to run the test suite (highly recommended), the following modules are required:
 </p>
@@ -84,7 +84,7 @@ In order to run the test suite (highly recommended), the following modules are r
  <li>Test::Harness 2.03</li>
  <li>*Test::Dynamic 1.3.1</li>
 </ul>
-</ul>
+
 <p>
 * These modules come bundled with Bucardo.
 </p>
@@ -98,7 +98,7 @@ Currently, Bucardo has only been tested on Linux distributions. In theory, it sh
 <hr />
 <h2><a name="BucardoFeatures">Bucardo Features</a></h2>
 <p>
-Bucardo has among its features the folowing:
+Bucardo has among its features the following:
 </p>
 
 <ul>
@@ -112,7 +112,6 @@ Bucardo has among its features the folowing:
  <li>Step by step data changes are not tracked, so updates can happen quicker.</li>
  <li>Included logging and analysis tools.</li>
 </ul>
-</ul>
 
 <br clear="all" />
 <hr />
@@ -122,15 +121,13 @@ Bucardo, like all replication systems, has limitations, including:
 </p>
 
 <ul>
- <li>Requires Postgres 8.1 or better, with Pl/Perl and Pl/pgsql. Version 8.2 or better is recommended.</li>
+ <li>Requires Postgres 8.1 or better, with PL/Perl and PL/pgSQL. Version 8.2 or better is recommended.</li>
  <li>Requires recent versions of Perl and DBD::Pg.</li>
  <li>Replicates tables only, not the entire database.</li>
  <li>Does not replicate DDL.</li>
  <li>Cannot handle more than two master nodes at a time (no master-master-master replication yet).</li>
  <li>Requires a primary key on each table to be replicated.</li>
- <li>Step by step data changes are not tracked, so busy sites with large network disconnect times may require </li>
- <li> expensive locking to "catch back up" </li>
-
+ <li>Step by step data changes are not tracked, so busy sites with large network disconnect times may require expensive locking to "catch back up".</li>
 </ul>
 
 <br clear="all" />
@@ -144,7 +141,6 @@ Installing Bucardo is a fairly straightforward process:
  <li>Make and install the Perl modules</li>
  <li>Create the database</li>
  <li>Import the schema</li>
-</ul>
 </ul>
 
 <h3>Make and install the Perl modules</h3>
@@ -213,14 +209,23 @@ There are a few environment variables you can set to help you when debugging and
  <th>Name</th>  <th>Default</th>  <th>Description</th> 
 </tr>
 <tr>
-<td class="lcol" >BUCARDO_TEST_NUKE_OKAY</td> <td>1</td> <td>If set, will not prompt before droppping the TESTBCxxx databases.</td> </tr>
+ <td class="lcol">BUCARDO_TEST_NUKE_OKAY</td>
+ <td>1</td>
+ <td>If set, will not prompt before droppping the TESTBCxxx databases.</td>
+</tr>
 <tr>
-<td class="lcol" >BUCARDO_TESTBAIL</td> <td>0</td> <td>If set, testing will stop when the first error appears.</td> </tr>
+ <td class="lcol">BUCARDO_TESTBAIL</td>
+ <td>0</td>
+ <td>If set, testing will stop when the first error appears.</td>
+</tr>
 <tr>
-<td class="lcol" >BUCARDO_KEEP_OLD_DEBUG</td> <td>0</td> <td>If set, the temporary log files will not be removed at the end of testing.</td> </tr>
+ <td class="lcol">BUCARDO_KEEP_OLD_DEBUG</td>
+ <td>0</td>
+ <td>If set, the temporary log files will not be removed at the end of testing.</td>
+</tr>
 </table>
 <p>
-The tests are grouped into logical families, which can be toggled at the top of the main test script, "01bc.t". The group of tests labelled TEST_RANDOM_SWAP is off by default, as their randomnes sometimes causes deadlock and serialization errors. Nonetheless, it is recommended to turn this on and run it, and try and discover non-deadlock, non-serialization errors that may pop up.
+The tests are grouped into logical families, which can be toggled at the top of the main test script, "01bc.t". The group of tests labelled TEST_RANDOM_SWAP is off by default, as their randomness sometimes causes deadlock and serialization errors. Nonetheless, it is recommended to turn this on and run it, and try and discover non-deadlock, non-serialization errors that may pop up.
 </p>
 <p>
 Please report any bugs found in testing to the mailing list (preferred) or the author of this module.
@@ -243,12 +248,10 @@ There are some common terms used when talking about Bucardo:
  <li>Swap - A type of sync in which each side is both a source and a target (e.g. master-master).</li>
  <li>Pushdelta - A type of sync in which the changes to a source are replicated to a target.</li>
  <li>Fullcopy - A type of sync in which the target is truncated and the entire source is replicated to it.</li>
- <li>Kick - To initiate a specific sync by sending Bucardo a signal. Note that the sync may not start right </li>
- <li>MCP - The main Perl daemon process (Master Control Program) that is responsible for keeping track of what </li>
- <li>CTL - The controller process for each sync. This is responsible for making sure that the sync runs, mostly by </li>
- <li>KID - A process responsible for a single replication event, going from a source to a target database (and the </li>
- <li>other way, if a swap sync). </li>
-
+ <li>Kick - To initiate a specific sync by sending Bucardo a signal. Note that the sync may not start right away.</li>
+ <li>MCP - The main Perl daemon process (Master Control Program) that is responsible for keeping track of what all processes are doing.</li>
+ <li>CTL - The controller process for each sync. This is responsible for making sure that the sync runs, mostly by starting a KID.</li>
+ <li>KID - A process responsible for a single replication event, going from a source to a target database (and the other way, if a swap sync).</li>
 </ul>
 
 <br clear="all" />
@@ -268,32 +271,88 @@ Each database involved in the replication must be added to the <b>db</b> table w
  <th>Column</th>  <th>Type</th>  <th>Default</th>  <th>Required?</th>  <th>Description</th> 
 </tr>
 <tr>
-<td class="lcol" >name</td> <td>text</td> <td>None</td> <td>Yes</td> <td>A unique name for this database, often the same as the dbname or dbhost for dedicated boxes. Must be of pattern [A-Za-z]\w*</td> </tr>
+ <td class="lcol">name</td>
+ <td>text</td>
+ <td>None</td>
+ <td>Yes</td>
+ <td>A unique name for this database, often the same as the dbname or dbhost for dedicated boxes. Must be of pattern [A-Za-z]\w*</td>
+</tr>
 <tr>
-<td class="lcol" >dbhost</td> <td>text</td> <td>Empty string</td> <td>No</td> <td>The hostname the database is on. If empty, connection is made locally via Unix sockets.</td> </tr>
+ <td class="lcol">dbhost</td>
+ <td>text</td>
+ <td>Empty string</td>
+ <td>No</td>
+ <td>The hostname the database is on. If empty, connection is made locally via Unix sockets.</td>
+</tr>
 <tr>
-<td class="lcol" >dbport</td> <td>text</td> <td>5432</td> <td>No</td> <td>The port number the database is listening on.</td> </tr>
+ <td class="lcol">dbport</td>
+ <td>text</td>
+ <td>5432</td>
+ <td>No</td>
+ <td>The port number the database is listening on.</td>
+</tr>
 <tr>
-<td class="lcol" >dbname</td> <td>text</td> <td>None</td> <td>Yes</td> <td>The name of the Postgres database</td> </tr>
+ <td class="lcol">dbname</td>
+ <td>text</td>
+ <td>None</td>
+ <td>Yes</td>
+ <td>The name of the Postgres database</td>
+</tr>
 <tr>
-<td class="lcol" >dbuser</td> <td>text</td> <td>None</td> <td>Yes</td> <td>The username to connect as.</td> </tr>
+ <td class="lcol">dbuser</td>
+ <td>text</td>
+ <td>None</td>
+ <td>Yes</td>
+ <td>The username to connect as.</td>
+</tr>
 <tr>
-<td class="lcol" >dbpass</td> <td>text</td> <td>None</td> <td>No</td> <td>The password to connect as. If empty, $ENV{DBI_PASS} and the .pgpass file may be used.</td> </tr>
+ <td class="lcol">dbpass</td>
+ <td>text</td>
+ <td>None</td>
+ <td>No</td>
+ <td>The password to connect as. If empty, the DBI_PASS environment variable and the .pgpass file may be used.</td>
+</tr>
 <tr>
-<td class="lcol" >pgpass</td> <td>text</td> <td>None</td> <td>No</td> <td>Full path to a .pgpass file</td> </tr>
+ <td class="lcol">pgpass</td>
+ <td>text</td>
+ <td>None</td>
+ <td>No</td>
+ <td>Full path to a .pgpass file</td>
+</tr>
 <tr>
-<td class="lcol" >dbconn</td> <td>text</td> <td>Empty string</td> <td>No</td> <td>String to add to the end of the generated DSN.</td> </tr>
+ <td class="lcol">dbconn</td>
+ <td>text</td>
+ <td>Empty string</td>
+ <td>No</td>
+ <td>String to add to the end of the generated DSN.</td>
+</tr>
 <tr>
-<td class="lcol" >status</td> <td>text</td> <td>'active'</td> <td>No</td> <td>Can be 'active' or 'inactive'. If inactive, no replication to or from this database will occur.</td> </tr>
+ <td class="lcol">status</td>
+ <td>text</td>
+ <td>'active'</td>
+ <td>No</td>
+ <td>Can be 'active' or 'inactive'. If inactive, no replication to or from this database will occur.</td>
+</tr>
 <tr>
-<td class="lcol" >sourcelimit</td> <td>smallint</td> <td>0</td> <td>No</td> <td>Maximum concurrent Bucardo read connections to this database</td> </tr>
+ <td class="lcol">sourcelimit</td>
+ <td>smallint</td>
+ <td>0</td>
+ <td>No</td>
+ <td>Maximum concurrent Bucardo read connections to this database</td>
+</tr>
 <tr>
-<td class="lcol" >targetlimit</td> <td>smallint</td> <td>0</td> <td>No</td> <td>Maximum concurrent Bucardo write connections to this database</td> </tr>
+ <td class="lcol">targetlimit</td>
+ <td>smallint</td>
+ <td>0</td>
+ <td>No</td>
+ <td>Maximum concurrent Bucardo write connections to this database</td>
+</tr>
 </table>
+
 <p>
 Example:
 </p>
-<p class="code"><span class="code">INSERT INTO db(name, dbname, dbhost, dbuser)
+<p class="code"><span class="code">INSERT INTO db (name, dbname, dbhost, dbuser)
 VALUES ('slave1','sales','sales-1.example.com','postgres'),
 VALUES ('venus','product','venus','ro_user');</span></p>
 <table border="1" class="db">
@@ -302,7 +361,7 @@ VALUES ('venus','product','venus','ro_user');</span></p>
  <th>Column</th>  <th>Type</th>  <th>Default</th>  <th>Required?</th>  <th>Description</th> 
 </tr>
 <tr>
-<td class="lcol" >name</td> <td>Text</td> <td>None</td> <td>Yes</td> <td>Unique name for this database group. Must be of pattern [A-Za-z]\w*</td> </tr>
+ <td class="lcol">name</td> <td>Text</td> <td>None</td> <td>Yes</td> <td>Unique name for this database group. Must be of pattern [A-Za-z]\w*</td> </tr>
 </table>
 <br />
 <table border="1" class="db">
@@ -320,8 +379,8 @@ VALUES ('venus','product','venus','ro_user');</span></p>
 <p>
 Example:
 </p>
-<p class="code"><span class="code">INSERT INTO dbgroup(name) VALUES ('readonlys');
-INSERT INTO dbmap(db,dbgroup) VALUES ('venus','readonlys'), ('mercury','readonlys');</span></p>
+<p class="code"><span class="code">INSERT INTO dbgroup (name) VALUES ('readonlys');
+INSERT INTO dbmap (db, dbgroup) VALUES ('venus','readonlys'), ('mercury','readonlys');</span></p>
 
 <h3>Adding goats</h3>
 <p>
@@ -362,8 +421,8 @@ Each table that needs to be replicated needs to be added to the <b>goat</b> tabl
 <p>
 Example:
 </p>
-<p class="code"><span class="code">INSERT INTO goat(db, tablename, pkey, pkeytype, standard_conflict)
-VALUES('venus', 'inventory', 'id', 'bigint', 'source');</span></p>
+<p class="code"><span class="code">INSERT INTO goat (db, tablename, pkey, pkeytype, standard_conflict)
+VALUES ('venus', 'inventory', 'id', 'bigint', 'source');</span></p>
 
 <h3>Adding herds</h3>
 <p>
@@ -393,8 +452,8 @@ Goats can be grouped together into herds. Goats can belong to one or more herdds
 <p>
 Example:
 </p>
-<p class="code"><span class="code">INSERT INTO herd(name) VALUES ('merch');
-INSERT INTO herdmap(herd,goat)
+<p class="code"><span class="code">INSERT INTO herd (name) VALUES ('merch');
+INSERT INTO herdmap (herd, goat)
   SELECT 'merch', id FROM goat
     WHERE db='venus' AND tablename IN ('inventory','stats','sales');</span></p>
 
@@ -403,7 +462,7 @@ INSERT INTO herdmap(herd,goat)
 The last step is to add syncs, which are individual replication events, added to the <b>sync</b> table:
 </p>
 <table border="1" class="db">
-<caption>Table "herdmap"</caption>
+<caption>Table "sync"</caption>
 <tr>
  <th>Column</th>  <th>Type</th>  <th>Default</th>  <th>Required?</th>  <th>Description</th> 
 </tr>
@@ -422,7 +481,7 @@ The last step is to add syncs, which are individual replication events, added to
 <tr>
 <td class="lcol" >kidsalive</td> <td>Boolean</td> <td>True</td> <td>No</td> <td>Do the children stay connected when finished?</td> </tr>
 <tr>
-<td class="lcol" >copyextra</td> <td>Text</td> <td>Empty string</td> <td>No</td> <td>Extra test to put after COPY command such as "WITH OIDS"</td> </tr>
+<td class="lcol" >copyextra</td> <td>Text</td> <td>Empty string</td> <td>No</td> <td>Extra text to put after COPY command such as "WITH OIDS"</td> </tr>
 <tr>
 <td class="lcol" >deletemethod</td> <td>Text</td> <td>'delete'</td> <td>No</td> <td>How to delete rows, one of 'delete' 'truncate'. Truncate is fast but does locking.</td> </tr>
 <tr>
@@ -448,14 +507,14 @@ The last step is to add syncs, which are individual replication events, added to
 <tr>
 <td class="lcol" >analyze_after_copy</td> <td>Boolean</td> <td>True</td> <td>No</td> <td>Whether to run an ANALYZE on the table after a fullcopy sync</td> </tr>
 <tr>
-<td class="lcol" >overdue</td> <td>Interval</td> <td>'0 seconds'</td> <td>No</td> <td>How long until the sync is considered overdue, e.g. for nagios warnings. '0 seconds' = do not check.</td> </tr>
+<td class="lcol" >overdue</td> <td>Interval</td> <td>'0 seconds'</td> <td>No</td> <td>How long until the sync is considered overdue, e.g. for Nagios warnings. '0 seconds' = do not check.</td> </tr>
 <tr>
-<td class="lcol" >expired</td> <td>Interval</td> <td>'0 seconds'</td> <td>No</td> <td>How long until the sync is considered expired, e.g. for nagios errors.</td> </tr>
+<td class="lcol" >expired</td> <td>Interval</td> <td>'0 seconds'</td> <td>No</td> <td>How long until the sync is considered expired, e.g. for Nagios errors.</td> </tr>
 </table>
 <p>
 Example:
 </p>
-<p class="code"><span class="code">INSERT INTO sync(name,source,targetdb,synctype,checktime,disable_triggers,disable_rules)
+<p class="code"><span class="code">INSERT INTO sync (name, source, targetdb, synctype, checktime, disable_triggers, disable_rules)
 VALUES ('merch','prod1','prod2','swap','10 minutes','replica','replica');</span></p>
 
 <br clear="all" />
@@ -480,13 +539,13 @@ When starting up Bucardo, it is best to watch the logs and make sure no errors o
 <p>
 When stopping Bucardo, the MCP program will tell the controllers to stop what they are doing and exit. They in turn will send the same message to their kids. Note that any existing replication events will not be cancelled but will wait until finished, so Bucardo may not stop for some time. If you really need to stop all Bucardo activity right away, you can manually kill any Bucardo processes from the command line. Looking for these processes is also the best way to check if Bucardo has completely finished shutting down:
 </p>
-<p class="code"><span class="code">ps -Afwww | grep Bucardo</span></p>
+<p class="code"><span class="code">ps -Afww | grep Bucardo</span></p>
 
 <br clear="all" />
 <hr />
 <h2><a name="Gatheringstatisticsandstatusinformation">Gathering statistics and status information</a></h2>
 <p>
-Bucardo comes with its own cgi script which provides a simplified, HTML table-based view of the status of all the syncs for one or more Bucardo instances. This script also outputs information designed for easy Nagios parsing. There is also a script for grabbing Bucardo information and adding it into a round-robin database (rrd), for use with reports by cacti and other programs. All scripts are located in the Bucardo/scripts directory.
+Bucardo comes with its own CGI script which provides a simplified, HTML table-based view of the status of all the syncs for one or more Bucardo instances. This script also outputs information designed for easy Nagios parsing. There is also a script for grabbing Bucardo information and adding it into a round-robin database (RRD), for use with reports by Cacti and other programs. All scripts are located in the Bucardo/scripts directory.
 </p>
 
 <br clear="all" />
@@ -508,7 +567,7 @@ If Bucardo detects that a remote host is no longer reachable, that a remote data
 
 <h3>Replication Errors</h3>
 <p>
-When replicating, Bucardo may come upon a situation it does not know how to handle. A common example is a violation of an existing constraint when doing master to master replication. It is your responsibility to provide Bucardo with write custom exception handling methods for these cases. A good way to detect these is to setup and use the web-based stats page.
+When replicating, Bucardo may come upon a situation it does not know how to handle. A common example is a violation of an existing constraint when doing master to master replication. It is your responsibility to provide Bucardo with custom exception handling methods for these cases. A good way to detect these is to setup and use the web-based stats page.
 </p>
 
 <br clear="all" />
@@ -520,7 +579,7 @@ Bucardo is very verbose by design in its logging. By default, all logging is don
 <p class="code"><span class="code"># Route Bucardo messages
 local1.*       -/var/log/bucardo.log</span></p>
 <p>
-This assumes that local1 is not being used by anything else of course. All important warnings and errors in the logs will have the string "Warning" inside of them. Thus, an easy way to check all the warnings, from newest to oldest, is:
+This assumes that local1 is not being used by anything else of course. The leading <tt>-</tt> before the filename directs syslog not to sync the file after each log line is written, as that would thrash the disk heavily. All important warnings and errors in the logs will have the string "Warning" inside of them. Thus, an easy way to check all the warnings, from newest to oldest, is:
 </p>
 <p class="code"><span class="code">tac /var/log/bucardo | grep Warning | less</span></p>
 
@@ -533,13 +592,12 @@ The main way of controlling Bucardo is through <strong>bucardo_ctl</strong>, a s
 
 <ul>
  <li><b>start</b> "reason - name" - Kills Bucardo if already running, then starts it up.</li>
- <li><b>stop</b> "reason - name" - Force all Bucardo porcesses to exit as soon as possible.</li>
- <li><b>kick</b> [one or more sync names] [seconds] - Kicks off one or more named syncs. If the "seconds" argument is given, </li>
+ <li><b>stop</b> "reason - name" - Force all Bucardo processes to exit as soon as possible.</li>
+ <li><b>kick</b> [one or more sync names] [seconds] - Kicks off one or more named syncs. If the "seconds" argument is given, wait up to that many seconds for the sync to complete. 0 seconds means to wait as long as it takes.</li>
  <li><b>reload_config</b> - Reload configuration information from the bucardo_config table.</li>
  <li><b>status</b> - Show the current status of all syncs.</li>
  <li><b>activate</b> [one or more sync names] - Set syncs to 'active' and start them up.</li>
  <li><b>deactivate</b> [one or more sync names] - Kill syncs and set to 'inactive'.</li>
-</ul>
 </ul>
 <p>
 See the <a href="http://bucardo.org/bucardo_ctl.html">latest bucardo_ctl documentation</a> for more information.
@@ -578,7 +636,7 @@ Inside the bucardo database, the <b>bucardo_config</b> table holds many settings
 <tr>
 <td class="lcol" >kid_pingtime</td> <td>60</td> <td>How often do we ping check the KID?</td> </tr>
 <tr>
-<td class="lcol" >ctl_checkonkids_time</td> <td>10</td> <td>How often does the controller check on the kids health?</td> </tr>
+<td class="lcol" >ctl_checkonkids_time</td> <td>10</td> <td>How often does the controller check on the kid's health?</td> </tr>
 <tr>
 <td class="lcol" >ctl_checkabortedkids_time</td> <td>30</td> <td>How often does the controller check the q table for aborted children?</td> </tr>
 <tr>
@@ -592,7 +650,7 @@ Inside the bucardo database, the <b>bucardo_config</b> table holds many settings
 <tr>
 <td class="lcol" >piddir</td> <td>/var/run/bucardo</td> <td>Directory holding Bucardo PID files</td> </tr>
 <tr>
-<td class="lcol" >pidfile</td> <td>bucardo.pid</td> <td>Name of the main Bucardo pid file</td> </tr>
+<td class="lcol" >pidfile</td> <td>bucardo.pid</td> <td>Name of the main Bucardo PID file</td> </tr>
 <tr>
 <td class="lcol" >stopfile</td> <td>fullstopbucardo</td> <td>Name of the semaphore file used to stop Bucardo processes</td> </tr>
 <tr>
@@ -625,29 +683,27 @@ Inside the bucardo database, the <b>bucardo_config</b> table holds many settings
 <hr />
 <h2><a name="Thebucardodeltaandbucardotracktables">The bucardo_delta and bucardo_track tables</a></h2>
 <p>
-Each database that needs to track row changes (has at least one table being used for a swap or a pushdelta sync)will have the following two tables created in the "bucardo" schema:
+Each database that needs to track row changes (that is, each database that has at least one table being used for a swap or a pushdelta sync) will have the following two tables created in the "bucardo" schema:
 </p>
 
 <ul>
  <li>bucardo_delta - Tracks which row has changed per database, and when it was changed.</li>
- <li>bucardo_track - Tracks which rows in the bucardo_delta table that each target database has already seen. </li>
-</ul>
+ <li>bucardo_track - Tracks which rows in the bucardo_delta table each target database has already seen.</li>
 </ul>
 <p>
-These tables (and the schema) itself are automatically created and modified as needed. Note that for safety reasons, removing a sync will <b>not</b> remove a table's triggers or remove entries from the bucardo_delta table. This must be done manually, for the risk of removing important data is to high to make it an automatic task.
+These tables (and the schema) itself are automatically created and modified as needed. Note that for safety reasons, removing a sync will <b>not</b> remove a table's triggers or remove entries from the bucardo_delta table. This must be done manually, for the risk of removing or accidentally stopping tracking of important data is too high to make it an automatic task.
 </p>
 
 <br clear="all" />
 <hr />
 <h2><a name="BucardoRoutineMaintenance">Bucardo Routine Maintenance</a></h2>
 <p>
-Bucardo does require some routine maintenance to keep things going, especially if you are processing heavy workloads. Sepcifically, there are some tables that need frequent vacuuming, and some that need frequent cleaning. There are provided examples of cronjobs to perform both of these tasks, but you should adjust them to your own system. The cronjobs will call the following functions:
+Bucardo does require some routine maintenance to keep things going, especially if you are processing heavy workloads. Specifically, there are some tables that need frequent vacuuming, and some that need frequent cleaning. There are provided examples of cron jobs to perform both of these tasks, but you should adjust them to your own system. The cron jobs will call the following functions:
 </p>
 
 <ul>
  <li>bucardo_purge_delta(interval) - removes processed rows from bucardo_delta and bucardo_track older than the interval.</li>
  <li>bucardo_purge_q_table(interval) - moves processed rows from the q table to master_q that are older then the interval.</li>
-</ul>
 </ul>
 
 <br clear="all" />
@@ -742,28 +798,34 @@ All custom code is passed the following information via a hashref as the first a
  <li>goatlist - A list of goats for this sync (arrayref).</li>
  <li>sourcename - The name of the source database, as known to Bucardo.</li>
  <li>targetname - The name of the target database, as known to Bucardo.</li>
- <li>kidloop - How many total syncs this kid hs preformed.</li>
- <li>deltacount - Total number of rows changed for each table (hashref).<ul>
- <li>{all} - total number of rows changed in this sync.</li>
- <li>{allsource} - total number of delta rows on source side.</li>
- <li>{alltarget} - total number of delta rows on target side.</li>
- <li>{source}{schema}{table} - total delta rows for a specific schema and table on the source.</li>
- <li>{target}{schema}{table} - total delta rows for a specific schema and table on the target.</li></ul></li>
- <li>dmlcount - Total number of deletes, updates, and inserts performed for each table (hashref).<ul>
- <li>{allinserts}{source} - total inserts made to the source</li>
- <li>{allinserts}{target} - total inserts made to the target</li>
- <li>{allupdates}{source} - total updates made to the source</li>
- <li>{allupdates}{target} - total updates made to the target</li>
- <li>{alldeletes}{source} - total deletes made to the source</li>
- <li>{alldeletes}{target} - total deletes made to the target</li>
- <li>{I}{source}{schema}{table} - total inserts made to a specific source schema and table</li>
- <li>{I}{target}{schema}{table} - total inserts made to a specific target schema and table</li>
- <li>{U}{source}{schema}{table} - total updates made to a specific source schema and table</li>
- <li>{U}{target}{schema}{table} - total updates made to a specific target schema and table</li>
- <li>{D}{source}{schema}{table} - total deletes made to a specific source schema and table</li>
- <li>{D}{target}{schema}{table} - total deletes made to a specific target schema and table</li>
- <li>{N}{source}{schema}{table} - total "no action taken" rows for a specific source schema and table</li>
- <li>{N}{target}{schema}{table} - total "no action taken" rows for a specific target schema and table</li></ul></li>
+ <li>kidloop - How many total syncs this kid has performed.</li>
+ <li>deltacount - Total number of rows changed for each table (hashref).
+  <ul>
+   <li>{all} - total number of rows changed in this sync.</li>
+   <li>{allsource} - total number of delta rows on source side.</li>
+   <li>{alltarget} - total number of delta rows on target side.</li>
+   <li>{source}{schema}{table} - total delta rows for a specific schema and table on the source.</li>
+   <li>{target}{schema}{table} - total delta rows for a specific schema and table on the target.</li>
+  </ul>
+ </li>
+ <li>dmlcount - Total number of deletes, updates, and inserts performed for each table (hashref).
+  <ul>
+   <li>{allinserts}{source} - total inserts made to the source</li>
+   <li>{allinserts}{target} - total inserts made to the target</li>
+   <li>{allupdates}{source} - total updates made to the source</li>
+   <li>{allupdates}{target} - total updates made to the target</li>
+   <li>{alldeletes}{source} - total deletes made to the source</li>
+   <li>{alldeletes}{target} - total deletes made to the target</li>
+   <li>{I}{source}{schema}{table} - total inserts made to a specific source schema and table</li>
+   <li>{I}{target}{schema}{table} - total inserts made to a specific target schema and table</li>
+   <li>{U}{source}{schema}{table} - total updates made to a specific source schema and table</li>
+   <li>{U}{target}{schema}{table} - total updates made to a specific target schema and table</li>
+   <li>{D}{source}{schema}{table} - total deletes made to a specific source schema and table</li>
+   <li>{D}{target}{schema}{table} - total deletes made to a specific target schema and table</li>
+   <li>{N}{source}{schema}{table} - total "no action taken" rows for a specific source schema and table</li>
+   <li>{N}{target}{schema}{table} - total "no action taken" rows for a specific target schema and table</li>
+  </ul>
+ </li>
  <li>message - If populated, will be echoed to the Bucardo logs.</li>
  <li>warning - If populated, will be treated as a Bucardo warning.</li>
  <li>error - If populated, will be treated as a Bucardo error - the current action will be aborted.</li>
@@ -774,18 +836,18 @@ All custom code is passed the following information via a hashref as the first a
  <li>sourcedbh - the DBIx::Safe database handle for the source database.</li>
  <li>targetdbh - the DBIx::Safe database handle for the target database (may be empty for some types of code).</li>
 </ul>
-</ul>
 <p>
 If "get_rows" is true, then an additional key is returned:
 </p>
 
 <ul>
- <li>rows - contains a copy of each row involved in the sync<ul>
- <li>{schema}{table}{pkeyname} - name of the primary key for a specific schema and table.</li>
- <li>{schema}{table}{pkeytype} - type of the primary key for a specific schema and table.</li>
- <li>{schema}{table}{target} - A hashref of all target rows.</li>
- <li>{schema}{table}{source} - A hashref of all source rows (swap syncs only).</li>
-</ul></ul>
+ <li>rows - contains a copy of each row involved in the sync
+  <ul>
+   <li>{schema}{table}{pkeyname} - name of the primary key for a specific schema and table.</li>
+   <li>{schema}{table}{pkeytype} - type of the primary key for a specific schema and table.</li>
+   <li>{schema}{table}{target} - A hashref of all target rows.</li>
+   <li>{schema}{table}{source} - A hashref of all source rows (swap syncs only).</li>
+  </ul>
 </ul>
 <p>
 Due to the way that the code is evaluated within Bucardo, the custom code should not read in the hashref with a "shift", but as follows:
@@ -804,26 +866,41 @@ Master to master replication requires a way to handle conflict, in the cases whe
  <th>Method</th>  <th>Description</th> 
 </tr>
 <tr>
-<td class="lcol" >source</td> <td>The source database always wins.</td> </tr>
+ <td class="lcol">source</td>
+ <td>The source database always wins.</td>
+</tr>
 <tr>
-<td class="lcol" >target</td> <td>The target database always wins.</td> </tr>
+ <td class="lcol">target</td>
+ <td>The target database always wins.</td>
+</tr>
 <tr>
-<td class="lcol" >random</td> <td>One of the two sides is chosen at random as the winner.</td> </tr>
+ <td class="lcol">random</td>
+ <td>One of the two sides is chosen at random as the winner.</td>
+</tr>
 <tr>
-<td class="lcol" >latest</td> <td>The side most recently changed wins.</td> </tr>
+ <td class="lcol">latest</td>
+ <td>The side most recently changed wins.</td>
+</tr>
 <tr>
-<td class="lcol" >abort</td> <td>The sync is aborted, and will not continue.</td> </tr>
+ <td class="lcol">abort</td>
+ <td>The sync is aborted, and will not continue.</td>
+</tr>
 <tr>
-<td class="lcol" >skip</td> <td>No action is taken. Not very useful by itself.</td> </tr>
+ <td class="lcol">skip</td>
+ <td>No action is taken. Not very useful by itself.</td>
+</tr>
 </table>
+
 <p>
-Use of any but "source" and "target" is not recommended for most circumstances.
+For most circumstances, "source", "target", or "latest" are recommended.
 </p>
+
 <p>
 In some cases, however, applying specific knowledge about your database and business rules is the only way to truly resolve a conflict. To do so, you add an entry into the <b>customcode</b> table, with a the whenrun column set to "conflict". Basically, this is a Perl subroutine that receives information about the conflicting rows, and returns a value that tells Bucardo what to do.
 </p>
 
 <h3>Conflict code input</h3>
+
 <p>
 In addition to all of the normal items passed in to custom codes, conflict codes receive an additional key in the hashref named 'rowinfo' which contains:
 </p>
@@ -834,13 +911,13 @@ In addition to all of the normal items passed in to custom codes, conflict codes
  <li>schema - Name of the current schema.</li>
  <li>table - Name of the current table.</li>
  <li>pkeyname - Name of the current primary key.</li>
- <li>pkyetype - Type of the current primary key.</li>
+ <li>pkeytype - Type of the current primary key.</li>
  <li>pkey - Value of the current primary key.</li>
  <li>action - Set to 0 initially, change to tell Bucardo how to handle this row.</li>
 </ul>
-</ul>
 
 <h3>Conflict code output:</h3>
+
 <p>
 The hashref that is passed to the conflict subroutine can be modified to let Bucardo know how to handle this conflict. Specifically, the "action" key is a bitmap that can be used to state which side should "win" the conflict:
 </p>
@@ -849,7 +926,7 @@ The hashref that is passed to the conflict subroutine can be modified to let Buc
  <li>1 - Indicates that the source row should go to the target database (e.g. the source "wins")</li>
  <li>2 - Indicates that the target row should go to the source database (e.g. the target "wins")</li>
 </ul>
-</ul>
+
 <p>
 However, it is also possible to modify the sourcerow and targetrow hashes inside of your subroutine. This makes it possible to put the modified rows back in the same database it came from. Hence:
 </p>
@@ -858,21 +935,20 @@ However, it is also possible to modify the sourcerow and targetrow hashes inside
  <li>4 - indicates that the source row should go back to the source database </li>
  <li>8 - indicates that the target row should go back to the target database </li>
 </ul>
-</ul>
+
 <p>
 If nothing should be done about this row, leave it as the default value:
 </p>
 
 <ul>
- <li>0 - do nothing, do not update either database </li>
-</ul>
+ <li>0 - do nothing; do not update either database</li>
 </ul>
 
 <br clear="all" />
 <hr />
 <h2><a name="BucardoExceptionHandling">Bucardo Exception Handling</a></h2>
 <p>
-A sync may fail because of an exception thrown by the database. A common example is a unique constraint on a non primary key column. Each table can be assigned one or more exception handlers via the customcode table to try and handle this problems.
+A sync may fail because of an exception thrown by the database. A common example is a unique constraint on a non primary key column. Each table can be assigned one or more exception handlers via the customcode table to try to handle this problem.
 </p>
 
 <h3>Exception code input</h3>
@@ -886,25 +962,24 @@ In addition to all of the normal items passed in to custom codes, exception code
  <li>schema - Name of the current schema.</li>
  <li>table - Name of the current table.</li>
  <li>pkeyname - Name of the current primary key.</li>
- <li>pkyetype - Type of the current primary key.</li>
+ <li>pkeytype - Type of the current primary key.</li>
  <li>pkey - Value of the current primary key.</li>
  <li>action - Set to 0 initially, change to tell Bucardo how to handle this row.</li>
  <li>dbi_error - The error string returned by the database.</li>
  <li>source_error - True if the source database was the one that threw the exception.</li>
  <li>target_error - True if the target database was the one that threw the exception.</li>
 </ul>
-</ul>
 
 <h3>Exception code output</h3>
 <p>
-It is expected that the excpetion code will change the rows directly via the sourcerow and targetrow keys, or use the database handles to connect back to the databases and fix the condition that caused the exception. Once it has done so, it should set the value of "runagain" to true, and Bucardo will retry the transaction that caused the exception. This process will be repeated, but will eventually throw a fatal error, if the number of attempts is greater than the number of rows for this sync.
+It is expected that the exception code will change the rows directly via the sourcerow and targetrow keys, or use the database handles to connect back to the databases and fix the condition that caused the exception. Once it has done so, it should set the value of "runagain" to true, and Bucardo will retry the transaction that caused the exception. This process will be repeated, but will eventually throw a fatal error, if the number of attempts is greater than the number of rows for this sync.
 </p>
 
 <br clear="all" />
 <hr />
 <h2><a name="TheBucardoFreezer">The Bucardo Freezer</a></h2>
 <p>
-Bucardo tracks many things about each sync: when it completed, how long it took, how many rows were processed, etc. This data is stored in the <b>q</b> table, but this table can grow very quickly. To prevent access to this table from getting too slow, older data is moved from the q table to a table called <b>master_q</b> inside of the <b>freezer</b> schema. The master_q table is partitioned by date, so that the stats page only has to select from a few child tables, depending on the date range that is set. The moving of the old rows from the q table to the master_q table is accomplished by the bucardo_purge_q_table() function, which is usually called regularly (e.g. every five minutes) by a cronjob.
+Bucardo tracks many things about each sync: when it completed, how long it took, how many rows were processed, etc. This data is stored in the <b>q</b> table, but this table can grow very quickly. To prevent access to this table from getting too slow, older data is moved from the q table to a table called <b>master_q</b> inside of the <b>freezer</b> schema. The master_q table is partitioned by date, so that the stats page only has to select from a few child tables, depending on the date range that is set. The moving of the old rows from the q table to the master_q table is accomplished by the bucardo_purge_q_table() function, which is usually called regularly (e.g. every five minutes) by a cron job.
 </p>
 
 <br clear="all" />
@@ -926,17 +1001,17 @@ The latest development version of Bucardo can be checked out like so:
 <hr />
 <h2><a name="HowBucardoWorks">How Bucardo Works</a></h2>
 <p>
-Detailed information on how the whole thing works.
+Still to write: Detailed information on how the whole thing works.
 </p>
 
 <br clear="all" />
 <hr />
 <h2><a name="Acknowledgments">Acknowledgments</a></h2>
 <p>
-Special thanks to Jon Jensen at End Point, who developed the push-tables script (an early ancestor of Bucardo), and who provided much code review, guidance, and worthy advice. Thanks to Ethan Rowe, Jeff Boes, and other End Point colleagues for code review, testing, and a willingness to answer questions quickly and correctly. Mark Johnson was invaluable in finding new ways to break the customcode sections and helping translate theory into working code.
+Special thanks to Jon Jensen at <a href="http://www.endpoint.com/">End Point</a>, who developed the push-tables script (an early ancestor of Bucardo), and who provided much code review, guidance, and worthy advice. Thanks to Ethan Rowe, Jeff Boes, and other End Point colleagues for code review, testing, and a willingness to answer questions quickly and correctly. Mark Johnson was invaluable in finding new ways to break the customcode sections and helping translate theory into working code.
 </p>
 <p>
-Bucardo was developed for Backcountry.com and much thanks is due to them for their early support, particularly Spencer Christensen and Dave Jenkins. Bucardo would not be as far along as it is if it did not grow up in the demanding, complex, extremely high volume database environment at Backcountry.com.
+Bucardo was developed for <a href="http://www.backcountry.com/">Backcountry.com</a> and much thanks is due to them for their early support, particularly Spencer Christensen and Dave Jenkins. Bucardo would not be as far along as it is if it did not grow up in the demanding, complex, extremely high volume database environment at Backcountry.com.
 </p>
 
 <br clear="all" />
@@ -947,17 +1022,25 @@ Bucardo is always improving. Some of the things things on its todo list are:
 </p>
 
 <ul>
- <li>HIGH PRIORITY:<ul>
- <li>Make bucardo_purge_delta handle multiple target tables.</li></ul></li>
- <li>LOWER PRIORITY:<ul>
- <li>Switch the freezer table partitioning from rules to triggers.</li>
- <li>Automatic detection of primary keys.</li>
- <li>Install bucardo_purge_q automatically on remote databases that need them.</li></ul></li>
- <li>LONG TERM:<ul>
- <li>Use asynchronous queries via DBD::Pg for speed.</li>
- <li>Support for more than two master databases at one time.</li>
- <li>Automatic locking for cleanups based on criteria.</li>
-</ul></ul>
+ <li>HIGH PRIORITY:
+  <ul>
+   <li>Make bucardo_purge_delta handle multiple target tables.</li>
+  </ul>
+ </li>
+ <li>LOWER PRIORITY:
+  <ul>
+   <li>Switch the freezer table partitioning from rules to triggers.</li>
+   <li>Automatic detection of primary keys.</li>
+   <li>Install bucardo_purge_q automatically on remote databases that need them.</li>
+  </ul>
+ </li>
+ <li>LONG TERM:
+  <ul>
+   <li>Use asynchronous queries via DBD::Pg for speed.</li>
+   <li>Support for more than two master databases at one time.</li>
+   <li>Automatic locking for cleanups based on criteria.</li>
+  </ul>
+ </li>
 </ul>
 
 <br clear="all" />
@@ -968,9 +1051,10 @@ The canonical place for Bucardo information, releases, bug announcements, etc. i
 </p>
 
 <ul>
- <li>bucardo-announce - Low volume list with new release notices and bug announcements. <a href="https://mail.endcrypt.com/mailman/listinfo/bucardo-announce">List information</a></li>
- <li>bucardo-general - For any and all talk about Bucardo. <a href="https://mail.endcrypt.com/mailman/listinfo/bucardo-general">List information</a></li>
- <li>bucardo-commits - Diffs of commits to the repository are sent to this list. <a href="https://mail.endcrypt.com/mailman/listinfo/bucardo-commits">List information</a></li>
+ <li><a href="https://mail.endcrypt.com/mailman/listinfo/bucardo-announce">bucardo-announce</a> - Low volume list with new release notices and bug announcements.</li>
+ <li><a href="https://mail.endcrypt.com/mailman/listinfo/bucardo-general">bucardo-general</a> - For any and all talk about Bucardo.</li>
+ <li><a href="https://mail.endcrypt.com/mailman/listinfo/bucardo-commits">bucardo-commits</a> - Diffs of commits to the repository are sent to this list.</li>
 </ul>
-</ul>
-</body></html>
+
+</body>
+</html>
