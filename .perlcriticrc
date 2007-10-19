@@ -1,55 +1,80 @@
 
-## perlcritic file for Bucardo scripts
+## perlcritic file for Bucardo
 ## Usage: perlcritic -profile <thisfile> <scriptname>
 
 verbose = 8
 severity = 1
 
-[-Bangs::ProhibitNumberedNames]
 [-Bangs::ProhibitFlagComments]
+[-Bangs::ProhibitNumberedNames]
 [-Bangs::ProhibitVagueNames]
+
+[-BuiltinFunctions::ProhibitBooleanGrep]
+[-BuiltinFunctions::ProhibitComplexMappings]
 
 [-CodeLayout::ProhibitHardTabs]
 [-CodeLayout::ProhibitParensWithBuiltins]
+[-CodeLayout::RequireTidyCode]
+[-CodeLayout::RequireUseUTF8]
+
 [-ControlStructures::ProhibitCascadingIfElse]
 [-ControlStructures::ProhibitCStyleForLoops]
 [-ControlStructures::ProhibitDeepNests]
 [-ControlStructures::ProhibitPostfixControls]
 [-ControlStructures::ProhibitUnlessBlocks]
 
+[-Documentation::PodSpelling]
 [-Documentation::RequirePodSections]
+[-Documentation::RequirePODUseEncodingUTF8]
 
 [-ErrorHandling::RequireCarping]
+[-ErrorHandling::RequireUseOfExceptions]
 
+[-InputOutput::ProhibitBacktickOperators]
 [-InputOutput::RequireBracedFileHandleWithPrint]
 
+[-Lax::ProhibitComplexMappings::LinesNotStatements]
 [-Lax::ProhibitEmptyQuotes::ExceptAsFallback]
 
 [-Miscellanea::ProhibitTies]
 [-Miscellanea::RequireRcsKeywords]
 
+[-Modules::PerlMinimumVersion]
+[-Modules::ProhibitExcessMainComplexity]
 [-Modules::ProhibitMultiplePackages]
+## Cannot handle multiple packages in one file
+[-Modules::RequireExplicitInclusion]
 
 [-References::ProhibitDoubleSigils]
 
 [-RegularExpressions::RequireExtendedFormatting]
 [-RegularExpressions::RequireLineBoundaryMatching]
-
+## A shame, but 'has' is confusing it
+[-Subroutines::ProhibitCallsToUndeclaredSubs]
 [-Subroutines::ProhibitExcessComplexity]
+[-Subroutines::ProhibitNestedSubs] 
+[-Subroutines::RequireArgUnpacking]
+
 
 [-TestingAndDebugging::ProhibitNoWarnings]
 
+[-Tics::ProhibitLongLines]
+
+[-ValuesAndExpressions::ProhibitAccessOfPrivateData]
 [-ValuesAndExpressions::ProhibitCommaSeparatedStatements]
 [-ValuesAndExpressions::ProhibitEmptyQuotes]
+[-ValuesAndExpressions::ProhibitImplicitNewlines]
 [-ValuesAndExpressions::ProhibitInterpolationOfLiterals]
 [-ValuesAndExpressions::ProhibitMixedBooleanOperators]
 [-ValuesAndExpressions::ProhibitNoisyQuotes]
 [-ValuesAndExpressions::ProhibitVersionStrings]
 [-ValuesAndExpressions::RequireNumberSeparators]
+[-ValuesAndExpressions::RestrictLongStrings]
 
 [-Variables::ProhibitLocalVars]
 [-Variables::ProhibitPackageVars]
 [-Variables::ProhibitPunctuationVars]
+[-Variables::RequireLocalizedPunctuationVars]
 
 [-Modules::RequireVersionVar]
 

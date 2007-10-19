@@ -1082,7 +1082,7 @@ sub start_mcp {
 	$systemtime = scalar localtime ($systemtime);
 	$self->glog("Local system time: $systemtime. DB time: $dbtime->[1]");
 	$systemtime = qx{/bin/date +"%Z"} || '?';
-	chomp $systemtime;	
+	chomp $systemtime;
 	$self->glog("Local system timezone: $systemtime. DB timezone: $dbtime->[2]");
 	$self->{dbpass} = '<not shown>';
 	my $objdump = "Bucardo object:\n";
@@ -2596,7 +2596,7 @@ sub start_controller {
 								## Connect to the source database
 								my $srcdbh = $self->connect_database($sourcedb);
 								## Create a list of all targets
-								my $targetlist = join ',' => map { s/'/''/g; qq{'$_'} } keys %$targetdb;
+								my $targetlist = join ',' => map { s/'/''/g; qq{'$_'} } keys %$targetdb; ## no critic
 								my $numtargets = keys %$targetdb;
 								for my $g (@{$sync->{goatlist}}) {
 
@@ -3922,7 +3922,7 @@ sub start_kid {
 				my $info = $sth{source}{$g}{getdelta}->fetchall_arrayref();
 
 				if ($sync->{need_rows}) {
-					$rows_for_custom_code->{$S}{$T} = 
+					$rows_for_custom_code->{$S}{$T} =
 						{
 						 source   => $info,
 						 pkeyname => $g->{pkey},
@@ -3941,7 +3941,7 @@ sub start_kid {
 				}
 
 				## First, delete any rows that no longer exist on the target:
-				my @tgtdelete = map { ($a=$_->[0]) =~ s/'/''/g; qq{'$a'} } grep { !defined $_->[1] } @$info;
+				my @tgtdelete = map { ($a=$_->[0]) =~ s/'/''/g; qq{'$a'} } grep { !defined $_->[1] } @$info; ## no critic
 				$count = @tgtdelete;
 				$SQL = "DELETE FROM $S.$T WHERE $namepk IN ";
 				if ($count) {
@@ -4046,7 +4046,7 @@ sub start_kid {
 				$deltacount{src2}{$S}{$T} = $deltacount{source}{$S}{$T};
 				$deltacount{tgt2}{$S}{$T} = $deltacount{target}{$S}{$T};
 
-				$dmlcount{I}{source}{$S}{$T} = $dmlcount{U}{source}{$S}{$T} = $dmlcount{D}{source}{$S}{$T} = 
+				$dmlcount{I}{source}{$S}{$T} = $dmlcount{U}{source}{$S}{$T} = $dmlcount{D}{source}{$S}{$T} =
 				$dmlcount{I}{target}{$S}{$T} = $dmlcount{U}{target}{$S}{$T} = $dmlcount{D}{target}{$S}{$T} = 0;
 
 				my $toid = $g->{targetoid}{$targetdb};
@@ -4077,7 +4077,7 @@ sub start_kid {
 				my $info2 = $deltacount{tgt2}{$S}{$T}<1 ? {} : $sth{target}{$g}{getdelta}->fetchall_hashref('BUCARDO_ID');
 
 				if ($sync->{need_rows}) {
-					$rows_for_custom_code->{$S}{$T} = 
+					$rows_for_custom_code->{$S}{$T} =
 						{
 						 source   => $info1,
 						 target   => $info2,

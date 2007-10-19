@@ -35,8 +35,10 @@ sub test {
 }
 
 sub manifypods {
-	my $after = "\t \$(NOECHO) pod2html Bucardo.pm > Bucardo.pm.html\n".
-		"\t \$(NOECHO) pod2html bucardo_ctl > bucardo_ctl.html\n".
-		"\t\$(NOECHO) \$(RM_F) pod*.tmp pm_to_blib\n";
+	my $after = qq{\t\$(NOECHO) pod2html Bucardo.pm > Bucardo.pm.html\n};
+	$after .= qq{\t\$(NOECHO) pod2html bucardo_ctl > bucardo_ctl.html\n};
+	$after .= qq{\t\$(NOECHO) \$(RM_F) pod*.tmp pm_to_blib\n};
+	$after .= qq{\t\$(NOECHO) \$(PERL) -pi -e "s/<link.*?>//" Bucardo.pm.html bucardo_ctl.html\n};
+	$after .= qq{\t\$(NOECHO) \$(ECHO) Created Bucardo.pm.html and bucardo_ctl.html\n};
 	return shift->SUPER::manifypods(@_) . $after;
 }

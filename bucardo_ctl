@@ -6,6 +6,7 @@
 
 use strict;
 use warnings;
+use 5.008003;
 use DBI;
 use IO::Handle;
 use Getopt::Long;
@@ -62,13 +63,13 @@ if (defined $file) {
 	while (<$rc>) {
 		next if /^\s*#/;
 		next unless /^\s*(\w+)\s*=\s*(.+?)\s*$/o;
-		my ($name,$value) = ($1,$2);
-                $bcargs->{$name} = $value;
+		my ($name,$value) = ($1,$2); ## no critic (ProhibitCaptureWithoutTest)
+		$bcargs->{$name} = $value;
 	}
-	close $rc;
+	close $rc or die;
 }
 
-GetOptions
+GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
 	($bcargs,
 	 'ctlverbose+',
 	 'ctlquiet+',
@@ -300,7 +301,7 @@ sub ping {
 	
   P:{
 		my $notify = $dbh->func('pg_notifies');
-		if (defined $notify) {			
+		if (defined $notify) {
 			my ($name, $pid) = @$notify;
 			$quiet or print "OK: Got response from PID $pid\n";
 			return $pid if $arg->{noexit};
@@ -371,7 +372,7 @@ sub kick {
 					alarm $timeout;
 				}
 			  WAITIN: {
-					my $last = '';
+					my $lastwait = '';
 					if ($PROGRESS and time - $time != $oldtime) {
 						$oldtime = time - $time;
 						if (!$QUIET and !$NOTIMER) {
@@ -383,10 +384,10 @@ sub kick {
 				  W: while (my $notify = $dbh->func('pg_notifies')) {
 						my ($name, $pid) = @$notify;
 						if ($name eq $done) {
-							$last = 'DONE!';
+							$lastwait = 'DONE!';
 						}
 						elsif ($name eq $killed) {
-							$last = 'KILLED!';
+							$lastwait = 'KILLED!';
 							$exitstatus = 2;
 						}
 						elsif ($name =~ /^bucardo_syncdone_${sync}_(.+)$/) {
@@ -399,13 +400,13 @@ sub kick {
 							print $new unless $QUIET;
 							$printstring .= $new;
 							$exitstatus = 2;
-							$last = " ";
+							$lastwait = " ";
 						}
 					}
 					$dbh->rollback();
-					if ($last) {
-						print $last unless $QUIET;
-						if ($last ne 'DONE!' and $RETRY and ++$retries <= $RETRY) {
+					if ($lastwait) {
+						print $lastwait unless $QUIET;
+						if ($lastwait ne 'DONE!' and $RETRY and ++$retries <= $RETRY) {
 							print "Retry #$retries\n";
 							$do_retry = 1;
 							die "Forcing eval to exit for retry attempt\n";
@@ -795,7 +796,7 @@ ORDER BY started DESC LIMIT 1
 			   );
 	for my $sync (sort keys %$syncs) {
 		if ($arg->{syncs}) {
-			next unless grep { $_ eq $sync } @{$arg->{syncs}};
+			next unless grep { $_ eq $sync } @{$arg->{syncs}}; ## no critic (ProhibitBooleanGrep)
 		}
 		$DEBUG and warn "Reading sync $sync...\n";
 
@@ -964,7 +965,7 @@ sub get_syncs {
 			warn "Skipping unknown file in pid directory: $pidfile\n";
 			next;
 		}
-		my $syncname = $1; ## no critic
+		my $syncname = $1; ## no critic (ProhibitCaptureWithoutTest)
 
 		## Is this a valid syncname?
 		if (! exists $sync->{$syncname}) {

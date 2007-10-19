@@ -1,5 +1,6 @@
-#!perl
+#!/usr/bin/perl -- -*-cperl-*-
 
+use 5.008003;
 use strict;
 use warnings;
 use Data::Dumper;
@@ -24,7 +25,7 @@ our $TEST_PING          = 1;
 our $TEST_RANDOM_SWAP   = 0;
 
 ## Count the number of tests
-my $tests = Test::Dynamic::count_tests
+my $tests = Test::Dynamic::count_tests ## no critic (ProhibitCallsToUnexportedSubs)
 	(
 	 {
 	  filehandle => \*DATA,
@@ -40,40 +41,6 @@ my $testmsg  = ' ?';
 my $testline = '?';
 my $showline = 1;
 my $showtime = 0;
-
-## Run perlcritic against the main source file, using custom rules
-SKIP: {
-
-	if (!$ENV{BUCARDO_TEST_CRITIC}) {
-		skip 'Set BUCARDO_TEST_CRITIC to run Perl::Critic tests', 2;
-	}
-
-	eval {
-		require Perl::Critic;
-	};
-
-	if ($@) {
-		skip 'Module Perl::Critic not available', 2;
-	}
-
-	## Gotta have a profile
-	my $PROFILE = '.perlcriticrc';
-	if (! -e $PROFILE) {
-		skip qq{Perl::Critic profile "$PROFILE" not found\n}, 2;
-	}
-
-	## Gotta have our code
-	my $CODE = './Bucardo.pm';
-	if (! -e $CODE) {
-		skip qq{Perl::Critic cannot find "$CODE" to test with\n}, 2;
-	}
-
-	pass(" Running Perl::Critic on Bucardo.pm");
-	my $critic = Perl::Critic->new(-profile => $PROFILE);
-	my @problems = $critic->critique($CODE);
-	is(@problems, 0, "Passed Perl::Critic run");
-
-};
 
 ## Once we reach a certain point, we may need to shutdown our test Bucardo processes
 our $need_shutdown = 0;
@@ -752,7 +719,7 @@ END {
 
 	## Kill our test program if running
 	## TODO : Clean this up
-	if ($^O !~ /Win/) {		
+	if ($^O !~ /Win/) {
 		for (split /\n/ => qx{/bin/ps w}) {
 			next if /^\s*$$\s/;
 			if (m{(\d+).*perl t/bucardo.test.helper\b}) {
@@ -1319,6 +1286,7 @@ sub t {
 		my $time = time;
 		$testmsg .= " [time: $time]";
 	}
+	return;
 } ## end of t
 
 
@@ -1876,6 +1844,7 @@ sub ping_testing {
 	is($found, 1, qq{KID responds to bucardo_kid_<pid>_ping});
 
 	bucardo_ctl("stop 'Ping testing'");
+	return;
 
 } ## end of ping_testing
 
@@ -2205,7 +2174,7 @@ sub basic_pushdelta_testing {
 	$masterdbh->do("LISTEN bucardo_syncdone_pushdeltatest");
 	$masterdbh->commit();
 
-	$SQL = $table =~ /0/ 
+	$SQL = $table =~ /0/
 		? "INSERT INTO $table(id) VALUES ('$val')"
 		: "INSERT INTO $table(id,data1,inty) VALUES ('$val','one',1)";
 	$sdbh->do($SQL);
@@ -2796,7 +2765,7 @@ sub basic_swap_testing {
 
 	compare_tables($table,$sdbh,$rdbh) or BAIL_OUT "Compare tables failed?!\n";
 
-	my ($val1,$val2,$val3,$val4) = 
+	my ($val1,$val2,$val3,$val4) =
 		($val{$type}{1},$val{$type}{2},$val{$type}{3},$val{$type}{4});
 
 	$SQL = $table =~ /0/
