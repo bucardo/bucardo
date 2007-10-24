@@ -307,8 +307,8 @@ after 'dbgroup' => sub {
 		my $db = $self->get_db($arg->{db});
 		my $maindbh = $self->{masterdbh};
 		my $pri = $arg->{priority} || 0;
-		$arg->{db} =~ s/'/''/go;
-		$arg->{name} =~ s/'/''/go;
+		$arg->{db} =~ s/\'/''/go;
+		$arg->{name} =~ s/\'/''/go;
 		$SQL = qq{
 			INSERT INTO bucardo.dbmap
 				(db, dbgroup, priority)
@@ -2589,14 +2589,14 @@ sub start_controller {
 						$self->glog(qq{Sent notice "bucardo_syncdone_$syncname"});
 						$maindbh->commit();
 
-						## Run all after_sync code
+						## Run all after_sync codes
 						for my $code (@{$sync->{code_after_sync}}) {
 							## Do we need row information?
 							if ($code->{getrows} and ! exists $rows_for_custom_code->{source}) {
 								## Connect to the source database
 								my $srcdbh = $self->connect_database($sourcedb);
 								## Create a list of all targets
-								my $targetlist = join ',' => map { s/'/''/g; qq{'$_'} } keys %$targetdb; ## no critic
+								my $targetlist = join ',' => map { s/\'/''/g; qq{'$_'} } keys %$targetdb; ## no critic
 								my $numtargets = keys %$targetdb;
 								for my $g (@{$sync->{goatlist}}) {
 
@@ -2633,7 +2633,7 @@ sub start_controller {
 
 									if ($synctype eq 'swap') {
 										## XXX Separate getrows into swap and targets in case we don't need both?
-										(my $safesourcedb = $sourcedb) =~ s/'/''/go;
+										(my $safesourcedb = $sourcedb) =~ s/\'/''/go;
 										($SQL = $SQL{delta}) =~ s/\$1/$g->{targetoid}{$sourcedb}/g;
 										$SQL =~ s/TARGETLIST/'$safesourcedb'/;
 										(my $targetname) = keys %$targetdb;
@@ -2663,6 +2663,12 @@ sub start_controller {
 							$SQL = "SELECT timeofday()::timestamp";
 							$sync->{starttime} = $maindbh->selectall_arrayref($SQL)->[0][0];
 						}
+
+						## Reset the finished marker on all kids
+						for my $d (keys %$targetdb) {
+							$targetdb->{$d}{finished} = 0;
+						}
+
 					} ## end all kids finished
 				} ## end kid finished notice
 			} ## end each notice
@@ -3352,12 +3358,12 @@ sub start_kid {
 						  )
 			};
 			($SQL = $SQL{delta}) =~ s/\$1/$g->{oid}/go;
-			(my $safedbname = $targetdb) =~ s/'/''/go;
+			(my $safedbname = $targetdb) =~ s/\'/''/go;
 			$SQL =~ s/\$2/$safedbname/o;
 			$sth{source}{$g}{getdelta} = $sourcedbh->prepare($SQL);
 
 			if ($synctype eq 'swap') {
-				($safesourcedb = $sourcedb) =~ s/'/''/go;
+				($safesourcedb = $sourcedb) =~ s/\'/''/go;
 				($SQL = $SQL{delta}) =~ s/\$1/$g->{targetoid}{$targetdb}/g;
 				$SQL =~ s/\$2/$safesourcedb/o;
 				$sth{target}{$g}{getdelta} = $targetdbh->prepare($SQL);
@@ -3941,7 +3947,7 @@ sub start_kid {
 				}
 
 				## First, delete any rows that no longer exist on the target:
-				my @tgtdelete = map { ($a=$_->[0]) =~ s/'/''/g; qq{'$a'} } grep { !defined $_->[1] } @$info; ## no critic
+				my @tgtdelete = map { ($a=$_->[0]) =~ s/\'/''/g; qq{'$a'} } grep { !defined $_->[1] } @$info; ## no critic
 				$count = @tgtdelete;
 				$SQL = "DELETE FROM $S.$T WHERE $namepk IN ";
 				if ($count) {
@@ -4218,7 +4224,7 @@ sub start_kid {
 						$safepk = $pkval;
 					}
 					else {
-						($safepk = $pkval) =~ s/'/''/go;
+						($safepk = $pkval) =~ s/\'/''/go;
 						$safepk = qq{'$safepk'};
 					}
 

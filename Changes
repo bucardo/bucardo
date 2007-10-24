@@ -2,7 +2,7 @@
 
 3.0.8 (unreleased)
 
-
+  - Fix problem with after_sync code not firing at correct time for staylive kids. [GSM]
 
 3.0.7 Released October 11, 2007
 
