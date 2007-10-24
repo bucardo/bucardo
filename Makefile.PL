@@ -18,6 +18,8 @@ WriteMakefile(
                      'Sys::Hostname'       => '1.11',
                      'Sys::Syslog'         => '0.13',
                  },
+    EXE_FILES    => ['bucardo_ctl'],
+    PM           => {},
     ABSTRACT     => 'Postgres asynchronous multi-master replication system',
     AUTHOR       => 'Greg Sabino Mullane <greg@endpoint.com>',
     LICENSE      => 'BSD',
@@ -28,17 +30,17 @@ WriteMakefile(
 
 package MY;
 sub test {
-	my $original = shift->SUPER::test(@_);
-	my $PRECOM = q{$(ABSPERLRUN) t/bucardo.test.helper};
-	$original =~ s/^(.*test_harness)/\t$PRECOM\n$1/m;
-	return $original;
+    my $original = shift->SUPER::test(@_);
+    my $PRECOM = q{$(ABSPERLRUN) t/bucardo.test.helper};
+    $original =~ s/^(.*test_harness)/\t$PRECOM\n$1/m;
+    return $original;
 }
 
 sub manifypods {
-	my $after = qq{\t\$(NOECHO) pod2html Bucardo.pm > Bucardo.pm.html\n};
-	$after .= qq{\t\$(NOECHO) pod2html bucardo_ctl > bucardo_ctl.html\n};
-	$after .= qq{\t\$(NOECHO) \$(RM_F) pod*.tmp pm_to_blib\n};
-	$after .= qq{\t\$(NOECHO) \$(PERL) -pi -e "s/<link.*?>//" Bucardo.pm.html bucardo_ctl.html\n};
-	$after .= qq{\t\$(NOECHO) \$(ECHO) Created Bucardo.pm.html and bucardo_ctl.html\n};
-	return shift->SUPER::manifypods(@_) . $after;
+    my $after = qq{\t\$(NOECHO) pod2html Bucardo.pm > Bucardo.pm.html\n};
+    $after .= qq{\t\$(NOECHO) pod2html bucardo_ctl > bucardo_ctl.html\n};
+    $after .= qq{\t\$(NOECHO) \$(RM_F) pod*.tmp pm_to_blib\n};
+    $after .= qq{\t\$(NOECHO) \$(PERL) -pi -e "s/<link.*?>//" Bucardo.pm.html bucardo_ctl.html\n};
+    $after .= qq{\t\$(NOECHO) \$(ECHO) Created Bucardo.pm.html and bucardo_ctl.html\n};
+    return shift->SUPER::manifypods(@_) . $after;
 }
