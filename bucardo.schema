@@ -1048,16 +1048,13 @@ $bc$
 			elog(ERROR, qq{Table "$schema.$table" contains a column starting with 'BUCARDO'});
 		}
 
-		## Does this schema exist?
-		my $bc_schema = "bucardo";
-
 		$SQL = qq{
             SELECT count(*)
             FROM   pg_catalog.pg_namespace
             WHERE  nspname = ?
         };
 		$sth = $dbh->prepare($SQL);
-		$sth->execute($bc_schema);
+		$sth->execute('bucardo');
 		$found{bc_schema} = $sth->fetchall_arrayref()->[0][0];
 
 		## (if bc_schema exists) Do these triggers exist on this table?
@@ -1109,25 +1106,22 @@ $bc$
                 AND    p.proname = ?
             };
 			$sth = $dbh->prepare($SQL);
-			$sth->execute($bc_schema,$func0);
+			$sth->execute('bucardo',$func0);
 			$found{func0} = $sth->fetchall_arrayref()->[0][0];
-			$sth->execute($bc_schema,$func1);
+			$sth->execute('bucardo',$func1);
 			$found{func1} = $sth->fetchall_arrayref()->[0][0];
-			$sth->execute($bc_schema,$func2);
+			$sth->execute('bucardo',$func2);
 			$found{func2} = $sth->fetchall_arrayref()->[0][0];
-			$sth->execute($bc_schema,$func3);
+			$sth->execute('bucardo',$func3);
 			$found{func3} = $sth->fetchall_arrayref()->[0][0];
-			$sth->execute($bc_schema,$func4);
+			$sth->execute('bucardo',$func4);
 			$found{func4} = $sth->fetchall_arrayref()->[0][0];
 		}
 
 		## (if bc_schema exists) Does this table exist?
-		my $bc_table1 = "bucardo_delta"; ## Name is to avoid confusion with "$table"
-		my $bc_table2 = "bucardo_track";
-		my $bc_table3 = "bucardo_delta_targets";
 
 		if (!$found{bc_schema}) {
-			$found{bc_table1} = $found{bc_table2} = $found{bc_table3} = 0;
+			$found{bucardo_delta} = $found{bucardo_track} = $found{bucardo_delta_targets} = 0;
 		}
 		else {
 			$SQL = qq{
@@ -1139,15 +1133,15 @@ $bc$
                 AND    c.relname = ?
             };
 			$sth = $dbh->prepare($SQL);
-			$sth->execute($bc_schema,$bc_table1);
-			$found{bc_table1} = $sth->fetchall_arrayref()->[0][0];
-			$sth->execute($bc_schema,$bc_table2);
-			$found{bc_table2} = $sth->fetchall_arrayref()->[0][0];
-			$sth->execute($bc_schema,$bc_table3);
-			$found{bc_table3} = $sth->fetchall_arrayref()->[0][0];
+			$sth->execute('bucardo','bucardo_delta');
+			$found{bucardo_delta} = $sth->fetchall_arrayref()->[0][0];
+			$sth->execute('bucardo','bucardo_track');
+			$found{'bucardo_track'} = $sth->fetchall_arrayref()->[0][0];
+			$sth->execute('bucardo','bucardo_delta_targets');
+			$found{bucardo_delta_targets} = $sth->fetchall_arrayref()->[0][0];
 		}
 
-		## (if bc_table1 exists) Do these indexes exist?
+		## (if bucardo_delta exists) Do these indexes exist?
 		my $index1 = "bucardo_delta_${schema}_${table}_txn";
 		my $index2 = "bucardo_delta_${schema}_${table}_rowid";
 		my $index3 = "bucardo_track_target";
@@ -1158,7 +1152,7 @@ $bc$
 			$safeindex1 = qq{"$safeindex1"};
 		}
 
-		if (!$found{bc_table1}) {
+		if (!$found{bucardo_delta}) {
 			$found{index1} = $found{index2} = $found{index3} = $found{index4} = $found{index5} = 0;
 		}
 		else {
@@ -1171,15 +1165,15 @@ $bc$
                 AND    c.relname = ?
             };
 			$sth = $dbh->prepare($SQL);
-			$sth->execute($bc_schema,$index1);
+			$sth->execute('bucardo',$index1);
 			$found{index1} = $sth->fetchall_arrayref()->[0][0];
-			$sth->execute($bc_schema,$index2);
+			$sth->execute('bucardo',$index2);
 			$found{index2} = $sth->fetchall_arrayref()->[0][0];
-			$sth->execute($bc_schema,$index3);
+			$sth->execute('bucardo',$index3);
 			$found{index3} = $sth->fetchall_arrayref()->[0][0];
-			$sth->execute($bc_schema,$index4);
+			$sth->execute('bucardo',$index4);
 			$found{index4} = $sth->fetchall_arrayref()->[0][0];
-			$sth->execute($bc_schema,$index5);
+			$sth->execute('bucardo',$index5);
 			$found{index5} = $sth->fetchall_arrayref()->[0][0];
 		}
 
@@ -1196,14 +1190,14 @@ $bc$
 
 		## Schema is needed for both ping and delta
 		if (($ping or $delta) and !$found{bc_schema}) {
-			$dbh->do("CREATE SCHEMA $bc_schema");
+			$dbh->do("CREATE SCHEMA bucardo");
 		}
 
 		## Ping needs a special function and trigger
 		if ($ping) {
 			if (!$found{func0}) {
 				$SQL = qq{
-                    CREATE FUNCTION $bc_schema.$func0()
+                    CREATE FUNCTION bucardo.$func0()
                     RETURNS TRIGGER 
                     LANGUAGE plpgsql
                     AS \$notify\$
@@ -1219,7 +1213,7 @@ $bc$
 				$SQL = qq{
                     CREATE TRIGGER $trigger0
                     AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
-                    FOR EACH STATEMENT EXECUTE PROCEDURE $bc_schema.$func0()
+                    FOR EACH STATEMENT EXECUTE PROCEDURE bucardo.$func0()
                 };
 				run_sql($SQL,$dbh);
 			}
@@ -1227,13 +1221,13 @@ $bc$
 
 		## If this is not a delta, clean up what we can
 		if (!$delta) {
-			if ($found{bc_table1}) {
-				elog(DEBUG, "Warning! NOT removing rows from $bc_schema.$bc_table1 where tablename=$oid ($table)");
+			if ($found{bucardo_delta}) {
+				elog(DEBUG, "Warning! NOT removing rows from bucardo.bucardo_delta where tablename=$oid ($table)");
 			}
-			if ($found{bc_table2}) {
-				elog(DEBUG, "Warning! NOT removing rows from $bc_schema.$bc_table2 where tablename=$oid ($table)");
+			if ($found{'bucardo_track'}) {
+				elog(DEBUG, "Warning! NOT removing rows from bucardo.bucardo_track where tablename=$oid ($table)");
 			}
-			$found{index1} and elog(DEBUG, "Warning! NOT removing index $bc_schema.$safeindex1");
+			$found{index1} and elog(DEBUG, "Warning! NOT removing index bucardo.$safeindex1");
 			$found{trigger1} and elog(DEBUG, "Warning! NOT removing trigger $trigger1 from $safeschema.$safetable");
 			$found{trigger2} and elog(DEBUG, "Warning! NOT removing trigger $trigger2 from $safeschema.$safetable");
 			$found{trigger3} and elog(DEBUG, "Warning! NOT removing trigger $trigger3 from $safeschema.$safetable");
@@ -1253,30 +1247,30 @@ $bc$
 				elog(DEBUG, "SQL: $SQL");
 				$sth = $dbh->prepare($SQL);
 				if ($found{func1}) {
-					$sth->execute($func1,$bc_schema);
+					$sth->execute($func1,'bucardo');
 					if (! $sth->fetchall_arrayref()->[0][0]) {
-						elog(DEBUG, "Warning! NOT removing function $bc_schema.$func1()");
+						elog(DEBUG, "Warning! NOT removing function bucardo.$func1()");
 					}
 				}
 				if ($found{func2}) {
 					$sth = $dbh->prepare($SQL);
-					$sth->execute($func2,$bc_schema);
+					$sth->execute($func2,'bucardo');
 					if (! $sth->fetchall_arrayref()->[0][0]) {
-						elog(DEBUG, "Warning! NOT removing function $bc_schema.$func2()");
+						elog(DEBUG, "Warning! NOT removing function bucardo.$func2()");
 					}
 				}
 				if ($found{func3}) {
 					$sth = $dbh->prepare($SQL);
-					$sth->execute($func3,$bc_schema);
+					$sth->execute($func3,'bucardo');
 					if (! $sth->fetchall_arrayref()->[0][0]) {
-						elog(DEBUG, "Warning! NOT removing function $bc_schema.$func3()");
+						elog(DEBUG, "Warning! NOT removing function bucardo.$func3()");
 					}
 				}
 			}
 		} ## end if not delta
 		else {
 
-			if (! $found{bc_table1}) {
+			if (! $found{bucardo_delta}) {
 				$SQL = qq{
                     CREATE TABLE bucardo.bucardo_delta (
                         tablename  OID         NOT NULL,
@@ -1286,7 +1280,7 @@ $bc$
                 };
 				run_sql($SQL,$dbh);
 			}
-			if (! $found{bc_table2}) {
+			if (! $found{'bucardo_track'}) {
 				$SQL = qq{
                     CREATE TABLE bucardo.bucardo_track (
                         txntime    TIMESTAMPTZ NOT NULL,
@@ -1296,7 +1290,7 @@ $bc$
                 };
 				run_sql($SQL,$dbh);
 			}
-			if (! $found{bc_table3}) {
+			if (! $found{bucardo_delta_targets}) {
 				$SQL = qq{
                     CREATE TABLE bucardo.bucardo_delta_targets (
                         tablename  OID         NOT NULL,
@@ -1306,25 +1300,25 @@ $bc$
 				run_sql($SQL,$dbh);
 			}
 			if (! $found{index1}) {
-				$dbh->do("CREATE INDEX $safeindex1 ON $bc_schema.$bc_table1(txntime) WHERE tablename = $oid");
+				$dbh->do("CREATE INDEX $safeindex1 ON bucardo.bucardo_delta(txntime) WHERE tablename = $oid");
 			}
 			if (! $found{index2}) {
 				my $safepkeytype = $pkeytype =~ /timestamp|date/ ? 'text' : $pkeytype;
-				$dbh->do("CREATE INDEX $index2 ON $bc_schema.$bc_table1((rowid::$safepkeytype)) WHERE tablename = $oid");
+				$dbh->do("CREATE INDEX $index2 ON bucardo.bucardo_delta((rowid::$safepkeytype)) WHERE tablename = $oid");
 			}
 			if (! $found{index3}) {
-				$dbh->do("CREATE INDEX $index3 ON $bc_schema.$bc_table2(tablename,txntime,targetdb)");
+				$dbh->do("CREATE INDEX $index3 ON bucardo.bucardo_track(tablename,txntime,targetdb)");
 			}
 			if (! $found{index4}) {
-				$dbh->do("CREATE UNIQUE INDEX $index4 ON $bc_schema.$bc_table3(tablename,targetdb)");
+				$dbh->do("CREATE UNIQUE INDEX $index4 ON bucardo.bucardo_delta_targets(tablename,targetdb)");
 			}
 			if (! $found{index5}) {
-				$dbh->do("CREATE INDEX $index5 ON $bc_schema.$bc_table1(txntime)");
+				$dbh->do("CREATE INDEX $index5 ON bucardo.bucardo_delta(txntime)");
 			}
 			if (! $found{func1}) {
 				## Make sure you use tabs in all these functions for leading whitespace
 				$SQL = qq{
-                    CREATE OR REPLACE FUNCTION $bc_schema.$func1()
+                    CREATE OR REPLACE FUNCTION bucardo.$func1()
                     RETURNS TRIGGER
                     LANGUAGE plpgsql
                     SECURITY DEFINER
@@ -1332,7 +1326,7 @@ $bc$
                     AS
                     \$clone\$
                     BEGIN
-                        INSERT INTO $bc_schema.$bc_table1(tablename,rowid)
+                        INSERT INTO bucardo.bucardo_delta(tablename,rowid)
                             VALUES (TG_RELID, NEW.${pkey});
                         RETURN NULL;
                     END;
@@ -1342,17 +1336,17 @@ $bc$
 			}
 			if (! $found{func2}) {
 				$SQL = qq{
-                    CREATE OR REPLACE FUNCTION $bc_schema.$func2()
+                    CREATE OR REPLACE FUNCTION bucardo.$func2()
                     RETURNS TRIGGER
                     LANGUAGE plpgsql
                     SECURITY DEFINER
                     AS
                     \$clone\$ 
                     BEGIN
-                        INSERT INTO $bc_schema.$bc_table1(tablename,rowid)
+                        INSERT INTO bucardo.bucardo_delta(tablename,rowid)
                             VALUES (TG_RELID, OLD.$pkey);
                         IF (OLD.$pkey <> NEW.$pkey) THEN
-                            INSERT INTO $bc_schema.$bc_table1(tablename,rowid)
+                            INSERT INTO bucardo.bucardo_delta(tablename,rowid)
                                 VALUES (TG_RELID, NEW.$pkey);
                         END IF;
                         RETURN NULL;
@@ -1363,14 +1357,14 @@ $bc$
 			}
 			if (! $found{func3}) {
 				$SQL = qq{
-                    CREATE OR REPLACE FUNCTION $bc_schema.$func3()
+                    CREATE OR REPLACE FUNCTION bucardo.$func3()
                     RETURNS TRIGGER
                     LANGUAGE plpgsql
                     SECURITY DEFINER
                     AS
                     \$clone\$ 
                     BEGIN
-                        INSERT INTO $bc_schema.$bc_table1(tablename,rowid)
+                        INSERT INTO bucardo.bucardo_delta(tablename,rowid)
                             VALUES (TG_RELID, OLD.$pkey);
                         RETURN NULL;
                     END;
@@ -1421,7 +1415,7 @@ $bc$
 				$SQL = qq{
                     CREATE TRIGGER $trigger1
                     AFTER INSERT ON $safeschema.$safetable
-                    FOR EACH ROW EXECUTE PROCEDURE $bc_schema.$func1()
+                    FOR EACH ROW EXECUTE PROCEDURE bucardo.$func1()
             	};
 				run_sql($SQL,$dbh);
 			}
@@ -1429,7 +1423,7 @@ $bc$
 				$SQL = qq{
                     CREATE TRIGGER $trigger2
                     AFTER UPDATE ON $safeschema.$safetable
-                    FOR EACH ROW EXECUTE PROCEDURE $bc_schema.$func2()
+                    FOR EACH ROW EXECUTE PROCEDURE bucardo.$func2()
                 };
 				run_sql($SQL,$dbh);
 			}
@@ -1437,7 +1431,7 @@ $bc$
 				$SQL = qq{
                     CREATE TRIGGER $trigger3
                     AFTER DELETE ON $safeschema.$safetable
-                    FOR EACH ROW EXECUTE PROCEDURE $bc_schema.$func3()
+                    FOR EACH ROW EXECUTE PROCEDURE bucardo.$func3()
                 };
 				run_sql($SQL,$dbh);
 			}
