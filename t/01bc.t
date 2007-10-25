@@ -3074,7 +3074,7 @@ sub test_customcode {
 
 	$SQL = "UPDATE customcode SET name = ?, src_code = ?";
 	$sth = $masterdbh->prepare($SQL);
-	$sth->execute($badcode,"custom code test 'bad'");
+	$sth->execute("custom code test 'bad'",$badcode);
 
 	$t=q{ Bucardo was reloaded };
 	$masterdbh->do("NOTIFY bucardo_mcp_reload");
