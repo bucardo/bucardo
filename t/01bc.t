@@ -1157,7 +1157,7 @@ sub wait_for_notice {
 			my $line = (caller)[2];
 			my $time = time;
 			diag("GOT: ".Dumper $_[0]);
-			diag("EXPECTED: ". Dumper $_[1]);
+			diag("EXPECTED: ".Dumper $_[1]);
 			BAIL_OUT "Stopping on a failed 'is_deeply' test from line $line. Time: $time";
 		}
 	} ## end of is_deeply
@@ -1167,6 +1167,8 @@ sub wait_for_notice {
 		if ($bail_on_error > $total_errors++) {
 			my $line = (caller)[2];
 			my $time = time;
+			diag("GOT: ".Dumper $_[0]);
+			diag("EXPECTED: ".Dumper $_[1]);
 			BAIL_OUT "Stopping on a failed 'like' test from line $line. Time: $time";
 		}
 	} ## end of like
@@ -1323,7 +1325,7 @@ sub test_customcode_methods {
 
 	$t=q{ Method customcode fails if 'whenrun' is invalid };
 	eval { $bc->customcode({name => 'test', src_code => 'foo', whenrun => 'invalid'}); };
-	like($@, qr{violates check constraint "customcode_whenrun"}, $t);
+	like($@, qr{"customcode" .* "customcode_whenrun"}, $t);
 
 	$t=q{ Method customcode works if given valid arguments };
 	eval { $code = $bc->customcode({name => 'test', src_code => 'foo', whenrun => 'before_txn'}); };
@@ -1356,7 +1358,7 @@ sub test_customcode_methods {
 
 	$t=q{ Method customcode fails if 'name' already exists };
 	eval { $bc->customcode({name => 'test', src_code => 'foo', whenrun => 'before_txn'}); };
-	like($@, qr{duplicate key}, $t);
+	like($@, qr{"customcode_name_key"}, $t);
 
 	$t=q{ Method customcode inserts with optional attributes };
 	eval { $code = $bc->customcode({name => 'test2', about=>'bz', src_code => 'foo',
@@ -1547,12 +1549,12 @@ sub test_database_methods {
 
 	$t=q{ Adding a database with a null name does not work };
 	eval { $masterdbh->do(qq{INSERT INTO db(name) VALUES (NULL)}); };
-	like($@, qr{violates not-null constraint}, $t);
+	is ($masterdbh->state, '23502', $t);
 	$masterdbh->rollback();
 
 	$t=q{ Adding an invalid database to the db table fails };
 	eval { $masterdbh->do(qq{INSERT INTO db(name,dbname,dbuser) VALUES ('bctest','nosuchdb!','no_such_user!')}); };
-	like($@, qr{authentication failed|database .* does not exist|no password supplied|could not connect to server}, $t);
+	is( $masterdbh->state, 'XX000', $t);
 	$masterdbh->rollback();
 
 	$t=q{ Dots not allowed in database names };
@@ -1580,7 +1582,7 @@ sub test_goat_methods {
 
 	$t=q{ Adding an goat with a null table fails };
 	eval { $masterdbh->do(qq{$SQL ('bctest1',null,'id','int')}); };
-	like($@, qr{not-null constraint}, $t);
+	like($@, qr{"tablename"}, $t);
 	$masterdbh->rollback();
 	
 	$t=q{ Adding an goat with a no primary key type fails };
@@ -1703,7 +1705,7 @@ sub test_config {
 	eval {
 		$sth->execute('bctest_unique', 123);
 	};
-	like($@, qr{violates unique constraint}, $t);
+	like($@, qr{"bucardo_config_unique"}, $t);
 	$masterdbh->rollback();
 
 	$t=q{ A bucardo_config setting of 'sync' gives an error };
@@ -2096,7 +2098,7 @@ sub test_purge {
 	eval {
 		$dbh1->do("SELECT bucardo.bucardo_purge_delta('foobar')");
 	};
-	like($@, qr{invalid input syntax for type interval}, $t);
+	is($dbh1->state, '22007', $t);
 	$dbh1->rollback();
 
 	$t=q{ Calling bucardo_purge_delta with valid interval argument works};
