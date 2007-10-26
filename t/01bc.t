@@ -839,6 +839,7 @@ sub setup_database {
 
 	$dbh->do("SET escape_string_warning = 'off'");
 	$dbh->do("ALTER USER $testuser SET escape_string_warning = 'off'");
+	$dbh->do("ALTER USER $testuser SET DateStyle ='ISO, YMD'");
 
 	if ($type ne 'master') {
 		$dbh->do("SET client_min_messages = 'warning'");
