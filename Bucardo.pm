@@ -3200,7 +3200,7 @@ sub start_kid {
 		$finaldbh->commit();
 		$finaldbh->disconnect();
 		if (! $self->{clean_exit}) {
-			$self->glog(qq{Warning! Child for "$syncname" was killed at line $line: $msg});
+			$self->glog(qq{Warning! Child for sync "$syncname" ("$sourcedb" -> "$targetdb") was killed at line $line: $msg});
 			for (values %{$self->{dbs}}) {
 				$_->{dbpass} = '???';
 			}
