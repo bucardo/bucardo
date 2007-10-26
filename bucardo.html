@@ -128,6 +128,7 @@ Bucardo, like all replication systems, has limitations, including:
  <li>Cannot handle more than two master nodes at a time (no master-master-master replication yet).</li>
  <li>Requires a primary key on each table to be replicated.</li>
  <li>Step by step data changes are not tracked, so busy sites with large network disconnect times may require expensive locking to "catch back up".</li>
+ <li>When dumping your schemas, you must use the <b>--oids</b> option, as Bucardo uses them internally.</li>
 </ul>
 
 <br clear="all" />
