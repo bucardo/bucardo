@@ -1888,6 +1888,7 @@ sub start_mcp {
 				return 0;
 			}
 			($g->{oid},$g->{safepkey},$g->{safeschema},$g->{safetable}) = @{$sth->fetchall_arrayref()->[0]};
+			$self->glog("OID is $g->{oid}");
 
 			## Check the source columns, and save them
 			$sth = $sth{checkcols};
@@ -1916,6 +1917,7 @@ sub start_mcp {
 				my $oid = $sth->fetchall_arrayref()->[0][0];
 				## Store away our oid, as we may need it later to access bucardo_delta
 				$g->{targetoid}{$db} = $oid;
+				$self->glog("OID=$oid");
 
 				$sth = $dbh->prepare($SQL{checkcols});
 				$sth->execute($oid);
@@ -1924,20 +1926,20 @@ sub start_mcp {
 				my $t = "$g->{schemaname}.$g->{tablename}";
 				for ($x=0; defined $cols[$x]; $x++) {
 					if (!defined $g->{cols}[$x]) {
-						my $msg = qq{Source database "$s->{name}", table $t does not have column "$cols[$x]" as seen on target "$db"};
+						my $msg = qq{Sync "$s->{name}", table $t does not have column "$cols[$x]" as seen on target "$db"};
 						$self->glog("FATAL: $msg");
 						warn $msg;
 						return 0;
 					}
 					if ($g->{cols}[$x] ne $cols[$x]) {
-						my $msg = qq{Source database "$s->{name}" has a column mismatch on table $t with target "$db" ($g->{cols}[$x] <> $cols[$x])};
+						my $msg = qq{Sync "$s->{name}" has a column mismatch on table $t with target "$db" ($g->{cols}[$x] <> $cols[$x])};
 						$self->glog("FATAL: $msg");
 						warn $msg;
 						return 0;
 					}
 				}
 				if (defined $g->{cols}[$x]) {
-					my $msg = qq{Source database "$s->{name}", table $t has more columns than target "$db"};
+					my $msg = qq{Sync "$s->{name}", table $t has more columns than target "$db"};
 					$self->glog("FATAL: $msg");
 					warn $msg;
 					return 0;
