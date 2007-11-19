@@ -17,3 +17,4 @@ TODO list for Bucardo
 - Make bucardo_ctl use same algorithm as bucardo-report for grabbing sync history
 - Have bucardo_ctl give details on KILLED syncs while kicking
 - See also XXX and TODO inside Bucardo.pm
+- Function or script to consolidate bucardo_delta entries for very asynchronous syncs.
