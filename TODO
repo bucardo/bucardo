@@ -2,6 +2,8 @@
 TODO list for Bucardo
 =====================
 
+These range the gamut from wildly speculative ideas to must-have features.
+
 - Death-level custom code hooks
 - Better conflict example in test suite, uses database handles
 - Allow adjustable criteria for going into lock before sync mode
@@ -17,4 +19,14 @@ TODO list for Bucardo
 - Make bucardo_ctl use same algorithm as bucardo-report for grabbing sync history
 - Have bucardo_ctl give details on KILLED syncs while kicking
 - See also XXX and TODO inside Bucardo.pm
-- Function or script to consolidate bucardo_delta entries for very asynchronous syncs.
+- Function or script to consolidate bucardo_delta entries for very asynchronous syncs
+- Have a single table track current status of each sync/target combo. This would 
+  allow the controller to do smarter things, and would make the reporting much faster
+- Add a pause mode
+- Add exception code for DELETE
+- Less reliance on PID matching overall for some queries
+- Purge or move audit_pid on startup
+- Break logging into named levels
+- Complain loudly on startup if a sync fails
+- I8n all messages/docs/etc.
+- Allow targets to be hard-linked: nobody goes on until everyone has finished
