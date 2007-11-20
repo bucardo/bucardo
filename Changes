@@ -2,6 +2,8 @@
 
 3.0.8 (unreleased)
 
+  - Fix a sorting problem in the bucardo-report script. [Jon Jensen <jon@endpoint.com>]
+
   - Fix problem with after_sync code not firing at correct time for staylive kids. [GSM]
 
 3.0.7 Released October 11, 2007
