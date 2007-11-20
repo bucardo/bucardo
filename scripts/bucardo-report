@@ -325,10 +325,10 @@ sub showhost {
 	$info{dcount} = '?'; $info{tcount} = '?';
 	unless ($q{norowcount}) {
 		$dbh = connect_database($host."_real");
-		$SQL = "SELECT 1,count(*) FROM bucardo.bucardo_delta UNION SELECT 1,count(*) FROM bucardo.bucardo_track ORDER BY 1";
+		$SQL = "SELECT 1,count(*) FROM bucardo.bucardo_delta UNION ALL SELECT 2,count(*) FROM bucardo.bucardo_track ORDER BY 1";
 		$info = $dbh->selectall_arrayref($SQL);
-		$info{dcount} = $info->[1][1];
-		$info{tcount} = $info->[0][1];
+		$info{dcount} = $info->[0][1];
+		$info{tcount} = $info->[1][1];
 		$dbh->disconnect();
 	}
 	print qq{<h3 class="s">$d->{DATABASE} latest <a href="$HERE">Bucardo</a> sync results &nbsp; &nbsp; };
