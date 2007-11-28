@@ -96,7 +96,7 @@ COPY bucardo_config(setting,value,about)
 FROM STDIN
 WITH DELIMITER '|';
 log_showpid|0|Show PID in the log output?
-log_showtime|1|Show timestamp in the log output?
+log_showtime|1|Show timestamp in the log output?  0=off  1=seconds since epoch  2=scalar gmtime  3=scalar localtime
 log_showline|0|Show line number in the log output?
 \.
 

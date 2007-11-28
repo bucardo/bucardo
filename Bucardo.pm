@@ -725,10 +725,12 @@ sub glog {
 
 	my $prefix = $self->{logprefix} || '';
 	$msg = "$prefix$msg";
-
 	my $header = sprintf "%s%s%s",
 		$config{log_showpid}  ? "($$) " : '',
-		$config{log_showtime} ? ('['.time.'] ') : '',
+		$config{log_showtime}==1 ? ('['.time.'] ') : 
+		$config{log_showtime}==2 ? ('['.scalar gmtime(time).'] ') : 
+		$config{log_showtime}==3 ? ('['.scalar localtime(time).'] ') : 
+		'',
 		$config{log_showline} ? (sprintf '#%04d ', (caller)[2]) : '';
 
 	## Route/tee serious errors to another file
@@ -753,7 +755,10 @@ sub glog {
 			print $log "($$) ";
 		}
 		printf $log "%s%s%s\n",
-			$config{log_showtime} ? ('['.time.'] ') : '',
+			$config{log_showtime}==1 ? ('['.time.'] ') :
+			$config{log_showtime}==2 ? ('['.scalar gmtime(time).'] ') :
+			$config{log_showtime}==3 ? ('['.scalar localtime(time).'] ') :
+			'',
 			$config{log_showline} ? (sprintf '#%04d ', (caller)[2]) : '',
 			$msg;
 		close $log or warn qq{Could not close "$file": $!\n};
