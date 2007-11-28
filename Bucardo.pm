@@ -917,7 +917,7 @@ sub get_herd {
 
 	$SQL = qq{
 		SELECT    h.name, g.db, g.tablename, g.schemaname, g.has_delta, g.ghost,
-				  g.standard_conflict, g.pkey, g.pkeytype
+				  g.standard_conflict, g.pkey, g.qpkey, g.pkeytype
 		FROM      bucardo.herd h
 		LEFT JOIN bucardo.herdmap m ON (m.herd=h.name)
 		LEFT JOIN bucardo.goat g ON (m.goat=g.id)
@@ -2610,7 +2610,8 @@ sub start_controller {
 									next unless $g->{has_delta};
 									## XXX Do a deltacount for fullcopy?
 
-									my ($S,$T,$namepk) = ($g->{safeschema},$g->{safetable},$g->{safepkey});
+									my ($S,$T,$namepk,$qnamepk) = 
+										($g->{safeschema},$g->{safetable},$g->{pkey},$g->{safepkey});
 									my $safepkeytype = $g->{pkeytype} =~ /timestamp|date/o ? 'text' : $g->{pkeytype};
 									my $x=0;
 									my $aliaslist = join ',' => map { "$_ AS $g->{cols}[$x++]" } @{$g->{safecols}};
@@ -2618,9 +2619,9 @@ sub start_controller {
 										$aliaslist = ", $aliaslist";
 									}
 									$SQL{trix} = qq{
-                                      SELECT    DISTINCT d.rowid AS "BUCARDO_ID", t.$namepk $aliaslist
+                                      SELECT    DISTINCT d.rowid AS "BUCARDO_ID", t.$qnamepk $aliaslist
                                       FROM      bucardo.bucardo_delta d
-                                      LEFT JOIN $S.$T t ON (t.${namepk}::$safepkeytype = d.rowid::$safepkeytype)
+                                      LEFT JOIN $S.$T t ON (t.${qnamepk}::$safepkeytype = d.rowid::$safepkeytype)
                                       WHERE     d.tablename = \$1::oid
                                       AND       d.txntime IN (
                                         SELECT txntime FROM bucardo.bucardo_track
@@ -3112,7 +3113,7 @@ sub start_kid {
 
 	## Set these early so the DIE block can use them
 	our ($maindbh,$sourcedbh,$targetdbh);
-	our ($S,$T,$pkval,$namepk) = ('?','?','?','?'); ## no critic
+	our ($S,$T,$pkval,$namepk,$qnamepk) = ('?','?','?','?','?'); ## no critic
 
 	## Keep track of how many times this kid has done work
 	our $kidloop = 0;
@@ -3315,15 +3316,15 @@ sub start_kid {
 		}
 
 		for my $g (@$goatlist) {
-			($S,$T,$namepk) = ($g->{safeschema},$g->{safetable},$g->{safepkey});
+			($S,$T,$namepk,$qnamepk) = ($g->{safeschema},$g->{safetable},$g->{pkey},$g->{safepkey});
 
 			if (length $g->{safecolumnlist}) {
-				$SQL = "INSERT INTO $S.$T ($namepk, $g->{safecolumnlist}) VALUES (?,";
+				$SQL = "INSERT INTO $S.$T ($qnamepk, $g->{safecolumnlist}) VALUES (?,";
 				$SQL .= join ',' => map {'?'} @{$g->{cols}};
 				$SQL .= ")";
 			}
 			else {
-				$SQL = "INSERT INTO $S.$T ($namepk) VALUES (?)";
+				$SQL = "INSERT INTO $S.$T ($qnamepk) VALUES (?)";
 			}
 			# $self->glog("INSERT SQL: $SQL");
 			$sth{target}{$g}{insertrow} = $targetdbh->prepare($SQL);
@@ -3332,10 +3333,10 @@ sub start_kid {
 			if (length $g->{safecolumnlist}) {
 				$SQL = "UPDATE $S.$T SET ";
 				$SQL .= join ',' => map { "$_=?" } @{$g->{safecols}};
-				$SQL .= " WHERE $namepk = ?";
+				$SQL .= " WHERE $qnamepk = ?";
 			}
 			else {
-				$SQL = "UPDATE $S.$T SET $namepk=$namepk WHERE $namepk = ?";
+				$SQL = "UPDATE $S.$T SET $qnamepk=$qnamepk WHERE $qnamepk = ?";
 			}
 			# $self->glog("UPDATE SQL: $SQL");
 			$sth{target}{$g}{updaterow} = $targetdbh->prepare($SQL);
@@ -3352,9 +3353,9 @@ sub start_kid {
 			## Note: column order important for splice and defined calls later
 			$SQL{delta} = qq{
 				SELECT    DISTINCT d.rowid AS "BUCARDO_ID",
-							  t.$namepk $aliaslist
+							  t.$qnamepk $aliaslist
 				FROM      bucardo.bucardo_delta d
-				LEFT JOIN $S.$T t ON (t.${namepk}::$safepkeytype = d.rowid::$safepkeytype)
+				LEFT JOIN $S.$T t ON (t.${qnamepk}::$safepkeytype = d.rowid::$safepkeytype)
 				WHERE     d.tablename = \$1::oid
 				AND       NOT EXISTS (
 								SELECT 1
@@ -3914,7 +3915,7 @@ sub start_kid {
 
 			for my $g (@$goatlist) {
 
-				($S,$T,$namepk) = ($g->{safeschema},$g->{safetable},$g->{safepkey});
+				($S,$T,$namepk,$qnamepk) = ($g->{safeschema},$g->{safetable},$g->{pkey},$g->{safepkey});
 
 				## Skip this table if no rows have changed on the source
 				next unless $deltacount{source}{$S}{$T};
@@ -3956,7 +3957,7 @@ sub start_kid {
 				## First, delete any rows that no longer exist on the target:
 				my @tgtdelete = map { ($a=$_->[0]) =~ s/\'/''/g; qq{'$a'} } grep { !defined $_->[1] } @$info; ## no critic
 				$count = @tgtdelete;
-				$SQL = "DELETE FROM $S.$T WHERE $namepk IN ";
+				$SQL = "DELETE FROM $S.$T WHERE $qnamepk IN ";
 				if ($count) {
 					while (@tgtdelete) {
 						no warnings;
@@ -3989,7 +3990,7 @@ sub start_kid {
 				  UPSERT: {
 						$count = $sth{target}{$g}{updaterow}->execute(@$row,$pkval);
 						if ($count ne '0E0') {
-							$self->glog("Updated $S.$T.$namepk: $pkval");
+							$self->glog("Updated $S.$T.$qnamepk: $pkval");
 							$dmlcount{U}{target}{$S}{$T} += $count;
 							next ROW;
 						}
@@ -4017,7 +4018,7 @@ sub start_kid {
 						}
 						else { ## The insert worked
 							$dmlcount{I}{target}{$S}{$T} += $count;
-							$self->glog("Inserted $S.$T.$namepk: $pkval");
+							$self->glog("Inserted $S.$T.$qnamepk: $pkval");
 							$targetdbh->pg_release("bucardo_insert");
 						}
 					} ## end UPSERT
@@ -4050,7 +4051,7 @@ sub start_kid {
 
 			for my $g (@$goatlist) {
 
-				($S,$T,$namepk) = ($g->{safeschema},$g->{safetable},$g->{safepkey});
+				($S,$T,$namepk,$qnamepk) = ($g->{safeschema},$g->{safetable},$g->{pkey},$g->{safepkey});
 
 				## Skip if neither side has changes for this table
 				next unless $deltacount{source}{$S}{$T} or $deltacount{target}{$S}{$T};
@@ -4088,7 +4089,6 @@ sub start_kid {
 
 				my $info1 = $deltacount{src2}{$S}{$T}<1 ? {} : $sth{source}{$g}{getdelta}->fetchall_hashref('BUCARDO_ID');
 				my $info2 = $deltacount{tgt2}{$S}{$T}<1 ? {} : $sth{target}{$g}{getdelta}->fetchall_hashref('BUCARDO_ID');
-
 				if ($sync->{need_rows}) {
 					$rows_for_custom_code->{$S}{$T} =
 						{
@@ -4108,7 +4108,7 @@ sub start_kid {
 					$pkval = $temp_pkval;
 					## No problem if it only exists on the source
 					if (! exists $info2->{$pkval}) {
-						$self->glog("No conflict, source only for $S.$T.$namepk: $pkval");
+						$self->glog("No conflict, source only for $S.$T.$qnamepk: $pkval");
 						$info1->{$pkval}{BUCARDO_ACTION} = 1; ## source to target
 					}
 					else {
@@ -4124,7 +4124,7 @@ sub start_kid {
 							}
 							elsif ('skip' eq $sc) { ## XXX Too dangerous? Not allow 0 in general?
 								$info1->{$pkval}{BUCARDO_ACTION} = 0;
-							}
+						}
 							elsif ('random' eq $sc) {
 								$info1->{$pkval}{BUCARDO_ACTION} = rand 2 > 1 ? 1 : 2;
 							}
@@ -4195,7 +4195,7 @@ sub start_kid {
 				## Since we've already handled conflicts, simply mark "target only" rows
 				for my $tpkval (keys %$info2) {
 					next if exists $info1->{$tpkval};
-					$self->glog("No conflict, target only for $S.$T.$namepk: $pkval");
+					$self->glog("No conflict, target only for $S.$T.$qnamepk: $pkval");
 					$info1->{$tpkval}{BUCARDO_ACTION} = 2; ## target to source
 				}
 
@@ -4291,7 +4291,7 @@ sub start_kid {
 				}
 
 				## Do deletions in chunks
-				$SQL = "DELETE FROM $S.$T WHERE $namepk IN";
+				$SQL = "DELETE FROM $S.$T WHERE $qnamepk IN";
 				$count = @srcdelete;
 				if ($count) {
 					while (@srcdelete) {
@@ -4321,7 +4321,7 @@ sub start_kid {
 				## Before this point, the lack of a matching record from the left join
 				## only tells us that the real row *might* exist.
 				## And upserts are too expensive here :)
-				$SQL = "SELECT $namepk FROM $S.$T WHERE $namepk IN ";
+				$SQL = "SELECT $qnamepk FROM $S.$T WHERE $qnamepk IN ";
 				while (@srccheck) {
 					no warnings;
 					my $list = '';
@@ -4441,7 +4441,7 @@ sub start_kid {
 
 					if (!$g->{has_exception_code}) {
 						if ($@) {
-							$self->glog("Warning! Aborting due to exception for $S.$T.$namepk: $pkval");
+							$self->glog("Warning! Aborting due to exception for $S.$T.$qnamepk: $pkval");
 							die $@;
 						}
 					}

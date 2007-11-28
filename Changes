@@ -2,6 +2,9 @@
 
 3.0.8 (unreleased)
 
+  - Use correct quoted/non-quoted versions of primary keys to allow 
+    primary keys with spaces, etc. [GSM]
+
   - Add new options to log_showtime to show non-epoch time strings [GSM]
 
   - Fix a sorting problem in the bucardo-report script. [Jon Jensen <jon@endpoint.com>]
