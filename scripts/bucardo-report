@@ -1289,7 +1289,7 @@ sub showsyncinfo {
 	if ($info->{targetgroup}) {
 		my $t = $info->{targetgroup};
 		if (! exists $info{$host}{dbs}{$t}) {
-			$SQL = "SELECT db FROM bucardo.dbmap WHERE dbgroup = ? ORDER BY priority DESC, db ASC";
+			$SQL = "SELECT dm.db FROM bucardo.dbmap dm JOIN bucardo.db db ON db.name = dm.db WHERE dm.dbgroup = ? AND db.status = 'active' ORDER BY dm.priority DESC, dm.db ASC";
 			$sth = $dbh->prepare_cached($SQL);
 			$sth->execute($t);
 			$info{$host}{dbs}{$t} = $sth->fetchall_arrayref({});

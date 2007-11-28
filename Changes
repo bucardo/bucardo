@@ -2,6 +2,9 @@
 
 3.0.8 (unreleased)
 
+  - Filter out inactive target dbs from bucardo-report script.
+    [Spencer Christensen <schristensen@backcountry.com>]
+
   - Auto-detect primary keys (or unique indexes) for added tables. [GSM]
 
   - Add update_bucardo_schema.pl to faciliate version changes. [GSM]
