@@ -2474,7 +2474,7 @@ sub start_controller {
 			}
 			else {
 				$_->{targetdb} ||= 'NONE';
-				$self->glog("Warning! Invalid targetdb found for $safesyncname: $_->{targetdb} pid=$_->{piod} cdate=$_->{cdate}");
+				$self->glog("Warning! Invalid targetdb found for $safesyncname: $_->{targetdb} pid=$_->{pid} cdate=$_->{cdate}");
 				$self->glog("Warning! SQL was $SQL. Count was $count");
 			}
 		}
