@@ -18,6 +18,7 @@ scripts/bucardo_rrd
 scripts/bucardo-report
 scripts/check_bucardo_sync
 scripts/bucardo_ctl.rc
+scripts/update_bucardo_schema.pl
 
 bucardo.html
 Bucardo.pm.html
@@ -25,7 +26,10 @@ bucardo_ctl.html
 
 ## Testing-related stuff
 .perlcriticrc
+t/00setup.pl
 t/01bc.t
+t/02perlcritic.t
+t/03goat.t
 t/bucardo.test.helper
 t/bucardo.test.data
 

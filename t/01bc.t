@@ -219,6 +219,7 @@ pass(" Bucardo master schema was created");
 $masterdbh->do("UPDATE bucardo.bucardo_config SET value='$PIDDIR' WHERE setting = 'piddir'");
 $masterdbh->do("UPDATE bucardo.bucardo_config SET value='$PIDFILE' WHERE setting = 'pidfile'");
 $masterdbh->do("UPDATE bucardo.bucardo_config SET value='$REASONFILE' WHERE setting = 'reason_file'");
+$masterdbh->do("UPDATE bucardo.bucardo_config SET value='3' WHERE setting = 'log_showtime'");
 $masterdbh->commit();
 
 $masterdbh->do("ALTER USER $bc{TESTBC} SET search_path = bucardo, public");
@@ -267,6 +268,7 @@ my %tabletype =
 	 'bucardo_test2' => 'TEXT',
 	 'bucardo_test3' => 'DATE',
 	 'bucardo_test4' => 'TIMESTAMP',
+	 'bucardo_test5' => 'NUMERIC',
  );
 
 my %table; ## This will hold the oids
@@ -313,9 +315,11 @@ $dbh3->do($SQL);
 
 
 for my $table (sort keys %tabletype) {
+	my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
+	my $pk = 'PRIMARY KEY';
 	$SQL = qq{
 		CREATE TABLE $table (
-			id    $tabletype{$table} NOT NULL PRIMARY KEY};
+			$pkey    $tabletype{$table} NOT NULL $pk};
 	$SQL .= $table =~ /0/ ? "\n)" : qq{,
         	data1 TEXT                   NULL,
 	        inty  SMALLINT               NULL,
@@ -394,6 +398,7 @@ for (1..30) {
 	$val{TEXT}{$_} = "bc$_";
 	$val{DATE}{$_} = sprintf "2001-10-%02d", $_;
 	$val{TIMESTAMP}{$_} = $val{DATE}{$_} . " 12:34:56";
+	$val{NUMERIC}{$_} = $_;
 }
 
 if ($ENV{BUCARDO_TEST_NOCREATEDB}) {
@@ -446,8 +451,6 @@ for my $table (sort keys %tabletype) {
 			  schemaname => $TEST_SCHEMA,
 			  tablename  => $table,
 			  herd       => "bctestherd$db",
-			  pkey       => 'id',
-			  pkeytype   => lc $tabletype{$table},
 			  standard_conflict => 'source',
 		  });
 	}
@@ -477,8 +480,6 @@ if ($TEST_METHODS) { ## START_TEST_METHODS
 	test_customcode_methods();
 
 	test_database_methods();
-
-	test_goat_methods();
 
 	test_sync_methods();
 
@@ -530,7 +531,7 @@ if ($TEST_PUSHDELTA) { ## START_TEST_PUSHDELTA
 	pass(" Bucardo was started");
 
 	for my $table (sort keys %tabletype) {
-		basic_pushdelta_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 5
+		basic_pushdelta_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 6
 	}
 
 	pass(" Finished with pushdelta tests");
@@ -561,7 +562,7 @@ if ($TEST_MAKEDELTA) { ## START_TEST_MAKEDELTA
 
 	for my $table (sort keys %tabletype) {
 		next if $table =~ /0/;
-		makedelta_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 4
+		makedelta_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 5
 	}
 
 	pass(" Finished with makedelta tests");
@@ -594,7 +595,7 @@ if ($TEST_COPY) { ## START_TEST_COPY
 	pass(" Bucardo was started");
 
 	for my $table (sort keys %tabletype) {
-		basic_copy_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 5
+		basic_copy_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 6
 	}
 
 	analyze_after_copy('bucardo_test1',$dbh1,$dbh2);
@@ -626,16 +627,16 @@ if ($TEST_SWAP) { ## START_TEST_SWAP
 	## Check that each table type populates bucardo_delta
 	for my $table (sort keys %tabletype) {
 		next if $table =~ /0/;
-		bucardo_delta_populate($table,$dbh1); ## TESTCOUNT * 4
-		bucardo_delta_populate($table,$dbh2); ## TESTCOUNT * 4
+		bucardo_delta_populate($table,$dbh1); ## TESTCOUNT * 5
+		bucardo_delta_populate($table,$dbh2); ## TESTCOUNT * 5
 	}
 	$dbh1->rollback();
 	$dbh2->rollback();
 
 	## Test the swap sync method
 	for my $table (sort keys %tabletype) {
-		basic_swap_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 5
-		basic_swap_testing($table,$dbh2,$dbh1); ## TESTCOUNT * 5
+		basic_swap_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 6
+		basic_swap_testing($table,$dbh2,$dbh1); ## TESTCOUNT * 6
 	}
 
 	pass(" Finished with swap tests");
@@ -665,7 +666,7 @@ if ($TEST_CUSTOM_CODE) { ## START_TEST_CUSTOM_CODE
 
 	for my $table (sort keys %tabletype) {
 		next if $table =~ /0/;
-		test_customcode($table,$dbh1,$dbh2); ## TESTCOUNT * 4
+		test_customcode($table,$dbh1,$dbh2); ## TESTCOUNT * 5
 	}
 
 	pass(" Finished with custom_code tests");
@@ -693,7 +694,7 @@ if ($TEST_RANDOM_SWAP) { ## START_TEST_RANDOM_SWAP
 	pass(" Bucardo was started");
 
 	for my $table (sort keys %tabletype) {
-		random_swap_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 4
+		random_swap_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 5
 	}
 
 	pass(" Finished with random swap tests");
@@ -1247,7 +1248,8 @@ sub compare_tables {
 	local $Data::Dumper::Indent = 0;
 
 	my $msg = "Table $table is the same on both databases";
-	$SQL = "SELECT * FROM $table ORDER BY inty, id";
+	my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
+	$SQL = "SELECT * FROM $table ORDER BY inty, $pkey";
 	$SQL =~ s/inty, // if $table =~ /0/;
 	my $uno = $sdbh->selectall_arrayref($SQL);
 	my $dos = $rdbh->selectall_arrayref($SQL);
@@ -1568,37 +1570,6 @@ sub test_database_methods {
 } ## end of test_database_methods
 
 
-sub test_goat_methods {
-
-	## Test methods related to the goat table
-
-	$location = 'goat_methods';
-
-	$SQL = qq{INSERT INTO goat(db,tablename,pkey,pkeytype) VALUES };
-
-	$t=q{ Adding a goat with a non-existent database fails };
-	eval { $masterdbh->do(qq{$SQL ('invalid','bucardo_test1','id','int')}); };
-	like($@, qr{find a database}, $t);
-	$masterdbh->rollback();
-
-	$t=q{ Adding an goat with a null table fails };
-	eval { $masterdbh->do(qq{$SQL ('bctest1',null,'id','int')}); };
-	like($@, qr{"tablename"}, $t);
-	$masterdbh->rollback();
-	
-	$t=q{ Adding an goat with a no primary key type fails };
-	eval { $masterdbh->do(qq{$SQL ('bctest1','bucardo_test1','notid',null)}); };
-	like($@, qr{pkey_needs_type}, $t);
-	$masterdbh->rollback();
-
-	$t=q{ Adding an goat with an invalid primary key type fails };
-	eval { $masterdbh->do(qq{$SQL ('bctest1','bucardo_test1','notid','money')}); };
-	like($@, qr{pkeytype_check}, $t);
-	$masterdbh->rollback();
-
-	return;
-
-} ## end of test_goat_methods
 
 
 sub test_sync_methods {
@@ -1613,7 +1584,7 @@ sub test_sync_methods {
 	eval { $masterdbh->do(qq{$SQL ('bct','foobar','bctesterd1','bctest2')}) };
 	like($@, qr{sync_type}, $t);
 	$masterdbh->rollback();
-	
+
 	$t=q{ Adding invalid source to the sync table fails };
 	eval { $masterdbh->do(qq{$SQL ('bct','pushdelta','invalid','bctest2')}); };
 	like($@, qr{sync_source_herd_fk}, $t);
@@ -2177,16 +2148,17 @@ sub basic_pushdelta_testing {
 	$masterdbh->do("LISTEN bucardo_syncdone_pushdeltatest");
 	$masterdbh->commit();
 
+	my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
 	$SQL = $table =~ /0/
-		? "INSERT INTO $table(id) VALUES ('$val')"
-		: "INSERT INTO $table(id,data1,inty) VALUES ('$val','one',1)";
+		? "INSERT INTO $table($pkey) VALUES ('$val')"
+		: "INSERT INTO $table($pkey,data1,inty) VALUES ('$val','one',1)";
 	$sdbh->do($SQL);
 	$sdbh->commit;
 
 	$t=qq{ Second table $table still empty before commit };
 	$SQL = $table =~ /0/
-		? "SELECT id FROM $table"
-		: "SELECT id,data1 FROM $table";
+		? "SELECT $pkey FROM $table"
+		: "SELECT $pkey,data1 FROM $table";
 	$result = [];
 	bc_deeply($result, $rdbh, $SQL, $t);
 
@@ -2207,8 +2179,8 @@ sub basic_pushdelta_testing {
 	## Insert to 1 should be echoed to two, after a slight delay:
 	$t=qq{ Second table $table got the pushdelta row};
 	$SQL = $table =~ /0/
-		? "SELECT id,'one' FROM $table"
-		: "SELECT id,data1 FROM $table";
+		? "SELECT $pkey,'one' FROM $table"
+		: "SELECT $pkey,data1 FROM $table";
 	$result = [[qq{$val},'one']];
 	bc_deeply($result, $rdbh, $SQL, $t);
 
@@ -2219,8 +2191,8 @@ sub basic_pushdelta_testing {
 	## Add a row to two, should not get removed or replicated
 	my $rval = $val{$type}{9};
 	$SQL = $table =~ /0/
-		? "INSERT INTO $table(id) VALUES ('$rval')"
-		: "INSERT INTO $table(id,data1,inty) VALUES ('$rval','nine',9)";
+		? "INSERT INTO $table($pkey) VALUES ('$rval')"
+		: "INSERT INTO $table($pkey,data1,inty) VALUES ('$rval','nine',9)";
 	$rdbh->do($SQL);
 	$rdbh->commit;
 
@@ -2232,8 +2204,8 @@ sub basic_pushdelta_testing {
 
 	$val = $val{$type}{2};
 	$SQL = $table =~ /0/
-		? "INSERT INTO $table(id) VALUES ('$val')"
-		: "INSERT INTO $table(id,data1,inty) VALUES ('$val','two',2)";
+		? "INSERT INTO $table($pkey) VALUES ('$val')"
+		: "INSERT INTO $table($pkey,data1,inty) VALUES ('$val','two',2)";
 	$sdbh->do($SQL);
 	$sdbh->commit;
 
@@ -2253,7 +2225,7 @@ sub basic_pushdelta_testing {
 	## Insert to 1 should be echoed to two, after a slight delay:
 	$t=qq{ Second table $table got the pushdelta row};
 	$SQL = $table =~ /0/
-		? "SELECT id FROM $table ORDER BY id"
+		? "SELECT $pkey FROM $table ORDER BY id"
 		: "SELECT data1,inty FROM $table ORDER BY inty";
 	$result = $table =~ /0/
 		? [[1],[2],[9]]
@@ -2265,15 +2237,15 @@ sub basic_pushdelta_testing {
 	bc_deeply($result, $rdbh, $DROPSQL, $t);
 
 	$t=q{ Source table did not get updated for pushdelta sync };
-	my $col = $table =~ /0/ ? 'id' : 'inty';
+	my $col = $table =~ /0/ ? $pkey : 'inty';
 	$SQL = "SELECT count(*) FROM $table WHERE $col = 9";
 	$count = $sdbh->selectall_arrayref($SQL)->[0][0];
 	is($count, 0, $t);
 
 	## Now with many rows
 	$SQL = $table =~ /0/
-		? "INSERT INTO $table(id) VALUES (?)"
-		: "INSERT INTO $table(id,data1,inty) VALUES (?,?,?)";
+		? "INSERT INTO $table($pkey) VALUES (?)"
+		: "INSERT INTO $table($pkey,data1,inty) VALUES (?,?,?)";
 	$sth = $sdbh->prepare($SQL);
 	for (3..6) {
 		$val = $val{$type}{$_};
@@ -2334,9 +2306,12 @@ sub makedelta_testing {
 	my $sourcetrackrows = "SELECT tablename,targetdb FROM bucardo.bucardo_track WHERE tablename = $oid ".
 		"ORDER BY txntime DESC, tablename DESC";
 
+	my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
+
 	$t=qq{ Insert to source $table populated source bucardo_delta correctly };
-	$SQL = "INSERT INTO $table(id,data1,inty) VALUES ('$val','one',1)";
+	$SQL = "INSERT INTO $table($pkey,data1,inty) VALUES ('$val','one',1)";
 	$sdbh->do($SQL);
+	$sdbh->do(q{SELECT 'XXX I AM supposed to be the source'});
 	$now = now_time($sdbh);
 	$info = $sdbh->selectall_arrayref($sourcerows);
 	$result = [[$oid,$val,$now]];
@@ -2346,6 +2321,8 @@ sub makedelta_testing {
 
 	## Wait until the row gets synced to the target database
 	wait_until_true($rdbh => "SELECT 1 FROM $table");
+
+## XXX GREG this fails with table5
 
 	$t=qq{ Insert to source $table with makedelta created a target bucardo_delta row };
 	$info = $rdbh->selectall_arrayref($remoterows);
@@ -2397,7 +2374,7 @@ sub makedelta_testing {
 	## Do an update of the primary key: which should give two rows in bucardo_delta on both ends
 	$t=qq{ Update to pk of source $table populated source bucardo_delta correctly };
 	my $newval = $val{$type}{3};
-	$SQL = "UPDATE $table SET id = '$newval' WHERE id = '$val'";
+	$SQL = "UPDATE $table SET $pkey = '$newval' WHERE $pkey = '$val'";
 	$sdbh->do($SQL);
 	$now = now_time($sdbh);
 	$info = $sdbh->selectall_arrayref($sourcerows);
@@ -2405,7 +2382,7 @@ sub makedelta_testing {
 	is_deeply($info, $src_delta, $t);
 	$sdbh->commit();
 
-	wait_until_true($rdbh => "SELECT 1 FROM $table WHERE id = '$newval'");
+	wait_until_true($rdbh => "SELECT 1 FROM $table WHERE $pkey = '$newval'");
 
 	$t=qq{ Update to pk of source $table with makedelta created two target bucardo_delta rows ($val) };
 	$info = $rdbh->selectall_arrayref($remoterows);
@@ -2425,7 +2402,7 @@ sub makedelta_testing {
 
 	## Delete should also add a ghost row
 	$t=qq{ Delete to source $table populated source bucardo_delta correctly };
-	$SQL = "DELETE FROM $table WHERE id = '$newval'";
+	$SQL = "DELETE FROM $table WHERE $pkey = '$newval'";
 	$count = $sdbh->do($SQL);
 	$now = now_time($sdbh);
 	$sdbh->commit();
@@ -2433,7 +2410,7 @@ sub makedelta_testing {
 	unshift @$src_delta, [$oid,$newval,$now];
 	is_deeply($info, $src_delta, $t);
 
-	wait_until_false($rdbh => "SELECT 1 FROM $table WHERE id = '$newval'");
+	wait_until_false($rdbh => "SELECT 1 FROM $table WHERE $pkey = '$newval'");
 
 	$t=qq{ Delete to source $table with makedelta created a target bucardo_delta row };
 	$info = $rdbh->selectall_arrayref($remoterows);
@@ -2463,7 +2440,7 @@ sub makedelta_testing {
 
 	## Insert:
 	$val = $val{$type}{4};
-	$SQL = "INSERT INTO $table(id,data1,inty) VALUES ('$val','one',4)";
+	$SQL = "INSERT INTO $table($pkey,data1,inty) VALUES ('$val','one',4)";
 	$rdbh->do($SQL);
 	$rdbh->commit();
 
@@ -2543,9 +2520,10 @@ sub basic_copy_testing {
 
 	$val = $val{$type}{1};
 
+	my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
 	$SQL = $table =~ /0/
-		? "INSERT INTO $table(id) VALUES ('$val')"
-		: "INSERT INTO $table(id,data1,inty) VALUES ('$val','one',1)";
+		? "INSERT INTO $table($pkey) VALUES ('$val')"
+		: "INSERT INTO $table($pkey,data1,inty) VALUES ('$val','one',1)";
 	$sdbh->do($SQL);
 	$sdbh->commit;
 
@@ -2560,8 +2538,8 @@ sub basic_copy_testing {
 	bc_deeply($result, $rdbh, $DROPSQL, $t);
 
 	$t=qq{ Second table $table still empty before kick };
-	my $SELECTSQL = "SELECT inty FROM $table ORDER BY id";
-	$table =~ /0/ and $SELECTSQL =~ s/inty/id/;
+	my $SELECTSQL = "SELECT inty FROM $table ORDER BY $pkey";
+	$table =~ /0/ and $SELECTSQL =~ s/inty/$pkey/;
 	$result = [];
 	bc_deeply($result, $rdbh, $SELECTSQL, $t);
    
@@ -2584,8 +2562,8 @@ sub basic_copy_testing {
 	my $oneval = $val;
 	$val = $val{$type}{2};
 	$SQL = $table =~ /0/
-		? "INSERT INTO $table(id) VALUES ('$val')"
-		: "INSERT INTO $table(id,data1,inty) VALUES ('$val','two',2)";
+		? "INSERT INTO $table($pkey) VALUES ('$val')"
+		: "INSERT INTO $table($pkey,data1,inty) VALUES ('$val','two',2)";
 	$sdbh->do($SQL);
 	$sdbh->commit;
 
@@ -2612,8 +2590,8 @@ sub basic_copy_testing {
 	$rdbh->commit; $sdbh->commit; $masterdbh->commit;
 	## Now with many rows
 	$SQL = $table =~ /0/
-		? "INSERT INTO $table(id) VALUES (?)"
-		: "INSERT INTO $table(id,data1,inty) VALUES (?,?,?)";
+		? "INSERT INTO $table($pkey) VALUES (?)"
+		: "INSERT INTO $table($pkey,data1,inty) VALUES (?,?,?)";
 	$sth = $sdbh->prepare($SQL);
 	for (3..6) {
 		$val = $val{$type}{$_};
@@ -2656,7 +2634,8 @@ sub analyze_after_copy {
 	$val = $val{$type}{$insertval};
 
 	## Make sure by default we do an analyze
-	$SQL = "INSERT INTO $table(id,inty) VALUES ('$val', $insertval)";
+	my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
+	$SQL = "INSERT INTO $table($pkey,inty) VALUES ('$val', $insertval)";
 	$sdbh->do($SQL);
 
 	bucardo_ctl("kick copytest 0");
@@ -2691,7 +2670,7 @@ sub analyze_after_copy {
 	$masterdbh->commit();
 	wait_for_notice($masterdbh, $sync_reloaded_notice);
 
-	$SQL = "INSERT INTO $table(id,inty) VALUES ('$val', $insertval)";
+	$SQL = "INSERT INTO $table($pkey,inty) VALUES ('$val', $insertval)";
 	$sdbh->do($SQL);
 
 	bucardo_ctl("kick copytest 0");
@@ -2716,7 +2695,7 @@ sub analyze_after_copy {
 	$masterdbh->commit();
 	wait_for_notice($masterdbh, $sync_reloaded_notice);
 
-	$SQL = "INSERT INTO $table(id,inty) VALUES ('$val', $insertval)";
+	$SQL = "INSERT INTO $table($pkey,inty) VALUES ('$val', $insertval)";
 	$sdbh->do($SQL);
 
 	bucardo_ctl("kick copytest 0");
@@ -2739,7 +2718,7 @@ sub analyze_after_copy {
 	$masterdbh->commit();
 	wait_for_notice($masterdbh, $sync_reloaded_notice);
 
-	$SQL = "INSERT INTO $table(id,inty) VALUES ('$val', $insertval)";
+	$SQL = "INSERT INTO $table($pkey,inty) VALUES ('$val', $insertval)";
 	$sdbh->do($SQL);
 
 	bucardo_ctl("kick copytest 0");
@@ -2771,13 +2750,15 @@ sub basic_swap_testing {
 	my ($val1,$val2,$val3,$val4) =
 		($val{$type}{1},$val{$type}{2},$val{$type}{3},$val{$type}{4});
 
+	my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
+
 	$SQL = $table =~ /0/
-		? "INSERT INTO $table(id) VALUES ('$val1')"
-		: "INSERT INTO $table(id,data1,inty) VALUES ('$val1','one',1)";
+		? "INSERT INTO $table($pkey) VALUES ('$val1')"
+		: "INSERT INTO $table($pkey,data1,inty) VALUES ('$val1','one',1)";
 	$sdbh->do($SQL);
 
 	$t=qq{ Second table $table still empty before commit};
-	my $SELECTID = "SELECT id FROM $table";
+	my $SELECTID = "SELECT $pkey FROM $table";
 	$result = [];
 	bc_deeply($result, $rdbh, $SELECTID, $t);
 
@@ -2799,7 +2780,7 @@ sub basic_swap_testing {
 	$t=qq{ Second table $table got the sync insert row};
 	$now = now_time($sdbh);
 	$sdbh->commit();
-	wait_until_true($rdbh => "SELECT 1 FROM $table WHERE id = '$val1'");
+	wait_until_true($rdbh => "SELECT 1 FROM $table WHERE $pkey = '$val1'");
 	$result = [[qq{$val1}]];
 	bc_deeply($result, $rdbh, $SELECTID, $t);
 
@@ -2812,7 +2793,7 @@ sub basic_swap_testing {
 	$result = [];
 	bc_deeply($result, $rdbh, $DROPSQL, $t);
 
-	my $SELECTDATA = "SELECT id,data1 FROM $table";
+	my $SELECTDATA = "SELECT $pkey,data1 FROM $table";
 	## An update should echo
 	if ($table =~ /0/) {
 		$t=qq{ Skipping update test - only one column};
@@ -2821,7 +2802,7 @@ sub basic_swap_testing {
 	}
 	else {
 		$t=qq{ Second table $table caught the sync update};
-		$SQL = "UPDATE $table SET data1 = 'upper' WHERE id = '$val1'";
+		$SQL = "UPDATE $table SET data1 = 'upper' WHERE $pkey = '$val1'";
 		$sdbh->do($SQL);
 		$now = now_time($sdbh);
 		$sdbh->commit();
@@ -2838,16 +2819,16 @@ sub basic_swap_testing {
 	bc_deeply($result2, $sdbh, $SQL, $t);
 
 	$t=qq{ Second table $table caught the delete};
-	$SQL = "DELETE FROM $table WHERE id = '$val1'";
+	$SQL = "DELETE FROM $table WHERE $pkey = '$val1'";
 	$sdbh->do($SQL);
 	$sdbh->commit();
-	wait_until_false($rdbh => "SELECT 1 FROM $table WHERE id = '$val1'");
+	wait_until_false($rdbh => "SELECT 1 FROM $table WHERE $pkey = '$val1'");
 	$result = [];
 	$SQL = $table =~ /0/ ? $SELECTID : $SELECTDATA;
 	bc_deeply($result, $rdbh, $SQL, $t);
 
 	## Quick test of a noop update. Tables are empty at this point.
-	$SQL = "UPDATE $table SET data1 = 'foobar' WHERE id = '$val1'";
+	$SQL = "UPDATE $table SET data1 = 'foobar' WHERE $pkey = '$val1'";
 	if ($table !~ /0/) {
 		$sdbh->do($SQL);
 		$rdbh->do($SQL);
@@ -2856,11 +2837,11 @@ sub basic_swap_testing {
 	## Insert, reverse direction
 	$t=qq{ First table $table synced the insert};
 	$SQL = $table =~ /0/
-		? "INSERT INTO $table(id) VALUES ('$val2')"
-		: "INSERT INTO $table(id,data1,inty) VALUES ('$val2','revins',2)";
+		? "INSERT INTO $table($pkey) VALUES ('$val2')"
+		: "INSERT INTO $table($pkey,data1,inty) VALUES ('$val2','revins',2)";
 	$rdbh->do($SQL);
 	$rdbh->commit();
-	wait_until_true($sdbh => "SELECT 1 FROM $table WHERE id = '$val2'");
+	wait_until_true($sdbh => "SELECT 1 FROM $table WHERE $pkey = '$val2'");
 	$result = [[qq{$val2}]];
 	bc_deeply($result, $sdbh, $SELECTID, $t);
 
@@ -2878,21 +2859,21 @@ sub basic_swap_testing {
 	}
 
 	## Insert, forward direction, and update, reverse
-	$SQL = "INSERT INTO $table(id,data1,inty) VALUES ('$val3','insert',3)";
+	$SQL = "INSERT INTO $table($pkey,data1,inty) VALUES ('$val3','insert',3)";
 	$sdbh->do($SQL);
 
-	$SQL = "UPDATE $table SET data1 = 'gator' WHERE id = '$val2'";
+	$SQL = "UPDATE $table SET data1 = 'gator' WHERE $pkey = '$val2'";
 	$rdbh->do($SQL);
 
 	$t=qq{ Sync on $table inserted to second};
 	$sdbh->commit();
 	$rdbh->commit();
 	wait_until_true($sdbh => "SELECT 1 FROM $table WHERE data1 = 'gator'");
-	$SQL = "SELECT id,data1 FROM $table WHERE id = '$val3'";
+	$SQL = "SELECT $pkey,data1 FROM $table WHERE $pkey = '$val3'";
 	$result = [[qq{$val3},'insert']];
 	bc_deeply($result, $rdbh, $SQL, $t);
 	$t=qq{ Sync on $table updated first};
-	$SQL = "SELECT id,data1 FROM $table WHERE id = '$val2'";
+	$SQL = "SELECT $pkey,data1 FROM $table WHERE $pkey = '$val2'";
 	$result = [[qq{$val2},'gator']];
 	bc_deeply($result, $sdbh, $SQL, $t);
 
@@ -2902,29 +2883,29 @@ sub basic_swap_testing {
 	# 3 | insert
 	## Add to second: 12, 14, 16
 
-	$rdbh->do("INSERT INTO $table(id,data1,inty) VALUES ('$val{$type}{12}','insert',12)");
-	$rdbh->do("INSERT INTO $table(id,data1,inty) VALUES ('$val{$type}{14}','insert',14)");
-	$rdbh->do("INSERT INTO $table(id,data1,inty) VALUES ('$val{$type}{16}','insert',16)");
+	$rdbh->do("INSERT INTO $table($pkey,data1,inty) VALUES ('$val{$type}{12}','insert',12)");
+	$rdbh->do("INSERT INTO $table($pkey,data1,inty) VALUES ('$val{$type}{14}','insert',14)");
+	$rdbh->do("INSERT INTO $table($pkey,data1,inty) VALUES ('$val{$type}{16}','insert',16)");
 	## Add to first: 13, 15, 17
-	$sdbh->do("INSERT INTO $table(id,data1,inty) VALUES ('$val{$type}{13}','insert',13)");
-	$sdbh->do("INSERT INTO $table(id,data1,inty) VALUES ('$val{$type}{15}','insert',15)");
-	$sdbh->do("INSERT INTO $table(id,data1,inty) VALUES ('$val{$type}{17}','insert',17)");
+	$sdbh->do("INSERT INTO $table($pkey,data1,inty) VALUES ('$val{$type}{13}','insert',13)");
+	$sdbh->do("INSERT INTO $table($pkey,data1,inty) VALUES ('$val{$type}{15}','insert',15)");
+	$sdbh->do("INSERT INTO $table($pkey,data1,inty) VALUES ('$val{$type}{17}','insert',17)");
 
 	## Delete one from each: 14, 13
-	$rdbh->do("DELETE FROM $table WHERE id = '$val{$type}{14}'");
-	$sdbh->do("DELETE FROM $table WHERE id = '$val{$type}{13}'");
+	$rdbh->do("DELETE FROM $table WHERE $pkey = '$val{$type}{14}'");
+	$sdbh->do("DELETE FROM $table WHERE $pkey = '$val{$type}{13}'");
 
 	## Update one old and one new: 2,17,3,12
-	$sdbh->do("UPDATE $table SET data1 = 'updated' WHERE id = '$val2'");
-	$sdbh->do("UPDATE $table SET data1 = 'updated' WHERE id = '$val{$type}{17}'");
-	$rdbh->do("UPDATE $table SET data1 = 'updated' WHERE id = '$val3'");
-	$rdbh->do("UPDATE $table SET data1 = 'updated' WHERE id = '$val{$type}{12}'");
+	$sdbh->do("UPDATE $table SET data1 = 'updated' WHERE $pkey = '$val2'");
+	$sdbh->do("UPDATE $table SET data1 = 'updated' WHERE $pkey = '$val{$type}{17}'");
+	$rdbh->do("UPDATE $table SET data1 = 'updated' WHERE $pkey = '$val3'");
+	$rdbh->do("UPDATE $table SET data1 = 'updated' WHERE $pkey = '$val{$type}{12}'");
 
 	$sdbh->commit();
 	$rdbh->commit();
 	wait_until_true($rdbh => "SELECT 1 FROM $table WHERE inty = 15");
 
-	$SQL = "SELECT id,data1 FROM $table ORDER BY inty";
+	$SQL = "SELECT $pkey,data1 FROM $table ORDER BY inty";
 	$result = [
 			   [qq{$val{$type}{2}},'updated'],
 			   [qq{$val{$type}{3}},'updated'],
@@ -2968,8 +2949,10 @@ sub bucardo_delta_populate {
 	my $sourcerows = "SELECT * FROM bucardo.bucardo_delta WHERE tablename = $oid ".
 		"ORDER BY txntime DESC, rowid DESC";
 
+	my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
+
 	$t=qq{ Insert to $table populated bucardo_delta correctly};
-	$SQL = "INSERT INTO $table(id,data1,inty) VALUES ('$val','one',1)";
+	$SQL = "INSERT INTO $table($pkey,data1,inty) VALUES ('$val','one',1)";
 	$dbh->do($SQL);
 	$now = now_time($dbh);
 	$info = $dbh->selectall_arrayref($sourcerows);
@@ -2978,7 +2961,7 @@ sub bucardo_delta_populate {
 
 	## Does an update do the same?
 	$t=qq{ Update to $table populated bucardo_delta correctly};
-	$SQL = "UPDATE $table SET data1='changed' WHERE id = '$val'";
+	$SQL = "UPDATE $table SET data1='changed' WHERE $pkey = '$val'";
 	$dbh->do($SQL);
 	$now = now_time($dbh);
 	$info = $dbh->selectall_arrayref($sourcerows);
@@ -2988,7 +2971,7 @@ sub bucardo_delta_populate {
 	$t=qq{ Update to $table populated bucardo_delta correctly};
 	$val2 = $val;
 	$val = $val{$type}{18};
-	$SQL = "UPDATE $table SET id='$val' WHERE id = '$val2'";
+	$SQL = "UPDATE $table SET $pkey='$val' WHERE $pkey = '$val2'";
 	$dbh->do($SQL);
 	$info = $dbh->selectall_arrayref($sourcerows);
 	unshift @$result, [$oid,$val,$now], [$oid,$val2,$now];
@@ -2996,7 +2979,7 @@ sub bucardo_delta_populate {
 
 	## Does a delete add a new row as well?
 	$t=qq{ Delete to $table populated bucardo_delta correctly };
-	$SQL = "DELETE FROM $table WHERE id = '$val'";
+	$SQL = "DELETE FROM $table WHERE $pkey = '$val'";
 	$dbh->do($SQL);
 	$info = $dbh->selectall_arrayref($sourcerows);
 	unshift @$result, [$oid,$val,$now];
@@ -3007,7 +2990,7 @@ sub bucardo_delta_populate {
 	$val = $val{$type}{22};
 	$val2 = $val{$type}{23};
 	$SQL = qq{
-		INSERT INTO $table(id,data1,inty)
+		INSERT INTO $table($pkey,data1,inty)
 		SELECT '$val'::$type, 'twentytwo',22
 		UNION ALL
 		SELECT '$val2'::$type, 'twentythree',23
@@ -3139,11 +3122,13 @@ return;
 	wait_until_true($masterdbh => $SQL);
 	pass(" Sync with good customcode is now active after a reload");
 
+	my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
+
 	## Check most of the custom code types
 	## TESTCOUNT + 4
 
 	$val = $val{$type}{1};
-	$sdbh->do("INSERT INTO $table(id,data1,inty) VALUES ('$val','one',1)");
+	$sdbh->do("INSERT INTO $table($pkey,data1,inty) VALUES ('$val','one',1)");
 	$sdbh->commit();
 
 	our $sync_done_notice = "bucardo_syncdone_customcode";
@@ -3240,9 +3225,9 @@ return;
 
 	## Create the conflict
 	$val = $val{$type}{3};
-	$sdbh->do("INSERT INTO $table(id,data1,inty) VALUES ('$val','source',3)");
+	$sdbh->do("INSERT INTO $table($pkey,data1,inty) VALUES ('$val','source',3)");
 	$sdbh->commit();
-	$tdbh->do("INSERT INTO $table(id,data1,inty) VALUES ('$val','target',33)");
+	$tdbh->do("INSERT INTO $table($pkey,data1,inty) VALUES ('$val','target',33)");
 	$tdbh->commit();
 
 	## Start up this sync, then kick it
@@ -3382,7 +3367,9 @@ sub random_swap_testing {
 
 	$type = $tabletype{$table};
 
-	$SQL = "INSERT INTO $table(id,data1,inty) VALUES (?,?,?)";
+	my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
+
+	$SQL = "INSERT INTO $table($pkey,data1,inty) VALUES (?,?,?)";
 	my $s_insert = $sdbh->prepare($SQL);
 	my $r_insert = $rdbh->prepare($SQL);
 
@@ -3450,11 +3437,11 @@ sub random_swap_testing {
 
 	## Final inserts so we know when all syncing has completed
 	$val = $val{$type}{3};
-	$SQL = "INSERT INTO $table(id,data1,inty) VALUES ('$val','stop',9999)";
+	$SQL = "INSERT INTO $table($pkey,data1,inty) VALUES ('$val','stop',9999)";
 	$sdbh->do($SQL);
 	$sdbh->commit();
 	$val = $val{$type}{4};
-	$SQL = "INSERT INTO $table(id,data1,inty) VALUES ('$val','stop',8888)";
+	$SQL = "INSERT INTO $table($pkey,data1,inty) VALUES ('$val','stop',8888)";
 	$rdbh->do($SQL);
 	$rdbh->commit();
 

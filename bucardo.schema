@@ -188,7 +188,8 @@ CREATE TABLE goat (
   schemaname         TEXT        NOT NULL DEFAULT 'public',
   tablename          TEXT        NOT NULL,
   reltype            TEXT        NOT NULL DEFAULT 'table',
-  pkey               TEXT        NOT NULL DEFAULT '',
+  pkey               TEXT            NULL,
+  qpkey              TEXT            NULL,
   pkeytype           TEXT            NULL,
   has_delta          BOOLEAN     NOT NULL DEFAULT 'false',
   ping               BOOLEAN         NULL,                 -- overrides sync-level ping
@@ -201,9 +202,6 @@ CREATE TABLE goat (
   cdate              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE goat ADD CONSTRAINT has_schemaname CHECK (length(schemaname) > 1);
-
-ALTER TABLE goat ADD CONSTRAINT goat_pkeytype_check
-  CHECK (pkeytype IN ('smallint','int','bigint','text','timestamp','date'));
 
 ALTER TABLE goat ADD CONSTRAINT custom_needs_pkey CHECK (customselect IS NULL OR length(pkey) > 1);
 
@@ -726,15 +724,45 @@ $bc$
 ## If a row in goat has changed, re-validate and set things up for that table
 elog(DEBUG, "Running validate_goat");
 use strict; use warnings; use DBI;
-my ($new, $dbname, $SQL, $rv, $row, %db, $dbh);
 
-sub rquote { $_[0] =~ s/'/''/g; return qq{'$_[0]'}; }
+my ($SQL, $rv, $row, %db, $dbh, $sth, $count, $oid);
 
-$new = $_TD->{new};
+my $old = $_TD->{event} eq 'UPDATE' ? $_TD->{old} : 0;
+my $new = $_TD->{new};
 
-$dbname = $new->{db};
-$dbname =~ s/'/''/go;
-$SQL = "SELECT db_getconn('$dbname') AS apple";
+if (!defined $new->{db}) {
+   die qq{Must provide a db\n};
+}
+if (!defined $new->{tablename}) {
+   die qq{Must provide a tablename\n};
+}
+if (!defined $new->{schemaname}) {
+   die qq{Must provide a schemaname\n};
+}
+
+my ($dbname,$schema,$table,$pkey) =
+   ($new->{db}, $new->{schemaname}, $new->{tablename}, $new->{pkey});
+
+## Do not allow pkeytype or qpkey to be set manually.
+if (defined $new->{pkeytype} and (!$old or $new->{pkeytype} ne $old->{pkeytype})) {
+	die qq{Cannot set pkeytype manually\n};
+}
+if (defined $new->{qpkey} and (!$old or $new->{qpkey} ne $old->{qpkey})) {
+	die qq{Cannot set qpkey manually\n};
+}
+
+## If this is an update, we only continue if certain fields have changed
+if ($old
+	and $old->{db} eq $new->{db}
+	and $old->{schemaname} eq $new->{schemaname}
+	and $old->{tablename} eq $new->{tablename}
+	and (defined $new->{pkey} and $new->{pkey} eq $old->{pkey})
+	) {
+	return;
+}
+
+(my $safedbname = $dbname) =~ s/'/''/go;
+$SQL = "SELECT db_getconn('$safedbname') AS apple";
 $rv = spi_exec_query($SQL);
 if (!$rv->{processed}) {
 	elog(ERROR, qq{Error: Could not find a database with an name of $dbname\n});
@@ -742,22 +770,119 @@ if (!$rv->{processed}) {
 $row = $rv->{rows}[0]{apple};
 ($db{dsn},$db{user},$db{pass}) = split /\n/ => $row;
 
-elog(DEBUG, "Connecting in validate_goat as $db{dsn} user=$db{user} $$ for table $new->{tablename}");
+elog(DEBUG, "Connecting in validate_goat as $db{dsn} user=$db{user} pid=$$ for table $schema.$table");
 
 $dbh = DBI->connect($db{dsn}, $db{user}, $db{pass},
 	{AutoCommit=>0, RaiseError=>1, PrintError=>0});
 
-$dbh or elog(ERROR, qq{Database connection "$db{dsn}" failed: $DBI::errstr\n});
+$dbh or elog(ERROR, qq{Database connection "$db{dsn}" as user $db{user} failed: $DBI::errstr\n});
 
-## Connected. Make sure this table exists, and that it has the column in question
+## Get column information for this table (and verify it exists)
+$SQL = q{
+SELECT c.oid, attnum, attname, quote_ident(attname) AS qattname, typname
+FROM   pg_attribute a, pg_type t, pg_class c, pg_namespace n
+WHERE  c.relnamespace = n.oid
+AND    nspname = ? AND relname = ?
+AND    a.attrelid = c.oid
+AND    a.atttypid = t.oid
+AND    attnum > 0
+};
+$sth = $dbh->prepare($SQL);
+$count = $sth->execute($schema,$table);
+if ($count < 1) {
+   $sth->finish();
+   $dbh->disconnect();
+   die qq{Table not found at $db{dsn}: $schema.$table\n};
+}
+my $col = $sth->fetchall_hashref('attnum');
+$oid = $col->{each %$col}{oid};
 
-$dbh->commit();
+## Find all usable unique constraints for this table
+$SQL = q{
+SELECT   indisprimary, indkey
+FROM     pg_index i
+WHERE    indisunique AND indpred IS NULL AND indexprs IS NULL AND indrelid = ?
+ORDER BY indexrelid DESC
+};
+## DESC because we choose the "newest" index in case of a tie below
+$sth = $dbh->prepare($SQL);
+$count = 0+$sth->execute($oid);
+my $cons = $sth->fetchall_arrayref({});
+$dbh->rollback();
 $dbh->disconnect();
 
-elog(DEBUG, "Ending validate_goat");
-return 'MODIFY';
+elog(DEBUG, "Valid unique constraints found: $count\n");
+if ($count < 1) {
+    ## We have no usable constraints. The entries must be blank.
+	my $orignew = $new->{pkey};
+	$new->{pkey} = $new->{qpkey} = $new->{pkeytype} = '';
 
-$bc$;
+	if (!$old) { ## This was an insert: just go
+		elog(DEBUG, "No usable constraints, setting pkey et. al. to blank");
+		return 'MODIFY';
+	}
+
+	## If pkey has been set to NULL, this was a specific reset request, so return
+	## If pkey ended up blank (no change, or changed to blank), just return
+	if (!defined $orignew or $orignew eq '') {
+		return 'MODIFY';
+	}
+
+	## The user has tried to change it something not blank, but this is not possible.
+	die qq{Cannot set pkey for table $schema.$table: no unique constraint found\n};
+}
+
+## Pick the best possible one. Primary keys are always the best choice.
+my ($primary)  = grep { $_->{indisprimary} } @$cons;
+my $uniq;
+if (defined $primary) {
+	$uniq = $primary;
+}
+else {
+	my (@foo) = grep { ! $_->{indisprimary} } @$cons;
+	$count = @foo;
+	## Pick the one with the smallest number of columns.
+	## In case of a tie, choose the one with the smallest column footprint
+	if ($count < 2) {
+		$uniq = $foo[0];
+	}
+	else {
+		my $lowest = 10_000;
+		for (@foo) {
+			my $cc = $_->{indkey} =~ y/ / /;
+			if ($cc < $lowest) {
+				$lowest = $cc;
+				$uniq = $_;
+			}
+		}
+	}
+}
+
+## This should not happen:
+if (!defined $uniq) {
+   die "Could not find a suitable unique index for table $schema.$table\n";
+}
+
+## If the user is not trying a manual override, set the best one and leave
+if (!defined $new->{pkey} or ($old and $new->{pkey} eq $old->{pkey})) {
+	($new->{pkey} = $uniq->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{attname} . ($2 ? '|' : '')/ge;
+	($new->{qpkey} = $uniq->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{qattname} . ($2 ? '|' : '')/ge;
+	($new->{pkeytype} = $uniq->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{typname} . ($2 ? '|' : '')/ge;
+	return 'MODIFY';
+}
+
+## They've attempted a manual override of pkey. Make sure it is valid.
+for (@$cons) {
+	(my $name = $_->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{attname} . ($2 ? '|' : '')/ge;
+	next unless $name eq $new->{pkey};
+	($new->{qpkey} = $uniq->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{qattname} . ($2 ? '|' : '')/ge;
+	($new->{pkeytype} = $uniq->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{typname} . ($2 ? '|' : '')/ge;
+	return 'MODIFY';
+}
+
+die qq{Could not finding a matching unique constraint that provides those columns\n};
+
+$bc$; -- End of validate_goat()
 
 CREATE TRIGGER validate_goat BEFORE INSERT OR UPDATE ON goat
 FOR EACH ROW EXECUTE PROCEDURE validate_goat();
@@ -808,7 +933,7 @@ $bc$
                pg_catalog.quote_ident(db)         AS safedb,
                pg_catalog.quote_ident(schemaname) AS safeschema,
                pg_catalog.quote_ident(tablename)  AS safetable,
-               pg_catalog.quote_ident(pkey)       AS safespkey
+               pg_catalog.quote_ident(pkey)       AS safepkey
         FROM   goat g, herdmap h
         WHERE  g.id = h.goat
         AND    h.herd = '$source'
@@ -1087,12 +1212,17 @@ $bc$
 		}
 
 		## (if bc_schema exists) Do these supporting functions exist?
-		## XXX pkeys with spaces in them
+		(my $noquotepkey = $safepkey) =~ s/^"(.+)"$/$1/;
 		my $func0 = "bucardo_triggerkick_$syncname";
-		my $func1 = "bucardo_add_delta_i_$pkey";
-		my $func2 = "bucardo_add_delta_u_$pkey";
-		my $func3 = "bucardo_add_delta_d_$pkey";
+		my $func1 = "bucardo_add_delta_i_$noquotepkey";
+		my $func2 = "bucardo_add_delta_u_$noquotepkey";
+		my $func3 = "bucardo_add_delta_d_$noquotepkey";
 		my $func4 = "bucardo_purge_delta";
+		if ($safepkey =~ /^"/) {
+		   $func1 = qq{"$func1"};
+		   $func2 = qq{"$func2"};
+		   $func3 = qq{"$func3"};
+		}
 
 		if (!$found{bc_schema}) {
 			$found{func0} = $found{func1} = $found{func2} = $found{func3} = 0;
@@ -1327,7 +1457,7 @@ $bc$
                     \$clone\$
                     BEGIN
                         INSERT INTO bucardo.bucardo_delta(tablename,rowid)
-                            VALUES (TG_RELID, NEW.${pkey});
+                            VALUES (TG_RELID, NEW.${safepkey});
                         RETURN NULL;
                     END;
                     \$clone\$;
@@ -1344,10 +1474,10 @@ $bc$
                     \$clone\$ 
                     BEGIN
                         INSERT INTO bucardo.bucardo_delta(tablename,rowid)
-                            VALUES (TG_RELID, OLD.$pkey);
-                        IF (OLD.$pkey <> NEW.$pkey) THEN
+                            VALUES (TG_RELID, OLD.$safepkey);
+                        IF (OLD.$safepkey <> NEW.$safepkey) THEN
                             INSERT INTO bucardo.bucardo_delta(tablename,rowid)
-                                VALUES (TG_RELID, NEW.$pkey);
+                                VALUES (TG_RELID, NEW.$safepkey);
                         END IF;
                         RETURN NULL;
                     END;
@@ -1365,7 +1495,7 @@ $bc$
                     \$clone\$ 
                     BEGIN
                         INSERT INTO bucardo.bucardo_delta(tablename,rowid)
-                            VALUES (TG_RELID, OLD.$pkey);
+                            VALUES (TG_RELID, OLD.$safepkey);
                         RETURN NULL;
                     END;
                     \$clone\$;
