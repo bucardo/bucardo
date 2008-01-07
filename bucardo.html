@@ -707,6 +707,29 @@ Bucardo does require some routine maintenance to keep things going, especially i
  <li>bucardo_purge_q_table(interval) - moves processed rows from the q table to master_q that are older then the interval.</li>
 </ul>
 
+<p>A sample cronjob entry might looks as follows:</p>
+<pre>
+
+## Trim the bucardo_delta tables of used entries every 20 minutes
+*/20 * * * * psql yourdb -c "SELECT bucardo_purge_delta('10 minutes'::interval)"
+
+## Vacuum the delta and track tables three times an hour
+02,22,42 * * * * psql yourdb -c 'VACUUM ANALYZE bucardo_delta; VACUUM ANALYZE bucardo_track'
+
+## Keep the highly-active pg_listener tables slim on both sides
+*/10 * * * * psql bucardo -c 'VACUUM ANALYZE pg_listener'
+*/10 * * * * psql yourdb  -c 'VACUUM ANALYZE pg_listener'
+
+## Keep the q table small, push older stuff into partitioned tables via master_q
+*/30 * * * * psql bucardo -c "SELECT bucardo_purge_q_table('30 minutes'::interval); VACUUM ANALYZE q"
+
+## Create the next day's partitioned q table
+30 10 * * * psql bucardo -c "SELECT create_child_q((SELECT 'child_q_'||to_char(now()+'1 day'::interval,'YYYYMMDD')))"
+
+</pre>
+
+
+
 <br clear="all" />
 <hr />
 <h2><a name="Customcodehooks">Custom code hooks</a></h2>
