@@ -182,6 +182,11 @@ CREATE LANGUAGE plperlu;</span></p>
 It is recommended that you put the bucardo database on the same server as your busiest replicated database, to reduce some network traffic.
 </p>
 
+<p>Each database that Bucardo connects to that is going to be the source of a swap or pushdelta sync must have plpgsql installed, by running:</p>
+<p class="code"><span class="code">CREATE USER bucardo SUPERUSER;
+CREATE LANGUAGE plpgsql;
+</p>
+
 <h3>Import the schema</h3>
 <p>
 Import the schema into the newly created database:
@@ -707,7 +712,7 @@ Bucardo does require some routine maintenance to keep things going, especially i
  <li>bucardo_purge_q_table(interval) - moves processed rows from the q table to master_q that are older then the interval.</li>
 </ul>
 
-<p>A sample cronjob entry might looks as follows:</p>
+<p>A sample cronjob entry might look as follows:</p>
 <pre>
 
 ## Trim the bucardo_delta tables of used entries every 20 minutes
