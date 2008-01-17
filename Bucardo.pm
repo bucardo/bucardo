@@ -3728,7 +3728,7 @@ sub start_kid {
 		if (defined $txnmode) {
 			$targetdbh->do("SET TRANSACTION ISOLATION LEVEL $txnmode");
 		}
-		if ($synctype eq 'swap') {
+		if ($synctype eq 'swap' or $synctype eq 'pushdelta') {
 			if (defined $txnmode) {
 				$sourcedbh->do("SET TRANSACTION ISOLATION LEVEL $txnmode");
 			}
@@ -3750,7 +3750,7 @@ sub start_kid {
 		  }
 		  $self->glog(qq{Found lock control file "$force_lock_file". Mode: $lock_table_mode});
 		}
-	
+
 		if ($lock_table_mode) {
 			$self->glog("Locking all table in $lock_table_mode MODE");
 			for my $g (@$goatlist) {
