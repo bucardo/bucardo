@@ -5,8 +5,8 @@ use strict;
 use warnings;
 use Test::More;
 
-if (! $ENV{TEST_AUTHOR}) {
-	plan (skip_all =>  "Must set \$ENV{TEST_AUTHOR} to run Perl::Critic tests");
+if (! $ENV{TEST_CRITIC}) {
+	plan (skip_all =>  "Must set \$ENV{TEST_CRITIC} to run Perl::Critic tests");
 }
 
 eval {
