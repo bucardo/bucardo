@@ -1906,11 +1906,18 @@ sub start_mcp {
 			$g->{safecols} = \@cols2;
 			$g->{columnlist} = join ',' => @cols;
 			$g->{safecolumnlist} = join ',' => @cols2;
-			my $x=0;
+
+			my $x = 1;
 			for (@$colinfo) {
-				next if $_->[0] eq $g->{pkey};
-				$x++;
-				push @{$g->{binarycols}}, $x if 17 == $_->[2];
+				if (17 == $_->[2]) {
+					if ($_->[0] eq $g->{pkey}) {
+						$g->{binarypkey} = 1;
+					}
+					else {
+						push @{$g->{binarycols}}, $x;
+					}
+				}
+				$x++ if $_->[0] ne $g->{pkey};
 			}
 
 			## Verify tables and columns on remote databases
@@ -3312,10 +3319,6 @@ sub start_kid {
 	if ($synctype eq 'pushdelta' or $synctype eq 'swap') {
 
 		if ($sync->{does_makedelta}) {
-			$SQL = qq{INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (?,?)};
-			$sth{source}{insertdelta} = $sourcedbh->prepare($SQL) if $synctype eq 'swap';
-			$sth{target}{insertdelta} = $targetdbh->prepare($SQL);
-
 			$SQL = qq{INSERT INTO bucardo.bucardo_track(txntime,tablename,targetdb) VALUES (now(),?,?)};
 			$sth{source}{inserttrack} = $sourcedbh->prepare($SQL) if $synctype eq 'swap';
 			$sth{target}{inserttrack} = $targetdbh->prepare($SQL);
@@ -3323,6 +3326,17 @@ sub start_kid {
 
 		for my $g (@$goatlist) {
 			($S,$T,$namepk,$qnamepk) = ($g->{safeschema},$g->{safetable},$g->{pkey},$g->{safepkey});
+
+			if ($g->{does_makedelta}) {
+				$SQL = qq{INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (?,?)};
+				$sth{source}{$g}{insertdelta} = $sourcedbh->prepare($SQL) if $synctype eq 'swap';
+				$sth{target}{$g}{insertdelta} = $targetdbh->prepare($SQL);
+
+				if ($g->{binarypkey}) {
+					$sth{source}{$g}{insertdelta}->bind_param(2,undef,{pg_type => PG_BYTEA});
+					$sth{target}{$g}{insertdelta}->bind_param(2,undef,{pg_type => PG_BYTEA});
+				}
+			}
 
 			if (length $g->{safecolumnlist}) {
 				$SQL = "INSERT INTO $S.$T ($qnamepk, $g->{safecolumnlist}) VALUES (?,";
@@ -3359,6 +3373,19 @@ sub start_kid {
 						$sth{source}{$g}{updaterow}->bind_param($_+1, undef, {pg_type => PG_BYTEA});
 					}
 				}
+			}
+			if (exists $g->{binarypkey}) {
+				my $lastrow = 1;
+				$sth{target}{$g}{insertrow}->bind_param(1, undef, {pg_type => PG_BYTEA});
+				my $x = 1;
+				if (length $g->{safecolumnlist}) {
+					$x = 1 + @{$g->{cols}};
+				}
+				$sth{target}{$g}{updaterow}->bind_param($x, undef, {pg_type => PG_BYTEA});
+					if ($synctype eq 'swap') {
+						$sth{source}{$g}{insertrow}->bind_param(1, undef, {pg_type => PG_BYTEA});
+						$sth{source}{$g}{insertrow}->bind_param($x, undef, {pg_type => PG_BYTEA});
+					}
 			}
 
 			## This casting is very important for index usage!
@@ -3965,7 +3992,7 @@ sub start_kid {
 
 				if ($g->{does_makedelta}) {
 					for (@$info) {
-						$sth{target}{insertdelta}->execute($toid,$_->[0]);
+						$sth{target}{$g}{insertdelta}->execute($toid,$_->[0]);
 						$self->glog("Inserted makedelta on $T record $g->{oid}, $_->[0] on $targetdb");
 					}
 					$sth{target}{inserttrack}->execute($toid,$targetdb);
@@ -4293,11 +4320,11 @@ sub start_kid {
 				## Add in the makedelta rows as needed
 				if ($g->{does_makedelta}) {
 					for (@srcdelete2) {
-						$sth{source}{insertdelta}->execute($g->{oid},$_);
+						$sth{source}{$g}{insertdelta}->execute($g->{oid},$_);
 						$self->glog("Adding in source bucardo_delta row (delete) for $g->{oid} and $_");
 					}
 					for (@tgtdelete2) {
-						$sth{target}{insertdelta}->execute($toid,$_);
+						$sth{target}{$g}{insertdelta}->execute($toid,$_);
 						$self->glog("Adding in target bucardo_delta row (delete) for $toid and $_");
 					}
 				}
@@ -4447,11 +4474,11 @@ sub start_kid {
 							## XXX Move this elsewhere?
 							if ($g->{does_makedelta}) {
 								if ($action & 2 or $action & 4) {
-									$sth{source}{insertdelta}->execute($g->{oid},$pkval);
+									$sth{source}{$g}{insertdelta}->execute($g->{oid},$pkval);
 									$self->glog("Adding in source bucardo_delta row (upsert) for $g->{oid} and $pkval");
 								}
 								if ($action & 1 or $action & 8) {
-									$sth{target}{insertdelta}->execute($toid,$pkval);
+									$sth{target}{$g}{insertdelta}->execute($toid,$pkval);
 									$self->glog("Adding in target bucardo_delta row (upsert) for $toid and $pkval");
 								}
 							}

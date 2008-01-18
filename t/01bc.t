@@ -15,10 +15,10 @@ BEGIN { system("perl t/bucardo.test.helper"); }
 
 ## Running all the tests can take quite a while
 ## This allows us to only run a subset while debugging
-our $TEST_METHODS       = 1;
-our $TEST_CONFIG        = 1;
-our $TEST_PURGE         = 1;
-our $TEST_PUSHDELTA     = 1;
+our $TEST_METHODS       = 0;
+our $TEST_CONFIG        = 0;
+our $TEST_PURGE         = 0;
+our $TEST_PUSHDELTA     = 0;
 our $TEST_MAKEDELTA     = 1;
 our $TEST_COPY          = 1;
 our $TEST_SWAP          = 1;
@@ -272,6 +272,7 @@ my %tabletype =
 	 'bucardo_test3' => 'DATE',
 	 'bucardo_test4' => 'TIMESTAMP',
 	 'bucardo_test5' => 'NUMERIC',
+	 'bucardo_test6' => 'BYTEA',
  );
 
 my %table; ## This will hold the oids
@@ -404,6 +405,7 @@ for (1..30) {
 	$val{DATE}{$_} = sprintf "2001-10-%02d", $_;
 	$val{TIMESTAMP}{$_} = $val{DATE}{$_} . " 12:34:56";
 	$val{NUMERIC}{$_} = $_;
+	$val{BYTEA}{$_} = "$_\0Z";
 }
 
 if ($ENV{BUCARDO_TEST_NOCREATEDB}) {
@@ -536,7 +538,7 @@ if ($TEST_PUSHDELTA) { ## START_TEST_PUSHDELTA
 	pass(" Bucardo was started");
 
 	for my $table (sort keys %tabletype) {
-		basic_pushdelta_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 6
+		basic_pushdelta_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 7
 	}
 
 	pass(" Finished with pushdelta tests");
@@ -567,7 +569,7 @@ if ($TEST_MAKEDELTA) { ## START_TEST_MAKEDELTA
 
 	for my $table (sort keys %tabletype) {
 		next if $table =~ /0/;
-		makedelta_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 5
+		makedelta_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 6
 	}
 
 	pass(" Finished with makedelta tests");
@@ -600,7 +602,7 @@ if ($TEST_COPY) { ## START_TEST_COPY
 	pass(" Bucardo was started");
 
 	for my $table (sort keys %tabletype) {
-		basic_copy_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 6
+		basic_copy_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 7
 	}
 
 	analyze_after_copy('bucardo_test1',$dbh1,$dbh2);
@@ -632,16 +634,16 @@ if ($TEST_SWAP) { ## START_TEST_SWAP
 	## Check that each table type populates bucardo_delta
 	for my $table (sort keys %tabletype) {
 		next if $table =~ /0/;
-		bucardo_delta_populate($table,$dbh1); ## TESTCOUNT * 5
-		bucardo_delta_populate($table,$dbh2); ## TESTCOUNT * 5
+		bucardo_delta_populate($table,$dbh1); ## TESTCOUNT * 6
+		bucardo_delta_populate($table,$dbh2); ## TESTCOUNT * 6
 	}
 	$dbh1->rollback();
 	$dbh2->rollback();
 
 	## Test the swap sync method
 	for my $table (sort keys %tabletype) {
-		basic_swap_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 6
-		basic_swap_testing($table,$dbh2,$dbh1); ## TESTCOUNT * 6
+		basic_swap_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 7
+		basic_swap_testing($table,$dbh2,$dbh1); ## TESTCOUNT * 7
 	}
 
 	pass(" Finished with swap tests");
@@ -671,7 +673,7 @@ if ($TEST_CUSTOM_CODE) { ## START_TEST_CUSTOM_CODE
 
 	for my $table (sort keys %tabletype) {
 		next if $table =~ /0/;
-		test_customcode($table,$dbh1,$dbh2); ## TESTCOUNT * 5
+		test_customcode($table,$dbh1,$dbh2); ## TESTCOUNT * 6
 	}
 
 	pass(" Finished with custom_code tests");
@@ -699,7 +701,7 @@ if ($TEST_RANDOM_SWAP) { ## START_TEST_RANDOM_SWAP
 	pass(" Bucardo was started");
 
 	for my $table (sort keys %tabletype) {
-		random_swap_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 5
+		random_swap_testing($table,$dbh1,$dbh2); ## TESTCOUNT * 7
 	}
 
 	pass(" Finished with random swap tests");
@@ -2156,9 +2158,13 @@ sub basic_pushdelta_testing {
 	my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
 
 	$SQL = $table =~ /0/
-		? "INSERT INTO $table($pkey) VALUES ('$val')"
-		: "INSERT INTO $table($pkey,data1,inty) VALUES ('$val','one',1)";
-	$sdbh->do($SQL);
+		? "INSERT INTO $table($pkey) VALUES (?)"
+		: "INSERT INTO $table($pkey,data1,inty) VALUES (?,'one',1)";
+	$sth = $sdbh->prepare($SQL);
+	if ($table =~ /6/) {
+		$sth->bind_param(1, undef, {pg_type => PG_BYTEA});
+	}
+	$sth->execute($val);
 	$sdbh->commit;
 
 	$t=qq{ Second table $table still empty before commit };
@@ -2197,9 +2203,13 @@ sub basic_pushdelta_testing {
 	## Add a row to two, should not get removed or replicated
 	my $rval = $val{$type}{9};
 	$SQL = $table =~ /0/
-		? "INSERT INTO $table($pkey) VALUES ('$rval')"
-		: "INSERT INTO $table($pkey,data1,inty) VALUES ('$rval','nine',9)";
-	$rdbh->do($SQL);
+		? "INSERT INTO $table($pkey) VALUES (?)"
+		: "INSERT INTO $table($pkey,data1,inty) VALUES (?,'nine',9)";
+	$sth = $rdbh->prepare($SQL);
+	if ($table =~ /6/) {
+		$sth->bind_param(1, undef, {pg_type => PG_BYTEA});
+	}
+	$sth->execute($rval);
 	$rdbh->commit;
 
 	## Another source change, but with a different trigger drop method
@@ -2210,9 +2220,13 @@ sub basic_pushdelta_testing {
 
 	$val = $val{$type}{2};
 	$SQL = $table =~ /0/
-		? "INSERT INTO $table($pkey) VALUES ('$val')"
-		: "INSERT INTO $table($pkey,data1,inty) VALUES ('$val','two',2)";
-	$sdbh->do($SQL);
+		? "INSERT INTO $table($pkey) VALUES (?)"
+		: "INSERT INTO $table($pkey,data1,inty) VALUES (?,'two',2)";
+	$sth = $sdbh->prepare($SQL);
+	if ($table =~ /6/) {
+		$sth->bind_param(1, undef, {pg_type => PG_BYTEA});
+	}
+	$sth->execute($val);
 	$sdbh->commit;
 
 	$t=q{ After insert, trigger and rule both populate droptest table4 };
@@ -2280,46 +2294,46 @@ sub basic_pushdelta_testing {
 
 		$SQL = "INSERT INTO $table($pkey,data1,inty,bite1) VALUES (?,?,?,?)";
 		$sth = $sdbh->prepare($SQL);
-		$val = $val{$type}{7};
+		$val = $val{$type}{17};
 		my $bite = 'FooBar';
-		$sth->execute($val,'bob',7,$bite);
+		$sth->execute($val,'bob',17,$bite);
 		$sdbh->commit;
 
 		wait_for_notice($masterdbh, 'bucardo_syncdone_pushdeltatest');
 
 		$t=qq{ Second table $table got the pushdelta rows with bytea column};
-		$SQL = "SELECT bite1 FROM $table WHERE inty = 7";
+		$SQL = "SELECT bite1 FROM $table WHERE inty = 17";
 		$result = [[$bite]];
 		bc_deeply($result, $rdbh, $SQL, $t);
 
 		## That was too easy, let's do some real bytea data
 
 		$t=qq{ Second table $table got the pushdelta rows with null-containing bytea column};
-		$val = $val{$type}{8};
+		$val = $val{$type}{18};
 		$bite = "Foo\0Bar";
 		$sth->bind_param(4, undef, {pg_type => PG_BYTEA});
-		$sth->execute($val,'bob',8,$bite);
+		$sth->execute($val,'bob',18,$bite);
 		$sdbh->commit;
 
 		wait_for_notice($masterdbh, 'bucardo_syncdone_pushdeltatest');
 
-		$SQL = "SELECT bite1 FROM $table WHERE inty = 8";
+		$SQL = "SELECT bite1 FROM $table WHERE inty = 18";
 		$result = [[$bite]];
 		bc_deeply($result, $rdbh, $SQL, $t);
 
 		## Now two bytea columns at once
 		$SQL = "INSERT INTO $table($pkey,bite2,data1,inty,bite1) VALUES (?,?,?,?,?)";
 		$sth = $sdbh->prepare($SQL);
-		$val = $val{$type}{9};
+		$val = $val{$type}{19};
 		my ($bite1,$bite2) = ("over\0cycle", "foo\tbar\0\tbaz\0");
 		$sth->bind_param(2, undef, {pg_type => PG_BYTEA});
 		$sth->bind_param(5, undef, {pg_type => PG_BYTEA});
-		$sth->execute($val,$bite2,'bob',9,$bite1);
+		$sth->execute($val,$bite2,'bob',19,$bite1);
 		$sdbh->commit;
 
 		wait_for_notice($masterdbh, 'bucardo_syncdone_pushdeltatest');
 
-		$SQL = "SELECT bite1,bite2 FROM $table WHERE inty = 9";
+		$SQL = "SELECT bite1,bite2 FROM $table WHERE inty = 19";
 		$result = [[$bite1,$bite2]];
 		bc_deeply($result, $rdbh, $SQL, $t);
 
@@ -2369,8 +2383,12 @@ sub makedelta_testing {
 	my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
 
 	$t=qq{ Insert to source $table populated source bucardo_delta correctly };
-	$SQL = "INSERT INTO $table($pkey,data1,inty) VALUES ('$val','one',1)";
-	$sdbh->do($SQL);
+	$SQL = "INSERT INTO $table($pkey,data1,inty) VALUES (?,'one',1)";
+	$sth = $sdbh->prepare($SQL);
+	if ($table =~ /6/) {
+		$sth->bind_param(1, undef, {pg_type => PG_BYTEA});
+	}
+	$sth->execute($val);
 	$sdbh->do(q{SELECT 'XXX I AM supposed to be the source'});
 	$now = now_time($sdbh);
 	$info = $sdbh->selectall_arrayref($sourcerows);
