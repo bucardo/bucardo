@@ -4178,11 +4178,11 @@ sub start_kid {
 								$sth{sc_latest_src} ||= $sourcedbh->prepare($SQL{sc_latest});
 								$sth{sc_latest_src}->execute($g->{oid},$pkval);
 								my $srctime = $sth{sc_latest_src}->fetchall_arrayref()->[0][0];
-								$sth{sc_latest_tgt} ||= $sourcedbh->prepare($SQL{sc_latest});
+								$sth{sc_latest_tgt} ||= $targetdbh->prepare($SQL{sc_latest});
 								$sth{sc_latest_tgt}->execute($toid,$pkval);
 								my $tgttime = $sth{sc_latest_tgt}->fetchall_arrayref()->[0][0];
 								$self->glog(qq{Delta source time: $srctime Target time: $tgttime});
-								$info->{$pkval}{BUCARDO_ACTION} = $srctime >= $tgttime ? 1 : 2;
+								$info1->{$pkval}{BUCARDO_ACTION} = $srctime >= $tgttime ? 1 : 2;
 							}
 							else {
 								die qq{Unknown standard conflict for sync $syncname on $T.$S: $sc\n};
