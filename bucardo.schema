@@ -779,7 +779,7 @@ $dbh or elog(ERROR, qq{Database connection "$db{dsn}" as user $db{user} failed: 
 
 ## Get column information for this table (and verify it exists)
 $SQL = q{
-SELECT c.oid, attnum, attname, quote_ident(attname) AS qattname, typname
+SELECT c.oid, attnum, attname, quote_ident(attname) AS qattname, typname, atttypid
 FROM   pg_attribute a, pg_type t, pg_class c, pg_namespace n
 WHERE  c.relnamespace = n.oid
 AND    nspname = ? AND relname = ?
@@ -1184,12 +1184,11 @@ $bc$
 
 		## (if bc_schema exists) Do these triggers exist on this table?
 		my $trigger0 = "bucardo_triggerkick_$syncname";
-		my $trigger1 = "bucardo_add_delta_i";
-		my $trigger2 = "bucardo_add_delta_u";
-		my $trigger3 = "bucardo_add_delta_d";
+		my $trigger1 = "bucardo_add_delta";
+		my $trigger2 = "bucardo_add_delta_binary";
 
 		if (!$found{bc_schema}) {
-			$found{trigger0} = $found{trigger1} = $found{trigger2} = $found{trigger3} = 0;
+			$found{trigger0} = $found{trigger1} = $found{trigger2} = 0;
 		}
 		else {
 			$SQL = qq{
@@ -1207,21 +1206,17 @@ $bc$
 			$found{trigger1} = $sth->fetchall_arrayref()->[0][0];
 	 		$sth->execute($schema,$table,$trigger2);
 			$found{trigger2} = $sth->fetchall_arrayref()->[0][0];
- 			$sth->execute($schema,$table,$trigger3);
-			$found{trigger3} = $sth->fetchall_arrayref()->[0][0];
 		}
 
 		## (if bc_schema exists) Do these supporting functions exist?
 		(my $noquotepkey = $safepkey) =~ s/^"(.+)"$/$1/;
 		my $func0 = "bucardo_triggerkick_$syncname";
-		my $func1 = "bucardo_add_delta_i_$noquotepkey";
-		my $func2 = "bucardo_add_delta_u_$noquotepkey";
-		my $func3 = "bucardo_add_delta_d_$noquotepkey";
-		my $func4 = "bucardo_purge_delta";
+		my $func1 = "bucardo_add_delta_$noquotepkey";
+		my $func2 = "bucardo_add_delta_binary_$noquotepkey";
+		my $func3 = "bucardo_purge_delta";
 		if ($safepkey =~ /^"/) {
 		   $func1 = qq{"$func1"};
 		   $func2 = qq{"$func2"};
-		   $func3 = qq{"$func3"};
 		}
 
 		if (!$found{bc_schema}) {
@@ -1244,8 +1239,6 @@ $bc$
 			$found{func2} = $sth->fetchall_arrayref()->[0][0];
 			$sth->execute('bucardo',$func3);
 			$found{func3} = $sth->fetchall_arrayref()->[0][0];
-			$sth->execute('bucardo',$func4);
-			$found{func4} = $sth->fetchall_arrayref()->[0][0];
 		}
 
 		## (if bc_schema exists) Does this table exist?
@@ -1360,10 +1353,9 @@ $bc$
 			$found{index1} and elog(DEBUG, "Warning! NOT removing index bucardo.$safeindex1");
 			$found{trigger1} and elog(DEBUG, "Warning! NOT removing trigger $trigger1 from $safeschema.$safetable");
 			$found{trigger2} and elog(DEBUG, "Warning! NOT removing trigger $trigger2 from $safeschema.$safetable");
-			$found{trigger3} and elog(DEBUG, "Warning! NOT removing trigger $trigger3 from $safeschema.$safetable");
 
 			## Clean up the functions if nobody else is using them
-			if ($found{func1} or $found{func2} or $found{func3}) {
+			if ($found{func1} or $found{func2}) {
 				$SQL = qq{
                     SELECT count(*)
                     FROM   pg_catalog.pg_trigger
@@ -1387,13 +1379,6 @@ $bc$
 					$sth->execute($func2,'bucardo');
 					if (! $sth->fetchall_arrayref()->[0][0]) {
 						elog(DEBUG, "Warning! NOT removing function bucardo.$func2()");
-					}
-				}
-				if ($found{func3}) {
-					$sth = $dbh->prepare($SQL);
-					$sth->execute($func3,'bucardo');
-					if (! $sth->fetchall_arrayref()->[0][0]) {
-						elog(DEBUG, "Warning! NOT removing function bucardo.$func3()");
 					}
 				}
 			}
@@ -1433,7 +1418,7 @@ $bc$
 				$dbh->do("CREATE INDEX $safeindex1 ON bucardo.bucardo_delta(txntime) WHERE tablename = $oid");
 			}
 			if (! $found{index2}) {
-				my $safepkeytype = $pkeytype =~ /timestamp|date/ ? 'text' : $pkeytype;
+				my $safepkeytype = $pkeytype =~ /timestamp|date|bytea/ ? 'text' : $pkeytype;
 				$dbh->do("CREATE INDEX $index2 ON bucardo.bucardo_delta((rowid::$safepkeytype)) WHERE tablename = $oid");
 			}
 			if (! $found{index3}) {
@@ -1445,8 +1430,8 @@ $bc$
 			if (! $found{index5}) {
 				$dbh->do("CREATE INDEX $index5 ON bucardo.bucardo_delta(txntime)");
 			}
-			if (! $found{func1}) {
-				## Make sure you use tabs in all these functions for leading whitespace
+			## Make sure you use tabs in all these functions for leading whitespace
+			if (! $found{func1} and $pkeytype ne 'bytea') {
 				$SQL = qq{
                     CREATE OR REPLACE FUNCTION bucardo.$func1()
                     RETURNS TRIGGER
@@ -1456,28 +1441,45 @@ $bc$
                     AS
                     \$clone\$
                     BEGIN
-                        INSERT INTO bucardo.bucardo_delta(tablename,rowid)
-                            VALUES (TG_RELID, NEW.${safepkey});
+						IF (TG_OP = 'INSERT') THEN
+                          INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (TG_RELID, NEW.${safepkey});
+                        ELSIF (TG_OP = 'UPDATE') THEN
+                          INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (TG_RELID, OLD.$safepkey);
+                          IF (OLD.$safepkey <> NEW.$safepkey) THEN
+                            INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (TG_RELID, NEW.$safepkey);
+                          END IF;
+                        ELSE
+                          INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (TG_RELID, OLD.$safepkey);
+                        END IF;
                         RETURN NULL;
                     END;
                     \$clone\$;
                 };
 				run_sql($SQL,$dbh);
 			}
-			if (! $found{func2}) {
+			if (! $found{func2} and $pkeytype eq 'bytea') {
 				$SQL = qq{
                     CREATE OR REPLACE FUNCTION bucardo.$func2()
                     RETURNS TRIGGER
                     LANGUAGE plpgsql
                     SECURITY DEFINER
+                    VOLATILE
                     AS
-                    \$clone\$ 
+                    \$clone\$
                     BEGIN
-                        INSERT INTO bucardo.bucardo_delta(tablename,rowid)
-                            VALUES (TG_RELID, OLD.$safepkey);
-                        IF (OLD.$safepkey <> NEW.$safepkey) THEN
-                            INSERT INTO bucardo.bucardo_delta(tablename,rowid)
-                                VALUES (TG_RELID, NEW.$safepkey);
+						IF (TG_OP = 'INSERT') THEN
+                          INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (TG_RELID,
+						  		 ENCODE(NEW.${safepkey},'base64'));
+                        ELSIF (TG_OP = 'UPDATE') THEN
+                          INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (TG_RELID,
+						  		 ENCODE(OLD.$safepkey,'base64'));
+                          IF (ENCODE(OLD.$safepkey,'base64') <> ENCODE(NEW.$safepkey,'base64')) THEN
+                            INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (TG_RELID,
+								   ENCODE(NEW.$safepkey,'base64'));
+                          END IF;
+                        ELSE
+                          INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (TG_RELID,
+						  		 ENCODE(OLD.$safepkey,'base64'));
                         END IF;
                         RETURN NULL;
                     END;
@@ -1486,23 +1488,6 @@ $bc$
 				run_sql($SQL,$dbh);
 			}
 			if (! $found{func3}) {
-				$SQL = qq{
-                    CREATE OR REPLACE FUNCTION bucardo.$func3()
-                    RETURNS TRIGGER
-                    LANGUAGE plpgsql
-                    SECURITY DEFINER
-                    AS
-                    \$clone\$ 
-                    BEGIN
-                        INSERT INTO bucardo.bucardo_delta(tablename,rowid)
-                            VALUES (TG_RELID, OLD.$safepkey);
-                        RETURN NULL;
-                    END;
-                    \$clone\$;
-                };
-				run_sql($SQL,$dbh);
-			}
-			if (! $found{func4}) {
 				$SQL = qq{
                     CREATE OR REPLACE FUNCTION bucardo.bucardo_purge_delta(interval)
                     RETURNS TEXT
@@ -1541,31 +1526,22 @@ $bc$
 				run_sql($SQL,$dbh);
 			}
 
-			if (! $found{trigger1}) {
+			if (! $found{trigger1} and $pkeytype ne 'bytea') {
 				$SQL = qq{
                     CREATE TRIGGER $trigger1
-                    AFTER INSERT ON $safeschema.$safetable
+                    AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
                     FOR EACH ROW EXECUTE PROCEDURE bucardo.$func1()
             	};
 				run_sql($SQL,$dbh);
 			}
-			if (! $found{trigger2}) {
+			if (! $found{trigger2} and $pkeytype eq 'bytea') {
 				$SQL = qq{
                     CREATE TRIGGER $trigger2
-                    AFTER UPDATE ON $safeschema.$safetable
+                    AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
                     FOR EACH ROW EXECUTE PROCEDURE bucardo.$func2()
-                };
+            	};
 				run_sql($SQL,$dbh);
 			}
-			if (! $found{trigger3}) {
-				$SQL = qq{
-                    CREATE TRIGGER $trigger3
-                    AFTER DELETE ON $safeschema.$safetable
-                    FOR EACH ROW EXECUTE PROCEDURE bucardo.$func3()
-                };
-				run_sql($SQL,$dbh);
-			}
-
 
 		} ## end if delta
 

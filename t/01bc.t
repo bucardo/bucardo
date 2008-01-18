@@ -7,6 +7,7 @@ use Data::Dumper;
 use DBI;
 use DBD::Pg ':pg_types';
 use IO::Handle;
+use MIME::Base64;
 use Test::More;
 use Time::HiRes qw/sleep gettimeofday tv_interval/;
 use Test::Dynamic '1.3.1';
@@ -15,10 +16,10 @@ BEGIN { system("perl t/bucardo.test.helper"); }
 
 ## Running all the tests can take quite a while
 ## This allows us to only run a subset while debugging
-our $TEST_METHODS       = 0;
-our $TEST_CONFIG        = 0;
-our $TEST_PURGE         = 0;
-our $TEST_PUSHDELTA     = 0;
+our $TEST_METHODS       = 1;
+our $TEST_CONFIG        = 1;
+our $TEST_PURGE         = 1;
+our $TEST_PUSHDELTA     = 1;
 our $TEST_MAKEDELTA     = 1;
 our $TEST_COPY          = 1;
 our $TEST_SWAP          = 1;
@@ -807,6 +808,7 @@ sub setup_database {
 		eval { $dbh->do($SQL); };
 		$@ and BAIL_OUT qq{Could not create test superuser "$testuser": $@\n};
 		pass(qq{ Created test super user "$testuser"});
+#		$dbh->do("ALTER USER $testuser SET client_min_messages = 'DEBUG2'");
 		
 		$dbh->{AutoCommit} = 1;
 		$SQL = "CREATE DATABASE $testdb OWNER $testuser";
@@ -2392,19 +2394,18 @@ sub makedelta_testing {
 	$sdbh->do(q{SELECT 'XXX I AM supposed to be the source'});
 	$now = now_time($sdbh);
 	$info = $sdbh->selectall_arrayref($sourcerows);
-	$result = [[$oid,$val,$now]];
-	$src_delta = [[$oid,$val,$now]];
+	my $bval = $table =~ /6/ ? encode_base64($val,'') : $val;
+	$result = [[$oid,$bval,$now]];
+	$src_delta = [[$oid,$bval,$now]];
 	is_deeply($info, $result, $t);
 	$sdbh->commit();
 
 	## Wait until the row gets synced to the target database
 	wait_until_true($rdbh => "SELECT 1 FROM $table");
 
-## XXX GREG this fails with table5
-
 	$t=qq{ Insert to source $table with makedelta created a target bucardo_delta row };
 	$info = $rdbh->selectall_arrayref($remoterows);
-	$tgt_delta = [[$roid,$val]];
+	$tgt_delta = [[$roid,$bval]];
 	is_deeply($info, $tgt_delta, $t);
 
 	$t=qq{ Insert to source $table with makedelta created a target bucardo_track row };
@@ -2427,7 +2428,7 @@ sub makedelta_testing {
 	$sdbh->do($SQL);
 	$now = now_time($sdbh);
 	$info = $sdbh->selectall_arrayref($sourcerows);
-	unshift @$src_delta, [$oid,$val,$now];
+	unshift @$src_delta, [$oid,$bval,$now];
 	is_deeply($info, $src_delta, $t);
 	$sdbh->commit();
 
@@ -2435,7 +2436,7 @@ sub makedelta_testing {
 
 	$t=qq{ Update to source $table with makedelta created a new bucardo_delta row };
 	$info = $rdbh->selectall_arrayref($remoterows);
-	unshift @$tgt_delta, [$roid, $val];
+	unshift @$tgt_delta, [$roid, $bval];
 	is_deeply($info, $tgt_delta, $t);
 
 	$t=qq{ Update to source $table with makedelta created a new bucardo_track row };
@@ -2452,19 +2453,28 @@ sub makedelta_testing {
 	## Do an update of the primary key: which should give two rows in bucardo_delta on both ends
 	$t=qq{ Update to pk of source $table populated source bucardo_delta correctly };
 	my $newval = $val{$type}{3};
-	$SQL = "UPDATE $table SET $pkey = '$newval' WHERE $pkey = '$val'";
-	$sdbh->do($SQL);
+	my $newbval = $table =~ /6/ ? encode_base64($newval,'') : $newval;
+	$SQL = "UPDATE $table SET $pkey = ? WHERE $pkey = ?";
+	$sth = $sdbh->prepare($SQL);
+	if ($table =~ /6/) {
+		$sth->bind_param(1, undef, {pg_type => PG_BYTEA});
+		$sth->bind_param(2, undef, {pg_type => PG_BYTEA});
+	}
+	$sth->execute($newval,$val);
 	$now = now_time($sdbh);
 	$info = $sdbh->selectall_arrayref($sourcerows);
-	unshift @$src_delta, [$oid,$newval,$now],[$oid,$val,$now];
+	unshift @$src_delta, [$oid,$newbval,$now],[$oid,$bval,$now];
 	is_deeply($info, $src_delta, $t);
 	$sdbh->commit();
 
-	wait_until_true($rdbh => "SELECT 1 FROM $table WHERE $pkey = '$newval'");
+	my $query = $table !~ /6/ ? 
+		"SELECT 1 FROM $table WHERE $pkey = '$newbval'"
+			: "SELECT 1 FROM $table WHERE ENCODE($pkey,'base64') = '$newbval'";
+	wait_until_true($rdbh => $query);
 
 	$t=qq{ Update to pk of source $table with makedelta created two target bucardo_delta rows ($val) };
 	$info = $rdbh->selectall_arrayref($remoterows);
-	unshift @$tgt_delta, [$roid, $newval], [$roid,$val];
+	unshift @$tgt_delta, [$roid, $newbval], [$roid,$bval];
 	is_deeply($info, $tgt_delta, $t);
 
 	$t=qq{ Update to pk of source $table with makedelta created a target bucardo_track row };
@@ -2480,19 +2490,24 @@ sub makedelta_testing {
 
 	## Delete should also add a ghost row
 	$t=qq{ Delete to source $table populated source bucardo_delta correctly };
-	$SQL = "DELETE FROM $table WHERE $pkey = '$newval'";
+	$SQL = $table =~ /6/ ?
+		"DELETE FROM $table WHERE ENCODE($pkey,'base64') = '$newbval'"
+			: "DELETE FROM $table WHERE $pkey = '$newbval'";
 	$count = $sdbh->do($SQL);
 	$now = now_time($sdbh);
 	$sdbh->commit();
 	$info = $sdbh->selectall_arrayref($sourcerows);
-	unshift @$src_delta, [$oid,$newval,$now];
+	unshift @$src_delta, [$oid,$newbval,$now];
 	is_deeply($info, $src_delta, $t);
 
-	wait_until_false($rdbh => "SELECT 1 FROM $table WHERE $pkey = '$newval'");
+	$query = $table !~ /6/ ? 
+		"SELECT 1 FROM $table WHERE $pkey = '$newbval'"
+			: "SELECT 1 FROM $table WHERE ENCODE($pkey,'base64') = '$newbval'";
+	wait_until_false($rdbh => $query);
 
 	$t=qq{ Delete to source $table with makedelta created a target bucardo_delta row };
 	$info = $rdbh->selectall_arrayref($remoterows);
-	unshift @$tgt_delta, [$roid,$newval];
+	unshift @$tgt_delta, [$roid,$newbval];
 	is_deeply($info, $tgt_delta, $t);
 
 	$t=qq{ Delete to source $table with makedelta created a target bucardo_track row };
@@ -2518,8 +2533,12 @@ sub makedelta_testing {
 
 	## Insert:
 	$val = $val{$type}{4};
-	$SQL = "INSERT INTO $table($pkey,data1,inty) VALUES ('$val','one',4)";
-	$rdbh->do($SQL);
+	$SQL = "INSERT INTO $table($pkey,data1,inty) VALUES (?,'one',4)";
+	$sth = $rdbh->prepare($SQL);
+	if ($table =~ /6/) {
+		$sth->bind_param(1, undef, {pg_type => PG_BYTEA});
+	}
+	$sth->execute($val);
 	$rdbh->commit();
 
 	wait_until_true($sdbh => "SELECT 1 FROM $table WHERE inty = 4");
@@ -2527,7 +2546,8 @@ sub makedelta_testing {
 	## The source delta and track tables should now have entries
 	$t=qq{ Insert to target $table with makedelta created a source bucardo_delta row };
 	$info = $sdbh->selectall_arrayref($sourcerows);
-	unshift @$src_delta, [$oid,$val];
+	$bval = $table =~ /6/ ? encode_base64($val,'') : $val;
+	unshift @$src_delta, [$oid,$bval];
 	is_deeply($info, $src_delta, $t);
 
 	$t=qq{ Insert to target $table with makedelta created a source bucardo_track row };
@@ -2540,7 +2560,7 @@ sub makedelta_testing {
 	$rdbh->do($SQL);
 	$now = now_time($rdbh);
 	$info = $rdbh->selectall_arrayref($remoterows);
-	unshift @$tgt_delta, [$roid,$val], [$roid,$val];
+	unshift @$tgt_delta, [$roid,$bval], [$roid,$bval];
 	is_deeply($info, $tgt_delta, $t);
 	$rdbh->commit();
 
@@ -2548,7 +2568,7 @@ sub makedelta_testing {
 
 	$t=qq{ Update to target $table with makedelta created a source bucardo_delta row };
 	$info = $sdbh->selectall_arrayref($sourcerows);
-	unshift @$src_delta, [$oid, $val];
+	unshift @$src_delta, [$oid, $bval];
 	is_deeply($info, $src_delta, $t);
 
 	$t=qq{ Update to target $table with makedelta created a source bucardo_track row };
@@ -2562,7 +2582,7 @@ sub makedelta_testing {
 	$rdbh->do($SQL);
 	$now = now_time($rdbh);
 	$info = $rdbh->selectall_arrayref($remoterows);
-	unshift @$tgt_delta, [$roid,$val];
+	unshift @$tgt_delta, [$roid,$bval];
 	is_deeply($info, $tgt_delta, $t);
 	$rdbh->commit();
 
@@ -2570,7 +2590,7 @@ sub makedelta_testing {
 
 	$t=qq{ Delete to target $table with makedelta created a source bucardo_delta row };
 	$info = $sdbh->selectall_arrayref($sourcerows);
-	unshift @$src_delta, [$oid,$val];
+	unshift @$src_delta, [$oid,$bval];
 	is_deeply($info, $src_delta, $t);
 
 	$t=qq{ Delete to target $table with makedelta created a source bucardo_track row };

@@ -2631,6 +2631,7 @@ sub start_controller {
 									if (length $aliaslist) {
 										$aliaslist = ", $aliaslist";
 									}
+									## XXX bytea
 									$SQL{trix} = qq{
                                       SELECT    DISTINCT d.rowid AS "BUCARDO_ID", t.$qnamepk $aliaslist
                                       FROM      bucardo.bucardo_delta d
@@ -3331,11 +3332,6 @@ sub start_kid {
 				$SQL = qq{INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (?,?)};
 				$sth{source}{$g}{insertdelta} = $sourcedbh->prepare($SQL) if $synctype eq 'swap';
 				$sth{target}{$g}{insertdelta} = $targetdbh->prepare($SQL);
-
-				if ($g->{binarypkey}) {
-					$sth{source}{$g}{insertdelta}->bind_param(2,undef,{pg_type => PG_BYTEA});
-					$sth{target}{$g}{insertdelta}->bind_param(2,undef,{pg_type => PG_BYTEA});
-				}
 			}
 
 			if (length $g->{safecolumnlist}) {
@@ -3346,7 +3342,10 @@ sub start_kid {
 			else {
 				$SQL = "INSERT INTO $S.$T ($qnamepk) VALUES (?)";
 			}
-			# $self->glog("INSERT SQL: $SQL");
+			if ($g->{binarypkey}) {
+				$SQL =~ s/\?/DECODE(?,'base64')/;
+			}
+			$self->glog("INSERT SQL: $SQL"); ## XXX
 			$sth{target}{$g}{insertrow} = $targetdbh->prepare($SQL);
 			if ($synctype eq 'swap') {
 				$sth{source}{$g}{insertrow} = $sourcedbh->prepare($SQL);
@@ -3359,6 +3358,9 @@ sub start_kid {
 			}
 			else {
 				$SQL = "UPDATE $S.$T SET $qnamepk=$qnamepk WHERE $qnamepk = ?";
+			}
+			if ($g->{binarypkey}) {
+				$SQL =~ s/WHERE $qnamepk/WHERE ENCODE($qnamepk,'base64')/;
 			}
 			# $self->glog("UPDATE SQL: $SQL");
 			$sth{target}{$g}{updaterow} = $targetdbh->prepare($SQL);
@@ -3374,22 +3376,9 @@ sub start_kid {
 					}
 				}
 			}
-			if (exists $g->{binarypkey}) {
-				my $lastrow = 1;
-				$sth{target}{$g}{insertrow}->bind_param(1, undef, {pg_type => PG_BYTEA});
-				my $x = 1;
-				if (length $g->{safecolumnlist}) {
-					$x = 1 + @{$g->{cols}};
-				}
-				$sth{target}{$g}{updaterow}->bind_param($x, undef, {pg_type => PG_BYTEA});
-					if ($synctype eq 'swap') {
-						$sth{source}{$g}{insertrow}->bind_param(1, undef, {pg_type => PG_BYTEA});
-						$sth{source}{$g}{insertrow}->bind_param($x, undef, {pg_type => PG_BYTEA});
-					}
-			}
 
 			## This casting is very important for index usage!
-			my $safepkeytype = $g->{pkeytype} =~ /timestamp|date/o ? 'text' : $g->{pkeytype};
+			my $safepkeytype = $g->{pkeytype} =~ /timestamp|date|bytea/o ? 'text' : $g->{pkeytype};
 			my $x=0;
 			my $aliaslist = join ',' => map { "$_ AS $g->{cols}[$x++]" } @{$g->{safecols}};
 			if (length $aliaslist) {
@@ -3401,7 +3390,7 @@ sub start_kid {
 				SELECT    DISTINCT d.rowid AS "BUCARDO_ID",
 							  t.$qnamepk $aliaslist
 				FROM      bucardo.bucardo_delta d
-				LEFT JOIN $S.$T t ON (t.${qnamepk}::$safepkeytype = d.rowid::$safepkeytype)
+				LEFT JOIN $S.$T t ON BUCARDO_JOIN
 				WHERE     d.tablename = \$1::oid
 				AND       NOT EXISTS (
 								SELECT 1
@@ -3411,6 +3400,12 @@ sub start_kid {
 								AND    bt.tablename = \$1::oid
 						  )
 			};
+			if ($g->{binarypkey}) {
+				$SQL{delta} =~ s/BUCARDO_JOIN/(ENCODE(t.${qnamepk},'base64')::text = d.rowid::text)/;
+			}
+			else {
+				$SQL{delta} =~ s/BUCARDO_JOIN/(t.${qnamepk}::$safepkeytype = d.rowid::$safepkeytype)/;
+			}
 			($SQL = $SQL{delta}) =~ s/\$1/$g->{oid}/go;
 			(my $safedbname = $targetdb) =~ s/\'/''/go;
 			$SQL =~ s/\$2/$safedbname/o;
@@ -4273,7 +4268,7 @@ sub start_kid {
 
 					## We are manually building lists, so we may need to escape the pkeys
 					my $safepk;
-					if ($g->{pkeytype} =~ /int$/o) { ## smallint, int, bigint
+					if ($g->{pkeytype} =~ /int$/o) { ## smallint, int, bigint, bytea(base64text)
 						$safepk = $pkval;
 					}
 					else {
@@ -4337,7 +4332,9 @@ sub start_kid {
 				}
 
 				## Do deletions in chunks
-				$SQL = "DELETE FROM $S.$T WHERE $qnamepk IN";
+				$SQL = $g->{binarypkey} ?
+					"DELETE FROM $S.$T WHERE ENCODE($qnamepk,'base64') IN"
+						: "DELETE FROM $S.$T WHERE $qnamepk IN";
 				$count = @srcdelete;
 				if ($count) {
 					while (@srcdelete) {
@@ -4367,7 +4364,10 @@ sub start_kid {
 				## Before this point, the lack of a matching record from the left join
 				## only tells us that the real row *might* exist.
 				## And upserts are too expensive here :)
-				$SQL = "SELECT $qnamepk FROM $S.$T WHERE $qnamepk IN ";
+				$SQL = $g->{binarypkey} ? 
+					"SELECT ENCODE($qnamepk,'base64') AS $qnamepk FROM $S.$T WHERE ENCODE($qnamepk,'base64') IN " 
+						: "SELECT $qnamepk FROM $S.$T WHERE $qnamepk IN ";
+
 				while (@srccheck) {
 					no warnings;
 					my $list = '';
@@ -4487,7 +4487,7 @@ sub start_kid {
 
 					if (!$g->{has_exception_code}) {
 						if ($@) {
-							$self->glog("Warning! Aborting due to exception for $S.$T.$qnamepk: $pkval");
+							$self->glog("Warning! Aborting due to exception for $S.$T.$qnamepk: $pkval Error was $@");
 							die $@;
 						}
 					}
