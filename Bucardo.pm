@@ -1750,10 +1750,10 @@ sub start_mcp {
 		$sth{checktable} = $srcdbh->prepare($SQL{checktable});
 
 		$SQL{checkcols} = qq{
-			SELECT   attname, pg_catalog.quote_ident(attname)
+			SELECT   attname, pg_catalog.quote_ident(attname), atttypid
 			FROM     pg_catalog.pg_attribute
 			WHERE    attrelid = ? AND attnum > 0 AND NOT attisdropped
-			ORDER BY attname
+			ORDER BY attnum
 		};
 		$sth{checkcols} = $srcdbh->prepare($SQL{checkcols});
 
@@ -1906,6 +1906,12 @@ sub start_mcp {
 			$g->{safecols} = \@cols2;
 			$g->{columnlist} = join ',' => @cols;
 			$g->{safecolumnlist} = join ',' => @cols2;
+			my $x=0;
+			for (@$colinfo) {
+				next if $_->[0] eq $g->{pkey};
+				$x++;
+				push @{$g->{binarycols}}, $x if 17 == $_->[2];
+			}
 
 			## Verify tables and columns on remote databases
 			for my $db (sort keys %targetdbh) {
@@ -3328,7 +3334,9 @@ sub start_kid {
 			}
 			# $self->glog("INSERT SQL: $SQL");
 			$sth{target}{$g}{insertrow} = $targetdbh->prepare($SQL);
-			$synctype eq 'swap' and $sth{source}{$g}{insertrow} = $sourcedbh->prepare($SQL);
+			if ($synctype eq 'swap') {
+				$sth{source}{$g}{insertrow} = $sourcedbh->prepare($SQL);
+			}
 
 			if (length $g->{safecolumnlist}) {
 				$SQL = "UPDATE $S.$T SET ";
@@ -3341,6 +3349,17 @@ sub start_kid {
 			# $self->glog("UPDATE SQL: $SQL");
 			$sth{target}{$g}{updaterow} = $targetdbh->prepare($SQL);
 			$synctype eq 'swap' and $sth{source}{$g}{updaterow} = $sourcedbh->prepare($SQL);
+
+			if (exists $g->{binarycols}) {
+				for (@{$g->{binarycols}}) {
+					$sth{target}{$g}{insertrow}->bind_param($_+1, undef, {pg_type => PG_BYTEA});
+					$sth{target}{$g}{updaterow}->bind_param($_, undef, {pg_type => PG_BYTEA});
+					if ($synctype eq 'swap') {
+						$sth{source}{$g}{insertrow}->bind_param($_+1, undef, {pg_type => PG_BYTEA});
+						$sth{source}{$g}{updaterow}->bind_param($_+1, undef, {pg_type => PG_BYTEA});
+					}
+				}
+			}
 
 			## This casting is very important for index usage!
 			my $safepkeytype = $g->{pkeytype} =~ /timestamp|date/o ? 'text' : $g->{pkeytype};

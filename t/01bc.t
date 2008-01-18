@@ -5,10 +5,13 @@ use strict;
 use warnings;
 use Data::Dumper;
 use DBI;
+use DBD::Pg ':pg_types';
 use IO::Handle;
 use Test::More;
 use Time::HiRes qw/sleep gettimeofday tv_interval/;
 use Test::Dynamic '1.3.1';
+
+BEGIN { system("perl t/bucardo.test.helper"); }
 
 ## Running all the tests can take quite a while
 ## This allows us to only run a subset while debugging
@@ -321,10 +324,12 @@ for my $table (sort keys %tabletype) {
 		CREATE TABLE $table (
 			$pkey    $tabletype{$table} NOT NULL $pk};
 	$SQL .= $table =~ /0/ ? "\n)" : qq{,
-        	data1 TEXT                   NULL,
-	        inty  SMALLINT               NULL,
-    	    email TEXT                   NULL UNIQUE
-		)
+            data1 TEXT                   NULL,
+            inty  SMALLINT               NULL,
+            bite1 BYTEA                  NULL,
+            bite2 BYTEA                  NULL,
+            email TEXT                   NULL UNIQUE
+        )
 	};
 	unless ($ENV{BUCARDO_TEST_NOCREATEDB}) {
 		$dbh1->do($SQL);
@@ -2149,6 +2154,7 @@ sub basic_pushdelta_testing {
 	$masterdbh->commit();
 
 	my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
+
 	$SQL = $table =~ /0/
 		? "INSERT INTO $table($pkey) VALUES ('$val')"
 		: "INSERT INTO $table($pkey,data1,inty) VALUES ('$val','one',1)";
@@ -2169,7 +2175,7 @@ sub basic_pushdelta_testing {
 	my $tval = $table =~ /0/ ? 0 : 1;
 	$result = [['rule',$tval],['trigger',$tval]];
 	bc_deeply($result, $sdbh, $DROPSQL, $t);
-   
+
 	$t=q{ Table droptest is empty on remote database };
 	$result = [];
 	bc_deeply($result, $rdbh, $DROPSQL, $t);
@@ -2214,7 +2220,7 @@ sub basic_pushdelta_testing {
 		? [['rule',0],['rule',0],['trigger',0],['trigger',0]]
 		: [['rule',1],['rule',2],['trigger',1],['trigger',2]];
 	bc_deeply($result, $sdbh, $DROPSQL, $t);
-   
+
 	$t=q{ Table droptest has correct entries on remote database };
 	my $ninezero = $table =~ /0/ ? 0 : 9;
 	$result = [['rule',$ninezero],['trigger',$ninezero]];
@@ -2266,8 +2272,62 @@ sub basic_pushdelta_testing {
 	$SQL = "SELECT $col FROM $table ORDER BY 1";
 	$result = [['1'],['2'],['3'],['4'],['5'],['6'],['9']];
 	bc_deeply($result, $rdbh, $SQL, $t);
+
+
+	## Test of bytea columns
+  SKIP: {
+		$table =~ /0/ and skip 'Cannot test bytea on single-pkey table', 3;
+
+		$SQL = "INSERT INTO $table($pkey,data1,inty,bite1) VALUES (?,?,?,?)";
+		$sth = $sdbh->prepare($SQL);
+		$val = $val{$type}{7};
+		my $bite = 'FooBar';
+		$sth->execute($val,'bob',7,$bite);
+		$sdbh->commit;
+
+		wait_for_notice($masterdbh, 'bucardo_syncdone_pushdeltatest');
+
+		$t=qq{ Second table $table got the pushdelta rows with bytea column};
+		$SQL = "SELECT bite1 FROM $table WHERE inty = 7";
+		$result = [[$bite]];
+		bc_deeply($result, $rdbh, $SQL, $t);
+
+		## That was too easy, let's do some real bytea data
+
+		$t=qq{ Second table $table got the pushdelta rows with null-containing bytea column};
+		$val = $val{$type}{8};
+		$bite = "Foo\0Bar";
+		$sth->bind_param(4, undef, {pg_type => PG_BYTEA});
+		$sth->execute($val,'bob',8,$bite);
+		$sdbh->commit;
+
+		wait_for_notice($masterdbh, 'bucardo_syncdone_pushdeltatest');
+
+		$SQL = "SELECT bite1 FROM $table WHERE inty = 8";
+		$result = [[$bite]];
+		bc_deeply($result, $rdbh, $SQL, $t);
+
+		## Now two bytea columns at once
+		$SQL = "INSERT INTO $table($pkey,bite2,data1,inty,bite1) VALUES (?,?,?,?,?)";
+		$sth = $sdbh->prepare($SQL);
+		$val = $val{$type}{9};
+		my ($bite1,$bite2) = ("over\0cycle", "foo\tbar\0\tbaz\0");
+		$sth->bind_param(2, undef, {pg_type => PG_BYTEA});
+		$sth->bind_param(5, undef, {pg_type => PG_BYTEA});
+		$sth->execute($val,$bite2,'bob',9,$bite1);
+		$sdbh->commit;
+
+		wait_for_notice($masterdbh, 'bucardo_syncdone_pushdeltatest');
+
+		$SQL = "SELECT bite1,bite2 FROM $table WHERE inty = 9";
+		$result = [[$bite1,$bite2]];
+		bc_deeply($result, $rdbh, $SQL, $t);
+
+	}
+
 	$sdbh->commit();
 	$rdbh->commit();
+
 	return;
 
 } ## end of basic_pushdelta_testing
