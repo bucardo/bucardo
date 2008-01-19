@@ -131,7 +131,7 @@ use Moose;
 use Moose::Util::TypeConstraints;
 use Time::HiRes 'sleep';
 use DBI;
-use DBD::Pg;
+use DBD::Pg ':pg_types';
 my $DEFAULT = $DBD::Pg::DBDPG_DEFAULT;
 use Mail::Sendmail;
 use Sys::Hostname;

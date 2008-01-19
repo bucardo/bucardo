@@ -2,7 +2,9 @@
 
 3.0.8 (unreleased)
 
-  - Support bytea column copying. [GSM]
+  - Fix error in 'latest' conflict code. [Adam Wendt].
+
+  - Support bytea in primary key and regular columns. [GSM]
 
   - Fix race condition in bucardo_delta/bucardo_track updates 
     for pushdelta syncs. [GSM]
