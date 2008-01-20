@@ -1910,6 +1910,7 @@ sub start_mcp {
 			my $x = 1;
 			for (@$colinfo) {
 				if (17 == $_->[2]) {
+					$self->glog("Setting column $x as binary")
 					if ($_->[0] eq $g->{pkey}) {
 						$g->{binarypkey} = 1;
 					}
