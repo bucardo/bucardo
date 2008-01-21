@@ -29,7 +29,7 @@ our $TEST_PING          = 1;
 our $TEST_RANDOM_SWAP   = 0;
 
 ## Count the number of tests
-my $tests = Test::Dynamic::count_tests ## no critic (ProhibitCallsToUnexportedSubs)
+my $tests = Test::Dynamic->count_tests ## no critic (ProhibitCallsToUnexportedSubs)
 	(
 	 {
 	  filehandle => \*DATA,
