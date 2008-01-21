@@ -3346,7 +3346,7 @@ sub start_kid {
 			if ($g->{binarypkey}) {
 				$SQL =~ s/\?/DECODE(?,'base64')/;
 			}
-			$self->glog("INSERT SQL: $SQL"); ## XXX
+			#$self->glog("INSERT SQL: $SQL");
 			$sth{target}{$g}{insertrow} = $targetdbh->prepare($SQL);
 			if ($synctype eq 'swap') {
 				$sth{source}{$g}{insertrow} = $sourcedbh->prepare($SQL);
@@ -3363,7 +3363,7 @@ sub start_kid {
 			if ($g->{binarypkey}) {
 				$SQL =~ s/WHERE $qnamepk/WHERE ENCODE($qnamepk,'base64')/;
 			}
-			# $self->glog("UPDATE SQL: $SQL");
+			#$self->glog("UPDATE SQL: $SQL");
 			$sth{target}{$g}{updaterow} = $targetdbh->prepare($SQL);
 			$synctype eq 'swap' and $sth{source}{$g}{updaterow} = $sourcedbh->prepare($SQL);
 
@@ -3373,7 +3373,7 @@ sub start_kid {
 					$sth{target}{$g}{updaterow}->bind_param($_, undef, {pg_type => PG_BYTEA});
 					if ($synctype eq 'swap') {
 						$sth{source}{$g}{insertrow}->bind_param($_+1, undef, {pg_type => PG_BYTEA});
-						$sth{source}{$g}{updaterow}->bind_param($_+1, undef, {pg_type => PG_BYTEA});
+						$sth{source}{$g}{updaterow}->bind_param($_, undef, {pg_type => PG_BYTEA});
 					}
 				}
 			}
