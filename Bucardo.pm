@@ -310,11 +310,9 @@ after 'dbgroup' => sub {
 		$arg->{db} =~ s/\'/''/go;
 		$arg->{name} =~ s/\'/''/go;
 		$SQL = qq{
-			INSERT INTO bucardo.dbmap
-				(db, dbgroup, priority)
-			VALUES
-				('$arg->{db}','$arg->{name}', $pri)
-		};
+            INSERT INTO bucardo.dbmap (db, dbgroup, priority)
+            VALUES ('$arg->{db}','$arg->{name}', $pri)
+        };
 		$maindbh->do($SQL);
 		$maindbh->commit();
 	}
@@ -624,7 +622,7 @@ sub reload_config {
 
 sub kick_sync {
 
-    my ($self, $arg) = @_;
+	my ($self, $arg) = @_;
 	my $msg;
 
 	if (ref $arg ne 'HASH') {
@@ -675,7 +673,7 @@ sub kick_sync {
 
 	{
 		local $SIG{ALRM} = sub { die $timeout_error };
-		
+
 		eval {
 			$timeout and alarm $timeout;
 		  KICK_SYNC_WAIT: while (1) {
@@ -859,8 +857,8 @@ sub get_dbgroups {
 	my $self = shift;
 	## Return a hashref of dbgroups
 	$SQL = qq{
-		SELECT    d.name, m.db, m.priority
-		FROM      bucardo.dbgroup d
+        SELECT    d.name, m.db, m.priority
+        FROM      bucardo.dbgroup d
         LEFT JOIN dbmap m ON (m.dbgroup=d.name)
         ORDER BY  m.priority ASC, random()
 	};
@@ -916,13 +914,13 @@ sub get_herd {
 	$herd or die qq{Must provide a herd\n};
 
 	$SQL = qq{
-		SELECT    h.name, g.db, g.tablename, g.schemaname, g.has_delta, g.ghost,
-				  g.standard_conflict, g.pkey, g.qpkey, g.pkeytype
-		FROM      bucardo.herd h
-		LEFT JOIN bucardo.herdmap m ON (m.herd=h.name)
-		LEFT JOIN bucardo.goat g ON (m.goat=g.id)
-		WHERE     h.name = ?
-	};
+        SELECT    h.name, g.db, g.tablename, g.schemaname, g.has_delta, g.ghost,
+                  g.standard_conflict, g.pkey, g.qpkey, g.pkeytype
+        FROM      bucardo.herd h
+        LEFT JOIN bucardo.herdmap m ON (m.herd=h.name)
+        LEFT JOIN bucardo.goat g ON (m.goat=g.id)
+        WHERE     h.name = ?
+    };
 	my $maindbh = $self->{masterdbh};
 	$sth = $maindbh->prepare($SQL);
 	$sth->execute($herd);
@@ -952,11 +950,11 @@ sub get_syncs {
 	my $self = shift;
 	## Return an arrayref of everything in the sync table
 	$SQL = qq{
-		SELECT *,
-			COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs
-		FROM     bucardo.sync
-		ORDER BY priority DESC, name DESC
-	};
+        SELECT *,
+            COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs
+        FROM     bucardo.sync
+        ORDER BY priority DESC, name DESC
+    };
 	$sth = $self->{masterdbh}->prepare($SQL);
 	$sth->execute();
 	my $info = $sth->fetchall_hashref("name");
@@ -972,11 +970,11 @@ sub find_goats {
 	my $goats = $self->get_goats();
 	my $maindbh = $self->{masterdbh};
 	$SQL = qq{
-		SELECT   goat
-		FROM     bucardo.herdmap q
-		WHERE    herd = ?
-		ORDER BY priority DESC, goat ASC
-	};
+        SELECT   goat
+        FROM     bucardo.herdmap q
+        WHERE    herd = ?
+        ORDER BY priority DESC, goat ASC
+    };
 	$sth = $maindbh->prepare($SQL);
 	$sth->execute($herd);
 	my $newgoats = [];
@@ -1181,11 +1179,9 @@ sub start_mcp {
 	$synclist =~ s/\| $//;
 	$self->{cdate} = scalar localtime;
 	$SQL = qq{
-		INSERT INTO bucardo.audit_pid
-			(type,sync,ppid,pid,birthdate)
-		VALUES 
-			('MCP',?,$self->{ppid},$$,?)
-	};
+        INSERT INTO bucardo.audit_pid (type,sync,ppid,pid,birthdate)
+        VALUES ('MCP',?,$self->{ppid},$$,?)
+    };
 	$sth = $maindbh->prepare($SQL);
 	$sth->execute($synclist,$self->{cdate});
 	$maindbh->do("NOTIFY bucardo_started");
@@ -1313,10 +1309,10 @@ sub start_mcp {
 
 					## Reread from the database
 					$SQL = qq{
-						SELECT *, COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs
-						FROM bucardo.sync
-						WHERE name = ?
-					};
+                        SELECT *, COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs
+                        FROM bucardo.sync
+                        WHERE name = ?
+                    };
 					$sth = $maindbh->prepare($SQL);
 					$count = $sth->execute($syncname);
 					if ($count eq '0E0') {
@@ -1740,21 +1736,21 @@ sub start_mcp {
 
 		my %SQL;
 		$SQL{checktable} = qq{
-			SELECT c.oid, pg_catalog.quote_ident(?),
-				pg_catalog.quote_ident(n.nspname), pg_catalog.quote_ident(c.relname)
-			FROM   pg_catalog.pg_class c, pg_catalog.pg_namespace n
-			WHERE  c.relnamespace = n.oid
-			AND    nspname = ?
-			AND    relname = ?
-		};
+            SELECT c.oid, pg_catalog.quote_ident(?),
+                pg_catalog.quote_ident(n.nspname), pg_catalog.quote_ident(c.relname)
+            FROM   pg_catalog.pg_class c, pg_catalog.pg_namespace n
+            WHERE  c.relnamespace = n.oid
+            AND    nspname = ?
+            AND    relname = ?
+        };
 		$sth{checktable} = $srcdbh->prepare($SQL{checktable});
 
 		$SQL{checkcols} = qq{
-			SELECT   attname, pg_catalog.quote_ident(attname), atttypid
-			FROM     pg_catalog.pg_attribute
-			WHERE    attrelid = ? AND attnum > 0 AND NOT attisdropped
-			ORDER BY attnum
-		};
+            SELECT   attname, pg_catalog.quote_ident(attname), atttypid
+            FROM     pg_catalog.pg_attribute
+            WHERE    attrelid = ? AND attnum > 0 AND NOT attisdropped
+            ORDER BY attnum
+        };
 		$sth{checkcols} = $srcdbh->prepare($SQL{checkcols});
 
 		## Connect to each target database used
@@ -1794,13 +1790,13 @@ sub start_mcp {
 		my $goatlist = join "," => map { $_->{id} } @{$s->{goatlist}};
 
 		$SQL = qq{
-			SELECT c.src_code, c.id, c.whenrun, c.getdbh, c.name, c.getrows, COALESCE(c.about,'?') AS about,
-				   m.active, m.priority, COALESCE(m.goat,0) AS goat
-			FROM customcode c, customcode_map m
-			WHERE c.id=m.code AND m.active IS TRUE
-			AND (m.sync = ? OR m.goat IN ($goatlist))
-			ORDER BY priority ASC
-		};
+            SELECT c.src_code, c.id, c.whenrun, c.getdbh, c.name, c.getrows, COALESCE(c.about,'?') AS about,
+                   m.active, m.priority, COALESCE(m.goat,0) AS goat
+            FROM customcode c, customcode_map m
+            WHERE c.id=m.code AND m.active IS TRUE
+            AND (m.sync = ? OR m.goat IN ($goatlist))
+            ORDER BY priority ASC
+        };
 		$sth = $self->{masterdbh}->prepare($SQL);
 		$sth->execute($syncname);
 		$s->{need_rows} = $s->{need_safe_dbh} = $s->{need_safe_dbh_strict} = 0;
@@ -2134,12 +2130,12 @@ sub start_mcp {
 		## Kill all children controllers belonging to us
 		my $finaldbh = $self->connect_database();
 		$SQL = qq{
-			SELECT pid
-			FROM   bucardo.audit_pid
-			WHERE  ppid = $$
-			AND    type = 'CTL'
-			AND    killdate IS NULL
-		};
+            SELECT pid
+            FROM   bucardo.audit_pid
+            WHERE  ppid = $$
+            AND    type = 'CTL'
+            AND    killdate IS NULL
+        };
 		## TODO: Think about checking for Bucardo in ps string
 		$sth = $finaldbh->prepare($SQL);
 		$count = $sth->execute();
@@ -2158,14 +2154,14 @@ sub start_mcp {
 
 		## Update the audit_pid table
 		$SQL = qq{
-			UPDATE bucardo.audit_pid
-			SET    killdate = timeofday()::timestamp, death = ?
-			WHERE  type='MCP'
-			AND    birthdate=?
-			AND    ppid=?
-			AND    pid =?
-			AND    killdate IS NULL
-		};
+            UPDATE bucardo.audit_pid
+            SET    killdate = timeofday()::timestamp, death = ?
+            WHERE  type='MCP'
+            AND    birthdate=?
+            AND    ppid=?
+            AND    pid =?
+            AND    killdate IS NULL
+        };
 		$sth = $finaldbh->prepare($SQL);
 		$reason =~ s/\s+$//;
 		$sth->execute($reason,$self->{cdate},$self->{ppid},$$);
@@ -2304,31 +2300,29 @@ sub start_controller {
 	## Add ourself to the audit table
 	$self->{ccdate} = scalar localtime;
 	$SQL = qq{
-		INSERT INTO bucardo.audit_pid
-			(type,sync,ppid,pid,birthdate)
-		VALUES 
-			('CTL',?,$self->{ppid},$$,?)
-	};
+      INSERT INTO bucardo.audit_pid (type,sync,ppid,pid,birthdate)
+      VALUES ('CTL',?,$self->{ppid},$$,?)
+    };
 	$sth = $maindbh->prepare($SQL);
 	$sth->execute($syncname,$self->{ccdate});
 	$maindbh->commit();
 
 	## Prepare to see how busy this sync is
 	$self->{SQL}{qfree} = $SQL = qq{
-		SELECT targetdb
-		FROM   bucardo.q
-		WHERE  sync=?
-		AND    ended IS NULL
-		AND    aborted IS NULL
-	};
+        SELECT targetdb
+        FROM   bucardo.q
+        WHERE  sync=?
+        AND    ended IS NULL
+        AND    aborted IS NULL
+    };
 	$sth{qfree} = $maindbh->prepare($SQL);
 	## Prepare to see how busy everyone is
 	$self->{SQL}{qfreeall} = $SQL = qq{
-		SELECT sourcedb, targetdb
-		FROM   bucardo.q
-		WHERE  ended IS NULL
-		AND    aborted IS NULL
-	};
+        SELECT sourcedb, targetdb
+        FROM   bucardo.q
+        WHERE  ended IS NULL
+        AND    aborted IS NULL
+    };
 	$sth{qfreeall} = $maindbh->prepare($SQL);
 
 	for my $m (@{$sync->{goatlist}}) {
@@ -2376,57 +2370,55 @@ sub start_controller {
 
 	## This is how we tell kids to go:
 	$SQL = qq{
-		INSERT INTO bucardo.q
-			(sync, ppid, sourcedb, targetdb, synctype)
-		VALUES
-			(?,?,?,?,?)
-	};
+        INSERT INTO bucardo.q (sync, ppid, sourcedb, targetdb, synctype)
+        VALUES (?,?,?,?,?)
+    };
 	$sth{qinsert} = $maindbh->prepare($SQL);
 
 	## We are only responsible for making sure there is one nullable
 	$SQL = qq{
-		SELECT 1
-		FROM   bucardo.q
-		WHERE  sync=?
-		AND    sourcedb=?
-		AND    targetdb=?
-		AND    started IS NULL
-	};
+        SELECT 1
+        FROM   bucardo.q
+        WHERE  sync=?
+        AND    sourcedb=?
+        AND    targetdb=?
+        AND    started IS NULL
+    };
 	$sth{qcheck} = $maindbh->prepare($SQL);
 
 	$SQL = qq{
-		SELECT targetdb, pid, whydie
-		FROM   bucardo.q
-		WHERE  sync=?
-		AND    started IS NOT NULL
-		AND    ended IS NULL
-		AND    aborted IS NOT NULL
-	};
+        SELECT targetdb, pid, whydie
+        FROM   bucardo.q
+        WHERE  sync=?
+        AND    started IS NOT NULL
+        AND    ended IS NULL
+        AND    aborted IS NOT NULL
+    };
 	$sth{qcheckaborted} = $maindbh->prepare($SQL);
 
 	$SQL = qq{
-		UPDATE bucardo.q
-		SET    ended = timeofday()::timestamp
+        UPDATE bucardo.q
+        SET    ended = timeofday()::timestamp
         WHERE  sync=?
         AND    targetdb = ?
         AND    pid = ?
         AND    started IS NOT NULL
         AND    ended IS NULL
         AND    aborted IS NOT NULL
-	};
+    };
 	$sth{qfixaborted} = $maindbh->prepare($SQL);
 
 	$SQL = qq{
-		UPDATE bucardo.q
-		SET    aborted=timeofday()::timestamp, whydie=?
-		WHERE  sync = ?
-		AND    pid = ?
-		AND    ppid = ?
-		AND    targetdb = ?
-		AND    started IS NOT NULL
-		AND    ended IS NULL
-		AND    aborted IS NULL
-	};
+        UPDATE bucardo.q
+        SET    aborted=timeofday()::timestamp, whydie=?
+        WHERE  sync = ?
+        AND    pid = ?
+        AND    ppid = ?
+        AND    targetdb = ?
+        AND    started IS NOT NULL
+        AND    ended IS NULL
+        AND    aborted IS NULL
+    };
 	$sth{qupdateabortedpid} = $maindbh->prepare($SQL);
 
 	## Rather than simply grab the local time, we grab this from the database 
@@ -2493,30 +2485,30 @@ sub start_controller {
 			}
 		}
 		$SQL = qq{
-				  UPDATE bucardo.q
-				  SET started=timeofday()::timestamp, ended=timeofday()::timestamp, aborted=timeofday()::timestamp, whydie='Controller cleaning out unstarted q entry'
-				  WHERE sync = $safesyncname
-				  AND started IS NULL
-				  };
+              UPDATE bucardo.q
+              SET started=timeofday()::timestamp, ended=timeofday()::timestamp, aborted=timeofday()::timestamp, whydie='Controller cleaning out unstarted q entry'
+              WHERE sync = $safesyncname
+              AND started IS NULL
+        };
 		$maindbh->do($SQL);
 
 		## Clear out any aborted kids (the kids don't end so we can populate targetdb->{kicked} above)
 		## The whydie has already been set by the kid
 		$SQL = qq{
-				  UPDATE bucardo.q
-				  SET ended=timeofday()::timestamp
-				  WHERE sync = $safesyncname
-				  AND ended IS NULL AND aborted IS NOT NULL
-				  };
+              UPDATE bucardo.q
+              SET ended=timeofday()::timestamp
+              WHERE sync = $safesyncname
+              AND ended IS NULL AND aborted IS NOT NULL
+        };
 		$maindbh->do($SQL);
 
 		## Clear out any lingering entries which have not ended
 		$SQL = qq{
-				  UPDATE bucardo.q
-				  SET ended=timeofday()::timestamp, aborted=timeofday()::timestamp, whydie='Controller cleaning out unended q entry'
-				  WHERE sync = $safesyncname
-				  AND ended IS NULL
-				  };
+              UPDATE bucardo.q
+              SET ended=timeofday()::timestamp, aborted=timeofday()::timestamp, whydie='Controller cleaning out unended q entry'
+              WHERE sync = $safesyncname
+              AND ended IS NULL
+        };
 		$maindbh->do($SQL);
 
 		$maindbh->commit();
@@ -3008,13 +3000,13 @@ sub cleanup_controller {
 	## Kill all Bucardo children mentioned in the audit table for this sync
 	my $finaldbh = $self->connect_database();
 	$SQL = qq{
-		SELECT pid
-		FROM   bucardo.audit_pid
-		WHERE  sync=?
-		AND    type = 'KID'
-		AND    killdate IS NULL
-		AND    death IS NULL
-	};
+        SELECT pid
+        FROM   bucardo.audit_pid
+        WHERE  sync=?
+        AND    type = 'KID'
+        AND    killdate IS NULL
+        AND    death IS NULL
+    };
 	$sth = $finaldbh->prepare($SQL);
 	$sth->execute($self->{syncname});
 	for (@{$sth->fetchall_arrayref()}) {
@@ -3025,27 +3017,27 @@ sub cleanup_controller {
 	}
 	## Asking them more than once is not going to do any good
 	$SQL = qq{
-		UPDATE bucardo.audit_pid
-		SET    death = ?
-		WHERE  sync=?
-		AND    type = 'KID'
-		AND    killdate IS NULL
-		AND    death IS NULL
-	};
+        UPDATE bucardo.audit_pid
+        SET    death = ?
+        WHERE  sync=?
+        AND    type = 'KID'
+        AND    killdate IS NULL
+        AND    death IS NULL
+    };
 	my $now = scalar localtime;
 	$sth = $finaldbh->prepare($SQL);
 	$sth->execute("Sent kill request by $$ at $now", $self->{syncname});
 
 	## Update the audit_pid table
 	$SQL = qq{
-		UPDATE bucardo.audit_pid
-		SET    killdate = timeofday()::timestamp, death = ?
-		WHERE  type='CTL'
-		AND    birthdate=?
-		AND    ppid=?
-		AND    pid =?
-		AND    killdate IS NULL
-	};
+        UPDATE bucardo.audit_pid
+        SET    killdate = timeofday()::timestamp, death = ?
+        WHERE  type='CTL'
+        AND    birthdate=?
+        AND    ppid=?
+        AND    pid =?
+        AND    killdate IS NULL
+    };
 	$sth = $finaldbh->prepare($SQL);
 	$reason =~ s/\s+$//;
 	$sth->execute($reason,$self->{ccdate},$self->{ppid},$$);
@@ -3076,7 +3068,7 @@ sub get_deadlock_details {
 
 		## Fetch informatin about the conflicting process
 		my $queryinfo =$dldbh->prepare(qq{
-SELECT 
+SELECT
   current_query AS query,
   datname AS database,
   TO_CHAR(timeofday()::timestamptz, 'HH24:MI:SS (YYYY-MM-DD)') AS current_time,
@@ -3194,13 +3186,13 @@ sub start_kid {
 		## Mark ourself as aborted if we've started but not completed a job
 		## The controller is responsible for marking aborted entries as ended
 		$SQL = qq{
-			UPDATE bucardo.q
-			SET    aborted=timeofday()::timestamp, whydie=?
-			WHERE  sync=?
-			AND    pid=?
-			AND    ended IS NULL
-			AND    aborted IS NULL
-		};
+            UPDATE bucardo.q
+            SET    aborted=timeofday()::timestamp, whydie=?
+            WHERE  sync=?
+            AND    pid=?
+            AND    ended IS NULL
+            AND    aborted IS NULL
+        };
 		## Note: we don't check for non-null started because it is never set without a pid
 		## TODO: Is the above unique enough for all circumstances?
 		$sth = $finaldbh->prepare($SQL);
@@ -3211,13 +3203,13 @@ sub start_kid {
 		}
 		## Clean up the audit_pid table
 		$SQL = qq{
-			UPDATE bucardo.audit_pid
-			SET    killdate=timeofday()::timestamp, death=?
-			WHERE  type='KID'
-			AND    sync=?
-			AND    ppid=?
-			AND    pid=?
-		};
+            UPDATE bucardo.audit_pid
+            SET    killdate=timeofday()::timestamp, death=?
+            WHERE  type='KID'
+            AND    sync=?
+            AND    ppid=?
+            AND    pid=?
+        };
 		$sth = $finaldbh->prepare($SQL);
 		$sth->execute($msg,$syncname,$self->{ppid},$$);
 		$finaldbh->commit();
@@ -3271,11 +3263,9 @@ sub start_kid {
 
 	## Add ourself to the audit table
 	$SQL = qq{
-		INSERT INTO bucardo.audit_pid
-			(type,sync,ppid,pid,birth)
-		VALUES
-			('KID',?,$self->{ppid},$$,'Life: $self->{life}')
-	};
+        INSERT INTO bucardo.audit_pid (type,sync,ppid,pid,birth)
+        VALUES ('KID',?,$self->{ppid},$$,'Life: $self->{life}')
+    };
 	$sth = $maindbh->prepare($SQL);
 	$sth->execute($syncname);
 
@@ -3290,25 +3280,25 @@ sub start_kid {
 
 	## Prepare to update the q table when we start...
 	$SQL = qq{
-		UPDATE bucardo.q
-		SET    started=timeofday()::timestamptz, pid = ?
-		WHERE  sync=?
-		AND    targetdb=?
-		AND    started IS NULL
-	};
+        UPDATE bucardo.q
+        SET    started=timeofday()::timestamptz, pid = ?
+        WHERE  sync=?
+        AND    targetdb=?
+        AND    started IS NULL
+    };
 	$sth{qsetstart} = $maindbh->prepare($SQL);
 
 	## .. and when we finish.
 	$SQL = qq{
-		UPDATE bucardo.q
-		SET    ended=timeofday()::timestamptz, updates=?, inserts=?, deletes=?
-		WHERE  sync=?
-		AND    targetdb=?
-		AND    pid=?
-		AND    started IS NOT NULL
-		AND    ended IS NULL
-		AND    aborted IS NULL
-	};
+        UPDATE bucardo.q
+        SET    ended=timeofday()::timestamptz, updates=?, inserts=?, deletes=?
+        WHERE  sync=?
+        AND    targetdb=?
+        AND    pid=?
+        AND    started IS NOT NULL
+        AND    ended IS NULL
+        AND    aborted IS NULL
+    };
 	$sth{qend} = $maindbh->prepare($SQL);
 
 	## Connect to the source database
@@ -3388,19 +3378,19 @@ sub start_kid {
 			my $safesourcedb;
 			## Note: column order important for splice and defined calls later
 			$SQL{delta} = qq{
-				SELECT    DISTINCT d.rowid AS "BUCARDO_ID",
-							  t.$qnamepk $aliaslist
-				FROM      bucardo.bucardo_delta d
-				LEFT JOIN $S.$T t ON BUCARDO_JOIN
-				WHERE     d.tablename = \$1::oid
-				AND       NOT EXISTS (
-								SELECT 1
-								FROM   bucardo.bucardo_track bt
-								WHERE  d.txntime = bt.txntime
-								AND    bt.targetdb = '\$2'::text
-								AND    bt.tablename = \$1::oid
-						  )
-			};
+                SELECT    DISTINCT d.rowid AS "BUCARDO_ID",
+                              t.$qnamepk $aliaslist
+                FROM      bucardo.bucardo_delta d
+                LEFT JOIN $S.$T t ON BUCARDO_JOIN
+                WHERE     d.tablename = \$1::oid
+                AND       NOT EXISTS (
+                                SELECT 1
+                                FROM   bucardo.bucardo_track bt
+                                WHERE  d.txntime = bt.txntime
+                                AND    bt.targetdb = '\$2'::text
+                                AND    bt.tablename = \$1::oid
+                          )
+            };
 			if ($g->{binarypkey}) {
 				$SQL{delta} =~ s/BUCARDO_JOIN/(ENCODE(t.${qnamepk},'base64')::text = d.rowid::text)/;
 			}
@@ -3422,18 +3412,18 @@ sub start_kid {
 			## Mark all unclaimed visible delta rows as done in the track table
 			## This must be called within the same transaction as the delta select
 			$SQL{track} = qq{
-				INSERT INTO bucardo.bucardo_track (txntime,targetdb,tablename)
-				SELECT DISTINCT txntime, '\$1'::text, \$2::oid
-				FROM bucardo.bucardo_delta d
-				WHERE d.tablename = \$2::oid
-				AND NOT EXISTS (
-					SELECT 1
-					FROM   bucardo.bucardo_track t
-					WHERE  d.txntime = t.txntime
-					AND    t.targetdb = '\$1'::text
-					AND    t.tablename = \$2::oid
-				);
-			};
+                INSERT INTO bucardo.bucardo_track (txntime,targetdb,tablename)
+                SELECT DISTINCT txntime, '\$1'::text, \$2::oid
+                FROM bucardo.bucardo_delta d
+                WHERE d.tablename = \$2::oid
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM   bucardo.bucardo_track t
+                    WHERE  d.txntime = t.txntime
+                    AND    t.targetdb = '\$1'::text
+                    AND    t.tablename = \$2::oid
+                );
+            };
 			($SQL = $SQL{track}) =~ s/\$1/$safedbname/go;
 			$SQL =~ s/\$2/$g->{oid}/go;
 			$sth{source}{$g}{track} = $sourcedbh->prepare($SQL);
@@ -4366,7 +4356,7 @@ sub start_kid {
 				## only tells us that the real row *might* exist.
 				## And upserts are too expensive here :)
 				$SQL = $g->{binarypkey} ? 
-					"SELECT ENCODE($qnamepk,'base64') AS $qnamepk FROM $S.$T WHERE ENCODE($qnamepk,'base64') IN " 
+					"SELECT ENCODE($qnamepk,'base64') AS $qnamepk FROM $S.$T WHERE ENCODE($qnamepk,'base64') IN "
 						: "SELECT $qnamepk FROM $S.$T WHERE $qnamepk IN ";
 
 				while (@srccheck) {
@@ -4696,14 +4686,14 @@ sub start_kid {
 
 	## Cleanup and exit
 	$SQL = qq{
-		UPDATE bucardo.audit_pid
-		SET    killdate = timeofday()::timestamp
-		WHERE  type='KID'
-		AND    sync=?
-		AND    ppid=?
-		AND    pid =?
-		AND    killdate IS NULL
-	};
+        UPDATE bucardo.audit_pid
+        SET    killdate = timeofday()::timestamp
+        WHERE  type='KID'
+        AND    sync=?
+        AND    ppid=?
+        AND    pid =?
+        AND    killdate IS NULL
+    };
 	$sth = $maindbh->prepare($SQL);
 	$sth->execute($syncname,$self->{ppid},$$);
 	$maindbh->commit();
