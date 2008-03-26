@@ -9,7 +9,7 @@ use 5.008003;
 use strict;
 use warnings;
 
-our $VERSION = '3.0.8';
+our $VERSION = '3.0.9';
 
 ## Begin Moose classes
 {
@@ -2477,6 +2477,7 @@ sub start_controller {
 			## Make sure we kick this off again
 			if (exists $targetdb->{$_->{targetdb}}) {
 				$targetdb->{$_->{targetdb}}{kicked} = 1;
+				$kicked = 2;
 			}
 			else {
 				$_->{targetdb} ||= 'NONE';
@@ -2544,8 +2545,9 @@ sub start_controller {
 	my $lastpingcheck = 0;
 
 	## A kid will control a specific sync for a specific targetdb
-	## We tell all targetdbs for this sync by setting $kicked to true
+	## We tell all targetdbs for this sync by setting $kicked to 1
 	## For individual ones only, we set $targetdb->{$dbname}{kicked} to true
+	## and $kicked to 2
 
   CONTROLLER: {
 
@@ -2847,6 +2849,8 @@ sub start_controller {
 
 		## Add kids to the queue if kicking
 		if ($kicked) {
+			## TODO: For now, redo all targets.
+			$kicked = 1;
 			for my $kid (keys %$targetdb) {
 				if (1 == $kicked or $targetdb->{$kid}{kicked}) {
 					push @q, $kid;
@@ -4904,7 +4908,7 @@ Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This documents describes Bucardo version 3.0.8
+This documents describes Bucardo version 3.0.9
 
 =head1 SYNOPSIS
 
