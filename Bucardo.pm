@@ -309,10 +309,8 @@ after 'dbgroup' => sub {
 		my $pri = $arg->{priority} || 0;
 		$arg->{db} =~ s/\'/''/go;
 		$arg->{name} =~ s/\'/''/go;
-		$SQL = qq{
-            INSERT INTO bucardo.dbmap (db, dbgroup, priority)
-            VALUES ('$arg->{db}','$arg->{name}', $pri)
-        };
+		$SQL = qq{INSERT INTO bucardo.dbmap (db, dbgroup, priority)}.
+			qq{ VALUES ('$arg->{db}','$arg->{name}', $pri)};
 		$maindbh->do($SQL);
 		$maindbh->commit();
 	}
@@ -723,6 +721,7 @@ sub glog {
 
 	my $prefix = $self->{logprefix} || '';
 	$msg = "$prefix$msg";
+
 	my $header = sprintf "%s%s%s",
 		$config{log_showpid}  ? "($$) " : '',
 		$config{log_showtime}==1 ? ('['.time.'] ') : 
@@ -1178,10 +1177,8 @@ sub start_mcp {
 	}
 	$synclist =~ s/\| $//;
 	$self->{cdate} = scalar localtime;
-	$SQL = qq{
-        INSERT INTO bucardo.audit_pid (type,sync,ppid,pid,birthdate)
-        VALUES ('MCP',?,$self->{ppid},$$,?)
-    };
+	$SQL = qq{INSERT INTO bucardo.audit_pid (type,sync,ppid,pid,birthdate) }.
+		qq{VALUES ('MCP',?,$self->{ppid},$$,?)};
 	$sth = $maindbh->prepare($SQL);
 	$sth->execute($synclist,$self->{cdate});
 	$maindbh->do("NOTIFY bucardo_started");
@@ -1889,7 +1886,6 @@ sub start_mcp {
 				return 0;
 			}
 			($g->{oid},$g->{safepkey},$g->{safeschema},$g->{safetable}) = @{$sth->fetchall_arrayref()->[0]};
-			$self->glog("OID is $g->{oid}");
 
 			## Check the source columns, and save them
 			$sth = $sth{checkcols};
@@ -1932,7 +1928,6 @@ sub start_mcp {
 				my $oid = $sth->fetchall_arrayref()->[0][0];
 				## Store away our oid, as we may need it later to access bucardo_delta
 				$g->{targetoid}{$db} = $oid;
-				$self->glog("OID=$oid");
 
 				$sth = $dbh->prepare($SQL{checkcols});
 				$sth->execute($oid);
@@ -1941,20 +1936,20 @@ sub start_mcp {
 				my $t = "$g->{schemaname}.$g->{tablename}";
 				for ($x=0; defined $cols[$x]; $x++) {
 					if (!defined $g->{cols}[$x]) {
-						my $msg = qq{Sync "$s->{name}", table $t does not have column "$cols[$x]" as seen on target "$db"};
+						my $msg = qq{Source database "$s->{name}", table $t does not have column "$cols[$x]" as seen on target "$db"};
 						$self->glog("FATAL: $msg");
 						warn $msg;
 						return 0;
 					}
 					if ($g->{cols}[$x] ne $cols[$x]) {
-						my $msg = qq{Sync "$s->{name}" has a column mismatch on table $t with target "$db" ($g->{cols}[$x] <> $cols[$x])};
+						my $msg = qq{Source database "$s->{name}" has a column mismatch on table $t with target "$db" ($g->{cols}[$x] <> $cols[$x])};
 						$self->glog("FATAL: $msg");
 						warn $msg;
 						return 0;
 					}
 				}
 				if (defined $g->{cols}[$x]) {
-					my $msg = qq{Sync "$s->{name}", table $t has more columns than target "$db"};
+					my $msg = qq{Source database "$s->{name}", table $t has more columns than target "$db"};
 					$self->glog("FATAL: $msg");
 					warn $msg;
 					return 0;
@@ -2299,10 +2294,8 @@ sub start_controller {
 
 	## Add ourself to the audit table
 	$self->{ccdate} = scalar localtime;
-	$SQL = qq{
-      INSERT INTO bucardo.audit_pid (type,sync,ppid,pid,birthdate)
-      VALUES ('CTL',?,$self->{ppid},$$,?)
-    };
+	$SQL = qq{INSERT INTO bucardo.audit_pid (type,sync,ppid,pid,birthdate)}.
+		qq{ VALUES ('CTL',?,$self->{ppid},$$,?)};
 	$sth = $maindbh->prepare($SQL);
 	$sth->execute($syncname,$self->{ccdate});
 	$maindbh->commit();
@@ -2369,10 +2362,8 @@ sub start_controller {
 	$dbinuse{source}{$sourcedb} = 0;
 
 	## This is how we tell kids to go:
-	$SQL = qq{
-        INSERT INTO bucardo.q (sync, ppid, sourcedb, targetdb, synctype)
-        VALUES (?,?,?,?,?)
-    };
+	$SQL = qq{INSERT INTO bucardo.q (sync, ppid, sourcedb, targetdb, synctype)}.
+		qq{ VALUES (?,?,?,?,?) };
 	$sth{qinsert} = $maindbh->prepare($SQL);
 
 	## We are only responsible for making sure there is one nullable
@@ -2611,22 +2602,21 @@ sub start_controller {
 								## Connect to the source database
 								my $srcdbh = $self->connect_database($sourcedb);
 								## Create a list of all targets
-								my $targetlist = join ',' => map { s/\'/''/g; qq{'$_'} } keys %$targetdb; ## no critic
+								my $targetlist = join ',' => map { s/\'/''/g; qq{'$_'} } keys %$targetdb;
 								my $numtargets = keys %$targetdb;
 								for my $g (@{$sync->{goatlist}}) {
 
 									next unless $g->{has_delta};
 									## XXX Do a deltacount for fullcopy?
 
-									my ($S,$T,$namepk,$qnamepk) = 
-										($g->{safeschema},$g->{safetable},$g->{pkey},$g->{safepkey});
+									my ($S,$T,$namepk,$qnamepk) = ($g->{safeschema},$g->{safetable},$g->{pkey},$g->{safepkey});
 									my $safepkeytype = $g->{pkeytype} =~ /timestamp|date/o ? 'text' : $g->{pkeytype};
 									my $x=0;
 									my $aliaslist = join ',' => map { "$_ AS $g->{cols}[$x++]" } @{$g->{safecols}};
 									if (length $aliaslist) {
 										$aliaslist = ", $aliaslist";
 									}
-									## XXX bytea
+
 									$SQL{trix} = qq{
                                       SELECT    DISTINCT d.rowid AS "BUCARDO_ID", t.$qnamepk $aliaslist
                                       FROM      bucardo.bucardo_delta d
@@ -2849,7 +2839,7 @@ sub start_controller {
 
 		## Add kids to the queue if kicking
 		if ($kicked) {
-			## TODO: For now, redo all targets.
+			## TODO: For now, redo all targets
 			$kicked = 1;
 			for my $kid (keys %$targetdb) {
 				if (1 == $kicked or $targetdb->{$kid}{kicked}) {
@@ -3266,10 +3256,8 @@ sub start_kid {
 	$maindbh->do("SET statement_timeout = 0");
 
 	## Add ourself to the audit table
-	$SQL = qq{
-        INSERT INTO bucardo.audit_pid (type,sync,ppid,pid,birth)
-        VALUES ('KID',?,$self->{ppid},$$,'Life: $self->{life}')
-    };
+	$SQL = qq{INSERT INTO bucardo.audit_pid (type,sync,ppid,pid,birth)}.
+		qq{ VALUES ('KID',?,$self->{ppid},$$,'Life: $self->{life}')};
 	$sth = $maindbh->prepare($SQL);
 	$sth->execute($syncname);
 
@@ -3340,7 +3328,7 @@ sub start_kid {
 			if ($g->{binarypkey}) {
 				$SQL =~ s/\?/DECODE(?,'base64')/;
 			}
-			#$self->glog("INSERT SQL: $SQL");
+
 			$sth{target}{$g}{insertrow} = $targetdbh->prepare($SQL);
 			if ($synctype eq 'swap') {
 				$sth{source}{$g}{insertrow} = $sourcedbh->prepare($SQL);
@@ -3357,7 +3345,6 @@ sub start_kid {
 			if ($g->{binarypkey}) {
 				$SQL =~ s/WHERE $qnamepk/WHERE ENCODE($qnamepk,'base64')/;
 			}
-			#$self->glog("UPDATE SQL: $SQL");
 			$sth{target}{$g}{updaterow} = $targetdbh->prepare($SQL);
 			$synctype eq 'swap' and $sth{source}{$g}{updaterow} = $sourcedbh->prepare($SQL);
 
