@@ -4147,7 +4147,7 @@ sub start_kid {
 							}
 							elsif ('skip' eq $sc) { ## XXX Too dangerous? Not allow 0 in general?
 								$info1->{$pkval}{BUCARDO_ACTION} = 0;
-						}
+							}
 							elsif ('random' eq $sc) {
 								$info1->{$pkval}{BUCARDO_ACTION} = rand 2 > 1 ? 1 : 2;
 							}
