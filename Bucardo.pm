@@ -9,7 +9,7 @@ use 5.008003;
 use strict;
 use warnings;
 
-our $VERSION = '3.0.9';
+our $VERSION = '3.1.0';
 
 ## Begin Moose classes
 {
@@ -727,7 +727,7 @@ sub glog {
 		$config{log_showtime}==1 ? ('['.time.'] ')
 			: $config{log_showtime}==2 ? ('['.scalar gmtime(time).'] ')
 				: $config{log_showtime}==3 ? ('['.scalar localtime(time).'] ')
-					: '';
+					: '',
 		$config{log_showline} ? (sprintf '#%04d ', (caller)[2]) : '';
 
 	## Route/tee serious errors to another file
@@ -4895,7 +4895,7 @@ Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This documents describes Bucardo version 3.0.9
+This documents describes Bucardo version 3.1.0
 
 =head1 SYNOPSIS
 

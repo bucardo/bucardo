@@ -14,11 +14,12 @@ use Time::HiRes 'sleep';
 use POSIX 'ceil';
 use Data::Dumper;
 
-our $VERSION = '1.1.19';
+return 1 if $ENV{BUCARDO_CTL_TEST};
+
+our $VERSION = '1.3.0';
 
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
-
 
 use vars qw/$dbh $SQL $sth %sth $count/;
 my $DEBUG            = 0;

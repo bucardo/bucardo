@@ -1,16 +1,9 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-3.0.8 (unreleased)
-
-  - Fix error in 'latest' conflict code. [Adam Wendt].
-
-  - Support bytea in primary key and regular columns. [GSM]
+3.1.0 April 6, 2008
 
   - Fix race condition in bucardo_delta/bucardo_track updates 
     for pushdelta syncs. [GSM]
-
-  - Filter out inactive target dbs from bucardo-report script.
-    [Spencer Christensen <schristensen@backcountry.com>]
 
   - Auto-detect primary keys (or unique indexes) for added tables. [GSM]
 
@@ -20,6 +13,25 @@
     primary keys with spaces, etc. [GSM]
 
   - Add new options to log_showtime to show non-epoch time strings [GSM]
+
+  - Make bucardo_ctl use the global version number, not its own. [GSM]
+
+  - Support bytea in primary key and regular columns. [GSM]
+
+3.0.9 Released March 26, 2008
+
+  - Fix problem causing killed controller to not re-do interrupted syncs 
+    on restart. [GSM]
+
+3.0.8 Released February 5, 2008
+
+  - Fix error in 'latest' conflict code. [Adam Wendt].
+
+  - Filter out inactive target dbs from bucardo-report script.
+    [Spencer Christensen <schristensen@backcountry.com>]
+
+  - Fix race condition in bucardo_delta/bucardo_track updates 
+    for pushdelta syncs. [GSM]
 
   - Fix a sorting problem in the bucardo-report script. [Jon Jensen <jon@endpoint.com>]
 

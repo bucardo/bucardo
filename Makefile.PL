@@ -1,6 +1,10 @@
-use strict;
-use 5.008003;
 use ExtUtils::MakeMaker;
+use strict;
+use warnings;
+use 5.008003;
+
+## No version.pm for this one, as the prereqs are not loaded yet.
+my $VERSION = '1.3.0';
 
 WriteMakefile(
     NAME         => 'Bucardo',
@@ -26,7 +30,6 @@ WriteMakefile(
     NO_META      => 1,
     clean        => { FILES => 'log.bucardo.* *~ *.tmp outgoingmail.*' },
 );
-
 
 package MY;
 sub test {

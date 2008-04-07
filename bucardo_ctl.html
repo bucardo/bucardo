@@ -9,8 +9,10 @@
 
 <body style="background-color: white">
 
-<p><a name="__index__"></a></p>
+
 <!-- INDEX BEGIN -->
+<div name="index">
+<p><a name="__index__"></a></p>
 
 <ul>
 
@@ -33,9 +35,11 @@
 	<li><a href="#see_also">SEE ALSO</a></li>
 	<li><a href="#copyright">COPYRIGHT</a></li>
 </ul>
+
+<hr name="index" />
+</div>
 <!-- INDEX END -->
 
-<hr />
 <p>
 </p>
 <h1><a name="name">NAME</a></h1>
@@ -80,10 +84,10 @@ bucardorc file mentioned below inside of separate directories.</p>
 <hr />
 <h1><a name="commands">COMMANDS</a></h1>
 <dl>
-<dt><strong><a name="item_start"><strong>start</strong></a></strong>
+<dt><strong><a name="start" class="item"><strong>start</strong></a></strong>
 
 <dd>
-<p>Usage: ./bucardo_ctl start ``Reason --name''</p>
+<p>Usage: ./bucardo_ctl start &quot;Reason --name&quot;</p>
 </dd>
 <dd>
 <p>Restarts Bucardo cleanly by first issuing the equivalent of a stop to ask any existing Bucardo 
@@ -97,10 +101,10 @@ If this returns successfully (indicating an active MCP process already running),
 exit with a return value of 2.</p>
 </dd>
 </li>
-<dt><strong><a name="item_stop"><strong>stop</strong></a></strong>
+<dt><strong><a name="stop" class="item"><strong>stop</strong></a></strong>
 
 <dd>
-<p>Usage: ./bucardo_ctl stop ``Reason --name''</p>
+<p>Usage: ./bucardo_ctl stop &quot;Reason --name&quot;</p>
 </dd>
 <dd>
 <p>Forces Bucardo to quit by creating a stop file which all MCP, CTL, and KID processes should 
@@ -112,7 +116,7 @@ this is a short explanation and your name. This is logged in the reason_file fil
 is also used by Bucardo when it exits and sends out mail about its death.</p>
 </dd>
 </li>
-<dt><strong><a name="item_kick"><strong>kick</strong></a></strong>
+<dt><strong><a name="kick" class="item"><strong>kick</strong></a></strong>
 
 <dd>
 <p>Usage: ./bucardo_ctl kick &lt;syncname(s)&gt; [timeout]</p>
@@ -132,14 +136,14 @@ multiple targets, the time that each target takes from the start of the kick is 
 target finishes.</p>
 </dd>
 </li>
-<dt><strong><a name="item_reload_config"><strong>reload_config</strong></a></strong>
+<dt><strong><a name="reload_config" class="item"><strong>reload_config</strong></a></strong>
 
 <dd>
 <p>Forces Bucardo to reload the bucardo_config file, and then restart all processes to ensure that the new 
 information is loaded.</p>
 </dd>
 </li>
-<dt><strong><a name="item_ping"><strong>ping</strong></a></strong>
+<dt><strong><a name="ping" class="item"><strong>ping</strong></a></strong>
 
 <dd>
 <p>Sends a ping notice to the MCP process to see if it will respond. By default, it will wait 15 seconds. A 
@@ -147,7 +151,7 @@ numeric argument will change this timeout. Using a 0 as the timeout indicates wa
 was returned, the program will exit with a value of 0. If it times out, the value will be 1.</p>
 </dd>
 </li>
-<dt><strong><a name="item_status"><strong>status</strong></a></strong>
+<dt><strong><a name="status" class="item"><strong>status</strong></a></strong>
 
 <dd>
 <p>Usage: ./bucardo_ctl status [syncname(s)] [--sort=#] [--daysback=#] [--showdays]</p>
@@ -160,16 +164,16 @@ shows detailed information for each one.</p>
 <p>When showing all syncs, the columns are:</p>
 </dd>
 <ol>
-<li><strong><a name="item_name"><strong>Name</strong></a></strong>
+<li><strong><a name="name" class="item"><strong>Name</strong></a></strong>
 
 <p>The name of the sync</p>
 </li>
-<li><strong><a name="item_type"><strong>Type</strong></a></strong>
+<li><strong><a name="type" class="item"><strong>Type</strong></a></strong>
 
 <p>The type of the sync. <code>F</code> = fullcopy, <code>S</code> = swap, <code>P</code> = pushdelta. In addition, if a sync is overdue, a <code>O!</code> will 
 appear, and if it is expired, a <code>E!</code> will appear.</p>
 </li>
-<li><strong><a name="item_state"><strong>State</strong></a></strong>
+<li><strong><a name="state" class="item"><strong>State</strong></a></strong>
 
 <p>The current status of this sync. If no sync is running, <code>idle</code> will appear. If a sync has been rquested, but has not 
 started yet, <code>WAIT</code> will appear, along with how long since the sync was requested. If a sync is 
@@ -177,40 +181,40 @@ currently running, <code>RUN</code> will appear, followed by the amount of time 
 target the sync is running against. Note that syncs running to more than one database at a time will only show 
 the one most recently started.</p>
 </li>
-<li><strong><a name="item_pid"><strong>PID</strong></a></strong>
+<li><strong><a name="pid" class="item"><strong>PID</strong></a></strong>
 
 <p>The PID of the current sync's controller (CTL). Note that if this is not a persistent sync and the state is <code>idle</code>, 
 this is merely a historical record and does not represent an active process.</p>
 </li>
-<li><strong><a name="item_last_good"><strong>Last_good</strong></a></strong>
+<li><strong><a name="last_good" class="item"><strong>Last_good</strong></a></strong>
 
 <p>How long since this sync last ran succesfully. Remember that this is affected by the --daysback parameter.</p>
 </li>
-<li><strong><a name="item_time"><strong>Time</strong></a></strong>
+<li><strong><a name="time" class="item"><strong>Time</strong></a></strong>
 
 <p>The amount of time the last successful sync took to run.</p>
 </li>
-<li><strong><a name="item_i_"><strong>I/U/D</strong></a></strong>
+<li><strong><a name="i_" class="item"><strong>I/U/D</strong></a></strong>
 
 <p>The number of inserts. updates, and deletes performed by the last successful sync.</p>
 </li>
-<li><strong><a name="item_last_bad"><strong>Last_bad</strong></a></strong>
+<li><strong><a name="last_bad" class="item"><strong>Last_bad</strong></a></strong>
 
 <p>How long since this sync failed to run successfully. Strongly affected by the --daysback parameter.</p>
 </li>
-<li><strong><strong>Time</strong></strong>
+<li><strong><a name="time2" class="item"><strong>Time</strong></a></strong>
 
 <p>The amount of time the last failed sync took before it was aborted.</p>
 </li>
 </ol>
-<dt><strong><a name="item_activate_syncname__5bsyncname2_syncname3__2e_2e_2e"><strong>activate</strong> syncname [syncname2 syncname3 ...] [timeout]</a></strong>
+<dt><strong><a name="activate_syncname_syncname2_syncname3_timeout" class="item"><strong>activate</strong> syncname [syncname2 syncname3 ...] [timeout]</a></strong>
 
 <dd>
 <p>Activates one or more named syncs. If given a timeout argument, it will wait until it has received 
 confirmation from Bucardo that each sync has been successfully activated.</p>
 </dd>
 </li>
-<dt><strong><a name="item_deactivate_syncname__5bsyncname2_syncname3__2e_2e_"><strong>deactivate</strong> syncname [syncname2 syncname3 ...] [timeout]</a></strong>
+<dt><strong><a name="deactivate_syncname_syncname2_syncname3_timeout" class="item"><strong>deactivate</strong> syncname [syncname2 syncname3 ...] [timeout]</a></strong>
 
 <dd>
 <p>Deactivates one or more named syncs. If given a timeout argument, it will wait until it has received 
@@ -225,39 +229,39 @@ confirmation from Bucardo that the sync has been successfully deactivated.</p>
 <p>It is usually easier to set most of these options at the top of the script, or make an alias for them, 
 as they will not change very often if at all.</p>
 <dl>
-<dt><strong><a name="item__2d_2ddbport_3dnumber"><strong>--dbport=number</strong></a></strong>
+<dt><strong><a name="dbport_number" class="item"><strong>--dbport=number</strong></a></strong>
 
-<dt><strong><a name="item__2d_2ddbhost_3dstring"><strong>--dbhost=string</strong></a></strong>
+<dt><strong><a name="dbhost_string" class="item"><strong>--dbhost=string</strong></a></strong>
 
-<dt><strong><a name="item__2d_2ddbname_3dstring"><strong>--dbname=string</strong></a></strong>
+<dt><strong><a name="dbname_string" class="item"><strong>--dbname=string</strong></a></strong>
 
-<dt><strong><a name="item__2d_2ddbuser_3dstring"><strong>--dbuser=string</strong></a></strong>
+<dt><strong><a name="dbuser_string" class="item"><strong>--dbuser=string</strong></a></strong>
 
-<dt><strong><a name="item__2d_2ddbpass_3dstring"><strong>--dbpass=string</strong></a></strong>
+<dt><strong><a name="dbpass_string" class="item"><strong>--dbpass=string</strong></a></strong>
 
 <dd>
 <p>The port, host, and name of the Bucardo database, the user to connect as, and the password to use.</p>
 </dd>
 </li>
-<dt><strong><a name="item__2d_2dverbose"><strong>--verbose</strong></a></strong>
+<dt><strong><a name="verbose" class="item"><strong>--verbose</strong></a></strong>
 
 <dd>
 <p>Tells Bucardo (not bucardo_ctl) to run in verbose mode. Default is on. Turning this off is not recommended.</p>
 </dd>
 </li>
-<dt><strong><a name="item__2d_2dctlverbose"><strong>--ctlverbose</strong></a></strong>
+<dt><strong><a name="ctlverbose" class="item"><strong>--ctlverbose</strong></a></strong>
 
 <dd>
 <p>Makes bucardo_ctl run verbosely. Default is off.</p>
 </dd>
 </li>
-<dt><strong><a name="item__2d_2dctlquiet"><strong>--ctlquiet</strong></a></strong>
+<dt><strong><a name="ctlquiet" class="item"><strong>--ctlquiet</strong></a></strong>
 
 <dd>
 <p>Tells bucardo_ctl to be as quiet as possible. Default is off.</p>
 </dd>
 </li>
-<dt><strong><a name="item__2d_2dhelp"><strong>--help</strong></a></strong>
+<dt><strong><a name="help" class="item"><strong>--help</strong></a></strong>
 
 <dd>
 <p>Shows a brief summary of usage for bucardo_ctl.</p>
@@ -269,19 +273,19 @@ as they will not change very often if at all.</p>
 <h2><a name="kick_arguments">Kick arguments</a></h2>
 <p>The following arguments are only used with the 'kick' command:</p>
 <dl>
-<dt><strong><a name="item__2d_2dretry_3d_23"><strong>--retry=#</strong></a></strong>
+<dt><strong><a name="retry" class="item"><strong>--retry=#</strong></a></strong>
 
 <dd>
 <p>The number of times to retry a sync if it fails. Defaults to 0.</p>
 </dd>
 </li>
-<dt><strong><a name="item__2d_2dretrysleep"><strong>--retrysleep</strong></a></strong>
+<dt><strong><a name="retrysleep" class="item"><strong>--retrysleep</strong></a></strong>
 
 <dd>
 <p>How long to sleep, in seconds, between each retry attempt.</p>
 </dd>
 </li>
-<dt><strong><a name="item__2d_2dnotimer"><strong>--notimer</strong></a></strong>
+<dt><strong><a name="notimer" class="item"><strong>--notimer</strong></a></strong>
 
 <dd>
 <p>By default, kicks with a timeout argument give a running real-time summary of time elapsed by 
@@ -295,27 +299,27 @@ via a cronjob, so turning --notimer on will simply print the entire message with
 <h2><a name="status_arguments">Status arguments</a></h2>
 <p>The following arguments are only used with the 'status' command:</p>
 <dl>
-<dt><strong><a name="item__2d_2ddaysback_3d_23"><strong>--daysback=#</strong></a></strong>
+<dt><strong><a name="daysback" class="item"><strong>--daysback=#</strong></a></strong>
 
 <dd>
 <p>Sets how many days backwards to search the old 'q' logs for information. Defaults to 3 days.</p>
 </dd>
 </li>
-<dt><strong><a name="item__2d_2dshowdays"><strong>--showdays</strong></a></strong>
+<dt><strong><a name="showdays" class="item"><strong>--showdays</strong></a></strong>
 
 <dd>
 <p>Specifies whether or not do list the time interval with days, or simply show the hours. For example, 
-``3d 12h 6m 3s'' vs. ``48h 6m 3s''</p>
+&quot;3d 12h 6m 3s&quot; vs. &quot;48h 6m 3s&quot;</p>
 </dd>
 </li>
-<dt><strong><a name="item__2d_2dcompress"><strong>--compress</strong></a></strong>
+<dt><strong><a name="compress" class="item"><strong>--compress</strong></a></strong>
 
 <dd>
 <p>Specifies whether or not to compress the time interval by removing spaces. Mostly used to limit 
 the width of the 'status' display.</p>
 </dd>
 </li>
-<dt><strong><a name="item__2d_2dsort_3d_23"><strong>--sort=#</strong></a></strong>
+<dt><strong><a name="sort" class="item"><strong>--sort=#</strong></a></strong>
 
 <dd>
 <p>Requests sorting of the 'status' output by one of the nine columns. Use a negative number to reverse 
@@ -326,68 +330,68 @@ the sort order.</p>
 <p>
 </p>
 <h2><a name="startup_arguments">Startup arguments</a></h2>
-<p>The following arguments are only applicable when using the ``start'' command:</p>
+<p>The following arguments are only applicable when using the &quot;start&quot; command:</p>
 <dl>
-<dt><strong><a name="item__2d_2dsendmail"><strong>--sendmail</strong></a></strong>
+<dt><strong><a name="sendmail" class="item"><strong>--sendmail</strong></a></strong>
 
 <dd>
 <p>Tells Bucardo whether or not to send mail on interesting events: startup, shutdown, and errors. Default is on.
 Only applicable when using ./bucardo_ctl start.</p>
 </dd>
 </li>
-<dt><strong><a name="item__2d_2dextraname_3dstring"><strong>--extraname=string</strong></a></strong>
+<dt><strong><a name="extraname_string" class="item"><strong>--extraname=string</strong></a></strong>
 
 <dd>
 <p>A short string that will be appended to the version string as output by the Bucardo process names. Mostly 
 useful for debugging.</p>
 </dd>
 </li>
-<dt><strong><a name="item__2d_2ddebugfilesep"><strong>--debugfilesep</strong></a></strong>
+<dt><strong><a name="debugfilesep" class="item"><strong>--debugfilesep</strong></a></strong>
 
 <dd>
-<p>Forces creation of separate log files for each Bucardo process of the form ``log.bucardo.X.Y'', 
+<p>Forces creation of separate log files for each Bucardo process of the form &quot;log.bucardo.X.Y&quot;, 
 where X is the type of process (MCP, CTL, or KID), and Y is the process ID.</p>
 </dd>
 </li>
-<dt><strong><a name="item__2d_2ddebugstderr"><strong>--debugstderr</strong></a></strong>
+<dt><strong><a name="debugstderr" class="item"><strong>--debugstderr</strong></a></strong>
 
 <dd>
 <p>Sends all log messages to standard error. Off by default.</p>
 </dd>
 </li>
-<dt><strong><a name="item__2d_2ddebugstdout"><strong>--debugstdout</strong></a></strong>
+<dt><strong><a name="debugstdout" class="item"><strong>--debugstdout</strong></a></strong>
 
 <dd>
 <p>Sends all log messages to standard out. Off by default.</p>
 </dd>
 </li>
-<dt><strong><a name="item__2d_2ddebugsyslog"><strong>--debugsyslog</strong></a></strong>
+<dt><strong><a name="debugsyslog" class="item"><strong>--debugsyslog</strong></a></strong>
 
 <dd>
 <p>Sends all log messages to the syslog daemon. On by default. The facility used is controlled by 
-the row ``syslog_facility'' in the bucardo_config table, and defaults to ``LOG_LOCAL1''.</p>
+the row &quot;syslog_facility&quot; in the bucardo_config table, and defaults to &quot;LOG_LOCAL1&quot;.</p>
 </dd>
 </li>
-<dt><strong><a name="item__2d_2ddebugfile"><strong>--debugfile</strong></a></strong>
+<dt><strong><a name="debugfile" class="item"><strong>--debugfile</strong></a></strong>
 
 <dd>
 <p>If set, writes detailed debugging information to one or more files.</p>
 </dd>
 </li>
-<dt><strong><a name="item__2d_2ddebugdir_3ddirectory_name"><strong>--debugdir=directory name</strong></a></strong>
+<dt><strong><a name="debugdir_directory_name" class="item"><strong>--debugdir=directory name</strong></a></strong>
 
 <dd>
 <p>Directory where the debug files should go.</p>
 </dd>
 </li>
-<dt><strong><a name="item__2d_2ddebugname_3dstring"><strong>--debugname=string</strong></a></strong>
+<dt><strong><a name="debugname_string" class="item"><strong>--debugname=string</strong></a></strong>
 
 <dd>
-<p>Appends the given string to the end of the default debug file name, ``log.bucardo''. A dot is added 
-before the name as well, so a debugname of ``rootdb'' would produce a log file named ``log.bucardo.rootdb''.</p>
+<p>Appends the given string to the end of the default debug file name, &quot;log.bucardo&quot;. A dot is added 
+before the name as well, so a debugname of &quot;rootdb&quot; would produce a log file named &quot;log.bucardo.rootdb&quot;.</p>
 </dd>
 </li>
-<dt><strong><a name="item__2d_2dcleandebugs"><strong>--cleandebugs</strong></a></strong>
+<dt><strong><a name="cleandebugs" class="item"><strong>--cleandebugs</strong></a></strong>
 
 <dd>
 <p>Forces removal of all old debug files before running.</p>
@@ -398,15 +402,15 @@ before the name as well, so a debugname of ``rootdb'' would produce a log file n
 </p>
 <hr />
 <h1><a name="files">FILES</a></h1>
-<p>In addition to command-line configurations, you can put any options inside of a file. The file <em>.bucardorc</em> in 
-the current directory will be used if found. If not found, then the file <em>~/.bucardorc</em> will be used. The format 
+<p>In addition to command-line configurations, you can put any options inside of a file. The file <em class="file">.bucardorc</em> in 
+the current directory will be used if found. If not found, then the file <em class="file">~/.bucardorc</em> will be used. The format 
 of the file is option = value, one per line. Any line starting with a '#' will be skipped. Any values loaded 
 from a .bucardorc file will be overwritten by command-line options.</p>
 <p>
 </p>
 <hr />
 <h1><a name="environment_variables">ENVIRONMENT VARIABLES</a></h1>
-<p>The bucardo_ctl script uses <em>$ENV{HOME}</em> to look for a <em>.bucardorc</em> file.</p>
+<p>The bucardo_ctl script uses <em>$ENV{HOME}</em> to look for a <em class="file">.bucardorc</em> file.</p>
 <p>
 </p>
 <hr />
