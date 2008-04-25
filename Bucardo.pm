@@ -1755,6 +1755,7 @@ sub start_mcp {
 		my $pdbh = $self->{pingdbh};
 		if (defined $s->{targetdb}) {
  		  my $tdb = $s->{targetdb};
+		  $self->glog(qq{Connecting to target database "$tdb"});
  		  $pdbh->{$tdb} ||= $self->connect_database($tdb);
  		  if ($pdbh->{$tdb} eq 'inactive') {
  		    delete $pdbh->{$tdb};
@@ -1765,14 +1766,15 @@ sub start_mcp {
  		  }
 		}
 		elsif (defined $s->{targetgroup}) {
-			for (@{$dbgroups->{$s->{targetgroup}}{members}}) {
-				$pdbh->{$_} ||= $self->connect_database($_);
+			for my $tdb (@{$dbgroups->{$s->{targetgroup}}{members}}) {
+				$self->glog(qq{Connecting to target database "$tdb"});
+				$pdbh->{$tdb} ||= $self->connect_database($tdb);
 				if ($pdbh->{$_} eq 'inactive') {
-					delete $pdbh->{$_};
+					delete $pdbh->{$tdb};
 				}
 				else {
-					$targetdbh{$_}++;
-					$s->{targetdbs}{$_}++;
+					$targetdbh{$tdb}++;
+					$s->{targetdbs}{$tdb}++;
 				}
 			}
 		}
