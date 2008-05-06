@@ -4842,7 +4842,7 @@ sub send_mail {
 		return;
 	}
 
-	if ($self->{sendmail}) {
+	if ($self->{sendmail} and $arg->{to} ne 'nobody@example.com') {
 		my $ret = Mail::Sendmail::sendmail(
 						   To      => $arg->{to},
 						   From    => $from,
