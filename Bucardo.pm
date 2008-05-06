@@ -2862,7 +2862,7 @@ sub start_controller {
 		if ($limitperdb) { ## How busy is each database?
 			undef %dbinuse;
 			$sth{qfreeall}->execute;
-			for (@{$sth{qfree}->fetchall_arrayref()}) {
+			for (@{$sth{qfreeall}->fetchall_arrayref()}) {
 				$dbinuse{source}{$_->[0]}++;
 				$dbinuse{target}{$_->[1]}++;
 			}
