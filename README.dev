@@ -73,7 +73,7 @@ bucardo.schema - The schema for Bucardo. Contains a version number in two places
 
 * Test files:
 
-bucardo.test.pl - Shared routines for setup and teardown.
+BucardoTesting.pm - Shared routines for setup and teardown.
 
 bucard.test.helper - Helper script for bucardo_ctl calling.
 
