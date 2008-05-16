@@ -2403,6 +2403,17 @@ sub start_controller {
 
 	$SQL = qq{
         UPDATE bucardo.q
+        SET    ended = timeofday()::timestamp
+        WHERE  sync=?
+        AND    targetdb = ?
+        AND    started IS NOT NULL
+        AND    ended IS NULL
+        AND    aborted IS NOT NULL
+    };
+	$sth{qclearaborted} = $maindbh->prepare($SQL);
+
+	$SQL = qq{
+        UPDATE bucardo.q
         SET    aborted=timeofday()::timestamp, whydie=?
         WHERE  sync = ?
         AND    pid = ?
@@ -2950,6 +2961,15 @@ sub start_controller {
 
 		my ($self,$sync,$kid) = @_;
 		$self->{parent} = $$;
+
+		## Clear out any aborted kid entries, so the controller does not resurrect them.
+		## It's fairly sane to do this here, as we can assume a kid will be immediately created,
+		## and that kid will create a new aborted entry if it fails.
+		## We want to do it pre-fork, so we don't clear out a kid that aborts quickly.
+
+		$sth{qclearaborted}->execute($self->{syncname},$kid->{dbname});
+		$self->{masterdbh}->commit();
+
 		my $newkid = fork;
 		if (! defined $newkid) {
 			die qq{Fork failed for new kid in start_controller};
