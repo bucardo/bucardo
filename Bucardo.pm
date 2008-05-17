@@ -3382,7 +3382,7 @@ sub start_kid {
 			}
 
 			## This casting is very important for index usage!
-			my $safepkeytype = $g->{pkeytype} =~ /timestamp|date|bytea/o ? 'text' : $g->{pkeytype};
+			my $safepkeytype = $g->{pkeytype} =~ /date|bytea/o ? 'text' : $g->{pkeytype};
 			my $x=0;
 			my $aliaslist = join ',' => map { "$_ AS $g->{cols}[$x++]" } @{$g->{safecols}};
 			if (length $aliaslist) {
