@@ -74,8 +74,8 @@ WITH DELIMITER '|';
 kick_sleep|0.2|How long do we sleep while waiting for a kick response?
 mcp_loop_sleep|0.1|How long does the main MCP daemon sleep between loops?
 mcp_dbproblem_sleep|15|How many seconds to sleep before trying to respawn
-ctl_nothingfound_sleep|1.0|How long does the controller loop sleep if nothing is found?
-kid_nothingfound_sleep|0.1|How long does a kid sleep if nothing is found?
+ctl_nothingfound_sleep|0.2|How long does the controller loop sleep if nothing is found?
+kid_nothingfound_sleep|0.3|How long does a kid sleep if nothing is found?
 kid_nodeltarows_sleep|0.8|How long do kids sleep if no delta rows are found?
 kid_serial_sleep|10|How long to sleep in seconds if we hit a serialization error
 endsync_sleep|1.0|How long do we sleep when custom code requests an endsync?
