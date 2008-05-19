@@ -406,7 +406,7 @@ Each table that needs to be replicated needs to be added to the <b>goat</b> tabl
 <tr>
 <td class="lcol" >pkey</td> <td>Text</td> <td>None</td> <td>Yes</td> <td>The primary key column for this table</td> </tr>
 <tr>
-<td class="lcol" >pkeytype</td> <td>Text</td> <td>Null</td> <td>Yes</td> <td>Type of primary key: must be one of: 'smallint','int','bigint','text','timestamp','date'</td> </tr>
+<td class="lcol" >pkeytype</td> <td>Text</td> <td>Null</td> <td>No</td> <td>Type of primary key: automatically set by Bucardo in most cases. Will be one of: 'smallint','int','bigint','bytea','text','timestamp','date'</td> </tr>
 <tr>
 <td class="lcol" >ping</td> <td>Boolean</td> <td>Null</td> <td>No</td> <td>Issue NOTIFY via a trigger when this table changes? Used to override a sync-level ping.</td> </tr>
 <tr>
