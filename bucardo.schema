@@ -138,6 +138,7 @@ CREATE TABLE db (
   dbuser      TEXT        NOT NULL,
   dbpass      TEXT            NULL,
   dbconn      TEXT        NOT NULL DEFAULT '',  -- string to add to the generated dsn
+  dbservice   TEXT            NULL,
   pgpass      TEXT            NULL,      -- local file with connection info same as pgpass
   status      TEXT        NOT NULL DEFAULT 'active',
   sourcelimit SMALLINT    NOT NULL DEFAULT 0, -- maximum concurrent read connections to this database
@@ -191,7 +192,7 @@ CREATE TABLE goat (
                        CONSTRAINT goat_id_pk PRIMARY KEY (id),
   db                 TEXT        NOT NULL,
                        CONSTRAINT goat_db_fk FOREIGN KEY (db) REFERENCES db(name) ON DELETE RESTRICT,
-  schemaname         TEXT        NOT NULL DEFAULT 'public',
+  schemaname         TEXT        NOT NULL,
   tablename          TEXT        NOT NULL,
   reltype            TEXT        NOT NULL DEFAULT 'table',
   pkey               TEXT            NULL,
@@ -681,6 +682,17 @@ if (!$dbh) {
 }
 
 $version = $dbh->{pg_server_version};
+
+# Install plpgsql if not there already
+$SQL = q{SELECT 1 FROM pg_language WHERE lanname = 'plpgsql'};
+my $sth = $dbh->prepare($SQL);
+my $count = $sth->execute();
+$sth->finish();
+if ($count < 1) {
+   $dbh->do("CREATE LANGUAGE foobar");
+   $dbh->commit();
+}
+
 $dbh->disconnect();
 
 my $safeconn = "$db{dsn} user=$db{user}"; ## No password for now
@@ -932,6 +944,13 @@ $bc$
 	## that the columns match up, and that the delta stuff is set up as needed.
 	my %database;
 
+	## Does this herd exist?
+	$SQL = qq{SELECT 1 FROM herd WHERE name = '$source'};
+	$rv = spi_exec_query($SQL);
+	if (!$rv->{processed}) {
+	   elog(ERROR, "No such herd: $source");
+	}
+
 	## Process the source herd
 	$SQL = qq{
         SELECT id, db, schemaname, tablename, pkey, pkeytype,
@@ -946,7 +965,7 @@ $bc$
     };
 	$rv = spi_exec_query($SQL);
 	if (!$rv->{processed}) {
-		elog(ERROR, "No such herd: $source");
+		elog(ERROR, "Herd has no members: $source");
 	}
 
 	## All the same database, so we can extract it outside of the loop
