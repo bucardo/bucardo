@@ -1156,6 +1156,12 @@ sub start_mcp {
 			exec $RUNME;
 		}
 
+
+		$self->{masterdbh}->rollback();
+		$self->{masterdbh}->do("NOTIFY bucardo_stopped");
+		$self->{masterdbh}->commit();
+		$self->{masterdbh}->disconnect();
+
 		exit;
 	}; ## end SIG{__DIE__}
 
