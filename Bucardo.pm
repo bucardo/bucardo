@@ -2772,6 +2772,8 @@ sub start_controller {
 			redo CONTROLLER;
 		}
 
+		$self->glog("Got an active sync - passing to a kid");
+
 		## If a custom code handler needs a database handle, create one
 		our ($cc_sourcedbh,$safe_sourcedbh);
 
@@ -2932,9 +2934,9 @@ sub start_controller {
 				}
 				else {
 					$self->glog("Could not add to q sync=$syncname,source=$sourcedb,target=$dbname,count=$count. Sending manual notification");
-					my $notify = "bucardo_q_${syncname}_$dbname";
-					$maindbh->do(qq{NOTIFY "$notify"}) or die "NOTIFY $notify failed";
 				}
+				my $notify = "bucardo_q_${syncname}_$dbname";
+				$maindbh->do(qq{NOTIFY "$notify"}) or die "NOTIFY $notify failed";
 				$maindbh->commit();
 
 				## Check if there is a kid alive for this database: spawn if needed
