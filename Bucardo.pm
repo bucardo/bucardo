@@ -3394,7 +3394,7 @@ sub start_kid {
 			## Note: column order important for splice and defined calls later
 			$SQL{delta} = qq{
                 SELECT    DISTINCT d.rowid AS "BUCARDO_ID",
-                              t.$qnamepk $aliaslist
+                             BUCARDO_PK $aliaslist
                 FROM      bucardo.bucardo_delta d
                 LEFT JOIN $S.$T t ON BUCARDO_JOIN
                 WHERE     d.tablename = \$1::oid
@@ -3408,9 +3408,11 @@ sub start_kid {
             };
 			if ($g->{binarypkey}) {
 				$SQL{delta} =~ s/BUCARDO_JOIN/(ENCODE(t.${qnamepk},'base64')::text = d.rowid::text)/;
+				$SQL{delta} =~ s/BUCARDO_PK/ENCODE(t.$qnamepk,'base64')/;
 			}
 			else {
 				$SQL{delta} =~ s/BUCARDO_JOIN/(t.${qnamepk}::$safepkeytype = d.rowid::$safepkeytype)/;
+				$SQL{delta} =~ s/BUCARDO_PK/t.$qnamepk/;
 			}
 			($SQL = $SQL{delta}) =~ s/\$1/$g->{oid}/go;
 			(my $safedbname = $targetdb) =~ s/\'/''/go;
