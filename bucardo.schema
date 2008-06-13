@@ -689,7 +689,7 @@ my $sth = $dbh->prepare($SQL);
 my $count = $sth->execute();
 $sth->finish();
 if ($count < 1) {
-   $dbh->do("CREATE LANGUAGE foobar");
+   $dbh->do("CREATE LANGUAGE plpgsql");
    $dbh->commit();
 }
 
