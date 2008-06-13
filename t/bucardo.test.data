@@ -1,34 +1,44 @@
 
 ## This file contains the connection information needed for "make test"
 
-## Master database. This must be a superuser, as we will create a bucardo_test database
-DBNAME: postgres
-DBUSER: bucardo
-DBHOST: 
-DBPORT: 5432
-TESTDB: bucardo_test
-TESTBC: bucardo_test
+## Bucardo database.
+DBNAME_bucardo: postgres
+DBUSER_bucardo: postgres
+DBHOST_bucardo: 
+DBPORT_bucardo: 5432
+TESTDB_bucardo: bucardo_test
+TESTBC_bucardo: bucardo_test
 
 ## First database
-DBNAME1: postgres
-DBUSER1: bucardo
-DBHOST1: 
-DBPORT1: 5432
-TESTDB1: bucardo_test1
-TESTBC1: bucardo_test1
+DBNAME_A: postgres
+DBUSER_A: postgres
+DBHOST_A: 
+DBPORT_A: 5432
+TESTDB_A: bucardo_test_a
+TESTBC_A: bucardo_test_a
 
 ## Second database:
-DBNAME2: postgres
-DBUSER2: bucardo
-DBHOST2: 
-DBPORT2: 5432
-TESTDB2: bucardo_test2
-TESTBC2: bucardo_test2
+DBNAME_B: postgres
+DBUSER_B: postgres
+DBHOST_B: 
+DBPORT_B: 5432
+TESTDB_B: bucardo_test_b
+TESTBC_B: bucardo_test_b
 
 ## Third database:
-DBNAME3: postgres
-DBUSER3: bucardo
-DBHOST3: 
-DBPORT3: 5432
-TESTDB3: bucardo_test3
-TESTBC3: bucardo_test3
+DBNAME_C: postgres
+DBUSER_C: postgres
+DBHOST_C: 
+DBPORT_C: 5432
+TESTDB_C: bucardo_test_c
+TESTBC_C: bucardo_test_c
+
+## Fourth database:
+DBNAME_D: postgres
+DBUSER_D: postgres
+DBHOST_D: 
+DBPORT_D: 5432
+TESTDB_D: bucardo_test_d
+TESTBC_D: bucardo_test_d
+
+

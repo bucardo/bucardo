@@ -1,19 +1,34 @@
 #!/usr/bin/perl -- -*-cperl-*-
 
-## Test goat trigger functionality
+## Test all goat-related actions
+## Creating goats and removing via Moose
+## Creating goats and removing via bucardo_ctl
+## Proper goat triggers
 
 use 5.008003;
 use strict;
 use warnings;
 use DBI;
 use Test::More tests => 73;
+use lib 't','.';
+use BucardoTesting;
+
+my $info = {
+			name => 'goat'
+			};
+my $bctest = BucardoTesting->new($info);
+
+
+
+__DATA__
+
 
 my $rebuildschema = 1;
 
 my ($SQL,$sth,$t);
 
 our $location = 'goat';
-require 't/00setup.pl';
+require 't/bucardo.test.pl';
 
 pass("*** Beginning 'goat' tests");
 
