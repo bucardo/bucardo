@@ -4,6 +4,7 @@
 ##
 ## Copyright 2006-2008 Greg Sabino Mullane <greg@endpoint.com>
 
+package bucardo_ctl;
 use strict;
 use warnings;
 use 5.008003;
@@ -11,7 +12,7 @@ use DBI;
 use IO::Handle;
 use Getopt::Long;
 use Time::HiRes 'sleep';
-use POSIX 'ceil';
+use POSIX qw/ceil setsid/;
 use Data::Dumper;
 
 return 1 if $ENV{BUCARDO_CTL_TEST};
@@ -44,9 +45,9 @@ my $bcargs = {
 			  debugname    => '',
 			  debugstderr  => 0,
 			  debugstdout  => 0,
-			  debugsyslog  => 1,
+			  debugsyslog  => 0,
 			  debugdir     => '',
-			  debugfile    => 0,
+			  debugfile    => 1,
 			  cleandebugs  => 1,
 		  };
 
@@ -125,11 +126,13 @@ $verb = lc $verb;
 my @nouns = @ARGV;
 my $nouns = join ' ' => @nouns;
 
-## Grab curent information from the bucardo_config file
+## Grab current information from the bucardo_config file
 my $DSN = "dbi:Pg:dbname=$bcargs->{dbname}";
 $bcargs->{dbhost} and length $bcargs->{dbhost} and $DSN .= ";host=$bcargs->{dbhost}";
 $bcargs->{dbport} and length $bcargs->{dbport} and $DSN .= ";port=$bcargs->{dbport}";
 $dbh = DBI->connect($DSN, $bcargs->{dbuser}, $bcargs->{dbpass}, {AutoCommit=>0,RaiseError=>1});
+$dbh->do("SET search_path = bucardo");
+$dbh->commit();
 
 my $REASONFILE = get_config('reason_file') or die "Invalid reason_file!\n";
 my $PIDDIR     = get_config('piddir') or die "Invalid piddir!\n";
@@ -147,6 +150,9 @@ start()         if $verb eq 'start';
 stop()          if $verb eq 'stop';
 reload_config() if $verb eq 'reload_config';
 ping()          if $verb eq 'ping';
+add_item()      if $verb eq 'add';
+remove_item()   if $verb eq 'remove';
+
 
 ## For the rest, we expect a list of sync with an optional decimal "timeout"
 my $adverb;
@@ -218,9 +224,18 @@ sub start {
 
 	$QUIET or print qq{Starting Bucardo\n};
 
-	$bc->start_mcp();
+	$dbh->disconnect();
+	if (fork) {
+		warn "I am a parent: $$";
+	}
+	else {
+		close STDERR;
+		close STDOUT;
+		setsid() or die;
+		$bc->start_mcp();
+	}
+	exit 0;
 
-    exit 0;
 }
 
 
@@ -299,7 +314,7 @@ sub ping {
 	$dbh->commit();
 	my $starttime = time;
 	sleep 0.1;
-	
+
   P:{
 		my $notify = $dbh->func('pg_notifies');
 		if (defined $notify) {
@@ -1032,7 +1047,506 @@ sub vate_sync {
 	exit 0;
 }
 
+sub add_item {
 
+	my $self = shift;
+
+	if (!@nouns) {
+		warn "Usage: add <item_type> <item_name>\n";
+		exit 1;
+	}
+
+	## First word must be a type we know about
+	my $type = shift @nouns;
+	$type = lc $type;
+
+	if ($type eq 'db' or $type eq 'database') {
+		add_database($type);
+	}
+	elsif ($type eq 'table' or $type eq 'goat') {
+		add_table($type);
+	}
+	elsif ($type eq 'sync') {
+		add_sync($type);
+	}
+	elsif ($type eq 'herd') {
+		add_herd($type);
+	}
+	elsif ($type eq 'dbgroup') {
+		add_dbgroup($type);
+	}
+	else {
+		warn "Cannot add: unknown type\n";
+	}
+	exit 1;
+
+} ## end of add
+
+
+sub remove_item {
+
+	my $self = shift;
+
+	if (!@nouns) {
+		warn "Usage: remove <item_type> <item_name>\n";
+		exit 1;
+	}
+
+	## First word must be a type we know about
+	my $type = shift @nouns;
+	$type = lc $type;
+
+	if ($type eq 'db' or $type eq 'database') {
+		remove_database($type);
+	}
+	elsif ($type eq 'table' or $type eq 'goat') {
+		remove_table($type);
+	}
+	elsif ($type eq 'sync') {
+		remove_sync($type);
+	}
+	elsif ($type eq 'herd') {
+		remove_herd($type);
+	}
+	else {
+		warn "Cannot add: unknown type\n";
+	}
+	exit 1;
+
+} ## end of remove_item
+
+
+sub add_database {
+
+	my $type = shift;
+
+	## Usage: add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass=xxx
+	## service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx
+
+	## The first word is the name of the database we connect to (column dbname)
+	my $item_name = shift @nouns || '';
+	if (!length $item_name) {
+		warn "Usage: add $type <name>";
+		exit 1;
+	}
+
+	## The rest is the options. If not there, we fill in the defaults
+	my $info = join ' ' => @nouns;
+	my $delim = $info =~ /\|/ ? "\\s*\\|\\s*" : '\\s+';
+	## Command line name, default value, database column name
+	my %arg = (
+			   name        => [$item_name, ''],
+			   user        => ['bucardo',  'dbuser'],
+			   port        => ['',         'dbport'],
+			   host        => ['',         'dbhost'],
+			   pass        => ['',         'dbpass'],
+			   status      => ['',         ''],
+			   conn        => ['',         'dbconn'],
+			   service     => ['',         'dbservice'],
+			   sourcelimit => ['',         ''],
+			   targetlimit => ['',         ''],
+			   );
+	for my $arg (split /$delim/ => $info) {
+		if ($arg !~ /(.+)=(.+)/o) {
+			die qq{Invalid argument\n};
+		}
+		my ($name,$value) = ($1,$2);
+		if (!exists $arg{$name}) {
+			die "Unknown option '$name'\n";
+		}
+		$arg{$name}[0] = $value;
+	}
+	$arg{dbname} = [$item_name,''];
+
+	## Lots of checks go here...
+
+	my ($cols,$phs) = ('','');
+	my @vals;
+	for my $col (sort keys %arg) {
+		next if ! length $arg{$col}[0];
+		my $name = $arg{$col}[1] || $col;
+		$cols .= "$name,";
+		$phs .= '?,';
+		push @vals, $arg{$col}[0];
+	}
+	$cols =~ s/,$//;
+	$phs =~ s/,$//;
+
+	## Add this to the database
+	$SQL = "INSERT INTO bucardo.db ($cols) VALUES ($phs)";
+	$DEBUG and warn "SQL: $SQL\n";
+	$sth = $dbh->prepare($SQL);
+	eval {
+		$count = $sth->execute(@vals);
+	};
+	if ($@) {
+		die "Fail: $@\n";
+	}
+	## Prompt for final go-ahead
+
+	$dbh->commit();
+
+	warn "Database added: $arg{name}[0]\n";
+	exit 0;
+
+} ## end of add_database
+
+
+sub add_table {
+
+	my $type = shift;
+
+	## Usage: add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx
+
+	## TODO: Make this smarter
+	my $DEFAULT_SCHEMA = 'public';
+
+	## Any single words are table names.
+	my (@newnouns,@tables);
+	for (@nouns) {
+		if (/=/) {
+			push @newnouns => $_;
+		}
+		else {
+			if (/^(\w*?)?\.?(\w+)$/) {
+				push @tables => length $1 ? [$1,$2] : [$DEFAULT_SCHEMA,$2];
+			}
+			else {
+				warn "Invalid table name: $_\n";
+				exit 1;
+			}
+		}
+	}
+	@nouns = @newnouns;
+
+	if (! @tables) {
+		warn "Usage: add $type <name>";
+		exit 1;
+	}
+
+	## The rest is the options. If not there, we fill in the defaults
+	my $info = join ' ' => @nouns;
+	my $delim = $info =~ /\|/ ? "\\s*\\|\\s*" : '\\s+';
+	## Command line name, default value, database column name
+	my %arg = (
+			   db                => ['',      ''],
+			   ping              => ['',      ''],
+			   standard_conflict => ['',      ''],
+			   herd              => ['',      ''],
+			   );
+	for my $arg (split /$delim/ => $info) {
+		if ($arg !~ /(.+)=(.+)/o) {
+			die qq{Invalid argument: ($arg)\n};
+		}
+		my ($name,$value) = ($1,$2);
+		if (!exists $arg{$name}) {
+			die "Unknown option '$name'\n";
+		}
+		$arg{$name}[0] = $value;
+	}
+
+	## Lots of checks go here...
+
+	my $herd;
+	if ($arg{herd}->[0]) {
+		$herd = $arg{herd}->[0];
+		delete $arg{herd};
+		## Does this herd exist?
+		$SQL = 'SELECT count(*) FROM herd WHERE name = ?';
+		$sth = $dbh->prepare($SQL);
+		$count = $sth->execute($herd);
+		$sth->finish();
+		if ($count != 1) {
+			die "Cannot add to non-existent herd: $herd\n";
+		}
+	}
+
+	my ($cols,$phs) = ('','');
+	my @vals;
+	for my $col (sort keys %arg) {
+		next if ! length $arg{$col}[0];
+		my $name = $arg{$col}[1] || $col;
+		$cols .= "$name,";
+		$phs .= '?,';
+		push @vals, $arg{$col}[0] if $arg{$col}[0];
+	}
+	$cols =~ s/,$//;
+	$phs =~ s/,$//;
+
+	## Add these to the database
+	$SQL = "INSERT INTO bucardo.goat ($cols,schemaname,tablename) VALUES ($phs,?,?) RETURNING id";
+	$sth = $dbh->prepare($SQL);
+	my @id;
+	for (@tables) {
+		my ($schema,$table) = @$_;
+		eval {
+			if ($DEBUG >= 2) {
+				warn "SQL: $SQL\n";
+				my $args = join ',' => @vals;
+				my $ss = defined $schema ? $schema : '<undef>';
+				warn "Args: $args, $ss, $table\n";
+			}
+			$count = $sth->execute(@vals,$schema,$table);
+			push @id => $sth->fetch()->[0];
+		};
+		if ($@) {
+			return "Table add failed: $@\n";
+		}
+	}
+
+	## Add them to the herd if it was specificed
+	if (defined $herd) {
+		$SQL = 'INSERT INTO herdmap (goat,herd,priority) VALUES (?,?,?)';
+		$sth = $dbh->prepare($SQL);
+		for (@id) {
+			$sth->execute($_,$herd,0);
+		}
+	}
+
+	## Prompt for final go-ahead
+
+	$dbh->commit();
+
+	my $tablelist = sprintf "%s added: ", @tables > 1 ? 'Tables' : 'Table';
+	for (@tables) {
+		$tablelist .= sprintf "%s%s, ", $_->[0] ? "$_->[0]." : '', $_->[1];
+	}
+	$tablelist =~ s/, $//;
+	warn "$tablelist\n";
+	exit 0;
+
+} ## end of add_table
+
+
+sub add_sync {
+
+	my $type = shift;
+
+	## Usage: add sync syncname options
+
+	## The first word is the sync name
+	my $item_name = shift @nouns || '';
+	if (!length $item_name) {
+		warn "Usage: add $type <name>";
+		exit 1;
+	}
+
+	## The rest is the options. If not there, we fill in the defaults
+	my $info = join ' ' => @nouns;
+	my $delim = $info =~ /\|/ ? "\\s*\\|\\s*" : '\\s+';
+	## Command line name, default value, database column name
+	my %arg = (
+			   source      => ['', ''],
+			   targetdb    => ['', ''],
+			   targetgroup => ['', ''],
+			   type    => ['', 'synctype'],
+			   makedelta   => ['', ''],
+			   );
+	for my $arg (split /$delim/ => $info) {
+		if ($arg !~ /(.+)=(.+)/o) {
+			die qq{Invalid argument\n};
+		}
+		my ($name,$value) = ($1,$2);
+		if (!exists $arg{$name}) {
+			die "Unknown option '$name'\n";
+		}
+		$arg{$name}[0] = $value;
+	}
+	$arg{name} = [$item_name];
+
+	## Lots of checks go here...
+
+	my ($cols,$phs) = ('','');
+	my @vals;
+	for my $col (sort keys %arg) {
+		next if ! length $arg{$col}[0];
+		my $name = $arg{$col}[1] || $col;
+		$cols .= "$name,";
+		$phs .= '?,';
+		push @vals, $arg{$col}[0];
+	}
+	$cols =~ s/,$//;
+	$phs =~ s/,$//;
+
+	## Add this to the database
+	$SQL = "INSERT INTO bucardo.sync ($cols) VALUES ($phs)";
+	$DEBUG and warn "SQL: $SQL\n";
+	$sth = $dbh->prepare($SQL);
+	eval {
+		$count = $sth->execute(@vals);
+	};
+	## Prompt for final go-ahead
+
+	$dbh->commit();
+
+	warn "Sync added: $item_name\n";
+	exit 0;
+
+} ## end of add_sync
+
+
+sub remove_sync {
+
+	my $type = shift;
+
+	## Usage: remove sync syncname
+
+	## The first word is the sync name
+	my $item_name = shift @nouns || '';
+	if (!length $item_name) {
+		warn "Usage: remove $type <name>";
+		exit 1;
+	}
+
+	## Does this sync exist?
+	$SQL = 'SELECT * FROM bucardo.sync WHERE name = ?';
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute($item_name);
+	if ($count != 1) {
+		warn "No such sync: $item_name\n"; ## XXX Suggest alternatives?
+		exit 1;
+	}
+	## Is it active?
+	## Is it in use?
+
+	## Verify removal
+	## Remove vs inactivate
+	$SQL = 'DELETE FROM bucardo.sync WHERE name = ?';
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute($item_name);
+	if ($count != 1) {
+		warn "Could not delete from sync table!\n";
+		$dbh->rollback();
+		exit 1;
+	}
+	$dbh->commit();
+	warn "Sync removed: $item_name\n";
+	exit 0;
+
+} ## end of remove_sync
+
+
+sub add_herd {
+
+	my $type = shift;
+
+	## Usage: add herd name
+
+	my $item_name = shift @nouns || '';
+	if (!length $item_name) {
+		warn "Usage: add $type <name>";
+		exit 1;
+	}
+
+	## The rest is the options. If not there, we fill in the defaults
+	my $info = join ' ' => @nouns;
+	my $delim = $info =~ /\|/ ? "\\s*\\|\\s*" : '\\s+';
+	## Command line name, default value, database column name
+	my %arg = (
+			   );
+	for my $arg (split /$delim/ => $info) {
+		if ($arg !~ /(.+)=(.+)/o) {
+			die qq{Invalid argument\n};
+		}
+		my ($name,$value) = ($1,$2);
+		if (!exists $arg{$name}) {
+			die "Unknown option '$name'\n";
+		}
+		$arg{$name}[0] = $value;
+	}
+	$arg{name} = [$item_name];
+
+	## Lots of checks go here...
+
+	my ($cols,$phs) = ('','');
+	my @vals;
+	for my $col (sort keys %arg) {
+		next if ! length $arg{$col}[0];
+		my $name = $arg{$col}[1] || $col;
+		$cols .= "$name,";
+		$phs .= '?,';
+		push @vals, $arg{$col}[0];
+	}
+	$cols =~ s/,$//;
+	$phs =~ s/,$//;
+
+	## Add this to the database
+	$SQL = "INSERT INTO bucardo.herd ($cols) VALUES ($phs)";
+	$sth = $dbh->prepare($SQL);
+	eval {
+		$count = $sth->execute(@vals);
+	};
+	## Prompt for final go-ahead
+
+	$dbh->commit();
+
+	warn "Herd added: $item_name\n";
+	exit 0;
+
+} ## end of add_herd
+
+
+sub add_dbgroup {
+
+	my $type = shift;
+
+	## Usage: add dbgroup name db1 db2 db3 ...
+
+	my $name = shift @nouns || '';
+	if (!length $name) {
+		warn "Usage: add $type <name>";
+		exit 1;
+	}
+
+	## Create the group if it does not exist
+	$SQL = 'SELECT 1 FROM bucardo.dbgroup WHERE name = ?';
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute($name);
+	$sth->finish();
+	if ($count != 1) {
+		$SQL = 'INSERT INTO dbgroup(name) VALUES (?)';
+		$sth = $dbh->prepare($SQL);
+		$sth->execute($name);
+	}
+
+	## Add any dbs to this group, if they are not already there
+	if (@nouns) {
+		$SQL = 'SELECT 1 FROM bucardo.db WHERE name = ?';
+		my $gotdb = $dbh->prepare($SQL);
+		$SQL = 'SELECT priority FROM dbmap WHERE db=? AND dbgroup=?';
+		my $getpri = $dbh->prepare($SQL);
+		$SQL = 'INSERT INTO dbmap(db,dbgroup,priority) VALUES (?,?,?)';
+		my $addrow = $dbh->prepare($SQL);
+		$SQL = 'UPDATE dbmap SET priority = ? WHERE db=? AND dbgroup=?';
+		my $changepri = $dbh->prepare($SQL);
+		for my $db (@nouns) {
+			my $newpri  = 1;
+			if ($db =~ s/\=(\d+)//) { $newpri = $1; }
+			$count = $gotdb->execute($db);
+			$gotdb->finish();
+			if ($count != 1) {
+				warn "No such database: $db\n";
+				exit 1;
+			}
+			$count = $getpri->execute($db,$name);
+			if ($count == 1) {
+				my $oldpri = $getpri->fetchall_arrayref()->[0][0];
+				if ($oldpri != $newpri) {
+					$changepri->execute($newpri,$db,$name);
+				}
+			}
+			else {
+				## Does not exist
+				$addrow->execute($db,$name,$newpri);
+			}
+		}
+	}
+	$dbh->commit();
+
+	warn "Group updated\n";
+	exit 0;
+
+} ## end of add_dbgroup
 
 __END__
 
@@ -1067,9 +1581,8 @@ This documents describes bucardo_ctl version 1.1.19
 The bucardo_ctl script is used to control the operation of a Bucardo process. Primarily it is 
 used for stopping and starting Bucardo, viewing current information, and for kicking off named 
 syncs. The script needs to know how to connect to the Bucardo database: this information can 
-be passed as arguments or hard-coded into the script itself. If you have multiple Bucardo 
-instances running, it is recommended that you create aliases for each database, or use the 
-bucardorc file mentioned below inside of separate directories.
+be passed as arguments or hard-coded into the script itself. If you have multiple Bucardos 
+running, it is recommended that you create aliases for each database.
 
 =head1 COMMANDS
 
