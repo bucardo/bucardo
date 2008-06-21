@@ -69,7 +69,7 @@ for my $table (sort keys %tabletype) {
 pass 'Tables were identical before testing';
 
 for my $table (sort keys %tabletype) {
-last; ## XXX
+
 	diag "Testing table $table\n";
 
 	my $qtable = $dbh->quote($table);
