@@ -31,3 +31,5 @@ These range the gamut from wildly speculative ideas to must-have features.
 - I8n all messages/docs/etc.
 - Allow targets to be hard-linked: nobody goes on until everyone has finished
 - Support large objects
+- Check for superuser on startup, to prevent errors that only show when a KID tries something.
+
