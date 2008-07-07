@@ -32,4 +32,5 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Allow targets to be hard-linked: nobody goes on until everyone has finished
 - Support large objects
 - Check for superuser on startup, to prevent errors that only show when a KID tries something.
+- Gracefully handle new nodes being added, e.g. a one-time fulcopy sync for new pushdeltas.
 
