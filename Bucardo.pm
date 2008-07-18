@@ -1151,7 +1151,7 @@ sub start_mcp {
 			## We assume this is bucardo_ctl, and that we are in same directory as when called
 			my $RUNME = $old0;
 			$RUNME = "./$RUNME" if index($RUNME,'.')!=0;
-			$RUNME .= qq{ forcestart "Attempting automatic respawn after MCP death"};
+			$RUNME .= qq{ start "Attempting automatic respawn after MCP death"};
 			$self->glog("Respawn attempt: $RUNME");
 			exec $RUNME;
 		}
