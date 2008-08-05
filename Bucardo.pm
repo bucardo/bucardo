@@ -2350,7 +2350,9 @@ sub start_controller {
 				$moresub = " (no connection)";
 			}
 			my $subject = qq{Bucardo "$syncname" controller killed on $shorthost$moresub};
-			$self->send_mail({ body => "$body\n\n$dump", subject => $subject });
+			if ($subject !~ /stopfile/) {
+				$self->send_mail({ body => "$body\n\n$dump", subject => $subject });
+			}
 		}
 		$self->cleanup_controller("Killed (line $line): $msg");
 		exit;
