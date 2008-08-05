@@ -9,7 +9,7 @@ use 5.008003;
 use strict;
 use warnings;
 
-our $VERSION = '3.1.0';
+our $VERSION = '3.1.1';
 
 ## Begin Moose classes
 {
@@ -46,7 +46,7 @@ use Moose;
 
 my @req1 =  (qw(tablename db));
 my @req2 =  (qw());
-my @opt1 =  (qw(schemaname has_delta pkey ghost customselect));
+my @opt1 =  (qw(schemaname has_delta pkey ghost customselect strict_checking));
 push @opt1, (qw(standard_conflict pkeytype ping analyze_after_copy makedelta rebuild_index));
 my @opt2 =  (qw());
 for my $req (@req1) { has $req => ( is => 'rw', isa => 'Str', required => 1 ); }
@@ -73,10 +73,10 @@ use Moose;
 
 my @req1 =  (qw(name source));
 my @req2 =  (qw());
-my @opt1 =  (qw(synctype copytype deletemethod copyrows copyextra stayalive              ));
-push @opt1, (qw(checktime status limitdbs precommand postcommand txnmode ping            ));
-push @opt1, (qw(targetdb targetgroup kidtime kidsalive disable_triggers do_listen        ));
-push @opt1, (qw(usecustomselect makedelta rebuild_index disable_rules analyze_after_copy ));
+my @opt1 =  (qw(synctype copytype deletemethod copyrows copyextra stayalive strict_checking ));
+push @opt1, (qw(checktime status limitdbs precommand postcommand txnmode ping               ));
+push @opt1, (qw(targetdb targetgroup kidtime kidsalive disable_triggers do_listen           ));
+push @opt1, (qw(usecustomselect makedelta rebuild_index disable_rules analyze_after_copy    ));
 my @opt2 =  (qw());
 for my $req (@req1) { has $req => ( is => 'rw', isa => 'Str', required => 1 ); }
 for my $req (@req2) { has $req => ( is => 'rw', isa => 'Int', required => 1 ); }
@@ -854,13 +854,14 @@ sub get_dbs {
 sub get_dbgroups {
 
 	my $self = shift;
+
 	## Return a hashref of dbgroups
 	$SQL = qq{
         SELECT    d.name, m.db, m.priority
         FROM      bucardo.dbgroup d
         LEFT JOIN dbmap m ON (m.dbgroup=d.name)
         ORDER BY  m.priority ASC, random()
-	};
+    };
 	my $maindbh = $self->{masterdbh};
 	$sth = $maindbh->prepare($SQL);
 	$sth->execute();
@@ -935,6 +936,7 @@ sub get_herd {
 					has_delta          => $h->{has_delta},
 					ghost              => $h->{ghost},
 					analyze_after_copy => $h->{analyze_after_copy},
+					strict_checking    => $h->{strict_checking},
 					standard_conflict  => $h->{standard_conflict},
 					};
 	}
@@ -1720,6 +1722,8 @@ sub start_mcp {
 
 		my $syncname = $s->{name};
 
+		$self->glog(qq{Running validate_sync on "$s->{name}"});
+
 		## Get a list of all dbgroups in case targetgroups is set
 		my $dbgroups = $self->get_dbgroups;
 
@@ -1749,12 +1753,16 @@ sub start_mcp {
 		$sth{checktable} = $srcdbh->prepare($SQL{checktable});
 
 		$SQL{checkcols} = qq{
-            SELECT   attname, pg_catalog.quote_ident(attname), atttypid
+            SELECT   attname, quote_ident(attname) AS qattname, atttypid, format_type(atttypid, atttypmod) AS ftype,
+                     attnotnull, atthasdef, attnum,
+                     (SELECT pg_get_expr(adbin, adrelid) FROM pg_attrdef WHERE adrelid=attrelid and adnum=attnum AND atthasdef) AS def
             FROM     pg_catalog.pg_attribute
             WHERE    attrelid = ? AND attnum > 0 AND NOT attisdropped
             ORDER BY attnum
         };
 		$sth{checkcols} = $srcdbh->prepare($SQL{checkcols});
+
+		## TODO: Check constraints as well
 
 		## Connect to each target database used
 		my %targetdbh;
@@ -1775,7 +1783,7 @@ sub start_mcp {
 			for my $tdb (@{$dbgroups->{$s->{targetgroup}}{members}}) {
 				$self->glog(qq{Connecting to target database "$tdb"});
 				$pdbh->{$tdb} ||= $self->connect_database($tdb);
-				if ($pdbh->{$_} eq 'inactive') {
+				if ($pdbh->{$tdb} eq 'inactive') {
 					delete $pdbh->{$tdb};
 				}
 				else {
@@ -1882,7 +1890,7 @@ sub start_mcp {
 
 		## Go through each table and make sure it exists and matches everywhere
 		for my $g (@{$s->{goatlist}}) {
-			$self->glog(qq{  Validating source table "$g->{schemaname}.$g->{tablename}" on $s->{sourcedb}});
+			$self->glog(qq{  Analyzing source table "$g->{schemaname}.$g->{tablename}" on database "$s->{sourcedb}"});
 
 			## Check the source table, save escaped versions of the names
 			$sth = $sth{checktable};
@@ -1898,33 +1906,35 @@ sub start_mcp {
 			## Check the source columns, and save them
 			$sth = $sth{checkcols};
 			$sth->execute($g->{oid});
-			my $colinfo = $sth->fetchall_arrayref();
-			my $pkey = grep { $_->[0] eq $g->{pkey} } @$colinfo;
-			my @cols = map { $_->[0] } grep { $_->[0] ne $g->{pkey} } @$colinfo;
-			$g->{cols} = \@cols;
-			my @cols2 = map { $_->[1] } grep { $_->[0] ne $g->{pkey} } @$colinfo;
-			$g->{safecols} = \@cols2;
-			$g->{columnlist} = join ',' => @cols;
-			$g->{safecolumnlist} = join ',' => @cols2;
-
+			my $colinfo = $sth->fetchall_hashref('attname');
+			$g->{columnhash} = $colinfo;
 			my $x = 1;
-			for (@$colinfo) {
-				if (17 == $_->[2]) {
-					$self->glog("Setting column $x ($_->[0]) as binary");
-					if ($_->[0] eq $g->{pkey}) {
-						$g->{binarypkey} = 1;
-					}
-					else {
-						push @{$g->{binarycols}}, $x;
-					}
+			for my $colname (sort { $colinfo->{$a}{attnum} <=> $colinfo->{$b}{attnum} } keys %$colinfo) {
+				next if $colname eq $g->{pkey};
+				push @{$g->{cols}}, $colname;
+				push @{$g->{safecols}}, $colinfo->{$colname}{qattname};
+				$colinfo->{$colname}{order} = $x++;
+			}
+			$g->{columnlist} = join ',' => @{$g->{cols}};
+			$g->{safecolumnlist} = join ',' => @{$g->{safecols}};
+
+			## Note which columns are bytea
+			for my $colname (keys %$colinfo) {
+				my $c = $colinfo->{$colname};
+				next if $c->{atttypid} != 17;
+				if ($colname eq $g->{pkey}) {
+					$g->{binarypkey} = 1;
 				}
-				$x++ if $_->[0] ne $g->{pkey};
+				else {
+					## This is used to bind_param these as binary during inserts and updates
+					push @{$g->{binarycols}}, $colinfo->{$colname}{order};
+				}
 			}
 
 			## Verify tables and columns on remote databases
 			for my $db (sort keys %targetdbh) {
 				my $dbh = $pdbh->{$db};
-				$self->glog(qq{    Comparing tables and columns on $db});
+				$self->glog(qq{  Validating columns on target database "$db"});
 				$sth = $dbh->prepare($SQL{checktable});
 				$count = $sth->execute('N/A',$g->{schemaname},$g->{tablename});
 				if ($count != 1) {
@@ -1939,29 +1949,85 @@ sub start_mcp {
 
 				$sth = $dbh->prepare($SQL{checkcols});
 				$sth->execute($oid);
-				my @cols = map { $_->[0] } grep { $_->[0] ne $g->{pkey} } @{$sth->fetchall_arrayref()};
-				my $x;
+				my $targetcolinfo = $sth->fetchall_hashref('attname');
 				my $t = "$g->{schemaname}.$g->{tablename}";
-				for ($x=0; defined $cols[$x]; $x++) {
-					if (!defined $g->{cols}[$x]) {
-						my $msg = qq{Source database "$s->{name}", table $t does not have column "$cols[$x]" as seen on target "$db"};
+
+				my $column_problems = 0;
+				for my $colname (sort keys %$colinfo) {
+					$self->glog(qq{    Checking column on target database "$db": "$colname"});
+
+					## Always fatal: column on source but not target
+					if (! exists $targetcolinfo->{$colname}) {
+						$column_problems = 2;
+						my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t", but target database "$db" does not};
 						$self->glog("FATAL: $msg");
 						warn $msg;
-						return 0;
+						next;
 					}
-					if ($g->{cols}[$x] ne $cols[$x]) {
-						my $msg = qq{Source database "$s->{name}" has a column mismatch on table $t with target "$db" ($g->{cols}[$x] <> $cols[$x])};
+					my $fcol = $targetcolinfo->{$colname};
+					my $scol = $colinfo->{$colname};
+
+					## Always fatal: types do not match up
+					if ($scol->{ftype} ne $fcol->{ftype}) {
+						$column_problems = 2;
+						my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" as type "$scol->{ftype}", but target database "$db" has a type of "$fcol->{ftype}"};
 						$self->glog("FATAL: $msg");
 						warn $msg;
-						return 0;
+						next;
 					}
-				}
-				if (defined $g->{cols}[$x]) {
-					my $msg = qq{Source database "$s->{name}", table $t has more columns than target "$db"};
-					$self->glog("FATAL: $msg");
+
+					## Fatal on strict: NOT NULL mismatch
+					if ($scol->{attnotnull} != $fcol->{attnotnull}) {
+						$column_problems ||= 1;
+						my $msg = sprintf qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" set as %s, but target database "$db" has column set as %s},
+							$scol->{attnotnull} ? 'NOT NULL' : 'NULL',
+							$scol->{attnotnull} ? 'NULL' : 'NOT NULL';
+						$self->glog("Warning: $msg");
+						warn $msg;
+					}
+
+					## Fatal on strict: DEFAULT existence mismatch
+					if ($scol->{atthasdef} != $fcol->{atthasdef}) {
+						$column_problems ||= 1;
+						my $msg = sprintf qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" %s, but target database "$db" %s},
+							$scol->{atthasdef} ? 'with a DEFAULT value' : 'has no DEFAULT value',
+							$scol->{atthasdef} ? 'has none' : 'does';
+						$self->glog("Warning: $msg");
+						warn $msg;
+					}
+
+					## Fatal on strict: DEFAULT exists but does not match
+					if ($scol->{atthasdef} and $fcol->{atthasdef} and $scol->{def} ne $fcol->{def}) {
+						$column_problems ||= 1;
+						my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" with a DEFAULT of "$scol->{def}", but target database "$db" has a DEFAULT of "$fcol->{def}"};
+						$self->glog("Warning: $msg");
+						warn $msg;
+					}
+
+					## Fatal on strict: order of columns does not match up
+					if ($scol->{attnum} != $fcol->{attnum}) {
+						$column_problems ||= 1;
+						my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" at position $scol->{attnum}, but target database "$db" has it in position "$fcol->{attnum}"};
+						$self->glog("Warning: $msg");
+						warn $msg;
+					}
+
+				} ## end each column
+
+				## Fatal on strict: extra columns on the target side
+				for my $colname (sort keys %$targetcolinfo) {
+					next if exists $colinfo->{$colname};
+					$column_problems ||= 1;
+					my $msg = qq{Target database has column "$colname" on table "$t", but source database "$s->{name}" does not};
+					$self->glog("Warning: $msg");
 					warn $msg;
-					return 0;
 				}
+
+				## Real serious problems always bail out
+				return 0 if $column_problems >= 2;
+
+				## If other problems, only bail if strict checking is on
+				return 0 if $column_problems and $s->{strict_checking} and $g->{strict_checking};
 
 			} ## end each target database
 
@@ -1982,7 +2048,7 @@ sub start_mcp {
 				$sth->execute();
 				$info = $sth->{NAME};
 				$sth->finish();
-				$pkey = $g->{pkey};
+				my $pkey = $g->{pkey};
 				## It must contain the primary key
 				if (! grep { $_ eq $pkey } @$info) {
 					$msg = qq{ERROR: Custom SELECT does not contain the primary key "$pkey"\n};
@@ -2475,7 +2541,7 @@ sub start_controller {
         FROM   bucardo.q
         WHERE  sync = $safesyncname
         AND    (started IS NULL OR ended IS NULL)
-	};
+    };
 	$sth{cleanq} = $maindbh->prepare($SQL);
 	$count = $sth{cleanq}->execute();
 	if ($count eq '0E0') {
@@ -2496,29 +2562,29 @@ sub start_controller {
 			}
 		}
 		$SQL = qq{
-              UPDATE bucardo.q
-              SET started=timeofday()::timestamp, ended=timeofday()::timestamp, aborted=timeofday()::timestamp, whydie='Controller cleaning out unstarted q entry'
-              WHERE sync = $safesyncname
-              AND started IS NULL
+            UPDATE bucardo.q
+            SET started=timeofday()::timestamp, ended=timeofday()::timestamp, aborted=timeofday()::timestamp, whydie='Controller cleaning out unstarted q entry'
+            WHERE sync = $safesyncname
+            AND started IS NULL
         };
 		$maindbh->do($SQL);
 
 		## Clear out any aborted kids (the kids don't end so we can populate targetdb->{kicked} above)
 		## The whydie has already been set by the kid
 		$SQL = qq{
-              UPDATE bucardo.q
-              SET ended=timeofday()::timestamp
-              WHERE sync = $safesyncname
-              AND ended IS NULL AND aborted IS NOT NULL
+            UPDATE bucardo.q
+            SET ended=timeofday()::timestamp
+            WHERE sync = $safesyncname
+            AND ended IS NULL AND aborted IS NOT NULL
         };
 		$maindbh->do($SQL);
 
 		## Clear out any lingering entries which have not ended
 		$SQL = qq{
-              UPDATE bucardo.q
-              SET ended=timeofday()::timestamp, aborted=timeofday()::timestamp, whydie='Controller cleaning out unended q entry'
-              WHERE sync = $safesyncname
-              AND ended IS NULL
+            UPDATE bucardo.q
+            SET ended=timeofday()::timestamp, aborted=timeofday()::timestamp, whydie='Controller cleaning out unended q entry'
+            WHERE sync = $safesyncname
+            AND ended IS NULL
         };
 		$maindbh->do($SQL);
 
@@ -2778,8 +2844,6 @@ sub start_controller {
 			redo CONTROLLER;
 		}
 
-		$self->glog("Got an active sync - passing to a kid");
-
 		## If a custom code handler needs a database handle, create one
 		our ($cc_sourcedbh,$safe_sourcedbh);
 
@@ -2987,7 +3051,7 @@ sub start_controller {
 			$kid->{cdate} = time;
 			$kid->{life}++;
 			$kid->{finished} = 0;
-			$self->glog(qq{Created new kid $newkid for sync "$self->{syncname}"});
+			$self->glog(qq{Created new kid $newkid for sync "$self->{syncname}" to db "$kid->{dbname}"});
 			sleep $config{ctl_createkid_time};
 			return;
 		}
@@ -3090,7 +3154,7 @@ sub get_deadlock_details {
 		$getname->execute($relation);
 		my $relname = $getname->fetchall_arrayref()->[0][0];
 
-		## Fetch informatin about the conflicting process
+		## Fetch information about the conflicting process
 		my $queryinfo =$dldbh->prepare(qq{
 SELECT
   current_query AS query,
@@ -4927,7 +4991,7 @@ Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This documents describes Bucardo version 3.1.0
+This documents describes Bucardo version 3.1.1
 
 =head1 SYNOPSIS
 

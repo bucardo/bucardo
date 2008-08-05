@@ -206,6 +206,7 @@ CREATE TABLE goat (
   ghost              BOOLEAN     NOT NULL DEFAULT 'false', -- only drop triggers, do not replicate
   standard_conflict  TEXT            NULL,
   analyze_after_copy BOOLEAN     NOT NULL DEFAULT 'true',
+  strict_checking    BOOLEAN     NOT NULL DEFAULT 'true',
   cdate              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE goat ADD CONSTRAINT has_schemaname CHECK (length(schemaname) > 1);
@@ -324,6 +325,7 @@ CREATE TABLE sync (
   disable_triggers   TEXT        NOT NULL DEFAULT 'pg_class',
   disable_rules      TEXT        NOT NULL DEFAULT 'pg_class',
   analyze_after_copy BOOLEAN     NOT NULL DEFAULT 'true',
+  strict_checking    BOOLEAN     NOT NULL DEFAULT 'true',
   overdue            INTERVAL    NOT NULL DEFAULT '0 seconds'::interval,
   expired            INTERVAL    NOT NULL DEFAULT '0 seconds'::interval,
   cdate              TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -492,6 +494,8 @@ BEGIN
   RETURN false;
 END;
 $_$;
+
+
 
 
 CREATE FUNCTION create_child_q(TEXT)
