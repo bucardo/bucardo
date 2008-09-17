@@ -181,7 +181,7 @@ META.yml (two places)
 If you are adding a new file to the distribution (and this should be a rare event), 
 please check that you have done the following items:
 
-* Added it to via 'git-add filename' and 'git-commit'
+* Added it to via 'git add filename' and 'git commit'
 
 * Added it to the MANIFEST file
 
@@ -253,7 +253,7 @@ You may also want to remove the directory it creates later by using "make realcl
 * Update the SIGNATURE file with Module::Signature. This should be done as the 
 very last step.
 
-* Create a tag for the new version via git-tag.
+* Create a tag for the new version with "git tag".
 
 * Make checksums
 
