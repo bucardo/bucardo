@@ -597,7 +597,7 @@ sub reload_config {
 	my $done = 'bucardo_reload_config_finished';
 	$masterdbh->do("LISTEN $done");
 	$masterdbh->commit();
-	$masterdbh->do("NOTIFY bucardo_reload_config");
+	$masterdbh->do("NOTIFY bucardo_reload_config") or warn 'NOTIFY failed';
 	$masterdbh->commit();
 
 	my $BAIL = 200;
@@ -1077,6 +1077,9 @@ sub start_mcp {
 		exit;
 	}
 	$self->{masterdbh} = $self->connect_database();
+	$self->{masterdbh}->do('NOTIFY bucardo_boot') or die 'NOTIFY bucardo_boot failed!';
+	$self->{masterdbh}->commit();
+
 
 	$self->glog("Starting Bucardo version $VERSION");
 	my $systemtime = time;
@@ -1160,7 +1163,7 @@ sub start_mcp {
 
 
 		$self->{masterdbh}->rollback();
-		$self->{masterdbh}->do("NOTIFY bucardo_stopped");
+		$self->{masterdbh}->do('NOTIFY bucardo_stopped')  or warn 'NOTIFY failed';
 		$self->{masterdbh}->commit();
 		$self->{masterdbh}->disconnect();
 
@@ -1189,7 +1192,7 @@ sub start_mcp {
 		qq{VALUES ('MCP',?,$self->{ppid},$$,?)};
 	$sth = $maindbh->prepare($SQL);
 	$sth->execute($synclist,$self->{cdate});
-	$maindbh->do("NOTIFY bucardo_started");
+	$maindbh->do('NOTIFY bucardo_started')  or warn 'NOTIFY failed';
 	$maindbh->commit();
 
 	## Start the main loop
@@ -1283,7 +1286,7 @@ sub start_mcp {
 
 				## Let anyone listening know we are done
 				$self->glog("Sent notice bucardo_reload_config_finished");
-				$maindbh->do("NOTIFY bucardo_reload_config_finished");
+				$maindbh->do('NOTIFY bucardo_reload_config_finished') or warn 'NOTIFY failed';
 				$maindbh->commit();
 			}
 			elsif ($name eq 'bucardo_mcp_reload') {
@@ -1292,12 +1295,12 @@ sub start_mcp {
 
 				## Let anyone listening know the sync is now ready
 				$self->glog("Sent notice bucardo_reloaded_mcp");
-				$maindbh->do("NOTIFY bucardo_reloaded_mcp");
+				$maindbh->do('NOTIFY bucardo_reloaded_mcp') or warn 'NOTIFY failed';
 				$maindbh->commit();
 			}
 			elsif ($name eq 'bucardo_mcp_ping') {
 				$self->glog("Got a ping, issuing pong");
-				$maindbh->do("NOTIFY bucardo_mcp_pong");
+				$maindbh->do('NOTIFY bucardo_mcp_pong') or warn 'NOTIFY failed';
 				$maindbh->commit();
 			}
 			elsif ($name =~ /^bucardo_reload_sync_(.+)/o) {
@@ -1354,7 +1357,7 @@ sub start_mcp {
 					else {
 						## Let anyone listening know the sync is now ready
 						$self->glog("Sent notice bucardo_reloaded_sync_$syncname");
-						$maindbh->do(qq{NOTIFY "bucardo_reloaded_sync_$syncname"});
+						$maindbh->do(qq{NOTIFY "bucardo_reloaded_sync_$syncname"}) or warn 'NOTIFY failed';
 					}
 					$maindbh->commit();
 				}
@@ -1366,7 +1369,7 @@ sub start_mcp {
 				}
 				elsif ($sync->{$syncname}{mcp_active}) {
 					$self->glog(qq{Sync "$syncname" is already activated});
-					$maindbh->do(qq{NOTIFY "bucardo_activated_sync_$syncname"});
+					$maindbh->do(qq{NOTIFY "bucardo_activated_sync_$syncname"}) or warn 'NOTIFY failed';
 					$maindbh->commit();
 				}
 				else {
@@ -1382,7 +1385,7 @@ sub start_mcp {
 				}
 				elsif (! $sync->{$syncname}{mcp_active}) {
 					$self->glog(qq{Sync "$syncname" is already deactivated});
-					$maindbh->do(qq{NOTIFY "bucardo_deactivated_sync_$syncname"});
+					$maindbh->do(qq{NOTIFY "bucardo_deactivated_sync_$syncname"}) or warn 'NOTIFY failed';
 					$maindbh->commit();
 				}
 				else {
@@ -1407,7 +1410,7 @@ sub start_mcp {
 				if ($msg) {
 					$self->glog($msg);
 					## Don't want people to wait around for a syncdone...
-					$maindbh->do(qq{NOTIFY "bucardo_syncerror_$syncname"});
+					$maindbh->do(qq{NOTIFY "bucardo_syncerror_$syncname"}) or warn 'NOTIFY failed';
 					$maindbh->commit();
 				}
 
@@ -1703,7 +1706,7 @@ sub start_mcp {
 		}
 
 		## Let any listeners know we are done
-		$maindbh->do(qq{NOTIFY "bucardo_activated_sync_$syncname"});
+		$maindbh->do(qq{NOTIFY "bucardo_activated_sync_$syncname"}) or warn 'NOTIFY failed';
 		$maindbh->commit();
 
 		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active sync:";
@@ -2170,7 +2173,7 @@ sub start_mcp {
 		$0 .= join "," => @activesyncs;
 
 		## Let any listeners know we are done
-		$maindbh->do(qq{NOTIFY "bucardo_deactivated_sync_$syncname"});
+		$maindbh->do(qq{NOTIFY "bucardo_deactivated_sync_$syncname"}) or warn 'NOTIFY failed';
 		$maindbh->commit();
 
 		return 1;
@@ -2665,7 +2668,7 @@ sub start_controller {
 				## Got a ping?
 				elsif ($name eq 'bucardo_ctl_'.$$.'_ping') {
 					$self->glog("Got a ping, issuing pong");
-					$maindbh->do('NOTIFY bucardo_ctl_'.$$.'_pong');
+					$maindbh->do('NOTIFY bucardo_ctl_'.$$.'_pong') or warn 'NOTIFY failed';
 					$maindbh->commit();
 				}
 				## A kid has finished?
@@ -3269,8 +3272,8 @@ sub start_kid {
 		my $finaldbh = $self->connect_database();
 
 		## Let anyone listening know that this target and sync aborted
-		$finaldbh->do(qq{NOTIFY "bucardo_synckill_${syncname}_$targetdb"});
-		$finaldbh->do(qq{NOTIFY "bucardo_synckill_$syncname"});
+		$finaldbh->do(qq{NOTIFY "bucardo_synckill_${syncname}_$targetdb"}) or warn 'NOTIFY failed';
+		$finaldbh->do(qq{NOTIFY "bucardo_synckill_$syncname"}) or warn 'NOTIFY failed';
 		$finaldbh->commit();
 
 		## Mark ourself as aborted if we've started but not completed a job
@@ -3466,7 +3469,7 @@ sub start_kid {
 			## Note: column order important for splice and defined calls later
 			$SQL{delta} = qq{
                 SELECT    DISTINCT d.rowid AS "BUCARDO_ID",
-                             BUCARDO_PK $aliaslist
+                              BUCARDO_PK $aliaslist
                 FROM      bucardo.bucardo_delta d
                 LEFT JOIN $S.$T t ON BUCARDO_JOIN
                 WHERE     d.tablename = \$1::oid
@@ -3772,7 +3775,7 @@ sub start_kid {
 				## Got a ping?
 				elsif ($name eq 'bucardo_kid_'.$$.'_ping') {
 					$self->glog("Got a ping, issuing pong");
-					$maindbh->do('NOTIFY bucardo_kid_'.$$.'_pong');
+					$maindbh->do('NOTIFY bucardo_kid_'.$$.'_pong') or warn 'NOTIFY failed';
 					$maindbh->commit();
 				}
 			}
@@ -4875,7 +4878,7 @@ sub deactivate_sync {
 
 	my $msg = "bucardo_deactivate_sync_$syncname";
 
-	$dbh->do(qq{NOTIFY "$msg"});
+	$dbh->do(qq{NOTIFY "$msg"}) or warn 'NOTIFY failed';
 	$dbh->commit();
 
 	return;
@@ -4901,7 +4904,7 @@ sub activate_sync {
 
 	my $msg = "bucardo_activate_sync_$syncname";
 
-	$dbh->do(qq{NOTIFY "$msg"});
+	$dbh->do(qq{NOTIFY "$msg"}) or warn 'NOTIFY failed';
 	return $dbh->commit();
 
 } ## end of activate_sync
@@ -4915,7 +4918,7 @@ sub reload_all_syncs {
 
 	my $msg = "bucardo_mcp_reload";
 
-	$dbh->do("NOTIFY $msg");
+	$dbh->do("NOTIFY $msg") or warn 'NOTIFY failed';
 	return $dbh->commit();
 
 } ## end of reload_all_syncs
