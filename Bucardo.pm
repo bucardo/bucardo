@@ -1091,12 +1091,12 @@ sub start_mcp {
 	my $systemtime = time;
 	$SQL = "SELECT extract(epoch FROM now()), now(), current_setting('timezone')";
 	my $dbtime = $self->{masterdbh}->selectall_arrayref($SQL)->[0];
-	$self->glog("Local system epoch: $systemtime. DB epoch: $dbtime->[0]");
+	$self->glog("Local system epoch: $systemtime  Database epoch: $dbtime->[0]");
 	$systemtime = scalar localtime ($systemtime);
-	$self->glog("Local system time: $systemtime. DB time: $dbtime->[1]");
+	$self->glog("Local system time: $systemtime  Database time: $dbtime->[1]");
 	$systemtime = qx{/bin/date +"%Z"} || '?';
 	chomp $systemtime;
-	$self->glog("Local system timezone: $systemtime. DB timezone: $dbtime->[2]");
+	$self->glog("Local system timezone: $systemtime  Database timezone: $dbtime->[2]");
 	$self->{dbpass} = '<not shown>';
 	my $objdump = "Bucardo object:\n";
 	my $maxlen = 5;
@@ -1250,7 +1250,7 @@ sub start_mcp {
 		for my $pdb (keys %{$self->{pingdbh}}) {
 			my $pingdbh = $self->{pingdbh}{$pdb};
 			while ($n = $pingdbh->func('pg_notifies')) {
-				push @notice, [$n->[0],$n->[1],"db $pdb"];
+				push @notice, [$n->[0],$n->[1],"database $pdb"];
 			}
 		}
 		for (@notice) {
@@ -1899,7 +1899,7 @@ sub start_mcp {
 
 		## Go through each table and make sure it exists and matches everywhere
 		for my $g (@{$s->{goatlist}}) {
-			$self->glog(qq{  Analyzing source table "$g->{schemaname}.$g->{tablename}" on database "$s->{sourcedb}"});
+			$self->glog(qq{  Inspecting source table $g->{schemaname}.$g->{tablename} on database "$s->{sourcedb}"});
 
 			## Check the source table, save escaped versions of the names
 			$sth = $sth{checktable};
@@ -1943,7 +1943,6 @@ sub start_mcp {
 			## Verify tables and columns on remote databases
 			for my $db (sort keys %targetdbh) {
 				my $dbh = $pdbh->{$db};
-				$self->glog(qq{  Validating columns on target database "$db"});
 				$sth = $dbh->prepare($SQL{checktable});
 				$count = $sth->execute('N/A',$g->{schemaname},$g->{tablename});
 				if ($count != 1) {
@@ -2120,7 +2119,7 @@ sub start_mcp {
 		$srcdbh->commit();
 		if ($s->{ping} or $s->{do_listen}) {
 			my $l = "bucardo_kick_sync_$syncname";
-			$self->glog(qq{Listening on source server $s->{sourcedb} for "$l"});
+			$self->glog(qq{Listening on source server "$s->{sourcedb}" for "$l"});
 			$srcdbh->do(qq{LISTEN "$l"}) or die "LISTEN $l failed";
 			$srcdbh->commit();
 		}
@@ -2247,7 +2246,7 @@ sub start_mcp {
 		$finaldbh->rollback();
 		my $systemtime = scalar localtime;
 		my $dbtime = $finaldbh->selectall_arrayref("SELECT now()")->[0][0];
-		$self->glog(qq{End of cleanup_mcp. Sys time: $systemtime. DB time: $dbtime});
+		$self->glog(qq{End of cleanup_mcp. Sys time: $systemtime. Database time: $dbtime});
 		$finaldbh->disconnect();
 		return;
 
@@ -2318,7 +2317,7 @@ sub start_controller {
 	$mailmsg .= "$msg\n";
 
 	$SIG{USR1} = sub {
-		die "Got a request from the MCP to shut down\n";
+		die "MCP request";
 	};
 
 	$SIG{__DIE__} = sub {
@@ -2806,7 +2805,7 @@ sub start_controller {
 					$count = $sth{qcheck}->execute($syncname,$sourcedb,$atarget);
 					$sth{qcheck}->finish();
 					if ($count < 1) {
-						$self->glog(qq{Re-adding sync to q table for db "$atarget"});
+						$self->glog(qq{Re-adding sync to q table for database "$atarget"});
 						$count = $sth{qinsert}->execute($syncname,$self->{ppid},$sourcedb,$atarget,$synctype);
 						$maindbh->commit();
 						sleep $KIDABORTSLEEP;
@@ -2990,14 +2989,14 @@ sub start_controller {
 			}
 			## Got any more slots for this target db?
 			elsif ($limitperdb and $dbinuse{target}{$dbname} >= $dbinfo->{$dbname}{targetlimit}) {
-				$self->glog(qq{No room in queue for another target db "$dbname" Limit: $dbinfo->{$dbname}{targetlimit} Used: $dbinuse{target}{$dbname}});
+				$self->glog(qq{No room in queue for another target database "$dbname" Limit: $dbinfo->{$dbname}{targetlimit} Used: $dbinuse{target}{$dbname}});
 				shift @q for (1..$offset);
 				$queueclear = 0;
 				next Q;
 			}
 			## Got any more slots for this source db?
 			elsif ($limitperdb and $dbinuse{source}{$sourcedb} >= $dbinfo->{$sourcedb}{sourcelimit}) {
-				$self->glog(qq{No room in queue for another source db "$dbname" Limit: $dbinfo->{$dbname}{sourcelimit} Used: $dbinuse{source}{$dbname}});
+				$self->glog(qq{No room in queue for another source database "$dbname" Limit: $dbinfo->{$dbname}{sourcelimit} Used: $dbinuse{source}{$dbname}});
 				shift @q for (1..$offset);
 				$queueclear = 0;
 				next Q;
@@ -3066,7 +3065,7 @@ sub start_controller {
 			$kid->{cdate} = time;
 			$kid->{life}++;
 			$kid->{finished} = 0;
-			$self->glog(qq{Created new kid $newkid for sync "$self->{syncname}" to db "$kid->{dbname}"});
+			$self->glog(qq{Created new kid $newkid for sync "$self->{syncname}" to database "$kid->{dbname}"});
 			sleep $config{ctl_createkid_time};
 			return;
 		}
@@ -3229,7 +3228,7 @@ sub start_kid {
 	our $kidloop = 0;
 
 	$SIG{USR1} = sub {
-		die "Got a request from the controller to shut down\n";
+		die "CTL request\n";
 	};
 
 	$SIG{__DIE__} = sub {
@@ -4025,7 +4024,7 @@ sub start_kid {
 					$dmlcount{I}{target}{$S}{$T}++;
 				}
 				$targetdbh->pg_endcopy();
-				$self->glog(qq{End COPY of "$S.$T". Rows inserted: $dmlcount{I}{target}{$S}{$T}});
+				$self->glog(qq{End COPY of $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
 				$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
 
 				if ($hasindex) {
