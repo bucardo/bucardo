@@ -140,11 +140,17 @@ use Data::Dumper;
 $Data::Dumper::Varname = 'BUCARDO';
 $Data::Dumper::Indent = 1;
 use Getopt::Long;
+use Config;
+use Sys::Syslog;
+use DBIx::Safe '1.2.4';
+
 use vars qw($SQL %SQL $sth %sth $bdb $count $info);
 
-use Sys::Syslog;
-
-use DBIx::Safe '1.2.4';
+my $x = 0;
+my %signumber;
+for (split(' ', $Config{sig_name})) {
+	$signumber{$_} = $x++;
+}
 
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
@@ -1337,7 +1343,7 @@ sub start_mcp {
 
 					## For now, just allow a few things to be changed "on the fly"
 					for my $val (qw/checksecs stayalive limitdbs do_listen txnmode deletemethod status 
-									analyze_after_copy disable_triggers/) {
+									analyze_after_copy disable_triggers targetgroup targetdb/) {
 						$sync->{$syncname}{$val} = $self->{sync}{$syncname}{$val} = $info->{$val};
 					}
 					## TODO: Fix those double assignments
@@ -1510,7 +1516,7 @@ sub start_mcp {
 					next SYNC;
 				}
 				$self->glog("No active pid $oldpid found. Killing just in case, and removing file");
-				kill 15, $oldpid;
+				kill $signumber{SIGTERM} => $oldpid;
 				unlink $pidfile;
 				$s->{mcp_changed} = 1;
 			} ## end if pidfile found for this sync
@@ -1595,7 +1601,7 @@ sub start_mcp {
 			}
 			my $pid = $1; ## no critic
 			$self->glog(qq{Asked process $pid to terminate});
-			kill 15, $pid;
+			kill $signumber{USR1} => $pid;
 			close $fh or warn qq{Could not close "$config{piddir}/$_": $!\n};
 		}
 		closedir $dh or warn qq{Could not closedir "$config{piddir}": $!\n};
@@ -2155,8 +2161,8 @@ sub start_mcp {
 			$self->glog("Warning! Controller not found");
 		}
 		else {
-			$count = kill 15, $ctl;
-			$self->glog("Sent kill 15 to CTL process $ctl. Result: $count");
+			$count = kill $signumber{USR1} => $ctl;
+			$self->glog("Sent kill USR1 to CTL process $ctl. Result: $count");
 		}
 		$s->{controller} = 0;
 
@@ -2216,7 +2222,7 @@ sub start_mcp {
 			my $kid = $_->[0];
 			$self->glog("Found active controller $kid");
 			if (kill 0, $kid) {
-				$count = kill 15, $kid;
+				$count = kill $signumber{USR1} => $kid;
 				$self->glog("Kill results: $count");
 			}
 			else {
@@ -2310,6 +2316,10 @@ sub start_controller {
 	$msg = qq{  limitdbs: $limitdbs kicked: $kicked kidsalive: $kidsalive triggers: $disabletrig};
 	$self->glog($msg);
 	$mailmsg .= "$msg\n";
+
+	$SIG{USR1} = sub {
+		die "Got a request from the MCP to shut down\n";
+	};
 
 	$SIG{__DIE__} = sub {
 		my ($msg) = @_;
@@ -3106,7 +3116,7 @@ sub cleanup_controller {
 		my $kidpid = $_->[0];
 		## TODO: Make sure these are Bucardo processes! - check for "Bucardo" string?
 		$self->glog("Asking kid process $kidpid to terminate");
-		kill 15, $kidpid;
+		kill $signumber{USR1} => $kidpid;
 	}
 	## Asking them more than once is not going to do any good
 	$SQL = qq{
@@ -3217,6 +3227,10 @@ sub start_kid {
 
 	## Keep track of how many times this kid has done work
 	our $kidloop = 0;
+
+	$SIG{USR1} = sub {
+		die "Got a request from the controller to shut down\n";
+	};
 
 	$SIG{__DIE__} = sub {
 		my ($msg) = @_;
