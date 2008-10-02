@@ -151,6 +151,7 @@ stop()          if $verb eq 'stop';
 reload_config() if $verb eq 'reload_config';
 ping()          if $verb eq 'ping';
 add_item()      if $verb eq 'add';
+alter_item()    if $verb eq 'alter';
 remove_item()   if $verb eq 'remove';
 
 
@@ -242,7 +243,7 @@ sub start {
 sub stop {
 
 	## Attempt to stop Bucardo
-	
+
 	set_reason();
 
 	print "Creating $STOPFILE ... " unless $QUIET;
@@ -654,7 +655,7 @@ sub status_detail {
 			$target .= join ',' => @{$s->{targets}};
 			$target .= ')';
 		}
-				
+
 		$s->{iud} =~ s#/# / #g;
 		$s->{state} =~ s/>/ > /;
 
@@ -1080,8 +1081,30 @@ sub add_item {
 	}
 	exit 1;
 
-} ## end of add
+} ## end of add_item
 
+sub alter_item {
+
+	my $self = shift;
+
+	if (!@nouns) {
+		warn "Usage: alter <item_type> <item_name>\n";
+		exit 1;
+	}
+
+	## First word must be a type we know about
+	my $type = shift @nouns;
+	$type = lc $type;
+
+	if ($type eq 'sync') {
+		alter_sync($type);
+	}
+	else {
+		warn "Cannot alter: unknown type\n";
+	}
+	exit 1;
+
+} ## end of alter_item
 
 sub remove_item {
 
@@ -1383,6 +1406,115 @@ sub add_sync {
 	exit 0;
 
 } ## end of add_sync
+
+
+sub alter_sync {
+
+	## Modify an existing sync
+	## Usage: alter sync syncname options
+	## targetgroup=foo - add/change the targetgroup
+	## targetdb=foo    - add/change the targetdb
+	## If a target already exists of other type, it is set to null
+
+	my $type = shift;
+
+	## The first word is the sync name
+	my $item_name = shift @nouns || '';
+	if (!length $item_name) {
+		warn "Usage: alter $type <name>";
+		exit 1;
+	}
+
+	## The rest is the options.
+	my $info = join ' ' => @nouns;
+	my $delim = $info =~ /\|/ ? "\\s*\\|\\s*" : '\\s+';
+	## Command line name, value
+	my %arg = (
+			   targetdb    => '',
+			   targetgroup => '',
+			   );
+	for my $arg (split /$delim/ => $info) {
+		if ($arg !~ /(.+)=(.+)/o) {
+			die qq{Invalid argument\n};
+		}
+		my ($name,$value) = ($1,$2);
+		if (!exists $arg{$name}) {
+			die "Unknown option '$name'\n";
+		}
+		$arg{$name} = $value;
+	}
+	$arg{name} = $item_name;
+
+	## Make sure this sync exists and gather current information from it
+	$SQL = 'SELECT * FROM bucardo.sync WHERE name = ?';
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute($item_name);
+	if ($count != 1) {
+		warn "No such sync: $item_name\n";
+		exit 1;
+	}
+	my $sync = $sth->fetchall_arrayref({})->[0];
+
+	my %set;
+
+	## Do we have a targetgroup?
+	if (length $arg{targetgroup}) {
+		my $group = $arg{targetgroup};
+		if (defined $sync->{targetgroup} and $group eq $sync->{targetgroup}) {
+			warn qq{targetgroup "$group" already exists: no change made\n};
+		}
+		else {
+			$set{'targetgroup'} = $group;
+			if (defined $sync->{targetdb}) {
+				warn qq{Removing targetdb "$sync->{targetdb}"\n};
+				$set{'targetdb'} = undef;
+			}
+		}
+	}
+	elsif (length $arg{targetdb}) {
+		my $db = $arg{targetdb};
+		if (defined $sync->{targetdb} and $db eq $sync->{targetdb}) {
+			warn qq{targetdb "$db" already exists: no change made\n};
+		}
+		else {
+			$set{'targetdb'} = $db;
+			if (defined $sync->{targetgroup}) {
+				warn qq{Removing targetgroup "$sync->{targetgroup}"\n};
+				$set{'targetgroup'} = undef;
+			}
+		}
+	}
+
+	if (! keys %set) {
+		warn "No change made\n";
+		exit 0;
+	}
+
+	$SQL = 'UPDATE sync SET ';
+	my @args;
+	for my $c (sort keys %set) {
+		$SQL .= "$c = ?, ";
+		push @args, $set{$c};
+	}
+	$SQL =~ s/, $//;
+	$SQL .= ' WHERE name = ?';
+
+	$sth = $dbh->prepare($SQL);
+	eval {
+		$count = $sth->execute(@args,$item_name);
+	};
+
+	## Prompt for final go-ahead
+
+	$dbh->commit();
+
+	warn "Sync updated: $item_name ($SQL)\n";
+
+	# warn about not forgetting to reload the sync if active?
+
+	exit 0;
+
+} ## end of alter_sync
 
 
 sub remove_sync {
