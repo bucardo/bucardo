@@ -9,12 +9,27 @@ use strict;
 use warnings;
 use DBI;
 use Time::HiRes qw/sleep gettimeofday tv_interval/;
+use Cwd;
 use Data::Dumper;
 
-use vars qw/$SQL $sth $count/;
+use vars qw/$SQL $sth $count $COM %dbh/;
 
 use base 'Exporter';
 our @EXPORT = qw/%tabletype %val compare_tables bc_deeply wait_for_notice $location is like pass isa_ok ok is_deeply/;
+
+our $location = 'setup';
+my $testmsg  = ' ?';
+my $testline = '?';
+my $showline = 1;
+my $showtime = 0;
+## Sometimes, we want to stop as soon as we see an error
+my $bail_on_error = $ENV{BUCARDO_TESTBAIL} || 0;
+my $total_errors = 0;
+## Used by the tt sub
+my %timing;
+
+my $user = qx{whoami};
+chomp $user;
 
 my $FRESHLOG = 1;
 if ($FRESHLOG) {
@@ -36,6 +51,8 @@ our %tabletype =
 	 'bucardo_test8' => 'BYTEA',
 	 );
 
+our @tables2empty = (qw/droptest/);
+
 my $DEBUG = 1; ## XXX
 
 my %debug = (
@@ -50,6 +67,17 @@ my $DEBUGDIR = ".";
 ## To avoid stepping on other instance's toes
 my $PIDDIR = "/tmp/bucardo_testing_$ENV{USER}";
 mkdir $PIDDIR if ! -e $PIDDIR;
+
+my %clusterinfo = (
+				   A => {port => 58921},
+				   B => {port => 58922},
+				   C => {port => 58923},
+				   D => {port => 58924},
+);
+
+## Location of files
+my $initdb = 'initdb';
+my $pg_ctl = 'pg_ctl';
 
 # Set a semi-unique name to make killing old tests easier
 my $xname = "bctest_$ENV{USER}";
@@ -132,7 +160,7 @@ sub new {
 
 	bless $self, $class;
 
-	$self->read_test_info();
+	#$self->read_test_info();
 
 	## Let's find out where bucardo_ctl is
 	if (-e './bucardo_ctl') {
@@ -192,6 +220,835 @@ sub read_test_info {
 
 } ## end of read_test_info
 
+sub blank_database {
+
+	## Create, start, and empty out a database ("server");
+
+	my $self = shift;
+	my $name = shift || 'A';
+
+	## Does it exist? If not, create with initdb
+	$self->create_cluster($name);
+
+	## Make sure it is started up
+    $self->start_cluster($name);
+
+	## Empty it out (drop and recreate the test database)
+    my $dbh = $self->fresh_database($name);
+
+	## Populate a test database
+	$self->add_test_schema($dbh,'foo');
+
+	return $dbh;
+
+} ## end of blank_database
+
+
+sub create_cluster {
+
+	## Create a cluster if it does not already exist
+
+	my $self = shift;
+	my $name = shift || 'A';
+	my $arg = shift || ''; ## A string to append to initdb call
+
+	my $clusterinfo = $clusterinfo{$name}
+		or die qq{I do not know how to create a cluster named "$name"};
+
+	my $dirname = "bucardo_test_database_$name";
+
+	return if -d $dirname;
+
+	warn qq{Running initdb for cluster "$name"\n};
+
+	qx{$initdb -D $dirname $arg 2>&1};
+
+	## Make some minor adjustments
+	my $file = "$dirname/postgresql.conf";
+	open my $fh, '>>', $file or die qq{Could not open "$file": $!\n};
+	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\n\n",
+		$clusterinfo->{port};
+	close $fh or die qq{Could not close "$file": $!\n};
+
+	return;
+
+
+} ## end of create_cluster
+
+
+sub start_cluster {
+
+	## Startup a cluster if not already running
+
+	my $self = shift;
+	my $name = shift || 'A';
+	my $arg = shift || '';
+
+	my $dirname = "bucardo_test_database_$name";
+
+	## Just in case
+	-d $dirname or $self->create_cluster($name);
+
+	my $pidfile = "$dirname/postmaster.pid";
+	if (-e $pidfile) {
+		open my $fh, '<', $pidfile or die qq{Could not open "$pidfile": $!\n};
+		<$fh> =~ /(\d+)/ or die qq{No PID found in file "$pidfile"\n};
+		my $pid = $1;
+		close $fh or die qq{Could not close "$pidfile": $!\n};
+		## Make sure it's still around
+		$count = kill 0 => $pid;
+		return if $count == 1;
+		warn qq{Server seems to have died, removing file "$pidfile"\n};
+		unlink $pidfile or die qq{Could not remove file "$pidfile"\n};
+	}
+
+	warn qq{Starting cluster "$name"\n};
+
+	my $option = '';
+	if ($^O !~ /Win32/) {
+		my $sockdir = "$dirname/socket";
+		-e $sockdir or mkdir $sockdir;
+		$option = q{-o '-k socket'};
+	}
+	$COM = qq{$pg_ctl $option -l $dirname/pg.log -D $dirname start};
+	qx{$COM};
+
+	{
+		last if -e $pidfile;
+		sleep 0.1;
+		redo;
+	}
+
+	## Wait for "ready to accept connections"
+	my $logfile = "$dirname/pg.log";
+	open my $fh, '<', $logfile or die qq{Could not open "$logfile": $!\n};
+	seek $fh, -100, 2;
+	LOOP: {
+		  while (<$fh>) {
+			  last LOOP if /system is ready/;
+		  }
+		  sleep 0.1;
+		  seek $fh, 0, 1;
+		  redo;
+	  }
+	close $fh or die qq{Could not close "$logfile": $!\n};
+
+	return;
+
+} ## end of start_cluster
+
+
+sub fresh_database {
+
+	## Drop and create the bucardo_test database
+	## First arg is cluster name
+	## Second arg is hashref, can be 'dropdb'
+
+	my $self = shift;
+	my $name = shift || 'A';
+	my $arg = shift || {};
+
+	my $dirname = "bucardo_test_database_$name";
+
+	## Just in case
+	-d $dirname or $self->create_cluster($name);
+	-e "$dirname/postmaster.pid" or $self->start_cluster($name);
+
+	my $dbh = $self->connect_database($name, 'postgres');
+
+	my $dbname = 'bucardo_test';
+	my $brandnew = 0;
+	{
+		if (database_exists($dbh => $dbname) and $arg->{dropdb}) {
+			local $dbh->{AutoCommit} = 1;
+			warn "Dropping database $dbname\n";
+			$dbh->do("DROP DATABASE $dbname");
+		}
+		if (!database_exists($dbh => $dbname)) {
+			local $dbh->{AutoCommit} = 1;
+			warn "Creating database $dbname\n";
+			$dbh->do("CREATE DATABASE $dbname");
+			$brandnew = 1;
+			$dbh->disconnect();
+		}
+	}
+
+	$dbh = $self->connect_database($name, $dbname);
+
+	return $dbh if $brandnew;
+
+	$self->empty_test_database($dbh);
+
+	return $dbh;
+
+} ## end of fresh_database
+
+
+sub empty_test_database {
+
+	## Wipe all data tables from a test database
+	## Takes a datbase handle as only arg
+
+	my $self = shift;
+	my $dbh = shift;
+
+	for my $table (sort keys %tabletype) {
+		$dbh->do("TRUNCATE TABLE $table");
+	}
+
+	for my $table (@tables2empty) {
+		$dbh->do("TRUNCATE TABLE $table");
+	}
+
+	$dbh->commit;
+
+	return;
+
+} ## end of empty_test_database
+
+sub shutdown_cluster {
+
+	## Shutdown a cluster if running
+	## Takes the cluster name
+
+	my $self = shift;
+	my $name = shift;
+
+	my $dirname = "bucardo_test_database_$name";
+
+	return if ! -d $dirname;
+
+	my $pidfile = "$dirname/postmaster.pid";
+	return if ! -e $pidfile;
+
+	open my $fh, '<', $pidfile or die qq{Could not open "$pidfile": $!\n};
+	<$fh> =~ /(\d+)/ or die qq{No PID found in file "$pidfile"\n};
+	my $pid = $1;
+	close $fh or die qq{Could not close "$pidfile": $!\n};
+	## Make sure it's still around
+	$count = kill 0 => $pid;
+	if ($count != 1) {
+		warn "Removing $pidfile\n";
+		unlink $pidfile;
+	}
+	$count = kill 15 => $pid;
+	print "New count: $count\n";
+	{
+		$count = kill 0 => $pid;
+		last if $count != 1;
+		sleep 0.2;
+		redo;
+	}
+
+	return;
+
+} ## end of shutdown_cluster
+
+
+sub remove_cluster {
+
+	## Remove a cluster, shutting it down first
+	## Takes the cluster name
+
+	my $self = shift;
+	my $name = shift;
+
+	my $dirname = "bucardo_test_database_$name";
+
+	return if ! -d $dirname;
+
+	## Just in case
+	$self->shutdown_cluster($name);
+
+	system("rm -fr $dirname");
+
+	return;
+
+} ## end of remove_cluster
+
+sub connect_database {
+
+	## Given a cluster name, return a connection to it
+	## Second arg is the database name, defaults to 'bucardo_test'
+
+	my $self = shift;
+	my $name = shift || 'A';
+	my $dbname = shift || 'bucardo_test';
+
+	my $clusterinfo = $clusterinfo{$name}
+		or die qq{I do not know about a cluster named "$name"};
+
+	my $dbport = $clusterinfo->{port};
+	my $dbhost = getcwd;
+	$dbhost .= "/bucardo_test_database_$name/socket";
+
+	my $dsn = "dbi:Pg:dbname=$dbname;port=$dbport;host=$dbhost";
+
+	if (exists $dbh{$dsn}) {
+		my $dbh = $dbh{$dsn};
+		$dbh->ping and return $dbh;
+		delete $dbh{$dsn};
+	}
+
+	my $dbh = DBI->connect($dsn, '', '', {AutoCommit=>0, RaiseError=>1, PrintError=>0});
+
+	$dbh->ping();
+
+	return $dbh;
+
+} ## end of connect_database
+
+
+sub add_test_schema {
+
+	## Add an empty test schema to a database
+	## Takes a database handle
+
+	my $self = shift;
+	my $dbh = shift;
+
+	## Assume it is empty and just load it in
+
+	## Empty out or create the droptest table
+	if (table_exists($dbh => 'droptest')) {
+		$dbh->do('TRUNCATE TABLE droptest');
+	}
+	else {
+		$dbh->do(q{
+            CREATE TABLE droptest (
+              name TEXT NOT NULL,
+              type TEXT NOT NULL,
+              inty INTEGER NOT NULL
+            )
+        });
+	}
+
+	## Create the language if needed
+	if (!language_exists($dbh => 'plpgsql')) {
+		$dbh->do('CREATE LANGUAGE plpgsql');
+	}
+	$dbh->commit();
+
+	## Create supporting functions as needed
+	if (!function_exists($dbh => 'trigger_test')) {
+		$dbh->do(q{
+                CREATE FUNCTION trigger_test()
+                RETURNS trigger
+                LANGUAGE plpgsql
+                AS $_$ BEGIN
+                INSERT INTO droptest(name,type,inty)
+                    VALUES (TG_RELNAME, 'trigger', NEW.inty);
+                RETURN NULL;
+                END;
+                $_$
+            });
+	}
+	if (!function_exists($dbh => 'trigger_test_zero')) {
+		$dbh->do(q{
+                CREATE FUNCTION trigger_test_zero()
+                RETURNS trigger
+                LANGUAGE plpgsql
+                AS $_$ BEGIN
+                INSERT INTO droptest(name,type,inty)
+                    VALUES (TG_RELNAME, 'trigger', 0);
+                RETURN NULL;
+                END;
+                $_$;
+            });
+	}
+
+	## Create one table for each table type
+	for my $table (sort keys %tabletype) {
+
+		local $dbh->{Warn} = 0;
+
+		## Does the table already exist? If so, drop it.
+		if (table_exists($dbh => $table)) {
+			$dbh->do("DROP TABLE $table");
+		}
+
+		my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
+		$SQL = qq{
+			CREATE TABLE $table (
+				$pkey    $tabletype{$table} NOT NULL PRIMARY KEY};
+		$SQL .= $table =~ /0/ ? "\n)" : qq{,
+    	        data1 TEXT                   NULL,
+        	    inty  SMALLINT               NULL,
+            	bite1 BYTEA                  NULL,
+            	bite2 BYTEA                  NULL,
+            	email TEXT                   NULL UNIQUE
+        	)
+			};
+		$dbh->do($SQL);
+
+		## Create a trigger to test trigger supression during syncs
+		$SQL = qq{
+			CREATE TRIGGER bctrig_$table
+			AFTER INSERT OR UPDATE ON $table
+			FOR EACH ROW EXECUTE PROCEDURE trigger_test()
+			};
+		$table =~ /0/ and ($SQL =~ s/trigger_test/trigger_test_zero/);
+		$dbh->do($SQL);
+
+		## Create a rule to test rule supression during syncs
+		$SQL = qq{
+			CREATE OR REPLACE RULE bcrule_$table
+			AS ON INSERT TO $table
+			DO ALSO INSERT INTO droptest(name,type,inty) VALUES ('$table','rule',NEW.inty)
+			};
+		$table =~ /0/ and $SQL =~ s/NEW.inty/0/;
+		$dbh->do($SQL);
+
+	}
+	$dbh->commit();
+
+	return;
+
+} ## end of add_test_schema
+
+sub setup_bucardo {
+
+	## Import the bucardo schema into a database named 'bucardo_control_test'
+	## Takes a cluster name and an optional database handle
+	## Returns a handle to the control database
+
+	my $self = shift;
+	my $name = shift || 'A';
+	my $dbh = shift || $self->connect_database($name);
+
+	my $dbname = 'bucardo_control_test';
+
+	if (!database_exists($dbh => $dbname)) {
+		local $dbh->{AutoCommit} = 1;
+		$dbh->do("CREATE DATABASE $dbname");
+		$dbh->do("ALTER DATABASE $dbname SET search_path = bucardo, freezer, public");
+		warn "Creating database $dbname\n";
+	}
+
+	## Are we connected to this database? If not, connect to it
+	$SQL = "SELECT current_database()";
+	my $localdb = $dbh->selectall_arrayref($SQL)->[0][0];
+	if ($localdb ne $dbname) {
+		$dbh = $self->connect_database($name, $dbname);
+	}
+
+	## Create the languages if needed
+	if (!language_exists($dbh => 'plpgsql')) {
+		$dbh->do('CREATE LANGUAGE plpgsql');
+	}
+	if (!language_exists($dbh => 'plperlu')) {
+		$dbh->do('CREATE LANGUAGE plperlu');
+	}
+	$dbh->commit();
+
+	## Drop the existing schemas
+	if (schema_exists($dbh => 'bucardo')) {
+		local $dbh->{Warn};
+		$dbh->do('DROP SCHEMA bucardo CASCADE');
+		$dbh->do('DROP SCHEMA freezer CASCADE');
+	}
+	$dbh->commit();
+
+	add_bucardo_schema_to_database($dbh);
+
+	return $dbh;
+
+} ## end of setup_bucardo
+
+sub thing_exists {
+	my ($dbh,$name,$table,$column) = @_;
+	my $SQL = "SELECT 1 FROM $table WHERE $column = ?";
+	my $sth = $dbh->prepare($SQL);
+	$count = $sth->execute($name);
+	$sth->finish();
+	$dbh->commit();
+	return $count < 1 ? 0 : $count;
+}
+
+sub schema_exists   { return thing_exists(@_, 'pg_namespace', 'nspname'); }
+sub language_exists { return thing_exists(@_, 'pg_language',  'lanname'); }
+sub database_exists { return thing_exists(@_, 'pg_database',  'datname'); }
+sub user_exists     { return thing_exists(@_, 'pg_user',      'usename'); }
+sub table_exists    { return thing_exists(@_, 'pg_class',     'relname'); }
+sub function_exists { return thing_exists(@_, 'pg_proc',      'proname'); }
+
+## no critic
+{
+	no warnings; ## Yes, we know they are being redefined!
+	sub is_deeply {
+		t($_[2],$_[3] || (caller)[2]);
+		return if Test::More::is_deeply($_[0],$_[1],$testmsg);
+		if ($bail_on_error > $total_errors++) {
+			my $line = (caller)[2];
+			my $time = time;
+			Test::More::diag("GOT: ".Dumper $_[0]);
+			Test::More::diag("EXPECTED: ".Dumper $_[1]);
+			Test::More::BAIL_OUT "Stopping on a failed 'is_deeply' test from line $line. Time: $time";
+		}
+	} ## end of is_deeply
+	sub like($$;$) {
+		t($_[2],(caller)[2]);
+		return if Test::More::like($_[0],$_[1],$testmsg);
+		if ($bail_on_error > $total_errors++) {
+			my $line = (caller)[2];
+			my $time = time;
+			Test::More::diag("GOT: ".Dumper $_[0]);
+			Test::More::diag("EXPECTED: ".Dumper $_[1]);
+			Test::More::BAIL_OUT "Stopping on a failed 'like' test from line $line. Time: $time";
+		}
+	} ## end of like
+	sub pass(;$) {
+		t($_[0],$_[1]||(caller)[2]);
+		Test::More::pass($testmsg);
+	} ## end of pass
+	sub is($$;$) {
+		t($_[2],(caller)[2]);
+		return if Test::More::is($_[0],$_[1],$testmsg);
+		if ($bail_on_error > $total_errors++) {
+			my $line = (caller)[2];
+			my $time = time;
+			Test::More::BAIL_OUT "Stopping on a failed 'is' test from line $line. Time: $time";
+		}
+	} ## end of is
+	sub isa_ok($$;$) {
+		t("Object isa $_[1]",(caller)[2]);
+		my ($name, $type, $msg) = ($_[0],$_[1]);
+		if (ref $name and ref $name eq $type) {
+			Test::More::pass($testmsg);
+			return;
+		}
+		$bail_on_error > $total_errors++ and Test::More::BAIL_OUT "Stopping on a failed test";
+	} ## end of isa_ok
+	sub ok($;$) {
+		t($_[1]||$testmsg);
+		return if Test::More::ok($_[0],$testmsg);
+		if ($bail_on_error > $total_errors++) {
+			my $line = (caller)[2];
+			my $time = time;
+			Test::More::BAIL_OUT "Stopping on a failed 'ok' test from line $line. Time: $time";
+		}
+	} ## end of ok
+}
+## use critic
+
+
+sub tt {
+	## Simple timing routine. Call twice with the same arg, before and after
+	my $name = shift or die qq{Need a name!\n};
+	if (exists $timing{$name}) {
+		my $newtime = tv_interval($timing{$name});
+		warn "Timing for $name: $newtime\n";
+		delete $timing{$name};
+	}
+	else {
+		$timing{$name} = [gettimeofday];
+	}
+	return;
+} ## end of tt
+
+sub t {
+	$testmsg = shift;
+	$testline = shift || (caller)[2];
+	$testmsg =~ s/^\s+//;
+	if ($location) {
+		$testmsg = "($location) $testmsg";
+	}
+	if ($showline) {
+		$testmsg .= " [line: $testline]";
+	}
+	if ($showtime) {
+		my $time = time;
+		$testmsg .= " [time: $time]";
+	}
+	return;
+} ## end of t
+
+sub add_bucardo_schema_to_database {
+
+	## Parses the bucardo.schema file and creates the database
+	## Assumes the schema 'bucardo' does not exist yet
+	## First argument is a database handle
+
+	my $dbh = shift;
+
+	if (schema_exists($dbh => 'bucardo')) {
+		return;
+	}
+
+	my $schema_file = 'bucardo.schema';
+	-e $schema_file or die qq{Cannot find the file "$schema_file"!};
+	open my $fh, '<', $schema_file or die qq{Could not open "$schema_file": $!\n};
+	my $sql='';
+	my (%copy,%copydata);
+	my ($start,$copy,$insidecopy) = (0,0,0);
+	while (<$fh>) {
+		if (!$start) {
+			next unless /ON_ERROR_STOP/;
+			$start = 1;
+			next;
+		}
+		next if /^\\[^\.]/; ## Avoid psql meta-commands at top of file
+		if (1==$insidecopy) {
+			$copy{$copy} .= $_;
+			if (/;/) {
+				$insidecopy = 2;
+			}
+		}
+		elsif (2==$insidecopy) {
+			if (/^\\\./) {
+				$insidecopy = 0;
+			}
+			else {
+				push @{$copydata{$copy}}, $_;
+			}
+		}
+		elsif (/^\s*(COPY bucardo.*)/) {
+			$copy{++$copy} = $1;
+			$insidecopy = 1;
+		}
+		else {
+			$sql .= $_;
+		}
+	}
+	close $fh or die qq{Could not close "$schema_file": $!\n};
+
+	$dbh->do("SET escape_string_warning = 'off'");
+
+	$dbh->{pg_server_prepare} = 0;
+
+	unless ($ENV{BUCARDO_TEST_NOCREATEDB}) {
+		$dbh->do($sql);
+
+		$count = 1;
+		while ($count <= $copy) {
+			$dbh->do($copy{$count});
+			for my $copyline (@{$copydata{$count}}) {
+				$dbh->pg_putline($copyline);
+			}
+			$dbh->pg_endcopy();
+			$count++;
+		}
+	}
+
+	$dbh->commit();
+
+	## Make some adjustments
+	$sth = $dbh->prepare('UPDATE bucardo.bucardo_config SET value = $2 WHERE setting = $1');
+	$count = $sth->execute('piddir' => $PIDDIR);
+	$count = $sth->execute('reason_file' => "$PIDDIR/reason");
+	$dbh->commit();
+
+} ## end of add_bucardo_schema_to_database
+
+sub add_db_args {
+
+	## Return a DSN-like string for a particular named cluster
+	my ($self,$name) = @_;
+
+	my $clusterinfo = $clusterinfo{$name}
+		or die qq{I do not know how to create a cluster named "$name"};
+
+	my $port = $clusterinfo->{port};
+
+	my $host = getcwd;
+	$host .= "/bucardo_test_database_$name/socket";
+
+	my $arg = "name=$name user=$user port=$port host=$host";
+
+	return $arg;
+
+} ## end of add_db_args
+
+
+sub ctl {
+
+	## Run a simple non-forking command against bucardo_ctl, get the answer back as a string
+	## Emulates a command-line invocation
+
+	my ($self,$args) = @_;
+
+	my $info;
+	my $ctl = $self->{bucardo_ctl};
+
+	## Build the connection options
+	my $bc = $self->{bcinfo};
+	my $connopts = '';
+	for my $arg (qw/host port pass/) {
+		my $val = 'DB' . (uc $arg) . '_bucardo';
+		next unless exists $bc->{$val} and length $bc->{$val};
+		$connopts .= " --db$arg=$bc->{$val}";
+	}
+	$connopts .= " --dbname=bucardo_control_test";
+	$connopts .= " --dbuser=$user";
+	## Just hard-code these, no sense in multiple Bucardo base dbs yet:
+	$connopts .= " --dbport=58921";
+	my $dbhost = getcwd;
+	$dbhost .= "/bucardo_test_database_A/socket";
+	$connopts .= " --dbhost=$dbhost";
+
+	$DEBUG >=3 and warn "Connection options: $connopts\n";
+	eval {
+		$info = qx{$ctl $connopts $args 2>&1};
+	};
+	if ($@) {
+		return "Error running bucardo_ctl: $@\n";
+	}
+	$DEBUG >= 3 and warn "bucardo_ctl said: $info\n";
+
+	return $info;
+
+} ## end of ctl
+
+sub add_test_databases {
+
+	## Add one or more databases to the bucardo.db table
+	## Arg is a string containing white-space separated db names
+
+	my $self = shift;
+	my $string = shift;
+
+	for my $db (split /\s+/ => $string) {
+		my $ctlargs = $self->add_db_args($db);
+		my $i = $self->ctl("add database bucardo_test $ctlargs");
+		die $i if $i =~ /ERROR/;
+	}
+
+	return;
+
+} ## end of add_test_databases
+
+
+sub add_test_tables_to_herd {
+
+	## Add all of the test tables to a herd
+	## Create the herd if it does not exist
+	## First arg is database name, second arg is the herdname
+
+	my $self = shift;
+	my $db = shift;
+	my $herd = shift;
+
+	$self->ctl("add herd $herd");
+
+	my $addstring = join ' ' => sort keys %tabletype;
+	my $result = $self->ctl("add table $addstring db=$db herd=$herd");
+	if ($result !~ /Tables? added:/) {
+		die "Failed to add tables: $result\n";
+	}
+
+	return;
+
+} ## end of add_test_tables_to_herd
+
+
+
+sub restart_bucardo {
+
+	## Start Bucardo, but stop first if it is already running
+	## Pass in a database handle to the bucardo_control_test db
+
+	my ($self,$dbh) = @_;
+
+	$self->stop_bucardo();
+
+	pass('Starting up Bucardo');
+	$dbh->do("LISTEN bucardo_boot");
+	$dbh->do("LISTEN bucardo_started");
+	$dbh->commit();
+
+	$self->ctl('start testing');
+
+	my $bail = 10;
+  WAITFORIT: {
+		if ($bail--<0) {
+			die "Bucardo did not start, but we waited!\n";
+		}
+		last if $dbh->func('pg_notifies');
+		$dbh->commit();
+		sleep 0.2;
+		redo;
+	}
+	pass('Bucardo was started');
+
+	return 1;
+
+} ## end of restart_bucardo
+
+
+sub stop_bucardo {
+
+	my ($self,$dbh) = @_;
+
+	$self->ctl('stop testing');
+
+	sleep 0.2;
+
+	return 1;
+
+} ## end of stop_bucardo
+
+
+sub bc_deeply {
+
+	my ($exp,$dbh,$sql,$msg,$oline) = @_;
+	my $line = (caller)[2];
+
+	local $Data::Dumper::Terse = 1;
+	local $Data::Dumper::Indent = 0;
+
+	die "Very invalid statement from line $line: $sql\n" if $sql !~ /^\s*select/i;
+
+	my $got;
+	eval {
+		$got = $dbh->selectall_arrayref($sql);
+	};
+	if ($@) {
+		die "bc_deeply failed from line $line. SQL=$sql\n";
+	}
+
+	$dbh->commit();
+	return is_deeply($got,$exp,$msg,$oline||(caller)[2]);
+
+} ## end of bc_deeply
+
+
+sub wait_for_notice {
+
+	my $dbh = shift;
+	my $text = shift;
+	my $timeout = shift || $TIMEOUT_NOTICE;
+	my $sleep = shift || $TIMEOUT_SLEEP;
+	my $n;
+	eval {
+		local $SIG{ALRM} = sub { die "Lookout!\n"; };
+		alarm $timeout;
+	  N: {
+			while ($n = $dbh->func('pg_notifies')) {
+				last N if $n->[0] eq $text;
+			}
+			sleep $sleep;
+			redo;
+		}
+		alarm 0;
+	};
+	if ($@) {
+		if ($@ =~ /Lookout/o) {
+			my $line = (caller)[2];
+			Test::More::BAIL_OUT (qq{Gave up waiting for notice "$text": timed out at $timeout from line $line});
+			return;
+		}
+	}
+	return;
+
+} ## end of wait_for_notice
+
+
+
+1;
+__END__
+## OLD STUFF
+
+
 
 sub setup_database {
 
@@ -216,7 +1073,7 @@ sub setup_database {
 		}
 	}
 
-	## Make sure this is a valid type: must exist in the bcuard.test.data file
+	## Make sure this is a valid type: must exist in the bucardo.test.data file
 	if (!exists $bc->{"DBNAME_$dbtype"}) {
 		die "No DBNAME setup for database named $dbtype\n";
 	}
@@ -282,7 +1139,7 @@ sub setup_database {
 
 		## If it exists, only drop and recreate if the "recreatedb" option was given
 		if ($got{testdb} and $arg->{recreatedb}) {
-			$dbh->{AutoCommit} = 1;
+			local $dbh->{AutoCommit} = 1;
 			$SQL = "DROP DATABASE $testdb";
 			eval { $dbh->do($SQL); };
 			$@ and die qq{Could not drop database $testdb: $@\n};
@@ -292,11 +1149,10 @@ sub setup_database {
 
 		## Create the test database, owned by the test user
 		if (!$got{testdb}) {
-			$dbh->{AutoCommit} = 1;
+			local $dbh->{AutoCommit} = 1;
 			$SQL = "CREATE DATABASE $testdb OWNER $testuser";
 			eval { $dbh->do($SQL); };
 			$@ and die qq{Could not create test database $testdb: $@\n};
-			$dbh->{AutoCommit} = 0;
 			$DEBUG >= 1 and warn "Created new database\n";
 		}
 
@@ -466,35 +1322,10 @@ sub testhost {
 	my ($self,$name) = @_;
 	return $self->{bcinfo}{"DBHOST_$name"};
 }
-sub add_db_args {
-	my ($self,$name) = @_;
-	my $b = $self->{bcinfo};
-	my ($db,$user,$host,$port) =
-		($b->{"TESTDB_$name"}, $b->{"TESTBC_$name"},$b->{"DBHOST_$name"},$b->{"DBPORT_$name"});
-	my $arg = "$db name=$name user=$user";
-	$host and $arg .= " host=$host";
-	$port and $arg .= " port=$port";
-	return $arg;
-}
 
 
-sub thing_exists {
-	my ($dbh,$name,$table,$column) = @_;
-	my $SQL = "SELECT 1 FROM $table WHERE $column = ?";
-	my $sth = $dbh->prepare($SQL);
-	$count = $sth->execute($name);
-	$sth->finish();
-	return $count < 1 ? 0 : $count;
-}
 
-sub schema_exists   { return thing_exists(@_, 'pg_namespace', 'nspname'); }
-sub language_exists { return thing_exists(@_, 'pg_language',  'lanname'); }
-sub database_exists { return thing_exists(@_, 'pg_database',  'datname'); }
-sub user_exists     { return thing_exists(@_, 'pg_user',      'usename'); }
-sub table_exists    { return thing_exists(@_, 'pg_class',     'relname'); }
-sub function_exists { return thing_exists(@_, 'pg_proc',      'proname'); }
-
-sub connect_database {
+sub old_connect_database {
 
 	## Given a database type, return a database handle or an error string
 
@@ -526,43 +1357,6 @@ sub connect_database {
 	return $dbh;
 
 } ## end of connect_database
-
-sub ctl {
-
-	## Run a simple non-forking command against bucardo_ctl, get the answer back as a string
-	## Emulates a command-line invocation
-
-	my ($self,$args) = @_;
-
-	my $info;
-	my $ctl = $self->{bucardo_ctl};
-
-	## Build the connection options
-	my $bc = $self->{bcinfo};
-	my $connopts = '';
-	for my $arg (qw/host port pass/) {
-		my $val = 'DB' . (uc $arg) . '_bucardo';
-		next unless exists $bc->{$val} and length $bc->{$val};
-		$connopts .= " --db$arg=$bc->{$val}";
-	}
-	$connopts .= " --dbname=$bc->{TESTDB_bucardo}";
-	$connopts .= " --dbuser=$bc->{TESTBC_bucardo}";
-
-
-	$DEBUG >=3 and warn "Connection options: $connopts\n";
-	eval {
-		$info = qx{$ctl $connopts $args 2>&1};
-	};
-	if ($@) {
-		return "Error running bucardo_ctl: $@\n";
-	}
-	$DEBUG >= 3 and warn "bucardo_ctl said: $info\n";
-
-	return $info;
-
-
-} ## end of ctl
-
 
 
 
@@ -753,81 +1547,6 @@ sub add_herds {
 
 } ## end of add_herds
 
-sub add_schema_to_database {
-
-	## Parses the bucardo.schema file and creates the database
-	## Assumes the schema 'bucardo' does not exist yet
-
-	my $dbh = shift;
-
-	## Create a new schema from the local file
-	my $schema_file = 'bucardo.schema';
-	if (! -e $schema_file) {
-		$schema_file = '../bucardo.schema';
-	}
-	-e $schema_file or die qq{Cannot find the file "$schema_file"!};
-	open my $fh, '<', $schema_file or die qq{Could not open "$schema_file": $!\n};
-	my $sql='';
-	my (%copy,%copydata);
-	my ($start,$copy,$insidecopy) = (0,0,0);
-	while (<$fh>) {
-		if (!$start) {
-			next unless /ON_ERROR_STOP/;
-			$start = 1;
-			next;
-		}
-		next if /^\\[^\.]/; ## Avoid psql meta-commands at top of file
-		if (1==$insidecopy) {
-			$copy{$copy} .= $_;
-			if (/;/) {
-				$insidecopy = 2;
-			}
-		}
-		elsif (2==$insidecopy) {
-			if (/^\\\./) {
-				$insidecopy = 0;
-			}
-			else {
-				push @{$copydata{$copy}}, $_;
-			}
-		}
-		elsif (/^\s*(COPY bucardo.*)/) {
-			$copy{++$copy} = $1;
-			$insidecopy = 1;
-		}
-		else {
-			$sql .= $_;
-		}
-	}
-	close $fh or die qq{Could not close "$schema_file": $!\n};
-
-	$dbh->do("SET escape_string_warning = 'off'");
-
-	$dbh->{pg_server_prepare} = 0;
-
-	unless ($ENV{BUCARDO_TEST_NOCREATEDB}) {
-		$dbh->do($sql);
-
-		$count = 1;
-		while ($count <= $copy) {
-			$dbh->do($copy{$count});
-			for my $copyline (@{$copydata{$count}}) {
-				$dbh->pg_putline($copyline);
-			}
-			$dbh->pg_endcopy();
-			$count++;
-		}
-	}
-
-	$dbh->commit();
-
-	## Make some adjustments
-	$sth = $dbh->prepare('UPDATE bucardo.bucardo_config SET value = $2 WHERE setting = $1');
-	$count = $sth->execute('piddir' => $PIDDIR);
-	$count = $sth->execute('reason_file' => "$PIDDIR/reason");
-	$dbh->commit();
-
-} ## end of add_schema_to_database
 
 
 sub bucardo_ctl {
@@ -888,24 +1607,6 @@ sub bucardo_ctl {
 
 } ## end of bucardo_ctl
 
-sub add_test_tables_to_herd {
-
-	## Add all of the test tables to a herd
-
-	my $self = shift;
-	my $db = shift;
-	my $herd = shift;
-
-	my $addstring = join ' ' => sort keys %tabletype;
-	my $result = $self->ctl("add table $addstring db=$db herd=$herd");
-	if ($result !~ /Tables? added:/) {
-		die "Failed to add tables: $result\n";
-	}
-
-	return;
-
-} ## end of add_test_tables_to_herd
-
 
 sub compare_tables {
 
@@ -934,159 +1635,10 @@ sub compare_tables {
 } ## end of compare_tables
 
 
-sub bc_deeply {
-
-	my ($exp,$dbh,$sql,$msg) = @_;
-	my $line = (caller)[2];
-
-	local $Data::Dumper::Terse = 1;
-	local $Data::Dumper::Indent = 0;
-
-	die "Very invalid statement from line $line: $sql\n" if $sql !~ /^\s*select/i;
-
-	my $got;
-	eval {
-		$got = $dbh->selectall_arrayref($sql);
-	};
-	if ($@) {
-		die "bc_deeply failed from line $line. SQL=$sql\n";
-	}
-
-	return is_deeply($got,$exp,$msg,(caller)[2]);
-
-} ## end of bc_deeply
-
-our $location = 'setup';
-my $testmsg  = ' ?';
-my $testline = '?';
-my $showline = 1;
-my $showtime = 0;
-## Sometimes, we want to stop as soon as we see an error
-my $bail_on_error = $ENV{BUCARDO_TESTBAIL} || 0;
-my $total_errors = 0;
-## Used by the tt sub
-my %timing;
 
 
-sub wait_for_notice {
-
-	my $dbh = shift;
-	my $text = shift;
-	my $timeout = shift || $TIMEOUT_NOTICE;
-	my $sleep = shift || $TIMEOUT_SLEEP;
-	my $n;
-	eval {
-		local $SIG{ALRM} = sub { die "Lookout!\n"; };
-		alarm $timeout;
-	  N: {
-			while ($n = $dbh->func('pg_notifies')) {
-				last N if $n->[0] eq $text;
-			}
-			sleep $sleep;
-			redo;
-		}
-		alarm 0;
-	};
-	if ($@) {
-		if ($@ =~ /Lookout/o) {
-			my $line = (caller)[2];
-			Test::More::BAIL_OUT (qq{Gave up waiting for notice "$text": timed out at $timeout from line $line});
-			return;
-		}
-	}
-	return;
-
-} ## end of wait_for_notice
 
 
-## no critic
-{
-	no warnings; ## Yes, we know they are being redefined!
-	sub is_deeply {
-		t($_[2],$_[3] || (caller)[2]);
-		return if Test::More::is_deeply($_[0],$_[1],$testmsg);
-		if ($bail_on_error > $total_errors++) {
-			my $line = (caller)[2];
-			my $time = time;
-			Test::More::diag("GOT: ".Dumper $_[0]);
-			Test::More::diag("EXPECTED: ".Dumper $_[1]);
-			Test::More::BAIL_OUT "Stopping on a failed 'is_deeply' test from line $line. Time: $time";
-		}
-	} ## end of is_deeply
-	sub like($$;$) {
-		t($_[2],(caller)[2]);
-		return if Test::More::like($_[0],$_[1],$testmsg);
-		if ($bail_on_error > $total_errors++) {
-			my $line = (caller)[2];
-			my $time = time;
-			Test::More::diag("GOT: ".Dumper $_[0]);
-			Test::More::diag("EXPECTED: ".Dumper $_[1]);
-			Test::More::BAIL_OUT "Stopping on a failed 'like' test from line $line. Time: $time";
-		}
-	} ## end of like
-	sub pass(;$) {
-		t($_[0],$_[1]||(caller)[2]);
-		Test::More::pass($testmsg);
-	} ## end of pass
-	sub is($$;$) {
-		t($_[2],(caller)[2]);
-		return if Test::More::is($_[0],$_[1],$testmsg);
-		if ($bail_on_error > $total_errors++) {
-			my $line = (caller)[2];
-			my $time = time;
-			Test::More::BAIL_OUT "Stopping on a failed 'is' test from line $line. Time: $time";
-		}
-	} ## end of is
-	sub isa_ok($$;$) {
-		t("Object isa $_[1]",(caller)[2]);
-		my ($name, $type, $msg) = ($_[0],$_[1]);
-		if (ref $name and ref $name eq $type) {
-			Test::More::pass($testmsg);
-			return;
-		}
-		$bail_on_error > $total_errors++ and Test::More::BAIL_OUT "Stopping on a failed test";
-	} ## end of isa_ok
-	sub ok($;$) {
-		t($_[1]||$testmsg);
-		return if Test::More::ok($_[0],$testmsg);
-		if ($bail_on_error > $total_errors++) {
-			my $line = (caller)[2];
-			my $time = time;
-			Test::More::BAIL_OUT "Stopping on a failed 'ok' test from line $line. Time: $time";
-		}
-	} ## end of ok
-}
-## use critic
-sub tt {
-	## Simple timing routine. Call twice with the same arg, before and after
-	my $name = shift or die qq{Need a name!\n};
-	if (exists $timing{$name}) {
-		my $newtime = tv_interval($timing{$name});
-		warn "Timing for $name: $newtime\n";
-		delete $timing{$name};
-	}
-	else {
-		$timing{$name} = [gettimeofday];
-	}
-	return;
-} ## end of tt
-
-sub t {
-	$testmsg = shift;
-	$testline = shift || (caller)[2];
-	$testmsg =~ s/^\s+//;
-	if ($location) {
-		$testmsg = "($location) $testmsg";
-	}
-	if ($showline) {
-		$testmsg .= " [line: $testline]";
-	}
-	if ($showtime) {
-		my $time = time;
-		$testmsg .= " [time: $time]";
-	}
-	return;
-} ## end of t
 
 
 sub start_bucardo {
