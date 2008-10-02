@@ -4,7 +4,7 @@ TODO list for Bucardo
 
 These range the gamut from wildly speculative ideas to must-have features.
 
-- Use initdb to create test database from scratch
+- Check for triggers and rules, if none at all, allow no manipulation
 - Death-level custom code hooks
 - Better conflict example in test suite, uses database handles
 - Allow adjustable criteria for going into lock before sync mode
@@ -34,4 +34,3 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Support large objects
 - Check for superuser on startup, to prevent errors that only show when a KID tries something.
 - Gracefully handle new nodes being added, e.g. a one-time fullcopy sync for new pushdeltas.
-
