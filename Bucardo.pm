@@ -2317,7 +2317,7 @@ sub start_controller {
 	$mailmsg .= "$msg\n";
 
 	$SIG{USR1} = sub {
-		die "MCP request";
+		die "MCP request\n";
 	};
 
 	$SIG{__DIE__} = sub {
@@ -4034,11 +4034,6 @@ sub start_kid {
 					$targetdbh->do("REINDEX TABLE $S.$T");
 				}
 
-				if ($sync->{analyze_after_copy} and $g->{analyze_after_copy}) {
-					$self->glog("Analyzing $S.$T on $targetdb");
-					$targetdbh->do("ANALYZE $S.$T");
-				}
-
 			} ## end each goat
 
 			if ($sync->{deletemethod} ne 'truncate') {
@@ -4758,6 +4753,18 @@ sub start_kid {
 		my $notify = "bucardo_syncdone_${syncname}_$targetdb";
 		$maindbh->do(qq{NOTIFY "$notify"}) or die "NOTIFY $notify failed!";
 		$maindbh->commit();
+
+		if ($synctype eq 'fullcopy'
+			and $sync->{analyze_after_copy}
+			and !$self->{dryrun}) {
+			for my $g (@$goatlist) {
+				next if ! $g->{analyze_after_copy};
+				($S,$T) = ($g->{safeschema},$g->{safetable});
+				$self->glog("Analyzing $S.$T on $targetdb");
+				$targetdbh->do("ANALYZE $S.$T");
+				$targetdbh->commit();
+			}
+		}
 
 		my $total_time = time() - $start_time;
 		$self->glog("Finished syncing. Time: $total_time. Updates: $dmlcount{allupdates}{source}+$dmlcount{allupdates}{target} Inserts: $dmlcount{allinserts}{source}+$dmlcount{allinserts}{target} Deletes: $dmlcount{alldeletes}{source}+$dmlcount{alldeletes}{target} Sync: $syncname. Keepalive: $kidsalive");
