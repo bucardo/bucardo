@@ -583,7 +583,7 @@ $name =~ s/'/''/go;
 $SQL = "SELECT * FROM db WHERE name = '$name'";
 $rv = spi_exec_query($SQL);
 if (!$rv->{processed}) {
-	elog(ERROR, qq{Error: Could not find a database with an name of $name\n});
+	elog(ERROR, qq{Error: Could not find a database with a name of $name\n});
 }
 $row = $rv->{rows}[0];
 
