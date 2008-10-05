@@ -1343,7 +1343,7 @@ sub start_mcp {
 
 					## For now, just allow a few things to be changed "on the fly"
 					for my $val (qw/checksecs stayalive limitdbs do_listen txnmode deletemethod status 
-									analyze_after_copy disable_triggers targetgroup targetdb/) {
+									analyze_after_copy disable_triggers targetgroup targetdb usecustomselect/) {
 						$sync->{$syncname}{$val} = $self->{sync}{$syncname}{$val} = $info->{$val};
 					}
 					## TODO: Fix those double assignments
@@ -2043,6 +2043,7 @@ sub start_mcp {
 
 			## TODO: Allow remote databases to have only a subset of columns
 			my $customselect = $g->{customselect} || '';
+			$self->glog("customselect=$customselect and $s->{usecustomselect}");
 			if ($customselect and $s->{usecustomselect}) {
 				if ($s->{synctype} ne 'fullcopy') {
 					my $msg = qq{ERROR: Custom select can only be used for fullcopy\n};
@@ -2324,7 +2325,8 @@ sub start_controller {
 		my ($msg) = @_;
 		my $line = (caller)[2];
 		if (! $self->{clean_exit}) {
-			$self->glog(qq{Warning! Controller for "$syncname" was killed at line $line: $msg});
+			my $warn = $msg =~ /MCP request/ ? '' : 'Warning! ';
+			$self->glog(qq{${warn}Controller for "$syncname" was killed at line $line: $msg});
 			for (values %{$self->{dbs}}) {
 				$_->{dbpass} = '???' if defined $_->{dbpass};
 			}
@@ -3260,7 +3262,8 @@ sub start_kid {
 			close $fh or warn qq{Could not close "$forcename": $!\n};
 		  }
 		  else {
-			$self->glog(qq{Warning! Could not create "$forcename": $!\n});
+			my $warn = $msg =~ /CTL request/ ? '' : 'Warning! ';
+			$self->glog(qq{${warn}Could not create "$forcename": $!\n});
 		  }
 		}
 
