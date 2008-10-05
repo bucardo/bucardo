@@ -2043,7 +2043,6 @@ sub start_mcp {
 
 			## TODO: Allow remote databases to have only a subset of columns
 			my $customselect = $g->{customselect} || '';
-			$self->glog("customselect=$customselect and $s->{usecustomselect}");
 			if ($customselect and $s->{usecustomselect}) {
 				if ($s->{synctype} ne 'fullcopy') {
 					my $msg = qq{ERROR: Custom select can only be used for fullcopy\n};
@@ -3262,8 +3261,7 @@ sub start_kid {
 			close $fh or warn qq{Could not close "$forcename": $!\n};
 		  }
 		  else {
-			my $warn = $msg =~ /CTL request/ ? '' : 'Warning! ';
-			$self->glog(qq{${warn}Could not create "$forcename": $!\n});
+			$self->glog(qq{Warning! Could not create "$forcename": $!\n});
 		  }
 		}
 
@@ -3324,7 +3322,8 @@ sub start_kid {
 		$finaldbh->commit();
 		$finaldbh->disconnect();
 		if (! $self->{clean_exit}) {
-			$self->glog(qq{Warning! Child for sync "$syncname" ("$sourcedb" -> "$targetdb") was killed at line $line: $msg});
+			my $warn = $msg =~ /CTL request/ ? '' : 'Warning! ';
+			$self->glog(qq{${warn}Child for sync "$syncname" ("$sourcedb" -> "$targetdb") was killed at line $line: $msg});
 			for (values %{$self->{dbs}}) {
 				$_->{dbpass} = '???';
 			}
@@ -3995,7 +3994,7 @@ sub start_kid {
 				if ($sync->{usecustomselect} and $g->{customselect}) {
 					my $temptable = "bucardo_temp_$g->{tablename}_$$"; ## Raw version, not "safetable"
 					$self->glog("Creating temp table $temptable for custom select on $S.$T");
-					$sourcedbh->do("CREATE TEMP TABLE $temptable AS $g->{customselect}");
+					$sourcedbh->do("CREATE TEMP TABLE $temptable ON COMMIT DROP AS $g->{customselect}");
 					$srccmd = "COPY $temptable TO STDOUT $sync->{copyextra}";
 					$tgtcmd = "COPY $S.$T($g->{safecolumnlist}) FROM STDIN $sync->{copyextra}";
 				}
