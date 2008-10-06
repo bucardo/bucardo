@@ -10,7 +10,7 @@ WriteMakefile(
     NAME         => 'Bucardo',
     VERSION_FROM => 'Bucardo.pm',
     PREREQ_PM    => {
-                     'DBD::Pg'             => '1.49',
+                     'DBD::Pg'             => '2.0',
                      'DBI'                 => '1.51',
                      'DBIx::Safe'          => '1.2.4',
                      'ExtUtils::MakeMaker' => '6.32',

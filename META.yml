@@ -10,8 +10,8 @@ dynamic_config      : 1
 distribution_type   : module
 
 requires:
-  DBI               : 1.49
-  DBD::Pg           : 1.49
+  DBI               : 1.51
+  DBD::Pg           : 2.0
   DBIx::Safe        : 1.2.4
   Moose             : 0.18
   IO::Handle        : 1.24
