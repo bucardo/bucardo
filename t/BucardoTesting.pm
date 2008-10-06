@@ -621,6 +621,8 @@ sub setup_bucardo {
 	if (!database_exists($dbh => $dbname)) {
 		local $dbh->{AutoCommit} = 1;
 		$dbh->do("CREATE DATABASE $dbname");
+		$dbh->do("CREATE SCHEMA bucardo");
+		$dbh->do("CREATE SCHEMA freezer");
 		$dbh->do("ALTER DATABASE $dbname SET search_path = bucardo, freezer, public");
 		warn "Creating database $dbname\n";
 	}
