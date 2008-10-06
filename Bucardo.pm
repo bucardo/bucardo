@@ -130,8 +130,8 @@ use sigtrap qw( die normal-signals );
 use Moose;
 use Moose::Util::TypeConstraints;
 use Time::HiRes 'sleep';
-use DBI;
-use DBD::Pg ':pg_types';
+use DBI 1.51;
+use DBD::Pg 2.0 ':pg_types';
 my $DEFAULT = $DBD::Pg::DBDPG_DEFAULT;
 use Mail::Sendmail;
 use Sys::Hostname;
@@ -196,9 +196,6 @@ my %dbix = (
 		},
 	}
 );
-
-## This needs to be fixed in DBD::Pg!!
-my $MAXCOPYBUF = 100_000;
 
 ## Optional cleanup for the pidfiles
 ## The string PIDFILE will be replaced with the actual name
@@ -4003,29 +4000,31 @@ sub start_kid {
 					$tgtcmd = "COPY $S.$T FROM STDIN $sync->{copyextra}";
 				}
 
-				$self->glog("Running on $sourcedb: $srccmd");
-				$sourcedbh->do($srccmd);
-
 				my $hasindex = 0;
 				if ($g->{rebuild_index}) {
+					## TODO: Cache this information earlier if feasible
 					$SQL = "SELECT relhasindex FROM pg_class WHERE oid = $g->{targetoid}{$targetdb}";
 					$hasindex = $targetdbh->selectall_arrayref($SQL)->[0][0];
 					if ($hasindex) {
 						$self->glog("Turning off indexes for $S.$T on $targetdb");
+						## TODO: Do this without pg_class manipulation
 						$SQL = "UPDATE pg_class SET relhasindex = 'f' WHERE oid = $g->{targetoid}{$targetdb}";
 						$targetdbh->do($SQL);
 					}
 				}
 
+				$self->glog("Running on $sourcedb: $srccmd");
+				$sourcedbh->do($srccmd);
+
 				$self->glog("Running on $targetdb: $tgtcmd");
 				$targetdbh->do($tgtcmd);
 				my $buffer='';
 				$dmlcount{I}{target}{$S}{$T} = 0;
-				while ($sourcedbh->pg_getline($buffer, $MAXCOPYBUF)) {
-					$targetdbh->pg_putline($buffer);
+				while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
+					$targetdbh->pg_putcopydata($buffer);
 					$dmlcount{I}{target}{$S}{$T}++;
 				}
-				$targetdbh->pg_endcopy();
+				$targetdbh->pg_putcopyend();
 				$self->glog(qq{End COPY of $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
 				$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
 
@@ -5057,8 +5056,8 @@ this distribution.
 
 =head1 DEPENDENCIES
 
-* DBI
-* DBD::Pg
+* DBI (1.51 or better)
+* DBD::Pg (2.0.0 or better)
 * Moose
 * IO::Handle
 * Mail::Sendmail
