@@ -3977,16 +3977,6 @@ sub start_kid {
 					next;
 				}
 
-				$self->glog("Emptying out target table $S.$T using $sync->{deletemethod}");
-				if ($sync->{deletemethod} eq 'truncate') {
-					$targetdbh->do("TRUNCATE TABLE $S.$T");
-				}
-				else {
-					($dmlcount{D}{target}{$S}{$T} = $targetdbh->do("DELETE FROM $S.$T")) =~ s/0E0/0/o;
-					$dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
-					$self->glog("Rows deleted from $S.$T: $dmlcount{D}{target}{$S}{$T}");
-				}
-
 				my ($srccmd,$tgtcmd);
 				if ($sync->{usecustomselect} and $g->{customselect}) {
 					my $temptable = "bucardo_temp_$g->{tablename}_$$"; ## Raw version, not "safetable"
@@ -3998,6 +3988,16 @@ sub start_kid {
 				else {
 					$srccmd = "COPY $S.$T TO STDOUT $sync->{copyextra}";
 					$tgtcmd = "COPY $S.$T FROM STDIN $sync->{copyextra}";
+				}
+
+				$self->glog("Emptying out target table $S.$T using $sync->{deletemethod}");
+				if ($sync->{deletemethod} eq 'truncate') {
+					$targetdbh->do("TRUNCATE TABLE $S.$T");
+				}
+				else {
+					($dmlcount{D}{target}{$S}{$T} = $targetdbh->do("DELETE FROM $S.$T")) =~ s/0E0/0/o;
+					$dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
+					$self->glog("Rows deleted from $S.$T: $dmlcount{D}{target}{$S}{$T}");
 				}
 
 				my $hasindex = 0;
@@ -4761,7 +4761,8 @@ sub start_kid {
 			for my $g (@$goatlist) {
 				next if ! $g->{analyze_after_copy};
 				($S,$T) = ($g->{safeschema},$g->{safetable});
-				$self->glog("Analyzing $S.$T on $targetdb");
+				my $total_time = time() - $start_time;
+				$self->glog("Analyzing $S.$T on $targetdb. Time: $total_time");
 				$targetdbh->do("ANALYZE $S.$T");
 				$targetdbh->commit();
 			}
