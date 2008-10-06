@@ -66,7 +66,7 @@ for my $table (sort keys %tabletype) {
 	$sql{insert}{$table}->execute($val{$table});
 }
 
-$dbhA->commit;
+$dbhA->commit();
 
 sub test_empty_drop {
 	my ($table, $dbh) = @_;
@@ -112,7 +112,6 @@ for my $table (sort keys %tabletype) {
 
 $bct->ctl("kick fullcopytest 0");
 wait_for_notice($dbhX, 'bucardo_syncdone_fullcopytest', 5);
-exit;
 
 for my $table (sort keys %tabletype) {
 	$t=qq{ Second table $table got the fullcopy row};
@@ -231,6 +230,27 @@ for my $table (sort keys %tabletype) {
 	bc_deeply($result, $dbhC, $sql{select}{$table}, $t);
 }
 
+## Test out customselect - update just the id column
+$dbhX->do(q{UPDATE goat SET customselect='SELECT '||qpkey||' FROM '||tablename});
+$dbhX->do(q{UPDATE sync SET usecustomselect = true});
+$dbhX->do("NOTIFY bucardo_reload_sync_fullcopytest");
+$dbhX->commit();
+
+$dbhA->do("UPDATE bucardo_test1 SET id = id + 100, inty=inty + 100");
+$dbhA->commit();
+
+$bct->ctl('kick fullcopytest 0');
+
+for my $table (sort keys %tabletype) {
+	$t=qq{ Second table $table got the fullcopy row};
+	$result = [[undef]];
+	bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
+
+	$t=qq{ Third table $table got the fullcopy row};
+	$result = [[undef]];
+	bc_deeply($result, $dbhC, $sql{select}{$table}, $t);
+}
+
 END {
 	$bct->stop_bucardo($dbhX);
 	$dbhX->disconnect();
@@ -238,3 +258,4 @@ END {
 	$dbhB->disconnect();
 	$dbhC->disconnect();
 }
+
