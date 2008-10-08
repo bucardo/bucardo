@@ -1339,7 +1339,7 @@ sub start_mcp {
 					$maindbh->commit();
 
 					## For now, just allow a few things to be changed "on the fly"
-					for my $val (qw/checksecs stayalive limitdbs do_listen txnmode deletemethod status 
+					for my $val (qw/checksecs stayalive limitdbs do_listen txnmode deletemethod status ping
 									analyze_after_copy disable_triggers targetgroup targetdb usecustomselect/) {
 						$sync->{$syncname}{$val} = $self->{sync}{$syncname}{$val} = $info->{$val};
 					}
@@ -3958,10 +3958,10 @@ sub start_kid {
 		}
 
 		if ($SQL{disable_trigrules}) {
-			$self->glog(qq{Disabling triggers and rules on $targetdb});
+			$self->glog(qq{Disabling triggers and rules on $targetdb ($sync->{disable_triggers} and $sync->{disable_rules})});
 			$targetdbh->do($SQL{disable_trigrules});
 			if ($synctype eq 'swap') {
-				$self->glog(qq{Disabling triggers and rules on $sourcedb});
+				$self->glog(qq{Disabling triggers and rules on $sourcedb ($sync->{disable_triggers} and $sync->{disable_rules})});
 				$sourcedbh->do($SQL{disable_trigrules});
 			}
 		}
@@ -4090,14 +4090,16 @@ sub start_kid {
 				## First, delete any rows that no longer exist on the target:
 				my @tgtdelete = map { ($a=$_->[0]) =~ s/\'/''/g; qq{'$a'} } grep { !defined $_->[1] } @$info; ## no critic
 				$count = @tgtdelete;
-				$SQL = "DELETE FROM $S.$T WHERE $qnamepk IN ";
+				$SQL = $g->{binarypkey} ?
+					"DELETE FROM $S.$T WHERE ENCODE($qnamepk,'base64') IN"
+						: "DELETE FROM $S.$T WHERE $qnamepk IN";
 				if ($count) {
 					while (@tgtdelete) {
 						no warnings;
 						my $list = '';
 						$list .= (shift @tgtdelete) . ',' for 1..$config{max_delete_clause};
 						$list =~ s/,+$//o;
-						$self->glog("Delete from $S.$T: $list");
+						$self->glog("Delete from $S.$T: ($list)");
 						$dmlcount{D}{target}{$S}{$T} += $targetdbh->do("$SQL ($list)");
 					}
 					$dmlcount{D}{target}{$S}{$T} = 0 if $dmlcount{D}{target}{$S}{$T} eq '0E0';
@@ -4434,7 +4436,7 @@ sub start_kid {
 						my $list = '';
 						$list .= (shift @srcdelete) . ',' for 1..$config{max_delete_clause};
 						$list =~ s/,+$//o;
-						$self->glog("Deleting from source: $list");
+						$self->glog("Deleting from source: ($list)");
 						$dmlcount{D}{source}{$S}{$T} += $sourcedbh->do("$SQL ($list)");
 					}
 					$self->glog(qq{Rows deleted from source "$S.$T": $dmlcount{D}{source}{$S}{$T}/$count});
@@ -4446,7 +4448,7 @@ sub start_kid {
 						my $list = '';
 						$list .= (shift @tgtdelete) . ',' for 1..$config{max_delete_clause};
 						$list =~ s/,+$//o;
-						$self->glog("Deleting from target: $list");
+						$self->glog("Deleting from target: $SQL ($list)");
 						$dmlcount{D}{target}{$S}{$T} += $targetdbh->do("$SQL ($list)");
 					}
 					$self->glog(qq{Rows deleted from target "$S.$T": $dmlcount{D}{target}{$S}{$T}/$count});
@@ -4456,7 +4458,7 @@ sub start_kid {
 				## Before this point, the lack of a matching record from the left join
 				## only tells us that the real row *might* exist.
 				## And upserts are too expensive here :)
-				$SQL = $g->{binarypkey} ? 
+				$SQL = $g->{binarypkey} ?
 					"SELECT ENCODE($qnamepk,'base64') AS $qnamepk FROM $S.$T WHERE ENCODE($qnamepk,'base64') IN "
 						: "SELECT $qnamepk FROM $S.$T WHERE $qnamepk IN ";
 
@@ -4719,7 +4721,7 @@ sub start_kid {
 
 		if ($SQL{disable_trigrules} or $SQL{enable_trigrules}) {
 			die "Invalid enable_trigrules!\n" if ! $SQL{enable_trigrules};
-			$self->glog(qq{Enabling triggers and rules});
+			$self->glog(qq{Enabling triggers and rules ($sync->{disable_triggers} and $sync->{disable_rules})});
 			$sourcedbh->do($SQL{enable_trigrules}) if $synctype eq 'swap';
 			$targetdbh->do($SQL{enable_trigrules});
 		}
