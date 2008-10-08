@@ -14,334 +14,225 @@ use BucardoTesting;
 my $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object failed\n";
 $location = 'pushdelta';
 
-use vars qw/$SQL $sth $t $i $result $count/;
+use vars qw/$SQL $sth $t $i $result $count %sql %val %pkey/;
+
+unlink "tmp/log.bucardo";
 
 pass("*** Beginning 'pushdelta' tests");
 
-## Start with a clean schema and databases
+## Prepare a clean Bucardo database on A
+my $dbhA = $bct->blank_database('A');
+my $dbhX = $bct->setup_bucardo(A => $dbhA);
 
-my $dbh = $bct->setup_database({db => 'bucardo', recreatedb => 0, recreateschema => 0});
+## Server A is the master, the rest are slaves
+my $dbhB = $bct->blank_database('B');
+my $dbhC = $bct->blank_database('C');
 
-my $dbhA = $bct->setup_database({db => 'A'});
-my $dbhB = $bct->setup_database({db => 'B'});
-my $dbhC = $bct->setup_database({db => 'C'});
+## Tell Bucardo about these databases
+$bct->add_test_databases('A B C');
 
-$bct->scrub_bucardo_tables($dbh);
-$bct->scrub_bucardo_target_tables($dbhA,$dbhB,$dbhC);
-
-## Teach Bucardo about databases and tables
-## TODO: Refactor this
-
-$t=q{Add database works};
-my $ctlargs = $bct->add_db_args('A');
-$i = $bct->ctl("add database $ctlargs");
-like($i, qr{Database added}, $t);
-
-$ctlargs = $bct->add_db_args('B');
-$i = $bct->ctl("add database $ctlargs");
-like($i, qr{Database added}, $t);
-
-$ctlargs = $bct->add_db_args('C');
-$i = $bct->ctl("add database $ctlargs");
-like($i, qr{Database added}, $t);
-
-## Add a source herd
-$t=q{Add herd works};
-$i = $bct->ctl("add herd testherd1");
-like($i, qr{Herd added}, $t);
-
-## Add the test tables to the herd
+## Create a herd for 'A' and add all test tables to it
 $bct->add_test_tables_to_herd('A', 'testherd1');
 
+## Create a new sync to pushdelta from A to B
 $t=q{Add sync works};
 $i = $bct->ctl("add sync pushdeltatest source=testherd1 type=pushdelta targetdb=B");
 like($i, qr{Sync added:}, $t);
 
-$bct->stop_bucardo($dbh);
-$bct->start_bucardo($dbh);
+$bct->restart_bucardo($dbhX);
 
-## Check for our PIDs - from system, from q table, from logs
+$dbhX->do('LISTEN bucardo_syncdone_pushdeltatest');
+$dbhX->commit();
 
-## Compare tables on A and B to make sure they are identical
-for my $table (sort keys %tabletype) {
-	compare_tables($table,$dbhA,$dbhB) or BAIL_OUT "Compare tables failed for $table\n";
+sub test_empty_drop {
+	my ($table, $dbh) = @_;
+	my $DROPSQL = 'SELECT * FROM droptest';
+	my $line = (caller)[2];
+	$t=qq{ Triggers and rules did NOT fire on remote table $table};
+	$result = [];
+	bc_deeply($result, $dbhB, $DROPSQL, $t, $line);
 }
-pass 'Tables were identical before testing';
 
+## Prepare some insert statement handles, add a row to source database
 for my $table (sort keys %tabletype) {
 
-	diag "Testing table $table\n";
-
-	my $qtable = $dbh->quote($table);
 	my $type = $tabletype{$table};
-	my $val = $val{$type}{1};
-	if (!defined $val) {
+	my $val1 = $val{$type}{1};
+	my $val2 = $val{$type}{2};
+	if (!defined $val1 or !defined $val2) {
 		BAIL_OUT "Could not determine value for $table $type\n";
 	}
 
-	$dbh->do("LISTEN bucardo_syncdone_pushdeltatest");
-	$dbh->commit();
-
-	my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
+	$pkey{$table} = $table =~ /test5/ ? q{"id space"} : 'id';
 
 	$SQL = $table =~ /0/
-		? "INSERT INTO $table($pkey) VALUES (?)"
-		: "INSERT INTO $table($pkey,data1,inty) VALUES (?,'one',1)";
-	$sth = $dbhA->prepare($SQL);
+		? "INSERT INTO $table($pkey{$table}) VALUES (?)"
+			: "INSERT INTO $table($pkey{$table},data1,inty) VALUES (?,'one',1)";
+	$sql{insert}{$table} = $dbhA->prepare($SQL);
 	if ($type eq 'BYTEA') {
-		$sth->bind_param(1, undef, {pg_type => PG_BYTEA});
+		$sql{insert}{$table}->bind_param(1, undef, {pg_type => PG_BYTEA});
 	}
-	$sth->execute($val);
-	$dbhA->commit;
+	$val{$table} = $val1;
 
-	$t=qq{ Second table $table still empty before commit };
-	$SQL = $table =~ /0/
-		? "SELECT $pkey FROM $table"
-		: "SELECT $pkey,data1 FROM $table";
-	$result = [];
-	bc_deeply($result, $dbhB, $SQL, $t);
+	$sql{insert}{$table}->execute($val{$table});
+
+	## Save for later
+	$val{"2.$table"} = $val2;
+
+}
+$dbhA->commit();
+
+## Verify triggers and rules on source database still fire
+for my $table (sort keys %tabletype) {
 
 	$t=q{ After insert, trigger and rule both populate droptest table };
-	my $DROPSQL = $table =~ /0/
+	my $qtable = $dbhX->quote($table);
+	my $LOCALDROPSQL = $table =~ /0/
 		? "SELECT type,0 FROM droptest WHERE name = $qtable ORDER BY 1,2"
-		: "SELECT type,inty FROM droptest WHERE name = $qtable ORDER BY 1,2";
+			: "SELECT type,inty FROM droptest WHERE name = $qtable ORDER BY 1,2";
 	my $tval = $table =~ /0/ ? 0 : 1;
 	$result = [['rule',$tval],['trigger',$tval]];
-	bc_deeply($result, $dbhA, $DROPSQL, $t);
+	bc_deeply($result, $dbhA, $LOCALDROPSQL, $t);
 
-	$t=q{ Table droptest is empty on remote database };
+	test_empty_drop($table,$dbhB);
+}
+
+## Make sure second database is still empty
+for my $table (sort keys %tabletype) {
+	$t=qq{ Second table $table still empty before kick };
+	$sql{select}{$table} = "SELECT inty FROM $table ORDER BY $pkey{$table}";
+	$table =~ /0/ and $sql{select}{$table} =~ s/inty/$pkey{$table}/;
 	$result = [];
-	bc_deeply($result, $dbhB, $DROPSQL, $t);
+	bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
+}
 
-	wait_for_notice($dbh, 'bucardo_syncdone_pushdeltatest');
+## Kick the source database, replicate one row in each table
+$bct->ctl("kick pushdeltatest 0");
+wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 
-	## Insert to A should be echoed to B, after a slight delay:
+## Make sure second database has the new rows, and that triggers and rules did not fire
+for my $table (sort keys %tabletype) {
 	$t=qq{ Second table $table got the pushdelta row};
-	$SQL = $table =~ /0/
-		? "SELECT $pkey,'one' FROM $table"
-		: "SELECT $pkey,data1 FROM $table";
-	$result = [[qq{$val},'one']];
-	bc_deeply($result, $dbhB, $SQL, $t);
+	$result = [[1]];
+	bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
 
-	$t=q{ Triggers and rules did not fire on remote table };
-	$result = [];
-	bc_deeply($result, $dbhB, $DROPSQL, $t);
+	test_empty_drop($table,$dbhB);
+}
 
-	## Add a row to two, should not get removed or replicated
-	my $rval = $val{$type}{9};
-	$SQL = $table =~ /0/
-		? "INSERT INTO $table($pkey) VALUES (?)"
-		: "INSERT INTO $table($pkey,data1,inty) VALUES (?,'nine',9)";
-	$sth = $dbhB->prepare($SQL);
-	if ($type eq 'BYTEA') {
-		$sth->bind_param(1, undef, {pg_type => PG_BYTEA});
-	}
-	$sth->execute($rval);
-	$dbhB->commit;
-
-	## Another source change, but with a different trigger drop method
-	$SQL = "UPDATE sync SET disable_triggers = 'SQL'";
-	$dbh->do($SQL);
-	$dbh->do("NOTIFY bucardo_reload_sync_pushdeltattest");
-	$dbh->commit();
-
-	$val = $val{$type}{2};
-	$SQL = $table =~ /0/
-		? "INSERT INTO $table($pkey) VALUES (?)"
-		: "INSERT INTO $table($pkey,data1,inty) VALUES (?,'two',2)";
-	$sth = $dbhA->prepare($SQL);
-	if ($type eq 'BYTEA') {
-		$sth->bind_param(1, undef, {pg_type => PG_BYTEA});
-	}
-	$sth->execute($val);
-	$dbhA->commit;
-
-	$t=q{ After insert, trigger and rule both populate droptest table4 };
-	$result = $table =~ /0/
-		? [['rule',0],['rule',0],['trigger',0],['trigger',0]]
-		: [['rule',1],['rule',2],['trigger',1],['trigger',2]];
-	bc_deeply($result, $dbhA, $DROPSQL, $t);
-
-	$t=q{ Table droptest has correct entries on remote database };
-	my $ninezero = $table =~ /0/ ? 0 : 9;
-	$result = [['rule',$ninezero],['trigger',$ninezero]];
-	bc_deeply($result, $dbhB, $DROPSQL, $t);
-
-	wait_for_notice($dbh, 'bucardo_syncdone_pushdeltatest');
-
-	## Insert to A should be echoed to B, after a slight delay:
-	$t=qq{ Second table $table got the pushdelta row};
-	$SQL = $table =~ /0/
-		? "SELECT $pkey FROM $table ORDER BY id"
-		: "SELECT data1,inty FROM $table ORDER BY inty";
-	$result = $table =~ /0/
-		? [[1],[2],[9]]
-		: [['one',1],['two',2],['nine',9]];
-	bc_deeply($result, $dbhB, $SQL, $t);
-
-	$t=q{ Triggers and rules did not fire on remote table };
-	$result = [['rule',$ninezero],['trigger',$ninezero]];
-	bc_deeply($result, $dbhB, $DROPSQL, $t);
-
-	$t=q{ Source table did not get updated for pushdelta sync };
-	my $col = $table =~ /0/ ? $pkey : 'inty';
-	$SQL = "SELECT count(*) FROM $table WHERE $col = 9";
-	$count = $dbhA->selectall_arrayref($SQL)->[0][0];
-	is($count, 0, $t);
-
-	## Now with many rows
-	$SQL = $table =~ /0/
-		? "INSERT INTO $table($pkey) VALUES (?)"
-		: "INSERT INTO $table($pkey,data1,inty) VALUES (?,?,?)";
-	$sth = $dbhA->prepare($SQL);
-	for (3..6) {
-		$val = $val{$type}{$_};
-		$table =~ /0/ ? $sth->execute($val) : $sth->execute($val,'bob',$_);
-	}
-	$dbhA->commit;
-
-	## Sanity check
-	$t=qq{ Rows are not in target table before the kick for $table};
-	$sth = $dbhB->prepare("SELECT 1 FROM $table WHERE $col BETWEEN 3 and 6");
-	$count = $sth->execute();
-	$sth->finish();
-	is($count, '0E0', $t);
-
-	wait_for_notice($dbh, 'bucardo_syncdone_pushdeltatest');
-
-	$t=qq{ Second table $table got the pushdelta rows};
-	$SQL = "SELECT $col FROM $table ORDER BY 1";
-	$result = [['1'],['2'],['3'],['4'],['5'],['6'],['9']];
-	bc_deeply($result, $dbhB, $SQL, $t);
-
-
-	## Test of bytea columns
-  SKIP: {
-		$table =~ /0/ and skip 'Cannot test bytea on single-pkey table', 3;
-
-		$SQL = "INSERT INTO $table($pkey,data1,inty,bite1) VALUES (?,?,?,?)";
-		$sth = $dbhA->prepare($SQL);
-		$val = $val{$type}{17};
-		my $bite = 'FooBar';
-		$sth->execute($val,'bob',17,$bite);
-		$dbhA->commit;
-
-		wait_for_notice($dbh, 'bucardo_syncdone_pushdeltatest');
-
-		$t=qq{ Second table $table got the pushdelta rows with bytea column};
-		$SQL = "SELECT bite1 FROM $table WHERE inty = 17";
-		$result = [[$bite]];
-		bc_deeply($result, $dbhB, $SQL, $t);
-
-		## That was too easy, let's do some real bytea data
-
-		$t=qq{ Second table $table got the pushdelta rows with null-containing bytea column};
-		$val = $val{$type}{18};
-		$bite = "Foo\0Bar";
-		$sth->bind_param(4, undef, {pg_type => PG_BYTEA});
-		$sth->execute($val,'bob',18,$bite);
-		$dbhA->commit;
-
-		wait_for_notice($dbh, 'bucardo_syncdone_pushdeltatest');
-
-		$SQL = "SELECT bite1 FROM $table WHERE inty = 18";
-		$result = [[$bite]];
-		bc_deeply($result, $dbhB, $SQL, $t);
-
-		## Now two bytea columns at once
-		$SQL = "INSERT INTO $table($pkey,bite2,data1,inty,bite1) VALUES (?,?,?,?,?)";
-		$sth = $dbhA->prepare($SQL);
-		$val = $val{$type}{19};
-		my ($bite1,$bite2) = ("over\0cycle", "foo\tbar\0\tbaz\0");
-		$sth->bind_param(2, undef, {pg_type => PG_BYTEA});
-		$sth->bind_param(5, undef, {pg_type => PG_BYTEA});
-		$sth->execute($val,$bite2,'bob',19,$bite1);
-		$dbhA->commit;
-
-		wait_for_notice($dbh, 'bucardo_syncdone_pushdeltatest');
-
-		$SQL = "SELECT bite1,bite2 FROM $table WHERE inty = 19";
-		$result = [[$bite1,$bite2]];
-		bc_deeply($result, $dbhB, $SQL, $t);
-
-	}
-
+## Adding a new row should cause the sync to fire without waiting for a kick
+for my $table (sort keys %tabletype) {
+	$dbhA->do("UPDATE $table SET inty = 2");
 	$dbhA->commit();
-	$dbhB->commit();
+	wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 
+	$t=qq{ Second table $table got the pushdelta row};
+	$result = [[2]];
+	bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
 
-} ## end each type of table
+	test_empty_drop($table,$dbhB);
+}
 
-
-## Now connect to more than one target database at a time
-$t=q{Remove sync works};
-$i = $bct->ctl("remove sync pushdeltatest");
-like($i, qr{Sync removed:}, $t);
-
-## Add databases to a new group
+## Add a new target database
 $t=q{Add dbgroup works};
-$i = $bct->ctl("add dbgroup testgroup B C=4");
-like($i, qr{Group updated}, $t);
+$i = $bct->ctl("add dbgroup tgroup B C");
+like($i, qr{Group updated|already exists}, $t);
 
-$t=q{Add sync works};
-$i = $bct->ctl("add sync pushdeltatest source=testherd1 type=pushdelta targetgroup=testgroup");
-like($i, qr{Sync added:}, $t);
+$t=q{Alter sync works};
+$dbhB->commit();
+$i = $bct->ctl("alter sync pushdeltatest targetgroup=tgroup");
+like($i, qr{Sync updated}, $t);
 
-## Make Bucardo reload the sync changes
-$dbh->do('NOTIFY bucardo_mcp_reload');
-$dbh->do('LISTEN bucardo_reloaded_mcp');
-$dbh->commit();
-wait_for_notice($dbh, 'bucardo_reloaded_mcp');
+## Turn off the ping
+$SQL = "UPDATE sync SET ping = FALSE";
+$dbhX->do($SQL);
+
+## Reload the sync
+$dbhX->do("NOTIFY bucardo_reload_sync_pushdeltatest");
+$dbhX->commit();
 
 for my $table (sort keys %tabletype) {
-
-	diag "Testing table $table\n";
-
-	my $qtable = $dbh->quote($table);
-	my $type = $tabletype{$table};
-	my $val = $val{$type}{22};
-	if (!defined $val) {
-		BAIL_OUT "Could not determine value for $table $type\n";
-	}
-
-	$dbh->do("LISTEN bucardo_syncdone_pushdeltatest");
-	$dbh->commit();
-
-	my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
-
-	$dbhA->do("DELETE FROM $table");
-
-	$SQL = $table =~ /0/
-		? "INSERT INTO $table($pkey) VALUES (?)"
-		: "INSERT INTO $table($pkey,data1,inty) VALUES (?,'one',1)";
-	$sth = $dbhA->prepare($SQL);
-	if ($type eq 'BYTEA') {
-		$sth->bind_param(1, undef, {pg_type => PG_BYTEA});
-	}
-	$sth->execute($val);
-	$dbhA->commit;
-
-	wait_for_notice($dbh, 'bucardo_syncdone_pushdeltatest');
-
-	## Insert to A should be echoed to B and C, after a slight delay:
-	$t=qq{ Database B table $table got the pushdelta row};
-	$SQL = $table =~ /0/
-		? "SELECT $pkey,'one' FROM $table"
-		: "SELECT $pkey,data1 FROM $table";
-	$result = [[qq{$val},'one']];
-	bc_deeply($result, $dbhB, $SQL, $t);
-
-	$t=qq{ Database C table $table got the pushdelta row};
-	bc_deeply($result, $dbhC, $SQL, $t);
-
+	$dbhA->do("UPDATE $table SET inty = 3");
 }
+$dbhA->commit();
+
+sleep 3;
+for my $table (sort keys %tabletype) {
+	$t=qq{ Second table $table did not change rows, not pinging};
+	$result = [[2]];
+	bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
+	$result = [];
+	bc_deeply($result, $dbhC, $sql{select}{$table}, $t);
+
+	test_empty_drop($table,$dbhB);
+	test_empty_drop($table,$dbhC);
+}
+
+## Kick the source database, replicate one row in each table
+$bct->ctl("kick pushdeltatest 0");
+wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
+
+for my $table (sort keys %tabletype) {
+	$t=qq{ Second table $table did not change rows, not pinging};
+	$result = [[3]];
+	bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
+	bc_deeply($result, $dbhC, $sql{select}{$table}, $t);
+
+	test_empty_drop($table,$dbhB);
+	test_empty_drop($table,$dbhC);
+}
+
+## Make sure local changes stick
+for my $table (sort keys %tabletype) {
+	$dbhB->do("UPDATE $table SET inty = 4");
+}
+$dbhB->do('DELETE FROM droptest');
+$dbhB->commit();
+
+for my $table (sort keys %tabletype) {
+	$sql{insert}{$table}->execute($val{"2.$table"});
+}
+$dbhA->commit();
+
+$bct->ctl("kick pushdeltatest 0");
+wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
+
+for my $table (sort keys %tabletype) {
+	$t=qq{ Second table $table did not get overwritten by pushdelta};
+	$result = [[4],[1]];
+	bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
+	$result = [[3],[1]];
+	bc_deeply($result, $dbhC, $sql{select}{$table}, $t);
+
+	test_empty_drop($table,$dbhB);
+	test_empty_drop($table,$dbhC);
+}
+
+## Test a deletion
+for my $table (sort keys %tabletype) {
+	$dbhA->do("DELETE FROM $table");
+}
+$dbhA->commit();
+
+$bct->ctl("kick pushdeltatest 0");
+wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
+
+for my $table (sort keys %tabletype) {
+	$t=qq{ Second table $table got the delete};
+	$result = [];
+	bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
+	$result = [];
+	bc_deeply($result, $dbhC, $sql{select}{$table}, $t);
+
+	test_empty_drop($table,$dbhB);
+	test_empty_drop($table,$dbhC);
+}
+
+exit;
 
 END {
-	$bct->stop_bucardo();
+	$bct->stop_bucardo($dbhX);
+	$dbhX->disconnect();
+	$dbhA->disconnect();
+	$dbhB->disconnect();
+	$dbhC->disconnect();
 }
-
-$dbh->disconnect();
-$dbhA->disconnect();
-$dbhB->disconnect();
-$dbhC->disconnect();
-
