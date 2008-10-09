@@ -47,8 +47,8 @@ my $bcargs = {
 			  debugstdout  => 0,
 			  debugsyslog  => 0,
 			  debugdir     => '',
-			  debugfile    => 1,
-			  cleandebugs  => 1,
+			  debugfile    => 0,
+			  cleandebugs  => 0,
 		  };
 
 ## Values are first read from a .bucardorc, either in the current dir, or the home dir.
