@@ -367,15 +367,24 @@ ALTER TABLE sync    ADD CONSTRAINT sync_name_sane    CHECK (name ~ '^[a-zA-Z]\\w
 --
 -- Track our children
 --
+CREATE SEQUENCE audit_pid_id_seq;
 CREATE TABLE audit_pid (
-  type         TEXT        NOT NULL,
-  sync         TEXT        NOT NULL,
-  ppid         INTEGER     NOT NULL,
-  pid          INTEGER     NOT NULL,
-  birthdate    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  killdate     TIMESTAMPTZ     NULL,
-  birth        TEXT            NULL,
-  death        TEXT            NULL
+  id             INTEGER     NOT NULL DEFAULT nextval('audit_pid_id_seq'),
+  parentid       INTEGER         NULL, -- CTL or MCP id
+  familyid       INTEGER         NULL, -- the MCP id
+  type           TEXT        NOT NULL,
+  sync           TEXT        NOT NULL,
+  source         TEXT            NULL,
+  target         TEXT            NULL,
+  master_backend INT         NOT NULL DEFAULT pg_backend_pid(),
+  source_backend INT             NULL,
+  target_backend INT             NULL,
+  ppid           INTEGER     NOT NULL,
+  pid            INTEGER     NOT NULL,
+  birthdate      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  killdate       TIMESTAMPTZ     NULL,
+  birth          TEXT            NULL,
+  death          TEXT            NULL
 );
 
 CREATE TABLE freezer.old_audit_pid AS SELECT * FROM audit_pid LIMIT 0;
@@ -1146,10 +1155,10 @@ $bc$
 
 		if ($info->{synctype} =~ /swap|delta/) {
 			if (! $pkey) {
-				elog(ERROR, qq{Table "$schema.$table" must specify a primary key when using a sync of 'swap'});
+				elog(ERROR, qq{Table "$schema.$table" must specify a primary key when using a sync of 'swap' or 'pushdelta'});
 			}
 			if (! $pkeytype) {
-				elog(ERROR, qq{Table "$schema.$table" must specify a pkeytype when using a sync of 'swap'});
+				elog(ERROR, qq{Table "$schema.$table" must specify a pkeytype when using a sync of 'swap' or 'pushdelta'});
 			}
 			if ($info->{synctype} =~ /swap/) {
 
@@ -1349,7 +1358,7 @@ $bc$
 		if ($ping) {
 			if (!$found{func0}) {
 				$SQL = qq{
-                    CREATE FUNCTION bucardo.$func0()
+                    CREATE FUNCTION bucardo."$func0"()
                     RETURNS TRIGGER 
                     LANGUAGE plpgsql
                     AS \$notify\$
@@ -1363,9 +1372,9 @@ $bc$
 			}
 			if (!$found{trigger0}) {
 				$SQL = qq{
-                    CREATE TRIGGER $trigger0
+                    CREATE TRIGGER "$trigger0"
                     AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
-                    FOR EACH STATEMENT EXECUTE PROCEDURE bucardo.$func0()
+                    FOR EACH STATEMENT EXECUTE PROCEDURE bucardo."$func0"()
                 };
 				run_sql($SQL,$dbh);
 			}
@@ -1444,25 +1453,25 @@ $bc$
 				run_sql($SQL,$dbh);
 			}
 			if (! $found{index1}) {
-				$dbh->do("CREATE INDEX $safeindex1 ON bucardo.bucardo_delta(txntime) WHERE tablename = $oid");
+				$dbh->do(qq{CREATE INDEX $safeindex1 ON bucardo.bucardo_delta(txntime) WHERE tablename = $oid});
 			}
 			if (! $found{index2}) {
 				my $safepkeytype = $pkeytype =~ /timestamp|date|bytea/ ? 'text' : $pkeytype;
-				$dbh->do("CREATE INDEX $index2 ON bucardo.bucardo_delta((rowid::$safepkeytype)) WHERE tablename = $oid");
+				$dbh->do(qq{CREATE INDEX "$index2" ON bucardo.bucardo_delta((rowid::$safepkeytype)) WHERE tablename = $oid});
 			}
 			if (! $found{index3}) {
-				$dbh->do("CREATE INDEX $index3 ON bucardo.bucardo_track(tablename,txntime,targetdb)");
+				$dbh->do(qq{CREATE INDEX "$index3" ON bucardo.bucardo_track(tablename,txntime,targetdb)});
 			}
 			if (! $found{index4}) {
-				$dbh->do("CREATE UNIQUE INDEX $index4 ON bucardo.bucardo_delta_targets(tablename,targetdb)");
+				$dbh->do(qq{CREATE UNIQUE INDEX "$index4" ON bucardo.bucardo_delta_targets(tablename,targetdb)});
 			}
 			if (! $found{index5}) {
-				$dbh->do("CREATE INDEX $index5 ON bucardo.bucardo_delta(txntime)");
+				$dbh->do(qq{CREATE INDEX "$index5" ON bucardo.bucardo_delta(txntime)});
 			}
 			## Make sure you use tabs in all these functions for leading whitespace
 			if (! $found{func1} and $pkeytype ne 'bytea') {
 				$SQL = qq{
-                    CREATE OR REPLACE FUNCTION bucardo.$func1()
+                    CREATE OR REPLACE FUNCTION bucardo."$func1"()
                     RETURNS TRIGGER
                     LANGUAGE plpgsql
                     SECURITY DEFINER
@@ -1488,7 +1497,7 @@ $bc$
 			}
 			if (! $found{func2} and $pkeytype eq 'bytea') {
 				$SQL = qq{
-                    CREATE OR REPLACE FUNCTION bucardo.$func2()
+                    CREATE OR REPLACE FUNCTION bucardo."$func2"()
                     RETURNS TRIGGER
                     LANGUAGE plpgsql
                     SECURITY DEFINER
@@ -1557,17 +1566,17 @@ $bc$
 
 			if (! $found{trigger1} and $pkeytype ne 'bytea') {
 				$SQL = qq{
-                    CREATE TRIGGER $trigger1
+                    CREATE TRIGGER "$trigger1"
                     AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
-                    FOR EACH ROW EXECUTE PROCEDURE bucardo.$func1()
+                    FOR EACH ROW EXECUTE PROCEDURE bucardo."$func1"()
             	};
 				run_sql($SQL,$dbh);
 			}
 			if (! $found{trigger2} and $pkeytype eq 'bytea') {
 				$SQL = qq{
-                    CREATE TRIGGER $trigger2
+                    CREATE TRIGGER "$trigger2"
                     AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
-                    FOR EACH ROW EXECUTE PROCEDURE bucardo.$func2()
+                    FOR EACH ROW EXECUTE PROCEDURE bucardo."$func2"()
             	};
 				run_sql($SQL,$dbh);
 			}
