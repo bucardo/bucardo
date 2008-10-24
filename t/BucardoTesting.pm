@@ -880,7 +880,7 @@ sub ctl {
 		next unless exists $bc->{$val} and length $bc->{$val};
 		$connopts .= " --db$arg=$bc->{$val}";
 	}
-	$connopts .= " --dbname=bucardo_control_test";
+	$connopts .= " --dbname=bucardo_control_test --debugfile=1";
 	$connopts .= " --dbuser=$user";
 	## Just hard-code these, no sense in multiple Bucardo base dbs yet:
 	$connopts .= " --dbport=58921";
