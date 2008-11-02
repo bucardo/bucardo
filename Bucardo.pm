@@ -1744,20 +1744,22 @@ sub start_mcp {
 
 		my %SQL;
 		$SQL{checktable} = qq{
-            SELECT c.oid, pg_catalog.quote_ident(?),
-                pg_catalog.quote_ident(n.nspname), pg_catalog.quote_ident(c.relname)
-            FROM   pg_catalog.pg_class c, pg_catalog.pg_namespace n
+            SELECT c.oid, quote_ident(n.nspname), quote_ident(c.relname)
+            FROM   pg_class c, pg_namespace n
             WHERE  c.relnamespace = n.oid
             AND    nspname = ?
             AND    relname = ?
         };
 		$sth{checktable} = $srcdbh->prepare($SQL{checktable});
 
+		$SQL = "SELECT quote_ident(?)";
+		$sth{quoteident} = $srcdbh->prepare($SQL);
+
 		$SQL{checkcols} = qq{
             SELECT   attname, quote_ident(attname) AS qattname, atttypid, format_type(atttypid, atttypmod) AS ftype,
                      attnotnull, atthasdef, attnum,
                      (SELECT pg_get_expr(adbin, adrelid) FROM pg_attrdef WHERE adrelid=attrelid and adnum=attnum AND atthasdef) AS def
-            FROM     pg_catalog.pg_attribute
+            FROM     pg_attribute
             WHERE    attrelid = ? AND attnum > 0 AND NOT attisdropped
             ORDER BY attnum
         };
@@ -1895,23 +1897,42 @@ sub start_mcp {
 
 			## Check the source table, save escaped versions of the names
 			$sth = $sth{checktable};
-			$count = $sth->execute($g->{pkey},$g->{schemaname},$g->{tablename});
+			$count = $sth->execute($g->{schemaname},$g->{tablename});
 			if ($count != 1) {
 				my $msg = qq{Could not find table $g->{schemaname}.$g->{tablename}\n};
 				$self->glog($msg);
 				warn $msg;
 				return 0;
 			}
-			($g->{oid},$g->{safepkey},$g->{safeschema},$g->{safetable}) = @{$sth->fetchall_arrayref()->[0]};
+			($g->{oid},$g->{safeschema},$g->{safetable}) = @{$sth->fetchall_arrayref()->[0]};
+
+			## Save information about each column in the primary key
+			$g->{pkcols} = 0;
+			my @pktypes = split /\|/ => $g->{pkeytype};
+			my @pkeys;
+			my $x = 0;
+			for my $pk (split /\|/ => $g->{pkey}) {
+				$sth{quoteident}->execute($pk);
+				my $qpk = $sth{quoteident}->fetchall_arrayref()->[0][0];
+				push @pkeys => $pk;
+				push @{$g->{qpkey}} => $qpk;
+				push @{$g->{pkeytype}} => $pktypes[$x++];
+				push @{$g->{binarypkey}} => 0;
+				$g->{pkcols}++;
+			}
+			$g->{pkey} = \@pkeys;
 
 			## Check the source columns, and save them
 			$sth = $sth{checkcols};
 			$sth->execute($g->{oid});
 			my $colinfo = $sth->fetchall_hashref('attname');
 			$g->{columnhash} = $colinfo;
-			my $x = 1;
-			for my $colname (sort { $colinfo->{$a}{attnum} <=> $colinfo->{$b}{attnum} } keys %$colinfo) {
-				next if $colname eq $g->{pkey};
+			$x = 1;
+		  COL: for my $colname (sort { $colinfo->{$a}{attnum} <=> $colinfo->{$b}{attnum} } keys %$colinfo) {
+				## Skip if this column is part of the primary key
+				for my $pk (@{$g->{pkey}}) {
+					next COL if $pk eq $colname;
+				}
 				push @{$g->{cols}}, $colname;
 				push @{$g->{safecols}}, $colinfo->{$colname}{qattname};
 				$colinfo->{$colname}{order} = $x++;
@@ -1920,23 +1941,27 @@ sub start_mcp {
 			$g->{safecolumnlist} = join ',' => @{$g->{safecols}};
 
 			## Note which columns are bytea
-			for my $colname (keys %$colinfo) {
+		  BCOL: for my $colname (keys %$colinfo) {
 				my $c = $colinfo->{$colname};
 				next if $c->{atttypid} != 17;
-				if ($colname eq $g->{pkey}) {
-					$g->{binarypkey} = 1;
+				$x = 0;
+				for my $pk (@{$g->{pkey}}) {
+					if ($colname eq $pk) {
+						$g->{binarypkey}[$x] = 1;
+						next BCOL;
+					}
+					$x++;
 				}
-				else {
-					## This is used to bind_param these as binary during inserts and updates
-					push @{$g->{binarycols}}, $colinfo->{$colname}{order};
-				}
+				## This is used to bind_param these as binary during inserts and updates
+				push @{$g->{binarycols}}, $colinfo->{$colname}{order};
 			}
 
 			## Verify tables and columns on remote databases
+			## XXX: Fork to speed this up?
 			for my $db (sort keys %targetdbh) {
 				my $dbh = $pdbh->{$db};
 				$sth = $dbh->prepare($SQL{checktable});
-				$count = $sth->execute('N/A',$g->{schemaname},$g->{tablename});
+				$count = $sth->execute($g->{schemaname},$g->{tablename});
 				if ($count != 1) {
 					my $msg = qq{Could not find remote table $g->{schemaname}.$g->{tablename} on $db\n};
 					$self->glog($msg);
@@ -2048,28 +2073,37 @@ sub start_mcp {
 				$sth->execute();
 				$info = $sth->{NAME};
 				$sth->finish();
-				my $pkey = $g->{pkey};
-				## It must contain the primary key
-				if (! grep { $_ eq $pkey } @$info) {
-					$msg = qq{ERROR: Custom SELECT does not contain the primary key "$pkey"\n};
-					warn $msg;
-					$self->glog($msg);
-					return 0;
+				## It must contain all the primary keys
+				for my $pk (@{$g->{pkey}}) {
+					## It must contain the primary key (does not do multicol)
+					if (! grep { $_ eq $pk } @$info) {
+						$msg = qq{ERROR: Custom SELECT does not contain the primary key "$pk"\n};
+						warn $msg;
+						$self->glog($msg);
+						return 0;
+					}
 				}
 				my $scols = $g->{cols};
 				## It must all contain only columns already in the slave
 				my $newcols = [];
-				$SQL = "SELECT quote_ident(?)";
-				$sth = $srcdbh->prepare($SQL);
 				my $info2;
-				for my $col (@$info) {
-					if ($col ne $pkey and !grep { $_ eq $col } @$scols) {
+			  SCOL: for my $col (@$info) {
+					my $ok = 0;
+					if (grep { $_ eq $col } @$scols) {
+						$ok = 1;
+					}
+					else {
+						for my $pk (@{$g->{pkey}}) {
+							$ok = 1 if $pk eq $col;
+						}
+					}
+					if (!$ok) {
 						$msg = qq{ERROR: Custom SELECT returned unknown column "$col"\n};
 						warn $msg;
 						$self->glog($msg);
 						return 0;
 					}
-					$sth->execute($col);
+					$sth{quoteident}->execute($col);
 					push @$info2, $sth->fetchall_arrayref()->[0][0];
 				}
 				## Replace the actual set of columns with our subset
@@ -2099,9 +2133,9 @@ sub start_mcp {
 				$self->glog(qq{    Standard conflict method "$sc" chosen});
 			} ## end standard conflict
 
-			## Sync must have a way to handle conflicts
+			## Swap syncs must have some way of resolving conflicts
 			if ($s->{synctype} eq 'swap' and !$g->{standard_conflict} and !exists $g->{code_conflict}) {
-				$self->glog(qq{Warning! Tables used in swaps must specify a conflict handler. $g->{schemaname}.$g->{tablename} appears to have neither});
+				$self->glog(qq{Warning! Tables used in swaps must specify a conflict handler. $g->{schemaname}.$g->{tablename} appears to have neither standard or custom handler.});
 				return 0;
 			}
 
@@ -2701,6 +2735,7 @@ sub start_controller {
 									next unless $g->{has_delta};
 									## XXX Do a deltacount for fullcopy?
 
+									### XXX multicol pkey
 									my ($S,$T,$namepk,$qnamepk) = ($g->{safeschema},$g->{safetable},$g->{pkey},$g->{safepkey});
 									my $safepkeytype = $g->{pkeytype} =~ /timestamp|date/o ? 'text' : $g->{pkeytype};
 									my $x=0;
@@ -3154,7 +3189,7 @@ sub get_deadlock_details {
 		next if $1 == $pid;
 		my ($process,$locktype,$relation) = ($1,$2,$3);
 		## Fetch the relation name
-		my $getname = $dldbh->prepare("SELECT relname FROM pg_catalog.pg_class WHERE oid = ?");
+		my $getname = $dldbh->prepare("SELECT relname FROM pg_class WHERE oid = ?");
 		$getname->execute($relation);
 		my $relname = $getname->fetchall_arrayref()->[0][0];
 
@@ -3427,18 +3462,28 @@ sub start_kid {
 			($S,$T,$namepk,$qnamepk) = ($g->{safeschema},$g->{safetable},$g->{pkey},$g->{safepkey});
 
 			if ($g->{does_makedelta}) {
-				$SQL = qq{INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (?,?)};
+				my $rowid = 'rowid';
+				my $vals = '?,?';
+				if ($g->{pkcols} > 1) {
+					for (2..$g->{multicol}) {
+						$rowid .= ",rowid$_";
+						$vals .= ',?';
+					}
+				}
+				$SQL = qq{INSERT INTO bucardo.bucardo_delta(tablename,$rowid) VALUES ($vals)};
 				$sth{source}{$g}{insertdelta} = $sourcedbh->prepare($SQL) if $synctype eq 'swap';
 				$sth{target}{$g}{insertdelta} = $targetdbh->prepare($SQL);
 			}
 
+			my $q = '?,' x $g->{pkcols};
+			chop $q;
 			if (length $g->{safecolumnlist}) {
-				$SQL = "INSERT INTO $S.$T ($qnamepk, $g->{safecolumnlist}) VALUES (?,";
+				$SQL = "INSERT INTO $S.$T ($qnamepk, $g->{safecolumnlist}) VALUES ($q,";
 				$SQL .= join ',' => map {'?'} @{$g->{cols}};
 				$SQL .= ")";
 			}
 			else {
-				$SQL = "INSERT INTO $S.$T ($qnamepk) VALUES (?)";
+				$SQL = "INSERT INTO $S.$T ($qnamepk) VALUES ($q)";
 			}
 			if ($g->{binarypkey}) {
 				$SQL =~ s/\?/DECODE(?,'base64')/;
@@ -3452,17 +3497,31 @@ sub start_kid {
 			if (length $g->{safecolumnlist}) {
 				$SQL = "UPDATE $S.$T SET ";
 				$SQL .= join ',' => map { "$_=?" } @{$g->{safecols}};
+			}
+			else {
+				$SQL = "UPDATE $S.$T SET $qnamepk=$qnamepk";
+			}
+			my $drow = q{d.rowid AS "BUCARDO_ID"};
+			if ($g->{pkcols} == 1) {
 				$SQL .= " WHERE $qnamepk = ?";
 			}
 			else {
-				$SQL = "UPDATE $S.$T SET $qnamepk=$qnamepk WHERE $qnamepk = ?";
+				my $x = 1;
+				for (@{$g->{multipk}}) {
+					$SQL .= sprintf " %s $_->[1] = ?", $SQL =~ /WHERE/ ? 'AND' : 'WHERE';
+					if ($x > 1) {
+						$drow .= qq{,d.rowid$x AS "BUCARDO_ID$x"};
+					}
+					$x++;
+				}
 			}
+
 			if ($g->{binarypkey}) {
 				$SQL =~ s/WHERE $qnamepk/WHERE ENCODE($qnamepk,'base64')/;
 			}
 			$sth{target}{$g}{updaterow} = $targetdbh->prepare($SQL);
 			$synctype eq 'swap' and $sth{source}{$g}{updaterow} = $sourcedbh->prepare($SQL);
-
+			## $self->glog($SQL);
 			if (exists $g->{binarycols}) {
 				for (@{$g->{binarycols}}) {
 					$sth{target}{$g}{insertrow}->bind_param($_+1, undef, {pg_type => PG_BYTEA});
@@ -3481,10 +3540,11 @@ sub start_kid {
 			if (length $aliaslist) {
 				$aliaslist = ", $aliaslist";
 			}
+
 			my $safesourcedb;
 			## Note: column order important for splice and defined calls later
 			$SQL{delta} = qq{
-                SELECT    DISTINCT d.rowid AS "BUCARDO_ID",
+                SELECT    DISTINCT $drow,
                               BUCARDO_PK $aliaslist
                 FROM      bucardo.bucardo_delta d
                 LEFT JOIN $S.$T t ON BUCARDO_JOIN
@@ -3502,10 +3562,28 @@ sub start_kid {
 				$SQL{delta} =~ s/BUCARDO_PK/ENCODE(t.$qnamepk,'base64')/;
 			}
 			else {
-				$SQL{delta} =~ s/BUCARDO_JOIN/(t.${qnamepk}::$safepkeytype = d.rowid::$safepkeytype)/;
-				$SQL{delta} =~ s/BUCARDO_PK/t.$qnamepk/;
+				if ($g->{pkcols} == 1) {
+					$SQL{delta} =~ s/BUCARDO_JOIN/(t.${qnamepk}::$safepkeytype = d.rowid::$safepkeytype)/;
+					$SQL{delta} =~ s/BUCARDO_PK/t.$qnamepk/;
+				}
+				else {
+					my $clause = '';
+					my $cols = '';
+					my $x = 1;
+					for (@{$g->{multipk}}) {
+						$clause .= sprintf qq{t.$_->[1]::$_->[2] = d.rowid%s::$_->[2] AND },
+							$x>1 ? $x : '';
+						$cols .= qq{t.$_->[1],};
+						$x++;
+					}
+					$clause =~ s/ AND $//;
+					chop $cols;
+					$SQL{delta} =~ s/BUCARDO_JOIN/($clause)/;
+					$SQL{delta} =~ s/BUCARDO_PK/$cols/;
+				}
 			}
 			($SQL = $SQL{delta}) =~ s/\$1/$g->{oid}/go;
+			$self->glog($SQL); ## XXX
 			(my $safedbname = $targetdb) =~ s/\'/''/go;
 			$SQL =~ s/\$2/$safedbname/o;
 			$sth{source}{$g}{getdelta} = $sourcedbh->prepare($SQL);
@@ -4121,15 +4199,24 @@ sub start_kid {
 				$dmlcount{I}{target}{$S}{$T} = 0;
 
 			  ROW: for my $row (grep { defined $_->[1] } @$info) {
-					## Grab the first column from the join above as the primary key.
+					## Grab the first column(s) from the join above as the primary key(s).
 					## Discard the second one (pkey)
-					$pkval = splice(@$row,0,2);
-
+					$self->glog(Dumper $row);
+					my @pkvals;
+					for (1..$g->{pkcols}) {
+						push @pkvals => splice(@$row,0,1);
+					}
+					shift @$row;
+					$self->glog("pkval=$pkval!");
+					$self->glog(Dumper $row);
+					$self->glog(Dumper \@pkvals);
+					my $pkvaljoined = join ',' => @pkvals;
 					my $upsert = 0; ## How many times we've tried to process this rows
 				  UPSERT: {
-						$count = $sth{target}{$g}{updaterow}->execute(@$row,$pkval);
+						## ZZZZ Need all pkvals! - use an array always?
+						$count = $sth{target}{$g}{updaterow}->execute(@$row,@pkvals);
 						if ($count ne '0E0') {
-							$self->glog("Updated $S.$T.$qnamepk: $pkval");
+							$self->glog("Updated $S.$T.$qnamepk: $pkvaljoined");
 							$dmlcount{U}{target}{$S}{$T} += $count;
 							next ROW;
 						}
@@ -4137,7 +4224,7 @@ sub start_kid {
 						## Row does not exist, that we know of. Try an insert
 						$targetdbh->pg_savepoint("bucardo_insert");
 						eval {
-							$count = $sth{target}{$g}{insertrow}->execute($pkval,@$row);
+							$count = $sth{target}{$g}{insertrow}->execute(@pkvals,@$row);
 						};
 						if ($@) {
 							$self->glog("Rolling back because of $@");
@@ -4149,15 +4236,15 @@ sub start_kid {
 								or
 								($upsert >= 1 and $@ !~ /duplicate key violates unique constraint/)
 								) {
-								$self->glog("Warning! Could not insert pk $pkval to $S.$T on $targetdb, aborting");
-								die qq{Upsert insert failed for $S.$T.$pkval on $targetdb: $@};
+								$self->glog("Warning! Could not insert pk $pkvaljoined to $S.$T on $targetdb, aborting");
+								die qq{Upsert insert failed for $S.$T.$pkvaljoined on $targetdb: $@};
 							}
 							$upsert++;
 							redo UPSERT;
 						}
 						else { ## The insert worked
 							$dmlcount{I}{target}{$S}{$T} += $count;
-							$self->glog("Inserted $S.$T.$qnamepk: $pkval");
+							$self->glog("Inserted $S.$T.$qnamepk: $pkvaljoined");
 							$targetdbh->pg_release("bucardo_insert");
 						}
 					} ## end UPSERT
