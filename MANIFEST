@@ -27,11 +27,19 @@ bucardo_ctl.html
 
 ## Testing-related stuff
 .perlcriticrc
-t/00setup.pl
-t/01bc.t
-t/02perlcritic.t
-t/03goat.t
 t/bucardo.test.helper
 t/bucardo.test.data
-
-
+t/01-basic.t
+t/02-monkey_with_db_table.t
+t/02-monkey_with_goat_table.t
+t/02-monkey_with_herd.t
+t/02-monkey_with_sync_table.t
+t/03-goat.t
+t/04-pushdelta.t
+t/05-fullcopy.t
+t/06-multicolpk.t
+t/98-cleanup.t
+t/99-perlcritic.t
+t/99-signature.t
+t/99-yaml.t
+t/BucardoTesting.pm

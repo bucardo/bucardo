@@ -9,7 +9,7 @@ use 5.008003;
 use strict;
 use warnings;
 
-our $VERSION = '3.1.2';
+our $VERSION = '3.2.0';
 
 ## Begin Moose classes
 {
@@ -5156,7 +5156,7 @@ Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This documents describes Bucardo version 3.1.2
+This documents describes Bucardo version 3.2.0
 
 =head1 SYNOPSIS
 

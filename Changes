@@ -1,5 +1,12 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
+3.2.0
+
+  - Make the audit_pid table more useful. Use sequences instead of 
+    PIDs to find children.
+
+  - Support multi-column primary keys. Thanks to Backcountry.com. [GSM]
+
 3.1.0 April 6, 2008
 
   - Fix race condition in bucardo_delta/bucardo_track updates 

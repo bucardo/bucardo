@@ -13,7 +13,6 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Make timeslices for master_q adjustable
 - Allow more data types for pkey on goats
 - Automatic detection of primary keys
-- Allow goats to have multi-column primary keys
 - Strip out large src_code from the email dumps
 - Handle partitioned tables
 - Allow notification emails to be regex sorted, e.g. serialization warnings
@@ -34,3 +33,5 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Support large objects
 - Check for superuser on startup, to prevent errors that only show when a KID tries something.
 - Gracefully handle new nodes being added, e.g. a one-time fullcopy sync for new pushdeltas.
+
+
