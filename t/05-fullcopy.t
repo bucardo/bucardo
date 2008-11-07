@@ -251,6 +251,40 @@ for my $table (sort keys %tabletype) {
 	bc_deeply($result, $dbhC, $sql{select}{$table}, $t);
 }
 
+KILLTEST: {
+sleep 1;
+}
+
+## Kill the Postgres backend for one of the kids to see how it is handled
+my $SQL = "SELECT * FROM bucardo.audit_pid WHERE target='B' ORDER BY id DESC LIMIT 1";
+my $info = $dbhX->prepare($SQL);
+$info->execute();
+$info = $info->fetchall_arrayref({})->[0];
+my $pid = $info->{'target_backend'};
+my $kidid = $info->{'id'};
+kill 15 => $pid;
+
+$dbhA->do("UPDATE bucardo_test1 SET id = id + 100, inty=inty + 100");
+$dbhA->commit();
+$bct->ctl('kick fullcopytest 0');
+
+$SQL = "SELECT * FROM bucardo.audit_pid WHERE id = ?";
+$info = $dbhX->prepare($SQL);
+$info->execute($kidid);
+$info = $info->fetchall_arrayref({})->[0];
+
+$t = 'Kid death was detected and entered in audit_pid table';
+like ($info->{death}, qr{target error: 7}, $t);
+
+sleep 2;
+## Latest kid should have a life of 2
+$SQL = "SELECT * FROM bucardo.audit_pid WHERE target='B' ORDER BY id DESC LIMIT 1";
+$info = $dbhX->prepare($SQL);
+$info->execute();
+$info = $info->fetchall_arrayref({})->[0];
+$t = 'Kid was resurrected by the controller after untimely death';
+like ($info->{death}, qr{abnormally}, $t);
+
 END {
 	$bct->stop_bucardo($dbhX);
 	$dbhX->disconnect();
