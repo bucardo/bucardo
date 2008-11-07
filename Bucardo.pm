@@ -2296,6 +2296,7 @@ sub start_controller {
 	$self->{syncname} = $syncname;
 	$sync->{targetdb}    ||= 0;
 	$sync->{targetgroup} ||= 0;
+	$self->{kidpid} = {};
 
 	$0 = qq{Bucardo Controller.$self->{extraname} Sync "$syncname" ($synctype) for source "$source"};
 	$self->{logprefix} = "CTL ";
@@ -2690,7 +2691,9 @@ sub start_controller {
 			$maindbh->commit();
 			for (@notice) {
 				my ($name, $pid) = @$_;
-				$self->glog(qq{Got notice "$name" from $pid});
+				my $msg = sprintf qq{Got notice "$name" from $pid%s},
+					exists $self->{kidpid}{$pid-1} ? (" (kid on database ".$self->{kidpid}{$pid-1}{dbname} .')') : '';
+				$self->glog($msg);
 				## Kick request from the MCP?
 				if ($name eq $kicklisten) {
 					$kicked = 1;
@@ -3124,6 +3127,7 @@ sub start_controller {
 
 		$self->glog(qq{Created new kid $newkid for sync "$self->{syncname}" to database "$kid->{dbname}"});
 		$kid->{pid} = $newkid;
+		$self->{kidpid}{$newkid} = $kid;
 		$kid->{cdate} = time;
 		$kid->{life}++;
 		$kid->{finished} = 0;
