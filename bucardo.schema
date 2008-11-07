@@ -922,7 +922,7 @@ FOR EACH ROW EXECUTE PROCEDURE validate_goat();
 -- Check that the goat tables are ready and compatible
 --
 
-CREATE FUNCTION validate_sync(TEXT)
+CREATE OR REPLACE FUNCTION bucardo.validate_sync(TEXT,INT)
 RETURNS TEXT
 LANGUAGE plperlu
 SECURITY DEFINER
@@ -931,6 +931,7 @@ $bc$
 	use strict; use warnings; use DBI;
 
 	my $syncname = shift;
+	my $force = shift || 0;
 	my ($rv,$SQL,%cache);
 
 	elog(DEBUG, "Starting validate_sync for $syncname");
@@ -1048,23 +1049,28 @@ $bc$
 
 	## Loop through and check each table in turn, setting up as needed.
 
+	my %badtable;
 	for my $schema (sort keys %sourcetable) {
-		for my $table (sort keys %{$sourcetable{$schema}}) {
+		TABLE: for my $table (sort keys %{$sourcetable{$schema}}) {
 
 			my $tinfo = $sourcetable{$schema}{$table};
 			$tinfo->{synctype} = $info->{synctype};
 			my $delta = $info->{synctype} =~ /pushdelta|swap/ ? 1 : 0;
 			my $ping = $info->{ping} eq 't' ? 1 : 0;
-			my $columns = bucardo_validate_table(1,$sourcedb,$tinfo,$delta,$ping,$syncname,\%cache);
+			my $columns = bucardo_validate_table(1,$sourcedb,$tinfo,$delta,$ping,$syncname,\%cache,$source);
+			if ($columns == -1) {
+				$badtable{$schema}{$table}=1;
+				next TABLE;
+			}
 
 			$delta = $info->{synctype} =~ /swap/ ? 1 : 0;
 			$ping = $delta;
 			for my $tdb (sort keys %$targetdb) {
-
-				my $tcolumns = bucardo_validate_table(0,$tdb,$tinfo,$delta,$ping,$syncname,\%cache);
-
-				## Check columns against each other
-
+				my $tcolumns = bucardo_validate_table(0,$tdb,$tinfo,$delta,$ping,$syncname,\%cache,$source);
+				if ($columns == -1) {
+					$badtable{$schema}{$table}=1;
+					next TABLE;
+				}
 			} ## end each target database
 
 
@@ -1072,6 +1078,12 @@ $bc$
 
 	}  ## end each source schema
 
+	## Remove any tables that were removed from the herd by bucardo_validate_table
+	for my $schema (keys %badtable) {
+		for my $table (keys %{$badtable{$schema}}) {
+			delete $sourcetable{$schema}{$table};
+		}
+	}
 
 	## Update the bucardo_delta_targets table as needed
 	my $check = "SELECT 1 FROM bucardo.bucardo_delta_targets WHERE tablename=? AND targetdb=?";
@@ -1132,7 +1144,7 @@ $bc$
 
 	sub bucardo_validate_table {
 
-		my ($is_source, $db, $info, $delta, $ping, $syncname, $cache) = @_;
+		my ($is_source, $db, $info, $delta, $ping, $syncname, $cache, $source) = @_;
 		my ($sth,$SQL);
 
 		my ($schema, $safeschema, $table,  $safetable, $pkey, $safepkey, $safedb, $pkeytype) = @$info{qw(
@@ -1155,10 +1167,19 @@ $bc$
 
 		if ($info->{synctype} =~ /swap|delta/) {
 			if (! $pkey) {
-				elog(ERROR, qq{Table "$schema.$table" must specify a primary key when using a sync of 'swap' or 'pushdelta'});
+				if (!$force) {
+					elog(ERROR, qq{Table "$schema.$table" must specify a primary key when using a sync of '$info->{synctype}'});
+				}
+				warn qq{Table "$schema.$table" must specify a primary key when using a sync of '$info->{synctype}'};
+				warn qq{REMOVING TABLE "$schema.$table" from herd "$source"\n};
+				(my $safesource = $source) =~ s/'/''/g;
+				$SQL = "DELETE FROM herdmap WHERE herd='$safesource' AND goat IN (SELECT id FROM goat ".
+				"WHERE schemaname='$safeschema' AND tablename='$safetable')";
+				$rv = spi_exec_query($SQL);
+				return -1;
 			}
 			if (! $pkeytype) {
-				elog(ERROR, qq{Table "$schema.$table" must specify a pkeytype when using a sync of 'swap' or 'pushdelta'});
+				elog(ERROR, qq{Table "$schema.$table" must specify a pkeytype when using a sync of '$info->{synctype}'});
 			}
 			if ($info->{synctype} =~ /swap/) {
 
@@ -1304,7 +1325,37 @@ $bc$
 
 		## (if bucardo_delta exists) Do these indexes exist?
 		my $index1 = "bucardo_delta_${schema}_${table}_txn";
+	    my $l = length $index1;
+		if ($l > 63) {
+			if ($l <= 67) {
+				$index1 = "bucardo_d_${schema}_${table}_txn";
+			}
+			elsif ($l <= 69) {
+				$index1 = "bucardo_d_${schema}_${table}_t";
+			}
+			elsif ($l <= 76) {
+				$index1 = "b_d_${schema}_${table}_t";
+			}
+			else {
+			    $index1 = "bucardo_delta_" . int(rand 9999999999);
+			}
+		}
 		my $index2 = "bucardo_delta_${schema}_${table}_rowid";
+		$l = length $index2;
+		if ($l > 63) {
+			if ($l <= 67) {
+				$index2 = "bucardo_d_${schema}_${table}_rowid";
+			}
+			elsif ($l <= 71) {
+				$index2 = "bucardo_d_${schema}_${table}_r";
+			}
+			elsif ($l <= 78) {
+				$index2 = "b_d_${schema}_${table}_r";
+			}
+			else {
+			    $index2 = "bucardo_delta_" . int(rand 9999999999);
+			}
+		}
 		my $index3 = "bucardo_track_target";
 		my $index4 = "bucardo_delta_targetdb_unique";
 		my $index5 = "bucardo_delta_txntime";
@@ -1423,6 +1474,10 @@ $bc$
 		} ## end if not delta
 		else {
 
+			my @pkeys = split (/\|/ => $pkey);
+			my $numpkeys = @pkeys;
+			warn "numpkeys is $numpkeys!\n";
+
 			if (! $found{bucardo_delta}) {
 				$SQL = qq{
                     CREATE TABLE bucardo.bucardo_delta (
@@ -1432,7 +1487,13 @@ $bc$
                     );
                 };
 				run_sql($SQL,$dbh);
+				warn "ABOUT TO ADD?\n";
+				for (2..$numpkeys) {
+					$SQL = "ALTER TABLE bucardo.bucardo_delta ADD rowid$_ TEXT NULL";
+					run_sql($SQL,$dbh);
+				}
 			}
+
 			if (! $found{'bucardo_track'}) {
 				$SQL = qq{
                     CREATE TABLE bucardo.bucardo_track (
@@ -1453,11 +1514,31 @@ $bc$
 				run_sql($SQL,$dbh);
 			}
 			if (! $found{index1}) {
-				$dbh->do(qq{CREATE INDEX $safeindex1 ON bucardo.bucardo_delta(txntime) WHERE tablename = $oid});
+				$dbh->do(qq{CREATE INDEX "$safeindex1" ON bucardo.bucardo_delta(txntime) WHERE tablename = $oid});
 			}
 			if (! $found{index2}) {
-				my $safepkeytype = $pkeytype =~ /timestamp|date|bytea/ ? 'text' : $pkeytype;
-				$dbh->do(qq{CREATE INDEX "$index2" ON bucardo.bucardo_delta((rowid::$safepkeytype)) WHERE tablename = $oid});
+				warn "No index2?\n";
+				my @pkeytypes = split (/\|/ => $pkeytype);
+				if (1 == @pkeytypes) {
+					my $safepkeytype = $pkeytype =~ /timestamp|date|bytea/ ? 'text' : $pkeytype;
+					elog(DEBUG, "Create index $index2 on bucardo_delta(rowid::$safepkeytype)");
+					$dbh->do(qq{CREATE INDEX "$index2" ON bucardo.bucardo_delta((rowid::$safepkeytype)) WHERE tablename = $oid});
+				}
+				else {
+					warn "Creating multicolindex\n";
+					my $multicol = join ',' => map { s{timestamp|date|bytea}{text}; "(rowid::$_)"; } split (/\|/ => $pkeytype);
+					$dbh->do(qq{CREATE INDEX "$index2" ON bucardo.bucardo_delta($multicol) WHERE tablename = $oid});
+					for (2..$numpkeys) {
+						my $colname = "rowid$_";
+						$SQL = "SELECT count(*) FROM pg_catalog.pg_attribute a, pg_class c, pg_namespace n ".
+							"WHERE c.relnamespace = n.oid AND n.nspname = 'bucardo' AND a.attrelid = c.oid AND a.attname = '$colname'";
+						$count = $dbh->selectall_arrayref($SQL)->[0][0];
+						if ($count != 1) {
+							$SQL = "ALTER TABLE bucardo.bucardo_delta ADD $colname TEXT NULL";
+							$dbh->do($SQL);
+						}
+					}
+				}
 			}
 			if (! $found{index3}) {
 				$dbh->do(qq{CREATE INDEX "$index3" ON bucardo.bucardo_track(tablename,txntime,targetdb)});
@@ -1469,6 +1550,13 @@ $bc$
 				$dbh->do(qq{CREATE INDEX "$index5" ON bucardo.bucardo_delta(txntime)});
 			}
 			## Make sure you use tabs in all these functions for leading whitespace
+			my $rowids = 'rowid';
+			for (2..$numpkeys) {
+				$rowids .= ",rowid$_";
+			}
+			my $new = join ',' => map { qq{NEW."$_"} } @pkeys;
+			my $old = join ',' => map { qq{OLD."$_"} } @pkeys;
+			my $clause = join ' OR ' => map { qq{OLD."$_" <> NEW."$_"} } @pkeys;
 			if (! $found{func1} and $pkeytype ne 'bytea') {
 				$SQL = qq{
                     CREATE OR REPLACE FUNCTION bucardo.$func1()
@@ -1479,15 +1567,15 @@ $bc$
                     AS
                     \$clone\$
                     BEGIN
-						IF (TG_OP = 'INSERT') THEN
-                          INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (TG_RELID, NEW.${safepkey});
+                        IF (TG_OP = 'INSERT') THEN
+                          INSERT INTO bucardo.bucardo_delta(tablename,$rowids) VALUES (TG_RELID, $new);
                         ELSIF (TG_OP = 'UPDATE') THEN
-                          INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (TG_RELID, OLD.$safepkey);
-                          IF (OLD.$safepkey <> NEW.$safepkey) THEN
-                            INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (TG_RELID, NEW.$safepkey);
+                          INSERT INTO bucardo.bucardo_delta(tablename,$rowids) VALUES (TG_RELID, $old);
+                          IF ($clause) THEN
+                            INSERT INTO bucardo.bucardo_delta(tablename,$rowids) VALUES (TG_RELID, $new);
                           END IF;
                         ELSE
-                          INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (TG_RELID, OLD.$safepkey);
+                          INSERT INTO bucardo.bucardo_delta(tablename,$rowids) VALUES (TG_RELID, $old);
                         END IF;
                         RETURN NULL;
                     END;
@@ -1568,7 +1656,7 @@ $bc$
 				$SQL = qq{
                     CREATE TRIGGER "$trigger1"
                     AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
-                    FOR EACH ROW EXECUTE PROCEDURE bucardo."$func1"()
+                    FOR EACH ROW EXECUTE PROCEDURE bucardo.$func1()
             	};
 				run_sql($SQL,$dbh);
 			}
@@ -1576,7 +1664,7 @@ $bc$
 				$SQL = qq{
                     CREATE TRIGGER "$trigger2"
                     AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
-                    FOR EACH ROW EXECUTE PROCEDURE bucardo."$func2"()
+                    FOR EACH ROW EXECUTE PROCEDURE bucardo.$func2()
             	};
 				run_sql($SQL,$dbh);
 			}
@@ -1584,7 +1672,8 @@ $bc$
 		} ## end if delta
 
 		$dbh->commit();
-		return ""; ## XXX
+		return 1;
+
 	} ## end of bucardo_validate_table
 
 	for (values %{$cache{dbh}}) {
@@ -1594,6 +1683,13 @@ $bc$
 	return 'MODIFY';
 $bc$;
 
+CREATE OR REPLACE FUNCTION bucardo.validate_sync(TEXT)
+RETURNS TEXT
+LANGUAGE SQL
+AS
+$bc$
+SELECT bucardo.validate_sync($1,0);
+$bc$;
 
 CREATE FUNCTION validate_sync()
 RETURNS TRIGGER
