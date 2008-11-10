@@ -1472,7 +1472,6 @@ $bc$
 
             my @pkeys = split (/\|/ => $pkey);
             my $numpkeys = @pkeys;
-            warn "numpkeys is $numpkeys!\n";
 
             if (! $found{bucardo_delta}) {
                 $SQL = qq{
