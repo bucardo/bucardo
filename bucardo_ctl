@@ -17,7 +17,7 @@ use Data::Dumper;
 
 return 1 if $ENV{BUCARDO_CTL_TEST};
 
-our $VERSION = '3.2.0';
+our $VERSION = '3.2.1';
 
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
@@ -45,7 +45,7 @@ my $bcargs = {
 			  debugname    => '',
 			  debugstderr  => 0,
 			  debugstdout  => 0,
-			  debugsyslog  => 0,
+			  debugsyslog  => 1,
 			  debugdir     => '',
 			  debugfile    => 0,
 			  cleandebugs  => 0,
@@ -228,7 +228,6 @@ sub start {
 
 	$dbh->disconnect();
 	if (fork) {
-		warn "I am a parent: $$";
 	}
 	else {
 		close STDERR;
@@ -1282,6 +1281,7 @@ sub upgrade {
 
 	my $schema = 'bucardo';
 
+	$dbh->do("SET escape_string_warning = 'OFF'");
 
 	my $changes = 0;
 
@@ -1399,9 +1399,45 @@ sub upgrade {
 		}
 	}
 
+	## Check for any new config items
+	$SQL = "SELECT value FROM bucardo_config WHERE lower(setting) = ?";
+	my $cfgsth = $dbh->prepare($SQL);
+	$SQL = 'INSERT INTO bucardo_config(setting,value,about) VALUES (?,?,?)';
+	my $newcfg = $dbh->prepare($SQL);
+	my $file = 'bucardo.schema';
+	open my $fh, '<', $file or die qq{Could not open "$file": $!\n};
+	my %config;
+	my $inside = 0;
+	while (<$fh>) {
+		if (!$inside) {
+			if (/^WITH DELIMITER/) {
+				$inside = 1;
+			}
+			next;
+		}
+		if (/^\\/) {
+			$inside = 0;
+			next;
+		}
+		## Scoop
+		my ($setting,$value,$about) = split /\|/ => $_;
+		$config{$setting} = [$value,$about];
+		$count = $cfgsth->execute($setting);
+		$cfgsth->finish();
+		if ($count eq '0E0') {
+			clog "Added new bucardo_config setting: $setting";
+			$changes++;
+			$newcfg->execute($setting,$value,$about);
+		}
+	}
+	close $fh or die qq{Could not close file "$file": $!\n};
+
 	for my $row (@row_values) {
 		my ($table,$column,$where,$force,$value) = @$row;
 		my $val = column_value($schema,$table,$column,$where);
+		if (!defined $val) {
+			die "Failed to find $table.$column where $where!\n";
+		}
 		if ($val eq $value) {
 			clog "  Value of $table.$column where $where is already correct";
 		}
@@ -1415,8 +1451,8 @@ sub upgrade {
 	}
 
 	## Now we check all the functions within bucardo.schema
-	my $file = 'bucardo.schema';
-	open my $fh, '<', $file or die qq{Could not open "$file": $!\n};
+	$file = 'bucardo.schema';
+	open $fh, '<', $file or die qq{Could not open "$file": $!\n};
 	my @flist;
 	my ($name,$args,$body) = ('','','');
 	while (<$fh>) {
@@ -1468,17 +1504,6 @@ sub upgrade {
 		(my $short = $body) =~ s/^(.+?)\n.*/$1/s;
 		upgrade_and_log($body,$short);
 		clog "Updated function: $schema.$name($args)";
-		$changes++;
-	}
-
-
-	## Bump the version if we need to
-	my $version = get_config('bucardo_current_version');
-	if ($version ne $VERSION) {
-		$SQL = sprintf "UPDATE $schema.bucardo_config SET value = %s WHERE setting = 'bucardo_current_version'",
-			$dbh->quote($VERSION);
-		upgrade_and_log($SQL);
-		clog "Changed bucardo_config 'bucardo_current_version' from $version to $VERSION\n";
 		$changes++;
 	}
 
