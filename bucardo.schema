@@ -42,7 +42,7 @@ ALTER TABLE bucardo_config ADD CONSTRAINT valid_config_type
 CREATE FUNCTION check_bucardo_config()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-AS $_$
+AS $bc$
 BEGIN
 NEW.setting = LOWER(NEW.setting);
 
@@ -60,7 +60,7 @@ END IF;
 
 RETURN NEW;
 END;
-$_$;
+$bc$;
 
 CREATE TRIGGER check_bucardo_config
 BEFORE INSERT OR UPDATE ON bucardo_config
@@ -151,7 +151,6 @@ ALTER TABLE db ADD CONSTRAINT db_status CHECK (status IN ('active','inactive'));
 --
 -- Databases can belong to zero or more named groups
 --
-CREATE SEQUENCE dbgroup_id_seq;
 CREATE TABLE dbgroup (
   name      TEXT        NOT NULL,
               CONSTRAINT dbgroup_name_pk PRIMARY KEY (name),
@@ -427,12 +426,12 @@ CREATE INDEX q_stathelper ON q(cdate, sync) WHERE ended IS NOT NULL;
 CREATE FUNCTION bucardo.bucardo_q()
 RETURNS TRIGGER 
 LANGUAGE plpgsql
-AS $q$
+AS $bc$
 BEGIN
 EXECUTE 'NOTIFY bucardo_q_'||NEW.sync||'_'||NEW.targetdb;
 RETURN NEW;
 END;
-$q$;
+$bc$;
 
 CREATE TRIGGER bucardo_q AFTER INSERT ON bucardo.q
   FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_q();
@@ -445,7 +444,7 @@ CREATE FUNCTION bucardo_purge_q_table(interval)
 RETURNS INTEGER
 SECURITY DEFINER
 LANGUAGE plpgsql
-AS $_$
+AS $bc$
 DECLARE
   numrows BIGINT;
   qcount  BIGINT;
@@ -462,37 +461,37 @@ BEGIN
   --RAISE NOTICE 'Rows left in q table: %', qcount;
   RETURN numrows;
 END;
-$_$;
+$bc$;
 
 CREATE FUNCTION bucardo_purge_q_table(text)
 RETURNS INTEGER
 LANGUAGE SQL
-AS $_$
+AS $bc$
 SELECT bucardo_purge_q_table($1::interval);
-$_$;
+$bc$;
 
 CREATE FUNCTION bucardo_purge_q_table()
 RETURNS INTEGER
 LANGUAGE SQL
-AS $_$
+AS $bc$
 SELECT bucardo_purge_q_table('2 hours'::interval);
-$_$;
+$bc$;
 
-CREATE FUNCTION bucardo_purge_q_table(int)
+CREATE FUNCTION bucardo_purge_q_table(integer)
 RETURNS INTEGER
 LANGUAGE plpgsql
 IMMUTABLE
-AS $_$
+AS $bc$
 BEGIN
 RAISE EXCEPTION 'Please use an time interval such as ''2 hours''';
 END;
-$_$;
+$bc$;
 
 
-CREATE FUNCTION table_exists(text, text)
+CREATE FUNCTION table_exists(text,text)
 RETURNS BOOLEAN
 LANGUAGE plpgsql
-AS $_$
+AS $bc$
 BEGIN
   PERFORM 1
     FROM pg_catalog.pg_class c, pg_namespace n
@@ -502,15 +501,13 @@ BEGIN
   IF FOUND THEN RETURN true; END IF;
   RETURN false;
 END;
-$_$;
+$bc$;
 
 
-
-
-CREATE FUNCTION create_child_q(TEXT)
+CREATE FUNCTION create_child_q(text)
 RETURNS BOOLEAN
 LANGUAGE plpgsql
-AS $_$
+AS $bc$
 DECLARE
   tablename ALIAS FOR $1;
   tfound BOOLEAN;
@@ -568,18 +565,17 @@ BEGIN
   RAISE NOTICE 'Created table %', tablename;
 RETURN true;
 END;
-$_$;
+$bc$;
 
 
 --
 -- Return a created connection string from the db table
 --
-CREATE FUNCTION db_getconn(TEXT)
+CREATE FUNCTION db_getconn(text)
 RETURNS TEXT
 LANGUAGE plperlu
 SECURITY DEFINER
-AS 
-$bc$
+AS $bc$
 
 ## Given the name of a db, return a connection string, username, and password
 
@@ -661,7 +657,7 @@ $bc$;
 --
 -- Test a database connection, and log to the db_connlog table
 --
-CREATE FUNCTION bucardo.db_testconn(TEXT)
+CREATE FUNCTION bucardo.db_testconn(text)
 RETURNS TEXT
 LANGUAGE plperlu
 SECURITY DEFINER
@@ -922,7 +918,7 @@ FOR EACH ROW EXECUTE PROCEDURE validate_goat();
 -- Check that the goat tables are ready and compatible
 --
 
-CREATE OR REPLACE FUNCTION bucardo.validate_sync(TEXT,INT)
+CREATE OR REPLACE FUNCTION bucardo.validate_sync(text,integer)
 RETURNS TEXT
 LANGUAGE plperlu
 SECURITY DEFINER
@@ -1057,7 +1053,7 @@ $bc$
 			$tinfo->{synctype} = $info->{synctype};
 			my $delta = $info->{synctype} =~ /pushdelta|swap/ ? 1 : 0;
 			my $ping = $info->{ping} eq 't' ? 1 : 0;
-			my $columns = bucardo_validate_table(1,$sourcedb,$tinfo,$delta,$ping,$syncname,\%cache,$source);
+			my $columns = bucardo_validate_table(1,$sourcedb,$tinfo,$delta,$ping,$syncname,\%cache,$source,$force);
 			if ($columns == -1) {
 				$badtable{$schema}{$table}=1;
 				next TABLE;
@@ -1066,7 +1062,7 @@ $bc$
 			$delta = $info->{synctype} =~ /swap/ ? 1 : 0;
 			$ping = $delta;
 			for my $tdb (sort keys %$targetdb) {
-				my $tcolumns = bucardo_validate_table(0,$tdb,$tinfo,$delta,$ping,$syncname,\%cache,$source);
+				my $tcolumns = bucardo_validate_table(0,$tdb,$tinfo,$delta,$ping,$syncname,\%cache,$source,$force);
 				if ($columns == -1) {
 					$badtable{$schema}{$table}=1;
 					next TABLE;
@@ -1144,7 +1140,7 @@ $bc$
 
 	sub bucardo_validate_table {
 
-		my ($is_source, $db, $info, $delta, $ping, $syncname, $cache, $source) = @_;
+		my ($is_source, $db, $info, $delta, $ping, $syncname, $cache, $source, $force) = @_;
 		my ($sth,$SQL);
 
 		my ($schema, $safeschema, $table,  $safetable, $pkey, $safepkey, $safedb, $pkeytype) = @$info{qw(
@@ -1683,7 +1679,7 @@ $bc$
 	return 'MODIFY';
 $bc$;
 
-CREATE OR REPLACE FUNCTION bucardo.validate_sync(TEXT)
+CREATE OR REPLACE FUNCTION bucardo.validate_sync(text)
 RETURNS TEXT
 LANGUAGE SQL
 AS
@@ -1876,6 +1872,12 @@ CHECK (sync IS NULL OR goat IS NULL);
 CREATE UNIQUE INDEX customcode_map_unique_sync ON customcode_map(code,sync) WHERE sync IS NOT NULL;
 CREATE UNIQUE INDEX customcode_map_unique_goat ON customcode_map(code,goat) WHERE goat IS NOT NULL;
 
+-- Keep track of any upgrades as we go along
+CREATE TABLE upgrade_log (
+  action   TEXT        NOT NULL,
+  version  TEXT        NOT NULL,
+  cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 --
 -- END OF THE SCHEMA
