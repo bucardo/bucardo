@@ -153,6 +153,7 @@ ping()          if $verb eq 'ping';
 add_item()      if $verb eq 'add';
 alter_item()    if $verb eq 'alter';
 remove_item()   if $verb eq 'remove';
+upgrade()       if $verb eq 'upgrade';
 
 
 ## For the rest, we expect a list of sync with an optional decimal "timeout"
@@ -1137,6 +1138,359 @@ sub remove_item {
 	exit 1;
 
 } ## end of remove_item
+
+sub clog {
+
+	my $msg = shift;
+	chomp $msg;
+
+	warn "$msg\n";
+
+} ## end of clog
+
+sub schema_exists {
+
+	my ($schema) = @_;
+	my $SQL = 'SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname = ?';
+	my $sth = $dbh->prepare_cached($SQL);
+	my $count = $sth->execute($schema);
+	$sth->finish();
+	return $count < 1 ? 0 : 1;
+
+} ## end of schema_exists
+
+
+sub relation_exists {
+
+	my ($schema,$name) = @_;
+	my $SQL = 'SELECT 1 FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n '.
+		'WHERE n.oid=c.relnamespace AND n.nspname = ? AND c.relname = ?';
+	my $sth = $dbh->prepare_cached($SQL);
+	my $count = $sth->execute($schema,$name);
+	$sth->finish();
+	return $count < 1 ? 0 : 1;
+
+} ## end of relation_exists
+
+sub column_exists {
+
+	my ($schema,$table,$column) = @_;
+	my $SQL = 'SELECT 1 FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n, '.
+		'pg_catalog.pg_attribute a WHERE n.oid=c.relnamespace AND n.nspname = ? AND c.relname = ? '.
+		'AND a.attname = ? AND a.attrelid = c.oid';
+	my $sth = $dbh->prepare_cached($SQL);
+	my $count = $sth->execute($schema,$table,$column);
+	$sth->finish();
+	return $count < 1 ? 0 : 1;
+
+} ## end of column_exists
+
+sub column_default {
+
+	my ($schema,$table,$column) = @_;
+	my $SQL = 'SELECT pg_get_expr(adbin,adrelid) FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n, '.
+		'pg_catalog.pg_attribute a, pg_attrdef d '.
+		'WHERE n.oid=c.relnamespace AND n.nspname = ? AND c.relname = ? '.
+		'AND a.attname = ? AND a.attrelid = c.oid AND d.adnum = a.attnum AND d.adrelid = a.attrelid';
+	my $sth = $dbh->prepare_cached($SQL);
+	my $count = $sth->execute($schema,$table,$column);
+	if ($count eq '0E0') {
+		$sth->finish();
+		return '';
+	}
+	return $sth->fetchall_arrayref()->[0][0];
+
+} ## end of column_default
+
+sub column_value {
+
+	my ($schema,$table,$column,$where) = @_;
+	my $SQL = "SELECT $column FROM $schema.$table WHERE $where";
+	return $dbh->selectall_arrayref($SQL)->[0][0];
+
+} ## end of column_value
+
+sub table_definition {
+
+	## Pull the complete table definition from the bucardo.schema file
+	## Returns an arrayref of sequences, and the textual table def
+
+	my $name = shift;
+
+	my $def = '';
+
+	my $file = 'bucardo.schema';
+	open my $fh, '<', $file or die qq{Could not open "$file": $!\n};
+	my @seq;
+	while (<$fh>) {
+		if (!$def) {
+			if (/^CREATE TABLE $name/) {
+				$def .= $_;
+			}
+		}
+		else {
+			$def .= $_;
+			last if /^\);/;
+		}
+	}
+	close $fh or die qq{Could not close "$file": $!\n};
+	while ($def =~ /nextval\('(.+?)'/g) {
+		push @seq => $1;
+	}
+
+	return \@seq, $def;
+
+} ## end of table_definition
+
+
+sub upgrade_and_log {
+
+	my $action = shift;
+	my $short = shift || $action;
+
+	$dbh->do($action);
+
+	$SQL = "INSERT INTO upgrade_log(action,version,summary) VALUES (?,?,?)";
+	$sth = $dbh->prepare($SQL);
+	$sth->execute($action,$VERSION,$short);
+
+} ## end of upgrade_and_log
+
+
+sub function_exists {
+
+	my ($schema,$name,$args) = @_;
+	$name = lc $name;
+	$SQL = "SELECT md5(prosrc) FROM pg_proc p, pg_language l ".
+		"WHERE p.prolang = l.oid AND proname = ? AND oidvectortypes(proargtypes) = ?";
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute($name,$args);
+	if ($count eq '0E0') {
+		$sth->finish();
+		return '';
+	}
+	return $sth->fetchall_arrayref()->[0][0];
+
+} ## end of function_exists
+
+sub upgrade {
+
+	## Make upgrades to an existing schema to match the current version
+	## This is generally not undoable, so we throw plenty of warnings
+
+	my $self = shift;
+
+	my $schema = 'bucardo';
+
+
+	my $changes = 0;
+
+	## Make sure the upgrade_log table is in place
+
+	if (!relation_exists($schema, 'upgrade_log')) {
+		my ($seqlist, $tabledef) = table_definition('upgrade_log');
+		upgrade_and_log($tabledef,"CREATE TABLE upgrade_log");
+		$dbh->commit();
+	}
+
+	my @new_sequences = (
+		'audit_pid_id_seq',
+	);
+
+	my @old_sequences = (
+		'dbgroup_id_seq',
+	);
+
+	my @new_tables = (
+	);
+
+	my @new_columns = (
+		['audit_pid', 'id',              q{INTEGER NOT NULL DEFAULT nextval('audit_pid_id_seq')}],
+		['audit_pid', 'parentid',        q{INTEGER     NULL}],
+		['audit_pid', 'familyid',        q{INTEGER     NULL}],
+		['audit_pid', 'source',          q{TEXT        NULL}],
+		['audit_pid', 'target',          q{TEXT        NULL}],
+		['audit_pid', 'master_backend',  q{INT     NOT NULL DEFAULT pg_backend_pid()}],
+		['audit_pid', 'source_backend',  q{INT         NULL}],,
+		['audit_pid', 'target_backend',  q{INT         NULL}],,
+		['db',        'dbservice',       q{TEXT        NULL}],
+		['sync',      'strict_checking', q{BOOLEAN NOT NULL DEFAULT 'true'}],
+	);
+
+	my @altered_columns = (
+		['goat', 'schemaname', 'NO DEFAULT'],
+	);
+
+	my @row_values = (
+
+		['bucardo_config','about',q{setting = 'log_showtime'}, 1,
+		 'Show timestamp in the log output?  0=off  1=seconds since epoch  2=scalar gmtime  3=scalar localtime'],
+	);
+
+	for my $sequence (@new_sequences) {
+		if (relation_exists($schema, $sequence)) {
+			clog "  Sequence already exists: $sequence";
+		}
+		else {
+			upgrade_and_log("CREATE SEQUENCE $schema.$sequence");
+			clog "Created sequence: $sequence";
+			$changes++;
+		}
+	}
+
+	for my $sequence (@old_sequences) {
+		if (!relation_exists($schema, $sequence)) {
+			clog "  Sequence does not exist: $sequence";
+		}
+		else {
+
+			upgrade_and_log("DROP SEQUENCE $schema.$sequence");
+			clog "Dropped sequence: $sequence";
+			$changes++;
+		}
+	}
+
+	for my $table (@new_tables) {
+		if (relation_exists($schema, $table)) {
+			clog "Table already exists: $table\n";
+		}
+		else {
+			my ($seqlist, $tabledef) = table_definition($table);
+			for my $sequence (@$seqlist) {
+				if (!relation_exists($schema, $sequence)) {
+					upgrade_and_log("CREATE SEQUENCE $schema.$sequence");
+					clog "Created sequence: $sequence";
+				}
+			}
+			upgrade_and_log($tabledef, "CREATE TABLE $table");
+			clog "Created table: $table\n";
+			$changes++;
+		}
+	}
+
+	for my $row (@new_columns) {
+		my ($table,$column,$def) = @$row;
+		if (column_exists($schema, $table, $column)) {
+			clog "  Column already exists: $schema.$table.$column";
+		}
+		else {
+			$def =~ s/\s+/ /g;
+			$dbh->do("ALTER TABLE $schema.$table ADD $column $def");
+			clog "Created column: $schema.$table.$column $def";
+			$changes++;
+		}
+	}
+
+	for my $row (@altered_columns) {
+		my ($table,$column,$change) = @$row;
+		if ($change eq 'NO DEFAULT') {
+			my $def = column_default($schema, $table, $column);
+			if (!$def) {
+				clog "  Column $schema.$table.$column already has no DEFAULT";
+			}
+			else {
+				upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column DROP DEFAULT");
+				clog "Removed DEFAULT ($def) from $schema.$table.$column";
+				$changes++;
+			}
+		}
+		else {
+			die qq{Do not know how to handle altered column spec of "$change"};
+		}
+	}
+
+	for my $row (@row_values) {
+		my ($table,$column,$where,$force,$value) = @$row;
+		my $val = column_value($schema,$table,$column,$where);
+		if ($val eq $value) {
+			clog "  Value of $table.$column where $where is already correct";
+		}
+		else {
+			$SQL = sprintf "UPDATE $schema.$table SET $column=%s WHERE $where",
+				$dbh->quote($value);
+			upgrade_and_log($SQL);
+			clog "New value set for $schema.$table.$column WHERE $where";
+			$changes++;
+		}
+	}
+
+	## Now we check all the functions within bucardo.schema
+	my $file = 'bucardo.schema';
+	open my $fh, '<', $file or die qq{Could not open "$file": $!\n};
+	my @flist;
+	my ($name,$args,$body) = ('','','');
+	while (<$fh>) {
+		if ($body) {
+			if (/^(\$bc\$;)/) {
+				$body .= $1;
+				push @flist, [$name, $args, $body];
+				$body = $name = $args = '';
+			}
+			else {
+				$body .= $_;
+			}
+			next;
+		}
+		if (/^CREATE (?:OR REPLACE )?FUNCTION\s+(\S+)/) {
+			$name = $1;
+			$body .= $_;
+			$name =~ s/bucardo\.//;
+			$name =~ s/\((.*)\)// or die "No args found for function: $_\n";
+			$args = $1;
+			$args =~ s/,(\S)/, $1/g;
+		}
+	}
+	close $fh or die qq{Could not close file "$file": $!\n};
+
+	## Now we check all the functions within bucardo.schema
+	$SQL = "SELECT md5(?)";
+	my $md5sth = $dbh->prepare($SQL);
+	for my $row (@flist) {
+		my ($name,$args,$body) = @$row;
+		my $oldbody = function_exists($schema,$name,$args);
+		if (!$oldbody) {
+			$body =~ s/FUNCTION /FUNCTION $schema./;
+			upgrade_and_log($body,"CREATE FUNCTION $schema.$name($args)");
+			clog "Added function $schema.$name($args)";
+			$changes++;
+			next;
+		}
+		my $realbody = $body;
+		$realbody =~ s/.*?\$bc\$(.+)\$bc\$;/$1/sm;
+		$md5sth->execute($realbody);
+		my $newbody = $md5sth->fetchall_arrayref()->[0][0];
+		if ($oldbody eq $newbody) {
+			clog "  Function unchanged: $schema.$name($args)";
+			next;
+		}
+		$body =~ s/^CREATE FUNCTION/CREATE OR REPLACE FUNCTION/;
+		$body =~ s/FUNCTION /FUNCTION $schema./;
+		(my $short = $body) =~ s/^(.+?)\n.*/$1/s;
+		upgrade_and_log($body,$short);
+		clog "Updated function: $schema.$name($args)";
+		$changes++;
+	}
+
+
+	## Bump the version if we need to
+	my $version = get_config('bucardo_current_version');
+	if ($version ne $VERSION) {
+		$SQL = sprintf "UPDATE $schema.bucardo_config SET value = %s WHERE setting = 'bucardo_current_version'",
+			$dbh->quote($VERSION);
+		upgrade_and_log($SQL);
+		clog "Changed bucardo_config 'bucardo_current_version' from $version to $VERSION\n";
+		$changes++;
+	}
+
+	if ($changes) {
+		printf "Okay to commit $changes %s? ", $changes==1 ? 'change' : 'changes';
+		exit if <STDIN> !~ /Y/i;
+		$dbh->commit();
+	}
+
+	exit 1;
+
+} ## end of upgrade
 
 
 sub add_database {
