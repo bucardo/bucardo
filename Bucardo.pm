@@ -1923,6 +1923,8 @@ sub start_mcp {
 			my $colinfo = $sth->fetchall_hashref('attname');
 			$g->{columnhash} = $colinfo;
 			my $x = 1;
+			$g->{cols} = [];
+			$g->{safecols} = [];
 		  COL: for my $colname (sort { $colinfo->{$a}{attnum} <=> $colinfo->{$b}{attnum} } keys %$colinfo) {
 				## Skip if this column is part of the primary key
 				for my $pk (@{$g->{pkey}}) {
