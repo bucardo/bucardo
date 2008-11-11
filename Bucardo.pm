@@ -1909,6 +1909,9 @@ sub start_mcp {
 			($g->{oid},$g->{safeschema},$g->{safetable}) = @{$sth->fetchall_arrayref()->[0]};
 
 			## Save information about each column in the primary key
+			if (!defined $g->{pkey} or !defined $g->{qpkey}) {
+				die "Table $g->{safetable} has no pkey or qpkey - do you need to run validate_goat on it?\n";
+			}
 			$g->{pkey}     = [split /\|/o => $g->{pkey}];
 			$g->{qpkey}    = [split /\|/o => $g->{qpkey}];
 			$g->{pkeytype} = [split /\|/o => $g->{pkeytype}];
