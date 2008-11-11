@@ -1265,6 +1265,7 @@ $bc$
         ## (if bc_schema exists) Do these supporting functions exist?
         (my $noquotepkey = $safepkey) =~ s/^"(.+)"$/$1/;
         my $func0 = "bucardo_triggerkick_$syncname";
+		## TODO: Handle long versions of the below
         my $func1 = "bucardo_add_delta_$noquotepkey";
         my $func2 = "bucardo_add_delta_binary_$noquotepkey";
         my $func3 = "bucardo_purge_delta";
@@ -1517,7 +1518,7 @@ $bc$
                     $dbh->do(qq{CREATE INDEX "$index2" ON bucardo.bucardo_delta((rowid::$safepkeytype)) WHERE tablename = $oid});
                 }
                 else {
-					my $x = 1;
+					my $x = 0;
                     my $multicol = join ',' => map { s{timestamp|date|bytea}{text}; $x++; 
 						sprintf "(rowid%s::$_)", $x<2 ? '' : $x; } split (/\|/ => $pkeytype);
 					elog(DEBUG, "Creating index on $multicol");
@@ -1525,8 +1526,10 @@ $bc$
                     for (2..$numpkeys) {
                         my $colname = "rowid$_";
                         $SQL = "SELECT count(*) FROM pg_catalog.pg_attribute a, pg_class c, pg_namespace n ".
-                            "WHERE c.relnamespace = n.oid AND n.nspname = 'bucardo' AND a.attrelid = c.oid AND a.attname = '$colname'";
+                            "WHERE c.relnamespace = n.oid AND n.nspname = 'bucardo' AND a.attrelid = c.oid ".
+							"AND c.relname = 'bucardo_delta' AND a.attname = '$colname'";
                         $count = $dbh->selectall_arrayref($SQL)->[0][0];
+elog(DEBUG, "ZZZZ Got count as $count for $colname");
                         if ($count != 1) {
                             $SQL = "ALTER TABLE bucardo.bucardo_delta ADD $colname TEXT NULL";
                             $dbh->do($SQL);
