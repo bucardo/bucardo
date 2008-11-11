@@ -901,7 +901,7 @@ if ((!defined $new->{pkey} or !length $new->{pkey}) or ($old and $new->{pkey} eq
 ## They've attempted a manual override of pkey. Make sure it is valid.
 for (@$cons) {
     (my $name = $_->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{attname} . ($2 ? '|' : '')/ge;
-	next unless $name eq $new->{pkey};
+	 next unless $name eq $new->{pkey};
     ($new->{qpkey} = $uniq->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{qattname} . ($2 ? '|' : '')/ge;
     ($new->{pkeytype} = $uniq->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{typname} . ($2 ? '|' : '')/ge;
     return 'MODIFY';
@@ -1481,7 +1481,6 @@ $bc$
                     );
                 };
                 run_sql($SQL,$dbh);
-                warn "ABOUT TO ADD?\n";
                 for (2..$numpkeys) {
                     $SQL = "ALTER TABLE bucardo.bucardo_delta ADD rowid$_ TEXT NULL";
                     run_sql($SQL,$dbh);
@@ -1511,7 +1510,6 @@ $bc$
                 $dbh->do(qq{CREATE INDEX "$safeindex1" ON bucardo.bucardo_delta(txntime) WHERE tablename = $oid});
             }
             if (! $found{index2}) {
-                warn "No index2?\n";
                 my @pkeytypes = split (/\|/ => $pkeytype);
                 if (1 == @pkeytypes) {
                     my $safepkeytype = $pkeytype =~ /timestamp|date|bytea/ ? 'text' : $pkeytype;
@@ -1519,8 +1517,10 @@ $bc$
                     $dbh->do(qq{CREATE INDEX "$index2" ON bucardo.bucardo_delta((rowid::$safepkeytype)) WHERE tablename = $oid});
                 }
                 else {
-                    warn "Creating multicolindex\n";
-                    my $multicol = join ',' => map { s{timestamp|date|bytea}{text}; "(rowid::$_)"; } split (/\|/ => $pkeytype);
+					my $x = 1;
+                    my $multicol = join ',' => map { s{timestamp|date|bytea}{text}; $x++; 
+						sprintf "(rowid%s::$_)", $x<2 ? '' : $x; } split (/\|/ => $pkeytype);
+					elog(DEBUG, "Creating index on $multicol");
                     $dbh->do(qq{CREATE INDEX "$index2" ON bucardo.bucardo_delta($multicol) WHERE tablename = $oid});
                     for (2..$numpkeys) {
                         my $colname = "rowid$_";
