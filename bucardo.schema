@@ -785,7 +785,7 @@ if ($old
     and $old->{tablename} eq $new->{tablename}
     and (defined $new->{pkey} and $new->{pkey} eq $old->{pkey})
     ) {
-    return;
+	#return;
 }
 
 (my $safedbname = $dbname) =~ s/'/''/go;
@@ -891,7 +891,7 @@ if (!defined $uniq) {
 }
 
 ## If the user is not trying a manual override, set the best one and leave
-if (!defined $new->{pkey} or ($old and $new->{pkey} eq $old->{pkey})) {
+if ((!defined $new->{pkey} or !length $new->{pkey}) or ($old and $new->{pkey} eq $old->{pkey})) {
     ($new->{pkey} = $uniq->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{attname} . ($2 ? '|' : '')/ge;
     ($new->{qpkey} = $uniq->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{qattname} . ($2 ? '|' : '')/ge;
     ($new->{pkeytype} = $uniq->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{typname} . ($2 ? '|' : '')/ge;
@@ -901,13 +901,13 @@ if (!defined $new->{pkey} or ($old and $new->{pkey} eq $old->{pkey})) {
 ## They've attempted a manual override of pkey. Make sure it is valid.
 for (@$cons) {
     (my $name = $_->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{attname} . ($2 ? '|' : '')/ge;
-    next unless $name eq $new->{pkey};
+	next unless $name eq $new->{pkey};
     ($new->{qpkey} = $uniq->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{qattname} . ($2 ? '|' : '')/ge;
     ($new->{pkeytype} = $uniq->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{typname} . ($2 ? '|' : '')/ge;
     return 'MODIFY';
 }
 
-die qq{Could not finding a matching unique constraint that provides those columns\n};
+die qq{Could not find a matching unique constraint that provides those columns\n};
 
 $bc$; -- End of validate_goat()
 
@@ -1041,7 +1041,6 @@ $bc$
     if (grep { $_ eq $sourcedb } keys %$targetdb) {
         elog(ERROR, "Source and target databases cannot be the same: $sourcedb");
     }
-
 
     ## Loop through and check each table in turn, setting up as needed.
 
