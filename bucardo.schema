@@ -930,7 +930,7 @@ $bc$
     my $force = shift || 0;
     my ($rv,$SQL,%cache);
 
-    elog(DEBUG, "Starting validate_sync for $syncname");
+    elog(INFO, "Starting validate_sync for $syncname");
 
     ## Connect to source and target(s) and verify that tables exist,
     ## and are identical. Setup the delta stuff as needed.
@@ -1726,20 +1726,27 @@ $bc$
 SELECT bucardo.validate_sync($1,0);
 $bc$;
 
-CREATE OR REPLACE FUNCTION bucardo.validate_all_syncs()
-RETURNS TEXT
-LANGUAGE SQL
+CREATE OR REPLACE FUNCTION bucardo.validate_all_syncs(INTEGER)
+RETURNS INTEGER
+LANGUAGE plpgsql
 AS
 $bc$
-SELECT validate_sync(name) FROM sync;
+DECLARE count INTEGER = 0; myrec RECORD;
+BEGIN
+FOR myrec IN SELECT name FROM sync ORDER BY name LOOP
+  PERFORM validate_sync(myrec.name, $1);
+  count = count + 1;
+END LOOP;
+RETURN count;
+END;
 $bc$;
 
-CREATE OR REPLACE FUNCTION bucardo.validate_all_syncs(integer)
-RETURNS TEXT
+CREATE OR REPLACE FUNCTION bucardo.validate_all_syncs()
+RETURNS INTEGER
 LANGUAGE SQL
 AS
 $bc$
-SELECT validate_sync(name, $1) FROM sync;
+SELECT validate_all_syncs(0);
 $bc$;
 
 CREATE FUNCTION validate_sync()
