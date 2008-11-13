@@ -1128,9 +1128,9 @@ $bc$
 
     sub run_sql {
         my ($sql,$dbh) = @_;
-        if ($sql =~ /^([\\\t ]+)/m) {
+        if ($sql =~ /^(\s+)/m) {
             my $leading = length($1);
-            $sql =~ s/^[\\\t ]{$leading}//gsm;
+            $sql =~ s/^\s{$leading}//gsm;
             $sql =~ s/\t/    /gsm;
         }
         elog(DEBUG, "SQL: $sql");
@@ -1155,6 +1155,7 @@ $bc$
         my $dbh;
         if (exists $cache->{dbh}{$db}) {
             $dbh = $cache->{dbh}{$db};
+			elog(DEBUG, 'Connected to cached version');
         }
         else {
             $cache->{dbh}{$db} = $dbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
@@ -1246,20 +1247,28 @@ $bc$
         }
         else {
             $SQL = qq{
-                SELECT count(*)
+				SELECT max(t0), max(t1), max(t2)
+                FROM (
+                SELECT
+                  CASE WHEN t.tgname = ? THEN 1 ELSE 0 END AS t0,
+                  CASE WHEN t.tgname = ? THEN 1 ELSE 0 END AS t1,
+                  CASE WHEN t.tgname = ? THEN 1 ELSE 0 END AS t2
                 FROM   pg_catalog.pg_trigger t, pg_catalog.pg_class c, pg_catalog.pg_namespace n
                 WHERE  c.relnamespace = n.oid AND t.tgrelid = c.oid AND c.relkind = 'r'
                 AND    n.nspname = ?
                 AND    c.relname = ?
-                AND    t.tgname  = ?
+                AND    t.tgname  IN (?,?,?)
+              ) foo
             };
+			elog(DEBUG, "Preparing to check triggers: $SQL");
             $sth = $dbh->prepare($SQL);
-             $sth->execute($schema,$table,$trigger0);
-            $found{trigger0} = $sth->fetchall_arrayref()->[0][0];
-             $sth->execute($schema,$table,$trigger1);
-            $found{trigger1} = $sth->fetchall_arrayref()->[0][0];
-             $sth->execute($schema,$table,$trigger2);
-            $found{trigger2} = $sth->fetchall_arrayref()->[0][0];
+			$sth->execute($trigger0,$trigger1,$trigger2,$schema,$table,$trigger0,$trigger1,$trigger2);
+			my $x = 0;
+			my $row = $sth->fetchall_arrayref()->[0];
+			for my $val (@$row) {
+				$found{"trigger$x"} = $val;
+				$x++;
+			}
         }
 
         ## (if bc_schema exists) Do these supporting functions exist?
@@ -1279,21 +1288,28 @@ $bc$
         }
         else {
             $SQL = qq{
-                SELECT count(*)
+				SELECT max(f0), max(f1), max(f2), max(f3)
+                FROM (
+                SELECT
+                  CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f0,
+                  CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f1,
+                  CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f2,
+                  CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f3
                 FROM   pg_catalog.pg_proc p, pg_catalog.pg_namespace n
                 WHERE  p.pronamespace = n.oid
                 AND    n.nspname = ?
-                AND    p.proname = ?
+                AND    p.proname IN (?,?,?,?)
+            ) foo
             };
+			elog(DEBUG, "Preparing to check functions: $SQL");
             $sth = $dbh->prepare($SQL);
-            $sth->execute('bucardo',$func0);
-            $found{func0} = $sth->fetchall_arrayref()->[0][0];
-            $sth->execute('bucardo',$func1);
-            $found{func1} = $sth->fetchall_arrayref()->[0][0];
-            $sth->execute('bucardo',$func2);
-            $found{func2} = $sth->fetchall_arrayref()->[0][0];
-            $sth->execute('bucardo',$func3);
-            $found{func3} = $sth->fetchall_arrayref()->[0][0];
+            $sth->execute($func0,$func1,$func2,$func3,'bucardo',$func0,$func1,$func2,$func3);
+			my $x = 0;
+			my $row = $sth->fetchall_arrayref()->[0];
+			for my $val (@$row) {
+				$found{"func$x"} = $val;
+				$x++;
+			}
         }
 
         ## (if bc_schema exists) Does this table exist?
@@ -1303,20 +1319,26 @@ $bc$
         }
         else {
             $SQL = qq{
-                SELECT count(*)
+				SELECT max(t1), max(t2), max(t3)
+                FROM (
+                SELECT
+                  CASE WHEN c.relname = 'bucardo_delta' THEN 1 ELSE 0 END AS t1,
+                  CASE WHEN c.relname = 'bucardo_track' THEN 1 ELSE 0 END AS t2,
+                  CASE WHEN c.relname = 'bucardo_delta_targets' THEN 1 ELSE 0 END AS t3
                 FROM   pg_catalog.pg_class c, pg_catalog.pg_namespace n
                 WHERE  c.relnamespace = n.oid
                 AND    c.relkind = 'r'
-                AND    n.nspname = ?
-                AND    c.relname = ?
+                AND    n.nspname = 'bucardo'
+                AND    c.relname IN ('bucardo_delta','bucardo_track','bucardo_delta_targets')
+                ) foo
             };
+			elog(DEBUG, "Preparing to check tables: $SQL");
             $sth = $dbh->prepare($SQL);
-            $sth->execute('bucardo','bucardo_delta');
-            $found{bucardo_delta} = $sth->fetchall_arrayref()->[0][0];
-            $sth->execute('bucardo','bucardo_track');
-            $found{'bucardo_track'} = $sth->fetchall_arrayref()->[0][0];
-            $sth->execute('bucardo','bucardo_delta_targets');
-            $found{bucardo_delta_targets} = $sth->fetchall_arrayref()->[0][0];
+            $sth->execute();
+			my $row = $sth->fetchall_arrayref()->[0];
+			$found{'bucardo_delta'} = $row->[0];
+			$found{'bucardo_track'} = $row->[1];
+			$found{'bucardo_delta_targets'} = $row->[2];
         }
 
         ## (if bucardo_delta exists) Do these indexes exist?
@@ -1365,24 +1387,30 @@ $bc$
         }
         else {
             $SQL = qq{
-                SELECT count(*)
+				SELECT max(i1), max(i2), max(i3), max(i4), max(i5)
+                FROM (
+                SELECT
+                  CASE WHEN c.relname = ? THEN 1 ELSE 0 END AS i1,
+                  CASE WHEN c.relname = ? THEN 1 ELSE 0 END AS i2,
+                  CASE WHEN c.relname = ? THEN 1 ELSE 0 END AS i3,
+                  CASE WHEN c.relname = ? THEN 1 ELSE 0 END AS i4,
+                  CASE WHEN c.relname = ? THEN 1 ELSE 0 END AS i5
                 FROM   pg_catalog.pg_class c, pg_catalog.pg_namespace n
                 WHERE  c.relnamespace = n.oid
                 AND    c.relkind = 'i'
                 AND    n.nspname = ?
-                AND    c.relname = ?
+                AND    c.relname IN (?,?,?,?,?)
+                ) foo
             };
+			elog(DEBUG, "Preparing to check indexes: $SQL");
             $sth = $dbh->prepare($SQL);
-            $sth->execute('bucardo',$index1);
-            $found{index1} = $sth->fetchall_arrayref()->[0][0];
-            $sth->execute('bucardo',$index2);
-            $found{index2} = $sth->fetchall_arrayref()->[0][0];
-            $sth->execute('bucardo',$index3);
-            $found{index3} = $sth->fetchall_arrayref()->[0][0];
-            $sth->execute('bucardo',$index4);
-            $found{index4} = $sth->fetchall_arrayref()->[0][0];
-            $sth->execute('bucardo',$index5);
-            $found{index5} = $sth->fetchall_arrayref()->[0][0];
+            $sth->execute($index1,$index2,$index3,$index4,$index5,'bucardo',$index1,$index2,$index3,$index4,$index5);
+			my $x = 1;
+			my $row = $sth->fetchall_arrayref()->[0];
+			for my $val (@$row) {
+				$found{"index$x"} = $val;
+				$x++;
+			}
         }
 
         ## Goat-level ping overrides the sync-level ping - source only
@@ -1392,20 +1420,20 @@ $bc$
         }
 
         ## If this is not set as ping, remove the trigger - the only one safe to remove
-        if (!$ping) {
-            $found{trigger0} and $dbh->do("DROP TRIGGER $trigger0 ON $safeschema.$safetable");
+        if (!$ping and $found{trigger0}) {
+			run_sql("DROP TRIGGER $trigger0 ON $safeschema.$safetable", $dbh);
         }
 
         ## Schema is needed for both ping and delta
         if (($ping or $delta) and !$found{bc_schema}) {
-            $dbh->do("CREATE SCHEMA bucardo");
+			run_sql('CREATE SCHEMA bucardo', $dbh);
         }
 
         ## Ping needs a special function and trigger
         if ($ping) {
-            if (!$found{func0}) {
+            if (!$found{func0} or $force) {
                 $SQL = qq{
-                    CREATE FUNCTION bucardo."$func0"()
+                    CREATE OR REPLACE FUNCTION bucardo."$func0"()
                     RETURNS TRIGGER 
                     LANGUAGE plpgsql
                     AS \$notify\$
@@ -1507,6 +1535,18 @@ $bc$
                 };
                 run_sql($SQL,$dbh);
             }
+			if ($force) {
+				if ($found{index1}) {
+					elog(DEBUG, qq{Dropping index "$safeindex1"});
+					$dbh->do(qq{DROP INDEX bucardo."$safeindex1"});
+					$found{index1} = 0;
+				}
+				if ($found{index2}) {
+					elog(DEBUG, qq{Dropping index "$index2"});
+					$dbh->do(qq{DROP INDEX bucardo."$index2"});
+					$found{index2} = 0;
+				}
+			}
             if (! $found{index1}) {
                 $dbh->do(qq{CREATE INDEX "$safeindex1" ON bucardo.bucardo_delta(txntime) WHERE tablename = $oid});
             }
@@ -1545,7 +1585,6 @@ $bc$
             if (! $found{index5}) {
                 $dbh->do(qq{CREATE INDEX "$index5" ON bucardo.bucardo_delta(txntime)});
             }
-            ## Make sure you use tabs in all these functions for leading whitespace
             my $rowids = 'rowid';
             for (2..$numpkeys) {
                 $rowids .= ",rowid$_";
@@ -1693,6 +1732,14 @@ LANGUAGE SQL
 AS
 $bc$
 SELECT validate_sync(name) FROM sync;
+$bc$;
+
+CREATE OR REPLACE FUNCTION bucardo.validate_all_syncs(integer)
+RETURNS TEXT
+LANGUAGE SQL
+AS
+$bc$
+SELECT validate_sync(name, $1) FROM sync;
 $bc$;
 
 CREATE FUNCTION validate_sync()
