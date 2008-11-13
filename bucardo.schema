@@ -428,7 +428,7 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $bc$
 BEGIN
-EXECUTE 'NOTIFY bucardo_q_'||NEW.sync||'_'||NEW.targetdb;
+EXECUTE 'NOTIFY "bucardo_q_'||NEW.sync||'_'||NEW.targetdb||'"';
 RETURN NEW;
 END;
 $bc$;
@@ -1410,7 +1410,7 @@ $bc$
                     LANGUAGE plpgsql
                     AS \$notify\$
                     BEGIN
-                        EXECUTE 'NOTIFY bucardo_kick_sync_$syncname';
+                        EXECUTE 'NOTIFY "bucardo_kick_sync_$syncname"';
                     RETURN NEW;
                     END;
                     \$notify\$;
