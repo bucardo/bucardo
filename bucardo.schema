@@ -862,7 +862,7 @@ if ($count < 1) {
 ## Pick the best possible one. Primary keys are always the best choice.
 my ($primary)  = grep { $_->{indisprimary} } @$cons;
 my $uniq;
-if (defined $primary) {
+if (defined $primary and !$old and defined $new->{pkey}) {
     $uniq = $primary;
 }
 else {
@@ -1510,6 +1510,17 @@ $bc$
             if (! $found{index1}) {
                 $dbh->do(qq{CREATE INDEX "$safeindex1" ON bucardo.bucardo_delta(txntime) WHERE tablename = $oid});
             }
+			for (2..$numpkeys) {
+				my $colname = "rowid$_";
+				$SQL = "SELECT count(*) FROM pg_catalog.pg_attribute a, pg_class c, pg_namespace n ".
+					"WHERE c.relnamespace = n.oid AND n.nspname = 'bucardo' AND a.attrelid = c.oid ".
+						"AND c.relname = 'bucardo_delta' AND a.attname = '$colname'";
+				$count = $dbh->selectall_arrayref($SQL)->[0][0];
+				if ($count != 1) {
+					$SQL = "ALTER TABLE bucardo.bucardo_delta ADD $colname TEXT NULL";
+					$dbh->do($SQL);
+				}
+			}
             if (! $found{index2}) {
                 my @pkeytypes = split (/\|/ => $pkeytype);
                 if (1 == @pkeytypes) {
@@ -1523,18 +1534,6 @@ $bc$
 						sprintf "(rowid%s::$_)", $x<2 ? '' : $x; } split (/\|/ => $pkeytype);
 					elog(DEBUG, "Creating index on $multicol");
                     $dbh->do(qq{CREATE INDEX "$index2" ON bucardo.bucardo_delta($multicol) WHERE tablename = $oid});
-                    for (2..$numpkeys) {
-                        my $colname = "rowid$_";
-                        $SQL = "SELECT count(*) FROM pg_catalog.pg_attribute a, pg_class c, pg_namespace n ".
-                            "WHERE c.relnamespace = n.oid AND n.nspname = 'bucardo' AND a.attrelid = c.oid ".
-							"AND c.relname = 'bucardo_delta' AND a.attname = '$colname'";
-                        $count = $dbh->selectall_arrayref($SQL)->[0][0];
-elog(DEBUG, "ZZZZ Got count as $count for $colname");
-                        if ($count != 1) {
-                            $SQL = "ALTER TABLE bucardo.bucardo_delta ADD $colname TEXT NULL";
-                            $dbh->do($SQL);
-                        }
-                    }
                 }
             }
             if (! $found{index3}) {
@@ -1686,6 +1685,14 @@ LANGUAGE SQL
 AS
 $bc$
 SELECT bucardo.validate_sync($1,0);
+$bc$;
+
+CREATE OR REPLACE FUNCTION bucardo.validate_all_syncs()
+RETURNS TEXT
+LANGUAGE SQL
+AS
+$bc$
+SELECT validate_sync(name) FROM sync;
 $bc$;
 
 CREATE FUNCTION validate_sync()
