@@ -39,11 +39,11 @@ my $bcargs = {
 			  dbuser       => 'bucardo',
 			  dbpass       => 'bucardo_password',
 			  verbose      => 1, ## Highly recommended to leave this on
-			  sendmail     => 1,
+			  sendmail     => 0,
 			  extraname    => '',
 			  debugfilesep => 0,
 			  debugname    => '',
-			  debugstderr  => 0,
+			  debugstderr  => 1,
 			  debugstdout  => 0,
 			  debugsyslog  => 1,
 			  debugdir     => '',
@@ -267,7 +267,7 @@ sub reload_config {
 	$QUIET or print qq{Forcing Bucardo to reload the bucardo_config table};
 
 	my $done = 'bucardo_reload_config_finished';
-	$dbh->do("NOTIFY bucardo_reload_config");
+	$dbh->do('NOTIFY bucardo_reload_config');
 	if (defined $adverb) {
 		print '...';
 		$dbh->do("LISTEN $done");
@@ -310,8 +310,8 @@ sub ping {
 	}
 
 	$VERBOSE and print "Pinging MCP, timeout = $timeout\n";
-	$dbh->do("LISTEN bucardo_mcp_pong");
-	$dbh->do("NOTIFY bucardo_mcp_ping");
+	$dbh->do('LISTEN bucardo_mcp_pong');
+	$dbh->do('NOTIFY bucardo_mcp_ping');
 	$dbh->commit();
 	my $starttime = time;
 	sleep 0.1;
@@ -349,7 +349,7 @@ sub kick {
 		$dbh->rollback();
 		$exitstatus = 0;
 	  SYNC: for my $sync (@syncs) {
-			$dbh->do("NOTIFY bucardo_kick_sync_$sync");
+			$dbh->do(qq{NOTIFY "bucardo_kick_sync_$sync"});
 			my $done = "bucardo_syncdone_$sync";
 			my $killed = "bucardo_synckill_$sync";
 			if (! defined $adverb) {
@@ -359,18 +359,18 @@ sub kick {
 			}
 
 			$QUIET or print qq{Kick $sync: };
-			$dbh->do("LISTEN $done");
-			$dbh->do("LISTEN $killed");
+			$dbh->do(qq{LISTEN "$done"});
+			$dbh->do(qq{LISTEN "$killed"});
 			my $s = $syncs->{$sync};
 			if ($s->{targetgroup}) {
 				for (@{$s->{targets}}) {
-					$dbh->do("LISTEN bucardo_syncdone_${sync}_$_");
-					$dbh->do("LISTEN bucardo_synckill_${sync}_$_");
+					$dbh->do(qq{LISTEN "bucardo_syncdone_${sync}_$_"});
+					$dbh->do(qq{LISTEN "bucardo_synckill_${sync}_$_"});
 				}
 			}
 			else {
-				$dbh->do("LISTEN bucardo_syncdone_${sync}_$s->{targetdb}");
-				$dbh->do("LISTEN bucardo_synckill_${sync}_$s->{targetdb}");
+				$dbh->do(qq{LISTEN "bucardo_syncdone_${sync}_$s->{targetdb}"});
+				$dbh->do(qq{LISTEN "bucardo_synckill_${sync}_$s->{targetdb}"});
 			}
 			$dbh->commit();
 
@@ -1023,10 +1023,10 @@ sub vate_sync {
 	for my $sync (@syncs) {
 		$QUIET or print qq{$ucname sync $sync};
 		my $done = "bucardo_${name}d_sync_$sync";
-		$dbh->do("NOTIFY bucardo_${name}_sync_$sync");
+		$dbh->do(qq{NOTIFY "bucardo_${name}_sync_$sync"});
 		if ($wait) {
 			print "...";
-			$dbh->do("LISTEN $done");
+			$dbh->do(qq{LISTEN "$done"});
 		}
 		$dbh->commit();
 		if (!$wait) {
