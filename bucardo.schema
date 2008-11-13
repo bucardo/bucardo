@@ -862,7 +862,7 @@ if ($count < 1) {
 ## Pick the best possible one. Primary keys are always the best choice.
 my ($primary)  = grep { $_->{indisprimary} } @$cons;
 my $uniq;
-if (defined $primary and !$old and defined $new->{pkey}) {
+if (defined $primary) {# and !$old and defined $new->{pkey}) {
     $uniq = $primary;
 }
 else {
@@ -975,7 +975,8 @@ $bc$
     };
     $rv = spi_exec_query($SQL);
     if (!$rv->{processed}) {
-        elog(ERROR, "Herd has no members: $source");
+        elog(WARNING, "Herd has no members: $source");
+		return qq{Herd "$source" for sync "$syncname" has no members: cannot validate};
     }
 
     ## All the same database, so we can extract it outside of the loop
@@ -1726,7 +1727,7 @@ $bc$
 SELECT bucardo.validate_sync($1,0);
 $bc$;
 
-CREATE OR REPLACE FUNCTION bucardo.validate_all_syncs(INTEGER)
+CREATE OR REPLACE FUNCTION bucardo.validate_all_syncs(integer)
 RETURNS INTEGER
 LANGUAGE plpgsql
 AS
