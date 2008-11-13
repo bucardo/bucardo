@@ -1912,6 +1912,9 @@ sub start_mcp {
 			if (!defined $g->{pkey} or !defined $g->{qpkey}) {
 				die "Table $g->{safetable} has no pkey or qpkey - do you need to run validate_goat on it?\n";
 			}
+			$g->{pkeyjoined} = $g->{pkey};
+			$g->{qpkeyjoined} = $g->{qpkey};
+			$g->{pkeytypejoined} = $g->{pkeytypejoined};
 			$g->{pkey}     = [split /\|/o => $g->{pkey}];
 			$g->{qpkey}    = [split /\|/o => $g->{qpkey}];
 			$g->{pkeytype} = [split /\|/o => $g->{pkeytype}];
@@ -2786,11 +2789,10 @@ sub start_controller {
 												$g->{pkeytype}[$x],
 													$x ? $x+1 : '',
 														$g->{pkeytype}[$x];
-										$cols .= $g->{binarypkey}[0] ? qq{ENCODE(t.$qpk,'base64'),} : "t.$qpk,";
+										$cols ||= $g->{binarypkey}[0] ? qq{ENCODE(t.$qpk,'base64'),} : "t.$qpk";
 										$x++;
 									}
 									$clause =~ s/ AND $//;
-									chop $cols;
 									$SQL =~ s/BUCARDO_JOIN/($clause)/;
 									$SQL =~ s/BUCARDO_PK/$cols/;
 									$sth = $srcdbh->prepare($SQL);
@@ -3604,7 +3606,6 @@ sub start_kid {
 			(my $safedbname = $targetdb) =~ s/\'/''/go;
 			$SQL =~ s/\$2/$safedbname/o;
 			$sth{source}{$g}{getdelta} = $sourcedbh->prepare($SQL);
-
 			if ($synctype eq 'swap') {
 				($safesourcedb = $sourcedb) =~ s/\'/''/go;
 				($SQL = $SQL{delta}) =~ s/\$1/$g->{targetoid}{$targetdb}/g;
@@ -4229,7 +4230,7 @@ sub start_kid {
 							else {
 								$list .= "$row->[0],";
 							}
-							LAST LOOP if $x++ >= $config{max_delete_clause};
+							last LOOP if $x++ >= $config{max_delete_clause};
 							redo LOOP;
 						}
 						chop $list;
@@ -4330,13 +4331,16 @@ sub start_kid {
 				$deltacount{src2}{$S}{$T} = $deltacount{source}{$S}{$T};
 				$deltacount{tgt2}{$S}{$T} = $deltacount{target}{$S}{$T};
 
-				## Set all counters to 0
+				## Set all IUD counters to 0
 				$dmlcount{I}{source}{$S}{$T} = $dmlcount{U}{source}{$S}{$T} = $dmlcount{D}{source}{$S}{$T} =
 				$dmlcount{I}{target}{$S}{$T} = $dmlcount{U}{target}{$S}{$T} = $dmlcount{D}{target}{$S}{$T} = 0;
 
 				my ($hasindex_src,$hasindex_tgt,$toid) = (0,0,$g->{targetoid}{$targetdb});
 
-				if ($g->{rebuild_index}) { ## Usually not a good idea for swap sync
+				## If requested, turn off indexes before making changes
+				## Usually not a good idea for swap syncs
+				## XXX Make this depend on number of rows or other factor?
+				if ($g->{rebuild_index}) {
 					$SQL = "SELECT relhasindex FROM pg_class WHERE oid = $g->{oid}";
 					$hasindex_src = $sourcedbh->selectall_arrayref($SQL)->[0][0];
 					if ($hasindex_src) {
@@ -4354,15 +4358,51 @@ sub start_kid {
 				}
 
 				$g->{exceptions} = 0; ## Total number of times we've failed for this table
+
 			  SAVEPOINT: {
 
-				my $info1 = $deltacount{src2}{$S}{$T}<1 ? {} : $sth{source}{$g}{getdelta}->fetchall_hashref('BUCARDO_ID');
-				my $info2 = $deltacount{tgt2}{$S}{$T}<1 ? {} : $sth{target}{$g}{getdelta}->fetchall_hashref('BUCARDO_ID');
+				## The actual data from the large join of bucardo_delta + original table for source and target
+				my ($info1,$info2)= ({},{});
+
+				## Single PK cols are easy, we can just use _hashref
+				if ($g->{pkcols} == 1) {
+					 $deltacount{src2}{$S}{$T} >= 1 and $info1 = $sth{source}{$g}{getdelta}->fetchall_hashref('BUCARDO_ID');
+					 $deltacount{tgt2}{$S}{$T} >= 1 and $info2 = $sth{target}{$g}{getdelta}->fetchall_hashref('BUCARDO_ID');
+				}
+				else {
+					## For multi-col PKs, we join all pk values together into a single scalar
+					if ($deltacount{src2}{$S}{$T} >= 1) {
+						for my $row (@{$sth{source}{$g}{getdelta}->fetchall_arrayref({})}) {
+							my $key = $row->{BUCARDO_ID};
+							push @{$row->{BUCARDO_PKVALS}} => $row->{BUCARDO_ID};
+							for (2..$g->{pkcols}) {
+								$key .= '|' . $row->{"BUCARDO_ID$_"};
+								push @{$row->{BUCARDO_PKVALS}} => $row->{"BUCARDO_ID$_"};
+							}
+							$info1->{$key} = $row;
+						}
+					}
+					if ($deltacount{tgt2}{$S}{$T} >= 1) {
+						for my $row (@{$sth{target}{$g}{getdelta}->fetchall_arrayref({})}) {
+							my $key = $row->{BUCARDO_ID};
+							push @{$row->{BUCARDO_PKVALS}} => $row->{BUCARDO_ID};
+							for (2..$g->{pkcols}) {
+								$key .= '|' . $row->{"BUCARDO_ID$_"};
+								push @{$row->{BUCARDO_PKVALS}} => $row->{"BUCARDO_ID$_"};
+							}
+							$info2->{$key} = $row;
+						}
+					}
+				}
+
+				## Store this info away for use by a custom code hook
 				if ($sync->{need_rows}) {
 					$rows_for_custom_code->{$S}{$T} =
 						{
+						 ## hashref of hashrefs of individual rows from giant join:
 						 source    => $info1,
 						 target    => $info2,
+						 ## arrayrefs:
 						 pkeyname  => $g->{pkey},
 						 qpkeyname => $g->{qpkey},
 						 pkeytype  => $g->{pkeytype},
@@ -4374,13 +4414,15 @@ sub start_kid {
 				## 2 = Add target row to the source db
 				## 4 = Add source row to the source db
 				## 8 = Add target row to the target db
-				my $qnamepkX = 'FIXME';
+
+				my $qnamepk = $g->{qpkeyjoined};
+				## Consider removing the sort for speed on large sets
 				for my $temp_pkval (sort keys %$info1) {
 					$pkval = $temp_pkval;
-					## No problem if it only exists on the source
+					## No problem if it only changed on the source
 					if (! exists $info2->{$pkval}) {
-						$self->glog("No conflict, source only for $S.$T.$qnamepkX: $pkval");
-						$info1->{$pkval}{BUCARDO_ACTION} = 1; ## source to target
+						$self->glog("No conflict, source only for $S.$T.$qnamepk: $pkval");
+						$info1->{$pkval}{BUCARDO_ACTION} = 1; ## copy source to target
 					}
 					else {
 						## Standard conflict handlers don't need info to make a decision
@@ -4388,10 +4430,10 @@ sub start_kid {
 							my $sc = $g->{standard_conflict};
 							$self->glog(qq{Conflict detected for $S.$T:$pkval. Using standard conflict "$sc"});
 							if ('source' eq $sc) {
-								$info1->{$pkval}{BUCARDO_ACTION} = 1; ## source to target
+								$info1->{$pkval}{BUCARDO_ACTION} = 1; ## copy source to target
 							}
 							elsif ('target' eq $sc) {
-								$info1->{$pkval}{BUCARDO_ACTION} = 2; ## target to source
+								$info1->{$pkval}{BUCARDO_ACTION} = 2; ## copy target to source
 							}
 							elsif ('skip' eq $sc) { ## XXX Too dangerous? Not allow 0 in general?
 								$info1->{$pkval}{BUCARDO_ACTION} = 0;
@@ -4404,12 +4446,25 @@ sub start_kid {
 							}
 							elsif ('latest' eq $sc) {
 								$SQL{sc_latest} ||=
-									qq{SELECT extract(epoch FROM max(txntime)) FROM bucardo.bucardo_delta WHERE tablename=? AND rowid=?};
+									qq{SELECT extract(epoch FROM MAX(txntime)) FROM bucardo.bucardo_delta WHERE tablename=? AND rowid=?};
+								for (2..$g->{pkcols}) {
+									$SQL{sc_latest} .= " AND rowid$_=?";
+								}
 								$sth{sc_latest_src} ||= $sourcedbh->prepare($SQL{sc_latest});
-								$sth{sc_latest_src}->execute($g->{oid},$pkval);
+								if ($g->{pkcols} > 1) {
+									$sth{sc_latest_src}->execute($g->{oid},@{$info1->{$pkval}{BUCARDO_PKVALS}});
+								}
+								else {
+									$sth{sc_latest_src}->execute($g->{oid},$pkval);
+								}
 								my $srctime = $sth{sc_latest_src}->fetchall_arrayref()->[0][0];
 								$sth{sc_latest_tgt} ||= $targetdbh->prepare($SQL{sc_latest});
-								$sth{sc_latest_tgt}->execute($toid,$pkval);
+								if ($g->{pkcols} > 1) {
+									$sth{sc_latest_tgt}->execute($toid,@{$info2->{$pkval}{BUCARDO_PKVALS}});
+								}
+								else {
+									$sth{sc_latest_tgt}->execute($toid,$pkval);
+								}
 								my $tgttime = $sth{sc_latest_tgt}->fetchall_arrayref()->[0][0];
 								$self->glog(qq{Delta source time: $srctime Target time: $tgttime});
 								$info1->{$pkval}{BUCARDO_ACTION} = $srctime >= $tgttime ? 1 : 2;
@@ -4466,8 +4521,8 @@ sub start_kid {
 				## Since we've already handled conflicts, simply mark "target only" rows
 				for my $tpkval (keys %$info2) {
 					next if exists $info1->{$tpkval};
-					$self->glog("No conflict, target only for $S.$T.$qnamepkX: $pkval");
-					$info1->{$tpkval}{BUCARDO_ACTION} = 2; ## target to source
+					$self->glog("No conflict, target only for $S.$T.$qnamepk: $pkval");
+					$info1->{$tpkval}{BUCARDO_ACTION} = 2; ## copy target to source
 				}
 
 				## Give some summary statistics
@@ -4486,6 +4541,9 @@ sub start_kid {
 				## How many rows are we upserting?
 				my $changecount = 0;
 
+				## We only need the first regardless of pkcols: it always null or not null
+				my $namepk = $g->{pkey}[0];
+
 				for my $temp_pkval (keys %$info1) {
 					$pkval = $temp_pkval;
 					my $action = $info1->{$pkval}{BUCARDO_ACTION};
@@ -4497,21 +4555,41 @@ sub start_kid {
 					}
 
 					## We are manually building lists, so we may need to escape the pkeys
-					my $safepk;
-					if ($g->{pkeytype} =~ /int$/o) { ## smallint, int, bigint, bytea(base64text)
-						$safepk = $pkval;
+					my @safepk;
+					if ($g->{pkcols} < 2) {
+						if ($g->{pkeytype}[0] =~ /int$/o) {
+							push @safepk => $pkval;
+						}
+						else {
+							(my $safepkval = $pkval) =~ s/\'/''/go;
+							push @safepk => qq{'$safepkval'};
+						}
 					}
 					else {
-						($safepk = $pkval) =~ s/\'/''/go;
-						$safepk = qq{'$safepk'};
+						$x=0;
+						for my $pk (@{$info1->{$pkval}{BUCARDO_PKVALS}}) {
+							if ($g->{pkeytype}[0] =~ /int$/o) {
+								push @safepk => $pk;
+							}
+							else {
+								(my $safepkval = $pk) =~ s/\'/''/go;
+								push @safepk => qq{'$safepkval'};
+							}
+						}
 					}
 
 					## Delete from source if going to source and has been deleted
-					my $namepk = 'FIXME';
 					if (($action & 2 and ! defined $info2->{$pkval}{$namepk}) ## target to source
 					 or ($action & 4 and ! defined $info1->{$pkval}{$namepk})) { ## source to source
-						push @srcdelete, $safepk;
-						push @srcdelete2, $pkval if $g->{does_makedelta};
+						push @srcdelete, \@safepk;
+						if ($g->{does_makedelta}) {
+							if ($g->{pkcols} <= 1) {
+								push @srcdelete2, [$pkval];
+							}
+							else {
+								push @srcdelete2, $info1->{$pkval}{BUCARDO_PKEYS};
+							}
+						}
 						## Strip out this action as done (2 and 4 are mutually exclusive)
 						$info1->{$pkval}{BUCARDO_ACTION} -= ($action & 2) ? 2 : 4;
 						$action = $info1->{$pkval}{BUCARDO_ACTION};
@@ -4520,25 +4598,32 @@ sub start_kid {
 					## Delete from target if going to target and has been deleted
 					if (($action & 1 and ! defined $info1->{$pkval}{$namepk}) ## source to target
 					 or ($action & 8 and ! defined $info2->{$pkval}{$namepk})) { ## target to target
-						push @tgtdelete, $safepk;
-						push @tgtdelete2, $pkval if $g->{does_makedelta};
+						push @tgtdelete, \@safepk;
+						if ($g->{does_makedelta}) {
+							if ($g->{pkcols} <= 1) {
+								push @tgtdelete2, [$pkval];
+							}
+							else {
+								push @tgtdelete2, $info1->{$pkval}{BUCARDO_PKEYS};
+							}
+						}
 						## Strip out this action as done (1 and 8 are mutually exclusive)
 						$info1->{$pkval}{BUCARDO_ACTION} -= ($action & 1) ? 1 : 8;
 						$action = $info1->{$pkval}{BUCARDO_ACTION};
 					}
 
-					next if ! $action; ## Delete only
+					next if ! $action; ## Stop if delete only
 
 					$changecount++;
 
 					## If going from target to source, verify if it exists on source or not
 					if (($action & 2) and !defined $info1->{$pkval}{$namepk}) {
-						push @srccheck, $safepk;
+						push @srccheck, \@safepk;
 					}
 
 					## If going from source to target, verify it it exists on target or not
 					if (($action & 1) and !defined $info2->{$pkval}{$namepk}) {
-						push @tgtcheck, $safepk;
+						push @tgtcheck, \@safepk;
 					}
 
 				}
@@ -4546,11 +4631,11 @@ sub start_kid {
 				## Add in the makedelta rows as needed
 				if ($g->{does_makedelta}) {
 					for (@srcdelete2) {
-						$sth{source}{$g}{insertdelta}->execute($g->{oid},$_);
+						$sth{source}{$g}{insertdelta}->execute($g->{oid},@$_);
 						$self->glog("Adding in source bucardo_delta row (delete) for $g->{oid} and $_");
 					}
 					for (@tgtdelete2) {
-						$sth{target}{$g}{insertdelta}->execute($toid,$_);
+						$sth{target}{$g}{insertdelta}->execute($toid,@$_);
 						$self->glog("Adding in target bucardo_delta row (delete) for $toid and $_");
 					}
 				}
@@ -4563,31 +4648,57 @@ sub start_kid {
 				}
 
 				## Do deletions in chunks
-				$SQL = $g->{binarypkey} ?
-					"DELETE FROM $S.$T WHERE ENCODE($qnamepkX,'base64') IN"
-						: "DELETE FROM $S.$T WHERE $qnamepkX IN";
-				$count = @srcdelete;
-				if ($count) {
-					while (@srcdelete) {
-						no warnings;
-						my $list = '';
-						$list .= (shift @srcdelete) . ',' for 1..$config{max_delete_clause};
-						$list =~ s/,+$//o;
-						$self->glog("Deleting from source: ($list)");
-						$dmlcount{D}{source}{$S}{$T} += $sourcedbh->do("$SQL ($list)");
+				$x=0;
+				$SQL = '';
+				for my $qpk (@{$g->{qpkey}}) {
+					$SQL .= sprintf '%s', $g->{binarypkey}[$x] ? qq{ENCODE($qpk,'base64'),} : "$qpk,";
+				}
+				chop $SQL;
+				$g->{pkcols} > 1 and $SQL = "($SQL)";
+				$SQL = "DELETE FROM $S.$T WHERE $SQL IN";
+				while (@srcdelete) {
+					$x=0;
+					my $list = '';
+				  LOOP: {
+						my $row = shift @srcdelete;
+						last LOOP if ! defined $row;
+						if ($g->{pkcols} > 1) {
+							$list .= sprintf '(%s),' => join ',' => @$row;
+						}
+						else {
+							$list .= "$row->[0],";
+						}
+						last LOOP if $x++ >= $config{max_delete_clause};
+						redo LOOP;
 					}
+					chop $list;
+					$self->glog("Deleting from source: ($list)");
+					$dmlcount{D}{source}{$S}{$T} += $sourcedbh->do("$SQL ($list)");
+				}
+				if ($dmlcount{D}{source}{$S}{$T}) {
 					$self->glog(qq{Rows deleted from source "$S.$T": $dmlcount{D}{source}{$S}{$T}/$count});
 				}
-				$count = @tgtdelete;
-				if ($count) {
-					while (@tgtdelete) {
-						no warnings;
-						my $list = '';
-						$list .= (shift @tgtdelete) . ',' for 1..$config{max_delete_clause};
-						$list =~ s/,+$//o;
-						$self->glog("Deleting from target: $SQL ($list)");
-						$dmlcount{D}{target}{$S}{$T} += $targetdbh->do("$SQL ($list)");
+
+				while (@tgtdelete) {
+					$x=0;
+					my $list = '';
+				  LOOP: {
+						my $row = shift @tgtdelete;
+						last LOOP if ! defined $row;
+						if ($g->{pkcols} > 1) {
+							$list .= sprintf '(%s),' => join ',' => @$row;
+						}
+						else {
+							$list .= "$row->[0],";
+						}
+						last LOOP if $x++ >= $config{max_delete_clause};
+						redo LOOP;
 					}
+					chop $list;
+					$self->glog("Deleting from target: $SQL ($list)");
+					$dmlcount{D}{target}{$S}{$T} += $targetdbh->do("$SQL ($list)");
+				}
+				if ($dmlcount{D}{target}{$S}{$T}) {
 					$self->glog(qq{Rows deleted from target "$S.$T": $dmlcount{D}{target}{$S}{$T}/$count});
 				}
 
@@ -4595,27 +4706,55 @@ sub start_kid {
 				## Before this point, the lack of a matching record from the left join
 				## only tells us that the real row *might* exist.
 				## And upserts are too expensive here :)
-				$SQL = $g->{binarypkey} ?
-					"SELECT ENCODE($qnamepkX,'base64') AS $qnamepkX FROM $S.$T WHERE ENCODE($qnamepkX,'base64') IN "
-						: "SELECT $qnamepkX FROM $S.$T WHERE $qnamepkX IN ";
-
-				my $namepkX = 'FIXME';
+				$x=0;
+				my $list = '';
+				my $pre = '';
+				for my $q (@{$g->{qpkey}}) {
+					$list .= sprintf '%s,',
+						$g->{binarypkey}[$x++] ? "ENCODE($q,'base64')" : $q;
+					$pre .= sprintf q{%s||'|'},
+						$g->{binarypkey}[$x++] ? "ENCODE($q,'base64')" : $q;
+				}
+				## We are pulling back a combined scalar, not necessarily the exact primary key
+				$pre =~ s/.....$/ AS id/;
+				$list =~ s/,$//;
+				$SQL = "SELECT $pre FROM $S.$T WHERE ($list) IN ";
 				while (@srccheck) {
-					no warnings;
-					my $list = '';
-					$list .= (shift @srccheck) . ',' for 1..$config{max_select_clause};
-					$list =~ s/,+$//o;
-					for (@{$sourcedbh->selectall_arrayref("$SQL ($list)")}) {
-						$info1->{$_->[0]}{$namepkX} = 1;
+					$x=0;
+					$list = '';
+				  LOOP: {
+						my $row = shift @srccheck;
+						last LOOP if ! defined $row;
+						if ($g->{pkcols} > 1) {
+							$list .= sprintf '(%s),' => join ',' => @$row;
+						}
+						else {
+							$list .= "$row->[0],";
+						}
+						$list =~ s/,$//;
+						last LOOP if $x++ >= $config{max_select_clause};
+						for (@{$sourcedbh->selectall_arrayref("$SQL ($list)")}) {
+							$info1->{$_->[0]}{$namepk} = 1;
+						}
 					}
 				}
 				while (@tgtcheck) {
-					no warnings;
-					my $list = '';
-					$list .= (shift @tgtcheck) . ',' for 1..$config{max_select_clause};
-					$list =~ s/,+$//o;
-					for (@{$targetdbh->selectall_arrayref("$SQL ($list)")}) {
-						$info2->{$_->[0]}{$namepkX} = 1;
+					$x=0;
+					$list = '';
+				  LOOP: {
+						my $row = shift @tgtcheck;
+						last LOOP if ! defined $row;
+						if ($g->{pkcols} > 99) {
+							$list .= sprintf '(%s),' => join ',' => @$row;
+						}
+						else {
+							$list .= "$row->[0],";
+						}
+						$list =~ s/,$//;
+						last LOOP if $x++ >= $config{max_select_clause};
+						for (@{$targetdbh->selectall_arrayref("$SQL ($list)")}) {
+							$info2->{$_->[0]}{$namepk} = 1;
+						}
 					}
 				}
 
@@ -4656,7 +4795,7 @@ sub start_kid {
 						eval {
 
 							if ($action & 1) { ## Source to target
-								if (defined $info2->{$pkval}{$namepkX}) {
+								if (defined $info2->{$pkval}{$namepk}) {
 									$self->glog("$prefix UPDATE source to target pk $pkval");
 									$count = $sth{target}{$g}{updaterow}->execute(@srcrow,$pkval);
 									$dmlcount{U}{target}{$S}{$T}++;
@@ -4668,7 +4807,7 @@ sub start_kid {
 								}
 							}
 							if ($action & 2) { ## Target to source
-								if (defined $info1->{$pkval}{$namepkX}) {
+								if (defined $info1->{$pkval}{$namepk}) {
 									$self->glog("$prefix UPDATE target to source pk $pkval");
 									$count = $sth{source}{$g}{updaterow}->execute(@tgtrow,$pkval);
 									$dmlcount{U}{source}{$S}{$T}++;
@@ -4680,7 +4819,7 @@ sub start_kid {
 								}
 							}
 							if ($action & 4) { ## Source to source
-								if (defined $info1->{$pkval}{$namepkX}) {
+								if (defined $info1->{$pkval}{$namepk}) {
 									$self->glog("$prefix UPDATE source to source pk $pkval");
 									$count = $sth{source}{$g}{updaterow}->execute(@srcrow,$pkval);
 									$dmlcount{U}{source}{$S}{$T}++;
@@ -4692,7 +4831,7 @@ sub start_kid {
 								}
 							}
 							if ($action & 8) { ## Target to target
-								if (defined $info2->{$pkval}{$namepkX}) {
+								if (defined $info2->{$pkval}{$namepk}) {
 									$self->glog("$prefix UPDATE target to target pk $pkval");
 									$count = $sth{target}{$g}{updaterow}->execute(@tgtrow,$pkval);
 									$dmlcount{U}{target}{$S}{$T}++;
@@ -4719,7 +4858,7 @@ sub start_kid {
 
 					if (!$g->{has_exception_code}) {
 						if ($@) {
-							$self->glog("Warning! Aborting due to exception for $S.$T.$qnamepkX: $pkval Error was $@");
+							$self->glog("Warning! Aborting due to exception for $S.$T.$qnamepk: $pkval Error was $@");
 							die $@;
 						}
 					}
