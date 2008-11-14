@@ -37,7 +37,7 @@ my $bcargs = {
 			  ctlverbose   => 0,
 			  dbname       => 'bucardo',
 			  dbuser       => 'bucardo',
-			  dbpass       => 'bucardo_password',
+			  dbpass       => '',
 			  verbose      => 1, ## Highly recommended to leave this on
 			  sendmail     => 0,
 			  extraname    => '',
@@ -1171,6 +1171,18 @@ sub relation_exists {
 
 } ## end of relation_exists
 
+sub constraint_exists {
+
+	my ($table,$constraint) = @_;
+	my $SQL = 'SELECT 1 FROM pg_catalog.pg_class c, pg_catalog.pg_constraint n '.
+		'WHERE c.oid=n.conrelid AND c.relname = ? AND n.conname = ?';
+	my $sth = $dbh->prepare_cached($SQL);
+	my $count = $sth->execute($table,$constraint);
+	$sth->finish();
+	return $count < 1 ? 0 : 1;
+
+} ## end of constraint_exists
+
 sub column_exists {
 
 	my ($schema,$table,$column) = @_;
@@ -1314,6 +1326,7 @@ sub upgrade {
 		['audit_pid', 'source_backend',  q{INT         NULL}],,
 		['audit_pid', 'target_backend',  q{INT         NULL}],,
 		['db',        'dbservice',       q{TEXT        NULL}],
+		['goat',      'qpkey',           q{TEXT        NULL}],
 		['sync',      'strict_checking', q{BOOLEAN NOT NULL DEFAULT 'true'}],
 	);
 
@@ -1326,6 +1339,22 @@ sub upgrade {
 		['bucardo_config','about',q{setting = 'log_showtime'}, 1,
 		 'Show timestamp in the log output?  0=off  1=seconds since epoch  2=scalar gmtime  3=scalar localtime'],
 	);
+
+	my @old_constraints = (
+		['goat', 'goat_pkeytype_check'],
+	);
+
+	for my $con (@old_constraints) {
+		my ($table, $constraint) = @$con;
+		if (!constraint_exists($table, $constraint)) {
+			clog "  Constraint $constraint does not exist";
+		}
+		else {
+			upgrade_and_log(qq{ALTER TABLE $table DROP CONSTRAINT "$constraint"});
+			clog "Dropped constraint $constraint";
+			$changes++;
+		}
+	}
 
 	for my $sequence (@new_sequences) {
 		if (relation_exists($schema, $sequence)) {
