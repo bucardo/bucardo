@@ -2026,8 +2026,22 @@ sub start_mcp {
 
 					## Fatal on strict: DEFAULT exists but does not match
 					if ($scol->{atthasdef} and $fcol->{atthasdef} and $scol->{def} ne $fcol->{def}) {
-						$column_problems ||= 1;
-						my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" with a DEFAULT of "$scol->{def}", but target database "$db" has a DEFAULT of "$fcol->{def}"};
+						# Tolerate Postgres versions returning DEFAULT parenthesized or not, e.g. as "-5" in 8.2 or as "(-5)" in 8.3
+						my $scol_def = $scol->{def};
+						my $fcol_def = $fcol->{def};
+						for ($scol_def, $fcol_def) {
+							s/\A\(//;
+							s/\)\z//;
+						}
+						my $msg;
+						if ($scol_def eq $fcol_def) {
+							$msg = qq{Postgres version mismatch leads to this difference, which is being tolerated: };
+						}
+						else {
+							$column_problems ||= 1;
+							$msg = '';
+						}
+						$msg .= qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" with a DEFAULT of "$scol->{def}", but target database "$db" has a DEFAULT of "$fcol->{def}"};
 						$self->glog("Warning: $msg");
 						warn $msg;
 					}
