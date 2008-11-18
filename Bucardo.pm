@@ -4237,7 +4237,7 @@ sub start_kid {
 						my $list = '';
 					  LOOP: {
 							my $row = shift @tgtdelete;
-							last LOOP if ! defined $row;
+							last LOOP if ! defined $row or ! defined $row->[0];
 							if ($g->{pkcols} > 1) {
 								$list .= sprintf "(%s)," => join ',' => @$row;
 							}
@@ -4570,7 +4570,7 @@ sub start_kid {
 
 					## We are manually building lists, so we may need to escape the pkeys
 					my @safepk;
-					if ($g->{pkcols} < 2) {
+					if ($g->{pkcols} <= 1) {
 						if ($g->{pkeytype}[0] =~ /int$/o) {
 							push @safepk => $pkval;
 						}
@@ -4675,7 +4675,7 @@ sub start_kid {
 					my $list = '';
 				  LOOP: {
 						my $row = shift @srcdelete;
-						last LOOP if ! defined $row;
+						last LOOP if ! defined $row or ! defined $row->[0];
 						if ($g->{pkcols} > 1) {
 							$list .= sprintf '(%s),' => join ',' => @$row;
 						}
@@ -4698,7 +4698,7 @@ sub start_kid {
 					my $list = '';
 				  LOOP: {
 						my $row = shift @tgtdelete;
-						last LOOP if ! defined $row;
+						last LOOP if ! defined $row or ! defined $row->[0];
 						if ($g->{pkcols} > 1) {
 							$list .= sprintf '(%s),' => join ',' => @$row;
 						}
@@ -4726,11 +4726,11 @@ sub start_kid {
 				for my $q (@{$g->{qpkey}}) {
 					$list .= sprintf '%s,',
 						$g->{binarypkey}[$x++] ? "ENCODE($q,'base64')" : $q;
-					$pre .= sprintf q{%s||'|'},
+					$pre .= sprintf q{%s||'|'||},
 						$g->{binarypkey}[$x++] ? "ENCODE($q,'base64')" : $q;
 				}
 				## We are pulling back a combined scalar, not necessarily the exact primary key
-				$pre =~ s/.....$/ AS id/;
+				$pre =~ s/.......$/ AS id/;
 				$list =~ s/,$//;
 				$SQL = "SELECT $pre FROM $S.$T WHERE ($list) IN ";
 				while (@srccheck) {
@@ -4738,7 +4738,7 @@ sub start_kid {
 					$list = '';
 				  LOOP: {
 						my $row = shift @srccheck;
-						last LOOP if ! defined $row;
+						last LOOP if ! defined $row or ! defined $row->[0];
 						if ($g->{pkcols} > 1) {
 							$list .= sprintf '(%s),' => join ',' => @$row;
 						}
@@ -4757,8 +4757,8 @@ sub start_kid {
 					$list = '';
 				  LOOP: {
 						my $row = shift @tgtcheck;
-						last LOOP if ! defined $row;
-						if ($g->{pkcols} > 99) {
+						last LOOP if ! defined $row or ! defined $row->[0];
+						if ($g->{pkcols} > 1) {
 							$list .= sprintf '(%s),' => join ',' => @$row;
 						}
 						else {
@@ -4808,62 +4808,65 @@ sub start_kid {
 						## This eval block needed for potential error handling
 						eval {
 
+							my $srcpks = $g->{pkcols} <= 1 ? [$pkval] : $info1->{$pkval}{BUCARDO_PKVALS};
+							my $tgtpks = $g->{pkcols} <= 1 ? [$pkval] : $info2->{$pkval}{BUCARDO_PKVALS};
 							if ($action & 1) { ## Source to target
 								if (defined $info2->{$pkval}{$namepk}) {
 									$self->glog("$prefix UPDATE source to target pk $pkval");
-									$count = $sth{target}{$g}{updaterow}->execute(@srcrow,$pkval);
+									$count = $sth{target}{$g}{updaterow}->execute(@srcrow,@$srcpks);
 									$dmlcount{U}{target}{$S}{$T}++;
 								}
 								else {
 									$self->glog("$prefix INSERT source to target pk $pkval");
-									$count = $sth{target}{$g}{insertrow}->execute($pkval,@srcrow);
+									$count = $sth{target}{$g}{insertrow}->execute(@$srcpks,@srcrow);
 									$dmlcount{I}{target}{$S}{$T}++;
 								}
 							}
 							if ($action & 2) { ## Target to source
 								if (defined $info1->{$pkval}{$namepk}) {
 									$self->glog("$prefix UPDATE target to source pk $pkval");
-									$count = $sth{source}{$g}{updaterow}->execute(@tgtrow,$pkval);
+									$count = $sth{source}{$g}{updaterow}->execute(@tgtrow,@$tgtpks);
 									$dmlcount{U}{source}{$S}{$T}++;
 								}
 								else {
 									$self->glog("$prefix INSERT target to source pk $pkval");
-									$count = $sth{source}{$g}{insertrow}->execute($pkval,@tgtrow);
+									$count = $sth{source}{$g}{insertrow}->execute(@$tgtpks,@tgtrow);
 									$dmlcount{I}{source}{$S}{$T}++;
 								}
 							}
 							if ($action & 4) { ## Source to source
 								if (defined $info1->{$pkval}{$namepk}) {
 									$self->glog("$prefix UPDATE source to source pk $pkval");
-									$count = $sth{source}{$g}{updaterow}->execute(@srcrow,$pkval);
+									$count = $sth{source}{$g}{updaterow}->execute(@srcrow,@$srcpks);
 									$dmlcount{U}{source}{$S}{$T}++;
 								}
 								else {
 									$self->glog("$prefix INSERT source to source pk $pkval");
-									$count = $sth{source}{$g}{insertrow}->execute($pkval,@srcrow);
+									$count = $sth{source}{$g}{insertrow}->execute(@$srcpks,@srcrow);
 									$dmlcount{I}{source}{$S}{$T}++;
 								}
 							}
 							if ($action & 8) { ## Target to target
 								if (defined $info2->{$pkval}{$namepk}) {
 									$self->glog("$prefix UPDATE target to target pk $pkval");
-									$count = $sth{target}{$g}{updaterow}->execute(@tgtrow,$pkval);
+									$count = $sth{target}{$g}{updaterow}->execute(@tgtrow,@$tgtpks);
 									$dmlcount{U}{target}{$S}{$T}++;
 								}
 								else {
 									$self->glog("$prefix INSERT target to target pk $pkval");
-									$count = $sth{target}{$g}{insertrow}->execute($pkval,@tgtrow);
+									$count = $sth{target}{$g}{insertrow}->execute(@$tgtpks,@tgtrow);
 									$dmlcount{I}{target}{$S}{$T}++;
 								}
 							}
 							## XXX Move this elsewhere?
+							## ZZZ This will probably break for multi-col pks
 							if ($g->{does_makedelta}) {
 								if ($action & 2 or $action & 4) {
-									$sth{source}{$g}{insertdelta}->execute($g->{oid},$pkval);
+									$sth{source}{$g}{insertdelta}->execute($g->{oid},@$srcpks);
 									$self->glog("Adding in source bucardo_delta row (upsert) for $g->{oid} and $pkval");
 								}
 								if ($action & 1 or $action & 8) {
-									$sth{target}{$g}{insertdelta}->execute($toid,$pkval);
+									$sth{target}{$g}{insertdelta}->execute($toid,@$tgtpks);
 									$self->glog("Adding in target bucardo_delta row (upsert) for $toid and $pkval");
 								}
 							}
