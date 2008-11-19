@@ -1,6 +1,9 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-3.2.0
+3.2.1
+
+  - Add 'bucardo_ctl upgrade' to make intra-version upgrades easy 
+    and automatic. [Selena Deckelmann and GSM]
 
   - Make the audit_pid table more useful. Use sequences instead of 
     PIDs to find children.
