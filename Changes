@@ -2,13 +2,19 @@
 
 3.2.1
 
+  - Support multi-column primary keys. Thanks to Backcountry.com. [GSM]
+
   - Add 'bucardo_ctl upgrade' to make intra-version upgrades easy 
     and automatic. [Selena Deckelmann and GSM]
 
-  - Make the audit_pid table more useful. Use sequences instead of 
-    PIDs to find children.
+  - Tolerate incompatibility in DEFAULT of negative numbers between 
+    Postgres 8.2 and 8.3. [Jon Jensen]
 
-  - Support multi-column primary keys. Thanks to Backcountry.com. [GSM]
+  - Make the audit_pid table more useful. Use sequences instead of 
+    PIDs to find children. [GSM]
+
+  - Add validate_all_syncs() function, and allow an argument to both that 
+    and validate_sync() to force recreation of supporting objects. [GSM]
 
 3.1.0 April 6, 2008
 
