@@ -1274,10 +1274,9 @@ $bc$
 
         ## (if bc_schema exists) Do these supporting functions exist?
         (my $noquotepkey = $safepkey) =~ s/^"(.+)"$/$1/;
-        my $func0 = "bucardo_triggerkick_$syncname";
-		## TODO: Handle long versions of the below
-        my $func1 = "bucardo_add_delta_$noquotepkey";
-        my $func2 = "bucardo_add_delta_binary_$noquotepkey";
+        my $func0 = length($syncname)    <= 42 ? "bucardo_triggerkick_$syncname" : "bkick_$syncname";
+        my $func1 = length($noquotepkey) <= 45 ? "bucardo_add_delta_$noquotepkey" : "bad_$noquotepkey";
+        my $func2 = length($noquotepkey) <= 38 ? "bucardo_add_delta_binary_$noquotepkey" : "badb_$noquotepkey";
         my $func3 = "bucardo_purge_delta";
         if ($safepkey =~ /^"/) {
            $func1 = qq{"$func1"};
