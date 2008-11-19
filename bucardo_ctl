@@ -42,12 +42,12 @@ my $bcargs = {
 			  sendmail     => 0,
 			  extraname    => '',
 			  debugfilesep => 0,
+			  debugdir     => '.',
 			  debugname    => '',
 			  debugstderr  => 1,
 			  debugstdout  => 0,
 			  debugsyslog  => 1,
-			  debugdir     => '',
-			  debugfile    => 0,
+			  debugfile    => 1,
 			  cleandebugs  => 0,
 		  };
 
@@ -207,6 +207,11 @@ sub start {
 	## Create a new Bucardo instance and connect to its database
 	require Bucardo;
 	my $bc = Bucardo->new($bcargs);
+
+	my $pm_version = $bc->{version} || 'unknown';
+	if ($VERSION ne $pm_version) {
+		die "Version mismatch: bucardo_ctl is $VERSION, but Bucardo.pm is $pm_version\n";
+	}
 
 	set_reason();
 
