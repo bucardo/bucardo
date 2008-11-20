@@ -930,7 +930,7 @@ $bc$
     my $force = shift || 0;
     my ($rv,$SQL,%cache);
 
-    elog(INFO, "Starting validate_sync for $syncname");
+    elog(NOTICE, "Starting validate_sync for $syncname");
 
     ## Connect to source and target(s) and verify that tables exist,
     ## and are identical. Setup the delta stuff as needed.
