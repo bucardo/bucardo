@@ -235,6 +235,7 @@ has 'dryrun'       => ( is => 'rw', isa => 'Int', default => 0 );
 has 'bcquiet'      => ( is => 'rw', isa => 'Int', default => 0 );
 has 'sendmail'     => ( is => 'rw', isa => 'Int', default => 1 );
 has 'extraname'    => ( is => 'rw', isa => 'Str', default => '' );
+has 'version'      => ( is => 'ro', isa => 'Str', default => $VERSION );
 
 has 'masterdbh'    => ( is => 'ro' );
 
