@@ -53,7 +53,7 @@ our %tabletype =
 
 our @tables2empty = (qw/droptest/);
 
-my $DEBUG = 1; ## XXX
+my $DEBUG = 0; ## XXX
 
 my %debug = (
 			 recreatedb     => 0,
@@ -567,10 +567,11 @@ sub add_test_schema {
 			$dbh->do("DROP TABLE $table");
 		}
 
-		my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
+		my $pkeyname = $table =~ /test5/ ? q{"id space"} : 'id';
+		my $pkindex = $table =~ /test2/ ? '' : 'PRIMARY KEY';
 		$SQL = qq{
 			CREATE TABLE $table (
-				$pkey    $tabletype{$table} NOT NULL PRIMARY KEY};
+				$pkeyname    $tabletype{$table} NOT NULL $pkindex};
 		$SQL .= $table =~ /0/ ? "\n)" : qq{,
     	        data1 TEXT                   NULL,
         	    inty  SMALLINT               NULL,
@@ -579,7 +580,12 @@ sub add_test_schema {
             	email TEXT                   NULL UNIQUE
         	)
 			};
+
 		$dbh->do($SQL);
+
+		if ($table =~ /test2/) {
+			$dbh->do("ALTER TABLE $table ADD CONSTRAINT multipk PRIMARY KEY ($pkeyname,data1)");
+		}
 
 		## Create a trigger to test trigger supression during syncs
 		$SQL = qq{
