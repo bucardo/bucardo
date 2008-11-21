@@ -1920,6 +1920,7 @@ sub start_mcp {
 			$g->{qpkey}    = [split /\|/o => $g->{qpkey}];
 			$g->{pkeytype} = [split /\|/o => $g->{pkeytype}];
 			$g->{pkcols}   = @{$g->{pkey}};
+			$g->{hasbinarypk} = 0;
 			for (@{$g->{pkey}}) {
 				push @{$g->{binarypkey}} => 0;
 			}
@@ -1952,6 +1953,7 @@ sub start_mcp {
 				for my $pk (@{$g->{pkey}}) {
 					if ($colname eq $pk) {
 						$g->{binarypkey}[$x] = 1;
+						$g->{hasbinarypk} = 1;
 						next BCOL;
 					}
 					$x++;
@@ -3522,70 +3524,67 @@ sub start_kid {
 					next if $x < 2;
 					$rowid .= ",$rowid$x";
 				}
+				## XXX Change to COPY when possible?
 				$SQL = qq{INSERT INTO bucardo.bucardo_delta(tablename,$rowid) VALUES ($vals)};
 				$sth{source}{$g}{insertdelta} = $sourcedbh->prepare($SQL) if $synctype eq 'swap';
 				$sth{target}{$g}{insertdelta} = $targetdbh->prepare($SQL);
 			}
 
-			my $safepks = join ',' => @{$g->{qpkey}};
-			my $q = '';
-			for my $pkb (@{$g->{binarypkey}}) {
-				$q .= $pkb ? q{DECODE(?,'base64'),} : '?,';
-			}
-			chop $q;
-			if (length $g->{safecolumnlist}) {
-				$SQL = "INSERT INTO $S.$T ($safepks, $g->{safecolumnlist}) VALUES ($q,";
-				$SQL .= join ',' => map {'?'} @{$g->{cols}};
-				$SQL .= ")";
-			}
-			else {
-				$SQL = "INSERT INTO $S.$T ($safepks) VALUES ($q)";
-			}
-			$sth{target}{$g}{insertrow} = $targetdbh->prepare($SQL);
 			if ($synctype eq 'swap') {
+				my $safepks = join ',' => @{$g->{qpkey}};
+				my $q = '';
+				for my $pkb (@{$g->{binarypkey}}) {
+					$q .= $pkb ? q{DECODE(?,'base64'),} : '?,';
+				}
+				chop $q;
+				if (length $g->{safecolumnlist}) {
+					$SQL = "INSERT INTO $S.$T ($safepks, $g->{safecolumnlist}) VALUES ($q,";
+					$SQL .= join ',' => map {'?'} @{$g->{cols}};
+					$SQL .= ")";
+				}
+				else {
+					$SQL = "INSERT INTO $S.$T ($safepks) VALUES ($q)";
+				}
+				$sth{target}{$g}{insertrow} = $targetdbh->prepare($SQL);
 				$sth{source}{$g}{insertrow} = $sourcedbh->prepare($SQL);
-			}
 
-			if (length $g->{safecolumnlist}) {
-				$SQL = "UPDATE $S.$T SET ";
-				$SQL .= join ',' => map { "$_=?" } @{$g->{safecols}};
-			}
-			else {
-				$SQL = "UPDATE $S.$T SET $g->{qpkey}[0]=$g->{qpkey}[0]";
-			}
+				if (length $g->{safecolumnlist}) {
+					$SQL = "UPDATE $S.$T SET ";
+					$SQL .= join ',' => map { "$_=?" } @{$g->{safecols}};
+				}
+				else {
+					$SQL = "UPDATE $S.$T SET $g->{qpkey}[0]=$g->{qpkey}[0]";
+				}
 
-			my $drow = q{d.rowid AS "BUCARDO_ID"};
-			$x=1;
-			for my $qpk (@{$g->{qpkey}}) {
-				$SQL .= sprintf " %s %s = ?",
-					$x>1 ? 'AND' : 'WHERE',
-					$g->{binarypkey}[$x-1] ? qq{ENCODE($qpk,'base64')} : $qpk;
-				$x > 1 and $drow .= qq{,d.rowid$x AS "BUCARDO_ID$x"};
-				$x++;
-			}
+				my $drow = q{d.rowid AS "BUCARDO_ID"};
+				$x=1;
+				for my $qpk (@{$g->{qpkey}}) {
+					$SQL .= sprintf " %s %s = ?",
+						$x>1 ? 'AND' : 'WHERE',
+							$g->{binarypkey}[$x-1] ? qq{ENCODE($qpk,'base64')} : $qpk;
+					$x > 1 and $drow .= qq{,d.rowid$x AS "BUCARDO_ID$x"};
+					$x++;
+				}
 
-			$sth{target}{$g}{updaterow} = $targetdbh->prepare($SQL);
-			$synctype eq 'swap' and $sth{source}{$g}{updaterow} = $sourcedbh->prepare($SQL);
-			if (exists $g->{binarycols}) {
-				for (@{$g->{binarycols}}) {
-					$sth{target}{$g}{insertrow}->bind_param($_ + $g->{pkcols}, undef, {pg_type => PG_BYTEA});
-					$sth{target}{$g}{updaterow}->bind_param($_, undef, {pg_type => PG_BYTEA});
-					if ($synctype eq 'swap') {
+				$sth{target}{$g}{updaterow} = $targetdbh->prepare($SQL);
+				$sth{source}{$g}{updaterow} = $sourcedbh->prepare($SQL);
+				if (exists $g->{binarycols}) {
+					for (@{$g->{binarycols}}) {
+						$sth{target}{$g}{insertrow}->bind_param($_ + $g->{pkcols}, undef, {pg_type => PG_BYTEA});
+						$sth{target}{$g}{updaterow}->bind_param($_, undef, {pg_type => PG_BYTEA});
 						$sth{source}{$g}{insertrow}->bind_param($_+1, undef, {pg_type => PG_BYTEA});
 						$sth{source}{$g}{updaterow}->bind_param($_, undef, {pg_type => PG_BYTEA});
 					}
 				}
-			}
 
-			$x=0;
-			my $aliaslist = join ',' => map { "$_ AS $g->{cols}[$x++]" } @{$g->{safecols}};
-			if (length $aliaslist) {
-				$aliaslist = ",$aliaslist";
-			}
+				$x=0;
+				my $aliaslist = join ',' => map { "$_ AS $g->{cols}[$x++]" } @{$g->{safecols}};
+				if (length $aliaslist) {
+					$aliaslist = ",$aliaslist";
+				}
 
-			my $safesourcedb;
-			## Note: column order important for splice and defined calls later
-			$SQL{delta} = qq{
+				## Note: column order important for splice and defined calls later
+				$SQL{delta} = qq{
                 SELECT    DISTINCT $drow,
                           BUCARDO_PK $aliaslist
                 FROM      bucardo.bucardo_delta d
@@ -3598,29 +3597,55 @@ sub start_kid {
                                 AND    bt.targetdb = '\$2'::text
                                 AND    bt.tablename = \$1::oid
                           )
-            };
+                };
 
-			my $clause = '';
-			my $cols = '';
-			$x = 0;
-			for my $qpk (@{$g->{qpkey}}) {
-				$clause .= sprintf qq{%s::%s = d.rowid%s::%s AND },
-					$g->{binarypkey}[$x] ? qq{ENCODE(t.$qpk,'base64')} : "t.$qpk",
-					$g->{pkeytype}[$x],
-					$x ? $x+1 : '',
-					$g->{pkeytype}[$x];
-				$cols .= $g->{binarypkey}[0] ? qq{ENCODE(t.$qpk,'base64'),} : "t.$qpk,";
-				$x++;
+				my $clause = '';
+				my $cols = '';
+				$x = 0;
+				for my $qpk (@{$g->{qpkey}}) {
+					$clause .= sprintf qq{%s::%s = d.rowid%s::%s AND },
+						$g->{binarypkey}[$x] ? qq{ENCODE(t.$qpk,'base64')} : "t.$qpk",
+							$g->{pkeytype}[$x],
+								$x ? $x+1 : '',
+									$g->{pkeytype}[$x];
+					$cols .= $g->{binarypkey}[0] ? qq{ENCODE(t.$qpk,'base64'),} : "t.$qpk,";
+					$x++;
+				}
+				$clause =~ s/ AND $//;
+				chop $cols;
+				$SQL{delta} =~ s/BUCARDO_JOIN/($clause)/;
+				$SQL{delta} =~ s/BUCARDO_PK/$cols/;
+
 			}
-			$clause =~ s/ AND $//;
-			chop $cols;
-			$SQL{delta} =~ s/BUCARDO_JOIN/($clause)/;
-			$SQL{delta} =~ s/BUCARDO_PK/$cols/;
+			else { ## synctype eq 'pushdelta'
+				my $rowids = 'rowid';
+				for (2 .. $g->{pkcols}) {
+					$rowids .= ",rowid$_";
+				}
 
+				$SQL{delta} = qq{
+                SELECT    DISTINCT $rowids
+                FROM      bucardo.bucardo_delta d
+                WHERE     d.tablename = \$1::oid
+                AND       NOT EXISTS (
+                                SELECT 1
+                                FROM   bucardo.bucardo_track bt
+                                WHERE  d.txntime = bt.txntime
+                                AND    bt.targetdb = '\$2'::text
+                                AND    bt.tablename = \$1::oid
+                          )
+                };
+
+			}
+
+			## Plug in the tablenames (oids) and the targetdb names
 			($SQL = $SQL{delta}) =~ s/\$1/$g->{oid}/go;
 			(my $safedbname = $targetdb) =~ s/\'/''/go;
 			$SQL =~ s/\$2/$safedbname/o;
 			$sth{source}{$g}{getdelta} = $sourcedbh->prepare($SQL);
+			my $safesourcedb;
+
+			## Plug in again for the source database when doing a swap sync
 			if ($synctype eq 'swap') {
 				($safesourcedb = $sourcedb) =~ s/\'/''/go;
 				($SQL = $SQL{delta}) =~ s/\$1/$g->{targetoid}{$targetdb}/g;
@@ -4072,6 +4097,7 @@ sub start_kid {
 			}
 		}
 
+		## Disable rules and triggers on target (all) and source (swap sync)
 		if ($SQL{disable_trigrules}) {
 			$self->glog(qq{Disabling triggers and rules on $targetdb ($sync->{disable_triggers} and $sync->{disable_rules})});
 			$targetdbh->do($SQL{disable_trigrules});
@@ -4094,6 +4120,7 @@ sub start_kid {
 
 				my ($srccmd,$tgtcmd);
 				if ($sync->{usecustomselect} and $g->{customselect}) {
+					## XXX Use COPY () format if 8.2 or greater
 					my $temptable = "bucardo_temp_$g->{tablename}_$$"; ## Raw version, not "safetable"
 					$self->glog("Creating temp table $temptable for custom select on $S.$T");
 					$sourcedbh->do("CREATE TEMP TABLE $temptable ON COMMIT DROP AS $g->{customselect}");
@@ -4163,8 +4190,6 @@ sub start_kid {
 
 			for my $g (@$goatlist) {
 
-				## XX When done, add back namepk and qnamepk for final die loop?
-				## ($S,$T,$namepk,$qnamepk) = ($g->{safeschema},$g->{safetable},$g->{pkey},$g->{safepkey});
 				($S,$T) = ($g->{safeschema},$g->{safetable});
 
 				## Skip this table if no rows have changed on the source
@@ -4174,7 +4199,7 @@ sub start_kid {
 
 				my $hasindex = 0;
 				if ($g->{rebuild_index}) {
-					## TODO: cache this earlier
+					## We could run this earlier, but might miss a newly-added index!
 					$SQL = "SELECT relhasindex FROM pg_class WHERE oid = $toid";
 					$hasindex = $targetdbh->selectall_arrayref($SQL)->[0][0];
 					if ($hasindex) {
@@ -4184,134 +4209,70 @@ sub start_kid {
 					}
 				}
 
+				## Grab all distinct pks from bucardo_delta for this table that have not been already pushed
 				my $info = $sth{source}{$g}{getdelta}->fetchall_arrayref();
 
 				if ($sync->{need_rows}) {
 					$rows_for_custom_code->{$S}{$T} =
 						{
-						 source   => $info,
-						 ## XXX Doc these changes: scalar to array, add qpkeyname
+						 source    => $info,
 						 pkeyname  => $g->{pkey},
 						 qpkeyname => $g->{qpkey},
 						 pkeytype  => $g->{pkeytype},
 						 };
 				}
 
+				## ZZZ Test this
 				if ($g->{does_makedelta}) {
 					for (@$info) {
-						$sth{target}{$g}{insertdelta}->execute($toid,$_->[0]);
-						$self->glog("Inserted makedelta on $T record $g->{oid}, $_->[0] on $targetdb");
+						$sth{target}{$g}{insertdelta}->execute($toid,@{$_}[0..($g->{pkcols}-1)]);
 					}
 					$sth{target}{inserttrack}->execute($toid,$targetdb);
 					$count = @$info;
 					$self->glog("Total makedelta rows added for $S.$T on $targetdb: $count");
 				}
 
-				## First, delete any rows that no longer exist on the target.
-				## The second element will be null due to the left join.
-				## Thus, the pk exists in bucardo_delta but not the actual table.
-				## So it was deleted from the source table, and we need to delete it from the target:
+				## Delete all rows of interest from the target
+				## It does not matter if they are delete, update, or insert on the source
 
-				my @tgtdelete;
+				## Build the left-hand of the WHERE clause, used by both DELETE and COPY
+				my $pkcols = '';
 				$x=0;
-				for my $row (grep { !defined $_->[$g->{pkcols}] } @$info) {
-					for my $y (1..$g->{pkcols}) {
-						$row->[$y-1] =~ s/\'/''/g;
-						push @{$tgtdelete[$x]} => qq{'$row->[$y-1]'};
-					}
-					$x++;
+				for my $qpk (@{$g->{qpkey}}) {
+					$pkcols .= sprintf '%s', $g->{binarypkey}[$x] ? qq{ENCODE($qpk,'base64'),} : "$qpk,";
 				}
-				if (!@tgtdelete) {
-					$count = $deltacount{source}{$S}{$T};
-				}
-				else {
-					$x=0;
-					$SQL = '';
-					for my $qpk (@{$g->{qpkey}}) {
-						$SQL .= sprintf '%s', $g->{binarypkey}[$x] ? qq{ENCODE($qpk,'base64'),} : "$qpk,";
-					}
-					chop $SQL;
-					$g->{pkcols} > 1 and $SQL = "($SQL)";
-					$SQL = "DELETE FROM $S.$T WHERE $SQL IN";
-					while (@tgtdelete) {
-						$x=0;
-						my $list = '';
-					  LOOP: {
-							my $row = shift @tgtdelete;
-							last LOOP if ! defined $row or ! defined $row->[0];
-							if ($g->{pkcols} > 1) {
-								$list .= sprintf "(%s)," => join ',' => @$row;
-							}
-							else {
-								$list .= "$row->[0],";
-							}
-							last LOOP if $x++ >= $config{max_delete_clause};
-							redo LOOP;
-						}
-						chop $list;
-						$self->glog("Delete from $S.$T: ($list)");
-						$dmlcount{D}{target}{$S}{$T} += $targetdbh->do("$SQL ($list)");
-					}
-					$dmlcount{D}{target}{$S}{$T} = 0 if $dmlcount{D}{target}{$S}{$T} eq '0E0';
-					$self->glog(qq{Rows deleted from target $S.$T: $dmlcount{D}{target}{$S}{$T}});
-					$dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
-					$count = $deltacount{source}{$S}{$T} - $count;
-				}
+				chop $pkcols;
+				$g->{pkcols} > 1 and $pkcols = "($pkcols)";
 
-				$self->glog("Rows to be upserted for $S.$T: $count");
+				## Build the right-hand side of the WHERE clause, escaping values as needed
+				my $pkvals = '';
+				for my $row (@$info) {
+					my $inner = join ',' => map { s/\'/''/go; qq{'$_'}; } @$row;
+					$pkvals .= $g->{pkcols} > 1 ? "($inner)," : "$inner,";
+				}
+				chop $pkvals;
 
-				$dmlcount{U}{target}{$S}{$T} = 0;
+				## Build and run a custom DELETE query
+				$SQL = "DELETE FROM $S.$T WHERE $pkcols IN ($pkvals)";
+				$count = $targetdbh->do($SQL);
+				$dmlcount{D}{target}{$S}{$T} += $count;
+				$dmlcount{alldeletes}{target} += $count;
+
+				## ZZZ TODO: break both delete and copy into chunks
+				## Now that they have all been deleted fom the target, add the ones that are still there on the source
+				my $srccmd = "COPY (SELECT * FROM $S.$T WHERE $pkcols IN ($pkvals)) TO STDOUT";
+				my $tgtcmd = "COPY $S.$T FROM STDIN";
+				$sourcedbh->do($srccmd);
+				$targetdbh->do($tgtcmd);
+				my $buffer = '';
 				$dmlcount{I}{target}{$S}{$T} = 0;
+				while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
+					$targetdbh->pg_putcopydata($buffer);
+				}
+				$targetdbh->pg_putcopyend();
+				$dmlcount{I}{target}{$S}{$T} = @$info;
+				$self->glog(qq{End COPY to $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
 
-			  ROW: for my $row (grep { defined $_->[$g->{pkcols}] } @$info) {
-					## Grab the first column(s) from the join above as the primary key(s).
-					my @pkvals;
-					for (1..$g->{pkcols}) {
-						push @pkvals => splice(@$row,0,1);
-					}
-					## Discard the next column(s) (left joined pk)
-					shift @$row for 1..$g->{pkcols};
-					my $pkvaljoined = join ',' => @pkvals;
-					my $upsert = 0; ## How many times we've tried to process this rows
-				  UPSERT: {
-						$count = $sth{target}{$g}{updaterow}->execute(@$row,@pkvals);
-						if ($count ne '0E0') {
-							$self->glog("Updated $S.$T.$pkvaljoined");
-							$dmlcount{U}{target}{$S}{$T} += $count;
-							next ROW;
-						}
-
-						## Row does not exist, that we know of. Try an insert
-						$targetdbh->pg_savepoint("bucardo_insert");
-						eval {
-							$count = $sth{target}{$g}{insertrow}->execute(@pkvals,@$row);
-						};
-						if ($@) {
-							$self->glog("Rolling back because of $@");
-							$targetdbh->pg_rollback_to("bucardo_insert");
-							## This may or may not be due to a primary key race condition.
-							## We give it one unconditional chance, then check the message
-							## A few more tries after that and nobody can go on
-							if ($upsert > $config{upsert_attempts}
-								or
-								($upsert >= 1 and $@ !~ /duplicate key violates unique constraint/)
-								) {
-								$self->glog("Warning! Could not insert pk $pkvaljoined to $S.$T on $targetdb, aborting");
-								die qq{Upsert insert failed for $S.$T.$pkvaljoined on $targetdb: $@};
-							}
-							$upsert++;
-							redo UPSERT;
-						}
-						else { ## The insert worked
-							$dmlcount{I}{target}{$S}{$T} += $count;
-							$self->glog("Inserted $S.$T.$pkvaljoined");
-							$targetdbh->pg_release("bucardo_insert");
-						}
-					} ## end UPSERT
-				} ## end ROW
-
-				$self->glog("Upsert results: updates=$dmlcount{U}{target}{$S}{$T} inserts=$dmlcount{I}{target}{$S}{$T}");
-				$dmlcount{allupdates}{target} += $dmlcount{U}{target}{$S}{$T};
 				$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
 
 				if ($hasindex) {
@@ -4329,14 +4290,14 @@ sub start_kid {
 
 			## TODO: Exception catching?
 
-			$self->glog("Pushdelta counts: updates=$dmlcount{allupdates}{target} inserts=$dmlcount{allinserts}{target}");
+			$self->glog("Pushdelta counts: deletes=$dmlcount{alldeletes}{target} inserts=$dmlcount{allinserts}{target}");
 
 		} ## end pushdelta
 
 		elsif ($synctype eq 'swap') {
 
 			for my $g (@$goatlist) {
-				## XX Restore 2 cols?
+
 				($S,$T) = ($g->{safeschema},$g->{safetable});
 
 				## Skip if neither side has changes for this table
