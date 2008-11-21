@@ -1421,7 +1421,7 @@ $bc$
 
         ## If this is not set as ping, remove the trigger - the only one safe to remove
         if (!$ping and $found{trigger0}) {
-			run_sql("DROP TRIGGER $trigger0 ON $safeschema.$safetable", $dbh);
+			run_sql(qq{DROP TRIGGER "$trigger0" ON $safeschema.$safetable}, $dbh);
         }
 
         ## Schema is needed for both ping and delta
