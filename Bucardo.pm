@@ -4257,7 +4257,7 @@ sub start_kid {
 				$x=0;
 				for my $q (@{$g->{qpkey}}) {
 					$pre .= sprintf q{%s||'|'||},
-						$g->{binarypkey}[$x++] ? "ENCODE($q,'base64')" : $q;
+						$g->{binarypkey}[$x++] ? "ENCODE($q,'base64')" : "${q}::text";
 				}
 				$pre =~ s/.......$/ AS id/;
 				## Creates a unique single scalar for this pkey
@@ -4782,7 +4782,7 @@ sub start_kid {
 					$list .= sprintf '%s,',
 						$g->{binarypkey}[$x++] ? "ENCODE($q,'base64')" : $q;
 					$pre .= sprintf q{%s||'|'||},
-						$g->{binarypkey}[$x++] ? "ENCODE($q,'base64')" : $q;
+						$g->{binarypkey}[$x++] ? "ENCODE($q,'base64')" : "${q}::text";
 				}
 				## We are pulling back a combined scalar, not necessarily the exact primary key
 				$pre =~ s/.......$/ AS id/;
