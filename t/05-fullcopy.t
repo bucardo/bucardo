@@ -231,7 +231,7 @@ for my $table (sort keys %tabletype) {
 }
 
 ## Test out customselect - update just the id column
-$dbhX->do(q{UPDATE goat SET customselect='SELECT '||qpkey||' FROM '||tablename});
+$dbhX->do(q{UPDATE goat SET customselect='SELECT '||replace(qpkey,'|',',')||' FROM '||tablename});
 $dbhX->do(q{UPDATE sync SET usecustomselect = true});
 $dbhX->do("NOTIFY bucardo_reload_sync_fullcopytest");
 $dbhX->commit();
