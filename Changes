@@ -2,6 +2,8 @@
 
 3.2.1
 
+  - Rewrite the pushdelta sync method to be more efficient. [GSM]
+
   - Support multi-column primary keys. Thanks to Backcountry.com. [GSM]
 
   - Add 'bucardo_ctl upgrade' to make intra-version upgrades easy 
