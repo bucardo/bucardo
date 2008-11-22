@@ -122,8 +122,8 @@ stats_script_url|http://www.bucardo.org/|Location of the stats script
 upsert_attempts|3|How many times do we try out the upsert loop?
 max_select_clause|500|Maximum number of items to select inside of IN() clauses
 max_delete_clause|200|Maximum number of items to delete inside of IN() clauses
-bucardo_version|3.2.1|Bucardo version this schema was created with
-bucardo_current_version|3.2.1|Current version of Bucardo
+bucardo_version|3.2.2|Bucardo version this schema was created with
+bucardo_current_version|3.2.2|Current version of Bucardo
 \.
 
 --

@@ -1,6 +1,6 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-3.2.1
+3.2.2
 
   - Rewrite the pushdelta sync method to be more efficient. [GSM]
 
