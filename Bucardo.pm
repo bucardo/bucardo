@@ -4232,48 +4232,137 @@ sub start_kid {
 					$self->glog("Total makedelta rows added for $S.$T on $targetdb: $count");
 				}
 
-				## Delete all rows of interest from the target
-				## It does not matter if they are delete, update, or insert on the source
-
-				## Build the left-hand of the WHERE clause, used by both DELETE and COPY
+				## Build the left-hand of the WHERE clause, used by all queries below
 				my $pkcols = '';
 				$x=0;
 				for my $qpk (@{$g->{qpkey}}) {
-					$pkcols .= sprintf '%s', $g->{binarypkey}[$x] ? qq{ENCODE($qpk,'base64'),} : "$qpk,";
+					$pkcols .= sprintf '%s,', $g->{binarypkey}[$x] ? qq{ENCODE($qpk,'base64')} : $qpk;
 				}
 				chop $pkcols;
+				## Example: id,"space bar",cdate
 				$g->{pkcols} > 1 and $pkcols = "($pkcols)";
+				## Example: (id,"space bar",cdate)
 
-				## Build the right-hand side of the WHERE clause, escaping values as needed
+				## Build a list of all values to pass to target
 				my $pkvals = '';
 				for my $row (@$info) {
 					my $inner = join ',' => map { s/\'/''/go; qq{'$_'}; } @$row;
 					$pkvals .= $g->{pkcols} > 1 ? "($inner)," : "$inner,";
 				}
 				chop $pkvals;
+				## Example: ('1234','Don''t Stop','2008-01-01'),('221','foobar','2008-11-01')
 
-				## Build and run a custom DELETE query
-				$SQL = "DELETE FROM $S.$T WHERE $pkcols IN ($pkvals)";
-				$count = $targetdbh->do($SQL);
-				$dmlcount{D}{target}{$S}{$T} += $count;
-				$dmlcount{alldeletes}{target} += $count;
-
-				## ZZZ TODO: break both delete and copy into chunks
-				## Now that they have all been deleted fom the target, add the ones that are still there on the source
-				my $srccmd = "COPY (SELECT * FROM $S.$T WHERE $pkcols IN ($pkvals)) TO STDOUT";
-				my $tgtcmd = "COPY $S.$T FROM STDIN";
-				$sourcedbh->do($srccmd);
-				$targetdbh->do($tgtcmd);
-				my $buffer = '';
-				$dmlcount{I}{target}{$S}{$T} = 0;
-				while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
-					$targetdbh->pg_putcopydata($buffer);
+				## Figure out which rows exists on the target
+				my $pre = '';
+				$x=0;
+				for my $q (@{$g->{qpkey}}) {
+					$pre .= sprintf q{%s||'|'||},
+						$g->{binarypkey}[$x++] ? "ENCODE($q,'base64')" : $q;
 				}
-				$targetdbh->pg_putcopyend();
-				$dmlcount{I}{target}{$S}{$T} = @$info;
-				$self->glog(qq{End COPY to $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
+				$pre =~ s/.......$/ AS id/;
+				## Creates a unique single scalar for this pkey
+				## Example: id||'|'||"space bar"||'|'||cdate AS id
+				$SQL = qq{SELECT $pre FROM $S.$T WHERE $pkcols IN ($pkvals)};
+				$sth = $targetdbh->prepare($SQL);
+				$count = $sth->execute();
+				my $tgtrows = $sth->fetchall_hashref('id');
 
-				$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
+				## Figure out which rows exist on the source
+				$sth = $sourcedbh->prepare($SQL);
+				$count = $sth->execute();
+				my $srcrows = $sth->fetchall_hashref('id');
+
+				## Build the right-hand side of the WHERE clauses, escaping values as needed
+				my $pkvalscopy = '';
+				my $pkvalsdelete = '';
+				my $pkvalsupdate = '';
+				$dmlcount{I}{target}{$S}{$T} = $dmlcount{D}{target}{$S}{$T} = $dmlcount{U}{target}{$S}{$T} = 0;
+				for my $row (@$info) {
+					my $inner = join ',' => map { s/\'/''/go; qq{'$_'}; } @$row;
+					my $value = join '|' => @$row;
+
+					## If no longer on the source, DELETE from the target
+					if (!exists $srcrows->{$value}) {
+						$pkvalsdelete .= $g->{pkcols} > 1 ? "($inner)," : "$inner,";
+						$dmlcount{D}{target}{$S}{$T}++;
+						next;
+					}
+
+					## If not on the target, bulk COPY it over there
+					if (!exists $tgtrows->{$value}) {
+						$pkvalscopy .= $g->{pkcols} > 1 ? "($inner)," : "$inner,";
+						$dmlcount{I}{target}{$S}{$T}++;
+						next;
+					}
+
+					## If neither, UPDATE on the target one by one
+					$pkvalsupdate .= $g->{pkcols} > 1 ? "($inner)," : "$inner,";
+					$dmlcount{U}{target}{$S}{$T}++;
+				}
+				chop $pkvalscopy;
+				chop $pkvalsdelete;
+				chop $pkvalsupdate;
+
+				## Delete from the target as needed
+				if ($dmlcount{D}{target}{$S}{$T}) {
+					$SQL = "DELETE FROM $S.$T WHERE $pkcols IN ($pkvalsdelete)";
+					$count = $targetdbh->do($SQL);
+					$dmlcount{alldeletes}{target} += $count;
+				}
+
+				## COPY over ones that are not already on the target
+				if ($dmlcount{I}{target}{$S}{$T}) {
+					my $srccmd = "COPY (SELECT * FROM $S.$T WHERE $pkcols IN ($pkvalscopy)) TO STDOUT";
+					my $tgtcmd = "COPY $S.$T FROM STDIN";
+					$sourcedbh->do($srccmd);
+					$targetdbh->do($tgtcmd);
+					my $buffer = '';
+					while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
+						$targetdbh->pg_putcopydata($buffer);
+					}
+					$targetdbh->pg_putcopyend();
+					$self->glog(qq{End COPY to $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
+					$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
+				}
+
+				## Update any that are on both source and target
+				if ($dmlcount{U}{target}{$S}{$T}) {
+
+					## If nothing but primary key, no need to update anything
+					next if ! length $g->{safecolumnlist};
+
+					## Build the UPDATE statement
+					$SQL = "UPDATE $S.$T SET ";
+					$SQL .= join ',' => map { "$_=?" } @{$g->{safecols}};
+
+					$x=1;
+					my $pkeycols = '';
+					for my $qpk (@{$g->{qpkey}}) {
+						$SQL .= sprintf " %s %s = ?",
+							$x>1 ? 'AND' : 'WHERE',
+								$g->{binarypkey}[$x-1] ? qq{ENCODE($qpk,'base64')} : $qpk;
+						$pkeycols .= sprintf ",%s",
+							$g->{binarypkey}[$x-1] ? qq{ENCODE($qpk,'base64')} : $qpk;
+						$x++;
+					}
+					$sth{target}{$g}{updaterow} = $targetdbh->prepare($SQL);
+					if (exists $g->{binarycols}) {
+						for (@{$g->{binarycols}}) {
+							$sth{target}{$g}{updaterow}->bind_param($_, undef, {pg_type => PG_BYTEA});
+						}
+					}
+
+					## Grab all the info from the source
+					my $cols = join ',' => @{$g->{safecols}};
+					$SQL = "SELECT $cols $pkeycols FROM $S.$T WHERE $pkcols IN ($pkvalsupdate)";
+					$sth = $sourcedbh->prepare($SQL);
+					$sth->execute();
+					for my $row (@{$sth->fetchall_arrayref()}) {
+						## The array is all non-PK cols, then all PK cols
+						$count = $sth{target}{$g}{updaterow}->execute(@$row);
+						$dmlcount{allupdates}{target} += $count;
+					}
+				}
 
 				if ($hasindex) {
 					$SQL = "UPDATE pg_class SET relhasindex = 't' WHERE oid = $toid";
@@ -4290,7 +4379,7 @@ sub start_kid {
 
 			## TODO: Exception catching?
 
-			$self->glog("Pushdelta counts: deletes=$dmlcount{alldeletes}{target} inserts=$dmlcount{allinserts}{target}");
+			$self->glog("Pushdelta counts: deletes=$dmlcount{alldeletes}{target} inserts=$dmlcount{allinserts}{target} updates=$dmlcount{allupdates}{target}");
 
 		} ## end pushdelta
 
