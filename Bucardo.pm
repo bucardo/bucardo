@@ -4648,8 +4648,10 @@ sub start_kid {
 						redo LOOP;
 					}
 					chop $list;
-					$self->glog("Deleting from source: ($list)");
-					$dmlcount{D}{source}{$S}{$T} += $sourcedbh->do("$SQL ($list)");
+					if (length $list) {
+						$self->glog("Deleting from source: ($list)");
+						$dmlcount{D}{source}{$S}{$T} += $sourcedbh->do("$SQL ($list)");
+					}
 				}
 				if ($dmlcount{D}{source}{$S}{$T}) {
 					$self->glog(qq{Rows deleted from source "$S.$T": $dmlcount{D}{source}{$S}{$T}/$count});
@@ -4671,8 +4673,10 @@ sub start_kid {
 						redo LOOP;
 					}
 					chop $list;
-					$self->glog("Deleting from target: $SQL ($list)");
-					$dmlcount{D}{target}{$S}{$T} += $targetdbh->do("$SQL ($list)");
+					if (length $list) {
+						$self->glog("Deleting from target: $SQL ($list)");
+						$dmlcount{D}{target}{$S}{$T} += $targetdbh->do("$SQL ($list)");
+					}
 				}
 				if ($dmlcount{D}{target}{$S}{$T}) {
 					$self->glog(qq{Rows deleted from target "$S.$T": $dmlcount{D}{target}{$S}{$T}/$count});
