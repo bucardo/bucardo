@@ -2,6 +2,8 @@
 
 3.2.2
 
+  - Allow for dead columns when checking attnums. [GSM]
+
   - Rewrite the pushdelta sync method to be more efficient. [GSM]
 
   - Support multi-column primary keys. Thanks to Backcountry.com. [GSM]
