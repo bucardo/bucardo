@@ -1929,6 +1929,11 @@ sub start_mcp {
 			$sth = $sth{checkcols};
 			$sth->execute($g->{oid});
 			my $colinfo = $sth->fetchall_hashref('attname');
+			## Allow for 'dead' columns in the attnum ordering
+			$x=1;
+			for (sort { $colinfo->{$a}{attnum} <=> $colinfo->{$b}{attnum} } keys %$colinfo) {
+				$colinfo->{$_}{realattnum} = $x++;
+			}
 			$g->{columnhash} = $colinfo;
 			my $x = 1;
 			$g->{cols} = [];
@@ -1981,6 +1986,10 @@ sub start_mcp {
 				$sth = $dbh->prepare($SQL{checkcols});
 				$sth->execute($oid);
 				my $targetcolinfo = $sth->fetchall_hashref('attname');
+				$x=1;
+				for (sort { $colinfo->{$a}{attnum} <=> $colinfo->{$b}{attnum} } keys %$targetcolinfo) {
+					$targetcolinfo->{$_}{realattnum} = $x++;
+				}
 				my $t = "$g->{schemaname}.$g->{tablename}";
 
 				my $column_problems = 0;
@@ -2050,9 +2059,9 @@ sub start_mcp {
 					}
 
 					## Fatal on strict: order of columns does not match up
-					if ($scol->{attnum} != $fcol->{attnum}) {
+					if ($scol->{realattnum} != $fcol->{realattnum}) {
 						$column_problems ||= 1;
-						my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" at position $scol->{attnum}, but target database "$db" has it in position "$fcol->{attnum}"};
+						my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" at position $scol->{realattnum} ($scol->{attnum}), but target database "$db" has it in position $fcol->{realattnum} ($fcol->{attnum})};
 						$self->glog("Warning: $msg");
 						warn $msg;
 					}
