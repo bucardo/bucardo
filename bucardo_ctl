@@ -307,8 +307,8 @@ sub ping {
 
 	my $arg = shift || {};
 
-	my $timeout = exists $arg->{timeout} ? $arg->{timeout} : 15;
-	my $quiet = exists $arg->{quiet} ? $arg->{quiet} : $QUIET;
+	my $timeout = $arg->{timeout} || $ARGV[0] || 15;
+	my $quiet = $arg->{quiet} || $ARGV[1] || 0;
 
 	if (defined $nouns[0] and $nouns[0] =~ /^\d+$/) {
 		$timeout = $nouns[0];
