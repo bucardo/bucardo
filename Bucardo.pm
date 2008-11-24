@@ -9,7 +9,7 @@ use 5.008003;
 use strict;
 use warnings;
 
-our $VERSION = '3.2.2';
+our $VERSION = '3.2.3';
 
 ## Begin Moose classes
 {
@@ -1250,8 +1250,8 @@ sub start_mcp {
 			my ($name,$pid,$db) = @$_;
 			$self->glog(qq{Got notice "$name" from $pid on $db});
 			if ($name eq 'bucardo_mcp_fullstop') {
-				$self->glog("Received full stop notice, leaving");
-				$self->cleanup_mcp("Received stop NOTICE");
+				$self->glog("Received full stop notice from PID $pid, leaving");
+				$self->cleanup_mcp("Received stop NOTICE from PID $pid");
 				exit;
 			}
 
@@ -1298,7 +1298,7 @@ sub start_mcp {
 				$maindbh->commit();
 			}
 			elsif ($name eq 'bucardo_mcp_ping') {
-				$self->glog("Got a ping, issuing pong");
+				$self->glog("Got a ping from PID $pid, issuing pong");
 				$maindbh->do('NOTIFY bucardo_mcp_pong') or warn 'NOTIFY failed';
 				$maindbh->commit();
 			}
@@ -1969,7 +1969,26 @@ sub start_mcp {
 
 			## Verify tables and columns on remote databases
 			## XXX: Fork to speed this up?
+			my $maindbh = $self->{masterdbh};
 			for my $db (sort keys %targetdbh) {
+
+				## Respond to ping here and now for very impatient watchdog programs
+				my $notice;
+				$maindbh->commit();
+				while ($notice = $maindbh->func('pg_notifies')) {
+					my ($name, $pid) = @$notice;
+					if ($name eq 'bucardo_mcp_fullstop') {
+						$self->glog("Received full stop notice from PID $pid, leaving");
+						$self->cleanup_mcp("Received stop NOTICE from PID $pid");
+						exit;
+					}
+					if ($name eq 'bucardo_mcp_ping') {
+						$self->glog("Got a ping from PID $pid, issuing pong");
+						$maindbh->do('NOTIFY bucardo_mcp_pong') or warn 'NOTIFY failed';
+						$maindbh->commit();
+					}
+				}
+
 				my $dbh = $pdbh->{$db};
 				$sth = $dbh->prepare($SQL{checktable});
 				$count = $sth->execute($g->{schemaname},$g->{tablename});
@@ -5381,7 +5400,7 @@ Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This documents describes Bucardo version 3.2.2
+This documents describes Bucardo version 3.2.3
 
 =head1 SYNOPSIS
 
