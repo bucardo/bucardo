@@ -620,7 +620,7 @@ sub status_detail {
 
 	for my $sync (sort @nouns) {
 		$DEBUG and warn "Verify sync: $sync\n";
-		if (!exists $syncs->{lc $sync}) {
+		if (!exists $syncs->{$sync}) {
 			die "No such sync: $sync\n";
 		}
 	}
