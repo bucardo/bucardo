@@ -778,7 +778,7 @@ if ($old
     and $old->{tablename} eq $new->{tablename}
     and (defined $new->{pkey} and $new->{pkey} eq $old->{pkey})
     ) {
-	#return;
+    #return;
 }
 
 (my $safedbname = $dbname) =~ s/'/''/go;
@@ -894,7 +894,7 @@ if ((!defined $new->{pkey} or !length $new->{pkey}) or ($old and $new->{pkey} eq
 ## They've attempted a manual override of pkey. Make sure it is valid.
 for (@$cons) {
     (my $name = $_->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{attname} . ($2 ? '|' : '')/ge;
-	 next unless $name eq $new->{pkey};
+    next unless $name eq $new->{pkey};
     ($new->{qpkey} = $uniq->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{qattname} . ($2 ? '|' : '')/ge;
     ($new->{pkeytype} = $uniq->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{typname} . ($2 ? '|' : '')/ge;
     return 'MODIFY';
@@ -970,7 +970,7 @@ $bc$
     $rv = spi_exec_query($SQL);
     if (!$rv->{processed}) {
         elog(WARNING, "Herd has no members: $source");
-		return qq{Herd "$source" for sync "$syncname" has no members: cannot validate};
+        return qq{Herd "$source" for sync "$syncname" has no members: cannot validate};
     }
 
     ## All the same database, so we can extract it outside of the loop
@@ -1150,7 +1150,7 @@ $bc$
         my $dbh;
         if (exists $cache->{dbh}{$db}) {
             $dbh = $cache->{dbh}{$db};
-			elog(DEBUG, 'Connected to cached version');
+            elog(DEBUG, 'Connected to cached version');
         }
         else {
             $cache->{dbh}{$db} = $dbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
@@ -1242,7 +1242,7 @@ $bc$
         }
         else {
             $SQL = qq{
-				SELECT max(t0), max(t1), max(t2)
+                SELECT max(t0), max(t1), max(t2)
                 FROM (
                 SELECT
                   CASE WHEN t.tgname = ? THEN 1 ELSE 0 END AS t0,
@@ -1255,15 +1255,15 @@ $bc$
                 AND    t.tgname  IN (?,?,?)
               ) foo
             };
-			elog(DEBUG, "Preparing to check triggers: $SQL");
+            elog(DEBUG, "Preparing to check triggers: $SQL");
             $sth = $dbh->prepare($SQL);
-			$sth->execute($trigger0,$trigger1,$trigger2,$schema,$table,$trigger0,$trigger1,$trigger2);
-			my $x = 0;
-			my $row = $sth->fetchall_arrayref()->[0];
-			for my $val (@$row) {
-				$found{"trigger$x"} = $val;
-				$x++;
-			}
+            $sth->execute($trigger0,$trigger1,$trigger2,$schema,$table,$trigger0,$trigger1,$trigger2);
+            my $x = 0;
+            my $row = $sth->fetchall_arrayref()->[0];
+            for my $val (@$row) {
+                $found{"trigger$x"} = $val;
+                $x++;
+            }
         }
 
         ## (if bc_schema exists) Do these supporting functions exist?
@@ -1282,7 +1282,7 @@ $bc$
         }
         else {
             $SQL = qq{
-				SELECT max(f0), max(f1), max(f2), max(f3)
+                SELECT max(f0), max(f1), max(f2), max(f3)
                 FROM (
                 SELECT
                   CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f0,
@@ -1295,15 +1295,15 @@ $bc$
                 AND    p.proname IN (?,?,?,?)
             ) foo
             };
-			elog(DEBUG, "Preparing to check functions: $SQL");
+            elog(DEBUG, "Preparing to check functions: $SQL");
             $sth = $dbh->prepare($SQL);
             $sth->execute($func0,$func1,$func2,$func3,'bucardo',$func0,$func1,$func2,$func3);
-			my $x = 0;
-			my $row = $sth->fetchall_arrayref()->[0];
-			for my $val (@$row) {
-				$found{"func$x"} = $val;
-				$x++;
-			}
+            my $x = 0;
+            my $row = $sth->fetchall_arrayref()->[0];
+            for my $val (@$row) {
+                $found{"func$x"} = $val;
+                $x++;
+            }
         }
 
         ## (if bc_schema exists) Does this table exist?
@@ -1313,7 +1313,7 @@ $bc$
         }
         else {
             $SQL = qq{
-				SELECT max(t1), max(t2), max(t3)
+                SELECT max(t1), max(t2), max(t3)
                 FROM (
                 SELECT
                   CASE WHEN c.relname = 'bucardo_delta' THEN 1 ELSE 0 END AS t1,
@@ -1326,13 +1326,13 @@ $bc$
                 AND    c.relname IN ('bucardo_delta','bucardo_track','bucardo_delta_targets')
                 ) foo
             };
-			elog(DEBUG, "Preparing to check tables: $SQL");
+            elog(DEBUG, "Preparing to check tables: $SQL");
             $sth = $dbh->prepare($SQL);
             $sth->execute();
-			my $row = $sth->fetchall_arrayref()->[0];
-			$found{'bucardo_delta'} = $row->[0];
-			$found{'bucardo_track'} = $row->[1];
-			$found{'bucardo_delta_targets'} = $row->[2];
+            my $row = $sth->fetchall_arrayref()->[0];
+            $found{'bucardo_delta'} = $row->[0];
+            $found{'bucardo_track'} = $row->[1];
+            $found{'bucardo_delta_targets'} = $row->[2];
         }
 
         ## (if bucardo_delta exists) Do these indexes exist?
@@ -1381,7 +1381,7 @@ $bc$
         }
         else {
             $SQL = qq{
-				SELECT max(i1), max(i2), max(i3), max(i4), max(i5)
+                SELECT max(i1), max(i2), max(i3), max(i4), max(i5)
                 FROM (
                 SELECT
                   CASE WHEN c.relname = ? THEN 1 ELSE 0 END AS i1,
@@ -1396,15 +1396,15 @@ $bc$
                 AND    c.relname IN (?,?,?,?,?)
                 ) foo
             };
-			elog(DEBUG, "Preparing to check indexes: $SQL");
+            elog(DEBUG, "Preparing to check indexes: $SQL");
             $sth = $dbh->prepare($SQL);
             $sth->execute($index1,$index2,$index3,$index4,$index5,'bucardo',$index1,$index2,$index3,$index4,$index5);
-			my $x = 1;
-			my $row = $sth->fetchall_arrayref()->[0];
-			for my $val (@$row) {
-				$found{"index$x"} = $val;
-				$x++;
-			}
+            my $x = 1;
+            my $row = $sth->fetchall_arrayref()->[0];
+            for my $val (@$row) {
+                $found{"index$x"} = $val;
+                $x++;
+            }
         }
 
         ## Goat-level ping overrides the sync-level ping - source only
@@ -1415,12 +1415,12 @@ $bc$
 
         ## If this is not set as ping, remove the trigger - the only one safe to remove
         if (!$ping and $found{trigger0}) {
-			run_sql(qq{DROP TRIGGER "$trigger0" ON $safeschema.$safetable}, $dbh);
+            run_sql(qq{DROP TRIGGER "$trigger0" ON $safeschema.$safetable}, $dbh);
         }
 
         ## Schema is needed for both ping and delta
         if (($ping or $delta) and !$found{bc_schema}) {
-			run_sql('CREATE SCHEMA bucardo', $dbh);
+            run_sql('CREATE SCHEMA bucardo', $dbh);
         }
 
         ## Ping needs a special function and trigger
@@ -1530,32 +1530,32 @@ $bc$
                 };
                 run_sql($SQL,$dbh);
             }
-			if ($force) {
-				if ($found{index1}) {
-					elog(DEBUG, qq{Dropping index "$safeindex1"});
-					$dbh->do(qq{DROP INDEX bucardo."$safeindex1"});
-					$found{index1} = 0;
-				}
-				if ($found{index2}) {
-					elog(DEBUG, qq{Dropping index "$index2"});
-					$dbh->do(qq{DROP INDEX bucardo."$index2"});
-					$found{index2} = 0;
-				}
-			}
+            if ($force) {
+                if ($found{index1}) {
+                    elog(DEBUG, qq{Dropping index "$safeindex1"});
+                    $dbh->do(qq{DROP INDEX bucardo."$safeindex1"});
+                    $found{index1} = 0;
+                }
+                if ($found{index2}) {
+                    elog(DEBUG, qq{Dropping index "$index2"});
+                    $dbh->do(qq{DROP INDEX bucardo."$index2"});
+                    $found{index2} = 0;
+                }
+            }
             if (! $found{index1}) {
                 $dbh->do(qq{CREATE INDEX "$safeindex1" ON bucardo.bucardo_delta(txntime) WHERE tablename = $oid});
             }
-			for (2..$numpkeys) {
-				my $colname = "rowid$_";
-				$SQL = "SELECT count(*) FROM pg_catalog.pg_attribute a, pg_class c, pg_namespace n ".
-					"WHERE c.relnamespace = n.oid AND n.nspname = 'bucardo' AND a.attrelid = c.oid ".
-						"AND c.relname = 'bucardo_delta' AND a.attname = '$colname'";
-				$count = $dbh->selectall_arrayref($SQL)->[0][0];
-				if ($count != 1) {
-					$SQL = "ALTER TABLE bucardo.bucardo_delta ADD $colname TEXT NULL";
-					$dbh->do($SQL);
-				}
-			}
+            for (2..$numpkeys) {
+                my $colname = "rowid$_";
+                $SQL = "SELECT count(*) FROM pg_catalog.pg_attribute a, pg_class c, pg_namespace n ".
+                    "WHERE c.relnamespace = n.oid AND n.nspname = 'bucardo' AND a.attrelid = c.oid ".
+                        "AND c.relname = 'bucardo_delta' AND a.attname = '$colname'";
+                $count = $dbh->selectall_arrayref($SQL)->[0][0];
+                if ($count != 1) {
+                    $SQL = "ALTER TABLE bucardo.bucardo_delta ADD $colname TEXT NULL";
+                    $dbh->do($SQL);
+                }
+            }
             if (! $found{index2}) {
                 my @pkeytypes = split (/\|/ => $pkeytype);
                 if (1 == @pkeytypes) {
@@ -1564,10 +1564,10 @@ $bc$
                     $dbh->do(qq{CREATE INDEX "$index2" ON bucardo.bucardo_delta((rowid::$safepkeytype)) WHERE tablename = $oid});
                 }
                 else {
-					my $x = 0;
+                    my $x = 0;
                     my $multicol = join ',' => map { s{timestamp|date|bytea}{text}; $x++; 
-						sprintf "(rowid%s::$_)", $x<2 ? '' : $x; } split (/\|/ => $pkeytype);
-					elog(DEBUG, "Creating index on $multicol");
+                        sprintf "(rowid%s::$_)", $x<2 ? '' : $x; } split (/\|/ => $pkeytype);
+                    elog(DEBUG, "Creating index on $multicol");
                     $dbh->do(qq{CREATE INDEX "$index2" ON bucardo.bucardo_delta($multicol) WHERE tablename = $oid});
                 }
             }
