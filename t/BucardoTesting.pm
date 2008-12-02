@@ -14,6 +14,8 @@ use Data::Dumper;
 
 use vars qw/$SQL $sth $count $COM %dbh/;
 
+my $DEBUG = 0; ## XXX
+
 use base 'Exporter';
 our @EXPORT = qw/%tabletype %val compare_tables bc_deeply wait_for_notice $location is like pass isa_ok ok is_deeply/;
 
@@ -52,8 +54,6 @@ our %tabletype =
 	 );
 
 our @tables2empty = (qw/droptest/);
-
-my $DEBUG = 0; ## XXX
 
 my %debug = (
 			 recreatedb     => 0,
@@ -894,7 +894,7 @@ sub ctl {
 	$dbhost .= "/bucardo_test_database_A/socket";
 	$connopts .= " --dbhost=$dbhost";
 
-	$DEBUG >=3 and warn "Connection options: $connopts\n";
+	$DEBUG >=3 and warn "Connection options: $connopts Args: $args\n";
 	eval {
 		$info = qx{$ctl $connopts $args 2>&1};
 	};

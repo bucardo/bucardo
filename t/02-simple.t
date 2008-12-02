@@ -16,7 +16,7 @@ $location = 'pushdelta';
 
 use vars qw/$SQL $sth $t $i $result $count %sql %val %pkey/;
 
-unlink "tmp/log.bucardo";
+unlink "log.bucardo";
 
 pass("*** Beginning 'simple' tests");
 
