@@ -2,7 +2,7 @@
 
 ## Web-based report on Bucardo activity
 ##
-## Copyright 2007 Greg Sabino Mullane <greg@endpoint.com>
+## Copyright 2007-2008 Greg Sabino Mullane <greg@endpoint.com>
 
 use strict;
 use warnings;
@@ -261,7 +261,7 @@ if (@{$q{syncinfo}}) {
 		next if $db{$host}{SKIP};
 		if (1==@{$q{syncinfo}} and $q{syncinfo}->[0] eq 'all') {
 			$dbh = connect_database($host);
-			$SQL = "SELECT name FROM bucardo.sync ORDER BY 1 WHERE status = 'active'";
+			$SQL = "SELECT name FROM bucardo.sync ORDER BY name WHERE status = 'active'";
 			for my $sync (@{$dbh->selectall_arrayref($SQL)}) {
 				&showsyncinfo($host,$sync->[0]); $found++;
 			}
@@ -319,7 +319,6 @@ sub showhost {
 	&Header("Bucardo stats for $d->{DATABASE}");
 
 	my $maxdaysback = (exists $q{daysback} and $q{daysback} =~ /^\d$/) ? $q{daysback} : $MAXDAYSBACK;
-
 
 	## Connect to the main database to check on the health
 	$info{dcount} = '?'; $info{tcount} = '?';
@@ -433,7 +432,7 @@ sub showhost {
 				}
 			}
 		} ## end check syncs
-		
+
 		last WAYBACK if $done;
 
 		## Grab aborted runs from this time period
@@ -591,17 +590,19 @@ sub showhost {
 			$row{$order}{sync} = $s;
 			$row{$order}{target} = $t;
 			$row{$order}{html} = qq{<tr class="$class">\n};
+			$row{$order}{isactive} = $sync->{$s}{status} eq 'active' ? 1 : 0;
+			my $inactive = $sync->{$s}{status} eq 'inactive' ? ' (inactive)' : '';
 			if (! $d->{SINGLE}) {
 				$row{$order}{html} .= qq{
 <th>$sync->{$s}{synctype}</th>
-<th align="center"><a href="$HERE?host=$host;sync=$s">$s</a></th>
+<th align="center"><a href="$HERE?host=$host;sync=$s">$s</a>$inactive</th>
 <th><a href="$HERE?host=$host;db=$t">$t</a></th>
 };
 			}
 			else {
 				$row{$order}{html} .= qq{
 <th>$sync->{$s}{synctype}</th>
-<th><a href="$HERE?host=$host;sync=$s">$s</a></th>
+<th><a href="$HERE?host=$host;sync=$s">$s</a>$inactive</th>
 };
 			}
 
@@ -679,11 +680,13 @@ sub showhost {
 
 		## sync name, target database
 		if (2 == $OCOL) {
-			return ($row{$a}{sync} cmp $row{$b}{sync}
+			return ($row{$b}{isactive} <=> $row{$a}{isactive}
+					or $row{$a}{sync} cmp $row{$b}{sync}
 					or $row{$a}{target} cmp $row{$b}{target})
 		}
 		if (-2 == $OCOL) {
-			return ($row{$b}{sync} cmp $row{$a}{sync}
+			return ($row{$b}{isactive} <=> $row{$a}{isactive}
+					or $row{$b}{sync} cmp $row{$a}{sync}
 					or $row{$b}{target} cmp $row{$a}{target})
 		}
 
@@ -1269,12 +1272,12 @@ sub showsyncinfo {
 			FROM bucardo.herdmap h, bucardo.goat g
 			WHERE g.id = h.goat
 			ORDER BY priority DESC, tablename ASC
-		
+
 		};
 		$sth = $dbh->prepare_cached($SQL);
 		$sth->execute();
 		$info{$host}{herds} = $sth->fetchall_arrayref({});
-	}	
+	}
 	## Get the goats for this herd:
 	my @goats = grep { $_->{herd} eq $info->{source} } @{$info{$host}{herds}};
 
@@ -1558,30 +1561,20 @@ __DATA__
 ## SINGLE: Optional, set to target database if that is the only one
 ## SKIP: Used for row counts, do not list anywhere
 
-DATABASE: RootDB
-DSN: dbi:Pg:database=bucardo;port=5432;host=rootdb.backcountry.com
+DATABASE: SampleDB1
+DSN: dbi:Pg:database=bucardo;port=5432;host=sample1.example.com
 DBUSER: bucardo_readonly
-DBPASS: icdeadtuples
-SINGLE: livedb
+DBPASS: foobar
+SINGLE: otherdb
 DAYSBACK: 2
 DAYSBACKSYNC: 3
 
-DATABASE: LiveDB
-DSN: dbi:Pg:database=bucardo;port=5432;host=livedb.backcountry.com
+DATABASE: OtherDB
+DSN: dbi:Pg:database=bucardo;port=5432;host=sample2.example.com
 DBUSER: bucardo_readonly
-DBPASS: icdeadtuples
+DBPASS: foobar
 DAYSBACK: 5
 DAYSBACKSYNC: 30
 DAYSBACKDB: 30
 
-DATABASE: RootDB_real
-DSN: dbi:Pg:database=bcs;port=5432;host=rootdb.backcountry.com
-DBUSER: bucardo_readonly
-DBPASS: icdeadtuples
-SKIP: Yes
 
-DATABASE: LiveDB_real
-DSN: dbi:Pg:database=bcs;port=5432;host=livedb.backcountry.com
-DBUSER: bucardo_readonly
-DBPASS: icdeadtuples
-SKIP: Yes
