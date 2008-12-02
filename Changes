@@ -1,12 +1,12 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-3.2.2
+3.2.4
 
-  - Allow for dead columns when checking attnums. [GSM]
+  - Support multi-column primary keys. Thanks to Backcountry.com. [GSM]
 
   - Rewrite the pushdelta sync method to be more efficient. [GSM]
 
-  - Support multi-column primary keys. Thanks to Backcountry.com. [GSM]
+  - Allow for dead columns when checking attnums. [GSM]
 
   - Add 'bucardo_ctl upgrade' to make intra-version upgrades easy 
     and automatic. [Selena Deckelmann and GSM]
@@ -19,6 +19,11 @@
 
   - Add validate_all_syncs() function, and allow an argument to both that 
     and validate_sync() to force recreation of supporting objects. [GSM]
+
+  - Have master_q use a trigger, not multiple rules. Remove the need 
+    for a separate create_child_q() function. [GSM]
+
+  - MCP listens for pings during table validations. [GSM]
 
 3.1.0 April 6, 2008
 
