@@ -438,6 +438,7 @@ CREATE TRIGGER bucardo_q
   FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_q();
 
 CREATE TABLE freezer.master_q AS SELECT * FROM q LIMIT 0;
+GRANT SELECT ON freezer.master_q TO PUBLIC;
 
 CREATE FUNCTION bucardo_purge_q_table(interval)
 RETURNS BIGINT
@@ -522,6 +523,8 @@ BEGIN
     WHERE n.nspname = 'freezer' AND c.relname = tablename;
     IF NOT FOUND THEN
       myst = 'CREATE TABLE freezer.' || tablename ||'() INHERITS (freezer.master_q)';
+      EXECUTE myst;
+      myst = 'GRANT SELECT ON freezer.' || tablename ||' TO public';
       EXECUTE myst;
       needindex = TRUE;
     END IF;
@@ -1942,4 +1945,3 @@ CREATE TABLE upgrade_log (
 --
 -- END OF THE SCHEMA
 --
-
