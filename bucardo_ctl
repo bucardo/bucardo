@@ -17,7 +17,7 @@ use Data::Dumper;
 
 return 1 if $ENV{BUCARDO_CTL_TEST};
 
-our $VERSION = '3.2.3';
+our $VERSION = '3.2.4';
 
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
@@ -130,7 +130,7 @@ my $nouns = join ' ' => @nouns;
 my $DSN = "dbi:Pg:dbname=$bcargs->{dbname}";
 $bcargs->{dbhost} and length $bcargs->{dbhost} and $DSN .= ";host=$bcargs->{dbhost}";
 $bcargs->{dbport} and length $bcargs->{dbport} and $DSN .= ";port=$bcargs->{dbport}";
-$dbh = DBI->connect($DSN, $bcargs->{dbuser}, $bcargs->{dbpass}, {AutoCommit=>0,RaiseError=>1});
+$dbh = DBI->connect($DSN, $bcargs->{dbuser}, $bcargs->{dbpass}, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
 $dbh->do("SET search_path = bucardo");
 $dbh->commit();
 
@@ -1166,13 +1166,17 @@ sub schema_exists {
 
 sub relation_exists {
 
+	## Checks if a relation exists. Returns the oid or 0
 	my ($schema,$name) = @_;
-	my $SQL = 'SELECT 1 FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n '.
+	my $SQL = 'SELECT c.oid FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n '.
 		'WHERE n.oid=c.relnamespace AND n.nspname = ? AND c.relname = ?';
 	my $sth = $dbh->prepare_cached($SQL);
 	my $count = $sth->execute($schema,$name);
+	if ($count == 1) {
+		return $sth->fetchall_arrayref()->[0][0];
+	}
 	$sth->finish();
-	return $count < 1 ? 0 : 1;
+	return 0;
 
 } ## end of relation_exists
 
@@ -1200,6 +1204,17 @@ sub column_exists {
 	return $count < 1 ? 0 : 1;
 
 } ## end of column_exists
+
+sub trigger_exists {
+
+	my $name = shift;
+	my $SQL = 'SELECT 1 FROM pg_catalog.pg_trigger WHERE tgname = ?';
+	my $sth = $dbh->prepare_cached($SQL);
+	my $count = $sth->execute($name);
+	$sth->finish();
+	return $count < 1 ? 0 : 1;
+
+} ## end of trigger_exists
 
 sub column_default {
 
@@ -1289,10 +1304,11 @@ sub function_exists {
 
 } ## end of function_exists
 
+
 sub upgrade {
 
 	## Make upgrades to an existing schema to match the current version
-	## This is generally not undoable, so we throw plenty of warnings
+	## This is generally not reversible, so we throw plenty of warnings
 
 	my $self = shift;
 
@@ -1349,6 +1365,37 @@ sub upgrade {
 		['goat', 'goat_pkeytype_check'],
 	);
 
+	my @old_functions = (
+		['create_child_q', 'text'],
+	);
+
+	my @drop_all_rules = (
+		['freezer','master_q'],
+	);
+
+	## Drop all existing rules from this table:
+	for my $row (@drop_all_rules) {
+		my ($schema,$table) = @$row;
+		print "Checking $schema and $table\n";
+		my $oid = relation_exists($schema,$table);
+		if (!$oid) {
+			warn "Could not find table $schema.$table to check!\n";
+			next;
+		}
+		$SQL = "SELECT rulename FROM pg_rewrite WHERE ev_class = ? ORDER BY rulename";
+		$sth = $dbh->prepare($SQL);
+		$count = $sth->execute($oid);
+		if ($count < 1) {
+			$sth->finish();
+			next;
+		}
+		for my $rule (map { $_->[0] } @{$sth->fetchall_arrayref()}) {
+			upgrade_and_log(qq{DROP RULE "$rule" ON $schema.$table});
+			clog "Dropped rule $rule on table $schema.$table";
+			$changes++;
+		}
+	}
+
 	for my $con (@old_constraints) {
 		my ($table, $constraint) = @$con;
 		if (!constraint_exists($table, $constraint)) {
@@ -1386,7 +1433,7 @@ sub upgrade {
 
 	for my $table (@new_tables) {
 		if (relation_exists($schema, $table)) {
-			clog "Table already exists: $table\n";
+			clog "  Table already exists: $table\n";
 		}
 		else {
 			my ($seqlist, $tabledef) = table_definition($table);
@@ -1484,35 +1531,61 @@ sub upgrade {
 		}
 	}
 
-	## Now we check all the functions within bucardo.schema
+	for my $row (@old_functions) {
+		my ($name, $args) = @$row;
+		if (function_exists('bucardo', $name, $args)) {
+			clog "Dropping deprecated function $name($args)";
+			upgrade_and_log(qq{DROP FUNCTION bucardo."$name"($args)});
+			$changes++;
+		}
+		else {
+			clog "  Deprecated function $name($args) does not exist";
+		}
+	}
+
+	## Now we check all the functions and triggers within bucardo.schema
 	$file = 'bucardo.schema';
 	open $fh, '<', $file or die qq{Could not open "$file": $!\n};
-	my @flist;
-	my ($name,$args,$body) = ('','','');
+	my (@flist, @tlist);
+	my ($fname,$args,$fbody) = ('','','');
+	my ($tname,$tbody) = ('','');
 	while (<$fh>) {
-		if ($body) {
+		if ($fbody) {
 			if (/^(\$bc\$;)/) {
-				$body .= $1;
-				push @flist, [$name, $args, $body];
-				$body = $name = $args = '';
+				$fbody .= $1;
+				push @flist, [$fname, $args, $fbody];
+				$fbody = $fname = $args = '';
 			}
 			else {
-				$body .= $_;
+				$fbody .= $_;
+			}
+			next;
+		}
+		if ($tbody) {
+			$tbody .= $_;
+			if (/;/) {
+				push @tlist, [$tname, $tbody];
+				$tbody = $tname = '';
 			}
 			next;
 		}
 		if (/^CREATE (?:OR REPLACE )?FUNCTION\s+(\S+)/) {
-			$name = $1;
-			$body .= $_;
-			$name =~ s/bucardo\.//;
-			$name =~ s/\((.*)\)// or die "No args found for function: $_\n";
+			$fname = $1;
+			$fbody .= $_;
+			$fname =~ s/bucardo\.//;
+			$fname =~ s/\((.*)\)// or die "No args found for function: $_\n";
 			$args = $1;
 			$args =~ s/,(\S)/, $1/g;
+			next;
+		}
+		if (/^CREATE TRIGGER (\S+)/) {
+			$tname = $1;
+			$tbody .= $_;
+			next;
 		}
 	}
 	close $fh or die qq{Could not close file "$file": $!\n};
 
-	## Now we check all the functions within bucardo.schema
 	$SQL = "SELECT md5(?)";
 	my $md5sth = $dbh->prepare($SQL);
 	for my $row (@flist) {
@@ -1536,8 +1609,40 @@ sub upgrade {
 		$body =~ s/^CREATE FUNCTION/CREATE OR REPLACE FUNCTION/;
 		$body =~ s/FUNCTION /FUNCTION $schema./;
 		(my $short = $body) =~ s/^(.+?)\n.*/$1/s;
-		upgrade_and_log($body,$short);
+		$dbh->do("SAVEPOINT bucardo_upgrade");
+		eval { upgrade_and_log($body,$short); };
+		if ($@) {
+			$dbh->do("ROLLBACK TO bucardo_upgrade");
+			(my $dropbody = $short) =~ s/CREATE OR REPLACE/DROP/;
+			$dropbody .= ' CASCADE';
+			upgrade_and_log($dropbody);
+			upgrade_and_log($body,$short);
+		}
+		else {
+			$dbh->do("RELEASE bucardo_upgrade");
+		}
 		clog "Updated function: $schema.$name($args)";
+		$changes++;
+	}
+
+	## Check for any added triggers
+	for my $row (@tlist) {
+		my ($name,$body) = @$row;
+		if (trigger_exists($name)) {
+			clog "  Trigger $name already exists";
+		}
+		else {
+			upgrade_and_log($body);
+			clog "Created trigger $name";
+			$changes++;
+		}
+	}
+
+	## The freezer.q_staging table is no longer needed, but we must empty it before dropping
+	if (relation_exists('freezer','q_staging')) {
+		upgrade_and_log("INSERT INTO freezer.master_q SELECT * FROM freezer.q_staging");
+		upgrade_and_log("DROP TABLE freezer.q_staging");
+		clog 'Dropped deprecated table freezer.q_staging';
 		$changes++;
 	}
 
