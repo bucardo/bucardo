@@ -1934,6 +1934,48 @@ CHECK (sync IS NULL OR goat IS NULL);
 CREATE UNIQUE INDEX customcode_map_unique_sync ON customcode_map(code,sync) WHERE sync IS NOT NULL;
 CREATE UNIQUE INDEX customcode_map_unique_goat ON customcode_map(code,goat) WHERE goat IS NOT NULL;
 
+
+CREATE OR REPLACE FUNCTION find_unused_goats()
+RETURNS SETOF text
+LANGUAGE plpgsql
+AS $bc$
+DECLARE
+  myrec RECORD;
+BEGIN
+  FOR myrec IN 
+    SELECT quote_ident(db) || '.' || quote_ident(schemaname) || '.' || quote_ident(tablename) AS t
+      FROM goat g
+      WHERE NOT EXISTS (SELECT 1 FROM herdmap h WHERE h.goat = g.id)
+      ORDER BY schemaname, tablename
+    LOOP
+      RETURN NEXT 'Not used in any herds: ' || myrec.t;
+  END LOOP;
+
+  FOR myrec IN 
+    SELECT quote_ident(db) || '.' || quote_ident(schemaname) || '.' || quote_ident(tablename) AS t
+      FROM goat g
+      JOIN herdmap h ON h.goat = g.id
+      WHERE NOT EXISTS (SELECT 1 FROM sync WHERE source = h.herd)
+      ORDER BY schemaname, tablename
+    LOOP
+      RETURN NEXT 'Not used in source herd: ' || myrec.t;
+  END LOOP;
+
+  FOR myrec IN 
+    SELECT quote_ident(db) || '.' || quote_ident(schemaname) || '.' || quote_ident(tablename) AS t
+      FROM goat g
+      JOIN herdmap h ON h.goat = g.id
+      WHERE NOT EXISTS (SELECT 1 FROM sync WHERE source = h.herd AND status = 'active')
+      ORDER BY schemaname, tablename
+    LOOP
+      RETURN NEXT 'Not used in source herd of active sync: ' || myrec.t;
+  END LOOP;
+
+  RETURN;
+END;
+$bc$;
+
+
 -- Keep track of any upgrades as we go along
 CREATE TABLE upgrade_log (
   action   TEXT        NOT NULL,
