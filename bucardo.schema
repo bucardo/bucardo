@@ -915,7 +915,7 @@ CREATE TRIGGER validate_goat
 -- Check that the goat tables are ready and compatible
 --
 
-CREATE OR REPLACE FUNCTION bucardo.validate_sync(text,integer)
+CREATE OR REPLACE FUNCTION validate_sync(text,integer)
 RETURNS TEXT
 LANGUAGE plperlu
 SECURITY DEFINER
