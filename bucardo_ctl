@@ -1338,21 +1338,30 @@ sub upgrade {
 	);
 
 	my @new_columns = (
-		['audit_pid', 'id',              q{INTEGER NOT NULL DEFAULT nextval('audit_pid_id_seq')}],
-		['audit_pid', 'parentid',        q{INTEGER     NULL}],
-		['audit_pid', 'familyid',        q{INTEGER     NULL}],
-		['audit_pid', 'source',          q{TEXT        NULL}],
-		['audit_pid', 'target',          q{TEXT        NULL}],
-		['audit_pid', 'master_backend',  q{INT     NOT NULL DEFAULT pg_backend_pid()}],
-		['audit_pid', 'source_backend',  q{INT         NULL}],,
-		['audit_pid', 'target_backend',  q{INT         NULL}],,
-		['db',        'dbservice',       q{TEXT        NULL}],
-		['goat',      'qpkey',           q{TEXT        NULL}],
-		['sync',      'strict_checking', q{BOOLEAN NOT NULL DEFAULT 'true'}],
+		['bucardo', 'audit_pid', 'id',              q{INTEGER NOT NULL DEFAULT nextval('audit_pid_id_seq')}],
+		['bucardo', 'audit_pid', 'parentid',        q{INTEGER     NULL}],
+		['bucardo', 'audit_pid', 'familyid',        q{INTEGER     NULL}],
+		['bucardo', 'audit_pid', 'source',          q{TEXT        NULL}],
+		['bucardo', 'audit_pid', 'target',          q{TEXT        NULL}],
+		['bucardo', 'audit_pid', 'master_backend',  q{INT     NOT NULL DEFAULT pg_backend_pid()}],
+		['bucardo', 'audit_pid', 'source_backend',  q{INT         NULL}],
+		['bucardo', 'audit_pid', 'target_backend',  q{INT         NULL}],
+		['bucardo', 'db',        'dbservice',       q{TEXT        NULL}],
+		['bucardo', 'goat',      'qpkey',           q{TEXT        NULL}],
+		['bucardo', 'sync',      'strict_checking', q{BOOLEAN NOT NULL DEFAULT 'true'}],
+
+		['freezer', 'old_audit_pid', 'id',              q{INTEGER}],
+		['freezer', 'old_audit_pid', 'parentid',        q{INTEGER}],
+		['freezer', 'old_audit_pid', 'familyid',        q{INTEGER}],
+		['freezer', 'old_audit_pid', 'source',          q{TEXT}   ],
+		['freezer', 'old_audit_pid', 'target',          q{TEXT}   ],
+		['freezer', 'old_audit_pid', 'master_backend',  q{INT}    ],
+		['freezer', 'old_audit_pid', 'source_backend',  q{INT}    ],
+		['freezer', 'old_audit_pid', 'target_backend',  q{INT}    ],
 	);
 
 	my @altered_columns = (
-		['goat', 'schemaname', 'NO DEFAULT'],
+		['bucardo', 'goat', 'schemaname', 'NO DEFAULT'],
 	);
 
 	my @row_values = (
@@ -1450,7 +1459,7 @@ sub upgrade {
 	}
 
 	for my $row (@new_columns) {
-		my ($table,$column,$def) = @$row;
+		my ($schema,$table,$column,$def) = @$row;
 		if (column_exists($schema, $table, $column)) {
 			clog "  Column already exists: $schema.$table.$column";
 		}
@@ -1463,7 +1472,7 @@ sub upgrade {
 	}
 
 	for my $row (@altered_columns) {
-		my ($table,$column,$change) = @$row;
+		my ($schema,$table,$column,$change) = @$row;
 		if ($change eq 'NO DEFAULT') {
 			my $def = column_default($schema, $table, $column);
 			if (!$def) {
@@ -1487,6 +1496,7 @@ sub upgrade {
 	my $newcfg = $dbh->prepare($SQL);
 	my $file = 'bucardo.schema';
 	open my $fh, '<', $file or die qq{Could not open "$file": $!\n};
+
 	my %config;
 	my $inside = 0;
 	while (<$fh>) {
