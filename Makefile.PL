@@ -23,7 +23,7 @@ WriteMakefile(
                      'Sys::Syslog'         => '0.13',
                  },
     EXE_FILES    => ['bucardo_ctl'],
-    PM           => {},
+    PM           => {'Bucardo.pm' => '$(INST_LIBDIR)/Bucardo.pm'},
     ABSTRACT     => 'Postgres asynchronous multi-master replication system',
     AUTHOR       => 'Greg Sabino Mullane <greg@endpoint.com>',
     LICENSE      => 'BSD',
