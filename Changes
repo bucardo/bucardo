@@ -1,6 +1,6 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-3.2.4
+3.2.5
 
   - Support multi-column primary keys. Thanks to Backcountry.com. [GSM]
 
@@ -22,6 +22,9 @@
 
   - Have master_q use a trigger, not multiple rules. Remove the need 
     for a separate create_child_q() function. [GSM]
+
+  - Add in bucardo_compress_delta function, to remove duplicate rows from 
+    the bucardo_delta table. [GSM]
 
   - MCP listens for pings during table validations. [GSM]
 

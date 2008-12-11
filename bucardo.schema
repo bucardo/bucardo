@@ -122,8 +122,8 @@ stats_script_url|http://www.bucardo.org/|Location of the stats script
 upsert_attempts|3|How many times do we try out the upsert loop?
 max_select_clause|500|Maximum number of items to select inside of IN() clauses
 max_delete_clause|200|Maximum number of items to delete inside of IN() clauses
-bucardo_version|3.2.4|Bucardo version this schema was created with
-bucardo_current_version|3.2.4|Current version of Bucardo
+bucardo_version|3.2.5|Bucardo version this schema was created with
+bucardo_current_version|3.2.5|Current version of Bucardo
 \.
 
 --
@@ -1275,13 +1275,14 @@ $bc$
         my $func1 = length($noquotepkey) <= 45 ? "bucardo_add_delta_$noquotepkey" : "bad_$noquotepkey";
         my $func2 = length($noquotepkey) <= 38 ? "bucardo_add_delta_binary_$noquotepkey" : "badb_$noquotepkey";
         my $func3 = "bucardo_purge_delta";
+        my $func4 = "bucardo_compress_delta";
         if ($safepkey =~ /^"/) {
            $func1 = qq{"$func1"};
            $func2 = qq{"$func2"};
         }
 
         if (!$found{bc_schema}) {
-            $found{func0} = $found{func1} = $found{func2} = $found{func3} = 0;
+            $found{func0} = $found{func1} = $found{func2} = $found{func3} = $found{func4} = 0;
         }
         else {
             $SQL = qq{
@@ -1291,16 +1292,17 @@ $bc$
                   CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f0,
                   CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f1,
                   CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f2,
-                  CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f3
+                  CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f3,
+                  CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f4
                 FROM   pg_catalog.pg_proc p, pg_catalog.pg_namespace n
                 WHERE  p.pronamespace = n.oid
                 AND    n.nspname = ?
-                AND    p.proname IN (?,?,?,?)
+                AND    p.proname IN (?,?,?,?,?)
             ) foo
             };
             elog(DEBUG, "Preparing to check functions: $SQL");
             $sth = $dbh->prepare($SQL);
-            $sth->execute($func0,$func1,$func2,$func3,'bucardo',$func0,$func1,$func2,$func3);
+            $sth->execute($func0,$func1,$func2,$func3,$func4,'bucardo',$func0,$func1,$func2,$func3,$func4);
             my $x = 0;
             my $row = $sth->fetchall_arrayref()->[0];
             for my $val (@$row) {
@@ -1684,7 +1686,110 @@ $bc$
                 };
                 run_sql($SQL,$dbh);
             }
+            if (! $found{func4}) {
+                $SQL = qq{
+                  CREATE OR REPLACE FUNCTION bucardo_compress_delta(text, text)
+                  RETURNS TEXT
+                  LANGUAGE plpgsql
+                  SECURITY DEFINER
+                  AS \$clone\$
+                  DECLARE
+                    mymode TEXT;
+                    myoid OID;
+                    myst TEXT;
+                    got2 bool;
+                    drows BIGINT = 0;
+                    trows BIGINT = 0;
+                  BEGIN
+                  
+                  -- Are we running in serializable mode?
+                  SELECT INTO mymode current_setting('transaction_isolation');
+                  IF (mymode <> 'serializable') THEN
+                    RAISE EXCEPTION 'This function must be run in serializable mode';
+                  END IF;
+                  
+                  -- Grab the oid of this schema/table combo
+                  SELECT INTO myoid
+                    c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                    WHERE nspname = \$1 AND relname = \$2 AND pg_table_is_visible(c.oid);
+                  
+                  IF NOT FOUND THEN
+                    RAISE EXCEPTION 'No such table: %.%', \$1, \$2;
+                  END IF;
+                  
+                  -- Does this table have non-null rowid2 values?
+                  BEGIN
+                  SELECT 1 FROM bucardo.bucardo_delta WHERE tablename = myoid AND rowid2 IS NOT NULL INTO got2;
+                    EXCEPTION WHEN OTHERS THEN
+                  END;
+                  IF got2 IS NOT NULL THEN
+                    RETURN 'Cannot compress '||\$1||'.'||\$2||': cannot handle multi-col primary keys yet';
+                  END IF;
+                  
+                  myst = 'DELETE FROM bucardo.bucardo_delta 
+                  USING (SELECT MAX(txntime) AS maxt, rowid AS id 
+                         FROM bucardo.bucardo_delta
+                         WHERE tablename = '||myoid||'
+                         GROUP BY 2) AS foo
+                  WHERE tablename = '||myoid||' AND rowid = id AND txntime <> maxt';
+                  EXECUTE myst;
+                  
+                  GET DIAGNOSTICS drows := row_count;
+                  
+                  myst = 'DELETE FROM bucardo.bucardo_track'
+                    || ' WHERE NOT EXISTS (SELECT 1 FROM bucardo.bucardo_delta d WHERE d.txntime = bucardo_track.txntime)';
+                  EXECUTE myst;
+                  
+                  GET DIAGNOSTICS trows := row_count;
+                  
+                  RETURN 'Compressed '||\$1||'.'||\$2||'. Rows deleted from bucardo_delta: '||drows||
+                    ' Rows deleted from bucardo_track: '||trows;
+                  
+                  END;
+                  \$clone\$;
+                };
+                run_sql($SQL,$dbh);
 
+                $SQL = qq{
+                  CREATE OR REPLACE FUNCTION bucardo_compress_delta(text)
+                  RETURNS TEXT
+                  LANGUAGE SQL
+                  SECURITY DEFINER
+                  AS \$clone\$
+                   SELECT bucardo.bucardo_compress_delta(n.nspname, c.relname) FROM pg_class c
+                   JOIN pg_namespace n ON n.oid = c.relnamespace
+                   WHERE relname = \$1 AND pg_table_is_visible(c.oid);
+                  \$clone\$;
+                };
+                run_sql($SQL,$dbh);
+                  
+                $SQL = qq{
+                  CREATE OR REPLACE FUNCTION bucardo_compress_delta(oid)
+                  RETURNS TEXT
+                  LANGUAGE SQL
+                  SECURITY DEFINER
+                  AS \$clone\$
+                   SELECT bucardo.bucardo_compress_delta(n.nspname, c.relname) FROM pg_class c
+                   JOIN pg_namespace n ON n.oid = c.relnamespace
+                   WHERE c.oid = \$1;
+                  \$clone\$;
+                };
+                run_sql($SQL,$dbh);
+                  
+                $SQL = qq{
+                  CREATE OR REPLACE FUNCTION bucardo_compress_delta()
+                  RETURNS SETOF TEXT
+                  LANGUAGE SQL
+                  SECURITY DEFINER
+                  AS \$clone\$
+                   SELECT bucardo.bucardo_compress_delta(n.nspname, c.relname) FROM pg_class c
+                   JOIN pg_namespace n ON n.oid = c.relnamespace
+                   WHERE c.oid IN (SELECT DISTINCT tablename FROM bucardo.bucardo_delta);
+                  \$clone\$;
+                };
+                run_sql($SQL,$dbh);
+            }
+                  
             if (! $found{trigger1} and $pkeytype ne 'bytea') {
                 $SQL = qq{
                     CREATE TRIGGER "$trigger1"
