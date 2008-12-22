@@ -1688,7 +1688,7 @@ $bc$
             }
             if (! $found{func4}) {
                 $SQL = qq{
-                  CREATE OR REPLACE FUNCTION bucardo_compress_delta(text, text)
+                  CREATE OR REPLACE FUNCTION bucardo.bucardo_compress_delta(text, text)
                   RETURNS TEXT
                   LANGUAGE plpgsql
                   SECURITY DEFINER
@@ -1751,7 +1751,7 @@ $bc$
                 run_sql($SQL,$dbh);
 
                 $SQL = qq{
-                  CREATE OR REPLACE FUNCTION bucardo_compress_delta(text)
+                  CREATE OR REPLACE FUNCTION bucardo.bucardo_compress_delta(text)
                   RETURNS TEXT
                   LANGUAGE SQL
                   SECURITY DEFINER
@@ -1764,7 +1764,7 @@ $bc$
                 run_sql($SQL,$dbh);
                   
                 $SQL = qq{
-                  CREATE OR REPLACE FUNCTION bucardo_compress_delta(oid)
+                  CREATE OR REPLACE FUNCTION bucardo.bucardo_compress_delta(oid)
                   RETURNS TEXT
                   LANGUAGE SQL
                   SECURITY DEFINER
@@ -1777,7 +1777,7 @@ $bc$
                 run_sql($SQL,$dbh);
                   
                 $SQL = qq{
-                  CREATE OR REPLACE FUNCTION bucardo_compress_delta()
+                  CREATE OR REPLACE FUNCTION bucardo.bucardo_compress_delta()
                   RETURNS SETOF TEXT
                   LANGUAGE SQL
                   SECURITY DEFINER
