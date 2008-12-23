@@ -19,7 +19,6 @@ requires:
   Sys::Syslog       : 0.13
   Mail::Sendmail    : 0.79
 build_requires:
-  Test::Dynamic     : 1.3.1
   Test::Harness     : 2.03
   Test::More        : 0.61
   Module::Signature : 0.50

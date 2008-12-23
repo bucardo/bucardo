@@ -65,7 +65,7 @@ Bucardo runs as a series of Perl daemons, and requires version 5.8.3 of Perl or 
 <ul>
  <li>DBI 1.51</li>
  <li>DBD::Pg 2.0.0</li>
- <li>*DBIx::Safe 1.2.4</li>
+ <li>DBIx::Safe 1.2.4 (comes bundled with Bucardo)</li>
  <li>Moose 0.18</li>
  <li>IO::Handle 1.24</li>
  <li>Sys::Hostname 1.11</li>
@@ -82,12 +82,7 @@ In order to run the test suite (highly recommended), the following modules are r
  <li>Test::Simple 0.30</li>
  <li>Test::More 0.61</li>
  <li>Test::Harness 2.03</li>
- <li>*Test::Dynamic 1.3.1</li>
 </ul>
-
-<p>
-* These modules come bundled with Bucardo.
-</p>
 
 <h3>Unix-like system</h3>
 <p>
@@ -146,13 +141,13 @@ Installing Bucardo is a fairly straightforward process:
 
 <h3>Make and install the Perl modules</h3>
 <p>
-Bucardo comes with three Perl modules. These are installed in the typical Perl fashion:
+Bucardo comes with two Perl modules. These are installed in the typical Perl fashion:
 </p>
 <p class="code"><span class="code">perl Makefile.PL
 make
 make install</span></p>
 <p>
-The three modules are <b>Bucardo</b>, <b>DBIx::Safe</b>, and <b>Test::Dynamic</b>.
+The two modules are <b>Bucardo</b>, and <b>DBIx::Safe</b>.
 </p>
 
 <h4>Bucardo</h4>
@@ -163,11 +158,6 @@ This is the main Bucardo module, which also contains the helper scripts. Most si
 <h4>DBIx::Safe</h4>
 <p>
 This module is used to provide safe versions of the database handles to the conflict resolution and exception handling routines.
-</p>
-
-<h4>Test::Dynamic</h4>
-<p>
-This is used to count the number of tests in the test suite.
 </p>
 
 <h3>Create the database</h3>
