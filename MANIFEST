@@ -37,7 +37,6 @@ t/02-monkey_with_sync_table.t
 t/03-goat.t
 t/04-pushdelta.t
 t/05-fullcopy.t
-t/06-multicolpk.t
 t/98-cleanup.t
 t/99-perlcritic.t
 t/99-signature.t
