@@ -423,7 +423,6 @@ sub showhost {
 		$done = 1;
 	  SYNC: for my $s (keys %$sync) {
 			next if $sync->{$s}{status} ne 'active';
-			next if $sync->{$s}{expiredsecs}==0;
 			my $list = $sync->{$s}{dblist};
 			for my $t (keys %$list) {
 				if (!exists $list->{$t}{success} and ! exists $list->{$t}{aborted}) {
