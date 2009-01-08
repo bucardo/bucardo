@@ -33,5 +33,5 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Support large objects
 - Check for superuser on startup, to prevent errors that only show when a KID tries something.
 - Gracefully handle new nodes being added, e.g. a one-time fullcopy sync for new pushdeltas.
-
+- Add a flag that allows for table structure checking before each sync
 
