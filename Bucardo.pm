@@ -2,7 +2,7 @@
 
 ## The main Bucardo program
 ##
-## Copyright 2006-2008 Greg Sabino Mullane <greg@endpoint.com>
+## Copyright 2006-2009 Greg Sabino Mullane <greg@endpoint.com>
 
 package Bucardo;
 use 5.008003;
@@ -4338,21 +4338,6 @@ sub start_kid {
 					$dmlcount{alldeletes}{target} += $count;
 				}
 
-				## COPY over ones that are not already on the target
-				if ($dmlcount{I}{target}{$S}{$T}) {
-					my $srccmd = "COPY (SELECT * FROM $S.$T WHERE $pkcols IN ($pkvalscopy)) TO STDOUT";
-					my $tgtcmd = "COPY $S.$T FROM STDIN";
-					$sourcedbh->do($srccmd);
-					$targetdbh->do($tgtcmd);
-					my $buffer = '';
-					while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
-						$targetdbh->pg_putcopydata($buffer);
-					}
-					$targetdbh->pg_putcopyend();
-					$self->glog(qq{End COPY to $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
-					$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
-				}
-
 				## Update any that are on both source and target
 				if ($dmlcount{U}{target}{$S}{$T}) {
 
@@ -4390,6 +4375,21 @@ sub start_kid {
 						$count = $sth{target}{$g}{updaterow}->execute(@$row);
 						$dmlcount{allupdates}{target} += $count;
 					}
+				}
+
+				## COPY over ones that are not already on the target
+				if ($dmlcount{I}{target}{$S}{$T}) {
+					my $srccmd = "COPY (SELECT * FROM $S.$T WHERE $pkcols IN ($pkvalscopy)) TO STDOUT";
+					my $tgtcmd = "COPY $S.$T FROM STDIN";
+					$sourcedbh->do($srccmd);
+					$targetdbh->do($tgtcmd);
+					my $buffer = '';
+					while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
+						$targetdbh->pg_putcopydata($buffer);
+					}
+					$targetdbh->pg_putcopyend();
+					$self->glog(qq{End COPY to $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
+					$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
 				}
 
 				if ($hasindex) {
@@ -5463,7 +5463,7 @@ Greg Sabino Mullane <greg@endpoint.com>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2005-2008 Greg Sabino Mullane <greg@endpoint.com>.
+Copyright (c) 2005-2009 Greg Sabino Mullane <greg@endpoint.com>.
 
 This software is free to use: see the LICENSE file for details.
 
