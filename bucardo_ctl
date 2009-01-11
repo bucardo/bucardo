@@ -2,7 +2,7 @@
 
 ## Script to control Bucardo
 ##
-## Copyright 2006-2008 Greg Sabino Mullane <greg@endpoint.com>
+## Copyright 2006-2009 Greg Sabino Mullane <greg@endpoint.com>
 
 package bucardo_ctl;
 use strict;
@@ -2531,7 +2531,7 @@ Bucardo
 
 =head1 COPYRIGHT
 
-Copyright 2006-2008 Greg Sabino Mullane <greg@endpoint.com>
+Copyright 2006-2009 Greg Sabino Mullane <greg@endpoint.com>
 
 This program is free to use, subject to the limitations in the LICENSE file.
 
