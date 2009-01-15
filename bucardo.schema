@@ -1700,6 +1700,12 @@ $bc$
                     got2 bool;
                     drows BIGINT = 0;
                     trows BIGINT = 0;
+                    rnames TEXT;
+                    rname TEXT;
+                    ids_where TEXT;
+                    ids_sel TEXT;
+                    ids_grp TEXT;
+                    idnum TEXT;
                   BEGIN
                   
                   -- Are we running in serializable mode?
@@ -1717,21 +1723,31 @@ $bc$
                     RAISE EXCEPTION 'No such table: %.%', \$1, \$2;
                   END IF;
                   
-                  -- Does this table have non-null rowid2 values?
-                  BEGIN
-                  SELECT 1 FROM bucardo.bucardo_delta WHERE tablename = myoid AND rowid2 IS NOT NULL INTO got2;
-                    EXCEPTION WHEN OTHERS THEN
-                  END;
-                  IF got2 IS NOT NULL THEN
-                    RETURN 'Cannot compress '||\$1||'.'||\$2||': cannot handle multi-col primary keys yet';
-                  END IF;
+                  ids_where = 'COALESCE(rowid,''NULL'') = COALESCE(id, ''NULL'')';
+                  ids_sel = 'rowid AS id';
+                  ids_grp = 'rowid';
+                  FOR rname IN SELECT attname FROM pg_attribute WHERE attrelid =
+                          (SELECT oid FROM pg_class WHERE relname = 'bucardo_delta'
+                          AND relnamespace =
+                          (SELECT oid FROM pg_namespace WHERE
+                          nspname = 'bucardo') AND attname ~ '^rowid'
+                      ) LOOP
+                      rnames = COALESCE(rnames || ' ', '') || rname ;
+                      SELECT INTO idnum SUBSTRING(rname FROM '[[:digit:]]+');
+                      IF idnum IS NOT NULL THEN
+                        ids_where = ids_where || ' AND COALESCE(' || rname || ', ''NULL'') = COALESCE(id' || idnum || ', ''NULL'')';
+                        ids_sel = ids_sel || ', ' || rname || ' AS id' || idnum;
+                        ids_grp = ids_grp || ', ' || rname;
+                      END IF;
+                  END LOOP;
                   
                   myst = 'DELETE FROM bucardo.bucardo_delta 
-                  USING (SELECT MAX(txntime) AS maxt, rowid AS id 
+                  USING (SELECT MAX(txntime) AS maxt, '||ids_sel||'
                          FROM bucardo.bucardo_delta
                          WHERE tablename = '||myoid||'
-                         GROUP BY 2) AS foo
-                  WHERE tablename = '||myoid||' AND rowid = id AND txntime <> maxt';
+                         GROUP BY ' || ids_grp || ') AS foo
+                  WHERE tablename = '|| myoid || ' AND ' || ids_where ||' AND txntime <> maxt';
+                  RAISE DEBUG 'Running %', myst;
                   EXECUTE myst;
                   
                   GET DIAGNOSTICS drows := row_count;
