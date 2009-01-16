@@ -4616,8 +4616,9 @@ sub start_kid {
 				## Since we've already handled conflicts, simply mark "target only" rows
 				for my $tpkval (keys %$info2) {
 					next if exists $info1->{$tpkval};
-					$self->glog("No conflict, target only for $S.$T.$qnamepk: $pkval");
+					$self->glog("No conflict, target only for $S.$T.$qnamepk: $tpkval");
 					$info1->{$tpkval}{BUCARDO_ACTION} = 2; ## copy target to source
+					$info1->{$tpkval}{BUCARDO_PKVALS} ||= $info2->{$tpkval}{BUCARDO_PKVALS};
 				}
 
 				## Give some summary statistics
