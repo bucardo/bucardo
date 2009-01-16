@@ -4342,38 +4342,39 @@ sub start_kid {
 				if ($dmlcount{U}{target}{$S}{$T}) {
 
 					## If nothing but primary key, no need to update anything
-					next if ! length $g->{safecolumnlist};
+					if (length $g->{safecolumnlist}) {
 
-					## Build the UPDATE statement
-					$SQL = "UPDATE $S.$T SET ";
-					$SQL .= join ',' => map { "$_=?" } @{$g->{safecols}};
+						## Build the UPDATE statement
+						$SQL = "UPDATE $S.$T SET ";
+						$SQL .= join ',' => map { "$_=?" } @{$g->{safecols}};
 
-					$x=1;
-					my $pkeycols = '';
-					for my $qpk (@{$g->{qpkey}}) {
-						$SQL .= sprintf " %s %s = ?",
-							$x>1 ? 'AND' : 'WHERE',
+						$x=1;
+						my $pkeycols = '';
+						for my $qpk (@{$g->{qpkey}}) {
+							$SQL .= sprintf " %s %s = ?",
+								$x>1 ? 'AND' : 'WHERE',
+									$g->{binarypkey}[$x-1] ? qq{ENCODE($qpk,'base64')} : $qpk;
+							$pkeycols .= sprintf ",%s",
 								$g->{binarypkey}[$x-1] ? qq{ENCODE($qpk,'base64')} : $qpk;
-						$pkeycols .= sprintf ",%s",
-							$g->{binarypkey}[$x-1] ? qq{ENCODE($qpk,'base64')} : $qpk;
-						$x++;
-					}
-					$sth{target}{$g}{updaterow} = $targetdbh->prepare($SQL);
-					if (exists $g->{binarycols}) {
-						for (@{$g->{binarycols}}) {
-							$sth{target}{$g}{updaterow}->bind_param($_, undef, {pg_type => PG_BYTEA});
+							$x++;
 						}
-					}
+						$sth{target}{$g}{updaterow} = $targetdbh->prepare($SQL);
+						if (exists $g->{binarycols}) {
+							for (@{$g->{binarycols}}) {
+								$sth{target}{$g}{updaterow}->bind_param($_, undef, {pg_type => PG_BYTEA});
+							}
+						}
 
-					## Grab all the info from the source
-					my $cols = join ',' => @{$g->{safecols}};
-					$SQL = "SELECT $cols $pkeycols FROM $S.$T WHERE $pkcols IN ($pkvalsupdate)";
-					$sth = $sourcedbh->prepare($SQL);
-					$sth->execute();
-					for my $row (@{$sth->fetchall_arrayref()}) {
-						## The array is all non-PK cols, then all PK cols
-						$count = $sth{target}{$g}{updaterow}->execute(@$row);
-						$dmlcount{allupdates}{target} += $count;
+						## Grab all the info from the source
+						my $cols = join ',' => @{$g->{safecols}};
+						$SQL = "SELECT $cols $pkeycols FROM $S.$T WHERE $pkcols IN ($pkvalsupdate)";
+						$sth = $sourcedbh->prepare($SQL);
+						$sth->execute();
+						for my $row (@{$sth->fetchall_arrayref()}) {
+							## The array is all non-PK cols, then all PK cols
+							$count = $sth{target}{$g}{updaterow}->execute(@$row);
+							$dmlcount{allupdates}{target} += $count;
+						}
 					}
 				}
 
@@ -4384,6 +4385,7 @@ sub start_kid {
 					$sourcedbh->do($srccmd);
 					$targetdbh->do($tgtcmd);
 					my $buffer = '';
+					$self->glog(qq{Begin COPY to $S.$T, rows: $dmlcount{I}{target}{$S}{$T}});
 					while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
 						$targetdbh->pg_putcopydata($buffer);
 					}
