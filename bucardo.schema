@@ -1717,7 +1717,7 @@ $bc$
                   -- Grab the oid of this schema/table combo
                   SELECT INTO myoid
                     c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-                    WHERE nspname = \$1 AND relname = \$2 AND pg_table_is_visible(c.oid);
+                    WHERE nspname = \$1 AND relname = \$2;
                   
                   IF NOT FOUND THEN
                     RAISE EXCEPTION 'No such table: %.%', \$1, \$2;
@@ -1735,9 +1735,32 @@ $bc$
                       rnames = COALESCE(rnames || ' ', '') || rname ;
                       SELECT INTO idnum SUBSTRING(rname FROM '[[:digit:]]+');
                       IF idnum IS NOT NULL THEN
-                        ids_where = ids_where || ' AND COALESCE(' || rname || ', ''NULL'') = COALESCE(id' || idnum || ', ''NULL'')';
-                        ids_sel = ids_sel || ', ' || rname || ' AS id' || idnum;
-                        ids_grp = ids_grp || ', ' || rname;
+                        ids_where = ids_where 
+                          || ' AND (' 
+                          || rname
+                          || ' = id'
+                          || idnum
+                          || ' OR ('
+                          || rname
+                          || ' IS NULL AND id'
+                          || idnum
+                          || ' IS NULL))';
+                        ids_sel = ids_sel
+                          || ', '
+                          || rname
+                          || ' AS id'
+                          || idnum;
+                        ids_grp = ids_grp
+                          || ', '
+                          || rname;
+                        ids_sel = ids_sel
+                          || ', '
+                          || rname
+                          || ' AS id'
+                          || idnum;
+                        ids_grp = ids_grp
+                          || ', '
+                          || rname;
                       END IF;
                   END LOOP;
                   
