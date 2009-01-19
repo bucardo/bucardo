@@ -495,7 +495,7 @@ The last step is to add syncs, which are individual replication events, added to
 <tr>
 <td class="lcol" >rebuild_index</td> <td>Boolean</td> <td>false</td> <td>No</td> <td>Whether to turn off indexes and then rebuild them</td> </tr>
 <tr>
-<td class="lcol" >priority</td> <td>Smallint</td> <td>0</td> <td>No</td> <td>Higher numbered sync run first</td> </tr>
+<td class="lcol" >priority</td> <td>Smallint</td> <td>0</td> <td>No</td> <td>Higher numbered syncs run first</td> </tr>
 <tr>
 <td class="lcol" >disable_triggers</td> <td>Text</td> <td>'pg_class'</td> <td>Yes</td> <td>How to disable triggers, one of: 'pg_class','SQL','replica'. Replica is highly recommended but will only work on Postgres version 8.3 or greater. SQL ("DISABLE TRIGGERS") will lock the tables, while pg_class will not, but will cause the very occasional OID error.</td> </tr>
 <tr>
