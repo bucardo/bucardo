@@ -2437,7 +2437,7 @@ sub start_controller {
 			}
 			my $subject = qq{Bucardo "$syncname" controller killed on $shorthost$moresub};
 			if ($subject !~ /stopfile/) {
-				$self->send_mail({ body => "$body\n\n$dump", subject => $subject });
+				$self->send_mail({ body => "$body\n", subject => $subject });
 			}
 		}
 		$self->cleanup_controller($msg);
@@ -3463,7 +3463,7 @@ sub start_kid {
 				$moresub = " (no connection)";
 			}
 			my $subject = qq{Bucardo kid for "$syncname" killed on $shorthost$moresub};
-			$self->send_mail({ body => "$body\n\n$dump", subject => $subject });
+			$self->send_mail({ body => "$body\n", subject => $subject });
 		}
 		exit;
 	}; ## end $SIG{__DIE__}
