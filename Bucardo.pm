@@ -3468,7 +3468,7 @@ sub start_kid {
 		exit;
 	}; ## end $SIG{__DIE__}
 
-	## Connect to the main database
+	## Connect to the main database, overwrites previous setting from the controller
 	$maindbh = $self->{masterdbh} = $self->connect_database();
 	$maindbh->do("SET statement_timeout = 0");
 

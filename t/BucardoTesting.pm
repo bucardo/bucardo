@@ -53,7 +53,7 @@ our %tabletype =
 	 'bucardo_test8' => 'BYTEA',
 	 );
 
-our @tables2empty = (qw/droptest/);
+our @tables2empty = (qw/droptest bucardo_test_multicol/);
 
 my %debug = (
 			 recreatedb     => 0,
@@ -266,7 +266,7 @@ sub create_cluster {
 	## Make some minor adjustments
 	my $file = "$dirname/postgresql.conf";
 	open my $fh, '>>', $file or die qq{Could not open "$file": $!\n};
-	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\n\n",
+	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\nlog_min_duration_statement = 0\n\n",
 		$clusterinfo->{port};
 	close $fh or die qq{Could not close "$file": $!\n};
 
@@ -606,6 +606,14 @@ sub add_test_schema {
 		$dbh->do($SQL);
 
 	}
+	if ( !table_exists($dbh => 'bucardo_test_multicol') ) {
+		$dbh->do(q{CREATE TABLE bucardo_test_multicol (
+        id   INTEGER,
+        id2  INTEGER,
+        id3  INTEGER,
+        data TEXT,
+        PRIMARY KEY (id, id2, id3))});
+	}
 	$dbh->commit();
 
 	return;
@@ -939,6 +947,7 @@ sub add_test_tables_to_herd {
 	$self->ctl("add herd $herd");
 
 	my $addstring = join ' ' => sort keys %tabletype;
+    $addstring .= ' bucardo_test_multicol';
 	my $result = $self->ctl("add table $addstring db=$db herd=$herd");
 	if ($result !~ /Tables? added:/) {
 		die "Failed to add tables: $result\n";
