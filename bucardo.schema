@@ -1753,14 +1753,6 @@ $bc$
                         ids_grp = ids_grp
                           || ', '
                           || rname;
-                        ids_sel = ids_sel
-                          || ', '
-                          || rname
-                          || ' AS id'
-                          || idnum;
-                        ids_grp = ids_grp
-                          || ', '
-                          || rname;
                       END IF;
                   END LOOP;
                   
