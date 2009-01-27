@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl -- -*-cperl-*-
+#!/usr/bin/perl -- -*-cperl-*-
 
 ## Script to control Bucardo
 ##
@@ -160,11 +160,18 @@ upgrade()       if $verb eq 'upgrade';
 my $adverb;
 my $syncs = get_syncs();
 my @syncs;
-for my $sync (@nouns) {
+SYNCMATCH: for my $sync (@nouns) {
 	if ($sync =~ /^\d+$/) {
 		$adverb = $sync;
-		next;
+		next SYNCMATCH;
 	}
+    if ($sync =~ /%/) {
+        my $tmp = $dbh->selectall_arrayref(qq{SELECT name FROM sync WHERE name LIKE '$sync'});
+        if ($#{ $tmp } >= 0) {
+            push @syncs, (map { $_->[0] } @$tmp);
+            next SYNCMATCH;
+        }
+    }
 	if (! exists $syncs->{$sync}) {
 		die qq{Sync "$sync" does not appear to exist\n};
 	}
@@ -177,13 +184,30 @@ help();
 
 sub help {
 	warn qq{Usage: $0 args
-  start <reason>  -- force existing sync(s) to quit, then start
-  stop <reason>   -- tell everyone to stop permanently, even the MCP
-  kick <syncname(s)> [timeout] -- kick off one or more syncs, optionally wait for result (0 = wait until done)
-  ping [timeout] -- ping the MCP for a response
-  status [--sort=col#] [--daysback=#]  -- list information about all syncs
-  status syncname[s] [--daysback=#] -- list detailed information about one or more syncs
-  reload_config  -- force a running Bucardo to reload the bucardo_config table
+  start <reason>  ** force existing sync(s) to quit, then start
+
+  stop <reason>   ** tell everyone to stop permanently, even the MCP
+
+  add <item_type> <item_name>
+                  ** add a new database, table, sync, herd, or database group
+    add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx
+    add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx
+    add sync syncname source=xxx targetdb=xxx targetgroup=xxx type=xxx makedelta=xxx 
+    add herd name
+    add dbgroup name db1 db2 db3 ...
+
+  kick <syncname(s)> [timeout]
+                  ** kick off one or more syncs, optionally wait for result (0 = wait until done)
+
+  ping [timeout]  ** ping the MCP for a response
+
+  status [--sort=col#] [--daysback=#]
+                  ** list information about all syncs
+
+  status syncname[s] [--daysback=#]
+                  ** list detailed information about one or more syncs
+
+  reload_config   ** force a running Bucardo to reload the bucardo_config table
 For more details, try 'man bucardo_ctl'
 } unless $QUIET; ## Mostly for the test suite
 	exit 0;
@@ -2223,6 +2247,16 @@ This documents describes bucardo_ctl version 1.1.19
   ./bucardo_ctl start "Starting up - Greg"
 
   ./bucardo_ctl stop "Bringing down for debugging - Raul E."
+ 
+  ./bucardo_ctl add sync testsync source=herd1 type=pushdelta targetdb=B
+
+  ./bucardo_ctl add database newdb name=internal_name port=5432 host=myserver user=postgres
+
+  ./bucardo_ctl add table some_schema.some_table db=internal_db_name ping=bool standard_conflict=source
+
+  ./bucardo_ctl add herd newherd
+
+  ./bucardo_ctl add dbgroup name db1 db2 db3 ...
 
   ./bucardo_ctl ping
 
@@ -2272,6 +2306,24 @@ you should scan the list of processes after running this program to make sure th
 processes have stopped. One should also provide a reason for issuing the stop - usually 
 this is a short explanation and your name. This is logged in the reason_file file and 
 is also used by Bucardo when it exits and sends out mail about its death.
+
+=item B<add>
+
+Usage:  add <item_type> <item_name>
+
+Usage:  add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx
+
+Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx
+
+Usage:  add sync syncname options
+
+Usage:  add herd name
+
+Usage:  add dbgroup name db1 db2 db3 ...
+
+Tells Bucardo about new objects it should know about. These commands can
+replace direct manipulation of the tables in the bucardo schema for the
+supported object types (you'll still need to add things like the mappings between objects on your own).
 
 =item B<kick>
 
