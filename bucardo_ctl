@@ -1028,6 +1028,7 @@ sub get_syncs {
 		open my $fh, '<', "$PIDDIR/$pidfile" or die qq{Could not open "$PIDDIR/$pidfile": $!\n};
 		my $pid = <$fh>;
 		chomp $pid;
+		if (! defined $pid) { $pid = ''; }
 		close $fh or warn qq{Could not close $PIDDIR/$pidfile: $!\n};
 		if ($pid !~ /^\d+$/) {
 			$sync->{$syncname}{NOPID} = 1;
