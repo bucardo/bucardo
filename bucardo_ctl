@@ -17,7 +17,7 @@ use Data::Dumper;
 
 return 1 if $ENV{BUCARDO_CTL_TEST};
 
-our $VERSION = '3.2.5';
+our $VERSION = '3.2.6';
 
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);

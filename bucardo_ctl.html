@@ -52,7 +52,17 @@
 <pre>
   ./bucardo_ctl start &quot;Starting up - Greg&quot;</pre>
 <pre>
-  ./bucardo_ctl stop &quot;Bringing down for debugging - Raul E.&quot;</pre>
+  ./bucardo_ctl stop &quot;Bringing down for debugging - Raul E.&quot;
+ 
+  ./bucardo_ctl add sync testsync source=herd1 type=pushdelta targetdb=B</pre>
+<pre>
+  ./bucardo_ctl add database newdb name=internal_name port=5432 host=myserver user=postgres</pre>
+<pre>
+  ./bucardo_ctl add table some_schema.some_table db=internal_db_name ping=bool standard_conflict=source</pre>
+<pre>
+  ./bucardo_ctl add herd newherd</pre>
+<pre>
+  ./bucardo_ctl add dbgroup name db1 db2 db3 ...</pre>
 <pre>
   ./bucardo_ctl ping</pre>
 <pre>
@@ -102,6 +112,19 @@ you should scan the list of processes after running this program to make sure th
 processes have stopped. One should also provide a reason for issuing the stop - usually 
 this is a short explanation and your name. This is logged in the reason_file file and 
 is also used by Bucardo when it exits and sends out mail about its death.</p>
+</dd>
+<dt><strong><a name="item_add"><strong>add</strong></a></strong></dt>
+
+<dd>
+<p>Usage:  add &lt;item_type&gt; &lt;item_name&gt;</p>
+<p>Usage:  add database &lt;dbname&gt; name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx</p>
+<p>Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx</p>
+<p>Usage:  add sync syncname options</p>
+<p>Usage:  add herd name</p>
+<p>Usage:  add dbgroup name db1 db2 db3 ...</p>
+<p>Tells Bucardo about new objects it should know about. These commands can
+replace direct manipulation of the tables in the bucardo schema for the
+supported object types (you'll still need to add things like the mappings between objects on your own).</p>
 </dd>
 <dt><strong><a name="item_kick"><strong>kick</strong></a></strong></dt>
 

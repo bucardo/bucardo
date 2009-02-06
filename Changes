@@ -1,6 +1,8 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-3.2.5
+3.2.6
+
+  - Allow wildcards in the 'bucardo_ctl kick' [Josh Tolley]
 
   - Support multi-column primary keys. Thanks to Backcountry.com. [GSM]
 
