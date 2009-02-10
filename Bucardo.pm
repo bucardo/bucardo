@@ -3863,7 +3863,7 @@ sub start_kid {
 		$safe_targetdbh = DBIx::Safe->new($darg);
 	}
 
-	sub run_custom_code {
+	sub run_kid_custom_code {
 		my $c = shift;
 		my $strictness = shift || '';
 
@@ -3930,7 +3930,7 @@ sub start_kid {
 		}
 		return 'normal';
 
-	} ## end of run_custom_code
+	} ## end of run_kid_custom_code
 
 	## Have we found a reason to check the queue yet?
 	my $checkq;
@@ -4015,7 +4015,7 @@ sub start_kid {
 
 		## Run all 'before_txn' code
 		for my $code (@{$sync->{code_before_txn}}) {
-			my $result = run_custom_code($code, 'nostrict');
+			my $result = run_kid_custom_code($code, 'nostrict');
 			if ($result eq 'redo') {
 				redo KID if $kidsalive;
 				last KID;
@@ -4068,7 +4068,7 @@ sub start_kid {
 
 		## Run all 'before_check_rows' code
 		for my $code (@{$sync->{code_before_check_rows}}) {
-			my $result = run_custom_code($code, 'strict');
+			my $result = run_kid_custom_code($code, 'strict');
 			if ($result eq 'redo') {
 				## In case we locked above:
 				$sourcedbh->rollback();
@@ -4118,7 +4118,7 @@ sub start_kid {
 
 		## Run all 'before_trigger_drop' code
 		for my $code (@{$sync->{code_before_trigger_drop}}) {
-			my $result = run_custom_code($code, 'strict');
+			my $result = run_kid_custom_code($code, 'strict');
 			if ($result eq 'redo') { ## redo rollsback source and target
 				redo KID if $kidsalive;
 				last KID;
@@ -4135,6 +4135,7 @@ sub start_kid {
 			}
 		}
 
+		## FULLCOPY
 		if ($synctype eq 'fullcopy') {
 
 			for my $g (@$goatlist) {
@@ -4214,8 +4215,10 @@ sub start_kid {
 
 		} ## end of synctype fullcopy
 
+		## PUSHDELTA
 		elsif ($synctype eq 'pushdelta') {
 
+			## Do each table in turn, ordered by descending priority and ascending id
 			for my $g (@$goatlist) {
 
 				($S,$T) = ($g->{safeschema},$g->{safetable});
@@ -4223,11 +4226,12 @@ sub start_kid {
 				## Skip this table if no rows have changed on the source
 				next unless $deltacount{source}{$S}{$T};
 
+				## The target table's OID
 				my $toid = $g->{targetoid}{$targetdb};
 
+				## If requested, disable all indexes, then enable and rebuild them after data changes
 				my $hasindex = 0;
 				if ($g->{rebuild_index}) {
-					## We could run this earlier, but might miss a newly-added index!
 					$SQL = "SELECT relhasindex FROM pg_class WHERE oid = $toid";
 					$hasindex = $targetdbh->selectall_arrayref($SQL)->[0][0];
 					if ($hasindex) {
@@ -4237,182 +4241,324 @@ sub start_kid {
 					}
 				}
 
-				## Grab all distinct pks from bucardo_delta for this table that have not been already pushed
-				my $info = $sth{source}{$g}{getdelta}->fetchall_arrayref();
+				## How many times this goat has handled an exception
+				$g->{exceptions} ||= 0;
 
-				if ($sync->{need_rows}) {
-					$rows_for_custom_code->{$S}{$T} =
-						{
-						 source    => $info,
-						 pkeyname  => $g->{pkey},
-						 qpkeyname => $g->{qpkey},
-						 pkeytype  => $g->{pkeytype},
-						 };
-				}
+				## This is where we want to 'rewind' to on a handled exception
+				## We choose this point as its possible the custom code has a different getdelta result
+			  PUSHDELTA_SAVEPOINT: {
 
-				## ZZZ Test this
-				if ($g->{does_makedelta}) {
-					for (@$info) {
-						$sth{target}{$g}{insertdelta}->execute($toid,@{$_}[0..($g->{pkcols}-1)]);
-					}
-					$sth{target}{inserttrack}->execute($toid,$targetdb);
-					$count = @$info;
-					$self->glog("Total makedelta rows added for $S.$T on $targetdb: $count");
-				}
+					## From bucardo_delta, grab all distinct pks for this table that have not been already pushed
+					my $info = $sth{source}{$g}{getdelta}->fetchall_arrayref();
 
-				## Build the left-hand of the WHERE clause, used by all queries below
-				my $pkcols = '';
-				$x=0;
-				for my $qpk (@{$g->{qpkey}}) {
-					$pkcols .= sprintf '%s,', $g->{binarypkey}[$x] ? qq{ENCODE($qpk,'base64')} : $qpk;
-				}
-				chop $pkcols;
-				## Example: id,"space bar",cdate
-				$g->{pkcols} > 1 and $pkcols = "($pkcols)";
-				## Example: (id,"space bar",cdate)
-
-				## Build a list of all values to pass to target
-				my $pkvals = '';
-				for my $row (@$info) {
-					my $inner = join ',' => map { s/\'/''/go; qq{'$_'}; } @$row;
-					$pkvals .= $g->{pkcols} > 1 ? "($inner)," : "$inner,";
-				}
-				chop $pkvals;
-				## Example: ('1234','Don''t Stop','2008-01-01'),('221','foobar','2008-11-01')
-
-				## Figure out which rows exists on the target
-				my $pre = '';
-				$x=0;
-				for my $q (@{$g->{qpkey}}) {
-					$pre .= sprintf q{%s||'|'||},
-						$g->{binarypkey}[$x++] ? "ENCODE($q,'base64')" : "${q}::text";
-				}
-				$pre =~ s/.......$/ AS id/;
-				## Creates a unique single scalar for this pkey
-				## Example: id||'|'||"space bar"||'|'||cdate AS id
-				$SQL = qq{SELECT $pre FROM $S.$T WHERE $pkcols IN ($pkvals)};
-				$sth = $targetdbh->prepare($SQL);
-				$count = $sth->execute();
-				my $tgtrows = $sth->fetchall_hashref('id');
-
-				## Figure out which rows exist on the source
-				$sth = $sourcedbh->prepare($SQL);
-				$count = $sth->execute();
-				my $srcrows = $sth->fetchall_hashref('id');
-
-				## Build the right-hand side of the WHERE clauses, escaping values as needed
-				my $pkvalscopy = '';
-				my $pkvalsdelete = '';
-				my $pkvalsupdate = '';
-				$dmlcount{I}{target}{$S}{$T} = $dmlcount{D}{target}{$S}{$T} = $dmlcount{U}{target}{$S}{$T} = 0;
-				for my $row (@$info) {
-					my $inner = join ',' => map { s/\'/''/go; qq{'$_'}; } @$row;
-					my $value = join '|' => @$row;
-
-					## If no longer on the source, DELETE from the target
-					if (!exists $srcrows->{$value}) {
-						$pkvalsdelete .= $g->{pkcols} > 1 ? "($inner)," : "$inner,";
-						$dmlcount{D}{target}{$S}{$T}++;
-						next;
+					## Prepare row information if any custom codes need it
+					if ($sync->{need_rows}) {
+						$rows_for_custom_code->{$S}{$T} =
+							{
+								source    => $info,
+								pkeyname  => $g->{pkey},
+								qpkeyname => $g->{qpkey},
+								pkeytype  => $g->{pkeytype},
+							};
 					}
 
-					## If not on the target, bulk COPY it over there
-					if (!exists $tgtrows->{$value}) {
-						$pkvalscopy .= $g->{pkcols} > 1 ? "($inner)," : "$inner,";
-						$dmlcount{I}{target}{$S}{$T}++;
-						next;
-					}
-
-					## If neither, UPDATE on the target one by one
-					$pkvalsupdate .= $g->{pkcols} > 1 ? "($inner)," : "$inner,";
-					$dmlcount{U}{target}{$S}{$T}++;
-				}
-				chop $pkvalscopy;
-				chop $pkvalsdelete;
-				chop $pkvalsupdate;
-
-				## Delete from the target as needed
-				if ($dmlcount{D}{target}{$S}{$T}) {
-					$SQL = "DELETE FROM $S.$T WHERE $pkcols IN ($pkvalsdelete)";
-					$count = $targetdbh->do($SQL);
-					$dmlcount{alldeletes}{target} += $count;
-				}
-
-				## Update any that are on both source and target
-				if ($dmlcount{U}{target}{$S}{$T}) {
-
-					## If nothing but primary key, no need to update anything
-					if (length $g->{safecolumnlist}) {
-
-						## Build the UPDATE statement
-						$SQL = "UPDATE $S.$T SET ";
-						$SQL .= join ',' => map { "$_=?" } @{$g->{safecols}};
-
-						$x=1;
-						my $pkeycols = '';
-						for my $qpk (@{$g->{qpkey}}) {
-							$SQL .= sprintf " %s %s = ?",
-								$x>1 ? 'AND' : 'WHERE',
-									$g->{binarypkey}[$x-1] ? qq{ENCODE($qpk,'base64')} : $qpk;
-							$pkeycols .= sprintf ",%s",
-								$g->{binarypkey}[$x-1] ? qq{ENCODE($qpk,'base64')} : $qpk;
-							$x++;
+					## If this goat is set to makedelta, add rows to bucardo_delta to simulate the
+					##   normal action of a tigger, and add rows to bucardo_track so they changed
+					##   rows cannot flow back to us
+					## XXX: Needs testing
+					if ($g->{does_makedelta}) {
+						for (@$info) {
+							$sth{target}{$g}{insertdelta}->execute($toid,@{$_}[0..($g->{pkcols}-1)]);
 						}
-						$sth{target}{$g}{updaterow} = $targetdbh->prepare($SQL);
-						if (exists $g->{binarycols}) {
-							for (@{$g->{binarycols}}) {
-								$sth{target}{$g}{updaterow}->bind_param($_, undef, {pg_type => PG_BYTEA});
+						$sth{target}{inserttrack}->execute($toid,$targetdb);
+						$count = @$info;
+						$self->glog("Total makedelta rows added for $S.$T on $targetdb: $count");
+					}
+
+					## Build the left-hand of the WHERE clause, used by all queries below
+					## XXX: Use some alternate method if there are a very large number of entries
+
+					## The list of primary key columns
+					if (! $g->{pkeycols}) {
+						$g->{pkeycols} = '';
+						$x=0;
+						for my $qpk (@{$g->{qpkey}}) {
+							$g->{pkeycols} .= sprintf '%s,', $g->{binarypkey}[$x] ? qq{ENCODE($qpk,'base64')} : $qpk;
+						}
+						chop $g->{pkeycols};
+						$g->{pkcols} > 1 and $g->{pkeycols} = "($g->{pkeycols})";
+						## Example: id
+						## Example MCPK: (id,"space bar",cdate)
+					}
+
+					## Build a list of all PK values to pass to the target
+					my $pkvals = '';
+					for my $row (@$info) {
+						my $inner = join ',' => map { s/\'/''/go; qq{'$_'}; } @$row;
+						$pkvals .= $g->{pkcols} > 1 ? "($inner)," : "$inner,";
+					}
+					chop $pkvals;
+					## Example: 1234, 221
+					## Example MCPK: ('1234','Don''t Stop','2008-01-01'),('221','foobar','2008-11-01')
+
+					## Create a unique single scalar for this pkey (a super PK)
+					## If more than one column in a PK, join with pipes
+					if (! $g->{pkeyscalar}) {
+						$g->{pkeyscalar} = '';
+						$x=0;
+						for my $q (@{$g->{qpkey}}) {
+							$g->{pkeyscalar} .= sprintf q{%s||'|'||},
+								$g->{binarypkey}[$x++] ? "ENCODE($q,'base64')" : "${q}::text";
+						}
+						## Remove the final pipe set:
+						$g->{pkeyscalar} =~ s/.......$/ AS id/;
+						## Example: id AS id
+						## Example MCPK: id||'|'||"space bar"||'|'||cdate AS id
+					}
+
+					## Pull a unique representation of the primary key for all rows on the target database
+					##   that were in our list of distinct rows from bucardo_delta.
+					## They may or may not exist on the source.
+					$SQL = qq{SELECT $g->{pkeyscalar} FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)};
+					## Example: SELECT id AS id FROM public.sales WHERE id IN (1234,221)
+					## Example MCPK: SELECT id||'|'||"space bar"||'|'||cdate AS id FROM public.sales
+					##   WHERE (id,"space bar",cdate) IN (('1234','Don''t Stop','2008-01-01'),('221','foobar','2008-11-01'))
+					$sth = $targetdbh->prepare($SQL);
+					$count = $sth->execute(); ## XXX: This can be very slow for very large IN lists
+					my $tgtrows = $sth->fetchall_hashref('id'); ## id is our unique 'super PK' (pkeyscalar)
+
+					## Run the same query on the source to figure out which rows are still there
+					$sth = $sourcedbh->prepare($SQL);
+					$count = $sth->execute();
+					my $srcrows = $sth->fetchall_hashref('id');
+
+					## Prepare to build lists for insert, update, and delete
+					my $pkvalsinsert = '';
+					my $pkvalsdelete = '';
+					my $pkvalsupdate = '';
+					$dmlcount{I}{target}{$S}{$T} = $dmlcount{U}{target}{$S}{$T} = $dmlcount{D}{target}{$S}{$T} = 0;
+
+					## Walk each row (PK) of interest, and determine what to do about it
+					for my $row (@$info) {
+						my $pkvalue = join ',' => map { s/\'/''/go; qq{'$_'}; } @$row;
+						my $superpk = join '|' => @$row;
+
+						## If no longer on the source, DELETE from the target
+						## Note: order of these if () loops is important!
+						if (!exists $srcrows->{$superpk}) {
+							$pkvalsdelete .= $g->{pkcols} > 1 ? "($pkvalue)," : "$pkvalue,";
+							$dmlcount{D}{target}{$S}{$T}++;
+							next;
+						}
+
+						## (else) If not on the target, insert to the target (via COPY)
+						if (!exists $tgtrows->{$superpk}) {
+							$pkvalsinsert .= $g->{pkcols} > 1 ? "($pkvalue)," : "$pkvalue,";
+							$dmlcount{I}{target}{$S}{$T}++;
+							next;
+						}
+
+						## If neither, UPDATE on the target one by one
+						$pkvalsupdate .= $g->{pkcols} > 1 ? "($pkvalue)," : "$pkvalue,";
+						$dmlcount{U}{target}{$S}{$T}++;
+					}
+					chop $pkvalsinsert;
+					chop $pkvalsupdate;
+					chop $pkvalsdelete;
+
+					## From here on out, we're making changes on the target that may trigger an exception
+					## This, if we have exception handling code, we create a savepoint to rollback to
+					if ($g->{has_exception_code}) {
+						$self->glog("Creating savepoint on target for exception handler(s)");
+						$targetdbh->pg_savepoint("bucardo_$$") or die qq{Savepoint creation failed for bucardo_$$};
+					}
+
+					## This label is solely to localize the DIE signal handler
+				  LOCALDIE: {
+						## Temporarily override our kid-level handler due to the eval
+						local $SIG{__DIE__} = sub {};
+
+						## Everything before this point should work, so we delay the eval until right before
+						##   our first execute on the target
+						eval {
+
+							## Delete from the target as needed
+							if ($dmlcount{D}{target}{$S}{$T}) {
+								$SQL = "DELETE FROM $S.$T WHERE $g->{pkeycols} IN ($pkvalsdelete)";
+								$count = $targetdbh->do($SQL);
+								$dmlcount{alldeletes}{target} += $count;
+							}
+
+							## Update any that are on both source and target
+							if ($dmlcount{U}{target}{$S}{$T}) {
+
+								## If this table consists only of primary keys, no need to update
+								if (!length $g->{safecolumnlist}) {
+								}
+
+								else {
+									## Build the UPDATE statement, but prepare once per session
+									if (! exists $sth{target}{$g}{updaterow}) {
+
+										$SQL = "UPDATE $S.$T SET ";
+										$SQL .= join ',' => map { "$_=?" } @{$g->{safecols}};
+										$x=1;
+										$g->{pkeycolumns} = '';
+										for my $qpk (@{$g->{qpkey}}) {
+											$SQL .= sprintf " %s %s = ?",
+												$x>1 ? 'AND' : 'WHERE',
+													$g->{binarypkey}[$x-1] ? qq{ENCODE($qpk,'base64')} : $qpk;
+											$g->{pkeycolumns} .= sprintf ",%s",
+												$g->{binarypkey}[$x-1] ? qq{ENCODE($qpk,'base64')} : $qpk;
+											$x++;
+										}
+										$sth{target}{$g}{updaterow} = $targetdbh->prepare($SQL);
+										## Tell DBI about any bytea columns
+										if (exists $g->{binarycols}) {
+											for (@{$g->{binarycols}}) {
+												$sth{target}{$g}{updaterow}->bind_param($_, undef, {pg_type => PG_BYTEA});
+											}
+										}
+									}
+
+									## Grab all the actual non-PK then PK column values from the source
+									my $cols = join ',' => @{$g->{safecols}};
+									$SQL = "SELECT $cols $g->{pkeycolumns} FROM $S.$T WHERE $g->{pkeycols} IN ($pkvalsupdate)";
+									$sth = $sourcedbh->prepare($SQL);
+									$sth->execute();
+									## Walk through all the rows from the source, and apply to the target
+									for my $row (@{$sth->fetchall_arrayref()}) {
+										## The array is all non-PK cols, then all PK cols
+										$count = $sth{target}{$g}{updaterow}->execute(@$row);
+										$dmlcount{allupdates}{target} += $count;
+									}
+								}
+							} ## end if got updates
+
+							## We've now done all deletions and updates, time for inserts
+							## We use COPY to put these rows on the target
+							if ($dmlcount{I}{target}{$S}{$T}) {
+								my $srccmd = "COPY (SELECT * FROM $S.$T WHERE $g->{pkeycols} IN ($pkvalsinsert)) TO STDOUT";
+								my $tgtcmd = "COPY $S.$T FROM STDIN";
+								$sourcedbh->do($srccmd);
+								$targetdbh->do($tgtcmd);
+								my $buffer = '';
+								$self->glog(qq{Begin COPY to $S.$T, rows: $dmlcount{I}{target}{$S}{$T}});
+								while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
+									$targetdbh->pg_putcopydata($buffer);
+								}
+								$targetdbh->pg_putcopyend();
+								$self->glog(qq{End COPY to $S.$T});
+								$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
+							}
+
+							## If we disabled the indexes earlier, flip them on and run a REINDEX
+							if ($hasindex) {
+								$self->glog("Re-enabling indexes for table $S.$T on $targetdb");
+								$SQL = "UPDATE pg_class SET relhasindex = 't' WHERE oid = $toid";
+								$targetdbh->do($SQL);
+								$self->glog("Reindexing table $S.$T on $targetdb");
+								$targetdbh->do("REINDEX TABLE $S.$T");
+							}
+
+							## Update the source bucardo_tracker for this table
+							##  so that subsequent runs don't process the rows we just did.
+							$self->glog("Updating bucardo_track for $S.$T on $sourcedb");
+							$sth{source}{$g}{track}->execute();
+
+						}; ## end of eval
+
+					} ## end of LOCALDIE label: die will now revert to its previous behavior
+
+					## If we failed the eval, and have no exception code, let the kid handle
+					##   the exception as it normally would
+					if (!$g->{has_exception_code}) {
+						if ($@) {
+							$self->glog("Warning! Aborting due to exception for $S.$T:$pkval Error was $@");
+							die $@;
+						}
+					}
+					elsif ($@) {
+						$self->glog("Exception caught: $@");
+
+						## Bail if we've already tried to handle this goat via an exception
+						if ($g->{exceptions} > 1) {
+							$self->glog("Warning! Exception custom code did not work for $S.$T:$pkval");
+							die qq{Error: too many exceptions to handle for $S.$T:$pkval};
+						}
+
+						## Time to let the exception handling custom code do its work
+						## First, we rollback any changes we've made on the target
+						$self->glog("Rolling back to target savepoint, due to database error: $DBI::errstr");
+						$targetdbh->pg_rollback_to("bucardo_$$");
+
+						## Now run one or more exception handlers
+						my $runagain = 0;
+						for my $code (@{$g->{code_exception}}) {
+							$self->glog("Trying exception code $code->{id}: $code->{name}");
+							my $result = run_kid_custom_code($code, 'strict');
+							if ($result eq 'next') {
+								$self->glog("Going to next available exception code");
+								next;
+							}
+
+							## A request to redo the entire sync
+							## Note that 'redo' always rolls back both source and target, so we don't have to do it here
+							## It also cleans up the q table and sends a sync done NOTIFY
+							if ($result eq 'redo') {
+								$self->glog("Exception handler requested redoing the entire sync");
+								redo KID;
+							}
+
+							## A request to run the same goat again.
+							if ($input->{runagain}) {
+								$self->glog("Exception handler thinks we can try again");
+								$runagain = 1;
+								last;
 							}
 						}
 
-						## Grab all the info from the source
-						my $cols = join ',' => @{$g->{safecols}};
-						$SQL = "SELECT $cols $pkeycols FROM $S.$T WHERE $pkcols IN ($pkvalsupdate)";
-						$sth = $sourcedbh->prepare($SQL);
-						$sth->execute();
-						for my $row (@{$sth->fetchall_arrayref()}) {
-							## The array is all non-PK cols, then all PK cols
-							$count = $sth{target}{$g}{updaterow}->execute(@$row);
-							$dmlcount{allupdates}{target} += $count;
+						## If not running again, we simply give up and throw an exception to the kid
+						if (!$runagain) {
+							$self->glog("No exception handlers were able to help, so we are bailing out");
+							die qq{No exception handlers were able to help, so we are bailing out\n};
 						}
+
+						## The custom code wants to try again
+
+						## Make sure the database connections are still clean
+						my $sourceping = $sourcedbh->ping();
+						if ($sourceping !~ /^[13]$/o) {
+							$self->glog("Warning! Source ping after exception handler was $sourceping");
+						}
+						my $targetping = $targetdbh->ping();
+						if ($targetping !~ /^[13]$/o) {
+							$self->glog("Warning! Target ping after exception handler was $targetping");
+						}
+
+						## As the bucardo_delta and source rows may have changed, we need to reset the counts
+						##   and pull a fresh copy of the interesting rows from the database
+						$deltacount{allsource} -= $deltacount{source}{$S}{$T};
+						$deltacount{allsource} += $deltacount{source}{$S}{$T} = $sth{source}{$g}{getdelta}->execute();
+
+						## Now jump back and try this goat again!
+						redo PUSHDELTA_SAVEPOINT;
+
+					} ## end of handled exception
+					else {
+						## Got eception handlers, but no exceptions, so reset the count:
+						$g->{exceptions} = 0;
 					}
-				}
 
-				## COPY over ones that are not already on the target
-				if ($dmlcount{I}{target}{$S}{$T}) {
-					my $srccmd = "COPY (SELECT * FROM $S.$T WHERE $pkcols IN ($pkvalscopy)) TO STDOUT";
-					my $tgtcmd = "COPY $S.$T FROM STDIN";
-					$sourcedbh->do($srccmd);
-					$targetdbh->do($tgtcmd);
-					my $buffer = '';
-					$self->glog(qq{Begin COPY to $S.$T, rows: $dmlcount{I}{target}{$S}{$T}});
-					while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
-						$targetdbh->pg_putcopydata($buffer);
-					}
-					$targetdbh->pg_putcopyend();
-					$self->glog(qq{End COPY to $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
-					$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
-				}
-
-				if ($hasindex) {
-					$SQL = "UPDATE pg_class SET relhasindex = 't' WHERE oid = $toid";
-					$targetdbh->do($SQL);
-					$self->glog("Reindexing table $S.$T on $targetdb");
-					$targetdbh->do("REINDEX TABLE $S.$T");
-				}
-
-				## Update the source bucardo_tracker for this table
-				$self->glog("Updating bucardo_track for $S.$T on $sourcedb");
-				$sth{source}{$g}{track}->execute();
+				} ## end of PUSHDELTA_SAVEPONT
 
 			} ## end each goat
-
-			## TODO: Exception catching?
 
 			$self->glog("Pushdelta counts: deletes=$dmlcount{alldeletes}{target} inserts=$dmlcount{allinserts}{target} updates=$dmlcount{allupdates}{target}");
 
 		} ## end pushdelta
 
+		## SWAP
 		elsif ($synctype eq 'swap') {
 
 			for my $g (@$goatlist) {
@@ -4454,7 +4600,7 @@ sub start_kid {
 
 				$g->{exceptions} = 0; ## Total number of times we've failed for this table
 
-			  SAVEPOINT: {
+			  SWAP_SAVEPOINT: {
 
 				## The actual data from the large join of bucardo_delta + original table for source and target
 				my ($info1,$info2)= ({},{});
@@ -4582,7 +4728,7 @@ sub start_kid {
 
 							## Run the conflict handler(s)
 							for my $code (@{$g->{code_conflict}}) {
-								my $result = run_custom_code($code, 'strict');
+								my $result = run_kid_custom_code($code, 'strict');
 								if ($result eq 'next') {
 									$self->glog("Going to next available conflict code");
 									next;
@@ -4744,13 +4890,17 @@ sub start_kid {
 				}
 
 				## Do deletions in chunks
-				$x=0;
-				$SQL = '';
-				for my $qpk (@{$g->{qpkey}}) {
-					$SQL .= sprintf '%s', $g->{binarypkey}[$x] ? qq{ENCODE($qpk,'base64'),} : "$qpk,";
+				if (! $g->{pkeycols}) {
+					$g->{pkeycols} = '';
+					$x=0;
+					for my $qpk (@{$g->{qpkey}}) {
+						$g->{pkeycols} .= sprintf '%s,', $g->{binarypkey}[$x] ? qq{ENCODE($qpk,'base64')} : $qpk;
+					}
+					chop $g->{pkeycols};
+					$g->{pkcols} > 1 and $g->{pkeycols} = "($g->{pkeycols})";
 				}
-				chop $SQL;
-				$g->{pkcols} > 1 and $SQL = "($SQL)";
+				$SQL = $g->{pkeycols};
+
 				$SQL = "DELETE FROM $S.$T WHERE $SQL IN";
 				while (@srcdelete) {
 					$x=0;
@@ -4801,7 +4951,6 @@ sub start_kid {
 				if ($dmlcount{D}{target}{$S}{$T}) {
 					$self->glog(qq{Rows deleted from target "$S.$T": $dmlcount{D}{target}{$S}{$T}/$count});
 				}
-
 				## Get authoritative existence information for all undefined keys
 				## Before this point, the lack of a matching record from the left join
 				## only tells us that the real row *might* exist.
@@ -4886,10 +5035,9 @@ sub start_kid {
 					$row++;
 					my $prefix = "[$row/$changecount] $S.$T";
 
-					## TODO: Any way to easily remove eval if not doing savepoints?
 				  GENX: {
 						## Temporarily override our kid-level handler due to the eval
-						local $SIG{__DIE__} = sub {}; ## TODO: WORKS?: if $g->{has_exception_code};
+						local $SIG{__DIE__} = sub {};
 
 						## This eval block needed for potential error handling
 						eval {
@@ -4967,6 +5115,8 @@ sub start_kid {
 					}
 					elsif ($@) {
 
+						$self->glog("Exception caught: $@");
+
 						## Bail if we've called one exception for every (original) row
 						## TODO: Develop better metrics here
 						if ($g->{exceptions} > $deltacount{source}{$S}{$T} and $g->{exceptions} > $deltacount{target}{$S}{$T}) {
@@ -4998,7 +5148,7 @@ sub start_kid {
 						my $runagain = 0;
 						for my $code (@{$g->{code_exception}}) {
 							$self->glog("Trying exception code $code->{id}: $code->{name}");
-							my $result = run_custom_code($code, 'strict');
+							my $result = run_kid_custom_code($code, 'strict');
 							if ($result eq 'next') {
 								$self->glog("Going to next available exception code");
 								next;
@@ -5034,7 +5184,7 @@ sub start_kid {
 						$deltacount{tgt2}{$g} = $sth{target}{$g}{getdelta}->execute();
 
 						$g->{exceptions}++;
-						redo SAVEPOINT;
+						redo SWAP_SAVEPOINT;
 
 					} ## end exception and savepointing
 				} ## end each PKEY
@@ -5067,7 +5217,7 @@ sub start_kid {
 				$dmlcount{allupdates}{target} += $dmlcount{U}{target}{$S}{$T};
 				$dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
 
-			} ## end SAVEPOINT
+			} ## end SWAP_SAVEPOINT
 
 				if ($hasindex_src) {
 					$SQL = "UPDATE pg_class SET relhasindex = 't' WHERE oid = $g->{oid}";
@@ -5093,7 +5243,7 @@ sub start_kid {
 
 		# Run all 'before_trigger_enable' code
 		for my $code (@{$sync->{code_before_trigger_enable}}) {
-			my $result = run_custom_code($code, 'strict');
+			my $result = run_kid_custom_code($code, 'strict');
 			if ($result eq 'redo') { ## redo rollsback source and target
 				redo KID if $kidsalive;
 				last KID;
@@ -5109,7 +5259,7 @@ sub start_kid {
 
 		# Run all 'after_trigger_enable' code
 		for my $code (@{$sync->{code_after_trigger_enable}}) {
-			my $result = run_custom_code($code, 'strict');
+			my $result = run_kid_custom_code($code, 'strict');
 			if ($result eq 'redo') { ## redo rollsback source and target
 				redo KID if $kidsalive;
 				last KID;
@@ -5167,7 +5317,7 @@ sub start_kid {
 
 		# Run all 'after_txn' code
 		for my $code (@{$sync->{code_after_txn}}) {
-			my $result = run_custom_code($code, 'nostrict');
+			my $result = run_kid_custom_code($code, 'nostrict');
 			## In case we want to bypass other after_txn code
 			if ($result eq 'redo') {
 				redo KID if $kidsalive;
