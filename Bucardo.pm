@@ -3799,6 +3799,7 @@ sub start_kid {
 		if ($synctype eq 'swap') {
 			$sourcedbh->do("SET session_replication_role = 'replica'");
 		}
+		## These stick around for a long time, but for the kids, that's ok
 	}
 	if ($config{tcp_keepalives_idle}) { ## e.g. not 0, should always exist
 		$sourcedbh->do("SET tcp_keepalives_idle = $config{tcp_keepalives_idle}");
