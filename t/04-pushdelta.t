@@ -16,7 +16,7 @@ $location = 'pushdelta';
 
 use vars qw/$SQL $sth $t $i $result $count %sql %val %pkey/;
 
-unlink "tmp/log.bucardo";
+unlink 'log.bucardo';
 
 pass("*** Beginning 'pushdelta' tests");
 
@@ -52,6 +52,57 @@ sub test_empty_drop {
 	$result = [];
 	bc_deeply($result, $dbhB, $DROPSQL, $t, $line);
 }
+
+## Test unique index violation problems
+## Test a deletion
+for my $table (sort keys %tabletype) {
+	my $pkeyname = $table =~ /test5/ ? q{"id space"} : 'id';
+	my $type = $tabletype{$table};
+	my $val1 = $val{$type}{1};
+	my $val2 = $val{$type}{2};
+	my $val3 = $val{$type}{3};
+	$SQL = "INSERT INTO $table($pkeyname, inty, data1, email) VALUES (?,?,?,?)";
+	$sth = $dbhA->prepare($SQL);
+	$sth->execute($val1, 1, 1, 'moe');
+	$sth->execute($val2, 2, 2, 'larry');
+	$sth->execute($val3, 3, 3, 'curly');
+}
+$dbhA->commit();
+
+$bct->ctl("kick pushdeltatest 0");
+wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
+
+## Kick it!
+$SQL = 'SELECT * FROM bucardo_test1';
+my $info = $dbhB->selectall_arrayref($SQL);
+
+## Switch things up to try and trick the unique index
+my $table = 'bucardo_test1';
+$SQL = "UPDATE $table SET email = ? WHERE id = ?";
+$sth = $dbhA->prepare($SQL);
+$sth->execute('larrytemp', 2);
+$sth->execute('larry', 1);
+$sth->execute('moe', 3);
+$sth->execute('curly', 2);
+$dbhA->commit();
+
+wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
+
+## We want 1 2 3 to be larry, curly, moe
+$SQL = 'SELECT id, email FROM bucardo_test1 ORDER BY id';
+$t='Pushdelta handled a unique index without any problems';
+$result = [[1,'larry'],[2,'curly'],[3,'moe']];
+bc_deeply($result, $dbhB, $SQL, $t);
+
+## Reset the tables
+for my $table (sort keys %tabletype) {
+	$dbhA->do("DELETE FROM $table");
+}
+$dbhA->do('DELETE FROM droptest');
+$dbhA->commit();
+wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
+$dbhB->do('DELETE FROM droptest');
+$dbhB->commit();
 
 ## Prepare some insert statement handles, add a row to source database
 for my $table (sort keys %tabletype) {
@@ -226,6 +277,7 @@ for my $table (sort keys %tabletype) {
 	test_empty_drop($table,$dbhB);
 	test_empty_drop($table,$dbhC);
 }
+
 
 exit;
 
