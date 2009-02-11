@@ -1,12 +1,16 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-3.2.6
+3.2.7
+
+  - Remove disable_triggers and disable_rules from the sync table. 
+    We simply choose pg_class or replica based on the version of the 
+    database in question. [GSM]
 
   - Allow wildcards in the 'bucardo_ctl kick' [Josh Tolley]
 
   - Support multi-column primary keys. Thanks to Backcountry.com. [GSM]
 
-  - Rewrite the pushdelta sync method to be more efficient. [GSM]
+  - Rewrite the pushdelta sync method to be more efficient and safer. [GSM]
 
   - Allow for dead columns when checking attnums. [GSM]
 

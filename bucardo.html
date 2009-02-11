@@ -497,10 +497,6 @@ The last step is to add syncs, which are individual replication events, added to
 <tr>
 <td class="lcol" >priority</td> <td>Smallint</td> <td>0</td> <td>No</td> <td>Higher numbered syncs run first</td> </tr>
 <tr>
-<td class="lcol" >disable_triggers</td> <td>Text</td> <td>'pg_class'</td> <td>Yes</td> <td>How to disable triggers, one of: 'pg_class','SQL','replica'. Replica is highly recommended but will only work on Postgres version 8.3 or greater. SQL ("DISABLE TRIGGERS") will lock the tables, while pg_class will not, but will cause the very occasional OID error.</td> </tr>
-<tr>
-<td class="lcol" >disable_rules</td> <td>Text</td> <td>'pg_class'</td> <td>Yes</td> <td>How to disable rules, one of: 'none','pg_class','replica'</td> </tr>
-<tr>
 <td class="lcol" >analyze_after_copy</td> <td>Boolean</td> <td>True</td> <td>No</td> <td>Whether to run an ANALYZE on the table after a fullcopy sync</td> </tr>
 <tr>
 <td class="lcol" >overdue</td> <td>Interval</td> <td>'0 seconds'</td> <td>No</td> <td>How long until the sync is considered overdue, e.g. for Nagios warnings. '0 seconds' = do not check.</td> </tr>
@@ -510,8 +506,8 @@ The last step is to add syncs, which are individual replication events, added to
 <p>
 Example:
 </p>
-<p class="code"><span class="code">INSERT INTO sync (name, source, targetdb, synctype, checktime, disable_triggers, disable_rules)
-VALUES ('merch','prod1','prod2','swap','10 minutes','replica','replica');</span></p>
+<p class="code"><span class="code">INSERT INTO sync (name, source, targetdb, synctype, checktime)
+VALUES ('merch','prod1','prod2','swap','10 minutes');</span></p>
 
 <br clear="all" />
 <hr />

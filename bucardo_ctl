@@ -17,7 +17,7 @@ use Data::Dumper;
 
 return 1 if $ENV{BUCARDO_CTL_TEST};
 
-our $VERSION = '3.2.6';
+our $VERSION = '3.2.7';
 
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
@@ -1207,11 +1207,11 @@ sub relation_exists {
 
 sub constraint_exists {
 
-	my ($table,$constraint) = @_;
-	my $SQL = 'SELECT 1 FROM pg_catalog.pg_class c, pg_catalog.pg_constraint n '.
-		'WHERE c.oid=n.conrelid AND c.relname = ? AND n.conname = ?';
+	my ($schema,$table,$constraint) = @_;
+	my $SQL = 'SELECT 1 FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n, pg_catalog.pg_constraint o '.
+		'WHERE n.oid=c.relnamespace AND c.oid=o.conrelid AND n.nspname = ? AND c.relname = ? AND o.conname = ?';
 	my $sth = $dbh->prepare_cached($SQL);
-	my $count = $sth->execute($table,$constraint);
+	my $count = $sth->execute($schema,$table,$constraint);
 	$sth->finish();
 	return $count < 1 ? 0 : 1;
 
@@ -1389,6 +1389,11 @@ sub upgrade {
 		['bucardo', 'goat', 'schemaname', 'NO DEFAULT'],
 	);
 
+	my @old_columns = (
+		['bucardo', 'sync', 'disable_rules'],
+		['bucardo', 'sync', 'disable_triggers'],
+	);
+
 	my @row_values = (
 
 		['bucardo_config','about',q{setting = 'log_showtime'}, 1,
@@ -1396,7 +1401,13 @@ sub upgrade {
 	);
 
 	my @old_constraints = (
-		['goat', 'goat_pkeytype_check'],
+		['bucardo', 'goat', 'goat_pkeytype_check'],
+		['bucardo', 'sync', 'sync_replica_allornone'],
+		['bucardo', 'sync', 'sync_disable_triggers_method'],
+		['bucardo', 'sync', 'sync_disable_rules_method'],
+	);
+
+	my @new_constraints = (
 	);
 
 	my @old_functions = (
@@ -1431,13 +1442,13 @@ sub upgrade {
 	}
 
 	for my $con (@old_constraints) {
-		my ($table, $constraint) = @$con;
-		if (!constraint_exists($table, $constraint)) {
+		my ($schema, $table, $constraint) = @$con;
+		if (!constraint_exists($schema, $table, $constraint)) {
 			clog "  Constraint $constraint does not exist";
 		}
 		else {
-			upgrade_and_log(qq{ALTER TABLE $table DROP CONSTRAINT "$constraint"});
-			clog "Dropped constraint $constraint";
+			upgrade_and_log(qq{ALTER TABLE $schema.$table DROP CONSTRAINT "$constraint"});
+			clog "Dropped constraint $constraint ON $schema.$table";
 			$changes++;
 		}
 	}
@@ -1490,7 +1501,7 @@ sub upgrade {
 		}
 		else {
 			$def =~ s/\s+/ /g;
-			$dbh->do("ALTER TABLE $schema.$table ADD $column $def");
+			$dbh->do("ALTER TABLE $schema.$table ADD COLUMN $column $def");
 			clog "Created column: $schema.$table.$column $def";
 			$changes++;
 		}
@@ -1498,6 +1509,7 @@ sub upgrade {
 
 	for my $row (@altered_columns) {
 		my ($schema,$table,$column,$change) = @$row;
+		next if ! column_exists($schema, $table, $column);
 		if ($change eq 'NO DEFAULT') {
 			my $def = column_default($schema, $table, $column);
 			if (!$def) {
@@ -1509,8 +1521,50 @@ sub upgrade {
 				$changes++;
 			}
 		}
+		elsif ($change =~ /^RENAME\s+(\w+)/) {
+			my $newname = $1;
+			upgrade_and_log("ALTER TABLE $schema.$table RENAME COLUMN $column TO $newname");
+			clog("Renamed $schema.$table.$column to $newname");
+			$changes++;
+		}
+		elsif ($change =~ /^DEFAULT\s+(.+)/) {
+			my $newname = $1;
+			my $oldname = column_default($schema, $table, $column);
+			if ($newname eq $oldname) {
+				clog "  Column $schema.$table.$column already has a DEFAULT of $newname";
+			}
+			else {
+				upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column SET DEFAULT $newname");
+				clog("Changed DEFAULT on $schema.$table.$column to $newname");
+				$changes++;
+			}
+		}
 		else {
 			die qq{Do not know how to handle altered column spec of "$change"};
+		}
+	}
+
+	for my $row (@old_columns) {
+		my ($schema,$table,$column) = @$row;
+		if (!column_exists($schema, $table, $column)) {
+			clog "  Column already removed: $schema.$table.$column";
+		}
+		else {
+			$dbh->do("ALTER TABLE $schema.$table DROP COLUMN $column");
+			clog "Dropped column: $schema.$table.$column";
+			$changes++;
+		}
+	}
+
+	for my $row (@new_constraints) {
+		my ($schema,$table,$name,$def) = @$row;
+		if (constraint_exists($schema, $table, $name)) {
+			clog "  Contraint $name on $schema.$table already exists";
+		}
+		else {
+			$dbh->do("ALTER TABLE $schema.$table ADD CONSTRAINT $name $def");
+			clog "Added constraint $name to $schema.$table";
+			$changes++;
 		}
 	}
 
@@ -1685,6 +1739,7 @@ sub upgrade {
 		printf "Okay to commit $changes %s? ", $changes==1 ? 'change' : 'changes';
 		exit if <STDIN> !~ /Y/i;
 		$dbh->commit();
+		print "Changes have been commited\n";
 	}
 
 	exit 1;

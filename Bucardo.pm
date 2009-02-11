@@ -9,7 +9,7 @@ use 5.008003;
 use strict;
 use warnings;
 
-our $VERSION = '3.2.6';
+our $VERSION = '3.2.7';
 
 ## Begin Moose classes
 {
@@ -75,8 +75,8 @@ my @req1 =  (qw(name source));
 my @req2 =  (qw());
 my @opt1 =  (qw(synctype copytype deletemethod copyrows copyextra stayalive strict_checking ));
 push @opt1, (qw(checktime status limitdbs precommand postcommand txnmode ping               ));
-push @opt1, (qw(targetdb targetgroup kidtime kidsalive disable_triggers do_listen           ));
-push @opt1, (qw(usecustomselect makedelta rebuild_index disable_rules analyze_after_copy    ));
+push @opt1, (qw(targetdb targetgroup kidtime kidsalive do_listen                            ));
+push @opt1, (qw(usecustomselect makedelta rebuild_index analyze_after_copy                  ));
 my @opt2 =  (qw());
 for my $req (@req1) { has $req => ( is => 'rw', isa => 'Str', required => 1 ); }
 for my $req (@req2) { has $req => ( is => 'rw', isa => 'Int', required => 1 ); }
@@ -1336,7 +1336,7 @@ sub start_mcp {
 
 					## For now, just allow a few things to be changed "on the fly"
 					for my $val (qw/checksecs stayalive limitdbs do_listen txnmode deletemethod status ping
-									analyze_after_copy disable_triggers targetgroup targetdb usecustomselect/) {
+									analyze_after_copy targetgroup targetdb usecustomselect/) {
 						$sync->{$syncname}{$val} = $self->{sync}{$syncname}{$val} = $info->{$val};
 					}
 					## TODO: Fix those double assignments
@@ -1774,22 +1774,24 @@ sub start_mcp {
 		my %targetdbh;
 		my $pdbh = $self->{pingdbh};
 		if (defined $s->{targetdb}) {
- 		  my $tdb = $s->{targetdb};
-		  $self->glog(qq{Connecting to target database "$tdb"});
- 		  $pdbh->{$tdb} ||= $self->connect_database($tdb);
- 		  if ($pdbh->{$tdb} eq 'inactive') {
- 		    delete $pdbh->{$tdb};
- 		  }
- 		  else {
- 		    $s->{targetdbs}{$tdb}++;
- 		    $targetdbh{$tdb}++;
- 		  }
+			my $tdb = $s->{targetdb};
+			$self->glog(qq{Connecting to target database "$tdb"});
+			$pdbh->{$tdb} ||= $self->connect_database($tdb);
+			if ($pdbh->{$tdb} eq 'inactive') {
+				$self->glog(qq{Deleting inactive target database "$tdb"});
+				delete $pdbh->{$tdb};
+			}
+			else {
+				$s->{targetdbs}{$tdb}++;
+				$targetdbh{$tdb}++;
+			}
 		}
 		elsif (defined $s->{targetgroup}) {
 			for my $tdb (@{$dbgroups->{$s->{targetgroup}}{members}}) {
 				$self->glog(qq{Connecting to target database "$tdb"});
 				$pdbh->{$tdb} ||= $self->connect_database($tdb);
 				if ($pdbh->{$tdb} eq 'inactive') {
+					$self->glog(qq{Deleting inactive target database "$tdb"});
 					delete $pdbh->{$tdb};
 				}
 				else {
@@ -2201,13 +2203,6 @@ sub start_mcp {
 		for my $db (sort keys %targetdbh) {
 			my $dbh = $pdbh->{$db};
 
-			## If using replica and connecting to a pre 8.3 server, switch to pg_class
-			my $remoteversion = $dbh->{pg_server_version} || 80000;
-			if ($s->{disable_triggers} eq 'replica' and $remoteversion < 80300) {
-				$self->glog("Server version on $db does not support replica trigger disabling: using pg_class");
-				$s->{disable_triggers} = $s->{disable_rules} = 'pg_class';
-			}
-
 			$dbh->commit();
 			next if (! $s->{ping} and ! $s->{do_listen}) or $s->{synctype} ne 'swap';
 			my $l = "bucardo_kick_sync_$syncname";
@@ -2384,8 +2379,7 @@ sub start_controller {
 	$msg = qq{  $showtarget synctype: $synctype stayalive: $stayalive checksecs: $checksecs };
 	$self->glog($msg);
 	$mailmsg .= "$msg\n";
-	my $disabletrig = $sync->{disable_triggers};
-	$msg = qq{  limitdbs: $limitdbs kicked: $kicked kidsalive: $kidsalive triggers: $disabletrig};
+	$msg = qq{  limitdbs: $limitdbs kicked: $kicked kidsalive: $kidsalive};
 	$self->glog($msg);
 	$mailmsg .= "$msg\n";
 
@@ -3708,36 +3702,23 @@ sub start_kid {
 
 	} ## end pushdelta/swap
 
-	## Setup the disable and enable triggers/rules one of three ways
-	## Disabling triggers is a tradeoff: ALTER TABLE does icky locking, while pg_class 
-	## modification is slightly dangerous due to non-MVCC system catalogs
-	##
-	## The only way to disable rules <= 8.2 is pg_class, or manually rebuilding each one
-	## 8.3 and up allows the use of replica magic
-	## TODO: allow no trigger drop for fullcopy?
+	## We disable and enable triggers and rules in one of two ways
+	## For old, pre 8.3 versions of Postgres, we manipulate pg_class
+	## This is not ideal, as we don't lock pg_class and thus risk problems
+	## because the system catalogs are not strictly MVCC. However, there is 
+	## no other way to disable rules, which we *must* do.
+	## If we are 8.3 or higher, we simply use session_replication_role, 
+	## which is completely safe (and faster)
+	## Note that the source and target may have different methods
+
+	my $source_disable_trigrules = $sourcedbh->{pg_server_version} >= 80300 ? 'replica' : 'pg_class';
+	my $target_disable_trigrules = $targetdbh->{pg_server_version} >= 80300 ? 'replica' : 'pg_class';
+
 	$SQL{disable_trigrules} = $SQL{enable_trigrules} = '';
-	if ($sync->{disable_triggers} eq 'SQL') {
-		$SQL{disable_trigrules} = join ";\n"
-			=> map {
-				"ALTER TABLE $_->{safeschema}.$_->{safetable} DISABLE TRIGGER ALL"
-			}
-				@$goatlist;
-		$SQL{enable_trigrules} = join ";\n"
-			=> map {
-				"ALTER TABLE $_->{safeschema}.$_->{safetable} ENABLE TRIGGER ALL"
-			}
-				@$goatlist;
-	}
-	if ($sync->{disable_triggers} eq 'pg_class' or $sync->{disable_rules} eq 'pg_class') {
-		my $dotrig = $sync->{disable_triggers} eq 'pg_class' ? 1 : 0;
-		my $dorule = $sync->{disable_rules} eq 'pg_class' ? 1 : 0;
-		my $setclause = '';
-		$setclause .= 'reltriggers = 0' if $dotrig;
-		$setclause .= ', ' if $dotrig and $dorule;
-		$setclause .= 'relhasrules = false' if $dorule;
+	if ($source_disable_trigrules eq 'pg_class' or $target_disable_trigrules eq 'pg_class') {
 		$SQL = qq{
             UPDATE pg_catalog.pg_class
-            SET    $setclause
+            SET    reltriggers = 0, relhasrules = false
             FROM   pg_catalog.pg_namespace
             WHERE  pg_catalog.pg_namespace.oid = relnamespace
             AND    (
@@ -3749,26 +3730,11 @@ sub start_kid {
 		$SQL{disable_trigrules} .= ";\n" if $SQL{disable_trigrules};
 		$SQL{disable_trigrules} .= $SQL;
 
-		$setclause = '';
-		if ($dotrig) {
-			$setclause = qq{reltriggers = 
-                (SELECT count(*) FROM pg_catalog.pg_trigger WHERE tgrelid = pg_catalog.pg_class.oid)
-            };
-		}
-		$setclause .= ', ' if $dotrig and $dorule;
-		if ($dorule) {
-			$setclause .= qq{relhasrules =
-                        CASE WHEN (
-                            SELECT COUNT(*)
-                            FROM   pg_catalog.pg_rules
-                            WHERE  schemaname = \$1
-                            AND    tablename = \$2
-                        ) > 0
-                        THEN true
-                        ELSE false
-                        END
-        };
-		}
+		my $setclause = q{reltriggers = }
+			. q{(SELECT count(*) FROM pg_catalog.pg_trigger WHERE tgrelid = pg_catalog.pg_class.oid),}
+			. q{relhasrules = }
+			. q{CASE WHEN (SELECT COUNT(*) FROM pg_catalog.pg_rules WHERE schemaname=$1 AND tablename=$2) > 0}
+			. q{THEN true ELSE false END};
 
 		$SQL{etrig} = qq{
             UPDATE pg_catalog.pg_class
@@ -3789,18 +3755,22 @@ sub start_kid {
 
 		$SQL{enable_trigrules} .= ";\n" if $SQL{enable_trigrules};
 		$SQL{enable_trigrules} .= $SQL;
+
 	}
 
 	## Common settings for the database handles. Set before passing to DBIx::Safe below
+	## These persist through all subsequent transactions
 	$sourcedbh->do("SET statement_timeout = 0");
 	$targetdbh->do("SET statement_timeout = 0");
-	if ($sync->{disable_triggers} eq 'replica') {
+
+	## Note: no need to turn these back to 'origin', we always want to stay in replica mode
+	if ($target_disable_trigrules eq 'replica') {
 		$targetdbh->do("SET session_replication_role = 'replica'");
-		if ($synctype eq 'swap') {
-			$sourcedbh->do("SET session_replication_role = 'replica'");
-		}
-		## These stick around for a long time, but for the kids, that's ok
 	}
+	if ($synctype eq 'swap' and $source_disable_trigrules eq 'replica') {
+		$sourcedbh->do("SET session_replication_role = 'replica'");
+	}
+
 	if ($config{tcp_keepalives_idle}) { ## e.g. not 0, should always exist
 		$sourcedbh->do("SET tcp_keepalives_idle = $config{tcp_keepalives_idle}");
 		$sourcedbh->do("SET tcp_keepalives_interval = $config{tcp_keepalives_interval}");
@@ -4127,13 +4097,13 @@ sub start_kid {
 		}
 
 		## Disable rules and triggers on target (all) and source (swap sync)
-		if ($SQL{disable_trigrules}) {
-			$self->glog(qq{Disabling triggers and rules on $targetdb ($sync->{disable_triggers} and $sync->{disable_rules})});
+		if ($target_disable_trigrules ne 'replica') {
+			$self->glog(qq{Disabling triggers and rules on $targetdb via pg_class});
 			$targetdbh->do($SQL{disable_trigrules});
-			if ($synctype eq 'swap') {
-				$self->glog(qq{Disabling triggers and rules on $sourcedb ($sync->{disable_triggers} and $sync->{disable_rules})});
-				$sourcedbh->do($SQL{disable_trigrules});
-			}
+		}
+		if ($synctype eq 'swap' and $source_disable_trigrules ne 'replica') {
+			$self->glog(qq{Disabling triggers and rules on $sourcedb via pg_class});
+			$sourcedbh->do($SQL{disable_trigrules});
 		}
 
 		## FULLCOPY
@@ -5139,11 +5109,13 @@ sub start_kid {
 			}
 		}
 
-		if ($SQL{disable_trigrules} or $SQL{enable_trigrules}) {
-			die "Invalid enable_trigrules!\n" if ! $SQL{enable_trigrules};
-			$self->glog(qq{Enabling triggers and rules ($sync->{disable_triggers} and $sync->{disable_rules})});
-			$sourcedbh->do($SQL{enable_trigrules}) if $synctype eq 'swap';
+		if ($target_disable_trigrules ne 'replica') {
+			$self->glog(qq{Enabling triggers and rules on target via pg_class});
 			$targetdbh->do($SQL{enable_trigrules});
+		}
+		if ($synctype eq 'swap' and $source_disable_trigrules ne 'replica') {
+			$self->glog(qq{Enabling triggers and rules on source via pg_class});
+			$sourcedbh->do($SQL{enable_trigrules});
 		}
 
 		# Run all 'after_trigger_enable' code
@@ -5442,7 +5414,7 @@ Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This documents describes Bucardo version 3.2.6
+This documents describes Bucardo version 3.2.7
 
 =head1 SYNOPSIS
 

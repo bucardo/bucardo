@@ -122,8 +122,8 @@ stats_script_url|http://www.bucardo.org/|Location of the stats script
 upsert_attempts|3|How many times do we try out the upsert loop?
 max_select_clause|500|Maximum number of items to select inside of IN() clauses
 max_delete_clause|200|Maximum number of items to delete inside of IN() clauses
-bucardo_version|3.2.6|Bucardo version this schema was created with
-bucardo_current_version|3.2.6|Current version of Bucardo
+bucardo_version|3.2.7|Bucardo version this schema was created with
+bucardo_current_version|3.2.7|Current version of Bucardo
 \.
 
 --
@@ -321,8 +321,6 @@ CREATE TABLE sync (
   rebuild_index      BOOLEAN     NOT NULL DEFAULT 'false',   -- Load without indexes and then REINDEX table
   priority           SMALLINT    NOT NULL DEFAULT 0,     -- Higher is better
   txnmode            TEXT        NOT NULL DEFAULT 'SERIALIZABLE',
-  disable_triggers   TEXT        NOT NULL DEFAULT 'pg_class',
-  disable_rules      TEXT        NOT NULL DEFAULT 'pg_class',
   analyze_after_copy BOOLEAN     NOT NULL DEFAULT 'true',
   strict_checking    BOOLEAN     NOT NULL DEFAULT 'true',
   overdue            INTERVAL    NOT NULL DEFAULT '0 seconds'::interval,
@@ -336,16 +334,6 @@ ALTER TABLE sync ADD CONSTRAINT sync_type CHECK (synctype IN ('pushdelta','fullc
 ALTER TABLE sync ADD CONSTRAINT sync_copytype CHECK (copytype IN ('insert','copy'));
 
 ALTER TABLE sync ADD CONSTRAINT sync_deletemethod CHECK (deletemethod IN ('truncate', 'delete'));
-
-ALTER TABLE sync ADD CONSTRAINT sync_disable_triggers_method CHECK (disable_triggers IN ('pg_class','SQL','replica'));
-
-ALTER TABLE sync ADD CONSTRAINT sync_disable_rules_method CHECK (disable_rules IN ('none','pg_class','replica'));
-
-ALTER TABLE sync ADD CONSTRAINT sync_replica_allornone CHECK (
-  (disable_triggers = 'replica' AND disable_rules = 'replica')
-  OR
-  (disable_triggers <> 'replica' AND disable_rules <> 'replica')
-);
 
 CREATE UNIQUE INDEX sync_source_targetdb ON sync(source, targetdb);
 CREATE UNIQUE INDEX sync_source_targetgroup ON sync(source, targetgroup);
