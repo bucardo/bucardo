@@ -2300,7 +2300,7 @@ sub start_mcp {
 		## Update the audit_pid table
 		$SQL = qq{
             UPDATE bucardo.audit_pid
-            SET    killdate = timeofday()::timestamp, death = ?
+            SET    killdate = timeofday()::timestamptz, death = ?
             WHERE  type='MCP'
             AND    id = ?
             AND    killdate IS NULL
@@ -2547,7 +2547,7 @@ sub start_controller {
 
 	$SQL = qq{
         UPDATE bucardo.q
-        SET    ended = timeofday()::timestamp
+        SET    ended = timeofday()::timestamptz
         WHERE  sync=?
         AND    targetdb = ?
         AND    pid = ?
@@ -2559,7 +2559,7 @@ sub start_controller {
 
 	$SQL = qq{
         UPDATE bucardo.q
-        SET    ended = timeofday()::timestamp
+        SET    ended = timeofday()::timestamptz
         WHERE  sync=?
         AND    targetdb = ?
         AND    started IS NOT NULL
@@ -2570,7 +2570,7 @@ sub start_controller {
 
 	$SQL = qq{
         UPDATE bucardo.q
-        SET    aborted=timeofday()::timestamp, whydie=?
+        SET    aborted=timeofday()::timestamptz, whydie=?
         WHERE  sync = ?
         AND    pid = ?
         AND    ppid = ?
@@ -2647,7 +2647,7 @@ sub start_controller {
 		}
 		$SQL = qq{
             UPDATE bucardo.q
-            SET started=timeofday()::timestamp, ended=timeofday()::timestamp, aborted=timeofday()::timestamp, whydie='Controller cleaning out unstarted q entry'
+            SET started=timeofday()::timestamptz, ended=timeofday()::timestamptz, aborted=timeofday()::timestamptz, whydie='Controller cleaning out unstarted q entry'
             WHERE sync = $safesyncname
             AND started IS NULL
         };
@@ -2657,7 +2657,7 @@ sub start_controller {
 		## The whydie has already been set by the kid
 		$SQL = qq{
             UPDATE bucardo.q
-            SET ended=timeofday()::timestamp
+            SET ended=timeofday()::timestamptz
             WHERE sync = $safesyncname
             AND ended IS NULL AND aborted IS NOT NULL
         };
