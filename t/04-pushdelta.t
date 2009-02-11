@@ -72,7 +72,6 @@ $dbhA->commit();
 $bct->ctl("kick pushdeltatest 0");
 wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 
-## Kick it!
 $SQL = 'SELECT * FROM bucardo_test1';
 my $info = $dbhB->selectall_arrayref($SQL);
 
@@ -170,6 +169,10 @@ for my $table (sort keys %tabletype) {
 	test_empty_drop($table,$dbhB);
 }
 
+## Clear out any notices
+$dbhX->func('pg_notifies');
+$dbhX->commit();
+
 ## Adding a new row should cause the sync to fire without waiting for a kick
 for my $table (sort keys %tabletype) {
 	$dbhA->do("UPDATE $table SET inty = 2");
@@ -206,7 +209,6 @@ for my $table (sort keys %tabletype) {
 }
 $dbhA->commit();
 
-sleep 3;
 for my $table (sort keys %tabletype) {
 	$t=qq{ Second table $table did not change rows, not pinging};
 	$result = [[2]];
