@@ -3544,7 +3544,7 @@ sub start_kid {
 				for my $pk (@{$g->{pkey}}) {
 					$x++;
 					next if $x < 2;
-					$rowid .= ",$rowid$x";
+					$rowid .= ", rowid$x";
 				}
 				## XXX Change to COPY when possible?
 				$SQL = qq{INSERT INTO bucardo.bucardo_delta(tablename,$rowid) VALUES ($vals)};
