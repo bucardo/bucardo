@@ -4333,12 +4333,14 @@ sub start_kid {
 					##   the exception as it normally would
 					if (!$g->{has_exception_code}) {
 						if ($@) {
-							$self->glog("Warning! Aborting due to exception for $S.$T:$pkval Error was $@");
+							(my $err = $@) =~ s/\n/\\n/g;
+							$self->glog("Warning! Aborting due to exception for $S.$T:$pkval Error was $err");
 							die $@;
 						}
 					}
 					elsif ($@) {
-						$self->glog("Exception caught: $@");
+						(my $err = $@) =~ s/\n/\\n/g;
+						$self->glog("Exception caught: $err");
 
 						## Bail if we've already tried to handle this goat via an exception
 						if ($g->{exceptions} > 1) {
@@ -4968,13 +4970,15 @@ sub start_kid {
 
 					if (!$g->{has_exception_code}) {
 						if ($@) {
-							$self->glog("Warning! Aborting due to exception for $S.$T.$qnamepk: $pkval Error was $@");
+							(my $err = $@) =~ s/\n/\\n/g;
+							$self->glog("Warning! Aborting due to exception for $S.$T.$qnamepk: $pkval Error was $err");
 							die $@;
 						}
 					}
 					elsif ($@) {
 
-						$self->glog("Exception caught: $@");
+						(my $err = $@) =~ s/\n/\\n/g;
+						$self->glog("Exception caught: $err");
 
 						## Bail if we've called one exception for every (original) row
 						## TODO: Develop better metrics here
