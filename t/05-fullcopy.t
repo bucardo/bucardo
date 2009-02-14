@@ -121,47 +121,7 @@ for my $table (sort keys %tabletype) {
 	test_empty_drop($table,$dbhB);
 }
 
-
-## Try a different trigger drop method
-$SQL = "UPDATE sync SET disable_triggers = 'SQL', disable_rules = 'pg_class'";
-$dbhX->do($SQL);
-$dbhX->do("NOTIFY bucardo_reload_sync_fullcopytest");
-$dbhX->commit();
 for my $table (sort keys %tabletype) {
-	$dbhA->do("DELETE FROM $table");
-}
-$dbhA->commit();
-$bct->ctl('kick fullcopytest 0');
-
-for my $table (sort keys %tabletype) {
-	$t=qq{ Second table $table was emptied out};
-	$result = [];
-	bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
-
-	test_empty_drop($table,$dbhB);
-}
-
-## Now a third method: replica
-$SQL = "UPDATE sync SET disable_triggers = 'replica', disable_rules = 'replica'";
-$dbhX->do($SQL);
-$dbhX->do("NOTIFY bucardo_reload_sync_fullcopytest");
-$dbhX->commit();
-
-for my $table (sort keys %tabletype) {
-	$sql{insert}{$table}->execute($val{$table});
-}
-
-$dbhA->commit();
-
-$bct->ctl('kick fullcopytest 0');
-
-for my $table (sort keys %tabletype) {
-	$t=qq{ Second table $table got the fullcopy row};
-	$result = [[1]];
-	bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
-
-	test_empty_drop($table,$dbhB);
-
 	## Make changes to B, have the sync blow them away
 	$i = $dbhB->do("UPDATE $table SET inty = 99");
 	$dbhB->do("DELETE FROM droptest");
