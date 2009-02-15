@@ -2108,6 +2108,27 @@ CREATE TABLE upgrade_log (
   cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Allow users to insert messages in the Bucardo logs
+
+CREATE FUNCTION bucardo_log_message_notify()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $bc$
+BEGIN
+  EXECUTE 'NOTIFY "bucardo_log_message"';
+  RETURN NULL;
+END;
+$bc$;
+
+CREATE TABLE bucardo_log_message (
+  msg TEXT NOT NULL,
+  cdate TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TRIGGER bucardo_log_message_trigger
+  AFTER INSERT ON bucardo_log_message
+  FOR EACH STATEMENT EXECUTE PROCEDURE bucardo_log_message_notify();
+
+
 --
 -- END OF THE SCHEMA
 --

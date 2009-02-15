@@ -1302,6 +1302,19 @@ sub start_mcp {
 				$maindbh->do('NOTIFY bucardo_mcp_pong') or warn 'NOTIFY failed';
 				$maindbh->commit();
 			}
+			elsif ($name eq 'bucardo_log_message') {
+				$self->glog("Checking for log messages");
+				$SQL = 'SELECT msg,cdate FROM bucardo_log_message ORDER BY cdate';
+				$sth = $maindbh->prepare_cached($SQL);
+				$count = $sth->execute();
+				if ($count ne '0E0') {
+					for my $row (@{$sth->fetchall_arrayref()}) {
+						$self->glog("MESSAGE ($row->[1]): $row->[0]");
+					}
+					$maindbh->do('TRUNCATE TABLE bucardo_log_message');
+					$maindbh->commit();
+				}
+			}
 			elsif ($name =~ /^bucardo_reload_sync_(.+)/o) {
 				my $syncname = $1;
 				if (! exists $sync->{$syncname}) {
@@ -1653,6 +1666,7 @@ sub start_mcp {
 			 "mcp_fullstop",
 			 "mcp_reload",
 			 "reload_config",
+			 "log_message",
 			 "mcp_ping",
 		 ) {
 			$self->glog(qq{Listening for "bucardo_$l"});

@@ -575,6 +575,11 @@ This assumes that local1 is not being used by anything else of course. The leadi
 </p>
 <p class="code"><span class="code">tac /var/log/bucardo | grep Warning | less</span></p>
 
+<p>
+If you want to add your own messages to the log, you can simply add them to the bucardo_log_message table. If Bucardo is running, 
+it will pick up messages from this table and add them to the current log with a prefix of <tt>MESSAGE</tt>. An easier way to 
+do this is with bucardo_ctl: adding a message is as simple as <tt>./bucardo_ctl message "Your message here"</tt>.
+
 <br clear="all" />
 <hr />
 <h2><a name="Thebucardoctlscript">The bucardo_ctl script</a></h2>

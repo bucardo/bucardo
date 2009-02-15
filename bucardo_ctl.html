@@ -44,7 +44,7 @@
 </p>
 <hr />
 <h1><a name="version">VERSION</a></h1>
-<p>This documents describes bucardo_ctl version 1.1.19</p>
+<p>This documents describes bucardo_ctl version 3.2.7</p>
 <p>
 </p>
 <hr />
@@ -52,8 +52,8 @@
 <pre>
   ./bucardo_ctl start &quot;Starting up - Greg&quot;</pre>
 <pre>
-  ./bucardo_ctl stop &quot;Bringing down for debugging - Raul E.&quot;
- 
+  ./bucardo_ctl stop &quot;Bringing down for debugging - Raul E.&quot;</pre>
+<pre>
   ./bucardo_ctl add sync testsync source=herd1 type=pushdelta targetdb=B</pre>
 <pre>
   ./bucardo_ctl add database newdb name=internal_name port=5432 host=myserver user=postgres</pre>
@@ -217,6 +217,20 @@ confirmation from Bucardo that each sync has been successfully activated.</p>
 <dd>
 <p>Deactivates one or more named syncs. If given a timeout argument, it will wait until it has received 
 confirmation from Bucardo that the sync has been successfully deactivated.</p>
+</dd>
+<dt><strong><a name="item_upgrade"><strong>upgrade</strong></a></strong></dt>
+
+<dd>
+<p>Performs an upgrade of Bucardo itself, by making sure the connected Bucardo database has a copy of the 
+latest schema. This should always be run after upgrading Bucardo, and will prompt you before making 
+any permanent changes.</p>
+</dd>
+<dt><strong><a name="item_message"><strong>message</strong></a></strong></dt>
+
+<dd>
+<p>Adds a message to the running Bucardo logs. This message will appear prefixed with &quot;MESSAGE: &quot;. If 
+Bucardo is not running, the message will go to the logs the next time Bucardo is running and someone 
+adds another message.</p>
 </dd>
 </dl>
 <p>
