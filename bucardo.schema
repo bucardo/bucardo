@@ -555,7 +555,7 @@ CREATE TRIGGER populate_child_q_table
 --
 -- Return a created connection string from the db table
 --
-CREATE OR REPLACE FUNCTION db_getconn(text)
+CREATE OR REPLACE FUNCTION bucardo.db_getconn(text)
 RETURNS TEXT
 LANGUAGE plperlu
 SECURITY DEFINER
@@ -657,7 +657,7 @@ my ($name, $SQL, $rv, $row, $dbh, %db, $version, $found);
 $name = shift;
 
 $name =~ s/'/''/g;
-$SQL = "SELECT db_getconn('$name') AS bob";
+$SQL = "SELECT bucardo.db_getconn('$name') AS bob";
 $rv = spi_exec_query($SQL);
 if (!$rv->{processed}) {
     elog(ERROR, qq{Error: Could not find a database with an name of $name\n});
@@ -773,7 +773,7 @@ if ($old
 }
 
 (my $safedbname = $dbname) =~ s/'/''/go;
-$SQL = "SELECT db_getconn('$safedbname') AS apple";
+$SQL = "SELECT bucardo.db_getconn('$safedbname') AS apple";
 $rv = spi_exec_query($SQL);
 if (!$rv->{processed}) {
     elog(ERROR, qq{Error: Could not find a database with an name of $dbname\n});
@@ -1134,7 +1134,7 @@ $bc$
         elog(DEBUG, "Validate_table for db $db $schema.$table, delta=$delta ping=$ping");
 
         $db =~ s/'/''/go;
-        my $rv = spi_exec_query("SELECT db_getconn('$db') AS conn");
+        my $rv = spi_exec_query("SELECT bucardo.db_getconn('$db') AS conn");
         $rv->{processed} or elog(ERROR, qq{Error: Could not find a database named "$db"\n});
         my ($dsn,$user,$pass) = split /\n/ => $rv->{rows}[0]{conn};
         elog(DEBUG, "Connecting to $dsn as $user inside bucardo_validate_sync");
@@ -1948,7 +1948,7 @@ AS $bc$
     for (@{$rv->{rows}}) {
         $relation{$_->{safeschema}}{$_->{safetable}} = $_;
     }
-    $rv = spi_exec_query("SELECT db_getconn('$sourcedb') AS conn");
+    $rv = spi_exec_query("SELECT bucardo.db_getconn('$sourcedb') AS conn");
     $rv->{processed} or die qq{Could not find a database named "$sourcedb"};
     my ($dsn,$user,$pass) = split /\n/ => $rv->{rows}[0]{conn};
     elog(DEBUG, "Connecting to $dsn as $user inside bucardo_delete_sync");
@@ -1990,7 +1990,7 @@ AS $bc$
 
     ## Finally, remove from the target database
     (my $targetdb = $old->{targetdb}) =~ s/'/''/go;
-    $rv = spi_exec_query("SELECT db_getconn('$targetdb') AS conn");
+    $rv = spi_exec_query("SELECT bucardo.db_getconn('$targetdb') AS conn");
     $rv->{processed} or die qq{Could not find a database named "$targetdb"};
     ($dsn,$user,$pass) = split /\n/ => $rv->{rows}[0]{conn};
     elog(DEBUG, "Connecting to $dsn as $user inside bucardo_delete_sync");
