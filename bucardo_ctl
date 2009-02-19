@@ -22,7 +22,7 @@ our $VERSION = '3.2.7';
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
 
-use vars qw/$dbh $SQL $sth %sth $count/;
+use vars qw/$dbh $SQL $sth %sth $count $info/;
 my $DEBUG            = 0;
 my $DATEFORMAT       = q{Mon DD, YYYY HH24:MI:SS};
 my $DEFAULT_DAYSBACK = 3;
@@ -155,6 +155,7 @@ alter_item()    if $verb eq 'alter';
 remove_item()   if $verb eq 'remove';
 upgrade()       if $verb eq 'upgrade';
 message()       if $verb eq 'message';
+list()          if $verb eq 'list';
 
 ## For the rest, we expect a list of sync with an optional decimal "timeout"
 my $adverb;
@@ -187,6 +188,8 @@ sub help {
   start <reason>  ** force existing sync(s) to quit, then start
 
   stop <reason>   ** tell everyone to stop permanently, even the MCP
+
+  list <type>     ** view short info about dbs, herds, goats, or syncs
 
   add <item_type> <item_name>
                   ** add a new database, table, sync, herd, or database group
@@ -938,6 +941,206 @@ ORDER BY started DESC LIMIT 1
 	return $syncs, \%max;
 
 } ## end of get_detailed_syncs
+
+
+sub list {
+
+	my $msg = "Need to specify what to list: db, goat, herd, or sync\n";
+	if (!@nouns) {
+		die $msg;
+	}
+	my $thing = shift @nouns;
+
+	list_dbs()   if $thing =~ /db/i   or $thing eq 'd';
+	list_goats() if $thing =~ /goat/i or $thing eq 'g';
+	list_herds() if $thing =~ /herd/i or $thing eq 'h';
+	list_syncs() if $thing =~ /sync/i or $thing eq 's';
+
+	die $msg;
+
+	exit;
+
+} ## end of list
+
+
+sub list_dbs {
+
+	## Show information about all or some subset of the 'db' table
+
+	## If any nouns left, treat as wildcards
+	my $WHERE = '';
+	for my $term (@nouns) {
+		$WHERE .= sprintf qq{%s lower(name) ~ %s},
+			$WHERE ? ' OR' : 'WHERE',
+			$dbh->quote(lc $term);
+	}
+
+	$SQL = "SELECT * FROM db $WHERE ORDER BY name";
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute();
+	if ($count < 1) {
+		$sth->finish();
+		printf "There are no%s entries in the 'db' table.\n",
+			$WHERE ? ' matching' : '';
+		exit;
+	}
+
+	$info = $sth->fetchall_arrayref({});
+	for my $row (@$info) {
+		print "Database: $row->{name}   Status: $row->{status}\n";
+		if ($row->{sourcelimit} != 0 or $row->{targetlimit} != 0) {
+			print "Limits: source:$row->{sourcelimit} / target:$row->{targetlimit}\n";
+		}
+		print "Conn: psql -h $row->{dbhost} -p $row->{dbport} -U $row->{dbuser} -d $row->{dbname}\n";
+		print "\n";
+	}
+
+	exit;
+
+} ## end of list_dbs
+
+
+sub list_goats {
+
+	## Show information about all or some subset of the 'goat' table
+	## Keep to three lines or less if possible
+
+	## If any nouns left, treat as wildcards
+	my $WHERE = '';
+	for my $term (@nouns) {
+		$WHERE .= sprintf qq{%s lower(tablename) ~ %s},
+			$WHERE ? ' OR' : 'WHERE',
+				$dbh->quote(lc $term);
+	}
+
+	$SQL = "SELECT * FROM goat $WHERE ORDER BY schemaname, tablename";
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute();
+	if ($count < 1) {
+		$sth->finish();
+		printf "There are no%s entries in the 'goat' table.\n",
+			$WHERE ? ' matching' : '';
+		exit;
+	}
+
+	$info = $sth->fetchall_arrayref({});
+	for my $row (@$info) {
+		printf "Table $row->{id}: $row->{schemaname}.$row->{tablename}%s\n",
+			$row->{ghost} ? ' GHOST TABLE' : '';
+		if ($row->{pkey}) {
+			print "  PK: $row->{pkey} ($row->{pkeytype})\n";
+		}
+		if ($row->{customselect}) {
+			print "  Custom select: $row->{customselect}\n";
+		}
+		printf "  DB: %s | Ping: %s  | Makedelta: %s | Has delta: %s\n",
+			$row->{db},
+			$row->{ping} ? 'Yes' : 'No',
+			$row->{makedelta} ? 'Yes' : 'No',
+			$row->{hasdelta} ? 'Yes' : 'No';
+	}
+
+	exit;
+
+} ## end of list_goats
+
+
+sub list_herds {
+
+	## Show information about all or some subset of the 'herd' table
+
+	$SQL = 'SELECT herd, schemaname, tablename FROM herdmap h JOIN goat g ON (g.id = h.goat)';
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	my $map = $sth->fetchall_arrayref({});
+	my $herdmap;
+	for my $row (@$map) {
+		push @{$herdmap->{$row->{herd}}}, "$row->{schemaname}.$row->{tablename}";
+	}
+
+	## If any nouns left, treat as wildcards
+	my $WHERE = '';
+	for my $term (@nouns) {
+		$WHERE .= sprintf qq{%s lower(name) ~ %s},
+			$WHERE ? ' OR' : 'WHERE',
+			$dbh->quote(lc $term);
+	}
+
+	$SQL = "SELECT * FROM herd $WHERE ORDER BY name";
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute();
+	if ($count < 1) {
+		$sth->finish();
+		printf "There are no%s entries in the 'herd' table.\n",
+			$WHERE ? ' matching' : '';
+		exit;
+	}
+
+	$info = $sth->fetchall_arrayref({});
+	my ($namelen,$goatlen) = (5,1);
+	for my $row (@$info) {
+		my $num = @{$herdmap->{$row->{name}}};
+		$namelen = length $row->{name} if length $row->{name} > $namelen;
+		$goatlen = length $num if length $num > $goatlen;
+	}
+	for my $row (@$info) {
+		printf "Herd: %-*s   Goats: %*d\n",
+			$namelen, $row->{name},
+			$goatlen, scalar @{$herdmap->{$row->{name}}};
+	}
+
+	## If requesting (or matching) a single herd, show the goats in detail
+	if (@nouns and $count == 1) {
+		for my $name (@{$herdmap->{$info->[0]{name}}}) {
+			print "  $name\n";
+		}
+	}
+
+	exit;
+
+} ## end of list_herds
+
+
+sub list_syncs {
+
+	## Show information about all or some subset of the 'sync' table
+
+	## If any nouns left, treat as wildcards
+	my $WHERE = '';
+	for my $term (@nouns) {
+		$WHERE .= sprintf qq{%s lower(name) ~ %s},
+			$WHERE ? ' OR' : 'WHERE',
+			$dbh->quote(lc $term);
+	}
+
+	$SQL = "SELECT * FROM sync $WHERE ORDER BY name";
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute();
+	if ($count < 1) {
+		$sth->finish();
+		printf "There are no%s entries in the 'sync' table.\n",
+			$WHERE ? ' matching' : '';
+		exit;
+	}
+
+	$info = $sth->fetchall_arrayref({});
+	my ($namelen,$goatlen) = (5,1);
+	for my $row (@$info) {
+		$namelen = length $row->{name} if length $row->{name} > $namelen;
+	}
+	for my $row (@$info) {
+		printf "Sync: %-*s %s %s=>%s %s\n",
+			$namelen,
+			$row->{name},
+			$row->{synctype},
+			$row->{source},
+			$row->{targetdb} ? $row->{targetdb} : $row->{targetgroup},
+			$row->{status} eq 'active' ? '' : "$row->{status}";
+	}
+
+	exit;
+
+} ## end of list_syncs
 
 
 sub pretty_time {
@@ -2326,6 +2529,8 @@ This documents describes bucardo_ctl version 3.2.7
 
   ./bucardo_ctl stop "Bringing down for debugging - Raul E."
 
+  ./bucardo_ctl list dbs
+
   ./bucardo_ctl add sync testsync source=herd1 type=pushdelta targetdb=B
 
   ./bucardo_ctl add database newdb name=internal_name port=5432 host=myserver user=postgres
@@ -2384,6 +2589,13 @@ you should scan the list of processes after running this program to make sure th
 processes have stopped. One should also provide a reason for issuing the stop - usually 
 this is a short explanation and your name. This is logged in the reason_file file and 
 is also used by Bucardo when it exits and sends out mail about its death.
+
+=item B<list>
+
+Usage: ./bucardo_ctl list <type> <regex>
+
+Lists summary information about databases, goats, herds, or syncs. Adding anything after the 
+type will look up all matching entries.
 
 =item B<add>
 
