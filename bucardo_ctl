@@ -645,17 +645,22 @@ sub status_detail {
 	## Verify that all named syncs exist
 	my ($syncs,$max) = get_detailed_syncs({syncs => \@nouns});
 
+	my @syncs;
 	for my $sync (sort @nouns) {
 		$DEBUG and warn "Verify sync: $sync\n";
 		if (!exists $syncs->{$sync}) {
-			die "No such sync: $sync\n";
+            ## If a number, skip for ease of "kick name #" toggling
+            $sync !~ /^\d+$/ and die "No such sync: $sync\n";
+		}
+		else {
+			push @syncs => $sync;
 		}
 	}
 
 	print "Days back: $DAYSBACK  $DBCONN\n";
 
 	## Present each ordered by name
-	for my $sync (sort { lc $a cmp lc $b } @nouns) {
+	for my $sync (sort { lc $a cmp lc $b } @syncs) {
 		print '=' x 70; print "\n";
 		my $s = $syncs->{$sync};
 
