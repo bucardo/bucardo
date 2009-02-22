@@ -4214,7 +4214,7 @@ sub start_kid {
 				## The target table's OID
 				my $toid = $g->{targetoid}{$targetdb};
 
-				## If requested, disable all indexes, then enable and rebuild them after data changes
+				## If requested, disable all indexes, then enable and rebuild them after we COPY
 				my $hasindex = 0;
 				if ($g->{rebuild_index}) {
 					$SQL = "SELECT relhasindex FROM pg_class WHERE oid = $toid";
@@ -4274,7 +4274,7 @@ sub start_kid {
 					## Example MCPK: ('1234','Don''t Stop','2008-01-01'),('221','foobar','2008-11-01')
 
 					## From here on out, we're making changes on the target that may trigger an exception
-					## This, if we have exception handling code, we create a savepoint to rollback to
+					## Thus, if we have exception handling code, we create a savepoint to rollback to
 					if ($g->{has_exception_code}) {
 						$self->glog("Creating savepoint on target for exception handler(s)");
 						$targetdbh->pg_savepoint("bucardo_$$") or die qq{Savepoint creation failed for bucardo_$$};
@@ -4334,11 +4334,6 @@ sub start_kid {
 								$targetdbh->do("REINDEX TABLE $S.$T");
 							}
 
-							## Update the source bucardo_tracker for this table
-							##  so that subsequent runs don't process the rows we just did.
-							$self->glog("Updating bucardo_track for $S.$T on $sourcedb");
-							$sth{source}{$g}{track}->execute();
-
 						}; ## end of eval
 
 					} ## end of LOCALDIE label: die will now revert to its previous behavior
@@ -4347,12 +4342,14 @@ sub start_kid {
 					##   the exception as it normally would
 					if (!$g->{has_exception_code}) {
 						if ($@) {
+							chomp $@;
 							(my $err = $@) =~ s/\n/\\n/g;
 							$self->glog("Warning! Aborting due to exception for $S.$T:$pkval Error was $err");
 							die $@;
 						}
 					}
 					elsif ($@) {
+						chomp $@;
 						(my $err = $@) =~ s/\n/\\n/g;
 						$self->glog("Exception caught: $err");
 
@@ -4984,13 +4981,14 @@ sub start_kid {
 
 					if (!$g->{has_exception_code}) {
 						if ($@) {
+							chomp $@;
 							(my $err = $@) =~ s/\n/\\n/g;
 							$self->glog("Warning! Aborting due to exception for $S.$T.$qnamepk: $pkval Error was $err");
 							die $@;
 						}
 					}
 					elsif ($@) {
-
+						chomp $@;
 						(my $err = $@) =~ s/\n/\\n/g;
 						$self->glog("Exception caught: $err");
 
@@ -5083,10 +5081,6 @@ sub start_kid {
 					}
 				}
 
-				## Update both bucardo trackers for this table
-				$deltacount{allsource} and $sth{source}{$g}{track}->execute();
-				$deltacount{alltarget} and $sth{target}{$g}{track}->execute();
-
 				$dmlcount{allinserts}{source} += $dmlcount{I}{source}{$S}{$T};
 				$dmlcount{allupdates}{source} += $dmlcount{U}{source}{$S}{$T};
 				$dmlcount{alldeletes}{source} += $dmlcount{D}{source}{$S}{$T};
@@ -5118,7 +5112,23 @@ sub start_kid {
 			die qq{Unknown sync type $synctype};
 		}
 
-		# Run all 'before_trigger_enable' code
+		## Update bucardo_track table so that the bucardo_delta rows we just processed
+		##  are marked as "done" and ignored by subsequent runs
+		if ($synctype eq 'pushdelta' or $synctype eq 'swap') {
+			for my $g (@$goatlist) {
+				($S,$T) = ($g->{safeschema},$g->{safetable});
+				if ($deltacount{source}{$g->{safeschema}}{$g->{safetable}}) {
+					$self->glog("Updating bucardo_track for $S.$T on $sourcedb");
+					$sth{source}{$g}{track}->execute();
+				}
+				if ($deltacount{target}{$g->{safeschema}}{$g->{safetable}}) {
+					$self->glog("Updating bucardo_track for $S.$T on $targetdb");
+					$sth{target}{$g}{track}->execute();
+				}
+			}
+		}
+
+		## Run all 'before_trigger_enable' code
 		for my $code (@{$sync->{code_before_trigger_enable}}) {
 			my $result = run_kid_custom_code($code, 'strict');
 			if ($result eq 'redo') { ## redo rollsback source and target
