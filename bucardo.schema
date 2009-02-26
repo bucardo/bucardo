@@ -325,6 +325,7 @@ CREATE TABLE sync (
   strict_checking    BOOLEAN     NOT NULL DEFAULT 'true',
   overdue            INTERVAL    NOT NULL DEFAULT '0 seconds'::interval,
   expired            INTERVAL    NOT NULL DEFAULT '0 seconds'::interval,
+  track_rates        BOOLEAN     NOT NULL DEFAULT 'false',
   cdate              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -402,7 +403,7 @@ CREATE TABLE q (
 -- Can only be one unstarted source->target per sync
 CREATE UNIQUE INDEX "q_unique" ON q (sync,sourcedb,targetdb) WHERE started IS NULL;
 
-CREATE INDEX "q_ppid" ON q (ppid,pid) WHERE ended IS NULL AND aborted IS NULL;
+CREATE INDEX q_ppid ON q (ppid,pid) WHERE ended IS NULL AND aborted IS NULL;
 
 CREATE INDEX q_aborted ON q(sync) WHERE started IS NOT NULL AND aborted IS NOT NULL AND ended IS NULL;
 
@@ -2099,6 +2100,16 @@ BEGIN
 END;
 $bc$;
 
+-- Monitor how long data takes to move over, from commit to commit
+CREATE TABLE bucardo_rate (
+  sync         TEXT        NOT NULL,
+  goat         INTEGER     NOT NULL,
+  target       TEXT            NULL,
+  mastercommit TIMESTAMPTZ NOT NULL,
+  slavecommit  TIMESTAMPTZ NOT NULL,
+  total        INTEGER     NOT NULL
+);
+CREATE INDEX bucardo_rate_sync ON bucardo_rate(sync);
 
 -- Keep track of any upgrades as we go along
 CREATE TABLE upgrade_log (

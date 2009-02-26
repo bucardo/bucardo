@@ -76,7 +76,7 @@ my @req2 =  (qw());
 my @opt1 =  (qw(synctype copytype deletemethod copyrows copyextra stayalive strict_checking ));
 push @opt1, (qw(checktime status limitdbs precommand postcommand txnmode ping               ));
 push @opt1, (qw(targetdb targetgroup kidtime kidsalive do_listen                            ));
-push @opt1, (qw(usecustomselect makedelta rebuild_index analyze_after_copy                  ));
+push @opt1, (qw(usecustomselect makedelta rebuild_index analyze_after_copy track_rates      ));
 my @opt2 =  (qw());
 for my $req (@req1) { has $req => ( is => 'rw', isa => 'Str', required => 1 ); }
 for my $req (@req2) { has $req => ( is => 'rw', isa => 'Int', required => 1 ); }
@@ -976,7 +976,7 @@ sub find_goats {
 	my $maindbh = $self->{masterdbh};
 	$SQL = qq{
         SELECT   goat
-        FROM     bucardo.herdmap q
+        FROM     bucardo.herdmap
         WHERE    herd = ?
         ORDER BY priority DESC, goat ASC
     };
@@ -1822,14 +1822,14 @@ sub start_mcp {
 		}
 
 		## Validate all (active) custom code for this sync
-		my $goatlist = join "," => map { $_->{id} } @{$s->{goatlist}};
+		my $goatlistcodes = join "," => map { $_->{id} } @{$s->{goatlist}};
 
 		$SQL = qq{
             SELECT c.src_code, c.id, c.whenrun, c.getdbh, c.name, c.getrows, COALESCE(c.about,'?') AS about,
                    m.active, m.priority, COALESCE(m.goat,0) AS goat
             FROM customcode c, customcode_map m
             WHERE c.id=m.code AND m.active IS TRUE
-            AND (m.sync = ? OR m.goat IN ($goatlist))
+            AND (m.sync = ? OR m.goat IN ($goatlistcodes))
             ORDER BY priority ASC
         };
 		$sth = $self->{masterdbh}->prepare($SQL);
@@ -1884,8 +1884,8 @@ sub start_mcp {
 
 		## Consolidate some things that are set at both sync and goat levels
 		$s->{does_makedelta} = $s->{makedelta};
+		$s->{track_rates} = 0 if $s->{synctype} eq 'fullcopy';
 		my $makedeltagoats = 0;
-
 		for my $g (@{$s->{goatlist}}) {
 			if ($g->{makedelta}) {
 				$s->{does_makedelta} = 1;
@@ -3672,6 +3672,21 @@ sub start_kid {
                           )
                 };
 
+				if ($sync->{track_rates}) {
+					$SQL{deltarate} = qq{
+                SELECT    DISTINCT txntime
+                FROM      bucardo.bucardo_delta d
+                WHERE     d.tablename = \$1::oid
+                AND       NOT EXISTS (
+                                SELECT 1
+                                FROM   bucardo.bucardo_track bt
+                                WHERE  d.txntime = bt.txntime
+                                AND    bt.targetdb = '\$2'::text
+                                AND    bt.tablename = \$1::oid
+                          )
+                };
+				}
+
 			}
 
 			## Plug in the tablenames (oids) and the targetdb names
@@ -3681,12 +3696,25 @@ sub start_kid {
 			$sth{source}{$g}{getdelta} = $sourcedbh->prepare($SQL);
 			my $safesourcedb;
 
+			## Plug in for rate measuring
+			if ($sync->{track_rates}) {
+				($SQL = $SQL{deltarate}) =~ s/\$1/$g->{oid}/go;
+				$SQL =~ s/\$2/$safedbname/o;
+				$sth{source}{$g}{deltarate} = $sourcedbh->prepare($SQL);
+			}
+
 			## Plug in again for the source database when doing a swap sync
 			if ($synctype eq 'swap') {
 				($safesourcedb = $sourcedb) =~ s/\'/''/go;
 				($SQL = $SQL{delta}) =~ s/\$1/$g->{targetoid}{$targetdb}/g;
 				$SQL =~ s/\$2/$safesourcedb/o;
 				$sth{target}{$g}{getdelta} = $targetdbh->prepare($SQL);
+
+				if ($sync->{track_rates}) {
+					($SQL = $SQL{deltarate}) =~ s/\$1/$g->{targetoid}{$targetdb}/g;
+					$SQL =~ s/\$2/$safesourcedb/o;
+					$sth{target}{$g}{deltarate} = $targetdbh->prepare($SQL);
+				}
 			}
 
 			## Mark all unclaimed visible delta rows as done in the track table
@@ -5117,11 +5145,29 @@ sub start_kid {
 		if ($synctype eq 'pushdelta' or $synctype eq 'swap') {
 			for my $g (@$goatlist) {
 				($S,$T) = ($g->{safeschema},$g->{safetable});
-				if ($deltacount{source}{$g->{safeschema}}{$g->{safetable}}) {
+				delete $g->{rateinfo};
+				if ($deltacount{source}{$S}{$T}) {
+
+					## Gather up our rate information - just store for now, we can write it after the commits
+					if ($sync->{track_rates}) {
+						$self->glog("Gathering source rate information");
+						my $sth = $sth{source}{$g}{deltarate};
+						$count = $sth->execute();
+						$g->{rateinfo}{source} = $sth->fetchall_arrayref();
+					}
+
 					$self->glog("Updating bucardo_track for $S.$T on $sourcedb");
 					$sth{source}{$g}{track}->execute();
 				}
-				if ($deltacount{target}{$g->{safeschema}}{$g->{safetable}}) {
+				if ($deltacount{target}{$S}{$T}) {
+
+					if ($sync->{track_rates}) {
+						$self->glog("Gathering target rate information");
+						my $sth = $sth{target}{$g}{deltarate};
+						$count = $sth->execute();
+						$g->{rateinfo}{target} = $sth->fetchall_arrayref();
+					}
+
 					$self->glog("Updating bucardo_track for $S.$T on $targetdb");
 					$sth{target}{$g}{track}->execute();
 				}
@@ -5167,6 +5213,12 @@ sub start_kid {
 			$targetdbh->commit();
 		}
 
+		## Capture the current time. now() is good enough as we just committed or rolled back
+		my $source_commit_time = $sourcedbh->selectall_arrayref("SELECT now()")->[0][0];
+		my $target_commit_time = $targetdbh->selectall_arrayref("SELECT now()")->[0][0];
+		$sourcedbh->commit();
+		$targetdbh->commit();
+
 		## Mark as done in the q table, and notify the parent directly
 		$self->glog("Marking as done in the q table, notifying controller");
 		$sth{qend}->execute($dmlcount{allupdates}{source}+$dmlcount{allupdates}{target},
@@ -5176,6 +5228,27 @@ sub start_kid {
 		my $notify = "bucardo_syncdone_${syncname}_$targetdb";
 		$maindbh->do(qq{NOTIFY "$notify"}) or die "NOTIFY $notify failed!";
 		$maindbh->commit();
+
+		## Update our rate information as needed
+		if ($sync->{track_rates}) {
+			$SQL = "INSERT INTO bucardo_rate(sync,goat,target,mastercommit,slavecommit,total) VALUES (?,?,?,?,?,?)";
+			$sth = $maindbh->prepare($SQL);
+			for my $g (@$goatlist) {
+				next if ! exists $g->{rateinfo};
+				($S,$T) = ($g->{safeschema},$g->{safetable});
+				if ($deltacount{source}{$S}{$T}) {
+					for my $time (@{$g->{rateinfo}{source}}) {
+						$sth->execute($syncname,$g->{id},$targetdb,$time,$source_commit_time,$deltacount{source}{$S}{$T});
+					}
+				}
+				if ($deltacount{target}{$S}{$T}) {
+					for my $time (@{$g->{rateinfo}{target}}) {
+						$sth->execute($syncname,$g->{id},$sourcedb,$time,$source_commit_time,$deltacount{target}{$S}{$T});
+					}
+				}
+			}
+			$maindbh->commit();
+		}
 
 		if ($synctype eq 'fullcopy'
 			and $sync->{analyze_after_copy}
@@ -5200,8 +5273,8 @@ sub start_kid {
 
 		## Remove lock file if we used it
 		if ($lock_table_mode and -e $force_lock_file) {
-		  $self->glog("Removing lock control file $force_lock_file");
-		  unlink $force_lock_file;
+			$self->glog("Removing lock control file $force_lock_file");
+			unlink $force_lock_file;
 		}
 
 		# Run all 'after_txn' code

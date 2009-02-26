@@ -1512,7 +1512,13 @@ sub upgrade_and_log {
 	my $action = shift;
 	my $short = shift || $action;
 
-	$dbh->do($action);
+	eval {
+		$dbh->do($action);
+	};
+	if ($@) {
+		my $line = (caller)[2];
+		die "From line $line, action $action\n$@\n";
+	}
 
 	$SQL = "INSERT INTO upgrade_log(action,version,summary) VALUES (?,?,?)";
 	$sth = $dbh->prepare($SQL);
@@ -1569,6 +1575,7 @@ sub upgrade {
 
 	my @new_tables = (
 		['bucardo', 'bucardo_log_message'],
+		['bucardo', 'bucardo_rate'],
 	);
 
 	my @new_columns = (
@@ -1583,6 +1590,7 @@ sub upgrade {
 		['bucardo', 'db',        'dbservice',       q{TEXT        NULL}],
 		['bucardo', 'goat',      'qpkey',           q{TEXT        NULL}],
 		['bucardo', 'sync',      'strict_checking', q{BOOLEAN NOT NULL DEFAULT 'true'}],
+		['bucardo', 'sync',      'track_rates',     q{BOOLEAN NOT NULL DEFAULT 'false'}],
 
 		['freezer', 'old_audit_pid', 'id',              q{INTEGER}],
 		['freezer', 'old_audit_pid', 'parentid',        q{INTEGER}],
@@ -1842,10 +1850,10 @@ sub upgrade {
 		}
 	}
 
-	## Now we check all the functions and triggers within bucardo.schema
+	## Now we check all the functions, triggers, and indexes within bucardo.schema
 	$file = 'bucardo.schema';
 	open $fh, '<', $file or die qq{Could not open "$file": $!\n};
-	my (@flist, @tlist);
+	my (@flist, @tlist, @ilist);
 	my ($fname,$args,$fbody) = ('','','');
 	my ($tname,$tbody) = ('','');
 	while (<$fh>) {
@@ -1880,6 +1888,10 @@ sub upgrade {
 		if (/^CREATE TRIGGER (\S+)/) {
 			$tname = $1;
 			$tbody .= $_;
+			next;
+		}
+		if (/^CREATE INDEX (\S+)/) {
+			push @ilist, [$1, $_];
 			next;
 		}
 	}
@@ -1933,6 +1945,20 @@ sub upgrade {
 		else {
 			upgrade_and_log($body);
 			clog "Created trigger $name";
+			$changes++;
+		}
+	}
+
+	## Check for any added indexes
+	for my $row (@ilist) {
+		my ($name,$body) = @$row;
+		if (relation_exists('bucardo',$name)) {
+			clog "  Index $name already exists";
+		}
+		else {
+			warn "DOES NOT EXIST? $name";
+			upgrade_and_log($body);
+			clog "Created index $name";
 			$changes++;
 		}
 	}

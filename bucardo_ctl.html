@@ -54,6 +54,8 @@
 <pre>
   ./bucardo_ctl stop &quot;Bringing down for debugging - Raul E.&quot;</pre>
 <pre>
+  ./bucardo_ctl list dbs</pre>
+<pre>
   ./bucardo_ctl add sync testsync source=herd1 type=pushdelta targetdb=B</pre>
 <pre>
   ./bucardo_ctl add database newdb name=internal_name port=5432 host=myserver user=postgres</pre>
@@ -112,6 +114,13 @@ you should scan the list of processes after running this program to make sure th
 processes have stopped. One should also provide a reason for issuing the stop - usually 
 this is a short explanation and your name. This is logged in the reason_file file and 
 is also used by Bucardo when it exits and sends out mail about its death.</p>
+</dd>
+<dt><strong><a name="item_list"><strong>list</strong></a></strong></dt>
+
+<dd>
+<p>Usage: ./bucardo_ctl list &lt;type&gt; &lt;regex&gt;</p>
+<p>Lists summary information about databases, goats, herds, or syncs. Adding anything after the 
+type will look up all matching entries.</p>
 </dd>
 <dt><strong><a name="item_add"><strong>add</strong></a></strong></dt>
 
