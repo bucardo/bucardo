@@ -2,7 +2,7 @@
 
 ## Web-based report on Bucardo activity
 ##
-## Copyright 2007-2008 Greg Sabino Mullane <greg@endpoint.com>
+## Copyright 2007-2009 Greg Sabino Mullane <greg@endpoint.com>
 
 use strict;
 use warnings;
@@ -581,9 +581,10 @@ sub showhost {
 		} keys %{$sync->{$s}{dblist}}) {
 			my $x = $sync->{$s}{dblist}{$t};
 			my $class = 'xxx';
-			$class = "overdue" if $x->{overdue};
-			$class = "expired" if $x->{expired};
-			$class = "error" if exists $x->{error};
+			$class = 'overdue' if $x->{overdue};
+			$class = 'expired' if $x->{expired};
+			$class = 'error' if exists $x->{error};
+			$class = 'inactive' if $sync->{$s}{status} ne 'active';
 			$order++;
 			$row{$order}{syncinfo} = $sync->{$s};
 			$row{$order}{sync} = $s;
@@ -1436,6 +1437,10 @@ tr.overdue { background-color: red; color: white; }
 tr.overdue a:visited { color: cyan; }
 tr.overdue a:active { color: black; }
 tr.overdue a { color: yellow; }
+tr.inactive { background-color: grey; color: white; }
+tr.inactive a:visited { color: cyan; }
+tr.inactive a:active { color: black; }
+tr.inactive a { color: yellow; }
 tr.expired { background-color: black; color: white; }
 tr.expired a:visited { color: cyan; }
 tr.expired a:active { color: black; }
