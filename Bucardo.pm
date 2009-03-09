@@ -1185,12 +1185,14 @@ sub start_mcp {
 	}
 	$synclist =~ s/\| $//;
 	$self->{cdate} = scalar localtime;
-	$SQL = "SELECT nextval('audit_pid_id_seq')";
-	$self->{mcpauditid} = $maindbh->selectall_arrayref($SQL)->[0][0];
-	$SQL = qq{INSERT INTO bucardo.audit_pid (type,id,familyid,sync,ppid,pid,birthdate) }.
-		qq{VALUES ('MCP',?,?,?,$self->{ppid},$$,?)};
-	$sth = $maindbh->prepare($SQL);
-	$sth->execute($self->{mcpauditid},$self->{mcpauditid},$synclist,$self->{cdate});
+	if ($config{audit_pid}) {
+		$SQL = "SELECT nextval('audit_pid_id_seq')";
+		$self->{mcpauditid} = $maindbh->selectall_arrayref($SQL)->[0][0];
+		$SQL = qq{INSERT INTO bucardo.audit_pid (type,id,familyid,sync,ppid,pid,birthdate) }.
+			qq{VALUES ('MCP',?,?,?,$self->{ppid},$$,?)};
+		$sth = $maindbh->prepare($SQL);
+		$sth->execute($self->{mcpauditid},$self->{mcpauditid},$synclist,$self->{cdate});
+	}
 	$maindbh->do('NOTIFY bucardo_started')  or warn 'NOTIFY failed';
 	$maindbh->commit();
 
@@ -2289,40 +2291,42 @@ sub start_mcp {
 
 		## Kill all children controllers belonging to us
 		my $finaldbh = $self->connect_database();
-		$SQL = qq{
-            SELECT pid
-            FROM   bucardo.audit_pid
-            WHERE  parentid = ?
-            AND    type = 'CTL'
-            AND    killdate IS NULL
-        };
-		$sth = $finaldbh->prepare($SQL);
-		$count = $sth->execute($self->{mcpauditid});
-		## Another option is to simply let the controllers keep running...
-		for (@{$sth->fetchall_arrayref()}) {
-			my $kid = $_->[0];
-			$self->glog("Found active controller $kid");
-			if (kill 0, $kid) {
-				$count = kill $signumber{USR1} => $kid;
-				$self->glog("Kill results: $count");
+		if ($config{audit_pid}) {
+			$SQL = qq{
+                SELECT pid
+                FROM   bucardo.audit_pid
+                WHERE  parentid = ?
+                AND    type = 'CTL'
+                AND    killdate IS NULL
+            };
+			$sth = $finaldbh->prepare($SQL);
+			$count = $sth->execute($self->{mcpauditid});
+			## Another option is to simply let the controllers keep running...
+			for (@{$sth->fetchall_arrayref()}) {
+				my $kid = $_->[0];
+				$self->glog("Found active controller $kid");
+				if (kill 0, $kid) {
+					$count = kill $signumber{USR1} => $kid;
+					$self->glog("Kill results: $count");
+				}
+				else {
+					$self->glog("Controller $$ not found!");
+				}
 			}
-			else {
-				$self->glog("Controller $$ not found!");
-			}
-		}
 
-		## Update the audit_pid table
-		$SQL = qq{
-            UPDATE bucardo.audit_pid
-            SET    killdate = timeofday()::timestamptz, death = ?
-            WHERE  type='MCP'
-            AND    id = ?
-            AND    killdate IS NULL
-        };
-		$sth = $finaldbh->prepare($SQL);
-		$reason =~ s/\s+$//;
-		$sth->execute($reason,$self->{mcpauditid});
-		$finaldbh->commit();
+			## Update the audit_pid table
+			$SQL = qq{
+                UPDATE bucardo.audit_pid
+                SET    killdate = timeofday()::timestamptz, death = ?
+                WHERE  type='MCP'
+                AND    id = ?
+                AND    killdate IS NULL
+            };
+			$sth = $finaldbh->prepare($SQL);
+			$reason =~ s/\s+$//;
+			$sth->execute($reason,$self->{mcpauditid});
+			$finaldbh->commit();
+		}
 		my $systemtime = scalar localtime;
 		my $dbtime = $finaldbh->selectall_arrayref("SELECT now()")->[0][0];
 		$self->glog(qq{End of cleanup_mcp. Sys time: $systemtime. Database time: $dbtime});
@@ -2464,12 +2468,14 @@ sub start_controller {
 
 	## Add ourself to the audit table
 	$self->{ccdate} = scalar localtime;
-	$SQL = qq{INSERT INTO bucardo.audit_pid (type,parentid,familyid,sync,source,ppid,pid,birthdate)}.
-		qq{ VALUES ('CTL',?,?,?,?,$self->{ppid},$$,?)};
-	$sth = $maindbh->prepare($SQL);
-	$sth->execute($self->{mcpauditid},$self->{mcpauditid},$syncname,$source,$self->{ccdate});
-	$SQL = "SELECT currval('audit_pid_id_seq')";
-	$self->{ctlauditid} = $maindbh->selectall_arrayref($SQL)->[0][0];
+	if ($config{audtit_pid}) {
+		$SQL = qq{INSERT INTO bucardo.audit_pid (type,parentid,familyid,sync,source,ppid,pid,birthdate)}.
+			qq{ VALUES ('CTL',?,?,?,?,$self->{ppid},$$,?)};
+		$sth = $maindbh->prepare($SQL);
+		$sth->execute($self->{mcpauditid},$self->{mcpauditid},$syncname,$source,$self->{ccdate});
+		$SQL = "SELECT currval('audit_pid_id_seq')";
+		$self->{ctlauditid} = $maindbh->selectall_arrayref($SQL)->[0][0];
+	}
 	$maindbh->commit();
 
 	## Prepare to see how busy this sync is
@@ -3218,47 +3224,49 @@ sub cleanup_controller {
 	unlink $self->{SYNCPIDFILE};
 
 	## Kill all Bucardo children mentioned in the audit table for this sync
-	my $finaldbh = $self->connect_database();
-	$SQL = qq{
-        SELECT pid
-        FROM   bucardo.audit_pid
-        WHERE  sync=?
-        AND    type = 'KID'
-        AND    killdate IS NULL
-        AND    death IS NULL
-    };
-	$sth = $finaldbh->prepare($SQL);
-	$sth->execute($self->{syncname});
-	for (@{$sth->fetchall_arrayref()}) {
-		my $kidpid = $_->[0];
-		## TODO: Make sure these are Bucardo processes! - check for "Bucardo" string?
-		$self->glog("Asking kid process $kidpid to terminate");
-		kill $signumber{USR1} => $kidpid;
-	}
-	## Asking them more than once is not going to do any good
-	$SQL = qq{
-        UPDATE bucardo.audit_pid
-        SET    death = ?
-        WHERE  sync=?
-        AND    type = 'KID'
-        AND    killdate IS NULL
-        AND    death IS NULL
-    };
-	my $now = scalar localtime;
-	$sth = $finaldbh->prepare($SQL);
-	$sth->execute("Sent kill request by $$ at $now", $self->{syncname});
+	if ($config{audit_pid}) {
+		my $finaldbh = $self->connect_database();
+		$SQL = qq{
+            SELECT pid
+            FROM   bucardo.audit_pid
+            WHERE  sync=?
+            AND    type = 'KID'
+            AND    killdate IS NULL
+            AND    death IS NULL
+        };
+		$sth = $finaldbh->prepare($SQL);
+		$sth->execute($self->{syncname});
+		for (@{$sth->fetchall_arrayref()}) {
+			my $kidpid = $_->[0];
+			## TODO: Make sure these are Bucardo processes! - check for "Bucardo" string?
+			$self->glog("Asking kid process $kidpid to terminate");
+			kill $signumber{USR1} => $kidpid;
+		}
+		## Asking them more than once is not going to do any good
+		$SQL = qq{
+            UPDATE bucardo.audit_pid
+            SET    death = ?
+            WHERE  sync=?
+            AND    type = 'KID'
+            AND    killdate IS NULL
+            AND    death IS NULL
+        };
+		my $now = scalar localtime;
+		$sth = $finaldbh->prepare($SQL);
+		$sth->execute("Sent kill request by $$ at $now", $self->{syncname});
 
-	## Update the audit_pid table
-	$SQL = qq{
-        UPDATE bucardo.audit_pid
-        SET    killdate = timeofday()::timestamp, death = ?
-        WHERE  id = ?
-        AND    killdate IS NULL
-    };
-	$sth = $finaldbh->prepare($SQL);
-	$reason =~ s/\s+$//;
-	$sth->execute($reason,$self->{ctlauditid});
-	$finaldbh->commit();
+		## Update the audit_pid table
+		$SQL = qq{
+            UPDATE bucardo.audit_pid
+            SET    killdate = timeofday()::timestamp, death = ?
+            WHERE  id = ?
+            AND    killdate IS NULL
+        };
+		$sth = $finaldbh->prepare($SQL);
+		$reason =~ s/\s+$//;
+		$sth->execute($reason,$self->{ctlauditid});
+		$finaldbh->commit();
+	}
 
 	$self->glog("Controller exiting at cleanup_controller. Reason: $reason");
 
@@ -3318,6 +3326,7 @@ WHERE procpid = ?
 
 
 sub start_kid {
+
 
 	## A single kid, in charge of doing a sync from one db to another
 
@@ -3481,12 +3490,14 @@ sub start_kid {
 	$maindbh->do("SET statement_timeout = 0");
 
 	## Add ourself to the audit table
-	$SQL = qq{INSERT INTO bucardo.audit_pid (type,parentid,familyid,sync,ppid,pid,birth,source,target)}.
-		qq{ VALUES ('KID',?,?,?,$self->{ppid},$$,'Life: $self->{life}',?,?)};
-	$sth = $maindbh->prepare($SQL);
-	$sth->execute($self->{ctlauditid},$self->{mcpauditid},$syncname,$sourcedb,$targetdb);
-	$SQL = "SELECT currval('audit_pid_id_seq')";
-	$self->{kidauditid} = $maindbh->selectall_arrayref($SQL)->[0][0];
+	if ($config{audit_pid}) {
+		$SQL = q{INSERT INTO bucardo.audit_pid (type,parentid,familyid,sync,ppid,pid,birth,source,target)}.
+			qq{ VALUES ('KID',?,?,?,$self->{ppid},$$,'Life: $self->{life}',?,?)};
+		$sth = $maindbh->prepare($SQL);
+		$sth->execute($self->{ctlauditid},$self->{mcpauditid},$syncname,$sourcedb,$targetdb);
+		$SQL = "SELECT currval('audit_pid_id_seq')";
+		$self->{kidauditid} = $maindbh->selectall_arrayref($SQL)->[0][0];
+	}
 
 	## Listen for important changes to the q table, if we are persistent
 	my $listenq = "bucardo_q_${syncname}_$targetdb";
@@ -3526,18 +3537,20 @@ sub start_kid {
 	## Connect to the target database
 	$targetdbh = $self->connect_database($targetdb);
 
-	## Put the backend PIDs in place
-	$SQL = 'SELECT pg_backend_pid()';
-	my $source_backend = $sourcedbh->selectall_arrayref($SQL)->[0][0];
-	my $target_backend = $targetdbh->selectall_arrayref($SQL)->[0][0];
-	$SQL = qq{
+	## Put the backend PIDs in place in the audit_pid table
+	if ($config{audit_pid}) {
+		$SQL = 'SELECT pg_backend_pid()';
+		my $source_backend = $sourcedbh->selectall_arrayref($SQL)->[0][0];
+		my $target_backend = $targetdbh->selectall_arrayref($SQL)->[0][0];
+		$SQL = qq{
             UPDATE bucardo.audit_pid
             SET    source_backend = ?, target_backend = ?
             WHERE  id = ?
         };
-	$sth = $maindbh->prepare($SQL);
-	$sth->execute($source_backend, $target_backend, $self->{kidauditid});
-	$maindbh->commit();
+		$sth = $maindbh->prepare($SQL);
+		$sth->execute($source_backend, $target_backend, $self->{kidauditid});
+		$maindbh->commit();
+	}
 
 	## If we are using delta tables, prepare all relevant SQL
 	if ($synctype eq 'pushdelta' or $synctype eq 'swap') {
@@ -5299,14 +5312,16 @@ sub start_kid {
 	} ## end KID
 
 	## Cleanup and exit
-	$SQL = qq{
-        UPDATE bucardo.audit_pid
-        SET    killdate = timeofday()::timestamp, death = 'END'
-        WHERE  id = ?
-        AND    killdate IS NULL
-    };
-	$sth = $maindbh->prepare($SQL);
-	$sth->execute($self->{kidauditid});
+	if ($config{audit_pid}) {
+		$SQL = qq{
+            UPDATE bucardo.audit_pid
+            SET    killdate = timeofday()::timestamp, death = 'END'
+            WHERE  id = ?
+            AND    killdate IS NULL
+        };
+		$sth = $maindbh->prepare($SQL);
+		$sth->execute($self->{kidauditid});
+	}
 	$maindbh->commit();
 	$maindbh->disconnect();
 

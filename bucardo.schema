@@ -101,29 +101,36 @@ tcp_keepalives_count|2|How many probes to send. 0 indicates sticking with system
 COPY bucardo_config(setting,value,about)
 FROM STDIN
 WITH DELIMITER '|';
+audit_pid|1|Do we populate the audit_pid table or not?
 log_showpid|0|Show PID in the log output?
 log_showtime|1|Show timestamp in the log output?  0=off  1=seconds since epoch  2=scalar gmtime  3=scalar localtime
 log_showline|0|Show line number in the log output?
+\.
+
+-- Versioning
+COPY bucardo_config(setting,value,about)
+FROM STDIN
+WITH DELIMITER '|';
+bucardo_version|3.2.7|Bucardo version this schema was created with
+bucardo_current_version|3.2.7|Current version of Bucardo
 \.
 
 -- Other settings:
 COPY bucardo_config(setting,value,about)
 FROM STDIN
 WITH DELIMITER '|';
+default_email_from|nobody@example.com|Who the alert emails are sent as
+default_email_to|nobody@example.com|Who to send alert emails to
+kid_abort_limit|3|How many times we will restore an aborted kid before giving up?
+max_delete_clause|200|Maximum number of items to delete inside of IN() clauses
+max_select_clause|500|Maximum number of items to select inside of IN() clauses
 piddir|/var/run/bucardo|Directory holding Bucardo PID files
 pidfile|bucardo.pid|Name of the main Bucardo pid file
-stopfile|fullstopbucardo|Name of the semaphore file used to stop Bucardo processes
 reason_file|/home/bucardo/restart.reason|File to hold reasons for stopping and starting
-syslog_facility|LOG_LOCAL1|Which syslog facility level to use
-kid_abort_limit|3|How many times we will restore an aborted kid before giving up?
-default_email_to|nobody@example.com|Who to send alert emails to
-default_email_from|nobody@example.com|Who the alert emails are sent as
 stats_script_url|http://www.bucardo.org/|Location of the stats script
+stopfile|fullstopbucardo|Name of the semaphore file used to stop Bucardo processes
+syslog_facility|LOG_LOCAL1|Which syslog facility level to use
 upsert_attempts|3|How many times do we try out the upsert loop?
-max_select_clause|500|Maximum number of items to select inside of IN() clauses
-max_delete_clause|200|Maximum number of items to delete inside of IN() clauses
-bucardo_version|3.2.7|Bucardo version this schema was created with
-bucardo_current_version|3.2.7|Current version of Bucardo
 \.
 
 --
