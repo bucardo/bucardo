@@ -18,8 +18,8 @@ use Moose;
 
 my @req1 = (qw(name dbname dbuser));
 my @req2 = (qw());
-my @opt1 = (qw(dbhost dbpass dbconn pgpass status));
-my @opt2 = (qw(dbport synclimit));
+my @opt1 = (qw(dbhost dbpass dbconn dbservice pgpass status));
+my @opt2 = (qw(dbport sourcelimit targetlimit));
 for my $req (@req1) { has $req => ( is => 'rw', isa => 'Str', required => 1 ); }
 for my $req (@req2) { has $req => ( is => 'rw', isa => 'Int', required => 1 ); }
 for my $opt (@opt1) { has $opt => ( is => 'rw', isa => 'Str', required => 0 ); }
@@ -3327,85 +3327,87 @@ WHERE procpid = ?
 
 sub start_kid {
 
-
-	## A single kid, in charge of doing a sync from one db to another
+	## A single kid, in charge of doing a sync between exactly two databases
 
 	our ($self,$sync,$targetdb) = @_;
 
-	our ($syncname, $synctype, $sourcedb, $goatlist, $txnmode, $kidsalive ) = @$sync{qw(
-		   name     synctype   sourcedb   goatlist   txnmode   kidsalive )};
+	our ($syncname, $synctype, $sourcedb, $goatlist, $kidsalive ) = @$sync{qw(
+		   name      synctype   sourcedb   goatlist   kidsalive )};
 
+	## Adjust the process name, start logging
 	$0 = qq{Bucardo Kid.$self->{extraname} Sync "$syncname": ($synctype) "$sourcedb" -> "$targetdb"};
-	$self->{logprefix} = "KID ";
-
+	$self->{logprefix} = 'KID ';
 	$self->glog(qq{New kid, syncs "$sourcedb" to "$targetdb" for sync "$syncname" alive=$kidsalive Parent=$self->{parent}});
 
-	if ($syncname eq $targetdb) {
-		die qq{Cannot sync to the same database: $targetdb\n};
-	}
-
-	## Set these early so the DIE block can use them
+	## Establish these early so the DIE block can use them
 	our ($maindbh,$sourcedbh,$targetdbh);
 	our ($S,$T,$pkval) = ('?','?','?'); ## no critic
 
 	## Keep track of how many times this kid has done work
 	our $kidloop = 0;
 
+	## Catch USR1 errors as a signal from the parent CTL process to exit right away
 	$SIG{USR1} = sub {
 		die "CTL request\n";
 	};
 
+	## Fancy exception handler to clean things up before leaving.
 	$SIG{__DIE__} = sub {
+
+		## The message we were passed in. Remove whitespace from the end.
 		my ($msg) = @_;
 		$msg =~ s/\s+$//g;
-		my $line = (caller)[2];
-		my ($merr,$serr,$terr);
+
+		## Find any error messages/states for the master, source, or target databases.
+		my ($merr,$serr,$terr, $mstate,$sstate,$tstate);
 		if ($msg =~ /DBD::Pg/) {
 			$merr = $maindbh->err || 'none';
 			$serr = $sourcedbh->err || 'none';
 			$terr = $targetdbh->err || 'none';
-			$msg .= "\n main error: $merr source error: $serr target error: $terr\n";
+			$mstate = $maindbh->state;
+			$sstate = $sourcedbh->state;
+			$tstate = $targetdbh->state;
+			$msg .= "\n main error: $merr source error: $serr target error: $terr States:$mstate/$sstate/$tstate\n";
 		}
+
+		## If the error was because we could not serialize, maybe add a sleep time
 		my $gotosleep = 0;
-		if ($msg =~ /could not serialize/) {
-			$self->glog("Could not serialize, sleeping for $config{kid_serial_sleep} seconds");
+		if ($tstate eq '40001' or $sstate eq '40001') {
 			$gotosleep = $config{kid_serial_sleep};
+			$self->glog("Could not serialize, sleeping for $gotosleep seconds");
 		}
 
-		## TODO: Develop better rules for this
-		if ($msg =~ /TODOcould not serialize/) {
-		  $self->glog("Could not serialize, requesting next run to have EXCLUSIVE locking.");
-		  my $forcename = "/tmp/bucardo-force-lock-$syncname";
-		  if (-e $forcename) {
-			$self->glog(qq{File "$forcename" already exists, will not create});
-		  }
-		  elsif (open my $fh, '>', $forcename) {
-			print $fh "EXCLUSIVE\nCreate by kid $$ due to previous serilization error\n";
-			close $fh or warn qq{Could not close "$forcename": $!\n};
-		  }
-		  else {
-			$self->glog(qq{Warning! Could not create "$forcename": $!\n});
-		  }
+		## TODO: Decide if we want to do this, and make better decision rules for it
+		if (0 or $tstate eq '40001' or $sstate eq '40001') {
+			$self->glog('Could not serialize, requesting next run to have EXCLUSIVE locking');
+			my $forcename = "/tmp/bucardo-force-lock-$syncname";
+			if (-e $forcename) {
+				$self->glog(qq{File "$forcename" already exists, will not create});
+			}
+			elsif (open my $fh, '>', $forcename) {
+				print $fh "EXCLUSIVE\nCreate by kid $$ due to previous serialization error\n";
+				close $fh or warn qq{Could not close "$forcename": $!\n};
+			}
+			else {
+				$self->glog(qq{Warning! Could not create "$forcename": $!\n});
+			}
 		}
 
-		## If deadlocks, try and gather more information
-		if ($msg =~ /deadlock/o) {
-			if ($terr ne 'none') {
-				$msg .= $self->get_deadlock_details($targetdbh, $msg);
-			}
-			elsif ($serr ne 'none') {
-				$msg .= $self->get_deadlock_details($sourcedbh, $msg);
-			}
-			elsif ($merr ne 'none') {
-				$msg .= $self->get_deadlock_details($maindbh, $msg);
-			}
+		## If this was a deadlock problem, try and gather more information
+		if ($tstate eq '40P01') {
+			$msg .= $self->get_deadlock_details($targetdbh, $msg);
+		}
+		elsif ($sstate eq '40P01') {
+			$msg .= $self->get_deadlock_details($sourcedbh, $msg);
+		}
+		elsif ($mstate eq '40P04') {
+			$msg .= $self->get_deadlock_details($maindbh, $msg);
 		}
 
 		## Drop all open connections, reconnect to main for cleanup
-		defined $maindbh   and $maindbh   and ($maindbh->rollback,   $maindbh->disconnect  );
 		defined $sourcedbh and $sourcedbh and ($sourcedbh->rollback, $sourcedbh->disconnect);
 		defined $targetdbh and $targetdbh and ($targetdbh->rollback, $targetdbh->disconnect);
-		sleep $gotosleep if $gotosleep;
+		defined $maindbh   and $maindbh   and ($maindbh->rollback,   $maindbh->disconnect  );
 		my $finaldbh = $self->connect_database();
 
 		## Let anyone listening know that this target and sync aborted
@@ -3419,75 +3421,92 @@ sub start_kid {
             UPDATE bucardo.q
             SET    aborted=timeofday()::timestamp, whydie=?
             WHERE  sync=?
+            AND    sourcedb=?
+            AND    targetdb=?
+            AND    ppid=?
             AND    pid=?
             AND    ended IS NULL
             AND    aborted IS NULL
         };
 		## Note: we don't check for non-null started because it is never set without a pid
-		## TODO: Is the above unique enough for all circumstances?
 		$sth = $finaldbh->prepare($SQL);
-		$count = $sth->execute($msg,$syncname,$$);
-		$count = 0 if $count < 1;
-		if ($count >= 1) {
-			$self->glog("Warning! Rows set to aborted in the q table for this child: $count");
-		}
+		$sth->execute($msg,$syncname,$sourcedb,$targetdb,$self->{parent},$$);
+
 		## Clean up the audit_pid table
-		$SQL = qq{
-            UPDATE bucardo.audit_pid
-            SET    killdate=timeofday()::timestamp, death=?
-            WHERE  id = ?
-        };
-		$sth = $finaldbh->prepare($SQL);
-		$sth->execute($msg,$self->{kidauditid});
+		if ($config{audit_pid}) {
+			$SQL = qq{
+                UPDATE bucardo.audit_pid
+                SET    killdate=timeofday()::timestamp, death=?
+                WHERE  id = ?
+            };
+			$sth = $finaldbh->prepare($SQL);
+			$sth->execute($msg,$self->{kidauditid});
+		}
+
+		## Done with database cleanups, so disconnect
 		$finaldbh->commit();
 		$finaldbh->disconnect();
-		if (! $self->{clean_exit}) {
-			my $warn = $msg =~ /CTL request/ ? '' : 'Warning! ';
-			$self->glog(qq{${warn}Child for sync "$syncname" ("$sourcedb" -> "$targetdb") was killed at line $line: $msg});
-			for (values %{$self->{dbs}}) {
-				$_->{dbpass} = '???';
-			}
-			$self->{dbpass} = '???';
-			## Trim the bloated sync list to just our modified one:
-			$self->{sync} = $sync;
-			my $dump = Dumper $self;
-			my $body = qq{
-				Kid $$ has been killed at line $line
-				Error: $msg
-				Possible suspects: $S.$T: $pkval
-				Host: $hostname
-				Sync name: $syncname
-				Stats page: $config{stats_script_url}?host=$sourcedb&sync=$syncname
-				Source database: $sourcedb
-				Target database: $targetdb
-				Parent process: $self->{ppid}
-				Rows set to aborted: $count
-				Version: $VERSION
-				Loops: $kidloop
-			};
-			$body =~ s/^\s+//gsm;
-			my $moresub = '';
-			if ($msg =~ /Found stopfile/) {
-				$moresub = " (stopfile)";
-			}
-			elsif ($msg =~ /could not serialize access/) {
-				$moresub = " (serialization)";
-			}
-			elsif ($msg =~ /deadlock/) {
-				$moresub = " (deadlock)";
-			}
-			elsif ($msg =~ /could not connect/) {
-				$moresub = " (no connection)";
-			}
-			my $subject = qq{Bucardo kid for "$syncname" killed on $shorthost$moresub};
-			$self->send_mail({ body => "$body\n", subject => $subject });
+
+		sleep $gotosleep if $gotosleep;
+
+		## If a clean exit was requested, exit right now
+		if ($self->{clean_exit}) {
+			exit 1;
 		}
-		exit;
+
+		## Send an email
+		my $warn = $msg =~ /CTL request/ ? '' : 'Warning! ';
+		my $line = (caller)[2];
+		$self->glog(qq{${warn}Child for sync "$syncname" ("$sourcedb" -> "$targetdb") was killed at line $line: $msg});
+
+		## Never display the database password
+		for (values %{$self->{dbs}}) {
+			$_->{dbpass} = '???';
+		}
+		$self->{dbpass} = '???';
+
+		## Show only our sync, not all of them
+		$self->{sync} = $sync;
+
+		## Create the body of the message to be mailed
+		my $dump = Dumper $self;
+		my $body = qq{
+			Kid $$ has been killed at line $line
+			Error: $msg
+			Possible suspects: $S.$T: $pkval
+			Host: $hostname
+			Sync name: $syncname
+			Stats page: $config{stats_script_url}?host=$sourcedb&sync=$syncname
+			Source database: $sourcedb
+			Target database: $targetdb
+			Parent process: $self->{ppid}
+			Rows set to aborted: $count
+			Version: $VERSION
+			Loops: $kidloop
+		};
+		$body =~ s/^\s+//gsm;
+		my $moresub = '';
+		if ($msg =~ /Found stopfile/) {
+			$moresub = " (stopfile)";
+		}
+		elsif ($tstate eq '40001' or $sstate eq '40001') {
+			$moresub = " (serialization)";
+		}
+		elsif ($mstate eq '40P04' or $sstate eq '40P04' or $tstate eq '40P04') {
+			$moresub = " (deadlock)";
+		}
+		elsif ($msg =~ /could not connect/) {
+			$moresub = " (no connection)";
+		}
+		my $subject = qq{Bucardo kid for "$syncname" killed on $shorthost$moresub};
+		$self->send_mail({ body => "$body\n", subject => $subject });
+
+		exit 1;
+
 	}; ## end $SIG{__DIE__}
 
-	## Connect to the main database, overwrites previous setting from the controller
+	## Connect to the main database; overwrites previous handle from the controller
 	$maindbh = $self->{masterdbh} = $self->connect_database();
-	$maindbh->do("SET statement_timeout = 0");
 
 	## Add ourself to the audit table
 	if ($config{audit_pid}) {
@@ -3504,12 +3523,13 @@ sub start_kid {
 	if ($kidsalive) {
 		$maindbh->do(qq{LISTEN "$listenq"}) or die "LISTEN $listenq failed";
 	}
+
 	## Listen for a ping, even if not persistent
 	$maindbh->do('LISTEN bucardo_kid_'.$$.'_ping');
 	$maindbh->commit();
 
 	## Prepare to update the q table when we start...
-	$SQL = qq{
+	$SQL = q{
         UPDATE bucardo.q
         SET    started=timeofday()::timestamptz, pid = ?
         WHERE  sync=?
@@ -3519,7 +3539,7 @@ sub start_kid {
 	$sth{qsetstart} = $maindbh->prepare($SQL);
 
 	## .. and when we finish.
-	$SQL = qq{
+	$SQL = q{
         UPDATE bucardo.q
         SET    ended=timeofday()::timestamptz, updates=?, inserts=?, deletes=?
         WHERE  sync=?
@@ -3667,40 +3687,42 @@ sub start_kid {
 
 			}
 			else { ## synctype eq 'pushdelta'
+
 				my $rowids = 'rowid';
 				for (2 .. $g->{pkcols}) {
 					$rowids .= ",rowid$_";
 				}
 
+				## This is the main query: grab all changed rows since the last sync
 				$SQL{delta} = qq{
-                SELECT    DISTINCT $rowids
-                FROM      bucardo.bucardo_delta d
-                WHERE     d.tablename = \$1::oid
-                AND       NOT EXISTS (
-                                SELECT 1
-                                FROM   bucardo.bucardo_track bt
-                                WHERE  d.txntime = bt.txntime
-                                AND    bt.targetdb = '\$2'::text
-                                AND    bt.tablename = \$1::oid
-                          )
+                SELECT  DISTINCT $rowids
+                FROM    bucardo.bucardo_delta d
+                WHERE   d.tablename = \$1::oid
+                AND     NOT EXISTS (
+                           SELECT 1
+                           FROM   bucardo.bucardo_track bt
+                           WHERE  d.txntime = bt.txntime
+                           AND    bt.targetdb = '\$2'::text
+                           AND    bt.tablename = \$1::oid
+                        )
                 };
 
 				if ($sync->{track_rates}) {
 					$SQL{deltarate} = qq{
-                SELECT    DISTINCT txntime
-                FROM      bucardo.bucardo_delta d
-                WHERE     d.tablename = \$1::oid
-                AND       NOT EXISTS (
-                                SELECT 1
-                                FROM   bucardo.bucardo_track bt
-                                WHERE  d.txntime = bt.txntime
-                                AND    bt.targetdb = '\$2'::text
-                                AND    bt.tablename = \$1::oid
-                          )
-                };
+                    SELECT  DISTINCT txntime
+                    FROM    bucardo.bucardo_delta d
+                    WHERE   d.tablename = \$1::oid
+                    AND     NOT EXISTS (
+                               SELECT 1
+                               FROM   bucardo.bucardo_track bt
+                               WHERE  d.txntime = bt.txntime
+                               AND    bt.targetdb = '\$2'::text
+                               AND    bt.tablename = \$1::oid
+                            )
+                    };
 				}
 
-			}
+			} ## end pushdelta
 
 			## Plug in the tablenames (oids) and the targetdb names
 			($SQL = $SQL{delta}) =~ s/\$1/$g->{oid}/go;
@@ -3755,14 +3777,14 @@ sub start_kid {
 			}
 		} ## end each goat
 
-	} ## end pushdelta/swap
+	} ## end pushdelta or swap
 
 	## We disable and enable triggers and rules in one of two ways
 	## For old, pre 8.3 versions of Postgres, we manipulate pg_class
 	## This is not ideal, as we don't lock pg_class and thus risk problems
-	## because the system catalogs are not strictly MVCC. However, there is 
-	## no other way to disable rules, which we *must* do.
-	## If we are 8.3 or higher, we simply use session_replication_role, 
+	## because the system catalogs are not strictly MVCC. However, there is
+	## no other way to disable rules, which we must do.
+	## If we are 8.3 or higher, we simply use session_replication_role,
 	## which is completely safe (and faster)
 	## Note that the source and target may have different methods
 
@@ -3815,15 +3837,15 @@ sub start_kid {
 
 	## Common settings for the database handles. Set before passing to DBIx::Safe below
 	## These persist through all subsequent transactions
-	$sourcedbh->do("SET statement_timeout = 0");
-	$targetdbh->do("SET statement_timeout = 0");
+	$sourcedbh->do('SET statement_timeout = 0');
+	$targetdbh->do('SET statement_timeout = 0');
 
 	## Note: no need to turn these back to 'origin', we always want to stay in replica mode
 	if ($target_disable_trigrules eq 'replica') {
-		$targetdbh->do("SET session_replication_role = 'replica'");
+		$targetdbh->do(q{SET session_replication_role = 'replica'});
 	}
 	if ($synctype eq 'swap' and $source_disable_trigrules eq 'replica') {
-		$sourcedbh->do("SET session_replication_role = 'replica'");
+		$sourcedbh->do(q{SET session_replication_role = 'replica'});
 	}
 
 	if ($config{tcp_keepalives_idle}) { ## e.g. not 0, should always exist
@@ -3839,10 +3861,9 @@ sub start_kid {
 
 	my $lastpingcheck = 0;
 
-	## Everything with "our" is used in custom code
+	## Everything below with "our" is used in custom code calls
 
 	## Summary information about our actions.
-	## Perhaps store in the main database someday
 	our %deltacount;
 	our %dmlcount;
 	our %rowinfo;
@@ -4055,13 +4076,9 @@ sub start_kid {
 
 		## Start the main transaction. From here on out, speed is key
 		## Note that all database handles are currently not in a txn (commit or rollback called)
-		if (defined $txnmode) {
-			$targetdbh->do("SET TRANSACTION ISOLATION LEVEL $txnmode");
-		}
+		$targetdbh->do("SET TRANSACTION ISOLATION LEVEL $sync->{txnmode}");
 		if ($synctype eq 'swap' or $synctype eq 'pushdelta') {
-			if (defined $txnmode) {
-				$sourcedbh->do("SET TRANSACTION ISOLATION LEVEL $txnmode");
-			}
+			$sourcedbh->do("SET TRANSACTION ISOLATION LEVEL $sync->{txnmode}");
 		}
 
 		## We may want to lock all the tables
@@ -4474,26 +4491,23 @@ sub start_kid {
 		## SWAP
 		elsif ($synctype eq 'swap') {
 
+			## Do each table in turn, ordered by descending priority and ascending id
 			for my $g (@$goatlist) {
 
 				($S,$T) = ($g->{safeschema},$g->{safetable});
 
-				## Skip if neither side has changes for this table
+				## Skip if neither source not target has changes for this table
 				next unless $deltacount{source}{$S}{$T} or $deltacount{target}{$S}{$T};
 
 				## Use copies as rollback/redo may change the originals
+				## XXX pushdelta doesn't need this, so why do we?
 				$deltacount{src2}{$S}{$T} = $deltacount{source}{$S}{$T};
 				$deltacount{tgt2}{$S}{$T} = $deltacount{target}{$S}{$T};
 
-				## Set all IUD counters to 0
-				$dmlcount{I}{source}{$S}{$T} = $dmlcount{U}{source}{$S}{$T} = $dmlcount{D}{source}{$S}{$T} =
-				$dmlcount{I}{target}{$S}{$T} = $dmlcount{U}{target}{$S}{$T} = $dmlcount{D}{target}{$S}{$T} = 0;
-
-				my ($hasindex_src,$hasindex_tgt,$toid) = (0,0,$g->{targetoid}{$targetdb});
+				## Get target table's oid, set index disable requests to zero
+				my ($toid,$hasindex_src,$hasindex_tgt) = ($g->{targetoid}{$targetdb},0,0);
 
 				## If requested, turn off indexes before making changes
-				## Usually not a good idea for swap syncs
-				## XXX Make this depend on number of rows or other factor?
 				if ($g->{rebuild_index}) {
 					$SQL = "SELECT relhasindex FROM pg_class WHERE oid = $g->{oid}";
 					$hasindex_src = $sourcedbh->selectall_arrayref($SQL)->[0][0];
@@ -4511,9 +4525,16 @@ sub start_kid {
 					}
 				}
 
-				$g->{exceptions} = 0; ## Total number of times we've failed for this table
+				## Keep track of how many times this goat has handled an exception
+				$g->{exceptions} = 0;
 
+				## This is where we want to 'rewind' to on a handled exception
+				## We choose this point as its possible the custom code has a different getdelta result
 			  SWAP_SAVEPOINT: {
+
+				## Reset all IUD counters to 0
+				$dmlcount{I}{source}{$S}{$T} = $dmlcount{U}{source}{$S}{$T} = $dmlcount{D}{source}{$S}{$T} =
+				$dmlcount{I}{target}{$S}{$T} = $dmlcount{U}{target}{$S}{$T} = $dmlcount{D}{target}{$S}{$T} = 0;
 
 				## The actual data from the large join of bucardo_delta + original table for source and target
 				my ($info1,$info2)= ({},{});
@@ -4570,106 +4591,108 @@ sub start_kid {
 				## 8 = Add target row to the target db
 
 				my $qnamepk = $g->{qpkeyjoined};
-				## Consider removing the sort for speed on large sets
+				## XXX Consider removing the sort for speed on large sets
+				## First, we loop through all changed row on the source
 				for my $temp_pkval (sort keys %$info1) {
 					$pkval = $temp_pkval;
 					## No problem if it only changed on the source
 					if (! exists $info2->{$pkval}) {
 						$self->glog("No conflict, source only for $S.$T.$qnamepk: $pkval");
 						$info1->{$pkval}{BUCARDO_ACTION} = 1; ## copy source to target
+						next;
 					}
-					else {
-						## Standard conflict handlers don't need info to make a decision
-						if (!exists $g->{code_conflict}) {
-							my $sc = $g->{standard_conflict};
-							$self->glog(qq{Conflict detected for $S.$T:$pkval. Using standard conflict "$sc"});
-							if ('source' eq $sc) {
-								$info1->{$pkval}{BUCARDO_ACTION} = 1; ## copy source to target
-							}
-							elsif ('target' eq $sc) {
-								$info1->{$pkval}{BUCARDO_ACTION} = 2; ## copy target to source
-							}
-							elsif ('skip' eq $sc) { ## XXX Too dangerous? Not allow 0 in general?
-								$info1->{$pkval}{BUCARDO_ACTION} = 0;
-							}
-							elsif ('random' eq $sc) {
-								$info1->{$pkval}{BUCARDO_ACTION} = rand 2 > 1 ? 1 : 2;
-							}
-							elsif ('abort' eq $sc) {
-								die qq{Warning! Aborting sync $syncname due to conflict for $S:$T:$pkval\n};
-							}
-							elsif ('latest' eq $sc) {
-								$SQL{sc_latest} ||=
+					## At this point, it's on both source and target. Don't panic.
+
+					## Standard conflict handlers don't need info to make a decision
+					if (!exists $g->{code_conflict}) {
+						my $sc = $g->{standard_conflict};
+						$self->glog(qq{Conflict detected for $S.$T:$pkval. Using standard conflict "$sc"});
+						if ('source' eq $sc) {
+							$info1->{$pkval}{BUCARDO_ACTION} = 1; ## copy source to target
+						}
+						elsif ('target' eq $sc) {
+							$info1->{$pkval}{BUCARDO_ACTION} = 2; ## copy target to source
+						}
+						elsif ('random' eq $sc) {
+							$info1->{$pkval}{BUCARDO_ACTION} = rand 2 > 1 ? 1 : 2;
+						}
+						elsif ('abort' eq $sc) {
+							die qq{Warning! Aborting sync $syncname due to conflict for $S:$T:$pkval\n};
+						}
+						elsif ('latest' eq $sc) {
+							if (!exists $sth{sc_latest_src}{$g->{pkcols}}) {
+								$SQL =
 									qq{SELECT extract(epoch FROM MAX(txntime)) FROM bucardo.bucardo_delta WHERE tablename=? AND rowid=?};
 								for (2..$g->{pkcols}) {
-									$SQL{sc_latest} .= " AND rowid$_=?";
+									$SQL .= " AND rowid$_=?";
 								}
-								$sth{sc_latest_src} ||= $sourcedbh->prepare($SQL{sc_latest});
-								if ($g->{pkcols} > 1) {
-									$sth{sc_latest_src}->execute($g->{oid},@{$info1->{$pkval}{BUCARDO_PKVALS}});
-								}
-								else {
-									$sth{sc_latest_src}->execute($g->{oid},$pkval);
-								}
-								my $srctime = $sth{sc_latest_src}->fetchall_arrayref()->[0][0];
-								$sth{sc_latest_tgt} ||= $targetdbh->prepare($SQL{sc_latest});
-								if ($g->{pkcols} > 1) {
-									$sth{sc_latest_tgt}->execute($toid,@{$info2->{$pkval}{BUCARDO_PKVALS}});
-								}
-								else {
-									$sth{sc_latest_tgt}->execute($toid,$pkval);
-								}
-								my $tgttime = $sth{sc_latest_tgt}->fetchall_arrayref()->[0][0];
-								$self->glog(qq{Delta source time: $srctime Target time: $tgttime});
-								$info1->{$pkval}{BUCARDO_ACTION} = $srctime >= $tgttime ? 1 : 2;
+								$sth{sc_latest_src}{$g->{pkcols}} = $sourcedbh->prepare($SQL);
+								$sth{sc_latest_tgt}{$g->{pkcols}} = $targetdbh->prepare($SQL);
+							}
+							if ($g->{pkcols} > 1) {
+								$sth{sc_latest_src}->execute($g->{oid},@{$info1->{$pkval}{BUCARDO_PKVALS}});
 							}
 							else {
-								die qq{Unknown standard conflict for sync $syncname on $T.$S: $sc\n};
+								$sth{sc_latest_src}->execute($g->{oid},$pkval);
 							}
+							my $srctime = $sth{sc_latest_src}->fetchall_arrayref()->[0][0];
+							if ($g->{pkcols} > 1) {
+								$sth{sc_latest_tgt}->execute($toid,@{$info2->{$pkval}{BUCARDO_PKVALS}});
+							}
+							else {
+								$sth{sc_latest_tgt}->execute($toid,$pkval);
+							}
+							my $tgttime = $sth{sc_latest_tgt}->fetchall_arrayref()->[0][0];
+							$self->glog(qq{Delta source time: $srctime Target time: $tgttime});
+							$info1->{$pkval}{BUCARDO_ACTION} = $srctime >= $tgttime ? 1 : 2;
+						} ## end 'latest'
+						else {
+							die qq{Unknown standard conflict for sync $syncname on $T.$S: $sc\n};
 						}
-						else { ## Custom conflict handler. Gather up info to pass to it.
-							%rowinfo = (
-									 sourcerow  => $info1->{$pkval},
-									 targetrow  => $info2->{$pkval},
-									 schema     => $S,
-									 table      => $T,
-									 pkeyname   => $g->{pkey},
-									 pkeytype   => $g->{pkeytype},
-									 pkey       => $pkval,
-									 action     => 0,
-							);
+						next;
+					} ## end standard conflict
 
-							## Run the conflict handler(s)
-							for my $code (@{$g->{code_conflict}}) {
-								my $result = run_kid_custom_code($code, 'strict');
-								if ($result eq 'next') {
-									$self->glog("Going to next available conflict code");
-									next;
-								}
-								if ($result eq 'redo') { ## ## redo rollsback source and target
-									$self->glog("Custom conflict handler has requested we redo this sync");
-									redo KID if $kidsalive;
-									last KID;
-								}
+					## Custom conflict handler. Gather up info to pass to it.
+					%rowinfo = (
+						sourcerow  => $info1->{$pkval},
+						targetrow  => $info2->{$pkval},
+						schema     => $S,
+						table      => $T,
+						pkeyname   => $g->{pkey},
+						pkeytype   => $g->{pkeytype},
+						pkey       => $pkval,
+						action     => 0,
+						);
 
-								$self->glog("Conflict handler action: $rowinfo{action}");
+					## Run the custom conflict handler(s)
+					for my $code (@{$g->{code_conflict}}) {
+						my $result = run_kid_custom_code($code, 'strict');
+						if ($result eq 'next') {
+							$self->glog("Going to next available conflict code");
+							next;
+						}
+						if ($result eq 'redo') { ## ## redo rollsback source and target
+							$self->glog("Custom conflict handler has requested we redo this sync");
+							redo KID if $kidsalive;
+							last KID;
+						}
 
-								## Check for conflicting actions
-								if ($rowinfo{action} & 2 and $rowinfo{action} & 4) {
-									$self->glog("Warning! Conflict handler cannot return 2 and 4. Ignoring 4");
-									$rowinfo{action} -= 4;
-								}
-								if ($rowinfo{action} & 1 and $rowinfo{action} & 8) {
-									$self->glog("Warning! Conflict handler cannot return 1 and 8. Ignoring 8");
-									$rowinfo{action} -= 8;
-								}
+						$self->glog("Conflict handler action: $rowinfo{action}");
 
-								$info1->{$pkval}{BUCARDO_ACTION} = $rowinfo{action};
+						## Check for conflicting actions
+						if ($rowinfo{action} & 2 and $rowinfo{action} & 4) {
+							$self->glog("Warning! Conflict handler cannot return 2 and 4. Ignoring 4");
+							$rowinfo{action} -= 4;
+						}
+						if ($rowinfo{action} & 1 and $rowinfo{action} & 8) {
+							$self->glog("Warning! Conflict handler cannot return 1 and 8. Ignoring 8");
+							$rowinfo{action} -= 8;
+						}
 
-								last;
-							}
-						} ## end custom code handler
-					} ## end conflict
+						$info1->{$pkval}{BUCARDO_ACTION} = $rowinfo{action};
+
+						last;
+					} ## end custom conflict
 				} ## end each key in source delta list
 
 				## Since we've already handled conflicts, simply mark "target only" rows
