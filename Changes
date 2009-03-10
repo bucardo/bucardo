@@ -20,8 +20,11 @@
   - Tolerate incompatibility in DEFAULT of negative numbers between 
     Postgres 8.2 and 8.3. [Jon Jensen]
 
+  - Add log_conflict_details to allow logging of conflict information 
+    to a separate file. [Adam Wendt]
+
   - Make the audit_pid table more useful. Use sequences instead of 
-    PIDs to find children. [GSM]
+    PIDs to find children. Allow for the audit_pid table to be toggled off. [GSM]
 
   - Add validate_all_syncs() function, and allow an argument to both that 
     and validate_sync() to force recreation of supporting objects. [GSM]
@@ -31,6 +34,16 @@
 
   - Add in bucardo_compress_delta function, to remove duplicate rows from 
     the bucardo_delta table. [GSM]
+
+  - Do better checking of bucardo_ctl executable when MCP is restarting. [Ben Allen]
+
+  - Allow the injection of custom messages into the Bucardo logs, and make 
+    an interface for same in bucardo_ctl. [GSM]
+
+  - Add the bucardo_rate table to track exactly how long replication takes
+    on a per-sync and per-table basis. [GSM]
+
+  - Change timestamp to timestamptz where needed inside Bucardo.pm [Yan Farmawan]
 
   - MCP listens for pings during table validations. [GSM]
 
