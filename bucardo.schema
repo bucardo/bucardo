@@ -105,6 +105,8 @@ audit_pid|1|Do we populate the audit_pid table or not?
 log_showpid|0|Show PID in the log output?
 log_showtime|1|Show timestamp in the log output?  0=off  1=seconds since epoch  2=scalar gmtime  3=scalar localtime
 log_showline|0|Show line number in the log output?
+log_conflict_details|0|Log detailed conflict data?
+log_conflict_file|bucardo_conflict.log|Name of the conflict detail log file
 \.
 
 -- Versioning

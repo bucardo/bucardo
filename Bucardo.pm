@@ -769,6 +769,30 @@ sub glog {
 	return;
 }
 
+
+sub clog {
+
+	## Write something to the conflict log file at config{log_conflict_file}
+
+	my ($self,$msg,@extra) = @_;
+	chomp $msg;
+
+	if (@extra) {
+		$msg = sprintf $msg, @extra;
+	}
+
+	my $cfile = $config{log_conflict_file};
+	my $clog;
+	if (! open $clog, '>>', $cfile) {
+		warn qq{Could not append to file "$cfile": $!};
+		return;
+	}
+	print $clog "$msg\n";
+	close $clog or warn qq{Could not close "$cfile": $!\n};
+	return;
+
+}
+
 sub get_config {
 
 	## Return current value of a configuration setting
@@ -4605,6 +4629,24 @@ sub start_kid {
 						next;
 					}
 					## At this point, it's on both source and target. Don't panic.
+
+					## Write detailed information to the conflict_file if requested
+					if ($config{log_conflict_details}) {
+						my $header = "$g->{pkey},";
+						my $srcrow = "$pkval,";
+						my $tgtrow = "$pkval,";
+						for my $column (@{$g->{cols}}) {
+							$header .= $column . ",";
+							$srcrow .= $info1->{$pkval}{$column} . ",";
+							$tgtrow .= $info2->{$pkval}{$column} . ",";
+						}
+						$self->clog("conflict,$S,$T");
+						$self->clog("timestamp," . localtime());
+						$self->clog("header," . substr($header, 0, -1));
+						$self->clog("source," . substr($srcrow, 0, -1));
+						$self->clog("target," . substr($tgtrow, 0, -1));
+						$self->glog("Logged details of conflict to $config{log_conflict_file}");
+					}
 
 					## Standard conflict handlers don't need info to make a decision
 					if (!exists $g->{code_conflict}) {
