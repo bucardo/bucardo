@@ -1562,13 +1562,13 @@ $bc$
             if (! $found{index2}) {
                 my @pkeytypes = split (/\|/ => $pkeytype);
                 if (1 == @pkeytypes) {
-                    my $safepkeytype = $pkeytype =~ /timestamp|date|bytea/ ? 'text' : $pkeytype;
+                    my $safepkeytype = $pkeytype =~ /timestamp|timestamptz|date|bytea/ ? 'text' : $pkeytype;
                     elog(DEBUG, "Create index $index2 on bucardo_delta(rowid::$safepkeytype)");
                     $dbh->do(qq{CREATE INDEX "$index2" ON bucardo.bucardo_delta((rowid::$safepkeytype)) WHERE tablename = $oid});
                 }
                 else {
                     my $x = 0;
-                    my $multicol = join ',' => map { s{timestamp|date|bytea}{text}; $x++; 
+                    my $multicol = join ',' => map { s{timestamp|timestamptz|date|bytea}{text}; $x++; 
                         sprintf "(rowid%s::$_)", $x<2 ? '' : $x; } split (/\|/ => $pkeytype);
                     elog(DEBUG, "Creating index on $multicol");
                     $dbh->do(qq{CREATE INDEX "$index2" ON bucardo.bucardo_delta($multicol) WHERE tablename = $oid});
