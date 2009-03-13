@@ -4675,19 +4675,19 @@ sub start_kid {
 								$sth{sc_latest_tgt}{$g->{pkcols}} = $targetdbh->prepare($SQL);
 							}
 							if ($g->{pkcols} > 1) {
-								$sth{sc_latest_src}->execute($g->{oid},@{$info1->{$pkval}{BUCARDO_PKVALS}});
+								$sth{sc_latest_src}{$g->{pkcols}}->execute($g->{oid},@{$info1->{$pkval}{BUCARDO_PKVALS}});
 							}
 							else {
-								$sth{sc_latest_src}->execute($g->{oid},$pkval);
+								$sth{sc_latest_src}{$g->{pkcols}}->execute($g->{oid},$pkval);
 							}
-							my $srctime = $sth{sc_latest_src}->fetchall_arrayref()->[0][0];
+							my $srctime = $sth{sc_latest_src}{$g->{pkcols}}->fetchall_arrayref()->[0][0];
 							if ($g->{pkcols} > 1) {
-								$sth{sc_latest_tgt}->execute($toid,@{$info2->{$pkval}{BUCARDO_PKVALS}});
+								$sth{sc_latest_tgt}{$g->{pkcols}}->execute($toid,@{$info2->{$pkval}{BUCARDO_PKVALS}});
 							}
 							else {
-								$sth{sc_latest_tgt}->execute($toid,$pkval);
+								$sth{sc_latest_tgt}{$g->{pkcols}}->execute($toid,$pkval);
 							}
-							my $tgttime = $sth{sc_latest_tgt}->fetchall_arrayref()->[0][0];
+							my $tgttime = $sth{sc_latest_tgt}{$g->{pkcols}}->fetchall_arrayref()->[0][0];
 							$self->glog(qq{Delta source time: $srctime Target time: $tgttime});
 							$info1->{$pkval}{BUCARDO_ACTION} = $srctime >= $tgttime ? 1 : 2;
 						} ## end 'latest'
