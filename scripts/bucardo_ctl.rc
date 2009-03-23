@@ -3,13 +3,19 @@
 # PROVIDE: bucardo_ctl 
 # REQUIRE: LOGIN postgresql 
 # KEYWORD: shutdown
-
+#
+# bucardo_ctl_enable="YES"
+# bucardo_ctl_flags="--dbuser bucardo --dbname bucardo"
+#
+#
 . /etc/rc.subr
 
 name="bucardo_ctl"
 rcvar=`set_rcvar`
+command="/usr/local/bin/${name}"
 
-command="/usr/local/sbin/${name}"
+load_rc_config $name
+bucardo_ctl_flags=${bucardo_ctl_flags:-"--dbuser bucardo --dbname bucardo"}
 
 rc_usage="start|stop|reload|restart|status|kick [sync_name]"
 extra_commands="reload kick"
@@ -25,7 +31,7 @@ status_cmd="${name}_status"
 bucardo_ctl_start()
 {
 	if [ -x ${command} ]; then
-		${command} start "Started by rc script."
+		${command} ${bucardo_ctl_flags} start "Started by rc script."
 	else
 		echo "${command} not found or not executable!"
 		exit 1
@@ -35,7 +41,7 @@ bucardo_ctl_start()
 bucardo_ctl_stop()
 {
 	if [ -x ${command} ]; then
-		${command} stop "Stopped by rc script."
+		${command} ${bucardo_ctl_flags} stop "Stopped by rc script."
 	else
 		echo "${command} not found or not executable!"
 		exit 1
@@ -45,7 +51,7 @@ bucardo_ctl_stop()
 bucardo_ctl_reload()
 {
 	if [ -x ${command} ]; then
-		${command} reload_config
+		${command} ${bucardo_ctl_flags} reload_config
 	else
 		echo "${command} not found or not executable!"
 		exit 1
@@ -55,8 +61,8 @@ bucardo_ctl_reload()
 bucardo_ctl_restart()
 {
 	if [ -x ${command} ]; then
-		${command} stop "Restarting: Stopped by rc script"
-		${command} start "Restarting: Started by rc script"
+		${command} ${bucardo_ctl_flags} stop "Restarting: Stopped by rc script"
+		${command} ${bucardo_ctl_flags} start "Restarting: Started by rc script"
 	else
 		echo "${command} not found or not executable!"
 		exit 1
@@ -67,7 +73,7 @@ bucardo_ctl_kick()
 {
 	if [ -x ${command} ]; then
 		if [ $# -gt 0 ]; then
-			${command} kick $*
+			${command} ${bucardo_ctl_flags} kick $*
 		else
 			echo "Specifiy sync name to kick off"
 			exit 1
@@ -82,9 +88,9 @@ bucardo_ctl_status()
 {
 	if [ -x ${command} ]; then
 		if [ $# -gt 0 ]; then
-			${command} status $*
+			${command} ${bucardo_ctl_flags} status $*
 		else
-			${command} status
+			${command} ${bucardo_ctl_flags} status
 		fi
 	else
 		echo "${command} not found or not executable!"
