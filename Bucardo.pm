@@ -1790,7 +1790,7 @@ sub start_mcp {
 
 		my %SQL;
 		$SQL{checktable} = qq{
-            SELECT c.oid, quote_ident(n.nspname), quote_ident(c.relname)
+            SELECT c.oid, quote_ident(n.nspname), quote_ident(c.relname), quote_literal(n.nspname), quote_literal(c.relname)
             FROM   pg_class c, pg_namespace n
             WHERE  c.relnamespace = n.oid
             AND    nspname = ?
@@ -1952,7 +1952,8 @@ sub start_mcp {
 				warn $msg;
 				return 0;
 			}
-			($g->{oid},$g->{safeschema},$g->{safetable}) = @{$sth->fetchall_arrayref()->[0]};
+			($g->{oid},$g->{safeschema},$g->{safetable},$g->{safeschemaliteral},$g->{safetableliteral})
+				= @{$sth->fetchall_arrayref()->[0]};
 
 			## Save information about each column in the primary key
 			if (!defined $g->{pkey} or !defined $g->{qpkey}) {
@@ -3828,7 +3829,7 @@ sub start_kid {
             AND    (
         };
 		$SQL .= join "OR\n"
-			=> map { "(nspname='$_->{safeschema}' AND relname='$_->{safetable}')" }
+			=> map { "(nspname=$_->{safeschemaliteral} AND relname=$_->{safetableliteral})" }
 			@$goatlist;
 		$SQL .= ')';
 		$SQL{disable_trigrules} .= ";\n" if $SQL{disable_trigrules};
@@ -3837,7 +3838,7 @@ sub start_kid {
 		my $setclause = q{reltriggers = }
 			. q{(SELECT count(*) FROM pg_catalog.pg_trigger WHERE tgrelid = pg_catalog.pg_class.oid),}
 			. q{relhasrules = }
-			. q{CASE WHEN (SELECT COUNT(*) FROM pg_catalog.pg_rules WHERE schemaname=$1 AND tablename=$2) > 0}
+			. q{CASE WHEN (SELECT COUNT(*) FROM pg_catalog.pg_rules WHERE schemaname=$1 AND tablename=$2) > 0 }
 			. q{THEN true ELSE false END};
 
 		$SQL{etrig} = qq{
@@ -3851,8 +3852,8 @@ sub start_kid {
 		$SQL = join ";\n"
 			=> map {
 					 my $sql = $SQL{etrig};
-					 $sql =~ s/\$1/'$_->{safeschema}'/g;
-					 $sql =~ s/\$2/'$_->{safetable}'/g;
+					 $sql =~ s/\$1/$_->{safeschemaliteral}/g;
+					 $sql =~ s/\$2/$_->{safetableliteral}/g;
 					 $sql;
 				 }
 				@$goatlist;
