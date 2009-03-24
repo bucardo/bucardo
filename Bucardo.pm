@@ -1165,6 +1165,11 @@ sub start_mcp {
 					   or $msg =~ /Restart Bucardo/
 					   ) ? 1 : 0;
 
+		if (! $config{mcp_dbproblem_sleep}) {
+			$self->glog('Database problem, but will not attempt a respawn due to mcp_dbproblem_sleep=0');
+			$respawn = 0;
+		}
+
 		if ($respawn) {
 			$self->glog("Database problem, will respawn after a short sleep: $config{mcp_dbproblem_sleep}");
 			$body .= " (will attempt respawn in $config{mcp_dbproblem_sleep} seconds)";

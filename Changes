@@ -54,6 +54,8 @@
 
   - Put schema in db_getconn calls [Alex Bahlai]
 
+  - Do not attempt respawn of MCP if mcp_dbproblem_sleep is 0. [GSM]
+
 3.1.0 April 6, 2008
 
   - Fix race condition in bucardo_delta/bucardo_track updates 
