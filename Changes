@@ -12,6 +12,9 @@
 
   - Rewrite the pushdelta sync method to be more efficient and safer. [GSM]
 
+  - Fix failure to disable/enable triggers when using pg_class and table 
+    and schema are words changed by quote_ident. [Ben Allen]
+
   - Allow for dead columns when checking attnums. [GSM]
 
   - Add 'bucardo_ctl upgrade' to make intra-version upgrades easy 
@@ -46,6 +49,8 @@
   - Change timestamp to timestamptz where needed inside Bucardo.pm [Yan Farmawan]
 
   - MCP listens for pings during table validations. [GSM]
+
+  - Improve the FreeBSD scripts/bucardo_ctl.rc file [Ben Allen]
 
   - Put schema in db_getconn calls [Alex Bahlai]
 
