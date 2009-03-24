@@ -3250,8 +3250,10 @@ sub cleanup_controller {
 	}
 
 	## Disconnect from the database
-	$self->{masterdbh}->rollback();
-	$self->{masterdbh}->disconnect();
+	if ($self->{masterdbh}) {
+		$self->{masterdbh}->rollback();
+		$self->{masterdbh}->disconnect();
+	}
 
 	## Remove the pid file
 	unlink $self->{SYNCPIDFILE};
