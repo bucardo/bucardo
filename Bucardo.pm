@@ -3950,7 +3950,7 @@ sub start_kid {
 		my $strictness = shift || '';
 
 		$self->glog("Running $c->{whenrun} custom code $c->{id}: $c->{name}");
-
+		my $send_mail_ref = sub { $self->send_mail(@_) };
 		$input = {
 			synctype   => $synctype,
 			syncname   => $syncname,
@@ -3967,6 +3967,7 @@ sub start_kid {
 			endsync    => '',
 			rowinfo    => \%rowinfo,
 			runagain   => 0, ## exception only
+			sendmail   => $send_mail_ref,
 		};
 		if ($c->{getrows}) {
 			$input->{rows} = $rows_for_custom_code;

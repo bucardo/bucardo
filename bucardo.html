@@ -857,6 +857,12 @@ All custom code is passed the following information via a hashref as the first a
  <li>runagain - If set to true, tells Bucardo to rerun the sync. Only used by exception handlers.</li>
  <li>sourcedbh - the DBIx::Safe database handle for the source database.</li>
  <li>targetdbh - the DBIx::Safe database handle for the target database (may be empty for some types of code).</li>
+ <li>sendmail - a reference to the internal send_mail routine. An example of use:
+<pre>
+  my $send_mail = $result->{'sendmail'};
+  $send_mail->({ body => "$result->{warning}\n\n$dump", subject => "Bucardo Exception" });
+</pre>
+</li>
 </ul>
 <p>
 If "get_rows" is true, then an additional key is returned:

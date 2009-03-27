@@ -46,6 +46,8 @@
   - Add the bucardo_rate table to track exactly how long replication takes
     on a per-sync and per-table basis. [GSM]
 
+  - Add "sendmail" option to the customcode input. [Ben Allen]
+
   - Change timestamp to timestamptz where needed inside Bucardo.pm [Yan Farmawan]
 
   - MCP listens for pings during table validations. [GSM]
