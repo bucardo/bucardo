@@ -1199,7 +1199,12 @@ sub start_mcp {
 		exit;
 	}; ## end SIG{__DIE__}
 
-	$self->reload_mcp();
+	my $active_syncs = $self->reload_mcp();
+	$self->glog("Active syncs: $active_syncs");
+	if (!$active_syncs) {
+		$self->glog('No active syncs were found, so we are exiting');
+		exit 1;
+	}
 
 	## We want to reload everything if someone HUPs us
 	$SIG{HUP} = sub {
@@ -1685,7 +1690,9 @@ sub start_mcp {
 		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active sync:";
 		$0 .= join "," => @activesyncs;
 
-		return;
+		my $count = @activesyncs;
+
+		return $count;
 
 	} ## end of reload_mcp
 
@@ -2077,13 +2084,20 @@ sub start_mcp {
 					my $fcol = $targetcolinfo->{$colname};
 					my $scol = $colinfo->{$colname};
 
-					## Always fatal: types do not match up
+					## Almost always fatal: types do not match up
 					if ($scol->{ftype} ne $fcol->{ftype}) {
-						$column_problems = 2;
-						my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" as type "$scol->{ftype}", but target database "$db" has a type of "$fcol->{ftype}"};
-						$self->glog("FATAL: $msg");
-						warn $msg;
-						next;
+						if (($scol->{ftype} eq 'character varying' and $fcol->{ftype} eq 'text') or
+							($fcol->{ftype} eq 'character varying' and $scol->{ftype} eq 'text')) {
+							my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" as type "$scol->{ftype}", but target database "$db" has a type of "$fcol->{ftype}". You should really fix that.};
+							$self->glog("Warning: $msg");
+						}
+						else {
+							$column_problems = 2;
+							my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" as type "$scol->{ftype}", but target database "$db" has a type of "$fcol->{ftype}"};
+							$self->glog("FATAL: $msg");
+							warn $msg;
+							next;
+						}
 					}
 
 					## Fatal on strict: NOT NULL mismatch
