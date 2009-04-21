@@ -356,9 +356,9 @@ ALTER TABLE sync ADD CONSTRAINT sync_swap_nogroup CHECK
   (synctype <> 'swap' or targetdb IS NOT NULL);
 
 -- Because NOTIFY is broke, make sure our names are simple:
-ALTER TABLE db      ADD CONSTRAINT db_name_sane      CHECK (name ~ '^[a-zA-Z]\\w*$');
-ALTER TABLE dbgroup ADD CONSTRAINT dbgroup_name_sane CHECK (name ~ '^[a-zA-Z]\\w*$');
-ALTER TABLE sync    ADD CONSTRAINT sync_name_sane    CHECK (name ~ '^[a-zA-Z]\\w*$');
+ALTER TABLE db      ADD CONSTRAINT db_name_sane      CHECK (name ~ E'^[a-zA-Z]\\w*$');
+ALTER TABLE dbgroup ADD CONSTRAINT dbgroup_name_sane CHECK (name ~ E'^[a-zA-Z]\\w*$');
+ALTER TABLE sync    ADD CONSTRAINT sync_name_sane    CHECK (name ~ E'^[a-zA-Z]\\w*$');
 
 
 --
