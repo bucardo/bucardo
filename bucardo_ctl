@@ -1633,6 +1633,16 @@ sub upgrade {
 		['create_child_q', 'text'],
 	);
 
+	my @old_indexes = (
+        ['bucardo', 'sync', 'sync_source_targetdb'],
+        ['bucardo', 'sync', 'sync_source_targetgroup'],
+	);
+
+	my @new_indexes = (
+        ['bucardo', 'sync', 'sync_source_targetdb_type', 'UNIQUE source,targetdb,synctype'],
+        ['bucardo', 'sync', 'sync_source_targetgroup_type', 'UNIQUE source,targetgroup,synctype'],
+	);
+
 	my @drop_all_rules = (
 		['freezer','master_q'],
 	);
@@ -1787,6 +1797,38 @@ sub upgrade {
 			$changes++;
 		}
 	}
+
+	for my $row (@old_indexes) {
+		my ($schema,$table,$name) = @$row;
+		if (!relation_exists($schema, $name)) {
+			clog "  Index already removed: $schema.$table.$name";
+		}
+		else {
+			$dbh->do("DROP INDEX $name");
+			clog "Dropped index $name";
+			$changes++;
+		}
+	}
+
+	for my $row (@new_indexes) {
+		my ($schema,$table,$name,$def) = @$row;
+		if (relation_exists($schema, $name)) {
+			clog "  Index already exists: $schema.$table.$name";
+		}
+		else {
+			my $unique = $def =~ s/^UNIQUE\s*// ? 1 : 0;
+			my $COM = sprintf 'CREATE %sINDEX %s ON %s.%s (%s)',
+				$unique ? 'UNIQUE ' : '',
+                $name,
+				$schema,
+                $table,
+                $def;
+			$dbh->do($COM);
+			clog "Created index $name on $name";
+			$changes++;
+		}
+	}
+
 
 	## Check for any new config items
 	$SQL = "SELECT value FROM bucardo_config WHERE lower(setting) = ?";

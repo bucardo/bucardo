@@ -345,8 +345,10 @@ ALTER TABLE sync ADD CONSTRAINT sync_copytype CHECK (copytype IN ('insert','copy
 
 ALTER TABLE sync ADD CONSTRAINT sync_deletemethod CHECK (deletemethod IN ('truncate', 'delete'));
 
-CREATE UNIQUE INDEX sync_source_targetdb ON sync(source, targetdb);
-CREATE UNIQUE INDEX sync_source_targetgroup ON sync(source, targetgroup);
+CREATE UNIQUE INDEX sync_source_targetdb_type ON sync(source, targetdb, synctype);
+
+CREATE UNIQUE INDEX sync_source_targetgroup_type ON sync(source, targetgroup, synctype);
+
 ALTER TABLE sync ADD CONSTRAINT sync_validtarget CHECK
   ((targetdb IS NULL AND targetgroup IS NOT NULL)
     OR
