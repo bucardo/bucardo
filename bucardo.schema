@@ -1233,8 +1233,12 @@ $bc$
         $sth->execute('bucardo');
         $found{bc_schema} = $sth->fetchall_arrayref()->[0][0];
 
-        ## (if bc_schema exists) Do these triggers exist on this table?
+		## If we are not a delta sync, we can jump to the ping part
+        my $func0 = length($syncname)    <= 42 ? "bucardo_triggerkick_$syncname" : "bkick_$syncname";
         my $trigger0 = "bucardo_triggerkick_$syncname";
+		$delta or goto PINGCHECK;
+
+        ## (if bc_schema exists) Do these triggers exist on this table?
         my $trigger1 = "bucardo_add_delta";
         my $trigger2 = "bucardo_add_delta_binary";
 
@@ -1269,7 +1273,6 @@ $bc$
 
         ## (if bc_schema exists) Do these supporting functions exist?
         (my $noquotepkey = $safepkey) =~ s/^"(.+)"$/$1/;
-        my $func0 = length($syncname)    <= 42 ? "bucardo_triggerkick_$syncname" : "bkick_$syncname";
         my $func1 = length($noquotepkey) <= 45 ? "bucardo_add_delta_$noquotepkey" : "bad_$noquotepkey";
         my $func2 = length($noquotepkey) <= 38 ? "bucardo_add_delta_binary_$noquotepkey" : "badb_$noquotepkey";
         my $func3 = "bucardo_purge_delta";
@@ -1410,6 +1413,7 @@ $bc$
             }
         }
 
+      PINGCHECK:
         ## Goat-level ping overrides the sync-level ping - source only
         if (defined $info->{goatping} and $is_source) {
             $ping = $info->{goatping} eq 't' ? 1 : 0;
