@@ -156,6 +156,8 @@ remove_item()   if $verb eq 'remove';
 upgrade()       if $verb eq 'upgrade';
 message()       if $verb eq 'message';
 list()          if $verb eq 'list';
+config()        if $verb eq 'set' or $verb eq 'show';
+
 
 ## For the rest, we expect a list of sync with an optional decimal "timeout"
 my $adverb;
@@ -2042,6 +2044,7 @@ sub add_database {
 	## Add this to the database
 	$SQL = "INSERT INTO bucardo.db ($cols) VALUES ($phs)";
 	$DEBUG and warn "SQL: $SQL\n";
+	$DEBUG and warn Dumper \@vals;
 	$sth = $dbh->prepare($SQL);
 	eval {
 		$count = $sth->execute(@vals);
@@ -2112,6 +2115,10 @@ sub add_table {
 		$arg{$name}[0] = $value;
 	}
 
+	if (! length $arg{db}[0]) {
+		die "Please specify a database with db=<name>\n";
+	}
+
 	## Lots of checks go here...
 
 	my $herd;
@@ -2142,6 +2149,10 @@ sub add_table {
 
 	## Add these to the database
 	$SQL = "INSERT INTO bucardo.goat ($cols,schemaname,tablename) VALUES ($phs,?,?) RETURNING id";
+	if ($DEBUG) {
+		warn "SQL: $SQL\n";
+		warn Dumper \@tables;
+	}
 	$sth = $dbh->prepare($SQL);
 	my @id;
 	for (@tables) {
@@ -2157,8 +2168,9 @@ sub add_table {
 			push @id => $sth->fetch()->[0];
 		};
 		if ($@) {
-			return "Table add failed: $@\n";
+			die "Table add failed: $@\n";
 		}
+		$DEBUG and warn "Insert count: $count\n";
 	}
 
 	## Add them to the herd if it was specificed
@@ -2235,14 +2247,24 @@ sub add_sync {
 	$cols =~ s/,$//;
 	$phs =~ s/,$//;
 
+	if ($arg{type}[0] eq 'fullcopy') {
+		$cols .= ',stayalive,kidsalive,ping';
+		$phs .= q{,'f','f','f'};
+	}
+
 	## Add this to the database
 	$SQL = "INSERT INTO bucardo.sync ($cols) VALUES ($phs)";
-	$DEBUG and warn "SQL: $SQL\n";
+	if ($DEBUG) {
+		warn "SQL: $SQL\n";
+		warn Dumper \@vals;
+	}
 	$sth = $dbh->prepare($SQL);
 	eval {
 		$count = $sth->execute(@vals);
 	};
-	## Prompt for final go-ahead
+	if ($@) {
+		die "Failed to add sync: $@\n";
+	}
 
 	$dbh->commit();
 
@@ -2406,11 +2428,11 @@ sub add_herd {
 
 	my $type = shift;
 
-	## Usage: add herd name
+	## Usage: add herd name (goat1, goat2, ...)
 
 	my $item_name = shift @nouns || '';
 	if (!length $item_name) {
-		warn "Usage: add $type <name>";
+		warn "Usage: add $type <name> goats";
 		exit 1;
 	}
 
@@ -2420,9 +2442,12 @@ sub add_herd {
 	## Command line name, default value, database column name
 	my %arg = (
 			   );
+
+	my @goatlist;
 	for my $arg (split /$delim/ => $info) {
 		if ($arg !~ /(.+)=(.+)/o) {
-			die qq{Invalid argument\n};
+			push @goatlist, $arg;
+			next;
 		}
 		my ($name,$value) = ($1,$2);
 		if (!exists $arg{$name}) {
@@ -2452,11 +2477,25 @@ sub add_herd {
 	eval {
 		$count = $sth->execute(@vals);
 	};
-	## Prompt for final go-ahead
-
+	if ($@) {
+		die "Failed to add herd: $@\n";
+	}
+	warn "Herd added: $item_name\n";
+	if (@goatlist) {
+		$SQL = "INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,(SELECT id FROM bucardo.goat WHERE tablename=?))";
+		$sth = $dbh->prepare($SQL);
+		for my $goat (@goatlist) {
+			eval {
+				$sth->execute($item_name, $goat);
+			};
+			if ($@) {
+				die "Failed to add goat to herdmap: $@\n";
+			}
+			print qq{Added goat "$goat" to new herd\n};
+		}
+	}
 	$dbh->commit();
 
-	warn "Herd added: $item_name\n";
 	exit 0;
 
 } ## end of add_herd
@@ -2523,6 +2562,58 @@ sub add_dbgroup {
 	exit 0;
 
 } ## end of add_dbgroup
+
+
+sub config {
+
+	## View or change a value inside the bucardo_config table
+
+	my $setusage = "Usage: $0 set setting=value [setting=value ...]\n";
+
+	if (!@nouns) {
+		$verb eq 'set' and die $setusage;
+		die "Usage: $0 show <all|setting1> [settting2 ...]\n";
+	}
+
+	$SQL = 'SELECT * FROM bucardo.bucardo_config';
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	my $config = $sth->fetchall_hashref('setting');
+	if ($verb eq 'show') {
+		my $all = $nouns[0] =~ /\ball\b/i ? 1 : 0;
+		my $maxsize = 3;
+		for my $s (keys %$config) {
+			next if ! $all and ! grep { $s =~ /$_/i } @nouns;
+			$maxsize = length $s if length $s > $maxsize;
+		}
+		for my $s (sort keys %$config) {
+			next if ! $all and ! grep { $s =~ /$_/i } @nouns;
+			printf "%-*s = %s\n", $maxsize, $s, $config->{$s}{value};
+		}
+		exit;
+	}
+
+	$SQL = 'UPDATE bucardo.bucardo_config SET value = ? WHERE setting = ?';
+	$sth = $dbh->prepare($SQL);
+
+	for my $noun (@nouns) {
+		$noun =~ /(\w+)=(.+)/ or die $setusage;
+		my ($set,$val) = (lc $1,$2);
+
+		if (! exists $config->{$set}) {
+			die qq{Unknown setting "$set"\n};
+		}
+
+		$sth->execute($val,$set);
+		print qq{Set "$set" to "$val"\n};
+
+	}
+
+	$dbh->commit();
+
+	exit 0;
+
+} ## end of config
 
 
 sub message {
@@ -2666,6 +2757,19 @@ target finishes.
 
 Forces Bucardo to reload the bucardo_config file, and then restart all processes to ensure that the new 
 information is loaded.
+
+=item B<show>
+
+Usage: ./bucardo_ctl show <all|setting1> [setting2..]
+
+Shows the current values in the bucardo_config table. Use the keyword 'all' to see all the settings, or 
+specify one or more search terms.
+
+=item B<set>
+
+Usage: ./bucardo_ctl set setting1=value [setting2=value]
+
+Sets one or more items inside the bucardo_config table. Setting names are case-insensitive.
 
 =item B<ping>
 
