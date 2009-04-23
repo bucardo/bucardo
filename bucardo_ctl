@@ -2572,6 +2572,8 @@ This documents describes bucardo_ctl version 3.2.7
 
   ./bucardo_ctl add dbgroup name db1 db2 db3 ...
 
+  ./bucardo_ctl alter sync syncname targetgroup=foo targetdb=foo
+
   ./bucardo_ctl ping
 
   ./bucardo_ctl status
@@ -2645,6 +2647,12 @@ Usage:  add dbgroup name db1 db2 db3 ...
 Tells Bucardo about new objects it should know about. These commands can
 replace direct manipulation of the tables in the bucardo schema for the
 supported object types (you'll still need to add things like the mappings between objects on your own).
+
+=item B<alter>
+
+Usage:  alter sync syncname [targetgroup=foo | targetdb=foo]
+
+Alters an existing sync, allowing modification to the target database or target database group
 
 =item B<kick>
 
