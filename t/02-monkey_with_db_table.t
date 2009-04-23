@@ -5,8 +5,7 @@
 use strict;
 use warnings;
 use lib 't','.';
-use Test::More tests => 99;
-
+use Test::More tests => 8;
 use BucardoTesting;
 my $bct = BucardoTesting->new();
 
@@ -14,8 +13,8 @@ my ($t,$i);
 
 ## Start with a clean schema and databases (don't care what's in them)
 
-my $dbh = $bct->setup_database({db => 'bucardo', clean => 1, dropschema => 1}); ## XX lose drop
-
+my $dbhA = $bct->blank_database('A');
+my $dbh = $bct->setup_bucardo(A => $dbhA);
 $bct->scrub_bucardo_tables($dbh);
 
 ## Now let's add the database in three ways: SQL, Moose, bucardo_ctl
@@ -42,20 +41,19 @@ $t = q{Calling bucardo_ctl with 'add database' gives expected message};
 $i = $bct->ctl('add database');
 like($i, qr{Usage: add database <name>}, $t);
 
-## Create and return handles for some test databases
-## If they exist, we don't need to worry about what's in them
-my $dbhA = $bct->setup_database({db => 'A'});
+# Create another database for testing
+my $dbhB = $bct->blank_database('B');
 
 ## Note: this cannot be tested exhaustively unless we initdb and control port and host ourselves
 my $ctlargs = $bct->add_db_args('A');
 #$com = qq{add database A 'user=$user port=1234 | fff=123 | host="two names"'};
 #warn "ctlargs: $ctlargs\n";
-$i = $bct->ctl("add database $ctlargs"); ## Default to user bucardo?
+$i = $bct->ctl("add database bucardo_test $ctlargs"); ## Default to user bucardo?
 like($i, qr{Database added: A}, $t);
 
 ## Note: this cannot be tested exhaustively unless we initdb and control port and host ourselves
 $ctlargs = $bct->add_db_args('B');
-$i = $bct->ctl("add database $ctlargs");
+$i = $bct->ctl("add database bucardo_test $ctlargs");
 like($i, qr{Database added: B}, $t);
 
 pass("done");
