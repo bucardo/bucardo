@@ -34,4 +34,9 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Check for superuser on startup, to prevent errors that only show when a KID tries something.
 - Gracefully handle new nodes being added, e.g. a one-time fullcopy sync for new pushdeltas.
 - Add a flag that allows for table structure checking before each sync
+- Make a Bucardo bundle for CPAN-like fun
+- Optimize swaps: use COPY if only new stuff on both sides. If exception, fall back
+- Readonly slaves: trigger/rule to prevent with good message
+- bucardo_help() function to explain all
+- Handle non-orderable data types such as polygons
 
