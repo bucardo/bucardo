@@ -194,7 +194,7 @@ sub help {
   add <item_type> <item_name>
                   ** add a new database, table, sync, herd, or database group
     add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx
-    add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx
+    add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool
     add sync syncname source=xxx targetdb=xxx targetgroup=xxx type=xxx makedelta=xxx 
     add herd name
     add dbgroup name db1 db2 db3 ...
@@ -2063,7 +2063,7 @@ sub add_table {
 
 	my $type = shift;
 
-	## Usage: add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx
+	## Usage: add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool
 
 	## TODO: Make this smarter
 	my $DEFAULT_SCHEMA = 'public';
@@ -2100,6 +2100,7 @@ sub add_table {
 			   ping              => ['',      ''],
 			   standard_conflict => ['',      ''],
 			   herd              => ['',      ''],
+			   makedelta         => ['',      ''],
 			   );
 	for my $arg (split /$delim/ => $info) {
 		if ($arg !~ /(.+)=(.+)/o) {
@@ -2636,7 +2637,7 @@ Usage:  add <item_type> <item_name>
 
 Usage:  add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx
 
-Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx
+Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool
 
 Usage:  add sync syncname options
 
