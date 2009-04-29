@@ -13,7 +13,7 @@ my $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object f
 
 unlink('log.bucardo');
 
-pass("*** Beginning unique constraint tests");
+pass("*** Beginning makedelta tests");
 #$bct->drop_database('all');
 
 ## Prepare a clean Bucardo database on A
