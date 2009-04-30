@@ -24,8 +24,8 @@ $bct->drop_database('all');
 pass('Removed all test databases');
 
 ## Remove all test users
-$bct->drop_users('all');
-pass('Removed all test users');
+#$bct->drop_users('all');
+#pass('Removed all test users');
 
 ## Shutdown the helper program
 pass('Shutdown the helper program');

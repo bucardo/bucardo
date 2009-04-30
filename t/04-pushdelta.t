@@ -202,6 +202,7 @@ $dbhX->do($SQL);
 
 ## Reload the sync
 $dbhX->do("NOTIFY bucardo_reload_sync_pushdeltatest");
+$dbhX->do('LISTEN bucardo_reloaded_sync_pushdeltatest');
 $dbhX->commit();
 
 for my $table (sort keys %tabletype) {
@@ -220,9 +221,11 @@ for my $table (sort keys %tabletype) {
 	test_empty_drop($table,$dbhC);
 }
 
+wait_for_notice($dbhX, 'bucardo_reloaded_sync_pushdeltatest', 10);
+
 ## Kick the source database, replicate one row in each table
-$bct->ctl("kick pushdeltatest 0");
-wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
+$bct->ctl("kick pushdeltatest 5");
+wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 0);
 
 for my $table (sort keys %tabletype) {
 	$t=qq{ Second table $table did not change rows, not pinging};

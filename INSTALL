@@ -14,8 +14,7 @@ that will contain the Bucardo files.
 
 Once the above has been run, you will need to create a Bucardo database. 
 Create a superuser named "bucardo" and then create a database named 
-"bucardo" owned by the same. Make sure that both Pl/pgsql and Pl/perlU 
-are installed and available in this database. Then, import the schema:
+"bucardo" owned by the same. Then, import the schema:
 
 psql -U bucardo bucardo -f bucardo.schema
 

@@ -266,7 +266,7 @@ sub create_cluster {
 	## Make some minor adjustments
 	my $file = "$dirname/postgresql.conf";
 	open my $fh, '>>', $file or die qq{Could not open "$file": $!\n};
-	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\nlog_min_duration_statement = 0\n\n",
+	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\nlog_statement = 'all'\n\n",
 		$clusterinfo->{port};
 	close $fh or die qq{Could not close "$file": $!\n};
 
@@ -1058,6 +1058,66 @@ sub wait_for_notice {
 	return;
 
 } ## end of wait_for_notice
+
+sub get_pgctl_options {
+    my $dirname = shift;
+    my $option;
+	if ($^O !~ /Win32/) {
+		my $sockdir = "$dirname/socket";
+		-e $sockdir or mkdir $sockdir;
+		$option = q{-o '-k socket'};
+	}
+    return $option;
+}
+
+sub remove_single_dir {
+    my $dirname = shift;
+    print "Removing test database in $dirname\n";
+    # Try stopping PostgreSQL
+    my $options = get_pgctl_options($dirname);
+    qx{$pg_ctl $options -l $dirname/pg.log -D $dirname stop -m immediate};
+    sleep 4;
+    qx{rm -rf $dirname};
+    return;
+}
+
+sub drop_database {
+    my ($self, $dir) = @_;
+    if ($dir eq 'all') {
+        ok(opendir(my $dh, '.'), 'Open current directory to clean up');
+        my @test_db_dirs = grep { -d $_ && /^bucardo_test_database/ } readdir $dh;
+        close($dh);
+
+        for my $dirname (@test_db_dirs) {
+            remove_single_dir($dirname);
+        }
+    }
+    else {
+        remove_single_dir($dir);
+    }
+    return;
+}
+
+sub scrub_bucardo_tables {
+
+	## Empty out all stuff from the bucardo schema
+
+	my $self = shift;
+	my $dbh = shift;
+
+	$dbh->do("DELETE FROM bucardo.sync");
+	$dbh->do("DELETE FROM bucardo.herd");
+	$dbh->do("DELETE FROM bucardo.herdmap");
+	$dbh->do("DELETE FROM bucardo.goat");
+	$dbh->do("DELETE FROM bucardo.db_connlog");
+	$dbh->do("DELETE FROM bucardo.dbgroup");
+	$dbh->do("DELETE FROM bucardo.db");
+	$dbh->do("DELETE FROM bucardo.q");
+	$dbh->commit;
+
+	return;
+
+} ## end of scrub_bucardo_tables
 
 
 

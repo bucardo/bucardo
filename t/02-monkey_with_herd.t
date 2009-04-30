@@ -5,7 +5,7 @@
 use strict;
 use warnings;
 use lib 't','.';
-use Test::More tests => 99;
+use Test::More tests => 4;
 
 use BucardoTesting;
 my $bct = BucardoTesting->new();
@@ -14,7 +14,7 @@ my ($t,$i);
 
 ## Start with a clean schema and databases (don't care what's in them)
 
-my $dbh = $bct->setup_database({db => 'bucardo', clean => 1, dropschema => 0});
+#my $dbh = $bct->setup_database({db => 'bucardo', clean => 1, dropschema => 0});
 
 $t = 'Calling bucardo_ctl from command-line works';
 $i = $bct->ctl('--help');
@@ -24,8 +24,9 @@ $t = q{Calling bucardo_ctl with 'add herd' gives expected message};
 $i = $bct->ctl('add herd');
 like($i, qr{Usage: add herd <name>}, $t);
 
+# Expects you've already run previous 02-monkey* tests without clearing the database
 ## Create and return handles for some test databases
-my $dbhA = $bct->setup_database({db => 'A'});
+#my $dbhA = $bct->setup_database({db => 'A'});
 
 $t=q{Running add herd works as expeceted};
 $i = $bct->ctl("add herd testherd1");

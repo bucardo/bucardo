@@ -196,7 +196,7 @@ sub help {
   add <item_type> <item_name>
                   ** add a new database, table, sync, herd, or database group
     add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx
-    add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx
+    add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool
     add sync syncname source=xxx targetdb=xxx targetgroup=xxx type=xxx makedelta=xxx 
     add herd name
     add dbgroup name db1 db2 db3 ...
@@ -2108,7 +2108,7 @@ sub add_table {
 
 	my $type = shift;
 
-	## Usage: add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx
+	## Usage: add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool
 
 	## TODO: Make this smarter
 	my $DEFAULT_SCHEMA = 'public';
@@ -2145,6 +2145,7 @@ sub add_table {
 			   ping              => ['',      ''],
 			   standard_conflict => ['',      ''],
 			   herd              => ['',      ''],
+			   makedelta         => ['',      ''],
 			   );
 	for my $arg (split /$delim/ => $info) {
 		if ($arg !~ /(.+)=(.+)/o) {
@@ -2705,6 +2706,8 @@ This documents describes bucardo_ctl version 3.2.7
 
   ./bucardo_ctl add dbgroup name db1 db2 db3 ...
 
+  ./bucardo_ctl alter sync syncname targetgroup=foo targetdb=foo
+
   ./bucardo_ctl ping
 
   ./bucardo_ctl status
@@ -2767,7 +2770,7 @@ Usage:  add <item_type> <item_name>
 
 Usage:  add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx
 
-Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx
+Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool
 
 Usage:  add sync syncname options
 
@@ -2778,6 +2781,12 @@ Usage:  add dbgroup name db1 db2 db3 ...
 Tells Bucardo about new objects it should know about. These commands can
 replace direct manipulation of the tables in the bucardo schema for the
 supported object types (you'll still need to add things like the mappings between objects on your own).
+
+=item B<alter>
+
+Usage:  alter sync syncname [targetgroup=foo | targetdb=foo]
+
+Alters an existing sync, allowing modification to the target database or target database group
 
 =item B<kick>
 
