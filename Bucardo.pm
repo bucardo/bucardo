@@ -1741,7 +1741,7 @@ sub start_mcp {
 
 		## Connect to each database used by this sync and validate tables
 		if (! $self->validate_sync($s)) {
-			$self->glog("Validation of sync FAILED");
+			$self->glog("Validation of sync $s->{name} FAILED");
 			$s->{mcp_active} = 0;
 			return 0;
 		}
