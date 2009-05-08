@@ -477,6 +477,8 @@ The last step is to add syncs, which are individual replication events, added to
 <tr>
 <td class="lcol" >kidsalive</td> <td>Boolean</td> <td>True</td> <td>No</td> <td>Do the children stay connected when finished?</td> </tr>
 <tr>
+<td class="lcol" >usecustomselect</td> <td>Boolean</td> <td>False</td> <td>No</td> <td>Should Bucardo use custom select statements for this sync?</td> </tr>
+<tr>
 <td class="lcol" >copyextra</td> <td>Text</td> <td>Empty string</td> <td>No</td> <td>Extra text to put after COPY command such as "WITH OIDS"</td> </tr>
 <tr>
 <td class="lcol" >deletemethod</td> <td>Text</td> <td>'delete'</td> <td>No</td> <td>How to delete rows, one of 'delete' 'truncate'. Truncate is fast but does locking.</td> </tr>

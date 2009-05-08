@@ -2258,11 +2258,12 @@ sub add_sync {
 	my $delim = $info =~ /\|/ ? "\\s*\\|\\s*" : '\\s+';
 	## Command line name, default value, database column name
 	my %arg = (
-			   source      => ['', ''],
-			   targetdb    => ['', ''],
-			   targetgroup => ['', ''],
-			   type    => ['', 'synctype'],
-			   makedelta   => ['', ''],
+			   source          => ['', ''],
+			   targetdb        => ['', ''],
+			   targetgroup     => ['', ''],
+			   type            => ['', 'synctype'],
+			   makedelta       => ['', ''],
+			   usecustomselect => ['', ''],
 			   );
 	for my $arg (split /$delim/ => $info) {
 		if ($arg !~ /(.+)=(.+)/o) {
