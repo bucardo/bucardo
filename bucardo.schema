@@ -240,7 +240,7 @@ CREATE TABLE herd (
 
 --
 -- Goats belong to zero or more herds. In most cases, they will 
--- belong to a single her if they are being replicated.
+-- belong to a single herd if they are being replicated.
 --
 CREATE TABLE herdmap (
   herd      TEXT        NOT NULL,
