@@ -133,7 +133,7 @@ use Time::HiRes 'sleep';
 use DBI 1.51;
 use DBD::Pg 2.0 ':pg_types';
 my $DEFAULT = $DBD::Pg::DBDPG_DEFAULT;
-use Mail::Sendmail;
+use Net::SMTP;
 use Sys::Hostname;
 use IO::Handle;
 use Data::Dumper;
@@ -5567,17 +5567,28 @@ sub send_mail {
 	}
 
 	if ($self->{sendmail} and $arg->{to} ne 'nobody@example.com') {
-		my $ret = Mail::Sendmail::sendmail(
-						   To      => $arg->{to},
-						   From    => $from,
-						   Message => $arg->{body},
-						   Subject => $arg->{subject},
-						   );
-		if ($ret) {
+	
+		eval {
+			my $smtp = Net::SMTP->new('localhost',
+				Hello => $hostname,
+				Timeout => 15,
+			);
+			$smtp->mail($from);
+			$smtp->to($arg->{to});
+			$smtp->data();
+			$smtp->datasend("From: $from\n");
+			$smtp->datasend("To: $arg->{to}\n");
+			$smtp->datasend("Subject: $arg->{subject}\n");
+			$smtp->datasend("\n");
+			$smtp->datasend($arg->{body});
+			$smtp->dataend;
+			$smtp->quit;
+		};
+		if (!$@) {
 			$self->glog("Sent an email to $arg->{to}: $arg->{subject}");
 		}
 		else {
-			my $error = $Mail::Sendmail::error || '???';
+			my $error = $@ || '???';
 			$self->glog("Warning: Error sending email to $arg->{to}: $error");
 		}
 	}
