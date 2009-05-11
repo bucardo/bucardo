@@ -16,7 +16,7 @@ WriteMakefile(
                      'ExtUtils::MakeMaker' => '6.32',
                      'Test::More'          => '0.61',
                      'Test::Harness'       => '2.03',
-                     'Mail::Sendmail'      => '0.79',
+                     'Net::SMTP'           => '0',
                      'Moose'               => '0.18',
                      'IO::Handle'          => '1.24',
                      'Sys::Hostname'       => '1.11',
