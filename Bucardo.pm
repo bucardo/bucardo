@@ -11,124 +11,7 @@ use warnings;
 
 our $VERSION = '3.2.7';
 
-## Begin Moose classes
-{
-package BCdatabase; ## "db" table
-use Moose;
-
-my @req1 = (qw(name dbname dbuser));
-my @req2 = (qw());
-my @opt1 = (qw(dbhost dbpass dbconn dbservice pgpass status));
-my @opt2 = (qw(dbport sourcelimit targetlimit));
-for my $req (@req1) { has $req => ( is => 'rw', isa => 'Str', required => 1 ); }
-for my $req (@req2) { has $req => ( is => 'rw', isa => 'Int', required => 1 ); }
-for my $opt (@opt1) { has $opt => ( is => 'rw', isa => 'Str', required => 0 ); }
-for my $opt (@opt2) { has $opt => ( is => 'rw', isa => 'Int', required => 0 ); }
-has 'id' => ( is => 'ro', isa => 'Int' );
-has 'cols' => ( is => 'ro', isa => 'ArrayRef', default => sub { [@req1,@req2,@opt1,@opt2] },);
-}
-
-{
-package BCdbgroup;
-use Moose;
-
-my @req1 = (qw(name db));
-my @req2 = (qw());
-for my $req (@req1) { has $req => ( is => 'rw', isa => 'Str', required => 1 ); }
-for my $req (@req2) { has $req => ( is => 'rw', isa => 'Int', required => 1 ); }
-has 'id' => ( is => 'ro', isa => 'Int' );
-has 'cols' => ( is => 'ro', isa => 'ArrayRef', default => sub { [@req1,@req2] },);
-}
-
-{
-package BCgoat;
-use Moose;
-
-my @req1 =  (qw(tablename db));
-my @req2 =  (qw());
-my @opt1 =  (qw(schemaname has_delta pkey ghost customselect strict_checking));
-push @opt1, (qw(standard_conflict pkeytype ping analyze_after_copy makedelta rebuild_index));
-my @opt2 =  (qw());
-for my $req (@req1) { has $req => ( is => 'rw', isa => 'Str', required => 1 ); }
-for my $req (@req2) { has $req => ( is => 'rw', isa => 'Int', required => 1 ); }
-for my $opt (@opt1) { has $opt => ( is => 'rw', isa => 'Str', required => 0 ); }
-for my $opt (@opt2) { has $opt => ( is => 'rw', isa => 'Int', required => 0 ); }
-has 'id' => ( is => 'ro', isa => 'Int' );
-has 'cols' => ( is => 'ro', isa => 'ArrayRef', default => sub { [@req1,@req2,@opt1,@opt2] },);
-}
-
-{
-package BCherd;
-use Moose;
-
-has 'goat'     => ( is => 'rw', isa => 'Any', required => 1 );
-has 'name'     => ( is => 'rw', isa => 'Str', required => 1 );
-has 'priority' => ( is => 'rw', isa => 'Int', required => 0 );
-
-}
-
-{
-package BCsync;
-use Moose;
-
-my @req1 =  (qw(name source));
-my @req2 =  (qw());
-my @opt1 =  (qw(synctype copytype deletemethod copyrows copyextra stayalive strict_checking ));
-push @opt1, (qw(checktime status limitdbs precommand postcommand txnmode ping               ));
-push @opt1, (qw(targetdb targetgroup kidtime kidsalive do_listen                            ));
-push @opt1, (qw(usecustomselect makedelta rebuild_index analyze_after_copy track_rates      ));
-my @opt2 =  (qw());
-for my $req (@req1) { has $req => ( is => 'rw', isa => 'Str', required => 1 ); }
-for my $req (@req2) { has $req => ( is => 'rw', isa => 'Int', required => 1 ); }
-for my $opt (@opt1) { has $opt => ( is => 'rw', isa => 'Str', required => 0 ); }
-for my $opt (@opt2) { has $opt => ( is => 'rw', isa => 'Int', required => 0 ); }
-has 'cols' => ( is => 'ro', isa => 'ArrayRef', default => sub { [@req1,@req2,@opt1,@opt2] },);
-## These should not be set by us:
-for my $opt (qw(id priority)) {
-  has $opt => ( is => 'ro', isa => 'Str', required => 0 );
-}
-}
-
-{
-package BCcustomcode;
-use Moose;
-
-my @req1 =  (qw(name whenrun src_code));
-my @req2 =  (qw());
-my @opt1 =  (qw(about getdbh getrows ));
-push @opt1, (qw(goat sync active priority ));
-my @opt2 =  (qw());
-for my $req (@req1) { has $req => ( is => 'rw', isa => 'Str', required => 1 ); }
-for my $req (@req2) { has $req => ( is => 'rw', isa => 'Int', required => 1 ); }
-for my $opt (@opt1) { has $opt => ( is => 'rw', isa => 'Str', required => 0 ); }
-for my $opt (@opt2) { has $opt => ( is => 'rw', isa => 'Int', required => 0 ); }
-has 'cols' => ( is => 'ro', isa => 'ArrayRef', default => sub { [@req1,@req2,@opt1,@opt2] },);
-## These should not be set by us:
-for my $opt (qw(id priority)) {
-  has $opt => ( is => 'ro', isa => 'Str', required => 0 );
-}
-
-}
-
-## Moose is a little messy, so we need this for now.
-## Known problem: future versions of Moose will fix this.
-$SIG{__DIE__} = sub {
-	my $line = (caller)[2];
-	(my $err = shift) =~ s{(.+?) at /\S+/Meta/Attribute.+}{$1}so;
-	##Temporary extra:
-	$err =~ s/(.+?)\n.+/$1/so if $err =~ /^\w/ and $err !~ /\$VAR1/o;
-	die "Line $line: $err\n";
-};
-
-
-
-## Begin main Bucardo object
-
-package Bucardo;
-
 use sigtrap qw( die normal-signals );
-use Moose;
-use Moose::Util::TypeConstraints;
 use Time::HiRes 'sleep';
 use DBI 1.51;
 use DBD::Pg 2.0 ':pg_types';
@@ -144,8 +27,9 @@ use Config;
 use Sys::Syslog;
 use DBIx::Safe '1.2.4';
 
-use vars qw($SQL %SQL $sth %sth $bdb $count $info);
+use vars qw($SQL %SQL $sth %sth $count $info);
 
+## Map system signal numbers to standard names
 my $x = 0;
 my %signumber;
 for (split(' ', $Config{sig_name})) {
@@ -199,8 +83,7 @@ my %dbix = (
 
 ## Optional cleanup for the pidfiles
 ## The string PIDFILE will be replaced with the actual name
-my $PIDCLEANUP = "/bin/chgrp bucardo PIDFILE";
-$PIDCLEANUP = '';
+my $PIDCLEANUP = ''; ## "/bin/chgrp bucardo PIDFILE";
 
 ## Save a copy of emails to a file? (override with $ENV{BUCARDO_SENDMAIL_FILE})
 my $SENDMAIL_FILE = ""; ## "./bucardo.sendmail.log";
@@ -215,33 +98,35 @@ $shorthost =~ s/^(.+?)\..*/$1/;
 our %config;
 our %config_about;
 
-##
-## BEGIN MOOSENESS
-##
+sub new {
 
-has 'created'      => ( is => 'ro', isa => 'Str', default => scalar localtime );
-has 'ppid'         => ( is => 'ro', isa => 'Int', default => $$ );
-has 'verbose'      => ( is => 'rw', isa => 'Int', default => 0 );
+	my $class = shift;
+	my $params = shift || {};
 
-has 'debugsyslog'  => ( is => 'rw', isa => 'Int', default => 1 );
-has 'debugdir'     => ( is => 'rw', isa => 'Str', default => './tmp' );
-has 'debugfile'    => ( is => 'rw', isa => 'Int', default => 0 );
-has 'debugfilesep' => ( is => 'rw', isa => 'Int', default => 0 );
-has 'debugname'    => ( is => 'rw', isa => 'Str', default => '' );
-has 'cleandebugs'  => ( is => 'rw', isa => 'Int', default => 0 );
-has 'debugstderr'  => ( is => 'rw', isa => 'Int', default => 0 );
-has 'debugstdout'  => ( is => 'rw', isa => 'Int', default => 0 );
-has 'dryrun'       => ( is => 'rw', isa => 'Int', default => 0 );
-has 'bcquiet'      => ( is => 'rw', isa => 'Int', default => 0 );
-has 'sendmail'     => ( is => 'rw', isa => 'Int', default => 1 );
-has 'extraname'    => ( is => 'rw', isa => 'Str', default => '' );
-has 'version'      => ( is => 'ro', isa => 'Str', default => $VERSION );
+	my $self = {
+		created      => scalar localtime,
+		ppid         => $$,
+		verbose      => 0,
+		debugsyslog  => 1,
+		debugdir     => $DEBUGDIR,
+		debugfile    => 0,
+		debugfilesep => 0,
+		debugname    => '',
+		cleandebugs  => 0,
+		debugstderr  => 0,
+		debugstdout  => 0,
+		dryrun       => 0,
+		bcquiet      => 0,
+		sendmail     => 1,
+		extraname    => '',
+		version      => $VERSION,
+	};
 
-has 'masterdbh'    => ( is => 'ro' );
+	for (keys %$params) {
+		$self->{$_} = $params->{$_};
+	}
 
-
-sub BUILD {
-	my ($self, $params) = @_;
+	bless $self, $class;
 
 	if ($self->{debugdir}) {
 		$DEBUGDIR = $self->{debugdir};
@@ -274,68 +159,8 @@ sub BUILD {
 	$self->{pidfile} = "$config{piddir}/$config{pidfile}";
 	$self->{stopfile} = "$config{piddir}/$config{stopfile}";
 
-	return;
+	return $self;
 }
-
-
-has 'dbname' => ( is => 'rw', isa => 'Str', required => 1 );
-has 'dbuser' => ( is => 'rw', isa => 'Str', required => 1 );
-
-has 'dbpass' => ( is => 'rw', isa => 'Str', required => 0, default => '' );
-has 'dbhost' => ( is => 'rw', isa => 'Str', required => 0, default => '' );
-has 'dbport' => ( is => 'rw', isa => 'Str', required => 0, default => '' );
-has 'dbconn' => ( is => 'rw', isa => 'Str', required => 0, default => '' );
-
-has 'database' => ( is => 'rw', isa => 'HashRef' );
-after 'database' => sub {
-	my ($self,$arg) = @_;
-	return if ! defined $arg;
-	my $db = BCdatabase->new($arg);
-	$self->{database}{id} = $self->addtable($db, "db");
-	## We may want to assign it immediately to a group
-	if (exists $arg->{dbgroup}) {
-		$self->dbgroup({db => $arg->{name}, name => $arg->{dbgroup}, priority => $arg->{priority}||0 });
-	}
-	return;
-};
-
-has 'dbgroup' => ( is => 'rw', isa => 'HashRef' );
-after 'dbgroup' => sub {
-	my ($self,$arg) = @_;
-	return if ! defined $arg;
-	my $group = BCdbgroup->new($arg);
-	$self->make_dbgroup($arg->{name});
-	## If we also got a database, add it to the group
-	if (defined $arg->{db}) {
-		## Does it exist?
-		my $db = $self->get_db($arg->{db});
-		my $maindbh = $self->{masterdbh};
-		my $pri = $arg->{priority} || 0;
-		$arg->{db} =~ s/\'/''/go;
-		$arg->{name} =~ s/\'/''/go;
-		$SQL = qq{INSERT INTO bucardo.dbmap (db, dbgroup, priority)}.
-			qq{ VALUES ('$arg->{db}','$arg->{name}', $pri)};
-		$maindbh->do($SQL);
-		$maindbh->commit();
-	}
-	return;
-};
-
-has 'goat' => ( is => 'rw', isa => 'HashRef' );
-after 'goat' => sub {
-	my ($self,$arg) = @_;
-	return if ! defined $arg;
-	my $goat = BCgoat->new($arg);
-	my $goatid = $self->addtable($goat, "goat")
-		or die "No id returned from addtable inside 'goat'\n";
-	return unless $arg->{herd};
-
-	## Add this goat to a herd
-	$arg->{name} = $arg->{herd};
-	$arg->{goat} = $goatid;
-	$self->herd($arg);
-	return;
-};
 
 
 
@@ -355,107 +180,6 @@ sub addtable {
 	return $self->{$type}{id} = $maindbh->selectall_arrayref("SELECT pg_catalog.lastval()")->[0][0];
 }
 
-has 'herd' => ( is => 'rw', isa => 'HashRef' );
-after 'herd' => sub {
-	my ($self,$arg) = @_;
-	return if ! defined $arg;
-	my $herd = BCherd->new($arg);
-	my $goatid = $self->find_goat($herd->goat,$arg->{db});
-	$self->make_herd($herd->name);
-	my $maindbh = $self->{masterdbh};
-	my $pri = $arg->{priority} || 0;
-	my $SQL = "INSERT INTO bucardo.herdmap(goat,herd,priority) VALUES ($goatid,?,$pri)";
-	$sth = $maindbh->prepare($SQL);
-	$sth->execute($herd->name);
-	$maindbh->commit();
-	return;
-};
-
-has 'sync' => ( is => 'rw', isa => 'HashRef' );
-after 'sync' => sub {
-	my ($self,$arg) = @_;
-	return if ! defined $arg;
-	my $sync = BCsync->new($arg);
-	## Make sure these are valid targets
-	$self->make_dbgroup($sync->targetgroup);
-	$self->make_herd($sync->source);
-	$self->{sync}{id} = $self->addtable($sync, "sync");
-};
-
-has 'customcode' => ( is => 'rw', isa => 'HashRef' );
-after 'customcode' => sub {
-
-	## Add an entry to the customcode table
-	## To add a new entry to customcode:
-	##   mandatory args: name, whenrun, src_code
-	##   optional args: about, getdbh, getrows
-
-	my ($self,$arg) = @_;
-
-	defined $arg and ref $arg eq 'HASH' or die qq{First argument must be a hashref\n};
-
-	my $dbh = $self->{masterdbh};
-	$dbh->rollback();
-
-	## Check if we are doing a mapping
-	if (defined $arg->{id}) {
-		my $id = $arg->{id};
-		$id =~ /^\d+$/ or die qq{Argument "id" must be a number\n};
-		my $sync = (defined $arg->{sync} and length $arg->{sync}) ? $arg->{sync} : '';
-		my $goat = (defined $arg->{goat} and length $arg->{goat}) ? $arg->{goat} : '';
-		if (!length $sync and !length $goat) {
-			die qq{Must pass in either a sync or goat argument\n};
-		}
-		## Is this a valid code?
-		$SQL = "SELECT 1 FROM customcode WHERE id = $id";
-		$count = $dbh->selectall_arrayref($SQL);
-		defined $count->[0] or die qq{Code number $id does not exist\n};
-
-		## Is this a valid sync?
-		if (length $sync) {
-			$SQL = "SELECT 1 FROM sync WHERE name = ?";
-			$sth = $dbh->prepare($SQL);
-			$count = $sth->execute($sync);
-			$sth->finish();
-			$count==1 or die qq{That sync does not exist\n};
-		}
-		else {
-			## Is this a valid goat?
-			$goat =~ /^\d+$/ or die qq{Invalid goat\n};
-			$SQL = "SELECT 1 FROM goat WHERE id = ?";
-			$sth = $dbh->prepare($SQL);
-			$count = $sth->execute($goat);
-			$sth->finish();
-			$count==1 or die qq{That goat does not exist\n};
-		}
-
-		$SQL = "INSERT INTO customcode_map(code,sync,goat,active,priority) VALUES (?,?,?,?,?)";
-		$sth = $dbh->prepare($SQL);
-		$sth->execute(map { (defined $_ and length $_) ? $_ : $DEFAULT }
-					  @$arg{qw/ id sync goat active priority /});
-
-		$dbh->commit();
-		return 1;
-	}
-
-	my $code = BCcustomcode->new($arg);
-
-	## Add this to the database
-	$SQL = "INSERT INTO customcode(name,about,whenrun,getdbh,getrows,src_code) VALUES (?,?,?,?,?,?)";
-	$sth = $dbh->prepare($SQL);
-	$sth->execute(map { defined $_ ? $_ : $DEFAULT } @$arg{qw/ name about whenrun getdbh getrows src_code /});
-	$arg->{id} = $dbh->selectall_arrayref("SELECT currval('customcode_id_seq')")->[0][0];
-	## Did they specify a sync or a goat?
-	if (defined $arg->{goat} or defined $arg->{sync}) {
-		$SQL = "INSERT INTO customcode_map(code,sync,goat,active,priority) VALUES (?,?,?,?,?)";
-		$sth = $dbh->prepare($SQL);
-		$sth->execute(map { defined $_ ? $_ : $DEFAULT } @$arg{qw / id sync goat active priority /});
-	}
-
-	$dbh->commit();
-	return $arg->{id};
-
-}; ## end 'after' customcode
 
 sub remove_customcode {
 	my ($self,$arg) = @_;
@@ -506,23 +230,6 @@ sub remove_customcode {
 	return $count eq '0E0' ? 0 : $count;
 
 } ## end of remove_customcode
-
-
-## Plural returns the latest list
-my %thing =
-	(
-	goats    => \&get_goats,
-	herds    => \&get_herds,
-	syncs    => \&get_syncs,
-	dbs      => \&get_dbs,
-	dbgroups => \&get_dbgroups,
-	 );
-while (($a,$b) = each %thing) {
-	has $a => ( is => 'ro', 'isa' => 'HashRef', lazy => 1, default=> $b, );
-}
-
-
-
 
 sub make_dbgroup {
 	## Create a named dbgroup if it does not already exist
@@ -5449,7 +5156,7 @@ sub connect_database {
 		$pass = $self->{dbpass};
 	}
 	else {
-		my $db = $self->dbs;
+		my $db = $self->get_dbs;
 		exists $db->{$id} or die qq{Invalid database id!: $id\n};
 
 		my $d = $db->{$id};
@@ -5675,7 +5382,6 @@ this distribution.
 
 * DBI (1.51 or better)
 * DBD::Pg (2.0.0 or better)
-* Moose
 * IO::Handle
 * Sys::Hostname
 * Sys::Syslog

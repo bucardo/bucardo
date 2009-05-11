@@ -7,6 +7,7 @@ use strict;
 use warnings;
 use lib 't','.';
 use Test::More tests => 4;
+use BucardoTesting;
 
 my $t=q{File Bucardo.pm compiles without errors};
 eval {
@@ -38,3 +39,4 @@ eval {
 };
 is($@, q{}, $t);
 $@ and BAIL_OUT qq{Cannot continue until BucardoTesting->new() works\n};
+

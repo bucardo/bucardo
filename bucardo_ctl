@@ -226,8 +226,8 @@ sub start {
 	## Refuse to go on if we get a ping response within 5 seconds
 	$QUIET or print "Checking for existing processes\n";
 
-	my $oldpid = ping({quiet => 1, timeout => 5, noexit => 1});
-
+	#my $oldpid = ping({quiet => 1, timeout => 5, noexit => 1});
+	my $oldpid = 0;
 	if ($oldpid) {
 		$QUIET or print "Cannot start, process $oldpid is already running\n";
 		exit 1;

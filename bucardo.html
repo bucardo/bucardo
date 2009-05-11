@@ -66,7 +66,6 @@ Bucardo runs as a series of Perl daemons, and requires version 5.8.3 of Perl or 
  <li>DBI 1.51</li>
  <li>DBD::Pg 2.0.0</li>
  <li>DBIx::Safe 1.2.4 (comes bundled with Bucardo)</li>
- <li>Moose 0.18</li>
  <li>IO::Handle 1.24</li>
  <li>Sys::Hostname 1.11</li>
  <li>Sys::Syslog</li>
@@ -253,7 +252,7 @@ There are some common terms used when talking about Bucardo:
 <hr />
 <h2><a name="PopulatingBucardo">Populating Bucardo</a></h2>
 <p>
-Once Bucardo has been installed, the next step is to populate its database with the specific information for your replicaton needs. Basically, this means that you need to add information to some of the tables within the bucardo schema. Information can be added using the standard Moose-like methods within Bucardo.pm, or simply by adding rows to the correct database tables within the bucardo database.
+Once Bucardo has been installed, the next step is to populate its database with the specific information for your replicaton needs. Basically, this means that you need to add information to some of the tables within the bucardo schema. Information can be added using the bucardo_ctl program, or simply by adding rows to the correct database tables within the bucardo database.
 </p>
 
 <h3>Adding databases</h3>

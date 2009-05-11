@@ -17,7 +17,6 @@ WriteMakefile(
                      'Test::More'          => '0.61',
                      'Test::Harness'       => '2.03',
                      'Net::SMTP'           => '0',
-                     'Moose'               => '0.18',
                      'IO::Handle'          => '1.24',
                      'Sys::Hostname'       => '1.11',
                      'Sys::Syslog'         => '0.13',

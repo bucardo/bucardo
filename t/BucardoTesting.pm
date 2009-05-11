@@ -128,8 +128,6 @@ for (1..30) {
 }
 
 
-
-
 sub new {
 
 	## Create a new BucardoTesting object.
