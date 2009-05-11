@@ -609,27 +609,8 @@ if (!defined $row->{dbpass}) {
     }
 }
 
-if (defined $row->{pgpass} and length $row->{pgpass}) {
-    my $pfile = $row->{pgpass};
-    if (! -e $pfile) {
-        elog(WARNING, qq{Password file "$pfile" does not exist, falling back to default method.});
-    }
-    else {
-        open my $pw, "<", $pfile or elog(ERROR, qq{Could not open password file "$pfile": $!\n});
-        while(<$pw>) {
-            next unless /^([^:]*):([^:]*):([^:]+):([^:]+):([^:]*)$/o;
-            ($db{host},$db{port},$db{name},$db{user},$db{pw}) = ($1,$2,$3,$4,$5);
-            last;
-        }
-        close $pw;
-        exists $db{name} or elog(ERROR, qq{The password file "$pfile" did not contain any valid information\n});
-    }
-}
-
-if (! exists $db{name}) {
-    for (qw(host port name user pass conn)) {
-        $db{$_} = exists $row->{"db$_"} ? $row->{"db$_"} : '';
-    }
+for (qw(host port name user pass conn)) {
+	$db{$_} = exists $row->{"db$_"} ? $row->{"db$_"} : '';
 }
 
 ## Check that the port is numeric
