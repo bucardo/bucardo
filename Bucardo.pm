@@ -5566,11 +5566,13 @@ sub send_mail {
 		return;
 	}
 
+	my $smtphost = $config{default_email_host} || 'localhost';
+
 	if ($self->{sendmail} and $arg->{to} ne 'nobody@example.com') {
 		eval {
 			my $smtp = Net::SMTP->new(
-				'localhost',
-				Hello => $hostname,
+				Host    => $smtphost,
+				Hello   => $hostname,
 				Timeout => 15
 				);
 			$smtp->mail($from);

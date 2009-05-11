@@ -15,7 +15,7 @@
 Bucardo is an asynchronous master-master and master-slave replication system for <a href="http://www.postgresql.org/">PostgreSQL</a>. It uses triggers on individual tables. It supports conflict resolution and exception handling through the use of custom Perl subroutines.
 </p>
 <p>
-This document covers Bucardo 3.2.2. The latest version of this document can always be found at <a href="http://bucardo.org/bucardo.html">http://bucardo.org/bucardo.html</a>.
+This document covers Bucardo 3.2.7. The latest version of this document can always be found at <a href="http://bucardo.org/bucardo.html">http://bucardo.org/bucardo.html</a>.
 </p>
 <ul class="toc">
  <li><a href="#Bucardorequirements">Bucardo requirements</a></li>
@@ -669,6 +669,8 @@ Inside the bucardo database, the <b>bucardo_config</b> table holds many settings
 <td class="lcol" >default_email_to</td> <td>nobody@example.com</td> <td>Who to send alert emails to</td> </tr>
 <tr>
 <td class="lcol" >default_email_from</td> <td>nobody@example.com</td> <td>Who the alert emails are sent as</td> </tr>
+<tr>
+<td class="lcol" >default_email_host</td> <td>localhost</td> <td>Which host to send email through</td> </tr>
 <tr>
 <td class="lcol" >stats_script_url</td> <td>http://www.bucardo.org/</td> <td>Location of the stats script</td> </tr>
 <tr>
