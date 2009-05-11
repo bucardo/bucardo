@@ -1,17 +1,22 @@
 
 -- Schema for the main Bucardo database
 
--- Dependencies:
--- Superuser bucardo owns a database named bucardo
+-- Should be run as a superuser
+
+\set ON_ERROR_STOP off
+
+CREATE USER bucardo SUPERUSER;
+CREATE DATABASE bucardo OWNER bucardo;
+
+\c bucardo bucardo
 
 -- plpgsql and plperlu are loaded, but just in case:
 SET client_min_messages = 'FATAL';
 CREATE LANGUAGE plpgsql;
 CREATE LANGUAGE plperlu;
 SET client_min_messages = 'ERROR';
-COMMIT;
 
-\set ON_ERROR_STOP
+\set ON_ERROR_STOP on
 
 CREATE SCHEMA bucardo;
 CREATE SCHEMA freezer;
