@@ -28,7 +28,7 @@ WriteMakefile(
     AUTHOR       => 'Greg Sabino Mullane <greg@endpoint.com>',
     LICENSE      => 'BSD',
     NO_META      => 1,
-    clean        => { FILES => 'log.bucardo.* *~ *.tmp outgoingmail.*' },
+    clean        => { FILES => 'log.bucardo.* *~ *.tmp outgoingmail.* bucardo_test_database*/' },
 );
 
 package MY;
@@ -48,3 +48,10 @@ sub manifypods {
     $after .= qq{\t\$(NOECHO) \$(ECHO) Created Bucardo.pm.html and bucardo_ctl.html\n};
     return shift->SUPER::manifypods(@_) . $after;
 }
+
+sub clean {
+	my $string = shift->SUPER::clean(@_);
+	$string =~ s{\t}{\tperl t/98-cleanup\.t\n\t};
+	return $string;
+}
+
