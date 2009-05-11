@@ -13,11 +13,10 @@ requires:
   DBI               : 1.51
   DBD::Pg           : 2.0
   DBIx::Safe        : 1.2.4
-  Moose             : 0.18
   IO::Handle        : 1.24
   Sys::Hostname     : 1.11
   Sys::Syslog       : 0.13
-  Mail::Sendmail    : 0.79
+  Net::SMTP         : 0
 build_requires:
   Test::Harness     : 2.03
   Test::More        : 0.61

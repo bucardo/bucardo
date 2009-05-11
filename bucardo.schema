@@ -123,6 +123,7 @@ FROM STDIN
 WITH DELIMITER '|';
 default_email_from|nobody@example.com|Who the alert emails are sent as
 default_email_to|nobody@example.com|Who to send alert emails to
+default_email_host|localhost|Which host to send email through
 kid_abort_limit|3|How many times we will restore an aborted kid before giving up?
 max_delete_clause|200|Maximum number of items to delete inside of IN() clauses
 max_select_clause|500|Maximum number of items to select inside of IN() clauses
@@ -631,7 +632,7 @@ if (!defined $row->{dbpass}) {
 }
 
 for (qw(host port name user pass conn)) {
-  $db{$_} = exists $row->{"db$_"} ? $row->{"db$_"} : '';
+	$db{$_} = exists $row->{"db$_"} ? $row->{"db$_"} : '';
 }
 
 ## Check that the port is numeric

@@ -8,6 +8,8 @@
 
   - Allow wildcards in the 'bucardo_ctl kick' [Josh Tolley]
 
+  - Add more tests and improve existing ones. [Josh Tolley]
+
   - Support multi-column primary keys. Thanks to Backcountry.com. [GSM]
 
   - Rewrite the pushdelta sync method to be more efficient and safer. [GSM]
@@ -16,6 +18,10 @@
     and schema are words changed by quote_ident. [Ben Allen]
 
   - Allow for dead columns when checking attnums. [GSM]
+
+  - Change from Mail::Sendmail to Net::SMTP [Ben Allen]
+
+  - Removed 'Moose' dependency. [GSM]
 
   - Add 'bucardo_ctl upgrade' to make intra-version upgrades easy 
     and automatic. [Selena Deckelmann and GSM]
