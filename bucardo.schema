@@ -229,6 +229,28 @@ ALTER TABLE goat ADD CONSTRAINT standard_conflict CHECK (standard_conflict IS NU
 -- CREATE UNIQUE INDEX goats_r_unique ON goat(db,schemaname,tablename,reltype);
 
 --
+-- Set of filters for each goat.
+--
+CREATE SEQUENCE bucardo_custom_trigger_id_seq;
+CREATE TABLE bucardo_custom_trigger (
+	id			 INTEGER	 	NOT NULL DEFAULT nextval('bucardo_custom_trigger_id_seq'),
+								CONSTRAINT bucardo_custom_trigger_id_pk PRIMARY KEY (id),
+	goat		 INTEGER 		NOT NULL,
+								CONSTRAINT bucardo_custom_trigger_goat_fk FOREIGN KEY (goat) REFERENCES goat(id) ON DELETE CASCADE,
+	trigger_name 		TEXT NOT NULL,
+	trigger_type 		TEXT NOT NULL,
+	trigger_language 	TEXT NOT NULL DEFAULT 'plpgsql',
+	trigger_body 		TEXT NOT NULL,
+	trigger_level	    TEXT NOT NULL,
+	status   			TEXT NOT NULL DEFAULT 'active',
+	cdate		    	TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE bucardo_custom_trigger ADD CONSTRAINT type_is_delta_or_trigger CHECK (trigger_type IN ('delta', 'triggerkick'));
+ALTER TABLE bucardo_custom_trigger ADD CONSTRAINT level_is_row_statement CHECK (trigger_level IN ('ROW', 'STATEMENT'));
+CREATE UNIQUE INDEX bucardo_custom_trigger_goat_type_unique ON bucardo_custom_trigger(goat, trigger_type);
+
+--
 -- A group of goats. Ideally arranged in some sort of tree.
 --
 CREATE TABLE herd (
@@ -1433,28 +1455,62 @@ $bc$
         }
 
         ## Ping needs a special function and trigger
-        if ($ping) {
-            if (!$found{func0} or $force) {
-                $SQL = qq{
-                    CREATE OR REPLACE FUNCTION bucardo."$func0"()
-                    RETURNS TRIGGER 
-                    LANGUAGE plpgsql
-                    AS \$notify\$
-                    BEGIN
-                        EXECUTE 'NOTIFY "bucardo_kick_sync_$syncname"';
-                    RETURN NEW;
-                    END;
-                    \$notify\$;
-                };
+	 	if ($ping) {
+			my $custom_trigger_level;
+			my $custom_function_name;
+			$SQL = qq{ 	SELECT trigger_language,trigger_body,trigger_level FROM bucardo_custom_trigger
+			 			WHERE goat=$info->{id}
+						AND status='active'
+						AND trigger_type='triggerkick' };	
+			elog(DEBUG, "Running $SQL");
+			$rv = spi_exec_query($SQL);
+				
+            if (!$found{func0} or $force or $rv->{processed}) {
+
+				if($rv->{processed}) {
+					$custom_function_name = $func0 . "_" . $info->{tablename};
+					$custom_trigger_level = $rv->{rows}[0]{trigger_level};
+					$SQL = qq{
+						CREATE OR REPLACE FUNCTION bucardo."$custom_function_name"()
+	                    RETURNS TRIGGER 
+	                    LANGUAGE $rv->{rows}[0]{trigger_language}
+	                    AS \$notify\$
+					};
+					$SQL .= qq{ $rv->{rows}[0]{trigger_body} };
+					$SQL .= qq{ \$notify\$; };
+				} 
+				else {
+                	$SQL = qq{
+	                    CREATE OR REPLACE FUNCTION bucardo."$func0"()
+	                    RETURNS TRIGGER 
+	                    LANGUAGE plpgsql
+	                    AS \$notify\$
+	                    BEGIN
+	                        EXECUTE 'NOTIFY "bucardo_kick_sync_$syncname"';
+	
+	                    RETURN NEW;
+	                    END;
+	                    \$notify\$;
+	                };
+				}
                 run_sql($SQL,$dbh);
             }
             if (!$found{trigger0}) {
-                $SQL = qq{
-                    CREATE TRIGGER "$trigger0"
-                    AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
-                    FOR EACH STATEMENT EXECUTE PROCEDURE bucardo."$func0"()
-                };
-                run_sql($SQL,$dbh);
+				if($custom_trigger_level && $custom_function_name) {
+                	$SQL = qq{
+	                    CREATE TRIGGER "$trigger0"
+	                    AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
+	                    FOR EACH $custom_trigger_level EXECUTE PROCEDURE bucardo."$custom_function_name"()
+	                };
+				} else
+				{
+					$SQL = qq{
+	                    CREATE TRIGGER "$trigger0"
+	                    AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
+	                    FOR EACH STATEMENT EXECUTE PROCEDURE bucardo."$func0"()
+	                };
+				}
+	            run_sql($SQL,$dbh);
             }
         }
 
@@ -1596,7 +1652,29 @@ $bc$
             my $new = join ',' => map { qq{NEW."$_"} } @pkeys;
             my $old = join ',' => map { qq{OLD."$_"} } @pkeys;
             my $clause = join ' OR ' => map { qq{OLD."$_" <> NEW."$_"} } @pkeys;
-            if (! $found{func1} and $pkeytype ne 'bytea') {
+
+			$SQL = qq{ 	SELECT trigger_language,trigger_body FROM bucardo_custom_trigger 
+						WHERE goat=$info->{id} 
+						AND status='active' 
+						AND trigger_type='delta' };
+			elog(DEBUG, "Running $SQL");
+			$rv = spi_exec_query($SQL);
+
+			if(! $found{func1} and $rv->{processed}) {
+				$SQL = qq{
+					CREATE OR REPLACE FUNCTION bucardo.$func1()
+                    RETURNS TRIGGER
+                    LANGUAGE $rv->{rows}[0]{trigger_language}
+					SECURITY DEFINER
+                    VOLATILE
+                    AS
+                    \$clone\$
+				};
+				$SQL .= qq{ $rv->{rows}[0]{trigger_body} };
+				$SQL .= qq{ \$clone\$; };
+				run_sql($SQL,$dbh);
+			} 
+			elsif (! $found{func1} and $pkeytype ne 'bytea') {
                 $SQL = qq{
                     CREATE OR REPLACE FUNCTION bucardo.$func1()
                     RETURNS TRIGGER
@@ -1622,7 +1700,7 @@ $bc$
                 };
                 run_sql($SQL,$dbh);
             }
-            if (! $found{func2} and $pkeytype eq 'bytea') {
+            elsif (! $found{func2} and $pkeytype eq 'bytea') {
                 $SQL = qq{
                     CREATE OR REPLACE FUNCTION bucardo.$func2()
                     RETURNS TRIGGER
