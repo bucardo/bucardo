@@ -266,6 +266,7 @@ sub create_cluster {
 	open my $fh, '>>', $file or die qq{Could not open "$file": $!\n};
 	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\nlog_statement = 'all'\n\n",
 		$clusterinfo->{port};
+	print $fh "logging_collector = off\n";
 	close $fh or die qq{Could not close "$file": $!\n};
 
 	return;
@@ -797,7 +798,7 @@ sub add_bucardo_schema_to_database {
 	my ($start,$copy,$insidecopy) = (0,0,0);
 	while (<$fh>) {
 		if (!$start) {
-			next unless /ON_ERROR_STOP/;
+			next unless /ON_ERROR_STOP on/;
 			$start = 1;
 			next;
 		}
