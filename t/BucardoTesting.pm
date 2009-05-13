@@ -160,8 +160,14 @@ sub new {
 
 	#$self->read_test_info();
 
-	## Let's find out where bucardo_ctl is
-	if (-e './bucardo_ctl') {
+	## Let's find out where bucardo_ctl is. Prefer the blib ones, which are shebang adjusted
+	if (-e 'blib/script/bucardo_ctl') {
+		$self->{bucardo_ctl} = 'blib/script/bucardo_ctl';
+	}
+	elsif (-e '../blib/script/bucardo_ctl') {
+		$self->{bucardo_ctl} = '../blib/script/bucardo_ctl';
+	}
+	elsif (-e './bucardo_ctl') {
 		$self->{bucardo_ctl} = './bucardo_ctl';
 	}
 	elsif (-e '../bucardo_ctl') {
