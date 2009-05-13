@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl -- -*-cperl-*-
+#!perl -- -*-cperl-*-
 
 ## The main Bucardo program
 ##

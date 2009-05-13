@@ -4,7 +4,7 @@ use warnings;
 use 5.008003;
 
 ## No version.pm for this one, as the prereqs are not loaded yet.
-my $VERSION = '3.2.2';
+my $VERSION = '3.2.7';
 
 WriteMakefile(
     NAME         => 'Bucardo',
@@ -22,7 +22,9 @@ WriteMakefile(
                      'Sys::Syslog'         => '0.13',
                  },
     EXE_FILES    => ['bucardo_ctl'],
-    PM           => {'Bucardo.pm' => '$(INST_LIBDIR)/Bucardo.pm'},
+    INST_ARCHLIB => 'none',
+    INST_BIN     => 'none',
+    MAN1PODS     => { 'bucardo_ctl' => 'blib/man1/bucardo_ctl.1pm' },
     ABSTRACT     => 'Postgres asynchronous multi-master replication system',
     AUTHOR       => 'Greg Sabino Mullane <greg@endpoint.com>',
     LICENSE      => 'BSD',
