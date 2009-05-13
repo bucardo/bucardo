@@ -5,9 +5,9 @@
 use 5.008003;
 use strict;
 use warnings;
-use Test::More tests => 1;
+use Test::More tests => 2;
 
-for my $letter ('A'..'Z') {
+for my $letter ('A'..'C') {
 	my $dir = "bucardo_test_database_$letter";
 	next if ! -d $dir;
 	my $pidfile = "$dir/postmaster.pid";
@@ -24,4 +24,17 @@ for my $letter ('A'..'Z') {
 }
 
 pass 'Test databases are shut down';
+
+my $dir = "/tmp/bucardo_testing_$ENV{USER}";
+if (-d $dir) {
+	opendir my $dh, $dir or die qq{Could not open directory "$dir": $!\n};
+	for my $file (grep { /^\w/ } readdir($dh)) {
+		unlink "$dir/$file";
+	}
+	closedir $dh or die qq{Could not open directory "$dir": $!\n};
+	rmdir $dir;
+}
+
+pass "Removed directory $dir";
+
 
