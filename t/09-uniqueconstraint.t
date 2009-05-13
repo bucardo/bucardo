@@ -1,3 +1,5 @@
+#!perl
+
 ## Test pushdelta functionality, with custom code
 
 use 5.008003;
