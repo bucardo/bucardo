@@ -1081,7 +1081,7 @@ sub remove_single_dir {
     # Try stopping PostgreSQL
     my $options = get_pgctl_options($dirname);
     qx{$pg_ctl $options -l $dirname/pg.log -D $dirname stop -m immediate};
-    sleep 4;
+    sleep 2;
     qx{rm -rf $dirname};
     return;
 }
