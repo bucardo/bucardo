@@ -55,7 +55,7 @@ $i = $bct->ctl("add table bucardo_test1 db=A herd=testherd1");
 like($i, qr{Table added:}, $t);
 
 $t=q{Add sync works};
-$i = $bct->ctl("add sync testsync1 source=testherd1 type=pushdelta targetdb=B");
+$i = $bct->ctl("add sync testsync2 source=testherd1 type=pushdelta targetdb=B");
 like($i, qr{Sync added:}, $t);
 
 pass("done");
