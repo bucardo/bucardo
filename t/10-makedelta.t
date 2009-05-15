@@ -1,3 +1,5 @@
+#!perl
+
 ## Test makedelta functionality
 
 use 5.008003;

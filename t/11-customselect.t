@@ -1,3 +1,5 @@
+#!perl
+
 ## Test customselect functionality
 
 use 5.008003;

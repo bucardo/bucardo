@@ -1,4 +1,4 @@
-#!/usr/bin/perl -- -*-cperl-*-
+#!perl
 
 ## Test of multi-col PK replication
 

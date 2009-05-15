@@ -1,4 +1,4 @@
-#!/usr/bin/perl -- -*-cperl-*-
+#!perl
 
 ## Simple tests to allow for quick testing of various things
 

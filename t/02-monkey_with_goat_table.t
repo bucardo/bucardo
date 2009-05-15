@@ -1,4 +1,4 @@
-#!/usr/bin/perl -- -*-cperl-*-
+#!perl
 
 ## Test all ways of accessing the goat table
 

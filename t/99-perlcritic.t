@@ -1,4 +1,4 @@
-#!/usr/bin/perl -- -*-cperl-*-
+#!perl
 
 use 5.008003;
 use strict;

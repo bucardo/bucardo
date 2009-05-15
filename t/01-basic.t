@@ -1,4 +1,4 @@
-#!/usr/bin/perl -- -*-cperl-*-
+#!perl
 
 ## Basic tests of Things That Should Always Work
 ## Any failures immediately call BAIL_OUT

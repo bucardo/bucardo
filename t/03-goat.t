@@ -1,4 +1,4 @@
-#!/usr/bin/perl -- -*-cperl-*-
+#!perl
 
 ## Test all goat-related actions
 ## Creating goats and removing via Moose

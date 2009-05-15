@@ -126,6 +126,8 @@ $verb = lc $verb;
 my @nouns = @ARGV;
 my $nouns = join ' ' => @nouns;
 
+install() if $verb eq 'install';
+
 ## Grab current information from the bucardo_config file
 my $DSN = "dbi:Pg:dbname=$bcargs->{dbname}";
 $bcargs->{dbhost} and length $bcargs->{dbhost} and $DSN .= ";host=$bcargs->{dbhost}";
@@ -2679,6 +2681,124 @@ sub message {
 } ## end of message
 
 
+sub install {
+
+	print "This will install the bucardo schema into a database\n";
+
+	my $ans;
+	my $host = $bcargs->{dbhost} || $ENV{DBHOST} || '<none>';
+	my $port = $bcargs->{dbport} || $ENV{DBPORT} || 5432;
+	## The user will default to bucardo in most cases
+	my $user = $bcargs->{dbuser} || $ENV{DBUSER} || 'postgres';
+
+  GOOEY:
+	{
+
+		print "Current connection settings:\n";
+
+		print "1. Host: $host\n";
+		print "2. Port: $port\n";
+		print "3. User: $user\n";
+
+		print "Enter a number to change it, P to proceed, or Q to quit: ";
+
+		$ans = <>;
+		print "\n";
+
+		if ($ans =~ /^\s*(\d+)(.*)/) {
+			my ($num,$text) = (int $1,$2);
+			$text =~ s/^\s*(\S+)\s*$/$1/;
+			my $new = length $text ? $text : '';
+			if (1 == $num) {
+				if (!length $new) {
+					print "Change the host to: ";
+					$new = <>;
+					print "\n";
+					chomp $new;
+				}
+				$host = length $new ? $new : '<none>';
+				print "Changed host to: $host\n";
+			}
+			elsif (2 == $num) {
+				if (!length $new) {
+					print "Change the port to: ";
+					$new = <>;
+					print "\n";
+					chomp $new;
+				}
+				if ($new !~ /^\d+$/) {
+					print "-->Sorry, but the port must be a number\n\n";
+					redo GOOEY;
+				}
+				$port = $new;
+				print "Changed port to: $port\n";
+			}
+			elsif (3 == $num) {
+				if (!length $new) {
+					print "Change the user to: ";
+					$new = <>;
+					print "\n";
+					chomp $new;
+				}
+				if (! length $new) {
+					print "-->Sorry, you must specify a user\n\n";
+					redo GOOEY;
+				}
+				$user = $new;
+				print "Changed user to: $user\n";
+			}
+		}
+		elsif ($ans =~ /^\s*Q/i) {
+			die "Goodbye!\n";
+		}
+		elsif ($ans =~ /^\s*P/i) {
+			last GOOEY;
+		}
+		else {
+			print "-->Please enter Q to quit, P to proceed, or enter a number to change a setting\n";
+		}
+
+		redo GOOEY;
+
+	}
+
+	print "OK for connection test\n";
+
+	my $PSQL = "psql -p $port -U $user -c 'SELECT version()'";
+	$host !~ /</ and $PSQL .= " --host=$host";
+
+	my $COM = "$PSQL -c 'SELECT version()'";
+
+	print "COM=$COM\n";
+
+	my $res = qx{$COM};
+
+	warn "GOT $res\n";
+	if ($res !~ /Postgre(?:SQL|s) (\d+)\.(\d+)(\S+)/) {
+		die "Sorry, could not determine the version for that database\n";
+	}
+	my ($maj,$min,$rev) = ($1,$2,$3);
+	$rev =~ s/^\.//;
+
+	print "Version is: $maj.$min\n";
+
+	if ($maj < 8 or (8 == $maj and $min < 1)) {
+		die "Sorry, Bucardo requires Postgres version 8.1 or higher. This is only $maj.$min\n";
+	}
+
+	$COM = "$PSQL -AX -qt -f bucardo.schema";
+
+	print "Attempting to create and populate the bucardo schema\n";
+
+	$res= qx{$COM};
+
+	print "Installation complete. If you see no errors, all is good.\n";
+
+	exit;
+
+} ## end of install
+
+
 __END__
 
 =head1 NAME
@@ -2691,9 +2811,7 @@ This documents describes bucardo_ctl version 3.2.7
 
 =head1 SYNOPSIS
 
-  ./bucardo_ctl start "Starting up - Greg"
-
-  ./bucardo_ctl stop "Bringing down for debugging - Raul E."
+  ./bucardo_ctl install
 
   ./bucardo_ctl list dbs
 
@@ -2708,6 +2826,10 @@ This documents describes bucardo_ctl version 3.2.7
   ./bucardo_ctl add dbgroup name db1 db2 db3 ...
 
   ./bucardo_ctl alter sync syncname targetgroup=foo targetdb=foo
+
+  ./bucardo_ctl start "Starting up - Greg"
+
+  ./bucardo_ctl stop "Bringing down for debugging - Raul E."
 
   ./bucardo_ctl ping
 
@@ -2732,6 +2854,13 @@ running, it is recommended that you create aliases for each database.
 =head1 COMMANDS
 
 =over 4
+
+=item B<install>
+
+Usage: ./bucardo_ctl install
+
+Attempts to install the Bucardo schema from the file 'bucardo.schema' into an existing 
+Postgres cluster. The user 'bucardo' and database 'bucardo' will be created first as needed.
 
 =item B<start>
 
