@@ -665,7 +665,7 @@ sub start_mcp {
 	}
 
 	## Drop the existing database connection, fork, and get a new one
-	$self->{masterdbh}->disconnect();
+	eval{ $self->{masterdbh}->disconnect(); }; $self->glog($@) if $@;
 	my $seeya = fork;
 	if (! defined $seeya) {
 		die qq{Could not fork mcp!};
