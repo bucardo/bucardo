@@ -86,6 +86,7 @@ $shorthost =~ s/^(.+?)\..*/$1/;
 our %config;
 our %config_about;
 
+
 sub new {
 
 	## Create a new Bucardo instance. Primarily called by bucardo_ctl
@@ -433,6 +434,46 @@ sub start_mcp {
 	## Prefix all lines in the log file with this TLA
 	$self->{logprefix} = 'MCP';
 
+	## If the pid file already exists, cowardly refuse to run
+	if (-e $self->{pidfile}) {
+		my $extra = '';
+		my $fh;
+		if (open ($fh, '<', $self->{pidfile}) and <$fh> =~ /(\d+)/) {
+			$extra = " (PID=$1)";
+		}
+		my $msg = qq{File "$self->{pidfile}" already exists$extra: cannot run until it is removed};
+		$self->glog($msg);
+		warn $msg;
+		exit 1;
+	}
+
+	## We'll also refuse if the global stop file exists
+	if (-e $self->{stopfile}) {
+		my $msg = qq{Cannot run while this file exists: "$self->{stopfile}"};
+		$self->glog($msg);
+		warn $msg;
+		## Show the first few lines
+		if (open my $fh, '<', $self->{stopfile}) {
+			while (<$fh>) {
+				$msg = "Line $.: $_";
+				$self->glog($msg);
+				warn $msg;
+				last if $. > 10;
+			}
+		}
+		exit 1;
+	}
+
+	## Create a new pid file
+	open my $pid, '>', $self->{pidfile} or die qq{Cannot write to $self->{pidfile}: $!\n};
+	my $now = scalar localtime;
+	print $pid "$$\n$old0\n$now\n";
+	close $pid or warn qq{Could not close "$self->{pidfile}": $!\n};
+	if ($PIDCLEANUP) {
+		(my $COM = $PIDCLEANUP) =~ s/PIDFILE/$self->{pidfile}/g;
+		system($COM);
+	}
+
 	## Create a pretty version of the current $self, with the password elided
 	my $oldpass = $self->{dbpass};
 	$self->{dbpass} = '<not shown>';
@@ -457,46 +498,6 @@ sub start_mcp {
 
 	$self->send_mail({ body => "$body\n\n$dump", subject => $subject });
 
-	## If the pid file already exists, cowardly refuse to run
-	if (-e $self->{pidfile}) {
-		my $extra = '';
-		my $fh;
-		if (open ($fh, '<', $self->{pidfile}) and <$fh> =~ /(\d+)/) {
-			$extra = " (PID=$1)";
-		}
-		my $msg = qq{File "$self->{pidfile}" already exists$extra: cannot run until it is removed};
-		$self->glog($msg);
-		warn $msg;
-		exit;
-	}
-
-	## We'll also refuse if the global stop file exists
-	if (-e $self->{stopfile}) {
-		my $msg = qq{Cannot run while this file exists: "$self->{stopfile}"};
-		$self->glog($msg);
-		warn $msg;
-		## Show the first few lines
-		if (open my $fh, '<', $self->{stopfile}) {
-			while (<$fh>) {
-				$msg = "Line $.: $_";
-				$self->glog($msg);
-				warn $msg;
-				last if $. > 10;
-			}
-		}
-		exit;
-	}
-
-	## Create a new pid file
-	open my $pid, '>', $self->{pidfile} or die qq{Cannot write to $self->{pidfile}: $!\n};
-	my $now = scalar localtime;
-	print $pid "$$\n$old0\n$now\n";
-	close $pid or warn qq{Could not close "$self->{pidfile}": $!\n};
-	if ($PIDCLEANUP) {
-		(my $COM = $PIDCLEANUP) =~ s/PIDFILE/$self->{pidfile}/g;
-		system($COM);
-	}
-
 	## Drop the existing database connection, fork, and get a new one
 	$self->{masterdbh}->disconnect();
 	my $seeya = fork;
@@ -504,13 +505,13 @@ sub start_mcp {
 		die qq{Could not fork mcp!};
 	}
 	if ($seeya) {
-		exit;
+		exit 0;
 	}
 	$self->{masterdbh} = $self->connect_database();
 	$self->{masterdbh}->do('NOTIFY bucardo_boot') or die 'NOTIFY bucardo_boot failed!';
 	$self->{masterdbh}->commit();
 
-
+	## Start outputting some interesting things to the log
 	$self->glog("Starting Bucardo version $VERSION");
 	my $systemtime = time;
 	$SQL = "SELECT extract(epoch FROM now()), now(), current_setting('timezone')";
@@ -518,9 +519,12 @@ sub start_mcp {
 	$self->glog("Local system epoch: $systemtime  Database epoch: $dbtime->[0]");
 	$systemtime = scalar localtime ($systemtime);
 	$self->glog("Local system time: $systemtime  Database time: $dbtime->[1]");
+	## TODO: No hard-coded call to date
 	$systemtime = qx{/bin/date +"%Z"} || '?';
 	chomp $systemtime;
 	$self->glog("Local system timezone: $systemtime  Database timezone: $dbtime->[2]");
+
+	## Again with the password trick
 	$self->{dbpass} = '<not shown>';
 	my $objdump = "Bucardo object:\n";
 	my $maxlen = 5;
@@ -553,11 +557,12 @@ sub start_mcp {
 	## Get all syncs, and check if each can be activated
 	my $mcp;
 
-	## We want to die gracefully
+	## From this point forward, we want to die gracefully
 	$SIG{__DIE__} = sub {
 		my $msg = shift;
 		my $line = (caller)[2];
 		$self->glog("Warning: Killed (line $line): $msg");
+
 		my $body = "MCP $$ was killed: $msg";
 		my $subject = "Bucardo MCP $$ was killed";
 
@@ -567,21 +572,25 @@ sub start_mcp {
 					   or $msg =~ /Restart Bucardo/
 					   ) ? 1 : 0;
 
+		## Sometimes we don't want to respawn at all (e.g. during some tests)
 		if (! $config{mcp_dbproblem_sleep}) {
 			$self->glog('Database problem, but will not attempt a respawn due to mcp_dbproblem_sleep=0');
 			$respawn = 0;
 		}
 
+		## Most times we do want to respawn
 		if ($respawn) {
 			$self->glog("Database problem, will respawn after a short sleep: $config{mcp_dbproblem_sleep}");
 			$body .= " (will attempt respawn in $config{mcp_dbproblem_sleep} seconds)";
 			$subject .= " (respawning)";
 		}
 
+		## Callers can prevent an email being sent by setting this before they die
 		if (! $self->{clean_exit}) {
 			$self->send_mail({ body => $body, subject => $subject });
 		}
 
+		## Kill children, remove pidfile, update tables, etc.
 		$self->cleanup_mcp("Killed: $msg");
 
 		if ($respawn) {
@@ -598,12 +607,16 @@ sub start_mcp {
 			exec $RUNME;
 		}
 
-		exit;
+		## We are not respawning, so we exit
+		exit 1;
+
 	}; ## end SIG{__DIE__}
 
+	## Resets listeners, kills children, loads and activate syncs
 	my $active_syncs = $self->reload_mcp();
 	$self->glog("Active syncs: $active_syncs");
 	if (!$active_syncs) {
+		## Should we allow an option to hang around anyway?
 		$self->glog('No active syncs were found, so we are exiting');
 		exit 1;
 	}
@@ -613,7 +626,7 @@ sub start_mcp {
 		$self->reload_mcp();
 	};
 
-	## Enter ourself into the audit_pid file
+	## Enter ourself into the audit_pid file (if config{audit_pid} is set)
 	my $maindbh = $self->{masterdbh};
 	my $synclist;
 	for (sort keys %{$self->{sync}}) {
@@ -638,370 +651,374 @@ sub start_mcp {
 	## Start the main loop
 	$self->mcp_main();
 
+	##
+	## Everything from this point forward in start_mcp is subroutines
+	##
+
 	sub mcp_main {
 
-	my $self = shift;
+		my $self = shift;
 
-	$self->glog("Entering main loop");
+		$self->glog("Entering main loop");
 
-	my $maindbh = $self->{masterdbh};
-	my $sync = $self->{sync};
+		my $maindbh = $self->{masterdbh};
+		my $sync = $self->{sync};
 
-	my ($n,@notice);
+		my ($n,@notice);
 
-	my $lastpingcheck = 0;
+		my $lastpingcheck = 0;
 
-  MCP: {
+	  MCP: {
 
-		## Bail if the stopfile exists
-		if (-e $self->{stopfile}) {
-			$self->glog(qq{Found stopfile "$self->{stopfile}": exiting\n});
-			my $msg = "Found stopfile";
-			my $reason = get_reason(0);
-			if ($reason) {
-				$msg .= ": $reason";
-			}
-			$self->cleanup_mcp("$msg\n");
-			$self->glog("Exiting");
-			exit;
-		}
-
-		## Every once in a while, make sure our db connection is still there
-		if (time() - $lastpingcheck >= $config{mcp_pingtime}) {
-			$maindbh->ping or die qq{Ping failed for main database!\n}; ## keep message in sync with above
-			for my $db (keys %{$self->{pingdbh}}) {
-				$self->{pingdbh}{$db}->ping
-					or die qq{Ping failed for remote database $db\n};
-			}
-			$lastpingcheck = time();
-		}
-
-		## Gather up and handle any received notices
-		undef @notice;
-		while ($n = $maindbh->func('pg_notifies')) {
-			push @notice, [$n->[0],$n->[1],'main'];
-		}
-		for my $pdb (keys %{$self->{pingdbh}}) {
-			my $pingdbh = $self->{pingdbh}{$pdb};
-			while ($n = $pingdbh->func('pg_notifies')) {
-				push @notice, [$n->[0],$n->[1],"database $pdb"];
-			}
-		}
-		for (@notice) {
-			my ($name,$pid,$db) = @$_;
-			$self->glog(qq{Got notice "$name" from $pid on $db});
-			if ($name eq 'bucardo_mcp_fullstop') {
-				$self->glog("Received full stop notice from PID $pid, leaving");
-				$self->cleanup_mcp("Received stop NOTICE from PID $pid");
-				exit;
+			## Bail if the stopfile exists
+			if (-e $self->{stopfile}) {
+				$self->glog(qq{Found stopfile "$self->{stopfile}": exiting\n});
+				my $msg = "Found stopfile";
+				my $reason = get_reason(0);
+				if ($reason) {
+					$msg .= ": $reason";
+				}
+				$self->cleanup_mcp("$msg\n");
+				$self->glog("Exiting");
+				exit 1;
 			}
 
-## These two are not active for now
+			## Every once in a while, make sure our db connection is still there
+			if (time() - $lastpingcheck >= $config{mcp_pingtime}) {
+				$maindbh->ping or die qq{Ping failed for main database!\n}; ## keep message in sync with above
+				for my $db (keys %{$self->{pingdbh}}) {
+					$self->{pingdbh}{$db}->ping
+						or die qq{Ping failed for remote database $db\n};
+				}
+				$lastpingcheck = time();
+			}
 
-			elsif ($name eq 'bucardo_activate_all_syncs') {
-				for my $syncname (keys %$sync) {
-					my $s = $sync->{$syncname};
-					if (! $s->{mcp_active}) {
-						if ($self->_activate_sync($s)) {
-							$s->{mcp_active} = 1;
+			## Gather up and handle any received notices
+			undef @notice;
+			while ($n = $maindbh->func('pg_notifies')) {
+				push @notice, [$n->[0],$n->[1],'main'];
+			}
+			for my $pdb (keys %{$self->{pingdbh}}) {
+				my $pingdbh = $self->{pingdbh}{$pdb};
+				while ($n = $pingdbh->func('pg_notifies')) {
+					push @notice, [$n->[0],$n->[1],"database $pdb"];
+				}
+			}
+			for (@notice) {
+				my ($name,$pid,$db) = @$_;
+				$self->glog(qq{Got notice "$name" from $pid on $db});
+				if ($name eq 'bucardo_mcp_fullstop') {
+					$self->glog("Received full stop notice from PID $pid, leaving");
+					$self->cleanup_mcp("Received stop NOTICE from PID $pid");
+					exit 0;
+				}
+
+				## These two are not active for now
+
+				elsif ($name eq 'bucardo_activate_all_syncs') {
+					for my $syncname (keys %$sync) {
+						my $s = $sync->{$syncname};
+						if (! $s->{mcp_active}) {
+							if ($self->_activate_sync($s)) {
+								$s->{mcp_active} = 1;
+							}
 						}
 					}
 				}
-			}
-			elsif ($name eq 'bucardo_deactivate_all_syncs') {
-				for my $syncname (keys %$sync) {
-					my $s = $sync->{$syncname};
-					if ($s->{mcp_active}) {
-						if ($self->_deactivate_sync($s)) {
-							$s->{mcp_active} = 0;
+				elsif ($name eq 'bucardo_deactivate_all_syncs') {
+					for my $syncname (keys %$sync) {
+						my $s = $sync->{$syncname};
+						if ($s->{mcp_active}) {
+							if ($self->_deactivate_sync($s)) {
+								$s->{mcp_active} = 0;
+							}
 						}
 					}
 				}
-			}
 
-			elsif ($name eq 'bucardo_reload_config') {
-				$self->glog("Reloading configuration table");
-				$self->reload_config_database();
-				$self->reload_mcp();
+				elsif ($name eq 'bucardo_reload_config') {
+					$self->glog("Reloading configuration table");
+					$self->reload_config_database();
+					$self->reload_mcp();
 
-				## Let anyone listening know we are done
-				$self->glog("Sent notice bucardo_reload_config_finished");
-				$maindbh->do('NOTIFY bucardo_reload_config_finished') or warn 'NOTIFY failed';
-				$maindbh->commit();
-			}
-			elsif ($name eq 'bucardo_mcp_reload') {
-				$self->glog("Reloading MCP");
-				$self->reload_mcp();
-
-				## Let anyone listening know the sync is now ready
-				$self->glog("Sent notice bucardo_reloaded_mcp");
-				$maindbh->do('NOTIFY bucardo_reloaded_mcp') or warn 'NOTIFY failed';
-				$maindbh->commit();
-			}
-			elsif ($name eq 'bucardo_mcp_ping') {
-				$self->glog("Got a ping from PID $pid, issuing pong");
-				$maindbh->do('NOTIFY bucardo_mcp_pong') or warn 'NOTIFY failed';
-				$maindbh->commit();
-			}
-			elsif ($name eq 'bucardo_log_message') {
-				$self->glog("Checking for log messages");
-				$SQL = 'SELECT msg,cdate FROM bucardo_log_message ORDER BY cdate';
-				$sth = $maindbh->prepare_cached($SQL);
-				$count = $sth->execute();
-				if ($count ne '0E0') {
-					for my $row (@{$sth->fetchall_arrayref()}) {
-						$self->glog("MESSAGE ($row->[1]): $row->[0]");
-					}
-					$maindbh->do('TRUNCATE TABLE bucardo_log_message');
+					## Let anyone listening know we are done
+					$self->glog("Sent notice bucardo_reload_config_finished");
+					$maindbh->do('NOTIFY bucardo_reload_config_finished') or warn 'NOTIFY failed';
 					$maindbh->commit();
 				}
-			}
-			elsif ($name =~ /^bucardo_reload_sync_(.+)/o) {
-				my $syncname = $1;
-				if (! exists $sync->{$syncname}) {
-					$self->glog(qq{Invalid sync reload: "$syncname"});
-				}
-				elsif (!$sync->{$syncname}{mcp_active}) {
-					$self->glog(qq{Sync "$syncname" is not active});
-				}
-				else {
-					$self->glog("Deactivating sync $syncname");
-					$self->_deactivate_sync($sync->{$syncname});
+				elsif ($name eq 'bucardo_mcp_reload') {
+					$self->glog("Reloading MCP");
+					$self->reload_mcp();
 
-					## Reread from the database
-					$SQL = qq{
+					## Let anyone listening know the sync is now ready
+					$self->glog("Sent notice bucardo_reloaded_mcp");
+					$maindbh->do('NOTIFY bucardo_reloaded_mcp') or warn 'NOTIFY failed';
+					$maindbh->commit();
+				}
+				elsif ($name eq 'bucardo_mcp_ping') {
+					$self->glog("Got a ping from PID $pid, issuing pong");
+					$maindbh->do('NOTIFY bucardo_mcp_pong') or warn 'NOTIFY failed';
+					$maindbh->commit();
+				}
+				elsif ($name eq 'bucardo_log_message') {
+					$self->glog("Checking for log messages");
+					$SQL = 'SELECT msg,cdate FROM bucardo_log_message ORDER BY cdate';
+					$sth = $maindbh->prepare_cached($SQL);
+					$count = $sth->execute();
+					if ($count ne '0E0') {
+						for my $row (@{$sth->fetchall_arrayref()}) {
+							$self->glog("MESSAGE ($row->[1]): $row->[0]");
+						}
+						$maindbh->do('TRUNCATE TABLE bucardo_log_message');
+						$maindbh->commit();
+					}
+				}
+				elsif ($name =~ /^bucardo_reload_sync_(.+)/o) {
+					my $syncname = $1;
+					if (! exists $sync->{$syncname}) {
+						$self->glog(qq{Invalid sync reload: "$syncname"});
+					}
+					elsif (!$sync->{$syncname}{mcp_active}) {
+						$self->glog(qq{Sync "$syncname" is not active});
+					}
+					else {
+						$self->glog("Deactivating sync $syncname");
+						$self->_deactivate_sync($sync->{$syncname});
+
+						## Reread from the database
+						$SQL = qq{
                         SELECT *, COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs
                         FROM bucardo.sync
                         WHERE name = ?
-                    };
-					$sth = $maindbh->prepare($SQL);
-					$count = $sth->execute($syncname);
-					if ($count eq '0E0') {
-						$sth->finish();
-						$self->glog(qq{Warning! Cannot reload sync "$syncname" : no longer in the database!\n});
+                        };
+						$sth = $maindbh->prepare($SQL);
+						$count = $sth->execute($syncname);
+						if ($count eq '0E0') {
+							$sth->finish();
+							$self->glog(qq{Warning! Cannot reload sync "$syncname" : no longer in the database!\n});
+							$maindbh->commit();
+							next; ## Handle the next notice
+						}
+
+						## TODO: Actually do a full disconnect and redo all the items in here
+
+						my $info = $sth->fetchall_arrayref({})->[0];
 						$maindbh->commit();
-						next; ## Handle the next notice
+
+						## For now, just allow a few things to be changed "on the fly"
+						for my $val (qw/checksecs stayalive limitdbs do_listen txnmode deletemethod status ping
+										analyze_after_copy targetgroup targetdb usecustomselect/) {
+							$sync->{$syncname}{$val} = $self->{sync}{$syncname}{$val} = $info->{$val};
+						}
+						## TODO: Fix those double assignments
+
+						## Empty all of our custom code arrays
+						for my $key (grep { /^code_/ } sort keys %{$self->{sync}{$syncname}}) {
+							$sync->{$syncname}{$key} = $self->{sync}{$syncname}{$key} = [];
+						}
+
+						sleep 2; ## TODO: Actually wait somehow, perhaps fork
+
+						$self->glog("Reactivating sync $syncname");
+						$sync->{$syncname}{mcp_active} = 0;
+						if (!$self->_activate_sync($sync->{$syncname})) {
+							$self->glog(qq{Warning! Reactivation of sync "$syncname" failed});
+						}
+						else {
+						## Let anyone listening know the sync is now ready
+							$self->glog("Sent notice bucardo_reloaded_sync_$syncname");
+							$maindbh->do(qq{NOTIFY "bucardo_reloaded_sync_$syncname"}) or warn 'NOTIFY failed';
+						}
+						$maindbh->commit();
 					}
-
-					## TODO: Actually do a full disconnect and redo all the items in here
-
-					my $info = $sth->fetchall_arrayref({})->[0];
-					$maindbh->commit();
-
-					## For now, just allow a few things to be changed "on the fly"
-					for my $val (qw/checksecs stayalive limitdbs do_listen txnmode deletemethod status ping
-									analyze_after_copy targetgroup targetdb usecustomselect/) {
-						$sync->{$syncname}{$val} = $self->{sync}{$syncname}{$val} = $info->{$val};
+				}
+				elsif ($name =~ /^bucardo_activate_sync_(.+)/o) {
+					my $syncname = $1;
+					if (! exists $sync->{$syncname}) {
+						$self->glog(qq{Invalid sync activation: "$syncname"});
 					}
-					## TODO: Fix those double assignments
-
-					## Empty all of our custom code arrays
-					for my $key (grep { /^code_/ } sort keys %{$self->{sync}{$syncname}}) {
-						$sync->{$syncname}{$key} = $self->{sync}{$syncname}{$key} = [];
-					}
-
-					sleep 2; ## TODO: Actually wait somehow, perhaps fork
-
-					$self->glog("Reactivating sync $syncname");
-					$sync->{$syncname}{mcp_active} = 0;
-					if (!$self->_activate_sync($sync->{$syncname})) {
-						$self->glog(qq{Warning! Reactivation of sync "$syncname" failed});
+					elsif ($sync->{$syncname}{mcp_active}) {
+						$self->glog(qq{Sync "$syncname" is already activated});
+						$maindbh->do(qq{NOTIFY "bucardo_activated_sync_$syncname"}) or warn 'NOTIFY failed';
+						$maindbh->commit();
 					}
 					else {
-						## Let anyone listening know the sync is now ready
-						$self->glog("Sent notice bucardo_reloaded_sync_$syncname");
-						$maindbh->do(qq{NOTIFY "bucardo_reloaded_sync_$syncname"}) or warn 'NOTIFY failed';
-					}
-					$maindbh->commit();
-				}
-			}
-			elsif ($name =~ /^bucardo_activate_sync_(.+)/o) {
-				my $syncname = $1;
-				if (! exists $sync->{$syncname}) {
-					$self->glog(qq{Invalid sync activation: "$syncname"});
-				}
-				elsif ($sync->{$syncname}{mcp_active}) {
-					$self->glog(qq{Sync "$syncname" is already activated});
-					$maindbh->do(qq{NOTIFY "bucardo_activated_sync_$syncname"}) or warn 'NOTIFY failed';
-					$maindbh->commit();
-				}
-				else {
-					if ($self->_activate_sync($sync->{$syncname})) {
-						$sync->{$syncname}{mcp_active} = 1;
+						if ($self->_activate_sync($sync->{$syncname})) {
+							$sync->{$syncname}{mcp_active} = 1;
+						}
 					}
 				}
-			}
-			elsif ($name =~ /^bucardo_deactivate_sync_(.+)/o) {
-				my $syncname = $1;
-				if (! exists $sync->{$syncname}) {
-					$self->glog(qq{Invalid sync "$syncname"});
-				}
-				elsif (! $sync->{$syncname}{mcp_active}) {
-					$self->glog(qq{Sync "$syncname" is already deactivated});
-					$maindbh->do(qq{NOTIFY "bucardo_deactivated_sync_$syncname"}) or warn 'NOTIFY failed';
-					$maindbh->commit();
-				}
-				else {
-					if ($self->_deactivate_sync($sync->{$syncname})) {
-						$sync->{$syncname}{mcp_active} = 0;
+				elsif ($name =~ /^bucardo_deactivate_sync_(.+)/o) {
+					my $syncname = $1;
+					if (! exists $sync->{$syncname}) {
+						$self->glog(qq{Invalid sync "$syncname"});
+					}
+					elsif (! $sync->{$syncname}{mcp_active}) {
+						$self->glog(qq{Sync "$syncname" is already deactivated});
+						$maindbh->do(qq{NOTIFY "bucardo_deactivated_sync_$syncname"}) or warn 'NOTIFY failed';
+						$maindbh->commit();
+					}
+					else {
+						if ($self->_deactivate_sync($sync->{$syncname})) {
+							$sync->{$syncname}{mcp_active} = 0;
+						}
 					}
 				}
-			}
-			elsif ($name =~ /^bucardo_kick_sync_(.+)/o) {
-				my $syncname = $1;
-				my $msg = '';
-				if (! exists $self->{sync}{$syncname}) {
-					$msg = qq{ERROR: Unknown sync to be kicked: "$syncname"\n};
+				elsif ($name =~ /^bucardo_kick_sync_(.+)/o) {
+					my $syncname = $1;
+					my $msg = '';
+					if (! exists $self->{sync}{$syncname}) {
+						$msg = qq{ERROR: Unknown sync to be kicked: "$syncname"\n};
+					}
+					elsif (! $self->{sync}{$syncname}{mcp_active}) {
+						$msg = qq{Cannot kick inactive sync "$syncname"};
+					}
+					else {
+						$sync->{$syncname}{mcp_kicked} = 1;
+					}
+
+					if ($msg) {
+						$self->glog($msg);
+						## Don't want people to wait around for a syncdone...
+						$maindbh->do(qq{NOTIFY "bucardo_syncerror_$syncname"}) or warn 'NOTIFY failed';
+						$maindbh->commit();
+					}
 				}
-				elsif (! $self->{sync}{$syncname}{mcp_active}) {
-					$msg = qq{Cannot kick inactive sync "$syncname"};
+			} ## end each notice
+
+			$maindbh->commit();
+
+			## Just in case:
+			$sync = $self->{sync};
+
+			## Startup controllers for eligible syncs
+		  SYNC: for my $syncname (keys %$sync) {
+				## Skip if not activated
+				next unless $sync->{$syncname}{mcp_active};
+
+				my $s = $sync->{$syncname};
+
+				## If this is not a stayalive, AND is not being kicked, skip it
+				next if ! $s->{stayalive} and ! $s->{mcp_kicked};
+
+				## If this is a previous stayalive, see if it is active, kick if needed
+				if ($s->{stayalive} and $s->{controller}) {
+					##$self->glog("Checking on previously started controller $s->{controller}");
+					$count = kill 0, $s->{controller};
+					if (! $count) {
+						$self->glog("Could not find controller $s->{controller}, will create a new one. Kicked is $s->{mcp_kicked}");
+						$s->{controller} = 0;
+					}
+					else { ## Presume it is alive and listening to us, kick if needed
+						if ($s->{mcp_kicked}) {
+							$self->glog(qq{Sent a kick request to controller $s->{controller} for sync "$syncname"});
+							my $notify = "bucardo_ctl_kick_$syncname";
+							$maindbh->do(qq{NOTIFY "$notify"}) or die "NOTIFY $notify failed";
+							$maindbh->commit();
+							$s->{mcp_kicked} = 0;
+						}
+						next SYNC;
+					}
 				}
-				else {
-					$sync->{$syncname}{mcp_kicked} = 1;
+
+				## At this point, we are either:
+				## 1. Not a stayalive
+				## 2. A stayalive that has not been run yet
+				## 3. A stayalive that has been run but is not responding
+
+				## Make sure there is nothing out there already running
+				my $syncname = $s->{name};
+				my $pidfile = "$config{piddir}/bucardo_sync_$syncname.pid";
+				if ($s->{mcp_changed}) {
+					$self->glog(qq{Checking for existing controllers for sync "$syncname"});
 				}
-
-				if ($msg) {
-					$self->glog($msg);
-					## Don't want people to wait around for a syncdone...
-					$maindbh->do(qq{NOTIFY "bucardo_syncerror_$syncname"}) or warn 'NOTIFY failed';
-					$maindbh->commit();
-				}
-
-			}
-
-		} ## end each notice
-
-		$maindbh->commit();
-
-		## Just in case:
-		$sync = $self->{sync};
-
-		## Startup controllers for eligible syncs
-	  SYNC: for my $syncname (keys %$sync) {
-			## Skip if not activated
-			next unless $sync->{$syncname}{mcp_active};
-
-			my $s = $sync->{$syncname};
-
-			## If this is not a stayalive, AND is not being kicked, skip it
-			next if ! $s->{stayalive} and ! $s->{mcp_kicked};
-
-			## If this is a previous stayalive, see if it is active, kick if needed
-			if ($s->{stayalive} and $s->{controller}) {
-				##$self->glog("Checking on previously started controller $s->{controller}");
-				$count = kill 0, $s->{controller};
-				if (! $count) {
-					$self->glog("Could not find controller $s->{controller}, will create a new one. Kicked is $s->{mcp_kicked}");
-					$s->{controller} = 0;
-				}
-				else { ## Presume it is alive and listening to us, kick if needed
-					if ($s->{mcp_kicked}) {
-						$self->glog(qq{Sent a kick request to controller $s->{controller} for sync "$syncname"});
+				if (-e $pidfile and ! $s->{mcp_problemchild}) {
+					$self->glog("File exists staylive=$s->{stayalive} controller=$s->{controller}");
+					my $pid;
+					if (!open $pid, '<', $pidfile) {
+						$self->glog(qq{ERROR: Could not open file "$pidfile": $!});
+						$s->{mcp_problemchild} = 1;
+						next SYNC;
+					}
+					my $oldpid = <$pid>;
+					chomp $oldpid;
+					close $pid or warn qq{Could not close "$pidfile": $!\n};
+					## We don't need to know about this every time
+					if ($s->{mcp_changed}) {
+						$self->glog(qq{Found previous controller $oldpid from "$pidfile"});
+					}
+					if ($oldpid !~ /^\d+$/) {
+						$self->glog(qq{ERROR: Invalid pid found inside of file "$pidfile" ($oldpid)});
+						$s->{mcp_changed} = 0;
+						$s->{mcp_problemchild} = 2;
+						next SYNC;
+					}
+					## Is it still alive?
+					$count = kill 0, $oldpid;
+					if ($count==1) {
+						if ($s->{mcp_changed}) {
+							$self->glog(qq{Skipping sync "$syncname", seems to be already handled by $oldpid});
+							## Make sure this kid is still running
+							$count = kill 0, $oldpid;
+							if (!$count) {
+								$self->glog(qq{Warning! PID $oldpid was not found. Removing PID file});
+								unlink $pidfile;
+								$s->{mcp_problemchild} = 3;
+								next SYNC;
+							}
+							$s->{mcp_changed} = 0;
+						}
+						if (! $s->{stayalive}) {
+							$self->glog(qq{Non stayalive sync "$syncname" still active - sending it a notify});
+						}
 						my $notify = "bucardo_ctl_kick_$syncname";
 						$maindbh->do(qq{NOTIFY "$notify"}) or die "NOTIFY $notify failed";
 						$maindbh->commit();
 						$s->{mcp_kicked} = 0;
+						next SYNC;
 					}
-					next SYNC;
-				}
-			}
+					$self->glog("No active pid $oldpid found. Killing just in case, and removing file");
+					kill $signumber{SIGTERM} => $oldpid;
+					unlink $pidfile;
+					$s->{mcp_changed} = 1;
+				} ## end if pidfile found for this sync
 
-			## At this point, we are either:
-			## 1. Not a stayalive
-			## 2. A stayalive that has not been run yet
-			## 3. A stayalive that has been run but is not responding
+				## We may have found an error in the pid file detection the first time through
+				$s->{mcp_problemchild} = 0;
 
-			## Make sure there is nothing out there already running
-			my $syncname = $s->{name};
-			my $pidfile = "$config{piddir}/bucardo_sync_$syncname.pid";
-			if ($s->{mcp_changed}) {
-				$self->glog(qq{Checking for existing controllers for sync "$syncname"});
-			}
-			if (-e $pidfile and ! $s->{mcp_problemchild}) {
-				$self->glog("File exists staylive=$s->{stayalive} controller=$s->{controller}");
-				my $pid;
-				if (!open $pid, '<', $pidfile) {
-					$self->glog(qq{ERROR: Could not open file "$pidfile": $!});
-					$s->{mcp_problemchild} = 1;
-					next SYNC;
+				## Fork off the controller, then clean up the $s hash
+				$self->{masterdbh}->commit();
+				my $controller = fork;
+				if (!defined $controller) {
+					die qq{ERROR: Fork for controller failed!\n};
 				}
-				my $oldpid = <$pid>;
-				chomp $oldpid;
-				close $pid or warn qq{Could not close "$pidfile": $!\n};
-				## We don't need to know about this every time
-				if ($s->{mcp_changed}) {
-					$self->glog(qq{Found previous controller $oldpid from "$pidfile"});
-				}
-				if ($oldpid !~ /^\d+$/) {
-					$self->glog(qq{ERROR: Invalid pid found inside of file "$pidfile" ($oldpid)});
-					$s->{mcp_changed} = 0;
-					$s->{mcp_problemchild} = 2;
-					next SYNC;
-				}
-				## Is it still alive?
-				$count = kill 0, $oldpid;
-				if ($count==1) {
-					if ($s->{mcp_changed}) {
-						$self->glog(qq{Skipping sync "$syncname", seems to be already handled by $oldpid});
-						## Make sure this kid is still running
-						$count = kill 0, $oldpid;
-						if (!$count) {
-							$self->glog(qq{Warning! PID $oldpid was not found. Removing PID file});
-							unlink $pidfile;
-							$s->{mcp_problemchild} = 3;
-							next SYNC;
-						}
-						$s->{mcp_changed} = 0;
+
+				if (!$controller) {
+					sleep 0.05;
+					$self->{masterdbh}->{InactiveDestroy} = 1;
+					$self->{masterdbh} = 0;
+					for my $db (values %{$self->{pingdbh}}) {
+						$db->{InactiveDestroy} = 1;
 					}
-					if (! $s->{stayalive}) {
-						$self->glog(qq{Non stayalive sync "$syncname" still active - sending it a notify});
-					}
-					my $notify = "bucardo_ctl_kick_$syncname";
-					$maindbh->do(qq{NOTIFY "$notify"}) or die "NOTIFY $notify failed";
-					$maindbh->commit();
-					$s->{mcp_kicked} = 0;
-					next SYNC;
+					$self->start_controller($s);
+					exit 0;
 				}
-				$self->glog("No active pid $oldpid found. Killing just in case, and removing file");
-				kill $signumber{SIGTERM} => $oldpid;
-				unlink $pidfile;
+
+				$self->glog(qq{Created controller $controller for sync "$syncname". Kick is $s->{mcp_kicked}});
+				$s->{controller} = $controller;
+				$s->{mcp_kicked} = 0;
 				$s->{mcp_changed} = 1;
-			} ## end if pidfile found for this sync
 
-			## We may have found an error in the pid file detection the first time through
-			$s->{mcp_problemchild} = 0;
+			} ## end each sync
 
-			## Fork off the controller, then clean up the $s hash
-			$self->{masterdbh}->commit();
-			my $controller = fork;
-			if (!defined $controller) {
-				die qq{ERROR: Fork for controller failed!\n};
-			}
+			sleep $config{mcp_loop_sleep};
+			redo MCP;
+		} ## end of MCP loop
 
-			if (!$controller) {
-				sleep 0.05;
-				$self->{masterdbh}->{InactiveDestroy} = 1;
-				$self->{masterdbh} = 0;
-				for my $db (values %{$self->{pingdbh}}) {
-					$db->{InactiveDestroy} = 1;
-				}
-				$self->start_controller($s);
-				exit;
-			}
+		return;
 
-			$self->glog(qq{Created controller $controller for sync "$syncname". Kick is $s->{mcp_kicked}});
-			$s->{controller} = $controller;
-			$s->{mcp_kicked} = 0;
-			$s->{mcp_changed} = 1;
+	} ## end of mcp_main
 
-		} ## end each sync
-
-		sleep $config{mcp_loop_sleep};
-		redo MCP;
-	}
-
-	return;
-	} ## end of MCP loop	
 
 	sub reload_config_database {
 
@@ -1028,7 +1045,10 @@ sub start_mcp {
 
 	} ## end of reload_config_database
 
+
 	sub reload_mcp {
+
+		## Reset listeners, kill children, load and activate syncs
 
 		my $self = shift;
 
@@ -1132,6 +1152,7 @@ sub start_mcp {
 		return $maindbh->commit();
 
 	} ## end of reset_mcp_listeners
+
 
 	sub _activate_sync {
 
@@ -1440,7 +1461,7 @@ sub start_mcp {
 					if ($name eq 'bucardo_mcp_fullstop') {
 						$self->glog("Received full stop notice from PID $pid, leaving");
 						$self->cleanup_mcp("Received stop NOTICE from PID $pid");
-						exit;
+						exit 0;
 					}
 					if ($name eq 'bucardo_mcp_ping') {
 						$self->glog("Got a ping from PID $pid, issuing pong");
@@ -1902,7 +1923,7 @@ sub start_controller {
 			}
 		}
 		$self->cleanup_controller($msg);
-		exit;
+		exit 0;
 	};
 
 	## Connect to the master database
@@ -2331,7 +2352,7 @@ sub start_controller {
 						## If we are not a stayalive, this is a good time to leave
 						if (! $stayalive and ! $kidsalive) {
 							$self->glog("Children are done, so leaving");
-							exit;
+							exit 0;
 						}
 
 						## If we ran an after_sync and grabbed rows, reset some things
@@ -2440,7 +2461,9 @@ sub start_controller {
 			}
 		}
 
+
 		sub run_ctl_custom_code {
+
 			my $c = shift;
 			my $strictness = shift || '';
 
@@ -2614,6 +2637,7 @@ sub start_controller {
 
 	} ## end CONTROLLER
 
+
 	sub create_newkid {
 
 		my ($self,$sync,$kid) = @_;
@@ -2637,7 +2661,7 @@ sub start_controller {
 			$self->{life} = ++$kid->{life};
 			$self->start_kid($sync,$kid->{dbname});
 			$self->{clean_exit} = 1;
-			exit;
+			exit 0;
 		}
 
 		$self->glog(qq{Created new kid $newkid for sync "$self->{syncname}" to database "$kid->{dbname}"});
@@ -2654,7 +2678,6 @@ sub start_controller {
 	die "How did we reach outside of the main controller loop?";
 
 } ## end of start_controller
-
 
 
 sub cleanup_controller {
@@ -2724,6 +2747,7 @@ sub cleanup_controller {
 	return;
 
 } ## end of cleanup_controller
+
 
 sub get_deadlock_details {
 
@@ -3360,6 +3384,7 @@ sub start_kid {
 		$darg->{dbh} = $targetdbh;
 		$safe_targetdbh = DBIx::Safe->new($darg);
 	}
+
 
 	sub run_kid_custom_code {
 		my $c = shift;
@@ -4825,7 +4850,7 @@ sub start_kid {
 
 	$self->glog("Kid exiting");
 	$self->{clean_exit} = 1;
-	exit;
+	exit 0;
 
 } ## end of start_kid
 
