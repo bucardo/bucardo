@@ -24,8 +24,9 @@ $Data::Dumper::Varname = 'BUCARDO';
 $Data::Dumper::Indent = 1;
 use Getopt::Long;
 use Config;
+## We can consider using require/eval magic to make Sys::Syslog optional
 use Sys::Syslog;
-use DBIx::Safe '1.2.4';
+use DBIx::Safe '1.2.4'; ## e.g. yum install perl-DBIx-Safe
 
 use vars qw($SQL %SQL $sth %sth $count $info);
 
@@ -36,20 +37,13 @@ for (split(' ', $Config{sig_name})) {
 	$signumber{$_} = $x++;
 }
 
+## Do not buffer output to stdout or stderr
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
 
-my $DEBUG     = 0;
-my $VERBOSE   = 1;
-my $QUIET     = 0;
-my $HELP      = 0;
-
-## Where our debug files live
-my $DEBUGDIR = './tmp';
-
 ## Specify exactly what database handles are allowed to do within custom code
 
-## Strict: inside the main txn
+## Here, 'strict' is inside the main transaction Bucardo uses to make changes
 my %dbix = (
 	source => {
 		strict => {
@@ -88,9 +82,6 @@ my $PIDCLEANUP = ''; ## "/bin/chgrp bucardo PIDFILE";
 ## Save a copy of emails to a file? (override with $ENV{BUCARDO_SENDMAIL_FILE})
 my $SENDMAIL_FILE = ""; ## "./bucardo.sendmail.log";
 
-## How long to sleep when adding back an aborted sync?
-my $KIDABORTSLEEP = 1.0;
-
 my $hostname = hostname;
 my $shorthost = $hostname;
 $shorthost =~ s/^(.+?)\..*/$1/;
@@ -108,7 +99,7 @@ sub new {
 		ppid         => $$,
 		verbose      => 0,
 		debugsyslog  => 1,
-		debugdir     => $DEBUGDIR,
+		debugdir     => './tmp',
 		debugfile    => 0,
 		debugfilesep => 0,
 		debugname    => '',
@@ -122,40 +113,56 @@ sub new {
 		version      => $VERSION,
 	};
 
+	## Add any passed in parameters to our hash
 	for (keys %$params) {
 		$self->{$_} = $params->{$_};
 	}
 
 	bless $self, $class;
 
-	if ($self->{debugdir}) {
-		$DEBUGDIR = $self->{debugdir};
-	}
-
 	if ($self->{cleandebugs}) {
-		system(qq{/bin/rm -f $DEBUGDIR/log.bucardo.*});
+		if (opendir my $dh, $self->{debugdir}) {
+			for my $file (grep { /^log\.bucardo\./ } readdir $dh) {
+				unlink "$self->{debugdir}/$file";
+			}
+			closedir $dh;
+		}
 	}
-	$self->{logprefix} = "BC! ";
-	$SIG{CHLD} = 'IGNORE'; ## Zombie stopper
 
+	## Set the "pre-MCP" three character log prefix. After this, it will all be MCP, CTL, or KID
+	$self->{logprefix} = "BC! ";
+
+	## Zombie stopper
+	$SIG{CHLD} = 'IGNORE';
+
+
+	## Basically, dryrun does a rollback instead of a commit at the final sync step
+	## This is not 100% safe, if (for example) you have custom code that reaches
+	## outside the database to do things.
 	if (exists $ENV{BUCARDO_DRYRUN}) {
 		$self->{dryrun} = 1;
+	}
+	if ($self->{dryrun}) {
 		print STDERR "** DRYRUN - Syncs will not be commited! **\n";
 	}
 
+	## This gets appended to the process description
 	if ($self->{extraname}) {
 		$self->{extraname} = " ($self->{extraname})";
 	}
 
+	## Connect to the main Bucardo database
 	$self->{masterdbh} = $self->connect_database();
 
 	## Load in the configuration information
 	$self->reload_config_database();
 
+	## If using Sys::Syslog, open with the current facility
 	if ($self->{debugsyslog}) {
-		openlog 'Bucardo', "pid nowait", $config{syslog_facility};
+		openlog 'Bucardo', 'pid nowait', $config{syslog_facility};
 	}
 
+	## Setup our standard files to store PID and to signal stopping all processes
 	$self->{pidfile} = "$config{piddir}/$config{pidfile}";
 	$self->{stopfile} = "$config{piddir}/$config{stopfile}";
 
@@ -312,7 +319,7 @@ sub glog {
 		syslog "info", $msg;
 	}
 	if ($self->{debugfile}) {
-		my $file = "$DEBUGDIR/log.bucardo";
+		my $file = "$self->{debugdir}/log.bucardo";
 		if ($self->{debugname}) {
 			$file .= ".$self->{debugname}";
 		}
@@ -2546,7 +2553,7 @@ sub start_controller {
 						$self->glog(qq{Re-adding sync to q table for database "$atarget"});
 						$count = $sth{qinsert}->execute($syncname,$self->{ppid},$sourcedb,$atarget,$synctype);
 						$maindbh->commit();
-						sleep $KIDABORTSLEEP;
+						sleep $config{kid_abort_sleep};
 						$self->glog("Creating kid to handle resurrected q row");
 						my $kid = $targetdb->{$atarget};
 						$kid->{dbname} = $atarget;
