@@ -132,7 +132,7 @@ sub new {
 	}
 
 	## Set the "pre-MCP" three character log prefix. After this, it will all be MCP, CTL, or KID
-	$self->{logprefix} = "BC! ";
+	$self->{logprefix} = 'BC!';
 
 	## Zombie stopper
 	$SIG{CHLD} = 'IGNORE';
@@ -159,7 +159,7 @@ sub new {
 	## Load in the configuration information
 	$self->reload_config_database();
 
-	## If using Sys::Syslog, open with the current facility
+	## If using syslog, open with the current facility
 	if ($self->{debugsyslog}) {
 		openlog 'Bucardo', 'pid nowait', $config{syslog_facility};
 	}
@@ -175,23 +175,31 @@ sub new {
 
 sub glog {
 
+	## Reformat and log internal messages to the correct place
+
+	## Quick shortcut if verbose if off (not recommended!)
 	return if ! $_[0]->{verbose};
+
+
 	my ($self,$msg,@extra) = @_;
 	chomp $msg;
 
+	## Any extra arguments means $msg is a printf-style string
 	if (@extra) {
 		$msg = sprintf $msg, @extra;
 	}
 
-	my $prefix = $self->{logprefix} || '';
-	$msg = "$prefix$msg";
+	## We should always have a prefix, either BC!, MCP, CTL, or KID
+	my $prefix = $self->{logprefix} || '???';
+	$msg = "$prefix $msg";
 
+	## We may also show other optional things: PID, timestamp, line we came from
 	my $header = sprintf '%s%s%s',
 		$config{log_showpid}  ? "($$) " : '',
-		$config{log_showtime}==1 ? ('['.time.'] ')
-			: $config{log_showtime}==2 ? ('['.scalar gmtime(time).'] ')
-				: $config{log_showtime}==3 ? ('['.scalar localtime(time).'] ')
-					: '',
+		1 == $config{log_showtime}       ? ('['.time.'] ')
+			: 2 == $config{log_showtime} ? ('['.scalar gmtime(time).'] ')
+			: 3 == $config{log_showtime} ? ('['.scalar localtime(time).'] ')
+		    : '',
 		$config{log_showline} ? (sprintf '#%04d ', (caller)[2]) : '';
 
 	## Route/tee serious errors to another file
@@ -199,35 +207,45 @@ sub glog {
 		## TODO
 	}
 
+	## If using syslog, send at the info level
 	if ($self->{debugsyslog}) {
-		syslog "info", $msg;
+		syslog 'info', $msg;
 	}
+
+	## If using a debug file, append to it
 	if ($self->{debugfile}) {
-		my $file = "$self->{debugdir}/log.bucardo";
-		if ($self->{debugname}) {
-			$file .= ".$self->{debugname}";
+		if (!exists $self->{debugfilename}) {
+			$self->{debugfilename} = "$self->{debugdir}/log.bucardo";
+			if ($self->{debugname}) {
+				$self->{debugfilename} .= ".$self->{debugname}";
+			}
 		}
+		## If we are writing each process to a separate file, append the PID to the file name
+		my $file = $self->{debugfilename};
 		if ($self->{debugfilesep}) {
-			$file .= ".$prefix.$$";
+			$file = $self->{debugfilename} . ".$prefix.$$";
 		}
-		$file =~ s/ //g;
-		open my $log, '>>', $file or die qq{Could not create "$file": $!\n};
-		if (!$self->{debugfilesep}) {
-			print $log "($$) ";
+
+		## If this file has not been opened yet, do so
+		if (!exists $self->{debugfilehandle}{$file}) {
+			open $self->{debugfilehandle}{$file}, '>>', $file or die qq{Could not append to "$file": $!\n};
 		}
-		printf $log "%s%s%s\n",
-			$config{log_showtime}==1 ? ('['.time.'] ')
-				: $config{log_showtime}==2 ? ('['.scalar gmtime(time).'] ')
-					: $config{log_showtime}==3 ? ('['.scalar localtime(time).'] ')
-						: '',
-			$config{log_showline} ? (sprintf '#%04d ', (caller)[2]) : '',
-			$msg;
-		close $log or warn qq{Could not close "$file": $!\n};
+
+		## If not writing to separate files, prepend the PID to the message
+		if (!$self->{debugfilesep} and !$config{log_showpid}) {
+			print {$self->{debugfilehandle}{$file}} "($$) ";
+		}
+
+		printf {$self->{debugfilehandle}{$file}} "$header $msg\n";
 	}
+
 	$self->{debugstderr} and print STDERR "$header $msg\n";
+
 	$self->{debugstdout} and print STDOUT "$header $msg\n";
+
 	return;
-}
+
+} ## end of glog
 
 
 sub clog {
@@ -495,7 +513,7 @@ sub start_mcp {
 	my ($self,$arg) = @_;
 	my $old0 = $0;
 	$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname}";
-	$self->{logprefix} = "MCP ";
+	$self->{logprefix} = 'MCP';
 
 	my $oldpass = $self->{dbpass};
 	$self->{dbpass} = '<not shown>';
@@ -1872,7 +1890,7 @@ sub start_controller {
 	$self->{kidpid} = {};
 
 	$0 = qq{Bucardo Controller.$self->{extraname} Sync "$syncname" ($synctype) for source "$source"};
-	$self->{logprefix} = "CTL ";
+	$self->{logprefix} = 'CTL';
 
 	## Upgrade any specific sync configs to real configs
 	if (exists $config{sync}{$syncname}) {
@@ -2845,7 +2863,7 @@ sub start_kid {
 
 	## Adjust the process name, start logging
 	$0 = qq{Bucardo Kid.$self->{extraname} Sync "$syncname": ($synctype) "$sourcedb" -> "$targetdb"};
-	$self->{logprefix} = 'KID ';
+	$self->{logprefix} = 'KID';
 	$self->glog(qq{New kid, syncs "$sourcedb" to "$targetdb" for sync "$syncname" alive=$kidsalive Parent=$self->{parent}});
 
 	## Establish these early so the DIE block can use them
