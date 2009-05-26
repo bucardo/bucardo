@@ -259,11 +259,12 @@ sub glog {
 
 sub clog {
 
-	## Write something to the conflict log file at config{log_conflict_file}
+	## Log a message to the conflict log file at config{log_conflict_file}
 
 	my ($self,$msg,@extra) = @_;
 	chomp $msg;
 
+	## Extra args indicates we are using printf style $msg string
 	if (@extra) {
 		$msg = sprintf $msg, @extra;
 	}
@@ -276,9 +277,11 @@ sub clog {
 	}
 	print $clog "$msg\n";
 	close $clog or warn qq{Could not close "$cfile": $!\n};
+
 	return;
 
-}
+} ## end of clog
+
 
 sub get_config {
 
