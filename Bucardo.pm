@@ -91,6 +91,8 @@ our %config_about;
 
 sub new {
 
+	## Create a new Bucardo instance. Primarily called by bucardo_ctl
+
 	my $class = shift;
 	my $params = shift || {};
 
@@ -167,35 +169,8 @@ sub new {
 	$self->{stopfile} = "$config{piddir}/$config{stopfile}";
 
 	return $self;
-}
 
-sub reload_config {
-
-	my ($self) = @_;
-
-	my $masterdbh = $self->{masterdbh};
-	my $done = 'bucardo_reload_config_finished';
-	$masterdbh->do("LISTEN $done");
-	$masterdbh->commit();
-	$masterdbh->do("NOTIFY bucardo_reload_config") or warn 'NOTIFY failed';
-	$masterdbh->commit();
-
-	my $BAIL = 200;
-  CONFIG_WAIT: {
-		while (my $notify = $masterdbh->func('pg_notifies')) {
-			my ($name, $pid) = @$notify;
-			last CONFIG_WAIT if $name eq $done;
-		}
-		$masterdbh->commit();
-		sleep(0.1);
-		die "Waited too long for reload_config to return\n" if --$BAIL < 1;
-		redo;
-	}
-
-	return;
-
-} ## end of reload_config
-
+} ## end of new
 
 
 sub kick_sync {
