@@ -217,6 +217,11 @@ There are a few environment variables you can set to help you when debugging and
  <td>0</td>
  <td>If set, the temporary log files will not be removed at the end of testing.</td>
 </tr>
+<tr>
+ <td class="lcol">BUCARDO_EMAIL_DEBUG_FILE</td>
+ <td>&nbsp;</td>
+ <td>If set, a file to save a copy of all outgoing emails to. Overrides the configuration variable 'email_debug_file'.</td>
+</tr>
 </table>
 <p>
 The tests are grouped into logical families, which can be toggled at the top of the main test script, "01bc.t". The group of tests labelled TEST_RANDOM_SWAP is off by default, as their randomness sometimes causes deadlock and serialization errors. Nonetheless, it is recommended to turn this on and run it, and try and discover non-deadlock, non-serialization errors that may pop up.
@@ -672,6 +677,8 @@ Inside the bucardo database, the <b>bucardo_config</b> table holds many settings
 <td class="lcol" >default_email_from</td> <td>nobody@example.com</td> <td>Who the alert emails are sent as</td> </tr>
 <tr>
 <td class="lcol" >default_email_host</td> <td>localhost</td> <td>Which host to send email through</td> </tr>
+<tr>
+<td class="lcol" >email_debug_file</td> <td>&nbsp;</td> <td>File to save a copy of all outgoing emails to</td> </tr>
 <tr>
 <td class="lcol" >stats_script_url</td> <td>http://www.bucardo.org/</td> <td>Location of the stats script</td> </tr>
 <tr>

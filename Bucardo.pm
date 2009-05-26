@@ -79,9 +79,6 @@ my %dbix = (
 ## The string PIDFILE will be replaced with the actual name
 my $PIDCLEANUP = ''; ## "/bin/chgrp bucardo PIDFILE";
 
-## Save a copy of emails to a file? (override with $ENV{BUCARDO_SENDMAIL_FILE})
-my $SENDMAIL_FILE = ""; ## "./bucardo.sendmail.log";
-
 my $hostname = hostname;
 my $shorthost = $hostname;
 $shorthost =~ s/^(.+?)\..*/$1/;
@@ -425,27 +422,39 @@ sub get_reason {
 
 sub start_mcp {
 
+	## Start the Bucardo daemon. Called by bucardo_ctl after setsid()
+
 	my ($self,$arg) = @_;
+
+	## Store the original invocation line, then modify it
 	my $old0 = $0;
 	$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname}";
+
+	## Prefix all lines in the log file with this TLA
 	$self->{logprefix} = 'MCP';
 
+	## Create a pretty version of the current $self, with the password elided
 	my $oldpass = $self->{dbpass};
 	$self->{dbpass} = '<not shown>';
 	my $dump = Dumper $self;
 	$self->{dbpass} = $oldpass;
-	my $reason = get_reason(1);
+
+	## Prepare to send an email letting people know we have started up
 	my $body = qq{
 		Master Control Program $$ was started on $hostname
 		Args: $old0
 		Version: $VERSION
 	};
-	my $subject = qq{Bucardo started on $shorthost};
+	my $subject = qq{Bucardo $VERSION started on $shorthost};
+
+	## If someone left a message in the reason file, append it, and delete the file
+	my $reason = get_reason('delete');
 	if ($reason) {
 		$body .= "Reason: $reason\n";
 		$subject .= " ($reason)";
 	}
 	$body =~ s/^\s+//gsm;
+
 	$self->send_mail({ body => "$body\n\n$dump", subject => $subject });
 
 	## If the pid file already exists, cowardly refuse to run
@@ -4944,13 +4953,14 @@ sub reload_all_syncs {
 
 sub send_mail {
 
+	## Send out an email message
+	## Expects a hashref with mandatory args 'body' and 'subject'
+	## Optional args: 'to'
+
 	my ($self,$arg) = @_;
 
-	my $from = getpwuid($>) . '@' . $hostname;
-
-	if ($config{default_email_from}) {
-		$from = $config{default_email_from};
-	}
+	## If 'default_email_from' is not set, we default to currentuser@currenthost
+	my $from = $config{default_email_from} || (getpwuid($>) . '@' . $hostname);
 
 	$arg->{to} ||= $config{default_email_to};
 	$arg->{subject} ||= 'Bucardo Mail!';
@@ -4980,7 +4990,7 @@ sub send_mail {
 			$smtp->quit;
 		};
 		if (!$@) {
-			$self->glog("Sent an email to $arg->{to}: $arg->{subject}");
+			$self->glog("Sent an email to $arg->{to} from $from: $arg->{subject}");
 		}
 		else {
 			my $error = $@ || '???';
@@ -4988,13 +4998,12 @@ sub send_mail {
 		}
 	}
 
-	if ($ENV{BUCARDO_SENDMAIL_FILE}) {
-		$SENDMAIL_FILE = $ENV{BUCARDO_SENDMAIL_FILE};
-	}
-	if ($SENDMAIL_FILE) {
+	my $sendmail_file = $ENV{BUCARDO_EMAIL_DEBUG_FILE} || $config{email_debug_file} || '';
+	if ($sendmail_file) {
 		my $fh;
-		if (! open $fh, '>>', $SENDMAIL_FILE) {
-			$self->glog(qq{Warning: Could not open sendmail file "$SENDMAIL_FILE": $!\n});
+		## This happens rare enough to not worry about caching the file handle
+		if (! open $fh, '>>', $sendmail_file) {
+			$self->glog(qq{Warning: Could not open sendmail file "$sendmail_file": $!\n});
 			return;
 		}
 		my $now = scalar localtime;
@@ -5007,7 +5016,7 @@ Date: $now
 $arg->{body}
 
 };
-		close $fh or warn qq{Could not close "$SENDMAIL_FILE": $!\n};
+		close $fh or warn qq{Could not close "$sendmail_file": $!\n};
 	}
 
 	return;
