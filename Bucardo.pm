@@ -283,66 +283,6 @@ sub clog {
 } ## end of clog
 
 
-sub get_config {
-
-	## Return current value of a configuration setting
-	my ($self,$name) = @_;
-	$name = lc $name;
-	return $config{$name};
-}
-
-sub set_config {
-
-	## Set value of a configuration setting
-	## Returns old value
-	my ($self,$name,$value) = @_;
-	$name = lc $name;
-	my $oldval = $self->get_config($name);
-	$config{$name} = $value;
-	return $oldval;
-}
-
-sub get_config_about {
-
-	## Return current description of a configuration setting
-	my ($self,$name) = @_;
-	return $config_about{lc $name};
-}
-
-sub set_config_about {
-
-	## Set description of a configuration setting
-	## Returns old value
-	my ($self,$name,$about) = @_;
-	my $oldabout = $self->get_config(lc $name);
-	$config_about{lc $name} = $about;
-	return $oldabout;
-}
-
-sub store_config {
-
-	## Put a configuration setting's value and description into the database
-	my ($self,$name) = @_;
-
-	$name = lc $name;
-	my $maindbh = $self->{masterdbh};
-	my ($value,$about) = ($config{$name},$config_about{$name});
-	$SQL = "SELECT count(*) FROM bucardo_config WHERE type=NULL AND setting = ".$maindbh->quote($name);
-	$count = $maindbh->selectall_arrayref($SQL)->[0][0];
-	if ($count == 1) {
-		$SQL = "UPDATE bucardo_config SET value=?, about=? WHERE type=NULL AND setting = ?";
-		$sth = $maindbh->prepare($SQL);
-		$sth->execute($value,$about,$name);
-	}
-	else {
-		$SQL = "INSERT INTO bucardo_config(value,about,setting) VALUES (?,?,?)";
-		$sth = $maindbh->prepare($SQL);
-		$sth->execute($value,$about,$name);
-	}
-	$maindbh->commit();
-	return;
-}
-
 sub get_db {
 	## Return a BCdatabase object
 	my ($self,$dbname) = @_;
