@@ -103,6 +103,7 @@ sub new {
 		debugsyslog  => 1,
 		debugdir     => './tmp',
 		debugfile    => 0,
+		warning_file => '',
 		debugfilesep => 0,
 		debugname    => '',
 		cleandebugs  => 0,
@@ -137,7 +138,6 @@ sub new {
 	## Zombie stopper
 	$SIG{CHLD} = 'IGNORE';
 
-
 	## Basically, dryrun does a rollback instead of a commit at the final sync step
 	## This is not 100% safe, if (for example) you have custom code that reaches
 	## outside the database to do things.
@@ -168,6 +168,9 @@ sub new {
 	$self->{pidfile} = "$config{piddir}/$config{pidfile}";
 	$self->{stopfile} = "$config{piddir}/$config{stopfile}";
 
+	## Send all log lines starting with "Warning" to a separate file
+	$self->{warning_file} ||= $config{warning_file};
+
 	return $self;
 
 } ## end of new
@@ -180,9 +183,10 @@ sub glog {
 	## Quick shortcut if verbose if off (not recommended!)
 	return if ! $_[0]->{verbose};
 
-
 	my ($self,$msg,@extra) = @_;
 	chomp $msg;
+
+	my $is_warning = ($self->{warning_file} and $msg =~ /^Warning/o) ? 1 : 0;
 
 	## Any extra arguments means $msg is a printf-style string
 	if (@extra) {
@@ -202,17 +206,26 @@ sub glog {
 		    : '',
 		$config{log_showline} ? (sprintf '#%04d ', (caller)[2]) : '';
 
-	## Route/tee serious errors to another file
-	if ($msg =~ /Warning/o) {
-		## TODO
+	## If using syslog, send the message at the 'info' priority
+	$self->{debugsyslog} and syslog 'info', $msg;
+
+	## Possibly send the message to stdout
+	$self->{debugstderr} and print STDERR "$header $msg\n";
+
+	## Possibly send the message to stderr
+	$self->{debugstdout} and print STDOUT "$header $msg\n";
+
+	## Possible send warnings to a separate file
+	if ($is_warning) {
+		my $file = $self->{warning_file} or die;
+		if (!exists $self->{warningfilehandle}) {
+			open $self->{warningfilehandle}, '>>', $file or die qq{Could not append to "$file": $!\n};
+		}
+		print {$self->{warningfilehandle}} "$header $msg\n";
+		close $self->{warningfilehandle} or warn qq{Could not close "$file": $!\n};
 	}
 
-	## If using syslog, send at the info level
-	if ($self->{debugsyslog}) {
-		syslog 'info', $msg;
-	}
-
-	## If using a debug file, append to it
+	## Possibly send the message to a debug file
 	if ($self->{debugfile}) {
 		if (!exists $self->{debugfilename}) {
 			$self->{debugfilename} = "$self->{debugdir}/log.bucardo";
@@ -238,10 +251,6 @@ sub glog {
 
 		printf {$self->{debugfilehandle}{$file}} "$header $msg\n";
 	}
-
-	$self->{debugstderr} and print STDERR "$header $msg\n";
-
-	$self->{debugstdout} and print STDOUT "$header $msg\n";
 
 	return;
 

@@ -83,6 +83,7 @@ ctl_nothingfound_sleep|0.2|How long does the controller loop sleep if nothing is
 kid_nothingfound_sleep|0.3|How long does a kid sleep if nothing is found?
 kid_nodeltarows_sleep|0.8|How long do kids sleep if no delta rows are found?
 kid_serial_sleep|10|How long to sleep in seconds if we hit a serialization error
+kid_abort_sleep|1|How long to sleep in seconds when adding back an aborted sync?
 endsync_sleep|1.0|How long do we sleep when custom code requests an endsync?
 \.
 
@@ -112,6 +113,7 @@ log_showtime|1|Show timestamp in the log output?  0=off  1=seconds since epoch  
 log_showline|0|Show line number in the log output?
 log_conflict_details|0|Log detailed conflict data?
 log_conflict_file|bucardo_conflict.log|Name of the conflict detail log file
+warning_file|bucardo.warning.log|File containing all log lines starting with "Warning"
 \.
 
 -- Versioning
