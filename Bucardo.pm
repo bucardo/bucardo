@@ -283,38 +283,34 @@ sub clog {
 } ## end of clog
 
 
-sub get_db {
-	## Return a BCdatabase object
-	my ($self,$dbname) = @_;
-	my $dbs = $self->get_dbs;
-	if (!exists $dbs->{$dbname}) {
-		die "No such database: $dbname\n";
-	}
-	my $db = BCdatabase->new($dbs->{$dbname});
-	return $db;
-}
-
-
 sub get_dbs {
 
-	my $self = shift;
 	## Return a hashref of everything in the db table
-	$SQL = "SELECT * FROM bucardo.db";
+
+	## Used by start_controller(), connect_database()
+
+	my $self = shift;
+
+	$SQL = 'SELECT * FROM bucardo.db';
 	$sth = $self->{masterdbh}->prepare($SQL);
 	$sth->execute();
 	my $info = $sth->fetchall_hashref('name');
 	$self->{masterdbh}->commit();
+
 	return $info;
 
-} # end of get_dbs
+} ## end of get_dbs
 
 
 sub get_dbgroups {
 
+	## Return a hashref of dbgroups
+
+	## Called by validate_sync
+
 	my $self = shift;
 
-	## Return a hashref of dbgroups
-	$SQL = qq{
+	$SQL = q{
         SELECT    d.name, m.db, m.priority
         FROM      bucardo.dbgroup d
         LEFT JOIN dbmap m ON (m.dbgroup=d.name)
@@ -331,100 +327,36 @@ sub get_dbgroups {
 		defined $x->{db} and push @{$groups->{$x->{name}}{members}}, $x->{db};
 	}
 	$maindbh->commit();
+
 	return $groups;
-} # end of get_dbgroups
+
+} ## end of get_dbgroups
 
 
 sub get_goats {
 
-	my $self = shift;
 	## Return a hashref of everything in the goat table
-	$SQL = "SELECT * FROM bucardo.goat";
+
+	## Used by find_goats()
+
+	my $self = shift;
+
+	$SQL = 'SELECT * FROM bucardo.goat';
 	$sth = $self->{masterdbh}->prepare($SQL);
 	$sth->execute();
 	my $info = $sth->fetchall_hashref('id');
 	$self->{masterdbh}->commit();
 	return $info;
 
-} # end of get_goats
-
-
-sub get_herds {
-
-	my $self = shift;
-	## Return a hashref of everything in the herd table
-	$SQL = "SELECT * FROM bucardo.herd";
-	$sth = $self->{masterdbh}->prepare($SQL);
-	$sth->execute();
-	my $info = $sth->fetchall_hashref('name');
-	$self->{masterdbh}->commit();
-	return $info;
-
-} # end of get_herds
-
-
-sub get_herd {
-
-	## Return a hashref for a single herd, with table information
-
-	my ($self,$herd) = @_;
-
-	$herd or die qq{Must provide a herd\n};
-
-	$SQL = qq{
-        SELECT    h.name, g.db, g.tablename, g.schemaname, g.has_delta, g.ghost,
-                  g.standard_conflict, g.pkey, g.qpkey, g.pkeytype
-        FROM      bucardo.herd h
-        LEFT JOIN bucardo.herdmap m ON (m.herd=h.name)
-        LEFT JOIN bucardo.goat g ON (m.goat=g.id)
-        WHERE     h.name = ?
-    };
-	my $maindbh = $self->{masterdbh};
-	$sth = $maindbh->prepare($SQL);
-	$sth->execute($herd);
-	my $tree;
-	for my $h (@{$sth->fetchall_arrayref({})}) {
-		if (! defined $tree) {
-			$tree = { name => $h->{name}, db => $h->{db} };
-		}
-		push @{$tree->{members}},
-				   {
-					schema             => $h->{schemaname},
-					table              => $h->{tablename},
-					has_delta          => $h->{has_delta},
-					ghost              => $h->{ghost},
-					analyze_after_copy => $h->{analyze_after_copy},
-					strict_checking    => $h->{strict_checking},
-					standard_conflict  => $h->{standard_conflict},
-					};
-	}
-	$maindbh->commit();
-	return $tree
-
-} # end of get_herd
-
-
-sub get_syncs {
-
-	my $self = shift;
-	## Return an arrayref of everything in the sync table
-	$SQL = qq{
-        SELECT *,
-            COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs
-        FROM     bucardo.sync
-        ORDER BY priority DESC, name DESC
-    };
-	$sth = $self->{masterdbh}->prepare($SQL);
-	$sth->execute();
-	my $info = $sth->fetchall_hashref("name");
-	$self->{masterdbh}->commit();
-	return $info;
-} ## end of get_syncs
-
+} ## end of get_goats
 
 
 sub find_goats {
+
 	## Given a herd, return an arrayref of goats
+
+	## Used in validate_sync
+
 	my ($self,$herd) = @_;
 	my $goats = $self->get_goats();
 	my $maindbh = $self->{masterdbh};
@@ -446,8 +378,37 @@ sub find_goats {
 } ## end of find_goats
 
 
+sub get_syncs {
+
+	## Return an arrayref of everything in the sync table
+
+	## Used by reload_mcp(), activate_sync(, deactivate_sync()
+
+	my $self = shift;
+
+	$SQL = q{
+        SELECT *,
+            COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs
+        FROM     bucardo.sync
+        ORDER BY priority DESC, name DESC
+    };
+	$sth = $self->{masterdbh}->prepare($SQL);
+	$sth->execute();
+	my $info = $sth->fetchall_hashref("name");
+	$self->{masterdbh}->commit();
+
+	return $info;
+
+} ## end of get_syncs
+
+
 sub get_reason {
+
+	## Returns the current string (if any) in the reason file
+	## If given an arg, the reason file is unlinked
+
 	my $delete = shift || 0;
+
 	my $reason = '';
 	if (open my $fh, '<', $config{reason_file}) {
 		if (<$fh> =~ /\|\s*(.+)/) {
@@ -456,8 +417,10 @@ sub get_reason {
 		close $fh or warn qq{Could not close "$config{reason_file}": $!\n};
 		$delete and unlink $config{reason_file};
 	}
+
 	return $reason;
-}
+
+} ## end of get_reason
 
 
 sub start_mcp {
