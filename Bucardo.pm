@@ -807,7 +807,7 @@ sub start_mcp {
 					}
 					else {
 						$self->glog("Deactivating sync $syncname");
-						$self->_deactivate_sync($sync->{$syncname});
+						$self->decommission_sync($sync->{$syncname});
 
 						## Reread from the database
 						$SQL = q{SELECT *, COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs }
@@ -884,7 +884,7 @@ sub start_mcp {
 						$maindbh->commit();
 					}
 					else {
-						if ($self->_deactivate_sync($sync->{$syncname})) {
+						if ($self->decommission_sync($sync->{$syncname})) {
 							$sync->{$syncname}{mcp_active} = 0;
 						}
 					}
@@ -1790,7 +1790,10 @@ sub start_mcp {
 	} ## end of validate_sync
 
 
-	sub _deactivate_sync {
+	sub decomission_sync {
+
+		## We need to turn off a running sync
+		## Returns boolean success/failure
 
 		my ($self,$s) = @_;
 
@@ -1800,7 +1803,7 @@ sub start_mcp {
 		## Kill the controller
 		my $ctl = $s->{controller};
 		if (!$ctl) {
-			$self->glog("Warning! Controller not found");
+			$self->glog('Warning! Controller not found');
 		}
 		else {
 			$count = kill $signumber{USR1} => $ctl;
@@ -1810,23 +1813,23 @@ sub start_mcp {
 
 		$self->{sync}{$syncname}{mcp_active} = 0;
 
-		## Redo our command line
-		my @activesyncs;
-		for my $syncname (keys %{$self->{sync}}) {
-			my $s = $self->{sync}{$syncname};
-			push @activesyncs, $syncname if $s->{mcp_active};
-		}
-
-		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active sync:";
-		$0 .= join "," => @activesyncs;
-
 		## Let any listeners know we are done
 		$maindbh->do(qq{NOTIFY "bucardo_deactivated_sync_$syncname"}) or warn 'NOTIFY failed';
 		$maindbh->commit();
 
+		## Redo our process name to include an updated list of active syncs
+		my @activesyncs;
+		for my $syncname (keys %{$self->{sync}}) {
+			my $s = ! $self->{sync}{$syncname}{mcp_active};
+			push @activesyncs, $syncname;
+		}
+
+		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active syncs:";
+		$0 .= join ',' => @activesyncs;
+
 		return 1;
 
-	} ## end of _deactivate_sync
+	} ## end of decomission_sync
 
 
 	sub cleanup_mcp {
