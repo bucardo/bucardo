@@ -3062,7 +3062,7 @@ sub start_kid {
 
 		## Mark ourself as aborted if we've started but not completed a job
 		## The controller is responsible for marking aborted entries as ended
-		$SQL = qq{
+		$SQL = q{
             UPDATE bucardo.q
             SET    aborted=timeofday()::timestamp, whydie=?
             WHERE  sync=?
@@ -3079,7 +3079,7 @@ sub start_kid {
 
 		## Clean up the audit_pid table
 		if ($config{audit_pid}) {
-			$SQL = qq{
+			$SQL = q{
                 UPDATE bucardo.audit_pid
                 SET    killdate=timeofday()::timestamp, death=?
                 WHERE  id = ?
@@ -3109,9 +3109,6 @@ sub start_kid {
 			$_->{dbpass} = '???';
 		}
 		$self->{dbpass} = '???';
-
-		## Show only our sync, not all of them
-		$self->{sync} = $sync;
 
 		## Create the body of the message to be mailed
 		my $dump = Dumper $self;
@@ -3159,7 +3156,7 @@ sub start_kid {
 			qq{ VALUES ('KID',?,?,?,$self->{ppid},$$,'Life: $self->{life}',?,?)};
 		$sth = $maindbh->prepare($SQL);
 		$sth->execute($self->{ctlauditid},$self->{mcpauditid},$syncname,$sourcedb,$targetdb);
-		$SQL = "SELECT currval('audit_pid_id_seq')";
+		$SQL = q{SELECT currval('audit_pid_id_seq')};
 		$self->{kidauditid} = $maindbh->selectall_arrayref($SQL)->[0][0];
 	}
 
@@ -3207,7 +3204,7 @@ sub start_kid {
 		$SQL = 'SELECT pg_backend_pid()';
 		my $source_backend = $sourcedbh->selectall_arrayref($SQL)->[0][0];
 		my $target_backend = $targetdbh->selectall_arrayref($SQL)->[0][0];
-		$SQL = qq{
+		$SQL = q{
             UPDATE bucardo.audit_pid
             SET    source_backend = ?, target_backend = ?
             WHERE  id = ?
@@ -3221,7 +3218,7 @@ sub start_kid {
 	if ($synctype eq 'pushdelta' or $synctype eq 'swap') {
 
 		if ($sync->{does_makedelta}) {
-			$SQL = qq{INSERT INTO bucardo.bucardo_track(txntime,tablename,targetdb) VALUES (now(),?,?)};
+			$SQL = q{INSERT INTO bucardo.bucardo_track(txntime,tablename,targetdb) VALUES (now(),?,?)};
 			$sth{source}{inserttrack} = $sourcedbh->prepare($SQL) if $synctype eq 'swap';
 			$sth{target}{inserttrack} = $targetdbh->prepare($SQL);
 		}
@@ -3681,7 +3678,7 @@ sub start_kid {
 		$count = $sth{qsetstart}->execute($$,$syncname,$targetdb);
 		if ($count != 1) {
 			## We can say != 1 here because of the unique constraint on q
-			$self->glog("Nothing to do: no entry found in the q table for this sync");
+			$self->glog('Nothing to do: no entry found in the q table for this sync');
 			$maindbh->rollback();
 			redo KID if $kidsalive;
 			last KID;
@@ -4357,7 +4354,9 @@ sub start_kid {
 						$info1->{$pkval}{BUCARDO_ACTION} = $rowinfo{action};
 
 						last;
+
 					} ## end custom conflict
+
 				} ## end each key in source delta list
 
 				## Since we've already handled conflicts, simply mark "target only" rows
@@ -5001,7 +5000,7 @@ sub start_kid {
 
 	## Cleanup and exit
 	if ($config{audit_pid}) {
-		$SQL = qq{
+		$SQL = q{
             UPDATE bucardo.audit_pid
             SET    killdate = timeofday()::timestamp, death = 'END'
             WHERE  id = ?
@@ -5018,8 +5017,9 @@ sub start_kid {
 	$targetdbh->rollback();
 	$targetdbh->disconnect();
 
-	$self->glog("Kid exiting");
+	$self->glog('Kid exiting');
 	$self->{clean_exit} = 1;
+
 	exit 0;
 
 } ## end of start_kid
