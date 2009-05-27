@@ -842,7 +842,7 @@ sub start_mcp {
 
 						$self->glog("Reactivating sync $syncname");
 						$sync->{$syncname}{mcp_active} = 0;
-						if (! $self->_activate_sync($sync->{$syncname})) {
+						if (! $self->prepare_sync($sync->{$syncname})) {
 							$self->glog(qq{Warning! Reactivation of sync "$syncname" failed});
 						}
 						else {
@@ -866,7 +866,7 @@ sub start_mcp {
 						$maindbh->commit();
 					}
 					else {
-						if ($self->_activate_sync($sync->{$syncname})) {
+						if ($self->prepare_sync($sync->{$syncname})) {
 							$sync->{$syncname}{mcp_active} = 1;
 						}
 					}
@@ -1030,12 +1030,14 @@ sub start_mcp {
 
 	sub reload_config_database {
 
+		## Reload the %config and %config_about hashes from the bucardo_config table
+
 		my $self = shift;
 
 		undef %config;
 		undef %config_about;
 
-		$SQL = "SELECT setting,value,about,type,name FROM bucardo_config";
+		$SQL = 'SELECT setting,value,about,type,name FROM bucardo_config';
 		$sth = $self->{masterdbh}->prepare($SQL);
 		$sth->execute();
 		for my $row (@{$sth->fetchall_arrayref({})}) {
@@ -1049,6 +1051,7 @@ sub start_mcp {
 			}
 		}
 		$self->{masterdbh}->commit();
+
 		return;
 
 	} ## end of reload_config_database
@@ -1057,6 +1060,7 @@ sub start_mcp {
 	sub reload_mcp {
 
 		## Reset listeners, kill children, load and activate syncs
+		## Returns how many syncs we activated
 
 		my $self = shift;
 
@@ -1067,38 +1071,44 @@ sub start_mcp {
 
 		## Kill any existing children
 		opendir my $dh, $config{piddir} or die qq{Could not opendir "$config{piddir}": $!\n};
-		while (defined ($_ = readdir($dh))) {
-			next unless /bucardo_sync_(.+)\.pid/;
+		my $name;
+		while (defined ($name = readdir($dh))) {
+			next unless $name =~ /bucardo_sync_(.+)\.pid/;
 			my $syncname = $1; ## no critic
 			$self->glog(qq{Attempting to kill controller process for "$syncname"});
-			next unless open my $fh, '<', "$config{piddir}/$_";
+			next unless open my $fh, '<', "$config{piddir}/$name";
 			if (<$fh> !~ /(\d+)/) {
-				$self->glog(qq{Warning! File "$config{piddir}/$_" did not contain a PID!\n});
+				$self->glog(qq{Warning! File "$config{piddir}/$name" did not contain a PID!\n});
 				next;
 			}
 			my $pid = $1; ## no critic
-			$self->glog(qq{Asked process $pid to terminate});
+			$self->glog(qq{Asking process $pid to terminate for reload_mcp});
 			kill $signumber{USR1} => $pid;
-			close $fh or warn qq{Could not close "$config{piddir}/$_": $!\n};
+			close $fh or warn qq{Could not close "$config{piddir}/$name": $!\n};
 		}
-		closedir $dh or warn qq{Could not closedir "$config{piddir}": $!\n};
-
-		my @activesyncs;
+		closedir $dh or warn qq{Warning! Could not closedir "$config{piddir}": $!\n};
 
 		$self->glog("LOADING TABLE sync. Rows=%d", scalar (keys %{$self->{sync}}));
+
+		## Load each sync in alphabetical order
+		my @activesyncs;
 		for (sort keys %{$self->{sync}}) {
 			my $s = $self->{sync}{$_};
 			my $syncname = $s->{name};
 
-			$self->{sync}{$_}{mcp_changed} = 1234;
-			$s->{mcp_changed} = 234;
+			## Note that the mcp has changed this sync
+			$s->{mcp_changed} = 1;
 
-			## Has a status field already (e.g. active)
+			## Reset some boolean flags for this sync
 			$s->{mcp_active} = $s->{mcp_kicked} = $s->{controller} = 0;
+
+			## If this sync is active, don't bother going any further
 			if ($s->{status} ne 'active') {
 				$self->glog(qq{Skipping sync "$syncname": status is "$s->{status}"});
 				next;
 			}
+
+			## If we are doing specific syncs, check the name
 			if (keys %{$self->{dosyncs}}) {
 				if (! exists $self->{dosyncs}{$syncname}) {
 					$self->glog(qq{Skipping sync "$syncname": not explicitly named});
@@ -1109,14 +1119,19 @@ sub start_mcp {
 			else {
 				$self->glog(qq{Activating sync "$syncname"});
 			}
-			## Activate this sync
+
+			## Activate this sync!
 			$s->{mcp_active} = 1;
-			if (! $self->_activate_sync($s)) {
+			if (! $self->prepare_sync($s)) {
 				$s->{mcp_active} = 0;
 			}
-			push @activesyncs, $syncname if $s->{mcp_active};
-		}
 
+			## If it was successfully activated, push it on the queue
+			push @activesyncs, $syncname if $s->{mcp_active};
+
+		} ## end each sync
+
+		## Change our process name, and list all active syncs
 		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active sync:";
 		$0 .= join "," => @activesyncs;
 
@@ -1128,43 +1143,59 @@ sub start_mcp {
 
 
 	sub reset_mcp_listeners {
+
+		## Unlisten everything, the relisten to specific entries
+		## Called by reload_mcp()
+
 		my $self = shift;
+
 		my $maindbh = $self->{masterdbh};
 
-		$maindbh->do("UNLISTEN *") or warn "UNLISTEN failed";
+		$maindbh->do('UNLISTEN *') or warn 'UNLISTEN failed';
+
+		## Listen for MCP specific items
 		for my $l
 			(
-			 "mcp_fullstop",
-			 "mcp_reload",
-			 "reload_config",
-			 "log_message",
-			 "mcp_ping",
+			 'mcp_fullstop',
+			 'mcp_reload',
+			 'reload_config',
+			 'log_message',
+			 'mcp_ping',
 		 ) {
 			$self->glog(qq{Listening for "bucardo_$l"});
 			$maindbh->do("LISTEN bucardo_$l") or die "LISTEN bucardo_$l failed";
 		}
+
+		## Listen for sync specific items
 		for my $syncname (keys %{$self->{sync}}) {
 			for my $l
 				(
-				 "activate_sync",
-				 "deactivate_sync",
-				 "reload_sync",
-				 "kick_sync",
+				 'activate_sync',
+				 'deactivate_sync',
+				 'reload_sync',
+				 'kick_sync',
 			 ) {
+
+				## If the sync is inactive, no sense in listening for anything but an activate request
 				next if $self->{sync}{$syncname}{status} ne 'active' and $l ne 'activate_sync';
-				$self->glog(qq{Listening for "bucardo_${l}_$syncname"});
+
 				my $listen = "bucardo_${l}_$syncname";
 				$maindbh->do(qq{LISTEN "$listen"}) or die "LISTEN $listen failed";
+				$self->glog(qq{Listening for "$listen"});
 			}
 		}
-		return $maindbh->commit();
+
+		$maindbh->commit();
+
+		return;
 
 	} ## end of reset_mcp_listeners
 
 
-	sub _activate_sync {
+	sub prepare_sync {
 
 		## We've got a new sync to be activated (but not started)
+
 		my ($self,$s) = @_;
 
 		my $maindbh = $self->{masterdbh};
@@ -1196,12 +1227,12 @@ sub start_mcp {
 		$maindbh->do(qq{NOTIFY "bucardo_activated_sync_$syncname"}) or warn 'NOTIFY failed';
 		$maindbh->commit();
 
-		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active sync:";
+		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active syncs:";
 		$0 .= join "," => @activesyncs;
 
 		return 1;
 
-	} ## end of _activate_sync
+	} ## end of prepare_sync
 
 
 	sub validate_sync {
@@ -4120,7 +4151,7 @@ sub start_kid {
 							$info1->{$pkval}{BUCARDO_ACTION} = rand 2 > 1 ? 1 : 2;
 						}
 						elsif ('abort' eq $sc) {
-							die qq{Warning! Aborting sync $syncname due to conflict for $S:$T:$pkval\n};
+							die qq{Aborting sync $syncname due to conflict for $S:$T:$pkval\n};
 						}
 						elsif ('latest' eq $sc) {
 							if (!exists $sth{sc_latest_src}{$g->{pkcols}}) {
