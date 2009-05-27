@@ -1132,8 +1132,8 @@ sub start_mcp {
 		} ## end each sync
 
 		## Change our process name, and list all active syncs
-		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active sync:";
-		$0 .= join "," => @activesyncs;
+		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active syncs:";
+		$0 .= join ',' => @activesyncs;
 
 		my $count = @activesyncs;
 
@@ -1195,6 +1195,7 @@ sub start_mcp {
 	sub prepare_sync {
 
 		## We've got a new sync to be activated (but not started)
+		## Returns boolean success/failure
 
 		my ($self,$s) = @_;
 
@@ -1211,24 +1212,24 @@ sub start_mcp {
 		## If the kids stay alive, the controller must too
 		if ($s->{kidsalive} and !$s->{stayalive}) {
 			$s->{stayalive} = 1;
-			$self->glog("Warning! Setting stayalive to true because kidsalive is true");
+			$self->glog('Warning! Setting stayalive to true because kidsalive is true');
 		}
 
 		$self->{sync}{$syncname}{mcp_active} = 1;
-
-		## Redo our command line
-		my @activesyncs;
-		for my $syncname (keys %{$self->{sync}}) {
-			my $s = $self->{sync}{$syncname};
-			push @activesyncs, $syncname if $s->{mcp_active};
-		}
 
 		## Let any listeners know we are done
 		$maindbh->do(qq{NOTIFY "bucardo_activated_sync_$syncname"}) or warn 'NOTIFY failed';
 		$maindbh->commit();
 
+		## Redo our process name to include an updated list of active syncs
+		my @activesyncs;
+		for my $syncname (sort keys %{$self->{sync}}) {
+			next if ! $self->{sync}{$syncname}{mcp_active};
+			push @activesyncs, $syncname;
+		}
+
 		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active syncs:";
-		$0 .= join "," => @activesyncs;
+		$0 .= join ',' => @activesyncs;
 
 		return 1;
 
@@ -1238,6 +1239,7 @@ sub start_mcp {
 	sub validate_sync {
 
 		## Check each database a sync needs to use, and (optionally) validate all tables and columns
+		## Returns boolean success/failure
 
 		my ($self,$s) = @_;
 
@@ -1258,12 +1260,15 @@ sub start_mcp {
 		$self->{pingdbh}{$s->{sourcedb}} ||= $self->connect_database($s->{sourcedb});
 		my $srcdbh = $self->{pingdbh}{$s->{sourcedb}};
  		if ($srcdbh eq 'inactive') {
-			$self->glog("Source database is inactive, cannot proceed. Consider making the sync inactive instead");
+			$self->glog('Source database is inactive, cannot proceed. Consider making the sync inactive instead');
 			die "Source database is not active";
  		}
 
+		## Prepare some SQL statements for immediate and future use
 		my %SQL;
-		$SQL{checktable} = qq{
+
+		## Given a schema and table name, return the oid and safely quoted names
+		$SQL{checktable} = q{
             SELECT c.oid, quote_ident(n.nspname), quote_ident(c.relname), quote_literal(n.nspname), quote_literal(c.relname)
             FROM   pg_class c, pg_namespace n
             WHERE  c.relnamespace = n.oid
@@ -1272,13 +1277,16 @@ sub start_mcp {
         };
 		$sth{checktable} = $srcdbh->prepare($SQL{checktable});
 
-		$SQL = "SELECT quote_ident(?)";
+		## Given a string, return a quoted version (ident, so user -> "user", but foo -> foo)
+		$SQL = 'SELECT quote_ident(?)';
 		$sth{quoteident} = $srcdbh->prepare($SQL);
 
-		$SQL{checkcols} = qq{
+		## Given a table oid, return detailed column information
+		$SQL{checkcols} = q{
             SELECT   attname, quote_ident(attname) AS qattname, atttypid, format_type(atttypid, atttypmod) AS ftype,
                      attnotnull, atthasdef, attnum,
-                     (SELECT pg_get_expr(adbin, adrelid) FROM pg_attrdef WHERE adrelid=attrelid and adnum=attnum AND atthasdef) AS def
+                     (SELECT pg_get_expr(adbin, adrelid) FROM pg_attrdef WHERE adrelid=attrelid
+                      AND adnum=attnum AND atthasdef) AS def
             FROM     pg_attribute
             WHERE    attrelid = ? AND attnum > 0 AND NOT attisdropped
             ORDER BY attnum
@@ -1287,13 +1295,14 @@ sub start_mcp {
 
 		## TODO: Check constraints as well
 
-		## Connect to each target database used
+		## Connect to each target database used and start checking things out
 		my %targetdbh;
 		my $pdbh = $self->{pingdbh};
 		if (defined $s->{targetdb}) {
 			my $tdb = $s->{targetdb};
 			$self->glog(qq{Connecting to target database "$tdb"});
 			$pdbh->{$tdb} ||= $self->connect_database($tdb);
+			## If the database is marked as inactive, we'll remove it from this syncs list
 			if ($pdbh->{$tdb} eq 'inactive') {
 				$self->glog(qq{Deleting inactive target database "$tdb"});
 				delete $pdbh->{$tdb};
@@ -1324,8 +1333,16 @@ sub start_mcp {
 			return 0;
 		}
 
+		## Reset custom code related counters for this sync
+		$s->{need_rows} = $s->{need_safe_dbh} = $s->{need_safe_dbh_strict} = 0;
+
+		## Empty out any existing lists of code types
+		for my $key (grep { /^code_/ } sort keys %$s) {
+			$s->{$key} = [];
+		}
+
 		## Validate all (active) custom code for this sync
-		my $goatlistcodes = join "," => map { $_->{id} } @{$s->{goatlist}};
+		my $goatlistcodes = join ',' => map { $_->{id} } @{$s->{goatlist}};
 
 		$SQL = qq{
             SELECT c.src_code, c.id, c.whenrun, c.getdbh, c.name, c.getrows, COALESCE(c.about,'?') AS about,
@@ -1337,11 +1354,6 @@ sub start_mcp {
         };
 		$sth = $self->{masterdbh}->prepare($SQL);
 		$sth->execute($syncname);
-		$s->{need_rows} = $s->{need_safe_dbh} = $s->{need_safe_dbh_strict} = 0;
-
-		for my $key (grep { /^code_/ } sort keys %$s) {
-			$s->{$key} = [];
-		}
 
 		for my $c (@{$sth->fetchall_arrayref({})}) {
 			$self->glog(qq{  Validating custom code $c->{id} ($c->{whenrun}) (goat=$c->{goat}): $c->{name}});
@@ -1353,12 +1365,16 @@ sub start_mcp {
 			else {
 				$self->glog(qq{    OK: code contains a dummy string});
 			}
+
+			## Carefully compile the code and see what falls out
 			$c->{coderef} = sub { local $SIG{__DIE__} = sub {}; eval $c->{src_code}; }; ## no critic
 			&{$c->{coderef}}({ dummy => 1 });
 			if ($@) {
 				$self->glog(qq{Warning! Custom code $c->{id} for sync "$syncname" did not compile: $@});
 				return 0;
 			}
+
+			## If this code is run at the goat level, push it to each goat's list of code
 			if ($c->{goat}) {
 				my ($goat) = grep { $_->{id}==$c->{goat} } @{$s->{goatlist}};
 				push @{$goat->{"code_$c->{whenrun}"}}, $c;
@@ -1369,9 +1385,13 @@ sub start_mcp {
 			else {
 				push @{$s->{"code_$c->{whenrun}"}}, $c;
 			}
+
+			## Some custom code needs row information - the default is 0
 			if ($c->{getrows}) {
 				$s->{need_rows} = 1;
 			}
+
+			## Some custom code needs database handles - if so, gets one of two types
 			if ($c->{getdbh}) {
 				if ($c->{whenrun} eq 'before_txn'
 					or $c->{whenrun} eq 'after_txn'
@@ -1383,7 +1403,8 @@ sub start_mcp {
 					$s->{need_safe_dbh_strict} = 1;
 				}
 			}
-		}
+
+		} ## end each custom code
 
 		## Consolidate some things that are set at both sync and goat levels
 		$s->{does_makedelta} = $s->{makedelta};
@@ -1409,7 +1430,7 @@ sub start_mcp {
 			}
 		}
 		if ($s->{does_makedelta} and !$makedeltagoats) {
-			$self->glog("Although sync set as makedelta, none of the goats within it are");
+			$self->glog('Although sync set as makedelta, none of the goats within it are');
 			$s->{does_makedelta} = 0;
 		}
 
@@ -1426,6 +1447,8 @@ sub start_mcp {
 				warn $msg;
 				return 0;
 			}
+
+			## Store oid and quoted names for this goat
 			($g->{oid},$g->{safeschema},$g->{safetable},$g->{safeschemaliteral},$g->{safetableliteral})
 				= @{$sth->fetchall_arrayref()->[0]};
 
@@ -1433,14 +1456,16 @@ sub start_mcp {
 			if (!defined $g->{pkey} or !defined $g->{qpkey}) {
 				die "Table $g->{safetable} has no pkey or qpkey - do you need to run validate_goat on it?\n";
 			}
-			$g->{pkeyjoined} = $g->{pkey};
-			$g->{qpkeyjoined} = $g->{qpkey};
+
+			## Much of this is used later on, for speed of performing the sync
+			$g->{pkeyjoined}     = $g->{pkey};
+			$g->{qpkeyjoined}    = $g->{qpkey};
 			$g->{pkeytypejoined} = $g->{pkeytypejoined};
-			$g->{pkey}     = [split /\|/o => $g->{pkey}];
-			$g->{qpkey}    = [split /\|/o => $g->{qpkey}];
-			$g->{pkeytype} = [split /\|/o => $g->{pkeytype}];
-			$g->{pkcols}   = @{$g->{pkey}};
-			$g->{hasbinarypk} = 0;
+			$g->{pkey}           = [split /\|/o => $g->{pkey}];
+			$g->{qpkey}          = [split /\|/o => $g->{qpkey}];
+			$g->{pkeytype}       = [split /\|/o => $g->{pkeytype}];
+			$g->{pkcols}         = @{$g->{pkey}};
+			$g->{hasbinarypk}    = 0;
 			for (@{$g->{pkey}}) {
 				push @{$g->{binarypkey}} => 0;
 			}
@@ -1455,6 +1480,8 @@ sub start_mcp {
 				$colinfo->{$_}{realattnum} = $x++;
 			}
 			$g->{columnhash} = $colinfo;
+
+			## Build lists of columns
 			my $x = 1;
 			$g->{cols} = [];
 			$g->{safecols} = [];
@@ -1467,13 +1494,15 @@ sub start_mcp {
 				push @{$g->{safecols}}, $colinfo->{$colname}{qattname};
 				$colinfo->{$colname}{order} = $x++;
 			}
+
+			## Stringified versions of the above lists, for ease later on
 			$g->{columnlist} = join ',' => @{$g->{cols}};
 			$g->{safecolumnlist} = join ',' => @{$g->{safecols}};
 
 			## Note which columns are bytea
 		  BCOL: for my $colname (keys %$colinfo) {
 				my $c = $colinfo->{$colname};
-				next if $c->{atttypid} != 17;
+				next if $c->{atttypid} != 17; ## Yes, it's hardcoded, no sweat
 				$x = 0;
 				for my $pk (@{$g->{pkey}}) {
 					if ($colname eq $pk) {
@@ -1488,7 +1517,9 @@ sub start_mcp {
 			}
 
 			## Verify tables and columns on remote databases
-			## XXX: Fork to speed this up?
+
+			## XXX: Fork to speed this up? (more than one target at a time)
+
 			my $maindbh = $self->{masterdbh};
 			for my $db (sort keys %targetdbh) {
 
@@ -1509,6 +1540,7 @@ sub start_mcp {
 					}
 				}
 
+				## Grab oid and quoted information about the table on the remote database
 				my $dbh = $pdbh->{$db};
 				$sth = $dbh->prepare($SQL{checktable});
 				$count = $sth->execute($g->{schemaname},$g->{tablename});
@@ -1522,16 +1554,23 @@ sub start_mcp {
 				## Store away our oid, as we may need it later to access bucardo_delta
 				$g->{targetoid}{$db} = $oid;
 
+				## Grab column information about this table
 				$sth = $dbh->prepare($SQL{checkcols});
 				$sth->execute($oid);
 				my $targetcolinfo = $sth->fetchall_hashref('attname');
+
+				## Allow for 'dead' columns in the attnum ordering
 				$x=1;
 				for (sort { $colinfo->{$a}{attnum} <=> $colinfo->{$b}{attnum} } keys %$targetcolinfo) {
 					$targetcolinfo->{$_}{realattnum} = $x++;
 				}
+
 				my $t = "$g->{schemaname}.$g->{tablename}";
 
+				## We'll state no problems until we are proved wrong
 				my $column_problems = 0;
+
+				## Check each column in alphabetic order
 				for my $colname (sort keys %$colinfo) {
 					$self->glog(qq{    Checking column on target database "$db": "$colname"});
 
@@ -1543,11 +1582,15 @@ sub start_mcp {
 						warn $msg;
 						next;
 					}
+
+					## Simple var mapping to make the following code sane
 					my $fcol = $targetcolinfo->{$colname};
 					my $scol = $colinfo->{$colname};
 
 					## Almost always fatal: types do not match up
 					if ($scol->{ftype} ne $fcol->{ftype}) {
+						## Carve out some known exceptions (but still warn about them)
+						## Allowed: varchar == text
 						if (($scol->{ftype} eq 'character varying' and $fcol->{ftype} eq 'text') or
 							($fcol->{ftype} eq 'character varying' and $scol->{ftype} eq 'text')) {
 							my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" as type "$scol->{ftype}", but target database "$db" has a type of "$fcol->{ftype}". You should really fix that.};
@@ -1562,29 +1605,30 @@ sub start_mcp {
 						}
 					}
 
-					## Fatal on strict: NOT NULL mismatch
+					## Fatal in strict mode: NOT NULL mismatch
 					if ($scol->{attnotnull} != $fcol->{attnotnull}) {
-						$column_problems ||= 1;
+						$column_problems ||= 1; ## Don't want to override a setting of "2"
 						my $msg = sprintf qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" set as %s, but target database "$db" has column set as %s},
 							$scol->{attnotnull} ? 'NOT NULL' : 'NULL',
-							$scol->{attnotnull} ? 'NULL' : 'NOT NULL';
+							$scol->{attnotnull} ? 'NULL'     : 'NOT NULL';
 						$self->glog("Warning: $msg");
 						warn $msg;
 					}
 
-					## Fatal on strict: DEFAULT existence mismatch
+					## Fatal in strict mode: DEFAULT existence mismatch
 					if ($scol->{atthasdef} != $fcol->{atthasdef}) {
-						$column_problems ||= 1;
+						$column_problems ||= 1; ## Don't want to override a setting of "2"
 						my $msg = sprintf qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" %s, but target database "$db" %s},
 							$scol->{atthasdef} ? 'with a DEFAULT value' : 'has no DEFAULT value',
-							$scol->{atthasdef} ? 'has none' : 'does';
+							$scol->{atthasdef} ? 'has none'             : 'does';
 						$self->glog("Warning: $msg");
 						warn $msg;
 					}
 
-					## Fatal on strict: DEFAULT exists but does not match
+					## Fatal in strict mode: DEFAULT exists but does not match
 					if ($scol->{atthasdef} and $fcol->{atthasdef} and $scol->{def} ne $fcol->{def}) {
-						# Tolerate Postgres versions returning DEFAULT parenthesized or not, e.g. as "-5" in 8.2 or as "(-5)" in 8.3
+						## Make an exception for Postgres versions returning DEFAULT parenthesized or not
+						## e.g. as "-5" in 8.2 or as "(-5)" in 8.3
 						my $scol_def = $scol->{def};
 						my $fcol_def = $fcol->{def};
 						for ($scol_def, $fcol_def) {
@@ -1593,10 +1637,10 @@ sub start_mcp {
 						}
 						my $msg;
 						if ($scol_def eq $fcol_def) {
-							$msg = qq{Postgres version mismatch leads to this difference, which is being tolerated: };
+							$msg = q{Postgres version mismatch leads to this difference, which is being tolerated: };
 						}
 						else {
-							$column_problems ||= 1;
+							$column_problems ||= 1; ## Don't want to override a setting of "2"
 							$msg = '';
 						}
 						$msg .= qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" with a DEFAULT of "$scol->{def}", but target database "$db" has a DEFAULT of "$fcol->{def}"};
@@ -1604,20 +1648,20 @@ sub start_mcp {
 						warn $msg;
 					}
 
-					## Fatal on strict: order of columns does not match up
+					## Fatal in strict mode: order of columns does not match up
 					if ($scol->{realattnum} != $fcol->{realattnum}) {
-						$column_problems ||= 1;
+						$column_problems ||= 1; ## Don't want to override a setting of "2"
 						my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" at position $scol->{realattnum} ($scol->{attnum}), but target database "$db" has it in position $fcol->{realattnum} ($fcol->{attnum})};
 						$self->glog("Warning: $msg");
 						warn $msg;
 					}
 
-				} ## end each column
+				} ## end each column to be checked
 
-				## Fatal on strict: extra columns on the target side
+				## Fatal in strict mode: extra columns on the target side
 				for my $colname (sort keys %$targetcolinfo) {
 					next if exists $colinfo->{$colname};
-					$column_problems ||= 1;
+					$column_problems ||= 1; ## Don't want to override a setting of "2"
 					my $msg = qq{Target database has column "$colname" on table "$t", but source database "$s->{name}" does not};
 					$self->glog("Warning: $msg");
 					warn $msg;
@@ -1626,7 +1670,8 @@ sub start_mcp {
 				## Real serious problems always bail out
 				return 0 if $column_problems >= 2;
 
-				## If other problems, only bail if strict checking is on
+				## If other problems, only bail if strict checking is on both sync and goat
+				## This allows us to make a sync strict, but carve out exceptions for goats
 				return 0 if $column_problems and $s->{strict_checking} and $g->{strict_checking};
 
 			} ## end each target database
@@ -1634,12 +1679,13 @@ sub start_mcp {
 			## If we got a custom query, figure out which columns to transfer
 
 			## TODO: Allow remote databases to have only a subset of columns
+
 			my $customselect = $g->{customselect} || '';
 			if ($customselect and $s->{usecustomselect}) {
 				if ($s->{synctype} ne 'fullcopy') {
 					my $msg = qq{ERROR: Custom select can only be used for fullcopy\n};
-					warn $msg;
 					$self->glog($msg);
+					warn $msg;
 					return 0;
 				}
 				my $msg;
@@ -1653,8 +1699,8 @@ sub start_mcp {
 					## It must contain the primary key (does not do multicol)
 					if (! grep { $_ eq $pk } @$info) {
 						$msg = qq{ERROR: Custom SELECT does not contain the primary key "$pk"\n};
-						warn $msg;
 						$self->glog($msg);
+						warn $msg;
 						return 0;
 					}
 				}
@@ -1674,8 +1720,8 @@ sub start_mcp {
 					}
 					if (!$ok) {
 						$msg = qq{ERROR: Custom SELECT returned unknown column "$col"\n};
-						warn $msg;
 						$self->glog($msg);
+						warn $msg;
 						return 0;
 					}
 					$sth{quoteident}->execute($col);
@@ -1688,6 +1734,7 @@ sub start_mcp {
 				$self->glog("New columns: $collist");
 				$g->{cols} = $info;
 				$g->{safecols} = $info2;
+
 				## Replace the column lists
 				$g->{columnlist} = join ',' => @$info;
 				$g->{safecolumnlist} = join ',' => @$info2;
@@ -1724,6 +1771,7 @@ sub start_mcp {
 			$srcdbh->do(qq{LISTEN "$l"}) or die "LISTEN $l failed";
 			$srcdbh->commit();
 		}
+
 		## Same for the targets, but only if synctype is also "swap"
 		for my $db (sort keys %targetdbh) {
 			my $dbh = $pdbh->{$db};
@@ -1736,6 +1784,7 @@ sub start_mcp {
 			$dbh->commit();
 		}
 
+		## Success!
 		return 1;
 
 	} ## end of validate_sync
