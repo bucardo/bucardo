@@ -381,7 +381,7 @@ sub get_syncs {
 
 	## Return an arrayref of everything in the sync table
 
-	## Used by reload_mcp(), activate_sync(, deactivate_sync()
+	## Used by reload_mcp()
 
 	my $self = shift;
 
@@ -810,7 +810,7 @@ sub start_mcp {
 					}
 					else {
 						$self->glog("Deactivating sync $syncname");
-						$self->decommission_sync($sync->{$syncname});
+						$self->deactivate_sync($sync->{$syncname});
 
 						## Reread from the database
 						$SQL = q{SELECT *, COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs }
@@ -845,7 +845,7 @@ sub start_mcp {
 
 						$self->glog("Reactivating sync $syncname");
 						$sync->{$syncname}{mcp_active} = 0;
-						if (! $self->prepare_sync($sync->{$syncname})) {
+						if (! $self->activate_sync($sync->{$syncname})) {
 							$self->glog(qq{Warning! Reactivation of sync "$syncname" failed});
 						}
 						else {
@@ -869,7 +869,7 @@ sub start_mcp {
 						$maindbh->commit();
 					}
 					else {
-						if ($self->prepare_sync($sync->{$syncname})) {
+						if ($self->activate_sync($sync->{$syncname})) {
 							$sync->{$syncname}{mcp_active} = 1;
 						}
 					}
@@ -887,7 +887,7 @@ sub start_mcp {
 						$maindbh->commit();
 					}
 					else {
-						if ($self->decommission_sync($sync->{$syncname})) {
+						if ($self->deactivate_sync($sync->{$syncname})) {
 							$sync->{$syncname}{mcp_active} = 0;
 						}
 					}
@@ -1129,7 +1129,7 @@ sub start_mcp {
 
 			## Activate this sync!
 			$s->{mcp_active} = 1;
-			if (! $self->prepare_sync($s)) {
+			if (! $self->activate_sync($s)) {
 				$s->{mcp_active} = 0;
 			}
 
@@ -1199,7 +1199,7 @@ sub start_mcp {
 	} ## end of reset_mcp_listeners
 
 
-	sub prepare_sync {
+	sub activate_sync {
 
 		## We've got a new sync to be activated (but not started)
 		## Returns boolean success/failure
@@ -1240,7 +1240,7 @@ sub start_mcp {
 
 		return 1;
 
-	} ## end of prepare_sync
+	} ## end of activate_sync
 
 
 	sub validate_sync {
@@ -1805,7 +1805,7 @@ sub start_mcp {
 	} ## end of validate_sync
 
 
-	sub decomission_sync {
+	sub deactivcate_sync {
 
 		## We need to turn off a running sync
 		## Returns boolean success/failure
@@ -1844,7 +1844,7 @@ sub start_mcp {
 
 		return 1;
 
-	} ## end of decomission_sync
+	} ## end of deactivate_sync
 
 
 	sub cleanup_mcp {
@@ -5081,55 +5081,6 @@ sub connect_database {
 } ## end of connect_database
 
 
-sub deactivate_sync {
-
-	## Request a named sync be deactivated
-	my ($self,$syncname) = @_;
-
-	if (!defined $syncname or ! length $syncname) {
-		die qq{Must provide a syncname\n};
-	}
-
-	my $sync = $self->get_syncs;
-
-	if (! exists $sync->{$syncname}) {
-		die qq{Could not find a sync named "$syncname"};
-	}
-
-	my $dbh = $self->{masterdbh} or die qq{No database connection!\n};
-
-	my $msg = "bucardo_deactivate_sync_$syncname";
-
-	$dbh->do(qq{NOTIFY "$msg"}) or warn 'NOTIFY failed';
-	$dbh->commit();
-
-	return;
-
-} ## end of deactivate_sync
-
-
-sub activate_sync {
-
-	my ($self,$syncname) = @_;
-
-	if (!defined $syncname or ! length $syncname) {
-		die qq{Must provide a syncname\n};
-	}
-
-	my $sync = $self->get_syncs;
-
-	if (! exists $sync->{$syncname}) {
-		die qq{Could not find a sync named "$syncname"};
-	}
-
-	my $dbh = $self->{masterdbh} or die qq{No database connection!\n};
-
-	my $msg = "bucardo_activate_sync_$syncname";
-
-	$dbh->do(qq{NOTIFY "$msg"}) or warn 'NOTIFY failed';
-	return $dbh->commit();
-
-} ## end of activate_sync
 
 
 sub reload_all_syncs {
