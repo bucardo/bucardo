@@ -5081,22 +5081,6 @@ sub connect_database {
 } ## end of connect_database
 
 
-
-
-sub reload_all_syncs {
-
-	my ($self) = @_;
-
-	my $dbh = $self->{masterdbh} or die qq{No database connection!\n};
-
-	my $msg = "bucardo_mcp_reload";
-
-	$dbh->do("NOTIFY $msg") or warn 'NOTIFY failed';
-	return $dbh->commit();
-
-} ## end of reload_all_syncs
-
-
 sub send_mail {
 
 	## Send out an email message
