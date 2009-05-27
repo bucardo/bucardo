@@ -1834,26 +1834,31 @@ sub start_mcp {
 
 	sub cleanup_mcp {
 
-		## Kill children, remove pidfile, update tables, etc.
-		my ($self,$reason) = @_;
+		## MCP is shutting down
+		## Disconnect from the database
+		## Attempt to kill and controller children
+		## Send a final NOTIFY
+		## Remove our PID file
 
-		unlink $self->{pidfile};
+		my ($self,$reason) = @_;
 
 		if (!ref $self) {
 			print STDERR "Oops! cleanup_mcp was not called correctly. This is a Bad Thing\n";
 			return;
 		}
-		$self->glog(qq{Removed file "$self->{pidfile}"});
 
+		## Rollback and disconnect from the master database
 		if ($self->{masterdbh}) {
 			$self->{masterdbh}->rollback();
 			$self->{masterdbh}->disconnect();
 		}
 
-		## Kill all children controllers belonging to us
+		## Reconnect to the master database for some final cleanups
 		my $finaldbh = $self->connect_database();
+
+		## Kill all children controllers belonging to us
 		if ($config{audit_pid}) {
-			$SQL = qq{
+			$SQL = q{
                 SELECT pid
                 FROM   bucardo.audit_pid
                 WHERE  parentid = ?
@@ -1866,7 +1871,7 @@ sub start_mcp {
 			for (@{$sth->fetchall_arrayref()}) {
 				my $kid = $_->[0];
 				$self->glog("Found active controller $kid");
-				if (kill 0, $kid) {
+				if (kill 0 => $kid) {
 					$count = kill $signumber{USR1} => $kid;
 					$self->glog("Kill results: $count");
 				}
@@ -1876,7 +1881,7 @@ sub start_mcp {
 			}
 
 			## Update the audit_pid table
-			$SQL = qq{
+			$SQL = q{
                 UPDATE bucardo.audit_pid
                 SET    killdate = timeofday()::timestamptz, death = ?
                 WHERE  type='MCP'
@@ -1888,17 +1893,25 @@ sub start_mcp {
 			$sth->execute($reason,$self->{mcpauditid});
 			$finaldbh->commit();
 		}
+
+		## TODO: Can we add info to the PID files and get the controller list that way?
+
 		my $systemtime = scalar localtime;
-		my $dbtime = $finaldbh->selectall_arrayref("SELECT now()")->[0][0];
+		my $dbtime = $finaldbh->selectall_arrayref('SELECT now()')->[0][0];
 		$self->glog(qq{End of cleanup_mcp. Sys time: $systemtime. Database time: $dbtime});
 		$finaldbh->do('NOTIFY bucardo_stopped')  or warn 'NOTIFY failed';
 		$finaldbh->commit();
 		$finaldbh->disconnect();
+
+		## Remove our PID file
+		unlink $self->{pidfile};
+		$self->glog(qq{Removed file "$self->{pidfile}"});
+
 		return;
 
 	} ## end of cleanup_mcp
 
-	return "We should never reach this point";
+	die 'We should never reach this point!';
 
 } ## end of start_mcp
 
