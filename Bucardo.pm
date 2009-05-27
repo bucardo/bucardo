@@ -184,7 +184,7 @@ sub glog {
 	my ($self,$msg,@extra) = @_;
 	chomp $msg;
 
-	my $is_warning = ($self->{warning_file} and $msg =~ /^Warning/o) ? 1 : 0;
+	my $is_warning = ($self->{warning_file} and $msg =~ /^Warning|ERROR|FATAL/o) ? 1 : 0;
 
 	## Any extra arguments means $msg is a printf-style string
 	if (@extra) {
