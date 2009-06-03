@@ -208,10 +208,10 @@ sub glog {
 	## If using syslog, send the message at the 'info' priority
 	$self->{debugsyslog} and syslog 'info', $msg;
 
-	## Possibly send the message to stdout
+	## Possibly send the message to stderr
 	$self->{debugstderr} and print STDERR "$header $msg\n";
 
-	## Possibly send the message to stderr
+	## Possibly send the message to stdout
 	$self->{debugstdout} and print STDOUT "$header $msg\n";
 
 	## Possible send warnings to a separate file
