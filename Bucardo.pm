@@ -239,16 +239,17 @@ sub glog {
 		}
 
 		## If this file has not been opened yet, do so
-		if (!exists $self->{debugfilehandle}{$file}) {
-			open $self->{debugfilehandle}{$file}, '>>', $file or die qq{Could not append to "$file": $!\n};
+		if (!exists $self->{debugfilehandle}{$$}{$file}) {
+			open $self->{debugfilehandle}{$$}{$file}, '>>', $file or die qq{Could not append to "$file": $!\n};
+			select((select($self->{debugfilehandle}{$$}{$file}),$|=1)[0]);
 		}
 
+		## Write the message.
 		## If not writing to separate files, prepend the PID to the message
-		if (!$self->{debugfilesep} and !$config{log_showpid}) {
-			print {$self->{debugfilehandle}{$file}} "($$) ";
-		}
-
-		printf {$self->{debugfilehandle}{$file}} "$header $msg\n";
+		printf {$self->{debugfilehandle}{$$}{$file}} "%s%s %s\n",
+			(!$self->{debugfilesep} and !$config{log_showpid}) ? "($$) " : '',
+			$header,
+			$msg;
 	}
 
 	return;
@@ -274,6 +275,7 @@ sub clog {
 		warn qq{Could not append to file "$cfile": $!};
 		return;
 	}
+
 	print $clog "$msg\n";
 	close $clog or warn qq{Could not close "$cfile": $!\n};
 
