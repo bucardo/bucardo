@@ -4023,7 +4023,7 @@ sub start_kid {
                             my ($srccmd,$temptable);
                             if (! $source_modern_copy) {
                                 $temptable = "bucardo_tempcopy_$$";
-                                $srccmd = "CREATE TABLE $temptable AS SELECT * FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)";
+                                $srccmd = "CREATE TEMP TABLE $temptable AS SELECT * FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)";
 
                                 $sourcedbh->do($srccmd);
                                 $srccmd = "COPY $temptable TO STDOUT";
