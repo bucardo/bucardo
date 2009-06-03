@@ -2104,7 +2104,7 @@ sub start_controller {
 
 	## Output goat information to the logs
 	for my $m (@{$sync->{goatlist}}) {
-		$msg = sprintf q{  Herd member %s: $s.%s%s%s%s},
+		$msg = sprintf q{  Herd member %s: %s.%s%s%s%s},
 			$m->{oid},
 			$m->{schemaname},
 			$m->{tablename},
