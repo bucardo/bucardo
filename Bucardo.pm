@@ -3434,6 +3434,7 @@ sub start_kid {
 
 	my $source_disable_trigrules = $sourcedbh->{pg_server_version} >= 80300 ? 'replica' : 'pg_class';
 	my $target_disable_trigrules = $targetdbh->{pg_server_version} >= 80300 ? 'replica' : 'pg_class';
+	my $source_modern_copy = $sourcedbh->{pg_server_version} >= 80200 ? 1 : 0;
 
 	$SQL{disable_trigrules} = $SQL{enable_trigrules} = '';
 	if ($source_disable_trigrules eq 'pg_class' or $target_disable_trigrules eq 'pg_class') {
@@ -4020,7 +4021,7 @@ sub start_kid {
 
                             ## Old versions of Postgres don't support "COPY (query)"
                             my ($srccmd,$temptable);
-                            if ($sourcedbh->{pg_server_version} < 80200) {
+                            if (! $source_modern_copy) {
                                 $temptable = "bucardo_tempcopy_$$";
                                 $srccmd = "CREATE TABLE $temptable AS SELECT * FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)";
 
@@ -4043,7 +4044,7 @@ sub start_kid {
 							$self->glog(qq{End COPY to $S.$T});
 							$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T} = @$info;
 
-                            if ($sourcedbh->{pg_server_version} < 80200) {
+                            if (! $source_modern_copy) {
                                 $sourcedbh->do("DROP TABLE $temptable");
                             }
 
