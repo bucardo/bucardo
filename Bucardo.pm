@@ -4015,8 +4015,22 @@ sub start_kid {
 							($count = $targetdbh->do($SQL)) =~ s/0E0/0/o;
 							$dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T} = $count;
 
-							## Now COPY over all affected rows from source to target
-							my $srccmd = "COPY (SELECT * FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)) TO STDOUT";
+
+							## COPY over all affected rows from source to target
+
+                            ## Old versions of Postgres don't support "COPY (query)"
+                            my ($srccmd,$temptable);
+                            if ($sourcedbh->{pg_server_version} < 80200) {
+                                $temptable = "bucardo_tempcopy_$$";
+                                $srccmd = "CREATE TABLE $temptable AS SELECT * FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)";
+
+                                $sourcedbh->do($srccmd);
+                                $srccmd = "COPY $temptable TO STDOUT";
+                            }
+                            else {
+                                $srccmd = "COPY (SELECT * FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)) TO STDOUT";
+                            }
+
 							my $tgtcmd = "COPY $S.$T FROM STDIN";
 							$sourcedbh->do($srccmd);
 							$targetdbh->do($tgtcmd);
@@ -4028,6 +4042,10 @@ sub start_kid {
 							$targetdbh->pg_putcopyend();
 							$self->glog(qq{End COPY to $S.$T});
 							$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T} = @$info;
+
+                            if ($sourcedbh->{pg_server_version} < 80200) {
+                                $sourcedbh->do("DROP TABLE $temptable");
+                            }
 
 							## If we disabled the indexes earlier, flip them on and run a REINDEX
 							if ($hasindex) {
