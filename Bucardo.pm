@@ -1807,7 +1807,7 @@ sub start_mcp {
 	} ## end of validate_sync
 
 
-	sub deactivcate_sync {
+	sub deactivate_sync {
 
 		## We need to turn off a running sync
 		## Returns boolean success/failure
@@ -3006,7 +3006,7 @@ sub start_kid {
 		$msg =~ s/\s+$//g;
 
 		## Find any error messages/states for the master, source, or target databases.
-		my ($merr,$serr,$terr, $mstate,$sstate,$tstate);
+		my ($merr,$serr,$terr, $mstate,$sstate,$tstate) = ('', '', '', '', '', '');
 		if ($msg =~ /DBD::Pg/) {
 			$merr = $maindbh->err || 'none';
 			$serr = $sourcedbh->err || 'none';
