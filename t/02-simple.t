@@ -50,19 +50,19 @@ wait_for_notice($dbhX, 'bucardo_syncdone_simpletest', 5);
 
 $SQL = 'SELECT id,inty FROM bucardo_test1';
 $result = $dbhB->selectall_arrayref($SQL);
-diag Dumper $result;
+#diag Dumper $result;
 is_deeply($result, [[12,34]], $t);
 
 ## Test mismatched rows - kicking the sync should fail, as it will be inactive
 $dbhA->do("ALTER TABLE bucardo_test1 ADD newcol INT");
 $dbhA->commit();
-
 $bct->restart_bucardo($dbhX);
 $dbhA->do("INSERT INTO bucardo_test1(id,inty) VALUES (44,55)");
 $dbhA->commit();
-
-$bct->ctl("kick simpletest 2");
-wait_for_notice($dbhX, 'bucardo_syncerror_simpletest', 5);
+eval {
+    wat_for_notice($dbhX, 'bucardo_syncdone_simpletest', 5);
+};
+ok($@, 'Bucardo correctly refused to start');
 
 ## Add the same column to B, then try again
 $dbhB->do("ALTER TABLE bucardo_test1 ADD newcol INT");

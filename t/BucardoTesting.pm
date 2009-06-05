@@ -270,7 +270,7 @@ sub create_cluster {
 	## Make some minor adjustments
 	my $file = "$dirname/postgresql.conf";
 	open my $fh, '>>', $file or die qq{Could not open "$file": $!\n};
-	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\nlog_statement = 'all'\n\n",
+	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\nlog_statement = 'all'\nclient_min_messages = ERROR\n\n",
 		$clusterinfo->{port};
 	print $fh "logging_collector = off\n";
 	close $fh or die qq{Could not close "$file": $!\n};
