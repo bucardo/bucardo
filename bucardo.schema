@@ -191,7 +191,7 @@ CREATE UNIQUE INDEX dbmap_unique ON dbmap(db,dbgroup);
 --
 CREATE TABLE db_connlog (
   db          TEXT        NOT NULL,
-                CONSTRAINT  db_connlog_dbid_fk FOREIGN KEY (db) REFERENCES db(name) ON DELETE CASCADE,
+                CONSTRAINT  db_connlog_dbid_fk FOREIGN KEY (db) REFERENCES db(name) ON DELETE CASCADE ON UPDATE CASCADE,
   conndate    TIMESTAMPTZ NOT NULL DEFAULT now(),  -- when we first connected to it
   connstring  TEXT        NOT NULL,
   status      TEXT        NOT NULL DEFAULT 'unknown',
