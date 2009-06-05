@@ -58,4 +58,8 @@ $t=q{Add sync works};
 $i = $bct->ctl("add sync testsync2 source=testherd1 type=pushdelta targetdb=B");
 like($i, qr{Sync added:}, $t);
 
+$dbhA->disconnect();
+$dbhB->disconnect();
+$dbhX->disconnect();
+
 pass("done");
