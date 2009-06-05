@@ -39,6 +39,10 @@ $t=q{Add sync works};
 $i = $bct->ctl("add sync fullcopytest source=testherd1 type=fullcopy targetdb=B");
 like($i, qr{Sync added:}, $t);
 
+## Tell sync kids to stay alive
+$dbhX->do(q{UPDATE bucardo.sync SET kidsalive = 't'});
+$dbhX->commit();
+
 $bct->restart_bucardo($dbhX);
 
 $dbhX->do('LISTEN bucardo_syncdone_fullcopytest');
@@ -160,6 +164,8 @@ for my $table (sort keys %tabletype) {
 }
 
 $dbhA->commit();
+# XXX - Hack
+sleep 5;
 $bct->ctl('kick fullcopytest 0');
 
 for my $table (sort keys %tabletype) {
@@ -199,6 +205,8 @@ $dbhX->commit();
 $dbhA->do("UPDATE bucardo_test1 SET id = id + 100, inty=inty + 100");
 $dbhA->commit();
 
+# XXX - Hack
+sleep 5;
 $bct->ctl('kick fullcopytest 0');
 
 for my $table (sort keys %tabletype) {
@@ -210,6 +218,7 @@ for my $table (sort keys %tabletype) {
 	$result = [[undef]];
 	bc_deeply($result, $dbhC, $sql{select}{$table}, $t);
 }
+
 
 KILLTEST: {
 sleep 1;
