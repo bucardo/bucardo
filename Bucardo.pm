@@ -504,7 +504,11 @@ sub start_mcp {
 	$self->send_mail({ body => "$body\n\n$dump", subject => $subject });
 
 	## Drop the existing database connection, fork, and get a new one
-	$self->{masterdbh}->disconnect();
+	eval {
+		$self->{masterdbh}->disconnect();
+	};
+	$@ and $self->glog("Warning! Disconnect failed $@");
+
 	my $seeya = fork;
 	if (! defined $seeya) {
 		die qq{Could not fork mcp!};
