@@ -263,14 +263,14 @@ sub create_cluster {
 
 	return if -d $dirname;
 
-	warn qq{Running initdb for cluster "$name"\n};
+	$DEBUG and warn qq{Running initdb for cluster "$name"\n};
 
 	qx{$initdb -D $dirname $arg 2>&1};
 
 	## Make some minor adjustments
 	my $file = "$dirname/postgresql.conf";
 	open my $fh, '>>', $file or die qq{Could not open "$file": $!\n};
-	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\nlog_statement = 'all'\nclient_min_messages = ERROR\n\n",
+	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\nlog_statement = 'all'\nclient_min_messages = WARNING\n\n",
 		$clusterinfo->{port};
 	print $fh "logging_collector = off\n";
 	close $fh or die qq{Could not close "$file": $!\n};
@@ -303,11 +303,11 @@ sub start_cluster {
 		## Make sure it's still around
 		$count = kill 0 => $pid;
 		return if $count == 1;
-		warn qq{Server seems to have died, removing file "$pidfile"\n};
+		$DEBUG and warn qq{Server seems to have died, removing file "$pidfile"\n};
 		unlink $pidfile or die qq{Could not remove file "$pidfile"\n};
 	}
 
-	warn qq{Starting cluster "$name"\n};
+	$DEBUG and warn qq{Starting cluster "$name"\n};
 
 	my $option = '';
 	if ($^O !~ /Win32/) {
@@ -366,12 +366,12 @@ sub fresh_database {
 	{
 		if (database_exists($dbh => $dbname) and $arg->{dropdb}) {
 			local $dbh->{AutoCommit} = 1;
-			warn "Dropping database $dbname\n";
+			$DEBUG and warn "Dropping database $dbname\n";
 			$dbh->do("DROP DATABASE $dbname");
 		}
 		if (!database_exists($dbh => $dbname)) {
 			local $dbh->{AutoCommit} = 1;
-			warn "Creating database $dbname\n";
+			$DEBUG and warn "Creating database $dbname\n";
 			$dbh->do("CREATE DATABASE $dbname");
 			$brandnew = 1;
 			$dbh->disconnect();
@@ -433,7 +433,7 @@ sub shutdown_cluster {
 	## Make sure it's still around
 	$count = kill 0 => $pid;
 	if ($count != 1) {
-		warn "Removing $pidfile\n";
+		$DEBUG and warn "Removing $pidfile\n";
 		unlink $pidfile;
 	}
 	$count = kill 15 => $pid;
@@ -643,7 +643,7 @@ sub setup_bucardo {
 		$dbh->do("CREATE SCHEMA bucardo");
 		$dbh->do("CREATE SCHEMA freezer");
 		$dbh->do("ALTER DATABASE $dbname SET search_path = bucardo, freezer, public");
-		warn "Creating database $dbname\n";
+		$DEBUG and warn "Creating database $dbname\n";
 	}
 
 	## Are we connected to this database? If not, connect to it
@@ -758,7 +758,7 @@ sub tt {
 	my $name = shift or die qq{Need a name!\n};
 	if (exists $timing{$name}) {
 		my $newtime = tv_interval($timing{$name});
-		warn "Timing for $name: $newtime\n";
+		$DEBUG and warn "Timing for $name: $newtime\n";
 		delete $timing{$name};
 	}
 	else {

@@ -82,11 +82,13 @@ $dbhA->do("ALTER TABLE bucardo_test1 ADD COLUMN newcol INT");
 $dbhA->commit();
 
 $bct->restart_bucardo($dbhX);
+$dbhA->do('INSERT INTO bucardo_test1 (id, inty, newcol) VALUES (100, 100, 100)');
+$dbhA->commit();
 $bct->ctl("kick simpletest 2");
 wait_for_notice($dbhX, 'bucardo_syncdone_simpletest', 5);
 
 $SQL = 'SELECT id,inty FROM bucardo_test1';
 $result = $dbhB->selectall_arrayref($SQL);
-is_deeply($result, [[12,34],[44,55]], $t);
+is_deeply($result, [[12,34],[44,55],[100,100]], $t);
 
 exit;

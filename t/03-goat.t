@@ -9,7 +9,8 @@ use 5.008003;
 use strict;
 use warnings;
 use DBI;
-use Test::More tests => 73;
+use Test::More 'no_plan';
+#use Test::More tests => 73;
 use lib 't','.';
 use BucardoTesting;
 
@@ -17,6 +18,8 @@ my $info = {
 			name => 'goat'
 			};
 my $bctest = BucardoTesting->new($info);
+
+ok('No tests');
 
 
 

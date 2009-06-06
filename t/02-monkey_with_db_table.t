@@ -56,5 +56,8 @@ $ctlargs = $bct->add_db_args('B');
 $i = $bct->ctl("add database bucardo_test $ctlargs");
 like($i, qr{Database added: B}, $t);
 
+$dbh->disconnect();
+$dbhA->disconnect();
+
 pass("done");
 
