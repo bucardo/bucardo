@@ -1699,6 +1699,7 @@ $bc$
                     trows BIGINT = 0;
                     rnames TEXT;
                     rname TEXT;
+                    rnamerec RECORD;
                     ids_where TEXT;
                     ids_sel TEXT;
                     ids_grp TEXT;
@@ -1723,12 +1724,13 @@ $bc$
                   ids_where = 'COALESCE(rowid,''NULL'') = COALESCE(id, ''NULL'')';
                   ids_sel = 'rowid AS id';
                   ids_grp = 'rowid';
-                  FOR rname IN SELECT attname FROM pg_attribute WHERE attrelid =
+                  FOR rnamerec IN SELECT attname FROM pg_attribute WHERE attrelid =
                           (SELECT oid FROM pg_class WHERE relname = 'bucardo_delta'
                           AND relnamespace =
                           (SELECT oid FROM pg_namespace WHERE
                           nspname = 'bucardo') AND attname ~ '^rowid'
                       ) LOOP
+                      rname = rnamerec.attname;
                       rnames = COALESCE(rnames || ' ', '') || rname ;
                       SELECT INTO idnum SUBSTRING(rname FROM '[[:digit:]]+');
                       IF idnum IS NOT NULL THEN
