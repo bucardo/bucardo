@@ -14,6 +14,9 @@
 
   - Rewrite the pushdelta sync method to be more efficient and safer. [GSM]
 
+  - Add new 'onetimecopy' attribute to sync table, to allow recreation on 
+    demand of pushdelta tables on slaves via COPY. [GSM]
+
   - Fix failure to disable/enable triggers when using pg_class and table 
     and schema are words changed by quote_ident. [Ben Allen]
 

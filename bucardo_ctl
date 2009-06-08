@@ -1595,6 +1595,7 @@ sub upgrade {
 		['bucardo', 'goat',      'qpkey',           q{TEXT        NULL}],
 		['bucardo', 'sync',      'strict_checking', q{BOOLEAN NOT NULL DEFAULT 'true'}],
 		['bucardo', 'sync',      'track_rates',     q{BOOLEAN NOT NULL DEFAULT 'false'}],
+		['bucardo', 'sync',      'onetimecopy',     q{BOOLEAN NOT NULL DEFAULT 'false'}],
 
 		['freezer', 'old_audit_pid', 'id',              q{INTEGER}],
 		['freezer', 'old_audit_pid', 'parentid',        q{INTEGER}],

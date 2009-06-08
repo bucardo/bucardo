@@ -837,7 +837,7 @@ sub start_mcp {
 
 						## For now, just allow a few things to be changed "on the fly"
 						for my $val (qw/checksecs stayalive limitdbs do_listen txnmode deletemethod status ping
-										analyze_after_copy targetgroup targetdb usecustomselect/) {
+										analyze_after_copy targetgroup targetdb usecustomselect onetimecopy/) {
 							$sync->{$syncname}{$val} = $self->{sync}{$syncname}{$val} = $info->{$val};
 						}
 						## TODO: Fix those double assignments
@@ -1953,8 +1953,8 @@ sub start_controller {
 
 	my ($syncname, $synctype, $kicked,  $source, $limitdbs) = @$sync{qw(
 		   name     synctype mcp_kicked  source   limitdbs)};
-	my ($sourcedb, $stayalive, $kidsalive, $checksecs) = @$sync{qw(
-		 sourcedb   stayalive   kidsalive   checksecs)};
+	my ($sourcedb, $stayalive, $kidsalive, $checksecs, $track_rates) = @$sync{qw(
+		 sourcedb   stayalive   kidsalive   checksecs   track_rates)};
 
 	## Set our process name
 	$0 = qq{Bucardo Controller.$self->{extraname} Sync "$syncname" ($synctype) for source "$source"};
@@ -1999,7 +1999,8 @@ sub start_controller {
 	$msg = qq{  $showtarget synctype: $synctype stayalive: $stayalive checksecs: $checksecs };
 	$self->glog($msg);
 	$mailmsg .= "$msg\n";
-	$msg = qq{  limitdbs: $limitdbs kicked: $kicked kidsalive: $kidsalive};
+	my $otc = $sync->{onetimecopy};
+	$msg = qq{  limitdbs: $limitdbs kicked: $kicked kidsalive: $kidsalive onetimecopy: $otc};
 	$self->glog($msg);
 	$mailmsg .= "$msg\n";
 
@@ -2326,7 +2327,8 @@ sub start_controller {
 	}
 
 	## If these are perpetual children, kick them off right away
-	if ($kidsalive) {
+	## Also handle "onetimecopy" here as well
+	if ($kidsalive or $otc) {
 		for my $dbname (sort keys %$targetdb) {
 			my $kid = $targetdb->{$dbname};
 			if ($kid->{pid}) { ## Can this happen?
@@ -2339,8 +2341,29 @@ sub start_controller {
 			}
 			$kid->{dbname} = $dbname;
 			$self->{kidcheckq} = 1;
+			if ($otc and $sync->{synctype} eq 'pushdelta') {
+				$sth{qinsert}->execute($syncname,$self->{ppid},$sourcedb,$dbname,'fullcopy');
+				$maindbh->commit();
+				$sync->{synctype} = 'fullcopy';
+				$sync->{kidsalive} = 0;
+				$sync->{track_rates} = 0;
+			}
 			$self->create_newkid($sync,$kid);
 		}
+	}
+
+	## Reset the one-time-copy flag, so we only do it one time!
+	## Presumes that above kids worked without problems, of course
+	if ($otc) {
+		$otc = 0;
+		$SQL = 'UPDATE sync SET onetimecopy = FALSE WHERE name = ?';
+		$sth = $maindbh->prepare($SQL);
+		$sth->execute($syncname);
+		$maindbh->commit();
+		## Reset to the original values, in case we changed them
+		$sync->{synctype} = $synctype;
+		$sync->{kidsalive} = $kidsalive;
+		$sync->{track_rates} = $track_rates;
 	}
 
 	my $lastpingcheck = 0;
@@ -2988,7 +3011,7 @@ sub start_kid {
 	## Adjust the process name, start logging
 	$0 = qq{Bucardo Kid.$self->{extraname} Sync "$syncname": ($synctype) "$sourcedb" -> "$targetdb"};
 	$self->{logprefix} = 'KID';
-	$self->glog(qq{New kid, syncs "$sourcedb" to "$targetdb" for sync "$syncname" alive=$kidsalive Parent=$self->{parent}});
+	$self->glog(qq{New kid, syncs "$sourcedb" to "$targetdb" for sync "$syncname" alive=$kidsalive Parent=$self->{parent} Type=$synctype});
 
 	## Establish these early so the DIE block can use them
 	our ($maindbh,$sourcedbh,$targetdbh);
@@ -4023,18 +4046,18 @@ sub start_kid {
 
 							## COPY over all affected rows from source to target
 
-                            ## Old versions of Postgres don't support "COPY (query)"
-                            my ($srccmd,$temptable);
-                            if (! $source_modern_copy) {
-                                $temptable = "bucardo_tempcopy_$$";
-                                $srccmd = "CREATE TEMP TABLE $temptable AS SELECT * FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)";
+							## Old versions of Postgres don't support "COPY (query)"
+							my ($srccmd,$temptable);
+							if (! $source_modern_copy) {
+								$temptable = "bucardo_tempcopy_$$";
+								$srccmd = "CREATE TEMP TABLE $temptable AS SELECT * FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)";
 
-                                $sourcedbh->do($srccmd);
-                                $srccmd = "COPY $temptable TO STDOUT";
-                            }
-                            else {
-                                $srccmd = "COPY (SELECT * FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)) TO STDOUT";
-                            }
+								$sourcedbh->do($srccmd);
+								$srccmd = "COPY $temptable TO STDOUT";
+							}
+							else {
+								$srccmd = "COPY (SELECT * FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)) TO STDOUT";
+							}
 
 							my $tgtcmd = "COPY $S.$T FROM STDIN";
 							$sourcedbh->do($srccmd);
@@ -4048,9 +4071,9 @@ sub start_kid {
 							$self->glog(qq{End COPY to $S.$T});
 							$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T} = @$info;
 
-                            if (! $source_modern_copy) {
-                                $sourcedbh->do("DROP TABLE $temptable");
-                            }
+							if (! $source_modern_copy) {
+								$sourcedbh->do("DROP TABLE $temptable");
+							}
 
 							## If we disabled the indexes earlier, flip them on and run a REINDEX
 							if ($hasindex) {
