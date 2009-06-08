@@ -214,12 +214,10 @@ sub glog {
 	## Possibly send the message to stdout
 	$self->{debugstdout} and print STDOUT "$header $msg\n";
 
-	## Possible send warnings to a separate file
+	## Possibly send warnings to a separate file
 	if ($is_warning) {
 		my $file = $self->{warning_file} or die;
-		if (!exists $self->{warningfilehandle}) {
-			open $self->{warningfilehandle}, '>>', $file or die qq{Could not append to "$file": $!\n};
-		}
+		open $self->{warningfilehandle}, '>>', $file or die qq{Could not append to "$file": $!\n};
 		print {$self->{warningfilehandle}} "$header $msg\n";
 		close $self->{warningfilehandle} or warn qq{Could not close "$file": $!\n};
 	}
