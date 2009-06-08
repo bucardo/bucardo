@@ -1997,7 +1997,7 @@ sub start_controller {
 	$msg = qq{  $showtarget synctype: $synctype stayalive: $stayalive checksecs: $checksecs };
 	$self->glog($msg);
 	$mailmsg .= "$msg\n";
-	my $otc = $sync->{onetimecopy};
+	my $otc = $sync->{onetimecopy} || 0;
 	$msg = qq{  limitdbs: $limitdbs kicked: $kicked kidsalive: $kidsalive onetimecopy: $otc};
 	$self->glog($msg);
 	$mailmsg .= "$msg\n";
@@ -2345,6 +2345,7 @@ sub start_controller {
 				$sync->{synctype} = 'fullcopy';
 				$sync->{kidsalive} = 0;
 				$sync->{track_rates} = 0;
+				$sync->{onetimecopy_savepid} = 1;
 			}
 			$self->create_newkid($sync,$kid);
 		}
@@ -2354,10 +2355,11 @@ sub start_controller {
 	## Presumes that above kids worked without problems, of course
 	if ($otc) {
 		$otc = 0;
-		$SQL = 'UPDATE sync SET onetimecopy = FALSE WHERE name = ?';
+		$SQL = 'UPDATE sync SET onetimecopy = 0 WHERE name = ?';
 		$sth = $maindbh->prepare($SQL);
 		$sth->execute($syncname);
 		$maindbh->commit();
+		$sync->{onetimecopy_savepid} = 0;
 		## Reset to the original values, in case we changed them
 		$sync->{synctype} = $synctype;
 		$sync->{kidsalive} = $kidsalive;
@@ -2617,7 +2619,9 @@ sub start_controller {
 					}
 					## If they are finished, and kidsalive is false, then all is good.
 					$kid->{pid} = 0; ## No need to check it again
-					if ($kid->{finished} and !$kidsalive) {
+
+					## Also make a special exception for one-time-copy kids
+					if ($kid->{onetimecopy} or ($kid->{finished} and !$kidsalive)) {
 						$self->glog(qq{Kid $pid has died a natural death. Removing from list});
 						next;
 					}
@@ -2807,7 +2811,7 @@ sub start_controller {
 				## Check if there is a kid alive for this database: spawn if needed
 				if (! $kid->{pid} or ! (kill 0 => $kid->{pid})) {
 					$kid->{dbname} = $dbname;
-					$self->glog("Creating a kid");
+					$self->glog('Creating a kid');
 					$self->{kidcheckq} = 1; ## Since this kid will not get the above notice
 					$self->create_newkid($sync,$kid);
 				}
@@ -2859,6 +2863,9 @@ sub start_controller {
 		$kid->{cdate} = time;
 		$kid->{life}++;
 		$kid->{finished} = 0;
+		if ($sync->{onetimecopy_savepid}) {
+			$kid->{onetimecopy} = 1;
+		}
 		sleep $config{ctl_createkid_time};
 		return;
 
@@ -3860,6 +3867,29 @@ sub start_kid {
 				if ($g->{ghost}) {
 					$self->glog("Skipping ghost table $S.$T");
 					next;
+				}
+
+				## If doing a one-time-copy and using empty mode, leave if the target has rows
+				if ($sync->{onetimecopy} == 2) {
+					$SQL = "SELECT 1 FROM $S.$T LIMIT 1";
+					$sth = $targetdbh->prepare($SQL);
+					$count = $sth->execute();
+					$sth->finish();
+					if ($count >= 1) {
+						$g->{onetimecopy_ifempty} = 1;
+						$self->glog(qq{Target table "$S.$T" has rows and we are in onetimecopy if empty mode, so we will not COPY});
+						next;
+					}
+
+					## Just in case, verify that we aren't at zero rows due to nothing on the source
+					$sth = $sourcedbh->prepare($SQL);
+					$count = $sth->execute();
+					$sth->finish();
+					if ($count < 1) {
+						$g->{onetimecopy_ifempty} = 1;
+						$self->glog(qq{Source table "$S.$T" has no rows and we are in onetimecopy if empty mode, so we will not COPY});
+						next;
+					}
 				}
 
 				my ($srccmd,$tgtcmd);
@@ -5001,6 +5031,10 @@ sub start_kid {
 			and !$self->{dryrun}) {
 			for my $g (@$goatlist) {
 				next if ! $g->{analyze_after_copy};
+				if ($g->{onetimecopy_ifempty}) {
+					$g->{onetimecopy_ifempty} = 0;
+					next;
+				}
 				($S,$T) = ($g->{safeschema},$g->{safetable});
 				my $total_time = time() - $start_time;
 				$self->glog("Analyzing $S.$T on $targetdb. Time: $total_time");
