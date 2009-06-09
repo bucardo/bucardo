@@ -839,10 +839,13 @@ sub start_mcp {
 						$maindbh->commit();
 
 						## For now, just allow a few things to be changed "on the fly"
+						## no critic (ProhibitHardTabs)
 						for my $val (qw/checksecs stayalive limitdbs do_listen txnmode deletemethod status ping
 										analyze_after_copy targetgroup targetdb usecustomselect onetimecopy/) {
 							$sync->{$syncname}{$val} = $self->{sync}{$syncname}{$val} = $info->{$val};
 						}
+						## use critic
+
 						## TODO: Fix those double assignments
 
 						## Empty all of our custom code arrays
@@ -1953,10 +1956,12 @@ sub start_controller {
 	## Custom code may require a copy of the rows
 	our $rows_for_custom_code;
 
+	## no critic (ProhibitHardTabs)
 	my ($syncname, $synctype, $kicked,  $source, $limitdbs) = @$sync{qw(
 		   name     synctype mcp_kicked  source   limitdbs)};
 	my ($sourcedb, $stayalive, $kidsalive, $checksecs, $track_rates) = @$sync{qw(
 		 sourcedb   stayalive   kidsalive   checksecs   track_rates)};
+	## use critic
 
 	## Set our process name
 	$0 = qq{Bucardo Controller.$self->{extraname} Sync "$syncname" ($synctype) for source "$source"};
@@ -3015,8 +3020,10 @@ sub start_kid {
 
 	our ($self,$sync,$targetdb) = @_;
 
+	## no critic (ProhibitHardTabs)
 	our ($syncname, $synctype, $sourcedb, $goatlist, $kidsalive ) = @$sync{qw(
 		   name      synctype   sourcedb   goatlist   kidsalive )};
+	## use critic
 
 	## Adjust the process name, start logging
 	$0 = qq{Bucardo Kid.$self->{extraname} Sync "$syncname": ($synctype) "$sourcedb" -> "$targetdb"};

@@ -58,6 +58,7 @@ profile-strictness = quiet
 
 [-Bangs::ProhibitFlagComments]
 [-BuiltinFunctions::ProhibitBooleanGrep]
+[-CodeLayout::ProhibitQuotedWordLists]
 [-ControlStructures::ProhibitPostfixControls]
 [-Documentation::RequirePodSections]
 [-Lax::ProhibitEmptyQuotes::ExceptAsFallback]
