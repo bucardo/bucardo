@@ -5,82 +5,94 @@
 verbose = 8
 severity = 1
 
-[-Bangs::ProhibitFlagComments]
-[-Bangs::ProhibitNumberedNames]
-[-Bangs::ProhibitVagueNames]
+##
+## Five:
+##
 
-[-BuiltinFunctions::ProhibitBooleanGrep]
-[-BuiltinFunctions::ProhibitComplexMappings]
-
-[-CodeLayout::ProhibitHardTabs]
-[-CodeLayout::ProhibitParensWithBuiltins]
-[-CodeLayout::RequireTidyCode]
-[-CodeLayout::RequireUseUTF8]
-
-[-ControlStructures::ProhibitCascadingIfElse]
-[-ControlStructures::ProhibitCStyleForLoops]
-[-ControlStructures::ProhibitDeepNests]
-[-ControlStructures::ProhibitPostfixControls]
-[-ControlStructures::ProhibitUnlessBlocks]
-
-[-Documentation::PodSpelling]
-[-Documentation::RequirePodSections]
-[-Documentation::RequirePODUseEncodingUTF8]
-
-[-ErrorHandling::RequireCarping]
-[-ErrorHandling::RequireUseOfExceptions]
-
-[-InputOutput::ProhibitBacktickOperators]
-[-InputOutput::RequireBracedFileHandleWithPrint]
-
-[-Lax::ProhibitComplexMappings::LinesNotStatements]
-[-Lax::ProhibitEmptyQuotes::ExceptAsFallback]
-
-[-Miscellanea::ProhibitTies]
-[-Miscellanea::RequireRcsKeywords]
-
-[-Modules::PerlMinimumVersion]
-[-Modules::ProhibitExcessMainComplexity]
-[-Modules::ProhibitMultiplePackages]
-## Cannot handle multiple packages in one file
-[-Modules::RequireExplicitInclusion]
-
-[-References::ProhibitDoubleSigils]
-
-[-RegularExpressions::RequireExtendedFormatting]
-[-RegularExpressions::RequireLineBoundaryMatching]
-## A shame, but 'has' is confusing it
-[-Subroutines::ProhibitCallsToUndeclaredSubs]
-[-Subroutines::ProhibitExcessComplexity]
+[-ControlStructures::ProhibitMutatingListFunctions]
 [-Subroutines::ProhibitNestedSubs] 
-[-Subroutines::RequireArgUnpacking]
-
-
-[-TestingAndDebugging::ProhibitNoWarnings]
-
-[-Tics::ProhibitLongLines]
-
 [-ValuesAndExpressions::ProhibitAccessOfPrivateData]
-[-ValuesAndExpressions::ProhibitCommaSeparatedStatements]
-[-ValuesAndExpressions::ProhibitEmptyQuotes]
-[-ValuesAndExpressions::ProhibitImplicitNewlines]
-[-ValuesAndExpressions::ProhibitInterpolationOfLiterals]
-[-ValuesAndExpressions::ProhibitMixedBooleanOperators]
-[-ValuesAndExpressions::ProhibitNoisyQuotes]
-[-ValuesAndExpressions::ProhibitVersionStrings]
-[-ValuesAndExpressions::RequireNumberSeparators]
-[-ValuesAndExpressions::RestrictLongStrings]
 
-[-Variables::ProhibitLocalVars]
-[-Variables::ProhibitPackageVars]
-[-Variables::ProhibitPunctuationVars]
+##
+## Four:
+##
+
+## We are just fine with 'die', thanks very much
+[-ErrorHandling::RequireUseOfExceptions]
+[-InputOutput::ProhibitOneArgSelect]
+## Too many false positives for this one:
+[-InputOutput::RequireBriefOpen]
+## This does such a poor job we have to exclude it
+[-RegularExpressions::ProhibitCaptureWithoutTest]
+[-ValuesAndExpressions::ProhibitMixedBooleanOperators]
 [-Variables::RequireLocalizedPunctuationVars]
 
-[-Modules::RequireVersionVar]
+##
+## Three:
+##
+
+[-Bangs::ProhibitNumberedNames]
+[-Bangs::ProhibitVagueNames]
+[-BuiltinFunctions::ProhibitComplexMappings]
+[-CodeLayout::RequireUseUTF8]
+[-ControlStructures::ProhibitCascadingIfElse]
+[-ControlStructures::ProhibitDeepNests]
+[-Documentation::RequirePODUseEncodingUTF8]
+[-ErrorHandling::RequireCarping]
+[-ErrorHandling::RequireCheckingReturnValueOfEval]
+[-InputOutput::ProhibitBacktickOperators]
+[-Lax::ProhibitComplexMappings::LinesNotStatements]
+[-Modules::ProhibitExcessMainComplexity]
+[-Modules::ProhibitUseQuotedVersion]
+[-RegularExpressions::ProhibitComplexRegexes]
+[-RegularExpressions::RequireExtendedFormatting]
+[-Subroutines::ProhibitExcessComplexity]
+[-ValuesAndExpressions::ProhibitImplicitNewlines]
+[-Variables::ProhibitPackageVars]
+[-ValuesAndExpressions::ProhibitVersionStrings]
+
+##
+## Two:
+##
+
+[-Bangs::ProhibitFlagComments]
+[-BuiltinFunctions::ProhibitBooleanGrep]
+[-ControlStructures::ProhibitPostfixControls]
+[-Documentation::RequirePodSections]
+[-Lax::ProhibitEmptyQuotes::ExceptAsFallback]
+## This one really ought to be removed entirely:
+## Giving too many false positives in bucardo_ctl:
+[-Miscellanea::ProhibitUselessNoCritic]
+[-Miscellanea::RequireRcsKeywords]
+[-References::ProhibitDoubleSigils]
+[-RegularExpressions::RequireDotMatchAnything]
+[-RegularExpressions::RequireLineBoundaryMatching]
+[-Tics::ProhibitLongLines]
+[-ValuesAndExpressions::ProhibitEmptyQuotes]
+[-ValuesAndExpressions::ProhibitMagicNumbers]
+## This one has such potential to be useful, but complains about some wrong things:
+[-ValuesAndExpressions::ProhibitNoisyQuotes]
+[-ValuesAndExpressions::RequireNumberSeparators]
+[-ValuesAndExpressions::RestrictLongStrings]
+[-Variables::ProhibitPunctuationVars]
+
+##
+## One:
+##
+
+[-CodeLayout::ProhibitParensWithBuiltins]
+[-CodeLayout::RequireTidyCode]
+[-Documentation::PodSpelling]
+## Yeah, because everyone checks the return value of 'print'
+[-InputOutput::RequireCheckedSyscalls]
+[-Miscellanea::RequireRcsKeywords]
+[-NamingConventions::Capitalization]
+[-RegularExpressions::ProhibitEscapedMetacharacters]
+
+## Change the severity level of some specific items
 
 [CodeLayout::ProhibitTrailingWhitespace]
 severity = 5
 
 [Subroutines::ProhibitBuiltinHomonyms]
 severity = 5
-

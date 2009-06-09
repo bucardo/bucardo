@@ -13,7 +13,7 @@ use IO::Handle;
 use Getopt::Long;
 use Time::HiRes 'sleep';
 use POSIX qw/ceil setsid/;
-use Data::Dumper;
+use Data::Dumper 'Dumper';
 
 return 1 if $ENV{BUCARDO_CTL_TEST};
 
@@ -133,7 +133,7 @@ my $DSN = "dbi:Pg:dbname=$bcargs->{dbname}";
 $bcargs->{dbhost} and length $bcargs->{dbhost} and $DSN .= ";host=$bcargs->{dbhost}";
 $bcargs->{dbport} and length $bcargs->{dbport} and $DSN .= ";port=$bcargs->{dbport}";
 $dbh = DBI->connect($DSN, $bcargs->{dbuser}, $bcargs->{dbpass}, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
-$dbh->do("SET search_path = bucardo");
+$dbh->do('SET search_path = bucardo');
 $dbh->commit();
 
 my $REASONFILE = get_config('reason_file') or die "Invalid reason_file!\n";
@@ -228,7 +228,6 @@ sub start {
 	## Refuse to go on if we get a ping response within 5 seconds
 	$QUIET or print "Checking for existing processes\n";
 
-	#my $oldpid = ping({quiet => 1, timeout => 5, noexit => 1});
 	my $oldpid = 0;
 	if ($oldpid) {
 		$QUIET or print "Cannot start, process $oldpid is already running\n";
@@ -266,8 +265,8 @@ sub start {
 	if (fork) {
 	}
 	else {
-		close STDERR;
-		close STDOUT;
+		close STDERR or warn "Could not close STDERR\n";
+		close STDOUT or warn "Could not close STDOUT\n";
 		setsid() or die;
 		$bc->start_mcp();
 	}
@@ -300,7 +299,7 @@ sub reload_config {
 		}
 	}
 
-	$QUIET or print qq{Forcing Bucardo to reload the bucardo_config table};
+	$QUIET or print q{Forcing Bucardo to reload the bucardo_config table};
 
 	my $done = 'bucardo_reload_config_finished';
 	$dbh->do('NOTIFY bucardo_reload_config');
@@ -453,7 +452,7 @@ sub kick {
 							print $new unless $QUIET;
 							$printstring .= $new;
 							$exitstatus = 2;
-							$lastwait = " ";
+							$lastwait = ' ';
 						}
 					}
 					$dbh->rollback();
@@ -539,9 +538,8 @@ sub status_all {
 		die "Invalid sort option, must be +- 1 through 9\n";
 	}
 
-	our $syncs;
-	my $max;
-	($syncs,$max) = get_detailed_syncs();
+	our ($synclist,$max);
+	($synclist,$max) = get_detailed_syncs();
 
 	printf qq{%-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s\n},
 		$max->{name},'Name',
@@ -572,7 +570,7 @@ sub status_all {
 		+1 == $sortcol and return $a cmp $b;
 		-1 == $sortcol and return $b cmp $a;
 
-		my ($uno,$dos) = ($syncs->{$a}, $syncs->{$b});
+		my ($uno,$dos) = ($synclist->{$a}, $synclist->{$b});
 
 		## Synctype
 		+2 == $sortcol and return ($uno->{synctype} cmp $dos->{synctype} or $a cmp $b);
@@ -621,8 +619,8 @@ sub status_all {
 
 	}
 
-	for my $sync (sort sortme keys %$syncs) {
-		my $s = $syncs->{$sync};
+	for my $sync (sort sortme keys %$synclist) {
+		my $s = $synclist->{$sync};
 		my $X = '|';
 		printf qq{%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s\n},
 			$max->{name},$sync,
@@ -647,26 +645,26 @@ sub status_detail {
 	## Show detailed information about one or more syncs
 
 	## Verify that all named syncs exist
-	my ($syncs,$max) = get_detailed_syncs({syncs => \@nouns});
+	my ($synclist,$max) = get_detailed_syncs({syncs => \@nouns});
 
-	my @syncs;
+	my @synclist;
 	for my $sync (sort @nouns) {
 		$DEBUG and warn "Verify sync: $sync\n";
-		if (!exists $syncs->{$sync}) {
+		if (!exists $synclist->{$sync}) {
             ## If a number, skip for ease of "kick name #" toggling
             $sync !~ /^\d+$/ and die "No such sync: $sync\n";
 		}
 		else {
-			push @syncs => $sync;
+			push @synclist => $sync;
 		}
 	}
 
 	print "Days back: $DAYSBACK  $DBCONN\n";
 
 	## Present each ordered by name
-	for my $sync (sort { lc $a cmp lc $b } @syncs) {
+	for my $sync (sort { lc $a cmp lc $b } @synclist) {
 		print '=' x 70; print "\n";
-		my $s = $syncs->{$sync};
+		my $s = $synclist->{$sync};
 
 		## Undefined should be written as 'none'
 		for (qw/checktime/) {
@@ -697,8 +695,8 @@ sub status_detail {
 			$target .= ')';
 		}
 
-		$s->{iud} =~ s#/# / #g;
-		$s->{state} =~ s/>/ > /;
+		$s->{iud} =~ s{/}{ / }g;
+		$s->{state} =~ s{>}{ > };
 
 		my $moregood = '';
 		if ($s->{lastgood} ne 'unknown') {
@@ -754,7 +752,7 @@ sub get_config {
 
 	my $name = shift;
 
-	$SQL = "SELECT value FROM bucardo_config WHERE lower(setting) = ?";
+	$SQL = 'SELECT value FROM bucardo_config WHERE lower(setting) = ?';
 	$sth = $dbh->prepare_cached($SQL);
 	$count = $sth->execute(lc $name);
 	if ($count < 1) {
@@ -773,10 +771,10 @@ sub set_reason {
 	}
 
 	open my $fh, '>', $REASONFILE or die qq{Could not open "$REASONFILE": $!\n};
-	print $fh (scalar localtime) . " | $nouns\n";
+	print {$fh} (scalar localtime) . " | $nouns\n";
 	close $fh or warn qq{Could not close $REASONFILE: $!\n};
 	open $fh, '>>', $REASONFILE_LOG or die qq{Could not open "$REASONFILE_LOG": $!\n};
-	print $fh (scalar localtime) . " | $verb | $nouns\n";
+	print {$fh} (scalar localtime) . " | $verb | $nouns\n";
 	close $fh or warn qq{Could not close $REASONFILE_LOG: $!\n};
 	return 1;
 }
@@ -794,7 +792,7 @@ sub get_detailed_syncs {
 
 	my $arg = shift || {};
 
-	my $syncs = get_syncs();
+	my $synclist = get_syncs();
 
 	## Now see exactly what's going on with it at this moment (according to q)
 
@@ -802,7 +800,7 @@ sub get_detailed_syncs {
 
 	$SQL = "SELECT date (now() - '$DAYSBACK days'::interval)";
 	my $oldtime = $dbh->selectall_arrayref($SQL)->[0][0];
-	$dbh->do("SET constraint_exclusion = true");
+	$dbh->do('SET constraint_exclusion = true');
 
 	## We want information about the last time it ran successfully
 	$SQL = qq{
@@ -827,6 +825,7 @@ ORDER BY ended DESC LIMIT 1;
 	$sth{latest_bad} = $dbh->prepare($SQL);
 
 	## Is it running right now?
+	## no critic (ProhibitInterpolationOfLiterals)
 	$SQL = qq{
 SELECT *,
 round(extract(epoch FROM now()-cdate)) AS q1,
@@ -837,6 +836,7 @@ AND ended IS NULL
 AND aborted IS NULL
 ORDER BY started DESC LIMIT 1
 };
+	## use critic
 	$sth{active_now} = $dbh->prepare($SQL);
 
 	my %max = (
@@ -852,13 +852,13 @@ ORDER BY started DESC LIMIT 1
 			   bad      => 8,
 			   totalbad => 4,
 			   );
-	for my $sync (sort keys %$syncs) {
+	for my $sync (sort keys %$synclist) {
 		if ($arg->{syncs}) {
 			next unless grep { $_ eq $sync } @{$arg->{syncs}}; ## no critic (ProhibitBooleanGrep)
 		}
 		$DEBUG and warn "Reading sync $sync...\n";
 
-		my $s = $syncs->{$sync};
+		my $s = $synclist->{$sync};
 
 		## Normal types are too long
 		$s->{typetext} = ' ' . uc(substr $s->{synctype},0,1);
@@ -947,7 +947,7 @@ ORDER BY started DESC LIMIT 1
 
 	}
 
-	return $syncs, \%max;
+	return $synclist, \%max;
 
 } ## end of get_detailed_syncs
 
@@ -967,8 +967,6 @@ sub list {
 
 	die $msg;
 
-	exit;
-
 } ## end of list
 
 
@@ -979,7 +977,7 @@ sub list_dbs {
 	## If any nouns left, treat as wildcards
 	my $WHERE = '';
 	for my $term (@nouns) {
-		$WHERE .= sprintf qq{%s lower(name) ~ %s},
+		$WHERE .= sprintf q{%s lower(name) ~ %s},
 			$WHERE ? ' OR' : 'WHERE',
 			$dbh->quote(lc $term);
 	}
@@ -1017,7 +1015,7 @@ sub list_goats {
 	## If any nouns left, treat as wildcards
 	my $WHERE = '';
 	for my $term (@nouns) {
-		$WHERE .= sprintf qq{%s lower(tablename) ~ %s},
+		$WHERE .= sprintf q{%s lower(tablename) ~ %s},
 			$WHERE ? ' OR' : 'WHERE',
 				$dbh->quote(lc $term);
 	}
@@ -1070,7 +1068,7 @@ sub list_herds {
 	## If any nouns left, treat as wildcards
 	my $WHERE = '';
 	for my $term (@nouns) {
-		$WHERE .= sprintf qq{%s lower(name) ~ %s},
+		$WHERE .= sprintf q{%s lower(name) ~ %s},
 			$WHERE ? ' OR' : 'WHERE',
 			$dbh->quote(lc $term);
 	}
@@ -1117,7 +1115,7 @@ sub list_syncs {
 	## If any nouns left, treat as wildcards
 	my $WHERE = '';
 	for my $term (@nouns) {
-		$WHERE .= sprintf qq{%s lower(name) ~ %s},
+		$WHERE .= sprintf q{%s lower(name) ~ %s},
 			$WHERE ? ' OR' : 'WHERE',
 			$dbh->quote(lc $term);
 	}
@@ -1186,12 +1184,12 @@ sub pretty_time {
 sub get_syncs {
 
 	my %dbgroup;
-	$SQL = "SELECT dbgroup, db FROM dbmap ORDER BY priority, db";
+	$SQL = 'SELECT dbgroup, db FROM dbmap ORDER BY priority, db';
 	for my $row (@{$dbh->selectall_arrayref($SQL)}) {
 		push @{$dbgroup{$row->[0]}}, $row->[1];
 	}
 
-	$SQL = qq{
+	$SQL = q{
         SELECT *,
             COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs,
             now()-overdue AS overdue_time,
@@ -1203,7 +1201,7 @@ sub get_syncs {
     };
 	$sth = $dbh->prepare($SQL);
 	$sth->execute();
-	my $sync = $sth->fetchall_hashref("name");
+	my $sync = $sth->fetchall_hashref('name');
 
 	## Expand any targetgroups in use
 	for (keys %$sync) {
@@ -1214,34 +1212,34 @@ sub get_syncs {
 	}
 	## Check what exists in the pid directory
 	opendir my $sdir, $PIDDIR or die qq{Could not opendir "$PIDDIR": $!\n};
-	my $pidfile;
-	while (defined ($pidfile = readdir($sdir))) {
-		next if $pidfile =~ /^\.\.?$/
-			or "$PIDDIR/$pidfile" eq $STOPFILE
-			or "$PIDDIR/$pidfile" eq $PIDFILE;
-		if ($pidfile !~ /^bucardo_sync_(.+)\.pid$/) {
-			warn "Skipping unknown file in pid directory: $pidfile\n";
+	my $syncpidfile;
+	while (defined ($syncpidfile = readdir($sdir))) {
+		next if $syncpidfile =~ /^\.\.?$/
+			or "$PIDDIR/$syncpidfile" eq $STOPFILE
+			or "$PIDDIR/$syncpidfile" eq $PIDFILE;
+		if ($syncpidfile !~ /^bucardo_sync_(.+)\.pid$/) {
+			warn "Skipping unknown file in pid directory: $syncpidfile\n";
 			next;
 		}
 		my $syncname = $1; ## no critic (ProhibitCaptureWithoutTest)
 
 		## Is this a valid syncname?
 		if (! exists $sync->{$syncname}) {
-			warn qq{Invalid pid file found: $PIDDIR/$pidfile - removing it\n};
-			unlink "$PIDDIR/$pidfile";
+			warn qq{Invalid pid file found: $PIDDIR/$syncpidfile - removing it\n};
+			unlink "$PIDDIR/$syncpidfile";
 			next;
 		}
 
-		my $cdate = localtime ($^T - (-C "$PIDDIR/$pidfile")*24*60*60);
-		$sync->{$syncname}{PIDFILE} = "$PIDDIR/$pidfile";
+		my $cdate = localtime ($^T - (-C "$PIDDIR/$syncpidfile")*24*60*60);
+		$sync->{$syncname}{PIDFILE} = "$PIDDIR/$syncpidfile";
 		$sync->{$syncname}{CREATED} = $cdate;
 
 		## Does it contain a pid?
-		open my $fh, '<', "$PIDDIR/$pidfile" or die qq{Could not open "$PIDDIR/$pidfile": $!\n};
+		open my $fh, '<', "$PIDDIR/$syncpidfile" or die qq{Could not open "$PIDDIR/$syncpidfile": $!\n};
 		my $pid = <$fh>;
 		chomp $pid;
 		if (! defined $pid) { $pid = ''; }
-		close $fh or warn qq{Could not close $PIDDIR/$pidfile: $!\n};
+		close $fh or warn qq{Could not close $PIDDIR/$syncpidfile: $!\n};
 		if ($pid !~ /^\d+$/) {
 			$sync->{$syncname}{NOPID} = 1;
 		}
@@ -1267,7 +1265,7 @@ sub vate_sync {
 		my $done = "bucardo_${name}d_sync_$sync";
 		$dbh->do(qq{NOTIFY "bucardo_${name}_sync_$sync"});
 		if ($wait) {
-			print "...";
+			print '...';
 			$dbh->do(qq{LISTEN "$done"});
 		}
 		$dbh->commit();
@@ -1278,8 +1276,8 @@ sub vate_sync {
 		sleep 0.1;
 	  WAITIN: {
 			while (my $notify = $dbh->func('pg_notifies')) {
-				my ($name, $pid) = @$notify;
-				last WAITIN if $name eq $done;
+				my ($xname, $pid) = @$notify;
+				last WAITIN if $xname eq $done;
 			}
 			$dbh->commit();
 			sleep($WAITSLEEP);
@@ -1380,12 +1378,25 @@ sub remove_item {
 
 } ## end of remove_item
 
+sub remove_database {
+	die "Not implemented yet\n";
+}
+sub remove_table {
+	die "Not implemented yet\n";
+}
+sub remove_herd {
+	die "Not implemented yet\n";
+}
+
+
 sub clog {
 
 	my $msg = shift;
 	chomp $msg;
 
 	warn "$msg\n";
+
+	return;
 
 } ## end of clog
 
@@ -1487,8 +1498,8 @@ sub table_definition {
 
 	my $def = '';
 
-	my $file = 'bucardo.schema';
-	open my $fh, '<', $file or die qq{Could not open "$file": $!\n};
+	my $schema_file = 'bucardo.schema';
+	open my $fh, '<', $schema_file or die qq{Could not open "$schema_file": $!\n};
 	my @seq;
 	while (<$fh>) {
 		if (!$def) {
@@ -1501,7 +1512,7 @@ sub table_definition {
 			last if /^\);/;
 		}
 	}
-	close $fh or die qq{Could not close "$file": $!\n};
+	close $fh or die qq{Could not close "$schema_file": $!\n};
 	while ($def =~ /nextval\('(.+?)'/g) {
 		push @seq => $1;
 	}
@@ -1524,9 +1535,11 @@ sub upgrade_and_log {
 		die "From line $line, action $action\n$@\n";
 	}
 
-	$SQL = "INSERT INTO upgrade_log(action,version,summary) VALUES (?,?,?)";
+	$SQL = 'INSERT INTO upgrade_log(action,version,summary) VALUES (?,?,?)';
 	$sth = $dbh->prepare($SQL);
 	$sth->execute($action,$VERSION,$short);
+
+	return;
 
 } ## end of upgrade_and_log
 
@@ -1535,8 +1548,8 @@ sub function_exists {
 
 	my ($schema,$name,$args) = @_;
 	$name = lc $name;
-	$SQL = "SELECT md5(prosrc) FROM pg_proc p, pg_language l ".
-		"WHERE p.prolang = l.oid AND proname = ? AND oidvectortypes(proargtypes) = ?";
+	$SQL = 'SELECT md5(prosrc) FROM pg_proc p, pg_language l ';.
+		'WHERE p.prolang = l.oid AND proname = ? AND oidvectortypes(proargtypes) = ?';
 	$sth = $dbh->prepare($SQL);
 	$count = $sth->execute($name,$args);
 	if ($count eq '0E0') {
@@ -1555,17 +1568,17 @@ sub upgrade {
 
 	my $self = shift;
 
-	my $schema = 'bucardo';
+	my $default_schema = 'bucardo';
 
-	$dbh->do("SET escape_string_warning = 'OFF'");
+	$dbh->do(q{SET escape_string_warning = 'OFF'});
 
 	my $changes = 0;
 
 	## Make sure the upgrade_log table is in place
 
-	if (!relation_exists($schema, 'upgrade_log')) {
+	if (!relation_exists($default_schema, 'upgrade_log')) {
 		my ($seqlist, $tabledef) = table_definition('upgrade_log');
-		upgrade_and_log($tabledef,"CREATE TABLE upgrade_log");
+		upgrade_and_log($tabledef,'CREATE TABLE upgrade_log');
 		$dbh->commit();
 	}
 
@@ -1659,7 +1672,8 @@ sub upgrade {
 			warn "Could not find table $schema.$table to check!\n";
 			next;
 		}
-		$SQL = "SELECT rulename FROM pg_rewrite WHERE ev_class = ? ORDER BY rulename";
+		$SQL = 'SELECT rulename FROM pg_rewrite WHERE ev_class = ? ORDER BY rulename'
+;
 		$sth = $dbh->prepare($SQL);
 		$count = $sth->execute($oid);
 		if ($count < 1) {
@@ -1686,23 +1700,23 @@ sub upgrade {
 	}
 
 	for my $sequence (@new_sequences) {
-		if (relation_exists($schema, $sequence)) {
+		if (relation_exists($default_schema, $sequence)) {
 			clog "  Sequence already exists: $sequence";
 		}
 		else {
-			upgrade_and_log("CREATE SEQUENCE $schema.$sequence");
+			upgrade_and_log("CREATE SEQUENCE $default_schema.$sequence");
 			clog "Created sequence: $sequence";
 			$changes++;
 		}
 	}
 
 	for my $sequence (@old_sequences) {
-		if (!relation_exists($schema, $sequence)) {
+		if (!relation_exists($default_schema, $sequence)) {
 			clog "  Sequence does not exist: $sequence";
 		}
 		else {
 
-			upgrade_and_log("DROP SEQUENCE $schema.$sequence");
+			upgrade_and_log("DROP SEQUENCE $default_schema.$sequence");
 			clog "Dropped sequence: $sequence";
 			$changes++;
 		}
@@ -1834,12 +1848,12 @@ sub upgrade {
 
 
 	## Check for any new config items
-	$SQL = "SELECT value FROM bucardo_config WHERE lower(setting) = ?";
+	$SQL = 'SELECT value FROM bucardo_config WHERE lower(setting) = ?';
 	my $cfgsth = $dbh->prepare($SQL);
 	$SQL = 'INSERT INTO bucardo_config(setting,value,about) VALUES (?,?,?)';
 	my $newcfg = $dbh->prepare($SQL);
-	my $file = 'bucardo.schema';
-	open my $fh, '<', $file or die qq{Could not open "$file": $!\n};
+	my $schema_file = 'bucardo.schema';
+	open my $fh, '<', $file or die qq{Could not open "$schema_file": $!\n};
 
 	my %config;
 	my $inside = 0;
@@ -1865,11 +1879,11 @@ sub upgrade {
 			$newcfg->execute($setting,$value,$about);
 		}
 	}
-	close $fh or die qq{Could not close file "$file": $!\n};
+	close $fh or die qq{Could not close file "$schema_file": $!\n};
 
 	for my $row (@row_values) {
 		my ($table,$column,$where,$force,$value) = @$row;
-		my $val = column_value($schema,$table,$column,$where);
+		my $val = column_value($default_schema,$table,$column,$where);
 		if (!defined $val) {
 			die "Failed to find $table.$column where $where!\n";
 		}
@@ -1877,10 +1891,10 @@ sub upgrade {
 			clog "  Value of $table.$column where $where is already correct";
 		}
 		else {
-			$SQL = sprintf "UPDATE $schema.$table SET $column=%s WHERE $where",
+			$SQL = sprintf "UPDATE $default_schema.$table SET $column=%s WHERE $where",
 				$dbh->quote($value);
 			upgrade_and_log($SQL);
-			clog "New value set for $schema.$table.$column WHERE $where";
+			clog "New value set for $default_schema.$table.$column WHERE $where";
 			$changes++;
 		}
 	}
@@ -1944,15 +1958,15 @@ sub upgrade {
 	}
 	close $fh or die qq{Could not close file "$file": $!\n};
 
-	$SQL = "SELECT md5(?)";
+	$SQL = 'SELECT md5(?)';
 	my $md5sth = $dbh->prepare($SQL);
 	for my $row (@flist) {
-		my ($name,$args,$body) = @$row;
-		my $oldbody = function_exists($schema,$name,$args);
+		my ($name,$arg,$body) = @$row;
+		my $oldbody = function_exists($default_schema,$name,$arg);
 		if (!$oldbody) {
-			$body =~ s/FUNCTION /FUNCTION $schema./;
-			upgrade_and_log($body,"CREATE FUNCTION $schema.$name($args)");
-			clog "Added function $schema.$name($args)";
+			$body =~ s/FUNCTION /FUNCTION $default_schema./;
+			upgrade_and_log($body,"CREATE FUNCTION $default_schema.$name($arg)");
+			clog "Added function $default_schema.$name($arg)";
 			$changes++;
 			next;
 		}
@@ -1961,25 +1975,25 @@ sub upgrade {
 		$md5sth->execute($realbody);
 		my $newbody = $md5sth->fetchall_arrayref()->[0][0];
 		if ($oldbody eq $newbody) {
-			clog "  Function unchanged: $schema.$name($args)";
+			clog "  Function unchanged: $default_schema.$name($arg)";
 			next;
 		}
 		$body =~ s/^CREATE FUNCTION/CREATE OR REPLACE FUNCTION/;
-		$body =~ s/FUNCTION /FUNCTION $schema./;
+		$body =~ s/FUNCTION /FUNCTION $default_schema./;
 		(my $short = $body) =~ s/^(.+?)\n.*/$1/s;
-		$dbh->do("SAVEPOINT bucardo_upgrade");
+		$dbh->do('SAVEPOINT bucardo_upgrade');
 		eval { upgrade_and_log($body,$short); };
 		if ($@) {
-			$dbh->do("ROLLBACK TO bucardo_upgrade");
+			$dbh->do('ROLLBACK TO bucardo_upgrade');
 			(my $dropbody = $short) =~ s/CREATE OR REPLACE/DROP/;
 			$dropbody .= ' CASCADE';
 			upgrade_and_log($dropbody);
 			upgrade_and_log($body,$short);
 		}
 		else {
-			$dbh->do("RELEASE bucardo_upgrade");
+			$dbh->do('RELEASE bucardo_upgrade');
 		}
-		clog "Updated function: $schema.$name($args)";
+		clog "Updated function: $default_schema.$name($arg)";
 		$changes++;
 	}
 
@@ -2012,8 +2026,8 @@ sub upgrade {
 
 	## The freezer.q_staging table is no longer needed, but we must empty it before dropping
 	if (relation_exists('freezer','q_staging')) {
-		upgrade_and_log("INSERT INTO freezer.master_q SELECT * FROM freezer.q_staging");
-		upgrade_and_log("DROP TABLE freezer.q_staging");
+		upgrade_and_log('INSERT INTO freezer.master_q SELECT * FROM freezer.q_staging');
+		upgrade_and_log('DROP TABLE freezer.q_staging');
 		clog 'Dropped deprecated table freezer.q_staging';
 		$changes++;
 	}
@@ -2046,7 +2060,7 @@ sub add_database {
 
 	## The rest is the options. If not there, we fill in the defaults
 	my $info = join ' ' => @nouns;
-	my $delim = $info =~ /\|/ ? "\\s*\\|\\s*" : '\\s+';
+	my $delim = $info =~ /\|/ ? '\s*\|\s*' : '\\s+';
 	## Command line name, default value, database column name
 	my %arg = (
 			   name        => [$item_name, ''],
@@ -2141,7 +2155,7 @@ sub add_table {
 
 	## The rest is the options. If not there, we fill in the defaults
 	my $info = join ' ' => @nouns;
-	my $delim = $info =~ /\|/ ? "\\s*\\|\\s*" : '\\s+';
+	my $delim = $info =~ /\|/ ? '\s*\|\s*' : '\\s+';
 	## Command line name, default value, database column name
 	my %arg = (
 			   db                => ['',      ''],
@@ -2232,9 +2246,9 @@ sub add_table {
 
 	$dbh->commit();
 
-	my $tablelist = sprintf "%s added: ", @tables > 1 ? 'Tables' : 'Table';
+	my $tablelist = sprintf '%s added: ', @tables > 1 ? 'Tables' : 'Table';
 	for (@tables) {
-		$tablelist .= sprintf "%s%s, ", $_->[0] ? "$_->[0]." : '', $_->[1];
+		$tablelist .= sprintf '%s%s, ', $_->[0] ? "$_->[0]." : '', $_->[1];
 	}
 	$tablelist =~ s/, $//;
 	warn "$tablelist\n";
@@ -2258,7 +2272,7 @@ sub add_sync {
 
 	## The rest is the options. If not there, we fill in the defaults
 	my $info = join ' ' => @nouns;
-	my $delim = $info =~ /\|/ ? "\\s*\\|\\s*" : '\\s+';
+	my $delim = $info =~ /\|/ ? '\s*\|\s*' : '\\s+';
 	## Command line name, default value, database column name
 	my %arg = (
 			   source          => ['', ''],
@@ -2340,7 +2354,7 @@ sub alter_sync {
 
 	## The rest is the options.
 	my $info = join ' ' => @nouns;
-	my $delim = $info =~ /\|/ ? "\\s*\\|\\s*" : '\\s+';
+	my $delim = $info =~ /\|/ ? '\s*\|\s*' : '\\s+';
 	## Command line name, value
 	my %arg = (
 			   targetdb    => '',
@@ -2368,7 +2382,7 @@ sub alter_sync {
 	}
 	my $sync = $sth->fetchall_arrayref({})->[0];
 
-	my %set;
+	my %setting;
 
 	## Do we have a targetgroup?
 	if (length $arg{targetgroup}) {
@@ -2377,10 +2391,10 @@ sub alter_sync {
 			warn qq{targetgroup "$group" already exists: no change made\n};
 		}
 		else {
-			$set{'targetgroup'} = $group;
+			$setting{'targetgroup'} = $group;
 			if (defined $sync->{targetdb}) {
 				warn qq{Removing targetdb "$sync->{targetdb}"\n};
-				$set{'targetdb'} = undef;
+				$setting{'targetdb'} = undef;
 			}
 		}
 	}
@@ -2390,24 +2404,24 @@ sub alter_sync {
 			warn qq{targetdb "$db" already exists: no change made\n};
 		}
 		else {
-			$set{'targetdb'} = $db;
+			$setting{'targetdb'} = $db;
 			if (defined $sync->{targetgroup}) {
 				warn qq{Removing targetgroup "$sync->{targetgroup}"\n};
-				$set{'targetgroup'} = undef;
+				$setting{'targetgroup'} = undef;
 			}
 		}
 	}
 
-	if (! keys %set) {
+	if (! keys %setting) {
 		warn "No change made\n";
 		exit 0;
 	}
 
 	$SQL = 'UPDATE sync SET ';
 	my @args;
-	for my $c (sort keys %set) {
+	for my $c (sort keys %setting) {
 		$SQL .= "$c = ?, ";
-		push @args, $set{$c};
+		push @args, $setting{$c};
 	}
 	$SQL =~ s/, $//;
 	$SQL .= ' WHERE name = ?';
@@ -2485,7 +2499,7 @@ sub add_herd {
 
 	## The rest is the options. If not there, we fill in the defaults
 	my $info = join ' ' => @nouns;
-	my $delim = $info =~ /\|/ ? "\\s*\\|\\s*" : '\\s+';
+	my $delim = $info =~ /\|/ ? '\s*\|\s*' : '\\s+';
 	## Command line name, default value, database column name
 	my %arg = (
 			   );
@@ -2529,7 +2543,7 @@ sub add_herd {
 	}
 	warn "Herd added: $item_name\n";
 	if (@goatlist) {
-		$SQL = "INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,(SELECT id FROM bucardo.goat WHERE tablename=?))";
+		$SQL = q{INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,(SELECT id FROM bucardo.goat WHERE tablename=?))};
 		$sth = $dbh->prepare($SQL);
 		for my $goat (@goatlist) {
 			eval {
@@ -2645,14 +2659,14 @@ sub config {
 
 	for my $noun (@nouns) {
 		$noun =~ /(\w+)=(.+)/ or die $setusage;
-		my ($set,$val) = (lc $1,$2);
+		my ($setting,$val) = (lc $1,$2);
 
-		if (! exists $config->{$set}) {
-			die qq{Unknown setting "$set"\n};
+		if (! exists $config->{$setting}) {
+			die qq{Unknown setting "$setting"\n};
 		}
 
-		$sth->execute($val,$set);
-		print qq{Set "$set" to "$val"\n};
+		$sth->execute($val,$setting);
+		print qq{Set "$setting" to "$val"\n};
 
 	}
 
@@ -2672,7 +2686,7 @@ sub message {
 		die qq{Usage: bucardo_ctl message "Some message to send to the logs"\n};
 	}
 
-	$SQL = "INSERT INTO bucardo_log_message(msg) VALUES (?)";
+	$SQL = 'INSERT INTO bucardo_log_message(msg) VALUES (?)';
 	$sth = $dbh->prepare($SQL);
 	$sth->execute($nouns);
 	$dbh->commit();
@@ -2701,7 +2715,7 @@ sub install {
 		print "2. Port: $port\n";
 		print "3. User: $user\n";
 
-		print "Enter a number to change it, P to proceed, or Q to quit: ";
+		print 'Enter a number to change it, P to proceed, or Q to quit: ';
 
 		$ans = <>;
 		print "\n";
@@ -2712,7 +2726,7 @@ sub install {
 			my $new = length $text ? $text : '';
 			if (1 == $num) {
 				if (!length $new) {
-					print "Change the host to: ";
+					print 'Change the host to: ';
 					$new = <>;
 					print "\n";
 					chomp $new;
@@ -2722,7 +2736,7 @@ sub install {
 			}
 			elsif (2 == $num) {
 				if (!length $new) {
-					print "Change the port to: ";
+					print 'Change the port to: ';
 					$new = <>;
 					print "\n";
 					chomp $new;
@@ -2736,7 +2750,7 @@ sub install {
 			}
 			elsif (3 == $num) {
 				if (!length $new) {
-					print "Change the user to: ";
+					print 'Change the user to: ';
 					$new = <>;
 					print "\n";
 					chomp $new;

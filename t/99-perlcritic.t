@@ -28,17 +28,9 @@ if (! -e $PROFILE) {
 	plan (skip_all =>  qq{Perl::Critic profile "$PROFILE" not found\n});
 }
 
-## Gotta have our code
-my $CODE = './Bucardo.pm';
-if (! -e $CODE) {
-	plan (skip_all =>  qq{Perl::Critic cannot find "$CODE" to test with\n});
-}
-
-plan tests => 4;
+plan tests => 2;
 Test::Perl::Critic->import( -profile => $PROFILE );
-critic_ok($CODE);
-critic_ok("./bucardo_ctl");
-critic_ok("t/01bc.t");
-critic_ok("t/02perlcritic.t");
+critic_ok('Bucardo.pm');
+critic_ok('bucardo_ctl');
 
 
