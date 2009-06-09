@@ -4,6 +4,7 @@
 
 verbose = 8
 severity = 1
+profile-strictness = quiet
 
 ##
 ## Five:
