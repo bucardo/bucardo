@@ -1548,7 +1548,7 @@ sub function_exists {
 
 	my ($schema,$name,$args) = @_;
 	$name = lc $name;
-	$SQL = 'SELECT md5(prosrc) FROM pg_proc p, pg_language l ';.
+	$SQL = 'SELECT md5(prosrc) FROM pg_proc p, pg_language l '.
 		'WHERE p.prolang = l.oid AND proname = ? AND oidvectortypes(proargtypes) = ?';
 	$sth = $dbh->prepare($SQL);
 	$count = $sth->execute($name,$args);
