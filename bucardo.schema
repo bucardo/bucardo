@@ -1927,6 +1927,9 @@ $bc$
         $_->disconnect();
     }
 
+    $SQL = "NOTIFY bucardo_validated_sync_$syncname";
+    spi_exec_query($SQL);
+
     return 'MODIFY';
 $bc$;
 
