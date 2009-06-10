@@ -151,6 +151,7 @@ status_detail() if $verb eq 'status';
 start()         if $verb eq 'start';
 stop()          if $verb eq 'stop';
 reload_config() if $verb eq 'reload_config';
+reload()        if $verb eq 'reload';
 ping()          if $verb eq 'ping';
 add_item()      if $verb eq 'add';
 alter_item()    if $verb eq 'alter';
@@ -159,6 +160,7 @@ upgrade()       if $verb eq 'upgrade';
 message()       if $verb eq 'message';
 list()          if $verb eq 'list';
 config()        if $verb eq 'set' or $verb eq 'show';
+validate()      if $verb eq 'validate';
 
 
 ## For the rest, we expect a list of sync with an optional decimal "timeout"
@@ -328,6 +330,96 @@ sub reload_config {
 	exit 0;
 
 } ## end of reload_config
+
+
+sub reload {
+
+	## Ask for one or more syncs to be reloaded
+
+	for my $syncname (@nouns) {
+		next if $syncname eq 'sync'; ## Allows $0 reload sync foobar
+
+		## Make sure this sync exists
+		$SQL = 'SELECT status FROM sync WHERE name = ?';
+		$sth = $dbh->prepare($SQL);
+		$count = $sth->execute($syncname);
+		if ($count != 1) {
+			warn "Invalid sync: $syncname\n";
+			$sth->finish();
+			next;
+		}
+		my $status = $sth->fetch()->[0];
+		if ($status ne 'active') {
+			warn qq{Cannot reload: status of sync "$syncname" is $status\n};
+			next;
+		}
+
+		my $done = "bucardo_reloaded_sync_$syncname";
+		print "Reloading sync $syncname...";
+		$dbh->do("LISTEN $done");
+		$dbh->do("NOTIFY bucardo_reload_sync_$syncname");
+		$dbh->commit();
+
+		sleep 0.1;
+	  WAITIN: {
+			while (my $notify = $dbh->func('pg_notifies')) {
+				my ($name, $pid) = @$notify;
+				last WAITIN if $name eq $done;
+			}
+			$dbh->commit();
+			sleep($WAITSLEEP);
+			redo;
+		}
+		print "DONE!\n";
+	}
+
+	exit 0;
+
+} ## end of reload
+
+
+sub validate {
+
+	## Ask for one or more syncs to be validated
+
+	for my $syncname (@nouns) {
+		next if $syncname eq 'sync'; ## Allows $0 validate sync foobar
+
+		## Make sure this sync exists
+		$SQL = 'SELECT status FROM sync WHERE name = ?';
+		$sth = $dbh->prepare($SQL);
+		$count = $sth->execute($syncname);
+		if ($count != 1) {
+			warn "Invalid sync: $syncname\n";
+			$sth->finish();
+			next;
+		}
+		my $status = $sth->fetch()->[0];
+
+		my $done = "bucardo_validated_sync_$syncname";
+		print "Validating sync $syncname...";
+		$dbh->do("LISTEN $done");
+		$SQL = 'SELECT validate_sync(?)';
+		$sth = $dbh->prepare($SQL);
+		$sth->execute($syncname);
+		$dbh->commit();
+
+		sleep 0.1;
+	  WAITIN: {
+			while (my $notify = $dbh->func('pg_notifies')) {
+				my ($name, $pid) = @$notify;
+				last WAITIN if $name eq $done;
+			}
+			$dbh->commit();
+			sleep($WAITSLEEP);
+			redo;
+		}
+		print "DONE!\n";
+	}
+
+	exit 0;
+
+} ## end of validate
 
 
 sub ping {
@@ -659,6 +751,21 @@ sub status_detail {
 		}
 	}
 
+	## Grab the mappings from herd to database
+	## We only need one from each herd!
+	$SQL = 'SELECT name FROM herd';
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	my $herdmap = $sth->fetchall_hashref('name');
+	for my $herdname (keys %$herdmap) {
+		print "Herd=$herdname\n";
+		$SQL = 'SELECT db FROM goat WHERE id = (SELECT goat FROM herdmap WHERE herd = ? LIMIT 1)';
+		$sth = $dbh->prepare($SQL);
+		$sth->execute($herdname);
+		my $goatinfo = $sth->fetchall_arrayref({})->[0];
+		$herdmap->{$herdname}{database} = $goatinfo->{db};
+	}
+
 	print "Days back: $DAYSBACK  $DBCONN\n";
 
 	## Present each ordered by name
@@ -687,10 +794,10 @@ sub status_detail {
 
 		my $target;
 		if ($s->{targetdb}) {
-			$target = "Target database:   $s->{targetdb}";
+			$target = "Target database:      $s->{targetdb}";
 		}
 		else {
-			$target = "Target group:      $s->{targetgroup} (";
+			$target = "Target group:         $s->{targetgroup} (";
 			$target .= join ',' => @{$s->{targets}};
 			$target .= ')';
 		}
@@ -701,14 +808,14 @@ sub status_detail {
 		my $moregood = '';
 		if ($s->{lastgood} ne 'unknown') {
 			$moregood .= " (time to run: $s->{timegood})";
-			$moregood .= "\nLast good time:    $s->{latest_good}{last_ended_date}";
+			$moregood .= "\nLast good time:       $s->{latest_good}{last_ended_date}";
 			$moregood .= "  Target: $s->{latest_good}{targetdb}";
 		}
 
 		my $morebad = '';
 		if ($s->{lastbad} ne 'unknown') {
 			$morebad = " (time to run: $s->{timebad})";
-			$morebad .= "\nLast bad time:     $s->{latest_bad}{last_aborted_date}";
+			$morebad .= "\nLast bad time:        $s->{latest_bad}{last_aborted_date}";
 			$morebad .= "  Target: $s->{latest_bad}{targetdb}";
 			(my $why = $s->{latest_bad}{whydie}) =~ s/\s+$//;
 			$why =~ s/^/                  /mg;
@@ -717,25 +824,33 @@ sub status_detail {
 			$morebad .= "\nLatest bad reason: $why";
 		}
 
-		print qq{Sync name:         $sync
-Current state:     $s->{state}$morepid
-Type:              $s->{synctype}
-Source database:   $s->{source}
+		my $sourcedb = $herdmap->{$s->{source}}{database} || '?';
+
+		$SQL = 'SELECT count(*) FROM herdmap WHERE herd = ?';
+		$sth = $dbh->prepare($SQL);
+		$sth->execute($s->{source});
+		my $numtables = $sth->fetch()->[0];
+
+		print qq{Sync name:            $sync
+Current state:        $s->{state}$morepid
+Type:                 $s->{synctype}
+Source herd/database: $s->{source} / $sourcedb
 $target
-Last good:         $s->{lastgood}$moregood
-Ins/Upd/Del:       $s->{iud}
-Last bad:          $s->{lastbad}$morebad
-PID file:          $s->{PIDFILE}
-PID file created:  $s->{CREATED}
-Status:            $s->{status}
-Limitdbs:          $s->{limitdbs}
-Priority:          $s->{priority}
-Checktime:         $s->{checktime}
-Overdue time:      $s->{overdue}
-Expired time:      $s->{expired}
-Stayalive:         $s->{stayalive}          Kidsalive: $s->{kidsalive}
-Rebuild index:     $s->{rebuild_index}          Do_listen: $s->{do_listen}
-Ping:              $s->{ping}          Makedelta: $s->{makedelta}
+Tables in sync:       $numtables
+Last good:            $s->{lastgood}$moregood
+Ins/Upd/Del:          $s->{iud}
+Last bad:             $s->{lastbad}$morebad
+PID file:             $s->{PIDFILE}
+PID file created:     $s->{CREATED}
+Status:               $s->{status}
+Limitdbs:             $s->{limitdbs}
+Priority:             $s->{priority}
+Checktime:            $s->{checktime}
+Overdue time:         $s->{overdue}
+Expired time:         $s->{expired}
+Stayalive:            $s->{stayalive}      Kidsalive: $s->{kidsalive}
+Rebuild index:        $s->{rebuild_index}      Do_listen: $s->{do_listen}
+Ping:                 $s->{ping}      Makedelta: $s->{makedelta}
 };
 		if ($s->{synctype} eq 'fullcopy'){
 			print qq{Custom select:     $s->{usecustomselect} $s->{copyextra}\n};
@@ -2125,7 +2240,7 @@ sub add_table {
 
 	my $type = shift;
 
-	## Usage: add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool
+	## Usage: add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool herd=herd_name
 
 	## TODO: Make this smarter
 	my $DEFAULT_SCHEMA = 'public';
@@ -2834,7 +2949,7 @@ This documents describes bucardo_ctl version 3.2.7
 
   ./bucardo_ctl add database newdb name=internal_name port=5432 host=myserver user=postgres
 
-  ./bucardo_ctl add table some_schema.some_table db=internal_db_name ping=bool standard_conflict=source
+  ./bucardo_ctl add table some_schema.some_table db=internal_db_name ping=bool standard_conflict=x herd=x
 
   ./bucardo_ctl add herd newherd
 
