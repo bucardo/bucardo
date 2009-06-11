@@ -646,11 +646,11 @@ Inside the bucardo database, the <b>bucardo_config</b> table holds many settings
 <tr>
 <td class="lcol" >ctl_createkid_time</td> <td>0.5</td> <td>How long do we sleep to allow kids-on-demand to get on their feet?</td> </tr>
 <tr>
-<td class="lcol" >tcp_keepalives_idle</td> <td>10</td> <td>How long to wait between each keepalive probe.</td> </tr>
+<td class="lcol" >tcp_keepalives_idle</td> <td>0</td> <td>How long to wait between each keepalive probe.</td> </tr>
 <tr>
-<td class="lcol" >tcp_keepalives_interval</td> <td>5</td> <td>How long to wait for a response to a keepalive probe.</td> </tr>
+<td class="lcol" >tcp_keepalives_interval</td> <td>0</td> <td>How long to wait for a response to a keepalive probe.</td> </tr>
 <tr>
-<td class="lcol" >tcp_keepalives_count</td> <td>2</td> <td>How many probes to send. 0 indicates sticking with system defaults.</td> </tr>
+<td class="lcol" >tcp_keepalives_count</td> <td>0</td> <td>How many probes to send. 0 indicates sticking with system defaults.</td> </tr>
 <tr>
 <td class="lcol" >piddir</td> <td>/var/run/bucardo</td> <td>Directory holding Bucardo PID files</td> </tr>
 <tr>

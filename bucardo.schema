@@ -98,9 +98,9 @@ kid_pingtime|60|How often do we ping check the KID?
 ctl_checkonkids_time|10|How often does the controller check on the kids health?
 ctl_checkabortedkids_time|30|How often does the controller check the q table for aborted children?
 ctl_createkid_time|0.5|How long do we sleep to allow kids-on-demand to get on their feet?
-tcp_keepalives_idle|10|How long to wait between each keepalive probe.
-tcp_keepalives_interval|5|How long to wait for a response to a keepalive probe.
-tcp_keepalives_count|2|How many probes to send. 0 indicates sticking with system defaults.
+tcp_keepalives_idle|0|How long to wait between each keepalive probe.
+tcp_keepalives_interval|0|How long to wait for a response to a keepalive probe.
+tcp_keepalives_count|0|How many probes to send. 0 indicates sticking with system defaults.
 \.
 
 -- Debug output
