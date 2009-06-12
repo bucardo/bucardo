@@ -932,21 +932,21 @@ sub start_mcp {
 					}
 					else { ## Presume it is alive and listening to us, kick if needed
 						if ($s->{mcp_kicked}) {
-                            ## See if controller needs to be killed, because of
-                            ## time limit or job count limit
-                            if (($s->{maxkicks} > 0 && $s->{ctl_kick_counts} >= $s->{maxkicks}) ||
-                                ($s->{lifetime} > 0 && time() - $s->{start_time} > $s->{lifetime})) {
-                                ## Kill and restart controller
-                                $self->glog("Restarting controller for sync $syncname. Timed out, or max kicks exceeded.");
-                                kill $signumber{USR1} => $s->{controller};
-                                $self->fork_controller($s, $syncname);
-                            }
+							## See if controller needs to be killed, because of
+							## time limit or job count limit
+							if (($s->{maxkicks} > 0 && $s->{ctl_kick_counts} >= $s->{maxkicks}) ||
+								($s->{lifetime} > 0 && time() - $s->{start_time} > $s->{lifetime})) {
+								## Kill and restart controller
+								$self->glog("Restarting controller for sync $syncname. Timed out, or max kicks exceeded.");
+								kill $signumber{USR1} => $s->{controller};
+								$self->fork_controller($s, $syncname);
+							}
 							my $notify = "bucardo_ctl_kick_$syncname";
 							$maindbh->do(qq{NOTIFY "$notify"}) or die "NOTIFY $notify failed";
 							$maindbh->commit();
 							$self->glog(qq{Sent a kick request to controller $s->{controller} for sync "$syncname"});
 							$s->{mcp_kicked} = 0;
-                            $s->{ctl_kick_counts}++;
+							$s->{ctl_kick_counts}++;
 						}
 						next SYNC;
 					}
@@ -1020,7 +1020,7 @@ sub start_mcp {
 
 				## Fork off the controller, then clean up the $s hash
 				$self->{masterdbh}->commit();
-                $self->fork_controller($s, $syncname);
+	            $self->fork_controller($s, $syncname);
 				$s->{mcp_kicked} = 0;
 				$s->{mcp_changed} = 1;
 
@@ -1035,32 +1035,32 @@ sub start_mcp {
 
 	} ## end of mcp_main
 
-    sub fork_controller {
-        my ($self, $s, $syncname) = @_;
-        my $controller = fork;
-        if (!defined $controller) {
-            die qq{ERROR: Fork for controller failed!\n};
-        }
+	sub fork_controller {
+	    my ($self, $s, $syncname) = @_;
+	    my $controller = fork;
+	    if (!defined $controller) {
+	        die qq{ERROR: Fork for controller failed!\n};
+	    }
 
-        if (!$controller) {
-            sleep 0.05;
-            $self->{masterdbh}->{InactiveDestroy} = 1;
-            $self->{masterdbh} = 0;
-            for my $db (values %{$self->{pingdbh}}) {
-                $db->{InactiveDestroy} = 1;
-            }
+	    if (!$controller) {
+	        sleep 0.05;
+	        $self->{masterdbh}->{InactiveDestroy} = 1;
+	        $self->{masterdbh} = 0;
+	        for my $db (values %{$self->{pingdbh}}) {
+	            $db->{InactiveDestroy} = 1;
+	        }
 
-            ## No need to keep information about other syncs around
-            $self->{sync} = $s;
+	        ## No need to keep information about other syncs around
+	        $self->{sync} = $s;
 
-            $self->start_controller($s);
-            exit 0;
-        }
+	        $self->start_controller($s);
+	        exit 0;
+	    }
 
-        $self->glog(qq{Created controller $controller for sync "$syncname". Kick is $s->{mcp_kicked}});
-        $s->{controller} = $controller;
-        $s->{ctl_kick_counts} = 0;
-    }
+	    $self->glog(qq{Created controller $controller for sync "$syncname". Kick is $s->{mcp_kicked}});
+	    $s->{controller} = $controller;
+	    $s->{ctl_kick_counts} = 0;
+	}
 
 
 	sub reload_config_database {
@@ -2003,8 +2003,8 @@ sub start_controller {
 	print {$pid} "$$\n";
 	close $pid or warn qq{Could not close "$SYNCPIDFILE": $!\n};
 
-    ## Track what time we started, for lifetime checks
-    $sync->{start_time} = time();
+	## Track what time we started, for lifetime checks
+	$sync->{start_time} = time();
 
 	## Sometimes we want to manipulate this file, e.g. to change the group ownership
 	if ($PIDCLEANUP) {
