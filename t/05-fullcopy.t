@@ -139,6 +139,7 @@ for my $table (sort keys %tabletype) {
 }
 
 $bct->ctl('kick fullcopytest 0');
+wait_for_notice($dbhX, 'bucardo_syncdone_fullcopytest', 5);
 
 for my $table (sort keys %tabletype) {
 	$t=qq{ Second table $table loses local changes on fullcopy};
@@ -167,10 +168,12 @@ $dbhA->commit();
 # XXX - Hack
 sleep 5;
 $bct->ctl('kick fullcopytest 0');
+wait_for_notice($dbhX, 'bucardo_syncdone_fullcopytest', 5);
 
 for my $table (sort keys %tabletype) {
 	$t=qq{ Second table $table was emptied out};
 	$result = [];
+
 	bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
 
 	$t=qq{ Third table $table begins empty};
@@ -185,6 +188,7 @@ for my $table (sort keys %tabletype) {
 $dbhA->commit();
 
 $bct->ctl('kick fullcopytest 0');
+wait_for_notice($dbhX, 'bucardo_syncdone_fullcopytest', 5);
 
 for my $table (sort keys %tabletype) {
 	$t=qq{ Second table $table got the fullcopy row};
@@ -208,6 +212,7 @@ $dbhA->commit();
 # XXX - Hack
 sleep 5;
 $bct->ctl('kick fullcopytest 0');
+wait_for_notice($dbhX, 'bucardo_syncdone_fullcopytest', 5);
 
 for my $table (sort keys %tabletype) {
 	$t=qq{ Second table $table got the fullcopy row};

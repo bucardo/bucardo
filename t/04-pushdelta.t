@@ -39,10 +39,10 @@ $t=q{Add sync works};
 $i = $bct->ctl("add sync pushdeltatest source=testherd1 type=pushdelta targetdb=B");
 like($i, qr{Sync added:}, $t);
 
-$bct->restart_bucardo($dbhX);
-
 $dbhX->do('LISTEN bucardo_syncdone_pushdeltatest');
 $dbhX->commit();
+
+$bct->restart_bucardo($dbhX);
 
 sub test_empty_drop {
 	my ($table, $dbh) = @_;

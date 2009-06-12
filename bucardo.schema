@@ -367,6 +367,8 @@ CREATE TABLE sync (
   expired            INTERVAL    NOT NULL DEFAULT '0 seconds'::interval,
   track_rates        BOOLEAN     NOT NULL DEFAULT 'false',
   onetimecopy        SMALLINT    NOT NULL DEFAULT 0,
+  lifetime           INTEGER     NOT NULL DEFAULT 0,
+  maxkicks           INTEGER     NOT NULL DEFAULT 0,
   cdate              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
