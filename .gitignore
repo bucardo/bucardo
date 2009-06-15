@@ -1,0 +1,25 @@
+## Build constructs:
+Makefile
+Makefile.old
+*.gz
+blib/
+none/
+pm_to_blib
+
+## Editor temporary files:
+*~
+*.swp
+
+## Git stuff
+*.blame
+*.patch
+*.diff
+
+## Testing artifacts:
+bucardo_test_database_*
+bucardo.warning.log
+log.bucardo
+
+## Temporary files:
+tmp/
+*.tmp
