@@ -469,6 +469,40 @@ sub ping {
 
 } ## end of ping
 
+
+sub process_args {
+
+	## Break apart a string of args, return a clean hashref
+
+	my $string = shift or return {};
+	$string .= ' ';
+
+	my %arg;
+
+	while ($string =~ m/(\w+)\s*=\s*"(.+?)" /g) {
+		$arg{$1} = $2;
+	}
+	$string =~ s/\w+\s*=\s*".+?" / /g;
+
+	while ($string =~ m/(\w+)\s*=\s*'(.+?)' /g) {
+		$arg{$1} = $2;
+	}
+	$string =~ s/\w+\s*=\s*'.+?' / /g;
+
+	while ($string =~ m/(\w+)\s*=\s*(\S+)/g) {
+		$arg{$1} = $2;
+	}
+	$string =~ s/\w+\s*=\s*\S+/ /g;
+
+	if ($string =~ /\S/) {
+		$string =~ s/^\s+//;
+		$arg{extraargs} = [split /\s+/ => $string];
+	}
+
+	return \%arg;
+
+} ## end of process_args
+
 sub kick {
 
 	@nouns or die qq{kick requires at least one sync name\n};
@@ -2180,7 +2214,6 @@ sub add_database {
 
 	## The rest is the options. If not there, we fill in the defaults
 	my $info = join ' ' => @nouns;
-	my $delim = $info =~ /\|/ ? '\s*\|\s*' : '\\s+';
 	## Command line name, default value, database column name
 	my %arg = (
 			   name        => [$item_name, ''],
@@ -2194,11 +2227,10 @@ sub add_database {
 			   sourcelimit => ['',         ''],
 			   targetlimit => ['',         ''],
 			   );
-	for my $arg (split /$delim/ => $info) {
-		if ($arg !~ /(.+)=(.+)/o) {
-			die qq{Invalid argument\n};
-		}
-		my ($name,$value) = ($1,$2);
+	my $args = process_args($info);
+	for my $name (sort keys %$args) {
+		next if $name eq 'extraargs';
+		my $value = $args->{$name};
 		if (!exists $arg{$name}) {
 			die "Unknown option '$name'\n";
 		}
@@ -2275,7 +2307,6 @@ sub add_table {
 
 	## The rest is the options. If not there, we fill in the defaults
 	my $info = join ' ' => @nouns;
-	my $delim = $info =~ /\|/ ? '\s*\|\s*' : '\\s+';
 	## Command line name, default value, database column name
 	my %arg = (
 			   db                => ['',      ''],
@@ -2284,11 +2315,10 @@ sub add_table {
 			   herd              => ['',      ''],
 			   makedelta         => ['',      ''],
 			   );
-	for my $arg (split /$delim/ => $info) {
-		if ($arg !~ /(.+)=(.+)/o) {
-			die qq{Invalid argument: ($arg)\n};
-		}
-		my ($name,$value) = ($1,$2);
+	my $args = process_args($info);
+	for my $name (sort keys %$args) {
+		next if $name eq 'extraargs';
+		my $value = $args->{$name};
 		if (!exists $arg{$name}) {
 			die "Unknown option '$name'\n";
 		}
@@ -2306,7 +2336,7 @@ sub add_table {
 		$herd = $arg{herd}->[0];
 		delete $arg{herd};
 		## Does this herd exist?
-		$SQL = 'SELECT count(*) FROM herd WHERE name = ?';
+		$SQL = 'SELECT 1 FROM herd WHERE name = ?';
 		$sth = $dbh->prepare($SQL);
 		$count = $sth->execute($herd);
 		$sth->finish();
@@ -2358,6 +2388,10 @@ sub add_table {
 		$SQL = 'INSERT INTO herdmap (goat,herd,priority) VALUES (?,?,?)';
 		$sth = $dbh->prepare($SQL);
 		for (@id) {
+			if ($DEBUG) {
+				warn "SQL: $SQL\n";
+				warn Dumper [$_, $herd, 0];
+			}
 			$sth->execute($_,$herd,0);
 		}
 	}
@@ -2392,7 +2426,6 @@ sub add_sync {
 
 	## The rest is the options. If not there, we fill in the defaults
 	my $info = join ' ' => @nouns;
-	my $delim = $info =~ /\|/ ? '\s*\|\s*' : '\\s+';
 	## Command line name, default value, database column name
 	my %arg = (
 			   source          => ['', ''],
@@ -2401,12 +2434,13 @@ sub add_sync {
 			   type            => ['', 'synctype'],
 			   makedelta       => ['', ''],
 			   usecustomselect => ['', ''],
+			   lifetime        => ['', ''],
+			   maxkicks        => [0,  ''],
 			   );
-	for my $arg (split /$delim/ => $info) {
-		if ($arg !~ /(.+)=(.+)/o) {
-			die qq{Invalid argument\n};
-		}
-		my ($name,$value) = ($1,$2);
+	my $args = process_args($info);
+	for my $name (sort keys %$args) {
+		next if $name eq 'extraargs';
+		my $value = $args->{$name};
 		if (!exists $arg{$name}) {
 			die "Unknown option '$name'\n";
 		}
@@ -2474,17 +2508,15 @@ sub alter_sync {
 
 	## The rest is the options.
 	my $info = join ' ' => @nouns;
-	my $delim = $info =~ /\|/ ? '\s*\|\s*' : '\\s+';
 	## Command line name, value
 	my %arg = (
 			   targetdb    => '',
 			   targetgroup => '',
 			   );
-	for my $arg (split /$delim/ => $info) {
-		if ($arg !~ /(.+)=(.+)/o) {
-			die qq{Invalid argument\n};
-		}
-		my ($name,$value) = ($1,$2);
+	my $args = process_args($info);
+	for my $name (sort keys %$args) {
+		next if $name eq 'extraargs';
+		my $value = $args->{$name};
 		if (!exists $arg{$name}) {
 			die "Unknown option '$name'\n";
 		}
@@ -2612,6 +2644,9 @@ sub add_herd {
 	## Usage: add herd name (goat1, goat2, ...)
 
 	my $item_name = shift @nouns || '';
+
+warn "ADD HERD! ($type, $item_name)!\n";
+
 	if (!length $item_name) {
 		warn "Usage: add $type <name> goats";
 		exit 1;
@@ -2619,18 +2654,19 @@ sub add_herd {
 
 	## The rest is the options. If not there, we fill in the defaults
 	my $info = join ' ' => @nouns;
-	my $delim = $info =~ /\|/ ? '\s*\|\s*' : '\\s+';
 	## Command line name, default value, database column name
 	my %arg = (
 			   );
 
 	my @goatlist;
-	for my $arg (split /$delim/ => $info) {
-		if ($arg !~ /(.+)=(.+)/o) {
-			push @goatlist, $arg;
-			next;
-		}
-		my ($name,$value) = ($1,$2);
+	my $args = process_args($info);
+
+	for my $gname (@{$args->{extraargs}}) {
+		push @goatlist => $gname;
+	}
+	for my $name (sort keys %$args) {
+		next if $name eq 'extraargs';
+		my $value = $args->{$name};
 		if (!exists $arg{$name}) {
 			die "Unknown option '$name'\n";
 		}
