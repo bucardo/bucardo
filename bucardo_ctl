@@ -126,6 +126,7 @@ $verb = lc $verb;
 my @nouns = @ARGV;
 my $nouns = join ' ' => @nouns;
 
+
 install() if $verb eq 'install';
 
 ## Grab current information from the bucardo_config file
@@ -191,6 +192,8 @@ help();
 
 sub help {
 	warn qq{Usage: $0 args
+  install         ** Install the Bucardo database
+
   start <reason>  ** force existing sync(s) to quit, then start
 
   stop <reason>   ** tell everyone to stop permanently, even the MCP
@@ -2815,22 +2818,44 @@ sub message {
 
 sub install {
 
-	print "This will install the bucardo schema into a database\n";
+	print "This will install the bucardo database into an existing Postgres cluster.\n";
+	print "Postgres must have been compiled with Perl support,\n";
+	print "and you must connect as a superuser\n\n";
+	print "We will create a new superuser named 'bucardo',\n";
+	print "and make it the owner of a new database named 'bucardo'\n\n";
 
 	my $ans;
 	my $host = $bcargs->{dbhost} || $ENV{DBHOST} || '<none>';
 	my $port = $bcargs->{dbport} || $ENV{DBPORT} || 5432;
-	## The user will default to bucardo in most cases
-	my $user = $bcargs->{dbuser} || $ENV{DBUSER} || 'postgres';
+	my $user = $ENV{DBUSER} || 'postgres';
+
+	## Make sure the bucardo.schema file is available, and extract some config items
+	my $schemafile = 'bucardo.schema';
+	open my $fh, '<', $schemafile or die qq{Could not open "$schemafile": $!\n};
+	my %confvar = (piddir => '');
+	while (<$fh>) {
+		for my $string (keys %confvar) {
+			if (/^$string\|(.+?)\|/) {
+				$confvar{$string} = $1;
+			}
+		}
+	}
+	close $fh or warn qq{Could not close "$schemafile": $!\n};
+	for my $key (keys %confvar) {
+		if (!$confvar{$key}) {
+			warn "Could not find default configuration for $key!\n";
+		}
+	}
 
   GOOEY:
 	{
 
 		print "Current connection settings:\n";
 
-		print "1. Host: $host\n";
-		print "2. Port: $port\n";
-		print "3. User: $user\n";
+		print "1. Host:          $host\n";
+		print "2. Port:          $port\n";
+		print "3. User:          $user\n";
+		print "4. PID directory: $confvar{piddir}\n";
 
 		print 'Enter a number to change it, P to proceed, or Q to quit: ';
 
@@ -2879,11 +2904,37 @@ sub install {
 				$user = $new;
 				print "Changed user to: $user\n";
 			}
+			elsif (4 == $num) {
+				if (!length $new) {
+					print 'Change the PID directory to: ';
+					$new = <>;
+					print "\n";
+					chomp $new;
+				}
+				if (! length $new) {
+					print "-->Sorry, you must specify a directory\n\n";
+					redo GOOEY;
+				}
+				if ($new !~ m{^/}) {
+					print "-->Sorry, the PID directory must be absolute (start with a slash)\n";
+					redo GOOEY;
+				}
+				if (! -d $new) {
+					print "-->Sorry, that is not a valid directory\n";
+					redo GOOEY;
+				}
+				$confvar{piddir} = $new;
+				print "Changed PID dir to: $confvar{piddir}\n";
+			}
 		}
 		elsif ($ans =~ /^\s*Q/i) {
 			die "Goodbye!\n";
 		}
 		elsif ($ans =~ /^\s*P/i) {
+			if (! -d $confvar{piddir}) {
+				print "-->Sorry, that is not a valid PID directory\n";
+				redo GOOEY;
+			}
 			last GOOEY;
 		}
 		else {
@@ -2894,18 +2945,13 @@ sub install {
 
 	}
 
-	print "OK for connection test\n";
-
 	my $PSQL = "psql -p $port -U $user -c 'SELECT version()'";
 	$host !~ /</ and $PSQL .= " --host=$host";
 
 	my $COM = "$PSQL -c 'SELECT version()'";
 
-	print "COM=$COM\n";
-
 	my $res = qx{$COM};
 
-	warn "GOT $res\n";
 	if ($res !~ /Postgre(?:SQL|s) (\d+)\.(\d+)(\S+)/) {
 		die "Sorry, could not determine the version for that database\n";
 	}
@@ -2920,11 +2966,41 @@ sub install {
 
 	$COM = "$PSQL -AX -qt -f bucardo.schema";
 
-	print "Attempting to create and populate the bucardo schema\n";
+	print "Attempting to create and populate the bucardo database and schema\n";
 
 	$res= qx{$COM};
 
-	print "Installation complete. If you see no errors, all is good.\n";
+	print "Database creation is complete\n\n";
+
+	## Whether or not we really need to, change the bucardo_config items:
+
+	print "Connecting to database 'bucardo' as user 'bucardo'\n";
+	my $BDSN  = 'dbi:Pg:dbname=bucardo';
+	$bcargs->{dbhost} and length $bcargs->{dbhost} and $BDSN .= ";host=$bcargs->{dbhost}";
+	$bcargs->{dbport} and length $bcargs->{dbport} and $BDSN .= ";port=$bcargs->{dbport}";
+	my $default_bucardo_password = 'goat';
+	$dbh = DBI->connect($BDSN, 'bucardo', $default_bucardo_password, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+	$dbh->do('SET search_path = bucardo');
+
+	$SQL = 'UPDATE bucardo_config SET value = ? WHERE setting = ?';
+	$sth = $dbh->prepare($SQL);
+	for my $key (sort keys %confvar) {
+		$count = $sth->execute($confvar{$key}, $key);
+		if ($count != 1) {
+			warn "!! Failed to set $key to $confvar{$key}\n";
+		}
+		else {
+			print qq{Updated configuration setting "$key"\n};
+		}
+	}
+	$dbh->commit();
+
+	print "Installation is now complete.\n\n";
+	print "If you see any unexpected errors above, please report them to bucardo-general\@bucardo.org\n\n";
+
+	print "You should probably check over the configuration variables next, by running:\n";
+	print "$0 show all\n";
+	print "Change any setting by using: $0 set foo=bar\n\n";
 
 	exit;
 
