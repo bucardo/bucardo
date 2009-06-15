@@ -379,7 +379,7 @@ sub find_goats {
 
 sub get_syncs {
 
-	## Return an hashref of everything in the sync table
+	## Return a hashref of everything in the sync table
 
 	## Used by reload_mcp()
 
