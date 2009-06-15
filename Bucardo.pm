@@ -2041,9 +2041,12 @@ sub start_controller {
 	$msg = qq{  $showtarget synctype: $synctype stayalive: $stayalive checksecs: $checksecs };
 	$self->glog($msg);
 	$mailmsg .= "$msg\n";
+
 	my $otc = $sync->{onetimecopy} || 0;
 	$msg = qq{  limitdbs: $limitdbs kicked: $kicked kidsalive: $kidsalive onetimecopy: $otc};
 	$self->glog($msg);
+	$mailmsg .= "$msg\n";
+
 	my $lts = $sync->{lifetimesecs};
 	my $lti = $sync->{lifetime};
 	my $mks = $sync->{maxkicks};
