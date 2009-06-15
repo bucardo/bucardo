@@ -949,13 +949,17 @@ sub add_test_tables_to_herd {
 	my $db = shift;
 	my $herd = shift;
 
-	$self->ctl("add herd $herd");
+	my $result = $self->ctl("add herd $herd");
+	if ($result !~ /Herd added/) {
+		die "Failed to add herd $herd: $result\n";
+	}
 
 	my $addstring = join ' ' => sort keys %tabletype;
     $addstring .= ' bucardo_test_multicol';
-	my $result = $self->ctl("add table $addstring db=$db herd=$herd");
+	my $com = "add table $addstring db=$db herd=$herd";
+	$result = $self->ctl($com);
 	if ($result !~ /Tables? added:/) {
-		die "Failed to add tables: $result\n";
+		die "Failed to add tables: $result (command was: $com)\n";
 	}
 
 	return;
