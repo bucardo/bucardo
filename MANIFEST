@@ -14,6 +14,7 @@ MANIFEST.SKIP
 META.yml
 Makefile.PL
 Changes
+.gitignore
 
 scripts/bucardo_rrd
 scripts/bucardo-report
@@ -30,6 +31,7 @@ bucardo_ctl.html
 t/bucardo.test.helper
 t/bucardo.test.data
 t/01-basic.t
+t/02-simple.t
 t/02-monkey_with_db_table.t
 t/02-monkey_with_goat_table.t
 t/02-monkey_with_herd.t
@@ -37,6 +39,13 @@ t/02-monkey_with_sync_table.t
 t/03-goat.t
 t/04-pushdelta.t
 t/05-fullcopy.t
+t/06-multicolpk.t
+t/06-multicolpushdelta.t
+t/07-multicolswap.t
+t/08-wildkick.t
+t/09-uniqueconstraint.t
+t/10-makedelta.t
+t/11-customselect.t
 t/98-cleanup.t
 t/99-perlcritic.t
 t/99-signature.t

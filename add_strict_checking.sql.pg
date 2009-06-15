@@ -1,4 +1,0 @@
-BEGIN;
-ALTER TABLE goat ADD strict_checking BOOLEAN NOT NULL DEFAULT 'true';
-ALTER TABLE sync ADD strict_checking BOOLEAN NOT NULL DEFAULT 'true';
-COMMIT;

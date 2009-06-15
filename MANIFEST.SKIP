@@ -9,3 +9,8 @@ pm_to_blib$
 ^log
 .git/
 outgoingmail.
+bucardo_test_database_*
+none/
+.tmp$
+.blame$
+bucardo.warning.log
