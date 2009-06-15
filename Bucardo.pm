@@ -930,17 +930,27 @@ sub start_mcp {
 						$self->glog("Could not find controller $s->{controller}, will create a new one. Kicked is $s->{mcp_kicked}");
 						$s->{controller} = 0;
 					}
-					else { ## Presume it is alive and listening to us, kick if needed
+					else { ## Presume it is alive and listening to us, restart and kick as needed
 						if ($s->{mcp_kicked}) {
-							## See if controller needs to be killed, because of
-							## time limit or job count limit
-							if (($s->{maxkicks} > 0 && $s->{ctl_kick_counts} >= $s->{maxkicks}) ||
-								($s->{lifetime} > 0 && time() - $s->{start_time} > $s->{lifetime})) {
+							## See if controller needs to be killed, because of time limit or job count limit
+							my $restart_reason = '';
+							if ($s->{maxkicks} > 0 and $s->{ctl_kick_counts} >= $s->{maxkicks}) {
+								$restart_reason = "Total kicks ($s->{ctl_kick_counts}) exceeds limit ($s->{maxkicks})";
+							}
+							elsif ($s->{lifetime} > 0) {
+								my $thistime = time();
+								if ($thistime - $s->{start_time} > $s->{lifetime}) {
+									$restart_reason = "Time is $thistime, limit is $s->{lifetime}";
+								}
+							}
+							if ($restart_reason) {
 								## Kill and restart controller
-								$self->glog("Restarting controller for sync $syncname. Timed out, or max kicks exceeded.");
+								$self->glog("Restarting controller for sync $syncname. $restart_reason");
 								kill $signumber{USR1} => $s->{controller};
 								$self->fork_controller($s, $syncname);
 							}
+
+							## Perform the kick
 							my $notify = "bucardo_ctl_kick_$syncname";
 							$maindbh->do(qq{NOTIFY "$notify"}) or die "NOTIFY $notify failed";
 							$maindbh->commit();
@@ -1020,7 +1030,7 @@ sub start_mcp {
 
 				## Fork off the controller, then clean up the $s hash
 				$self->{masterdbh}->commit();
-	            $self->fork_controller($s, $syncname);
+				$self->fork_controller($s, $syncname);
 				$s->{mcp_kicked} = 0;
 				$s->{mcp_changed} = 1;
 
@@ -1036,30 +1046,30 @@ sub start_mcp {
 	} ## end of mcp_main
 
 	sub fork_controller {
-	    my ($self, $s, $syncname) = @_;
-	    my $controller = fork;
-	    if (!defined $controller) {
-	        die qq{ERROR: Fork for controller failed!\n};
-	    }
+		my ($self, $s, $syncname) = @_;
+		my $controller = fork;
+		if (!defined $controller) {
+			die qq{ERROR: Fork for controller failed!\n};
+		}
 
-	    if (!$controller) {
-	        sleep 0.05;
-	        $self->{masterdbh}->{InactiveDestroy} = 1;
-	        $self->{masterdbh} = 0;
-	        for my $db (values %{$self->{pingdbh}}) {
-	            $db->{InactiveDestroy} = 1;
-	        }
+		if (!$controller) {
+			sleep 0.05;
+			$self->{masterdbh}->{InactiveDestroy} = 1;
+			$self->{masterdbh} = 0;
+			for my $db (values %{$self->{pingdbh}}) {
+				$db->{InactiveDestroy} = 1;
+			}
 
-	        ## No need to keep information about other syncs around
-	        $self->{sync} = $s;
+			## No need to keep information about other syncs around
+			$self->{sync} = $s;
 
-	        $self->start_controller($s);
-	        exit 0;
-	    }
+			$self->start_controller($s);
+			exit 0;
+		}
 
-	    $self->glog(qq{Created controller $controller for sync "$syncname". Kick is $s->{mcp_kicked}});
-	    $s->{controller} = $controller;
-	    $s->{ctl_kick_counts} = 0;
+		$self->glog(qq{Created controller $controller for sync "$syncname". Kick is $s->{mcp_kicked}});
+		$s->{controller} = $controller;
+		$s->{ctl_kick_counts} = 0;
 	}
 
 
