@@ -387,7 +387,8 @@ sub get_syncs {
 
 	$SQL = q{
         SELECT *,
-            COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs
+            COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs,
+            COALESCE(EXTRACT(epoch FROM lifetime),0) AS lifetimesecs
         FROM     bucardo.sync
         ORDER BY priority DESC, name DESC
     };
@@ -822,8 +823,10 @@ sub start_mcp {
 						$self->deactivate_sync($sync->{$syncname});
 
 						## Reread from the database
-						$SQL = q{SELECT *, COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs }
-							 . q{FROM bucardo.sync WHERE name = ?};
+						$SQL = q{SELECT *, }
+							. q{COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs, }
+							. q{COALESCE(EXTRACT(epoch FROM lifetime),0) AS lifetimesecs }
+							. q{FROM bucardo.sync WHERE name = ?};
 						$sth = $maindbh->prepare($SQL);
 						$count = $sth->execute($syncname);
 						if ($count eq '0E0') {
@@ -838,10 +841,11 @@ sub start_mcp {
 						my $info = $sth->fetchall_arrayref({})->[0];
 						$maindbh->commit();
 
-						## For now, just allow a few things to be changed "on the fly"
+						## Only certain things can be changed "on the fly"
 						## no critic (ProhibitHardTabs)
 						for my $val (qw/checksecs stayalive limitdbs do_listen txnmode deletemethod status ping
-										analyze_after_copy targetgroup targetdb usecustomselect onetimecopy/) {
+										analyze_after_copy targetgroup targetdb usecustomselect onetimecopy
+										lifetimesecs maxkicks/) {
 							$sync->{$syncname}{$val} = $self->{sync}{$syncname}{$val} = $info->{$val};
 						}
 						## use critic
@@ -935,12 +939,12 @@ sub start_mcp {
 							## See if controller needs to be killed, because of time limit or job count limit
 							my $restart_reason = '';
 							if ($s->{maxkicks} > 0 and $s->{ctl_kick_counts} >= $s->{maxkicks}) {
-								$restart_reason = "Total kicks ($s->{ctl_kick_counts}) exceeds limit ($s->{maxkicks})";
+								$restart_reason = "Total kicks ($s->{ctl_kick_counts}) >= limit ($s->{maxkicks})";
 							}
-							elsif ($s->{lifetime} > 0) {
+							elsif ($s->{lifetimesecs} > 0) {
 								my $thistime = time();
-								if ($thistime - $s->{start_time} > $s->{lifetime}) {
-									$restart_reason = "Time is $thistime, limit is $s->{lifetime}";
+								if ($thistime - $s->{start_time} > $s->{lifetimesecs}) {
+									$restart_reason = "Time is $thistime, limit is $s->{lifetimesecs} ($s->{lifetime})";
 								}
 							}
 							if ($restart_reason) {
@@ -948,6 +952,8 @@ sub start_mcp {
 								$self->glog("Restarting controller for sync $syncname. $restart_reason");
 								kill $signumber{USR1} => $s->{controller};
 								$self->fork_controller($s, $syncname);
+								## Extra little sleep to ensure the new controller gets the upcoming kick
+								sleep 0.5;
 							}
 
 							## Perform the kick
@@ -1046,6 +1052,7 @@ sub start_mcp {
 	} ## end of mcp_main
 
 	sub fork_controller {
+
 		my ($self, $s, $syncname) = @_;
 		my $controller = fork;
 		if (!defined $controller) {
@@ -1069,7 +1076,10 @@ sub start_mcp {
 
 		$self->glog(qq{Created controller $controller for sync "$syncname". Kick is $s->{mcp_kicked}});
 		$s->{controller} = $controller;
+
+		## Reset counters for ctl restart via maxkicks and lifetime settings
 		$s->{ctl_kick_counts} = 0;
+		$s->{start_time} = time();
 	}
 
 
@@ -2013,9 +2023,6 @@ sub start_controller {
 	print {$pid} "$$\n";
 	close $pid or warn qq{Could not close "$SYNCPIDFILE": $!\n};
 
-	## Track what time we started, for lifetime checks
-	$sync->{start_time} = time();
-
 	## Sometimes we want to manipulate this file, e.g. to change the group ownership
 	if ($PIDCLEANUP) {
 		(my $COM = $PIDCLEANUP) =~ s/PIDFILE/$SYNCPIDFILE/g;
@@ -2036,6 +2043,11 @@ sub start_controller {
 	$mailmsg .= "$msg\n";
 	my $otc = $sync->{onetimecopy} || 0;
 	$msg = qq{  limitdbs: $limitdbs kicked: $kicked kidsalive: $kidsalive onetimecopy: $otc};
+	$self->glog($msg);
+	my $lts = $sync->{lifetimesecs};
+	my $lti = $sync->{lifetime};
+	my $mks = $sync->{maxkicks};
+	$msg = qq{  lifetimesecs: $lts ($lti) maxkicks: $mks};
 	$self->glog($msg);
 	$mailmsg .= "$msg\n";
 
@@ -2118,7 +2130,7 @@ sub start_controller {
 
 
 	## Add ourself to the audit table
-	if ($config{audtit_pid}) {
+	if ($config{audit_pid}) {
 		$SQL = q{INSERT INTO bucardo.audit_pid (type,parentid,familyid,sync,source,ppid,pid,birthdate)}.
 			qq{ VALUES ('CTL',?,?,?,?,$self->{ppid},$$,?)};
 		$sth = $maindbh->prepare($SQL);
@@ -2263,7 +2275,7 @@ sub start_controller {
 	my $lastheardfrom = time();
 	my $safesyncname = $maindbh->quote($syncname);
 	if ($checksecs) {
-		$SQL = "SELECT date(now() - checktime) FROM sync WHERE name = $safesyncname";
+		$SQL = "SELECT date(now() - checktime) FROM bucardo.sync WHERE name = $safesyncname";
 		my $cdate = $maindbh->selectall_arrayref($SQL)->[0][0];
 		## World of hurt here if constraint_exclusion is not set!
 
@@ -3773,7 +3785,7 @@ sub start_kid {
 
 		$kidloop++;
 
-		my $start_time = time();
+		my $kid_start_time = time();
 
 		## Reset stuff that may be used by custom code
 		undef %deltacount;
@@ -5086,14 +5098,14 @@ sub start_kid {
 					next;
 				}
 				($S,$T) = ($g->{safeschema},$g->{safetable});
-				my $total_time = time() - $start_time;
+				my $total_time = time() - $kid_start_time;
 				$self->glog("Analyzing $S.$T on $targetdb. Time: $total_time");
 				$targetdbh->do("ANALYZE $S.$T");
 				$targetdbh->commit();
 			}
 		}
 
-		my $total_time = time() - $start_time;
+		my $total_time = time() - $kid_start_time;
 		if ($synctype eq 'swap') {
 			$self->glog("Finished syncing. Time: $total_time. Updates: $dmlcount{allupdates}{source}+$dmlcount{allupdates}{target} Inserts: $dmlcount{allinserts}{source}+$dmlcount{allinserts}{target} Deletes: $dmlcount{alldeletes}{source}+$dmlcount{alldeletes}{target} Sync: $syncname. Keepalive: $kidsalive");
 		}

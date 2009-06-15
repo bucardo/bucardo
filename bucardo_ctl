@@ -1721,9 +1721,11 @@ sub upgrade {
 		['bucardo', 'audit_pid', 'target_backend',  q{INT         NULL}],
 		['bucardo', 'db',        'dbservice',       q{TEXT        NULL}],
 		['bucardo', 'goat',      'qpkey',           q{TEXT        NULL}],
+		['bucardo', 'sync',      'lifetime',        q{INTERVAL NULL}],
+		['bucardo', 'sync',      'maxkicks',        q{INTEGER NOT NULL DEFAULT 0}],
+		['bucardo', 'sync',      'onetimecopy',     q{SMALLINT NOT NULL DEFAULT 0}],
 		['bucardo', 'sync',      'strict_checking', q{BOOLEAN NOT NULL DEFAULT 'true'}],
 		['bucardo', 'sync',      'track_rates',     q{BOOLEAN NOT NULL DEFAULT 'false'}],
-		['bucardo', 'sync',      'onetimecopy',     q{SMALLINT NOT NULL DEFAULT 0}],
 
 		['freezer', 'old_audit_pid', 'id',              q{INTEGER}],
 		['freezer', 'old_audit_pid', 'parentid',        q{INTEGER}],
