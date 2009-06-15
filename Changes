@@ -1,73 +1,84 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-3.2.7
+3.2.7 June 2009
+
+New features:
+
+  - Add support for multi-column primary keys. Thanks to Backcountry.com. [GSM]
+
+  - Add new 'onetimecopy' attribute to sync table, to allow recreation on 
+    demand of pushdelta tables on slaves via COPY. [GSM]
+
+  - Add log_conflict_details to allow logging of conflict information 
+    to a separate file. [Adam Wendt]
+
+  - Add 'maxkicks' and 'lifetime' to syncs to force restart of controller 
+    and kids after a certain number of kicks or time. [Josh Tolley]
+
+  - Add the bucardo_rate table to track exactly how long replication takes
+    on a per-sync and per-table basis. [GSM]
+
+  - Add more bucardo_ctl actions: reload, validate [GSM]
+
+  - Add in bucardo_compress_delta function, to remove duplicate rows from 
+    the bucardo_delta table. [GSM]
+
+  - Allow the injection of custom messages into the Bucardo logs, and make 
+    an interface for same in bucardo_ctl. [GSM]
+
+  - Add the "warning_file" config parameter to log all 'Warning' messages. [GSM]
+
+  - Add validate_all_syncs() function, and allow an argument to both that 
+    and validate_sync() to force recreation of supporting objects. [GSM]
+
+Enhancements:
+
+  - Remove 'Moose' dependency. [GSM]
 
   - Remove disable_triggers and disable_rules from the sync table. 
     We simply choose pg_class or replica based on the version of the 
     database in question. [GSM]
 
-  - Allow wildcards in the 'bucardo_ctl kick' [Josh Tolley]
-
-  - Add more tests and improve existing ones. [Josh Tolley]
-
-  - Support multi-column primary keys. Thanks to Backcountry.com. [GSM]
-
   - Rewrite the pushdelta sync method to be more efficient and safer. [GSM]
-
-  - Add new 'onetimecopy' attribute to sync table, to allow recreation on 
-    demand of pushdelta tables on slaves via COPY. [GSM]
-
-  - Fix failure to disable/enable triggers when using pg_class and table 
-    and schema are words changed by quote_ident. [Ben Allen]
-
-  - Allow for dead columns when checking attnums. [GSM]
 
   - Change from Mail::Sendmail to Net::SMTP [Ben Allen]
 
-  - Removed 'Moose' dependency. [GSM]
+  - Allow wildcards in the 'bucardo_ctl kick' [Josh Tolley]
+
+  - Improve the FreeBSD scripts/bucardo_ctl.rc file [Ben Allen]
+
+  - Add "sendmail" option to the customcode input. [Ben Allen]
 
   - Add 'bucardo_ctl upgrade' to make intra-version upgrades easy 
     and automatic. [Selena Deckelmann and GSM]
 
-  - Tolerate incompatibility in DEFAULT of negative numbers between 
-    Postgres 8.2 and 8.3. [Jon Jensen]
-
-  - Add log_conflict_details to allow logging of conflict information 
-    to a separate file. [Adam Wendt]
+  - Add more tests and improve existing ones. [Josh Tolley]
 
   - Make the audit_pid table more useful. Use sequences instead of 
     PIDs to find children. Allow for the audit_pid table to be toggled off. [GSM]
 
-  - Add validate_all_syncs() function, and allow an argument to both that 
-    and validate_sync() to force recreation of supporting objects. [GSM]
+  - MCP listens for pings during table validations. [GSM]
 
   - Have master_q use a trigger, not multiple rules. Remove the need 
     for a separate create_child_q() function. [GSM]
 
-  - Add in bucardo_compress_delta function, to remove duplicate rows from 
-    the bucardo_delta table. [GSM]
+Bug fixes:
+
+  - Fix failure to disable/enable triggers when using pg_class and table 
+    and schema are words changed by quote_ident. [Ben Allen]
+
+  - Tolerate incompatibility in DEFAULT of negative numbers between 
+    Postgres 8.2 and 8.3. [Jon Jensen]
 
   - Do better checking of bucardo_ctl executable when MCP is restarting. [Ben Allen]
 
-  - Allow the injection of custom messages into the Bucardo logs, and make 
-    an interface for same in bucardo_ctl. [GSM]
-
-  - Add the bucardo_rate table to track exactly how long replication takes
-    on a per-sync and per-table basis. [GSM]
-
-  - Add "sendmail" option to the customcode input. [Ben Allen]
-
   - Change timestamp to timestamptz where needed inside Bucardo.pm [Yan Farmawan]
-
-  - MCP listens for pings during table validations. [GSM]
-
-  - Improve the FreeBSD scripts/bucardo_ctl.rc file [Ben Allen]
 
   - Put schema in db_getconn calls [Alex Bahlai]
 
-  - Do not attempt respawn of MCP if mcp_dbproblem_sleep is 0. [GSM]
+  - Allow for dead columns when checking attnums. [GSM]
 
-  - Add the "warning_file" config parameter to log all 'Warning' messages. [GSM]
+  - Do not attempt respawn of MCP if mcp_dbproblem_sleep is 0. [GSM]
 
 3.1.0 April 6, 2008
 
