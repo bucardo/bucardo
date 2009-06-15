@@ -31,8 +31,8 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Readonly slaves: trigger/rule to prevent with good message
 - bucardo_help() function to explain all
 - Handle non-orderable data types such as polygons
-- Force children to die after X runs or after a certain amount of time
 - Support truncate triggers for Postgres >= 8.4
 - Put these into a bug tracker
 - Put version number into all functions
 - Document all LISTEN/NOTIFY strings in one area
+- Use 2PC where possible
