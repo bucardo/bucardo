@@ -15,7 +15,7 @@ use BucardoTesting;
 use warnings;
 
 my $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object failed\n";
-unlink "tmp/log.bucardo";
+
 pass(q{*** Beginning 'wildkick' tests});
 
 $bct->drop_database('all');

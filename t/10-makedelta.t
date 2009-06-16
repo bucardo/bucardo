@@ -13,8 +13,6 @@ use Test::More tests => 15;
 use BucardoTesting;
 my $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object failed\n";
 
-unlink('log.bucardo');
-
 pass("*** Beginning makedelta tests");
 #$bct->drop_database('all');
 

@@ -16,8 +16,6 @@ $location = 'pushdelta';
 
 use vars qw/$SQL $sth $t $i $result $count %sql %val %pkey/;
 
-unlink 'log.bucardo';
-
 pass("*** Beginning 'pushdelta' tests");
 
 ## Prepare a clean Bucardo database on A

@@ -16,8 +16,6 @@ $location = 'fullcopy';
 
 use vars qw/$SQL $sth $t $i $result $count %sql %val %pkey/;
 
-unlink "tmp/log.bucardo";
-
 pass("*** Beginning 'fullcopy' tests");
 
 ## Prepare a clean Bucardo database on A
