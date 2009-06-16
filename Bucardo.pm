@@ -1631,7 +1631,11 @@ sub start_mcp {
 
 				## Check each column in alphabetic order
 				for my $colname (sort keys %$colinfo) {
-					$self->glog(qq{    Checking column on target database "$db": "$colname"});
+					## Simple var mapping to make the following code sane
+					my $fcol = $targetcolinfo->{$colname};
+					my $scol = $colinfo->{$colname};
+
+					$self->glog(qq{    Checking column on target database "$db": "$colname" ($fcol->{ftype})});
 
 					## Always fatal: column on source but not target
 					if (! exists $targetcolinfo->{$colname}) {
@@ -1642,9 +1646,6 @@ sub start_mcp {
 						next;
 					}
 
-					## Simple var mapping to make the following code sane
-					my $fcol = $targetcolinfo->{$colname};
-					my $scol = $colinfo->{$colname};
 
 					## Almost always fatal: types do not match up
 					if ($scol->{ftype} ne $fcol->{ftype}) {
