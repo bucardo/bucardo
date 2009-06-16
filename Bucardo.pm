@@ -106,8 +106,6 @@ sub new {
 		debugfilesep => 0,
 		debugname    => '',
 		cleandebugs  => 0,
-		debugstderr  => 0,
-		debugstdout  => 0,
 		dryrun       => 0,
 		bcquiet      => 0,
 		sendmail     => 1,
@@ -144,9 +142,7 @@ sub new {
 		$self->{dryrun} = 1;
 	}
 	if ($self->{dryrun}) {
-		my $drymsg = '** DRYRUN - Syncs will not be commited! **';
-		print {*STDERR} "$drymsg\n";
-		$self->glog($drymsg);
+		$self->glog("'** DRYRUN - Syncs will not be commited! **\n");
 	}
 
 	## This gets appended to the process description
@@ -209,12 +205,6 @@ sub glog { ## no critic (RequireArgUnpacking)
 
 	## If using syslog, send the message at the 'info' priority
 	$self->{debugsyslog} and syslog 'info', $msg;
-
-	## Possibly send the message to stderr
-	$self->{debugstderr} and print {*STDERR} "$header $msg\n";
-
-	## Possibly send the message to stdout
-	$self->{debugstdout} and print {*STDOUT} "$header $msg\n";
 
 	## Possibly send warnings to a separate file
 	if ($is_warning) {

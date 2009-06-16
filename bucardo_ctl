@@ -44,8 +44,6 @@ my $bcargs = {
 			  debugfilesep => 0,
 			  debugdir     => '.',
 			  debugname    => '',
-			  debugstderr  => 0,
-			  debugstdout  => 0,
 			  debugsyslog  => 1,
 			  debugfile    => 1,
 			  cleandebugs  => 0,
@@ -95,8 +93,6 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
 	 'extraname=s',
 	 'debugfilesep',
 	 'debugname=s',
-	 'debugstderr=i',
-	 'debugstdout=i',
 	 'debugsyslog=i',
 	 'debugdir=s',
 	 'debugfile=i',
@@ -3388,14 +3384,6 @@ useful for debugging.
 
 Forces creation of separate log files for each Bucardo process of the form "log.bucardo.X.Y", 
 where X is the type of process (MCP, CTL, or KID), and Y is the process ID.
-
-=item B<--debugstderr>
-
-Sends all log messages to standard error. Off by default.
-
-=item B<--debugstdout>
-
-Sends all log messages to standard out. Off by default.
 
 =item B<--debugsyslog>
 
