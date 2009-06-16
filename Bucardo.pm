@@ -144,7 +144,9 @@ sub new {
 		$self->{dryrun} = 1;
 	}
 	if ($self->{dryrun}) {
-		print {*STDERR} "** DRYRUN - Syncs will not be commited! **\n";
+		my $drymsg = '** DRYRUN - Syncs will not be commited! **';
+		print {*STDERR} "$drymsg\n";
+		$self->glog($drymsg);
 	}
 
 	## This gets appended to the process description
