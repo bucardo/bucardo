@@ -237,7 +237,7 @@ sub glog { ## no critic (RequireArgUnpacking)
 		## Write the message.
 		## If not writing to separate files, prepend the PID to the message
 		printf {$self->{debugfilehandle}{$$}{$file}} "%s%s %s\n",
-			(!$self->{debugfilesep} and !$config{log_showpid}) ? "($$) " : '',
+			(!$self->{debugfilesep} and $config{log_showpid}) ? "($$) " : '',
 			$header,
 			$msg;
 	}
@@ -529,6 +529,7 @@ sub start_mcp {
 	$systemtime = qx{/bin/date +"%Z"} || '?';
 	chomp $systemtime;
 	$self->glog("Local system timezone: $systemtime  Database timezone: $dbtime->[2]");
+	$self->glog("PID: $$");
 
 	## Again with the password trick
 	$self->{dbpass} = '<not shown>';
@@ -2024,6 +2025,7 @@ sub start_controller {
 
 	my $msg = qq{Controller starting for sync "$syncname". Source herd is "$source"};
 	$self->glog($msg);
+	$self->glog("PID: $$");
 
 	## Log some startup information, and squirrel some away for later emailing
 	my $showtarget = sprintf '%s: %s',
@@ -3065,6 +3067,7 @@ sub start_kid {
 	$0 = qq{Bucardo Kid.$self->{extraname} Sync "$syncname": ($synctype) "$sourcedb" -> "$targetdb"};
 	$self->{logprefix} = 'KID';
 	$self->glog(qq{New kid, syncs "$sourcedb" to "$targetdb" for sync "$syncname" alive=$kidsalive Parent=$self->{parent} Type=$synctype});
+	$self->glog("PID: $$");
 
 	## Establish these early so the DIE block can use them
 	our ($maindbh,$sourcedbh,$targetdbh);
