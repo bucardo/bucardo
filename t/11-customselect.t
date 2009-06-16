@@ -31,6 +31,8 @@ $bct->add_test_tables_to_herd('A', 'testherd1');
 
 ## Create tables for this test
 for my $dbh (($dbhA, $dbhB)) {
+	$dbh->do('DROP TABLE IF EXISTS customselect');
+	$dbh->do('DROP TABLE IF EXISTS csmulti');
     $dbh->do(q{
         CREATE TABLE customselect (
             id INTEGER PRIMARY KEY,
