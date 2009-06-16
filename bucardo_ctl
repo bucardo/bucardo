@@ -2003,7 +2003,7 @@ sub upgrade {
 	$SQL = 'INSERT INTO bucardo_config(setting,value,about) VALUES (?,?,?)';
 	my $newcfg = $dbh->prepare($SQL);
 	my $schema_file = 'bucardo.schema';
-	open my $fh, '<', $file or die qq{Could not open "$schema_file": $!\n};
+	open my $fh, '<', $schema_file or die qq{Could not open "$schema_file": $!\n};
 
 	my %config;
 	my $inside = 0;
