@@ -2641,8 +2641,6 @@ sub add_herd {
 
 	my $item_name = shift @nouns || '';
 
-warn "ADD HERD! ($type, $item_name)!\n";
-
 	if (!length $item_name) {
 		warn "Usage: add $type <name> goats";
 		exit 1;
