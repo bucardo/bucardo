@@ -1224,8 +1224,14 @@ sub start_mcp {
 				 'kick_sync',
 			 ) {
 
-				## If the sync is inactive, no sense in listening for anything but an activate request
-				next if $self->{sync}{$syncname}{status} ne 'active' and $l ne 'activate_sync';
+				## If the sync is inactive, no sense in listening for anything but activate/reload requests
+				if ($self->{sync}{$syncname}{status} ne 'active') {
+					next if $l eq 'deactivate_sync' or $l eq 'kick_sync';
+				}
+				else {
+					## If sync is active, no need to listen for an activate request
+					next if $l eq 'activate_sync';
+				}
 
 				my $listen = "bucardo_${l}_$syncname";
 				$maindbh->do(qq{LISTEN "$listen"}) or die "LISTEN $listen failed";
@@ -1267,6 +1273,11 @@ sub start_mcp {
 
 		## Let any listeners know we are done
 		$maindbh->do(qq{NOTIFY "bucardo_activated_sync_$syncname"}) or warn 'NOTIFY failed';
+		## We don't need to listen for activation requests anymore
+		$maindbh->do("UNLISTEN bucardo_activate_sync_$syncname");
+		## But we do need to listen for deactivate and kick requests
+		$maindbh->do("LISTEN bucardo_deactivate_sync_$syncname");
+		$maindbh->do("LISTEN bucardo_kick_sync_$syncname");
 		$maindbh->commit();
 
 		## Redo our process name to include an updated list of active syncs
@@ -1871,7 +1882,34 @@ sub start_mcp {
 
 		## Let any listeners know we are done
 		$maindbh->do(qq{NOTIFY "bucardo_deactivated_sync_$syncname"}) or warn 'NOTIFY failed';
+		## We don't need to listen for deactivation or kick requests
+		$maindbh->do("UNLISTEN bucardo_deactivate_sync_$syncname");
+		$maindbh->do("UNLISTEN bucardo_kick_sync_$syncname");
+		## But we do need to listen for an activation request
+		$maindbh->do("LISTEN bucardo_activate_sync_$syncname");
 		$maindbh->commit();
+
+		## If we are listening for kicks on the source, stop doing so
+		$self->{pingdbh}{$s->{sourcedb}} ||= $self->connect_database($s->{sourcedb});
+		my $srcdbh = $self->{pingdbh}{$s->{sourcedb}};
+		$srcdbh->commit();
+		if ($s->{ping} or $s->{do_listen}) {
+			my $l = "bucardo_kick_sync_$syncname";
+			$self->glog(qq{Unlistening on source server "$s->{sourcedb}" for "$l"});
+			$srcdbh->do(qq{UNLISTEN "$l"}) or warn "UNLISTEN $l failed";
+			$srcdbh->commit();
+			## Same for the targets, but only if synctype is also "swap"
+			if ($s->{synctype} eq 'swap') {
+				my $pdbh = $self->{pingdbh};
+				for my $db (sort keys %$pdbh) {
+					my $dbh = $pdbh->{$db};
+					my $l = "bucardo_kick_sync_$syncname";
+					$self->glog(qq{Unlistening on remote server $db for "$l"});
+					$dbh->do(qq{UNLISTEN "$l"}) or warn "UNLISTEN $l failed";
+					$dbh->commit();
+				}
+			}
+		}
 
 		## Redo our process name to include an updated list of active syncs
 		my @activesyncs;
