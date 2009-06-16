@@ -2048,7 +2048,7 @@ sub start_controller {
 	$mailmsg .= "$msg\n";
 
 	my $lts = $sync->{lifetimesecs};
-	my $lti = $sync->{lifetime};
+	my $lti = $sync->{lifetime} || '<NULL>';
 	my $mks = $sync->{maxkicks};
 	$msg = qq{  lifetimesecs: $lts ($lti) maxkicks: $mks};
 	$self->glog($msg);
