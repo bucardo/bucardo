@@ -4166,10 +4166,10 @@ sub start_kid {
 							## If rows were deleted from source, we are also deleting from target
 							## If rows were inserted to source, they won't be on the target anyway
 							## If rows were updated on source, we'll insert later (update = delete + insert)
+							$self->glog(qq{Deleting rows from $S.$T});
 							$SQL = "DELETE FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)";
 							($count = $targetdbh->do($SQL)) =~ s/0E0/0/o;
 							$dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T} = $count;
-
 
 							## COPY over all affected rows from source to target
 
