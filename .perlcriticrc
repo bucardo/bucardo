@@ -23,10 +23,13 @@ profile-strictness = quiet
 [-InputOutput::ProhibitOneArgSelect]
 ## Too many false positives for this one:
 [-InputOutput::RequireBriefOpen]
+[-Lax::RequireEndWithTrueConst]
+[-Modules::RequireEndWithOne]
 ## This does such a poor job we have to exclude it
 [-RegularExpressions::ProhibitCaptureWithoutTest]
 [-ValuesAndExpressions::ProhibitMixedBooleanOperators]
 [-Variables::RequireLocalizedPunctuationVars]
+
 
 ##
 ## Three:
@@ -61,6 +64,7 @@ profile-strictness = quiet
 [-CodeLayout::ProhibitQuotedWordLists]
 [-ControlStructures::ProhibitPostfixControls]
 [-Documentation::RequirePodSections]
+[-Editor::RequireEmacsFileVariables]
 [-Lax::ProhibitEmptyQuotes::ExceptAsFallback]
 ## This one really ought to be removed entirely:
 ## Giving too many false positives in bucardo_ctl:

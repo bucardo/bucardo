@@ -1,4 +1,4 @@
-#!/usr/bin/perl -- -*-cperl-*-
+
 
 ## Script to control Bucardo
 ##
@@ -2045,10 +2045,10 @@ sub upgrade {
 
 	## Check for any added tables
 	for my $row (@tablelist) {
-		my ($tname,$tbody) = @$row;
-		next if relation_exists('bucardo', $tname);
-		upgrade_and_log($tbody);
-		clog "Created table $tname";
+		my ($name,$body) = @$row;
+		next if relation_exists('bucardo', $name);
+		upgrade_and_log($body);
+		clog "Created table $name";
 		$changes++;
 	}
 
@@ -2072,10 +2072,10 @@ sub upgrade {
 
 	## Check for any added constraints
 	for my $row (@clist) {
-		my ($tname,$cname,$body) = @$row;
-		next if constraint_exists('bucardo', $tname, $cname);
+		my ($name,$cname,$body) = @$row;
+		next if constraint_exists('bucardo', $name, $cname);
 		upgrade_and_log($body);
-		clog "Created constraint $cname on $tname";
+		clog "Created constraint $cname on $name";
 		$changes++;
 	}
 
@@ -2296,9 +2296,9 @@ sub add_table {
 		eval {
 			if ($DEBUG >= 2) {
 				warn "SQL: $SQL\n";
-				my $args = join ',' => @vals;
+				my $localargs = join ',' => @vals;
 				my $ss = defined $schema ? $schema : '<undef>';
-				warn "Args: $args, $ss, $table\n";
+				warn "Args: $localargs, $ss, $table\n";
 			}
 			$count = $sth->execute(@vals,$schema,$table);
 			push @id => $sth->fetch()->[0];

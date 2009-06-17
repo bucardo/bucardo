@@ -1073,6 +1073,8 @@ sub start_mcp {
 		## Reset counters for ctl restart via maxkicks and lifetime settings
 		$s->{ctl_kick_counts} = 0;
 		$s->{start_time} = time();
+
+		return;
 	}
 
 
@@ -1904,9 +1906,9 @@ sub start_mcp {
 				my $pdbh = $self->{pingdbh};
 				for my $db (sort keys %$pdbh) {
 					my $dbh = $pdbh->{$db};
-					my $l = "bucardo_kick_sync_$syncname";
-					$self->glog(qq{Unlistening on remote server $db for "$l"});
-					$dbh->do(qq{UNLISTEN "$l"}) or warn "UNLISTEN $l failed";
+					my $lname = "bucardo_kick_sync_$syncname";
+					$self->glog(qq{Unlistening on remote server $db for "$lname"});
+					$dbh->do(qq{UNLISTEN "$lname"}) or warn "UNLISTEN $lname failed";
 					$dbh->commit();
 				}
 			}
