@@ -1255,7 +1255,7 @@ $bc$
         $found{bc_schema} = $sth->fetchall_arrayref()->[0][0];
 
         ## If we are not a delta sync, we can jump to the ping part
-        my $func0 = length($syncname)    <= 42 ? "bucardo_triggerkick_$syncname" : "bkick_$syncname";
+        my $func0 = length($syncname) <= 42 ? "bucardo_triggerkick_$syncname" : "bkick_$syncname";
         my $trigger0 = "bucardo_triggerkick_$syncname";
         $delta or goto PINGCHECK;
 
