@@ -2075,7 +2075,7 @@ sub upgrade {
 		my ($tname,$cname,$body) = @$row;
 		next if constraint_exists('bucardo', $tname, $cname);
 		upgrade_and_log($body);
-		clog "Created constraint $cname";
+		clog "Created constraint $cname on $tname";
 		$changes++;
 	}
 
