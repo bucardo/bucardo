@@ -1180,7 +1180,7 @@ sub start_mcp {
 		} ## end each sync
 
 		## Change our process name, and list all active syncs
-		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active syncs:";
+		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active syncs: ";
 		$0 .= join ',' => @activesyncs;
 
 		my $count = @activesyncs;
@@ -1287,7 +1287,7 @@ sub start_mcp {
 			push @activesyncs, $syncname;
 		}
 
-		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active syncs:";
+		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active syncs: ";
 		$0 .= join ',' => @activesyncs;
 
 		return 1;
@@ -1918,7 +1918,7 @@ sub start_mcp {
 			push @activesyncs, $syncname;
 		}
 
-		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active syncs:";
+		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active syncs: ";
 		$0 .= join ',' => @activesyncs;
 
 		return 1;
