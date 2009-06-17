@@ -76,8 +76,8 @@ my %clusterinfo = (
 );
 
 ## Location of files
-my $initdb = 'initdb';
-my $pg_ctl = 'pg_ctl';
+my $initdb = $ENV{PGBINDIR} ? "$ENV{PGBINDIR}/initdb" : 'initdb';
+my $pg_ctl = $ENV{PGBINDIR} ? "$ENV{PGBINDIR}/pg_ctl" : 'pg_ctl';
 
 # Set a semi-unique name to make killing old tests easier
 my $xname = "bctest_$ENV{USER}";
