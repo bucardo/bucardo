@@ -1670,28 +1670,6 @@ sub table_definition {
 } ## end of table_definition
 
 
-sub upgrade_and_log {
-
-	my $action = shift;
-	my $short = shift || $action;
-
-	eval {
-		$dbh->do($action);
-	};
-	if ($@) {
-		my $line = (caller)[2];
-		die "From line $line, action $action\n$@\n";
-	}
-
-	$SQL = 'INSERT INTO upgrade_log(action,version,summary) VALUES (?,?,?)';
-	$sth = $dbh->prepare($SQL);
-	$sth->execute($action,$VERSION,$short);
-
-	return;
-
-} ## end of upgrade_and_log
-
-
 sub function_exists {
 
 	my ($schema,$name,$args) = @_;
@@ -1711,12 +1689,9 @@ sub function_exists {
 
 sub upgrade {
 
-	## Make upgrades to an existing schema to match the current version
-	## This is generally not reversible, so we throw plenty of warnings
+	## Make upgrades to an existing Bucardo schema to match the current version
 
 	my $self = shift;
-
-	my $default_schema = 'bucardo';
 
 	$dbh->do(q{SET escape_string_warning = 'OFF'});
 
@@ -1724,23 +1699,35 @@ sub upgrade {
 
 	## Make sure the upgrade_log table is in place
 
-	if (!relation_exists($default_schema, 'upgrade_log')) {
+	if (!relation_exists('bucardo', 'upgrade_log')) {
 		my ($seqlist, $tabledef) = table_definition('upgrade_log');
 		upgrade_and_log($tabledef,'CREATE TABLE upgrade_log');
 		$dbh->commit();
 	}
 
-	my @new_sequences = (
-		'audit_pid_id_seq',
-	);
-
 	my @old_sequences = (
 		'dbgroup_id_seq',
 	);
 
-	my @new_tables = (
-		['bucardo', 'bucardo_log_message'],
-		['bucardo', 'bucardo_rate'],
+	my @old_constraints = (
+		['bucardo', 'goat', 'goat_pkeytype_check'],
+		['bucardo', 'sync', 'sync_replica_allornone'],
+		['bucardo', 'sync', 'sync_disable_triggers_method'],
+		['bucardo', 'sync', 'sync_disable_rules_method'],
+	);
+
+	my @old_columns = (
+		['bucardo', 'sync', 'disable_rules'],
+		['bucardo', 'sync', 'disable_triggers'],
+	);
+
+	my @old_functions = (
+		['create_child_q', 'text'],
+	);
+
+	my @old_indexes = (
+        ['bucardo', 'sync', 'sync_source_targetdb'],
+        ['bucardo', 'sync', 'sync_source_targetgroup'],
 	);
 
 	my @new_columns = (
@@ -1774,56 +1761,25 @@ sub upgrade {
 		['bucardo', 'goat', 'schemaname', 'NO DEFAULT'],
 	);
 
-	my @old_columns = (
-		['bucardo', 'sync', 'disable_rules'],
-		['bucardo', 'sync', 'disable_triggers'],
-	);
-
 	my @row_values = (
 
 		['bucardo_config','about',q{setting = 'log_showtime'}, 1,
 		 'Show timestamp in the log output?  0=off  1=seconds since epoch  2=scalar gmtime  3=scalar localtime'],
 	);
 
-	my @old_constraints = (
-		['bucardo', 'goat', 'goat_pkeytype_check'],
-		['bucardo', 'sync', 'sync_replica_allornone'],
-		['bucardo', 'sync', 'sync_disable_triggers_method'],
-		['bucardo', 'sync', 'sync_disable_rules_method'],
-	);
-
-	my @new_constraints = (
-	);
-
-	my @old_functions = (
-		['create_child_q', 'text'],
-	);
-
-	my @old_indexes = (
-        ['bucardo', 'sync', 'sync_source_targetdb'],
-        ['bucardo', 'sync', 'sync_source_targetgroup'],
-	);
-
-	my @new_indexes = (
-        ['bucardo', 'sync', 'sync_source_targetdb_type', 'UNIQUE source,targetdb,synctype'],
-        ['bucardo', 'sync', 'sync_source_targetgroup_type', 'UNIQUE source,targetgroup,synctype'],
-	);
-
 	my @drop_all_rules = (
 		['freezer','master_q'],
 	);
 
-	## Drop all existing rules from this table:
+	## Drop all existing rules from a table:
 	for my $row (@drop_all_rules) {
 		my ($schema,$table) = @$row;
-		print "Checking $schema and $table\n";
 		my $oid = relation_exists($schema,$table);
 		if (!$oid) {
 			warn "Could not find table $schema.$table to check!\n";
 			next;
 		}
-		$SQL = 'SELECT rulename FROM pg_rewrite WHERE ev_class = ? ORDER BY rulename'
-;
+		$SQL = 'SELECT rulename FROM pg_rewrite WHERE ev_class = ? ORDER BY rulename';
 		$sth = $dbh->prepare($SQL);
 		$count = $sth->execute($oid);
 		if ($count < 1) {
@@ -1837,86 +1793,43 @@ sub upgrade {
 		}
 	}
 
+	## Drop any old sequences
+	for my $sequence (@old_sequences) {
+		next if !relation_exists('bucardo', $sequence);
+		upgrade_and_log("DROP SEQUENCE bucardo.$sequence");
+		clog "Dropped sequence: $sequence";
+		$changes++;
+	}
+
+	## Drop any old constraints
 	for my $con (@old_constraints) {
 		my ($schema, $table, $constraint) = @$con;
-		if (!constraint_exists($schema, $table, $constraint)) {
-			clog "  Constraint $constraint does not exist";
-		}
-		else {
-			upgrade_and_log(qq{ALTER TABLE $schema.$table DROP CONSTRAINT "$constraint"});
-			clog "Dropped constraint $constraint ON $schema.$table";
-			$changes++;
-		}
+		next if !constraint_exists($schema, $table, $constraint);
+		upgrade_and_log(qq{ALTER TABLE $schema.$table DROP CONSTRAINT "$constraint"});
+		clog "Dropped constraint $constraint ON $schema.$table";
+		$changes++;
 	}
 
-	for my $sequence (@new_sequences) {
-		if (relation_exists($default_schema, $sequence)) {
-			clog "  Sequence already exists: $sequence";
-		}
-		else {
-			upgrade_and_log("CREATE SEQUENCE $default_schema.$sequence");
-			clog "Created sequence: $sequence";
-			$changes++;
-		}
-	}
-
-	for my $sequence (@old_sequences) {
-		if (!relation_exists($default_schema, $sequence)) {
-			clog "  Sequence does not exist: $sequence";
-		}
-		else {
-
-			upgrade_and_log("DROP SEQUENCE $default_schema.$sequence");
-			clog "Dropped sequence: $sequence";
-			$changes++;
-		}
-	}
-
-	for my $row (@new_tables) {
-		my ($schema,$table) = @$row;
-		if (relation_exists($schema, $table)) {
-			clog "  Table already exists: $table\n";
-		}
-		else {
-			my ($seqlist, $tabledef) = table_definition($table);
-			for my $sequence (@$seqlist) {
-				if (!relation_exists($schema, $sequence)) {
-					upgrade_and_log("CREATE SEQUENCE $schema.$sequence");
-					clog "Created sequence: $sequence";
-				}
-			}
-			upgrade_and_log($tabledef, "CREATE TABLE $table");
-			clog "Created table: $table\n";
-			$changes++;
-		}
-	}
-
+	## Add new columns as needed
 	for my $row (@new_columns) {
 		my ($schema,$table,$column,$def) = @$row;
-		if (column_exists($schema, $table, $column)) {
-			clog "  Column already exists: $schema.$table.$column";
-		}
-		else {
-			$def =~ s/\s+/ /g;
-			$dbh->do("ALTER TABLE $schema.$table ADD COLUMN $column $def");
-			clog "Created column: $schema.$table.$column $def";
-			$changes++;
-		}
+		next if column_exists($schema, $table, $column);
+		$def =~ s/\s+/ /g;
+		$dbh->do("ALTER TABLE $schema.$table ADD COLUMN $column $def");
+		clog "Created column: $schema.$table.$column $def";
+		$changes++;
 	}
 
+	## Change any altered columns
 	for my $row (@altered_columns) {
 		my ($schema,$table,$column,$change) = @$row;
 		next if ! column_exists($schema, $table, $column);
 		if ($change eq 'NO DEFAULT') {
 			my $def = column_default($schema, $table, $column);
-			if (!$def) {
-				clog "  Column $schema.$table.$column already has no DEFAULT";
-			}
-			else {
-				upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column DROP DEFAULT");
-				clog "Removed DEFAULT ($def) from $schema.$table.$column";
-				$changes++;
-			}
+			next if !$def;
+			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column DROP DEFAULT");
+			clog "Removed DEFAULT ($def) from $schema.$table.$column";
+			$changes++;
 		}
 		elsif ($change =~ /^RENAME\s+(\w+)/) {
 			my $newname = $1;
@@ -1927,75 +1840,42 @@ sub upgrade {
 		elsif ($change =~ /^DEFAULT\s+(.+)/) {
 			my $newname = $1;
 			my $oldname = column_default($schema, $table, $column);
-			if ($newname eq $oldname) {
-				clog "  Column $schema.$table.$column already has a DEFAULT of $newname";
-			}
-			else {
-				upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column SET DEFAULT $newname");
-				clog("Changed DEFAULT on $schema.$table.$column to $newname");
-				$changes++;
-			}
+			next if $newname eq $oldname;
+			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column SET DEFAULT $newname");
+			clog("Changed DEFAULT on $schema.$table.$column to $newname");
+			$changes++;
 		}
 		else {
 			die qq{Do not know how to handle altered column spec of "$change"};
 		}
 	}
 
+	## Drop any old columns
 	for my $row (@old_columns) {
 		my ($schema,$table,$column) = @$row;
-		if (!column_exists($schema, $table, $column)) {
-			clog "  Column already removed: $schema.$table.$column";
-		}
-		else {
-			$dbh->do("ALTER TABLE $schema.$table DROP COLUMN $column");
-			clog "Dropped column: $schema.$table.$column";
-			$changes++;
-		}
+		next if !column_exists($schema, $table, $column);
+		$dbh->do("ALTER TABLE $schema.$table DROP COLUMN $column");
+		clog "Dropped column: $schema.$table.$column";
+		$changes++;
 	}
 
-	for my $row (@new_constraints) {
-		my ($schema,$table,$name,$def) = @$row;
-		if (constraint_exists($schema, $table, $name)) {
-			clog "  Contraint $name on $schema.$table already exists";
-		}
-		else {
-			$dbh->do("ALTER TABLE $schema.$table ADD CONSTRAINT $name $def");
-			clog "Added constraint $name to $schema.$table";
-			$changes++;
-		}
-	}
-
+	## Drop any old indexes
 	for my $row (@old_indexes) {
 		my ($schema,$table,$name) = @$row;
-		if (!relation_exists($schema, $name)) {
-			clog "  Index already removed: $schema.$table.$name";
-		}
-		else {
-			$dbh->do("DROP INDEX $name");
-			clog "Dropped index $name";
-			$changes++;
-		}
+		next if !relation_exists($schema, $name);
+		$dbh->do("DROP INDEX $name");
+		clog "Dropped index $name";
+		$changes++;
 	}
 
-	for my $row (@new_indexes) {
-		my ($schema,$table,$name,$def) = @$row;
-		if (relation_exists($schema, $name)) {
-			clog "  Index already exists: $schema.$table.$name";
-		}
-		else {
-			my $unique = $def =~ s/^UNIQUE\s*// ? 1 : 0;
-			my $COM = sprintf 'CREATE %sINDEX %s ON %s.%s (%s)',
-				$unique ? 'UNIQUE ' : '',
-                $name,
-				$schema,
-                $table,
-                $def;
-			$dbh->do($COM);
-			clog "Created index $name on $name";
-			$changes++;
-		}
+	## Drop any old functions
+	for my $row (@old_functions) {
+		my ($name, $args) = @$row;
+		next if ! function_exists('bucardo', $name, $args);
+		clog "Dropped function $name($args)";
+		upgrade_and_log(qq{DROP FUNCTION bucardo."$name"($args)});
+		$changes++;
 	}
-
 
 	## Check for any new config items
 	$SQL = 'SELECT value FROM bucardo_config WHERE lower(setting) = ?';
@@ -2031,42 +1911,29 @@ sub upgrade {
 	}
 	close $fh or die qq{Could not close file "$schema_file": $!\n};
 
+	## Apply any specific row changes
 	for my $row (@row_values) {
 		my ($table,$column,$where,$force,$value) = @$row;
-		my $val = column_value($default_schema,$table,$column,$where);
+		my $val = column_value('bucardo',$table,$column,$where);
 		if (!defined $val) {
 			die "Failed to find $table.$column where $where!\n";
 		}
-		if ($val eq $value) {
-			clog "  Value of $table.$column where $where is already correct";
-		}
-		else {
-			$SQL = sprintf "UPDATE $default_schema.$table SET $column=%s WHERE $where",
-				$dbh->quote($value);
-			upgrade_and_log($SQL);
-			clog "New value set for $default_schema.$table.$column WHERE $where";
-			$changes++;
-		}
+		next if $val eq $value;
+		$SQL = sprintf "UPDATE bucardo.$table SET $column=%s WHERE $where",
+			$dbh->quote($value);
+		upgrade_and_log($SQL);
+		clog "New value set for bucardo.$table.$column WHERE $where";
+		$changes++;
 	}
 
-	for my $row (@old_functions) {
-		my ($name, $args) = @$row;
-		if (function_exists('bucardo', $name, $args)) {
-			clog "Dropping deprecated function $name($args)";
-			upgrade_and_log(qq{DROP FUNCTION bucardo."$name"($args)});
-			$changes++;
-		}
-		else {
-			clog "  Deprecated function $name($args) does not exist";
-		}
-	}
-
-	## Now we check all the functions, triggers, and indexes within bucardo.schema
+	## Parse the bucardo.schema file and verify the following types of objects exist:
+	## Functions, triggers, constraints, sequences, and indexes
 	$file = 'bucardo.schema';
 	open $fh, '<', $file or die qq{Could not open "$file": $!\n};
-	my (@flist, @tlist, @ilist);
+	my (@flist, @tlist, @ilist, @clist, @slist, @tablelist);
 	my ($fname,$args,$fbody) = ('','','');
 	my ($tname,$tbody) = ('','');
+	my ($tablename,$tablebody) = ('','');
 	while (<$fh>) {
 		if ($fbody) {
 			if (/^(\$bc\$;)/) {
@@ -2087,6 +1954,14 @@ sub upgrade {
 			}
 			next;
 		}
+		if ($tablebody) {
+			$tablebody .= $_;
+			if (/;/) {
+				push @tablelist, [$tablename, $tablebody];
+				$tablebody = $tablename = '';
+			}
+			next;
+		}
 		if (/^CREATE (?:OR REPLACE )?FUNCTION\s+(\S+)/) {
 			$fname = $1;
 			$fbody .= $_;
@@ -2101,8 +1976,21 @@ sub upgrade {
 			$tbody .= $_;
 			next;
 		}
-		if (/^CREATE INDEX (\S+)/) {
-			push @ilist, [$1, $_];
+		if (/^CREATE TABLE bucardo.(\w+)/) {
+			$tablename = $1;
+			$tablebody .= $_;
+			next;
+		}
+		if (/^CREATE (UNIQUE )?INDEX (\S+)/) {
+			push @ilist, [$1, $2, $_];
+			next;
+		}
+		if (/^ALTER TABLE (\S+) ADD CONSTRAINT (\S+)/) {
+			push @clist, [$1, $2, $_];
+			next;
+		}
+		if (/^CREATE SEQUENCE (\w+)/) {
+			push @slist, [$1, $_];
 			next;
 		}
 	}
@@ -2112,11 +2000,11 @@ sub upgrade {
 	my $md5sth = $dbh->prepare($SQL);
 	for my $row (@flist) {
 		my ($name,$arg,$body) = @$row;
-		my $oldbody = function_exists($default_schema,$name,$arg);
+		my $oldbody = function_exists('bucardo',$name,$arg);
 		if (!$oldbody) {
-			$body =~ s/FUNCTION /FUNCTION $default_schema./;
-			upgrade_and_log($body,"CREATE FUNCTION $default_schema.$name($arg)");
-			clog "Added function $default_schema.$name($arg)";
+			$body =~ s/FUNCTION /FUNCTION bucardo./;
+			upgrade_and_log($body,"CREATE FUNCTION bucardo.$name($arg)");
+			clog "Added function bucardo.$name($arg)";
 			$changes++;
 			next;
 		}
@@ -2124,12 +2012,11 @@ sub upgrade {
 		$realbody =~ s/.*?\$bc\$(.+)\$bc\$;/$1/sm;
 		$md5sth->execute($realbody);
 		my $newbody = $md5sth->fetchall_arrayref()->[0][0];
-		if ($oldbody eq $newbody) {
-			clog "  Function unchanged: $default_schema.$name($arg)";
-			next;
-		}
+		next if $oldbody eq $newbody;
 		$body =~ s/^CREATE FUNCTION/CREATE OR REPLACE FUNCTION/;
-		$body =~ s/FUNCTION /FUNCTION $default_schema./;
+		if ($body !~ /FUNCTION bucardo/) {
+			$body =~ s/FUNCTION /FUNCTION bucardo./;
+		}
 		(my $short = $body) =~ s/^(.+?)\n.*/$1/s;
 		$dbh->do('SAVEPOINT bucardo_upgrade');
 		eval { upgrade_and_log($body,$short); };
@@ -2143,35 +2030,53 @@ sub upgrade {
 		else {
 			$dbh->do('RELEASE bucardo_upgrade');
 		}
-		clog "Updated function: $default_schema.$name($arg)";
+		clog "Updated function: bucardo.$name($arg)";
+		$changes++;
+	}
+
+	## Check for any added sequences
+	for my $row (@slist) {
+		my ($sname,$body) = @$row;
+		next if relation_exists('bucardo', $sname);
+		upgrade_and_log($body);
+		clog "Created sequence $sname";
+		$changes++;
+	}
+
+	## Check for any added tables
+	for my $row (@tablelist) {
+		my ($tname,$tbody) = @$row;
+		next if relation_exists('bucardo', $tname);
+		upgrade_and_log($tbody);
+		clog "Created table $tname";
 		$changes++;
 	}
 
 	## Check for any added triggers
 	for my $row (@tlist) {
 		my ($name,$body) = @$row;
-		if (trigger_exists($name)) {
-			clog "  Trigger $name already exists";
-		}
-		else {
-			upgrade_and_log($body);
-			clog "Created trigger $name";
-			$changes++;
-		}
+		next if trigger_exists($name);
+		upgrade_and_log($body);
+		clog "Created trigger $name";
+		$changes++;
 	}
 
 	## Check for any added indexes
 	for my $row (@ilist) {
-		my ($name,$body) = @$row;
-		if (relation_exists('bucardo',$name)) {
-			clog "  Index $name already exists";
-		}
-		else {
-			warn "DOES NOT EXIST? $name";
-			upgrade_and_log($body);
-			clog "Created index $name";
-			$changes++;
-		}
+		my ($uniq,$name,$body) = @$row;
+		next if relation_exists('bucardo',$name);
+		upgrade_and_log($body);
+		clog "Created index $name";
+		$changes++;
+	}
+
+	## Check for any added constraints
+	for my $row (@clist) {
+		my ($tname,$cname,$body) = @$row;
+		next if constraint_exists('bucardo', $tname, $cname);
+		upgrade_and_log($body);
+		clog "Created constraint $cname";
+		$changes++;
 	}
 
 	## The freezer.q_staging table is no longer needed, but we must empty it before dropping
@@ -2188,10 +2093,35 @@ sub upgrade {
 		$dbh->commit();
 		print "Changes have been commited\n";
 	}
+	else {
+		print "No schema changes were needed\n";
+	}
 
 	exit 1;
 
 } ## end of upgrade
+
+
+sub upgrade_and_log {
+
+	my $action = shift;
+	my $short = shift || $action;
+
+	eval {
+		$dbh->do($action);
+	};
+	if ($@) {
+		my $line = (caller)[2];
+		die "From line $line, action $action\n$@\n";
+	}
+
+	$SQL = 'INSERT INTO upgrade_log(action,version,summary) VALUES (?,?,?)';
+	$sth = $dbh->prepare($SQL);
+	$sth->execute($action,$VERSION,$short);
+
+	return;
+
+} ## end of upgrade_and_log
 
 
 sub add_database {
