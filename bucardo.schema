@@ -29,7 +29,7 @@ SET escape_string_warning = 'OFF';
 --
 -- Main bucardo configuration information
 --
-CREATE TABLE bucardo_config (
+CREATE TABLE bucardo.bucardo_config (
   setting  TEXT        NOT NULL, -- short unique name, maps to %config inside Bucardo
   value    TEXT        NOT NULL,
   about    TEXT            NULL, -- long description
@@ -45,7 +45,7 @@ CREATE UNIQUE INDEX bucardo_config_unique_name ON bucardo_config(setting,name,ty
 ALTER TABLE bucardo_config ADD CONSTRAINT valid_config_type
   CHECK (type IN ('sync','goat'));
 
-CREATE FUNCTION check_bucardo_config()
+CREATE FUNCTION bucardo.check_bucardo_config()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $bc$
@@ -148,7 +148,7 @@ upsert_attempts|3|How many times do we try out the upsert loop?
 --
 -- Keep track of every database we need to connect to
 --
-CREATE TABLE db (
+CREATE TABLE bucardo.db (
   name        TEXT        NOT NULL,  -- local name for convenience, not necessarily database name
                 CONSTRAINT db_name_pk PRIMARY KEY (name),
   dbhost      TEXT        NOT NULL DEFAULT '',
@@ -164,19 +164,19 @@ CREATE TABLE db (
   targetlimit SMALLINT    NOT NULL DEFAULT 0, -- maximum concurrent write connections to this database
   cdate       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE UNIQUE INDEX "db_dsn_unique" ON db(dbhost,dbport,dbname,dbuser) WHERE NOT name ~ '^bctest';
+CREATE UNIQUE INDEX db_dsn_unique ON db(dbhost,dbport,dbname,dbuser) WHERE NOT name ~ '^bctest';
 ALTER TABLE db ADD CONSTRAINT db_status CHECK (status IN ('active','inactive'));
 
 --
 -- Databases can belong to zero or more named groups
 --
-CREATE TABLE dbgroup (
+CREATE TABLE bucardo.dbgroup (
   name      TEXT        NOT NULL,
               CONSTRAINT dbgroup_name_pk PRIMARY KEY (name),
   cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE dbmap (
+CREATE TABLE bucardo.dbmap (
   db       TEXT        NOT NULL,
              CONSTRAINT  dbmap_db_fk FOREIGN KEY (db) REFERENCES db(name) ON DELETE CASCADE,
   dbgroup  TEXT        NOT NULL,
@@ -190,7 +190,7 @@ CREATE UNIQUE INDEX dbmap_unique ON dbmap(db,dbgroup);
 --
 -- Track status information about each database
 --
-CREATE TABLE db_connlog (
+CREATE TABLE bucardo.db_connlog (
   db          TEXT        NOT NULL,
                 CONSTRAINT  db_connlog_dbid_fk FOREIGN KEY (db) REFERENCES db(name) ON DELETE CASCADE ON UPDATE CASCADE,
   conndate    TIMESTAMPTZ NOT NULL DEFAULT now(),  -- when we first connected to it
@@ -205,7 +205,7 @@ CREATE TABLE db_connlog (
 -- We need to track each item we want to replicate from or replicate to
 --
 CREATE SEQUENCE goat_id_seq;
-CREATE TABLE goat (
+CREATE TABLE bucardo.goat (
   id                 INTEGER     NOT NULL DEFAULT nextval('goat_id_seq'),
                        CONSTRAINT goat_id_pk PRIMARY KEY (id),
   db                 TEXT        NOT NULL,
@@ -242,7 +242,7 @@ ALTER TABLE goat ADD CONSTRAINT standard_conflict CHECK (standard_conflict IS NU
 -- Set of filters for each goat.
 --
 CREATE SEQUENCE bucardo_custom_trigger_id_seq;
-CREATE TABLE bucardo_custom_trigger (
+CREATE TABLE bucardo.bucardo_custom_trigger (
   id                INTEGER     NOT NULL DEFAULT nextval('bucardo_custom_trigger_id_seq'),
       CONSTRAINT bucardo_custom_trigger_id_pk PRIMARY KEY (id),
   goat              INTEGER     NOT NULL,
@@ -263,7 +263,7 @@ CREATE UNIQUE INDEX bucardo_custom_trigger_goat_type_unique ON bucardo_custom_tr
 --
 -- A group of goats. Ideally arranged in some sort of tree.
 --
-CREATE TABLE herd (
+CREATE TABLE bucardo.herd (
   name       TEXT        NOT NULL,
                CONSTRAINT herd_name_pk PRIMARY KEY (name),
   cdate      TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -273,7 +273,7 @@ CREATE TABLE herd (
 -- Goats belong to zero or more herds. In most cases, they will 
 -- belong to a single herd if they are being replicated.
 --
-CREATE TABLE herdmap (
+CREATE TABLE bucardo.herdmap (
   herd      TEXT        NOT NULL,
               CONSTRAINT herdmap_herd_fk FOREIGN KEY (herd) REFERENCES herd(name) ON DELETE CASCADE,
   goat      INTEGER     NOT NULL,
@@ -287,7 +287,7 @@ CREATE VIEW goats_in_herd AS
   FROM goat g
   JOIN herdmap hm ON hm.goat = g.id;
 
-CREATE FUNCTION herdcheck()
+CREATE FUNCTION bucardo.herdcheck()
 RETURNS TRIGGER
 LANGUAGE plperlu
 AS
@@ -337,7 +337,7 @@ CREATE TRIGGER herdcheck
 --
 -- We need to know who is replicating to who, and how
 --
-CREATE TABLE sync (
+CREATE TABLE bucardo.sync (
   name               TEXT        NOT NULL UNIQUE,
                        CONSTRAINT sync_name_pk PRIMARY KEY (name),
   source             TEXT        NOT NULL,
@@ -402,7 +402,7 @@ ALTER TABLE sync    ADD CONSTRAINT sync_name_sane    CHECK (name ~ E'^[a-zA-Z]\\
 -- Track our children
 --
 CREATE SEQUENCE audit_pid_id_seq;
-CREATE TABLE audit_pid (
+CREATE TABLE bucardo.audit_pid (
   id             INTEGER     NOT NULL DEFAULT nextval('audit_pid_id_seq'),
   parentid       INTEGER         NULL, -- CTL or MCP id
   familyid       INTEGER         NULL, -- the MCP id
@@ -426,7 +426,7 @@ CREATE TABLE freezer.old_audit_pid AS SELECT * FROM audit_pid LIMIT 0;
 --
 -- Traffic control for children
 --
-CREATE TABLE q (
+CREATE TABLE bucardo.q (
   sync      TEXT           NULL,
               CONSTRAINT q_sync_fk FOREIGN KEY (sync) REFERENCES sync(name) ON DELETE SET NULL,
   sourcedb  TEXT           NULL,
@@ -447,7 +447,7 @@ CREATE TABLE q (
 );
 -- insert constraint - db and sync not null
 -- Can only be one unstarted source->target per sync
-CREATE UNIQUE INDEX "q_unique" ON q (sync,sourcedb,targetdb) WHERE started IS NULL;
+CREATE UNIQUE INDEX q_unique ON q (sync,sourcedb,targetdb) WHERE started IS NULL;
 
 CREATE INDEX q_ppid ON q (ppid,pid) WHERE ended IS NULL AND aborted IS NULL;
 
@@ -475,7 +475,7 @@ CREATE TRIGGER bucardo_q
 CREATE TABLE freezer.master_q AS SELECT * FROM q LIMIT 0;
 GRANT SELECT ON freezer.master_q TO PUBLIC;
 
-CREATE FUNCTION bucardo_purge_q_table(interval)
+CREATE FUNCTION bucardo.bucardo_purge_q_table(interval)
 RETURNS BIGINT
 SECURITY DEFINER
 LANGUAGE plpgsql
@@ -495,21 +495,21 @@ BEGIN
 END;
 $bc$;
 
-CREATE FUNCTION bucardo_purge_q_table(text)
+CREATE FUNCTION bucardo.bucardo_purge_q_table(text)
 RETURNS BIGINT
 LANGUAGE SQL
 AS $bc$
 SELECT bucardo_purge_q_table($1::interval);
 $bc$;
 
-CREATE FUNCTION bucardo_purge_q_table()
+CREATE FUNCTION bucardo.bucardo_purge_q_table()
 RETURNS BIGINT
 LANGUAGE SQL
 AS $bc$
 SELECT bucardo_purge_q_table('2 hours'::interval);
 $bc$;
 
-CREATE FUNCTION bucardo_purge_q_table(integer)
+CREATE FUNCTION bucardo.bucardo_purge_q_table(integer)
 RETURNS BIGINT
 LANGUAGE plpgsql
 IMMUTABLE
@@ -520,7 +520,7 @@ END;
 $bc$;
 
 
-CREATE FUNCTION table_exists(text,text)
+CREATE FUNCTION bucardo.table_exists(text,text)
 RETURNS BOOLEAN
 LANGUAGE plpgsql
 AS $bc$
@@ -602,7 +602,7 @@ CREATE TRIGGER populate_child_q_table
 --
 -- Return a created connection string from the db table
 --
-CREATE OR REPLACE FUNCTION bucardo.db_getconn(text)
+CREATE OR REPLACE FUNCTION db_getconn(text)
 RETURNS TEXT
 LANGUAGE plperlu
 SECURITY DEFINER
@@ -733,7 +733,7 @@ $bc$;
 --
 -- Check the database connection if anything changes in the db table
 --
-CREATE FUNCTION db_change()
+CREATE FUNCTION bucardo.db_change()
 RETURNS TRIGGER
 LANGUAGE plperlu
 SECURITY DEFINER
@@ -1941,7 +1941,7 @@ RETURNS TEXT
 LANGUAGE SQL
 AS
 $bc$
-SELECT bucardo.validate_sync($1,0);
+ SELECT bucardo.validate_sync($1,0);
 $bc$;
 
 CREATE OR REPLACE FUNCTION bucardo.validate_all_syncs(integer)
@@ -1967,7 +1967,7 @@ $bc$
 SELECT validate_all_syncs(0);
 $bc$;
 
-CREATE FUNCTION validate_sync()
+CREATE FUNCTION bucardo.validate_sync()
 RETURNS TRIGGER
 LANGUAGE plperlu
 SECURITY DEFINER
@@ -2009,7 +2009,7 @@ CREATE TRIGGER validate_sync
   AFTER INSERT OR UPDATE ON sync
   FOR EACH ROW EXECUTE PROCEDURE validate_sync();
 
-CREATE FUNCTION bucardo_delete_sync()
+CREATE FUNCTION bucardo.bucardo_delete_sync()
 RETURNS TRIGGER
 LANGUAGE plperlu
 SECURITY DEFINER
@@ -2110,7 +2110,7 @@ CREATE TRIGGER bucardo_delete_sync
   FOR EACH ROW EXECUTE PROCEDURE bucardo_delete_sync();
 
 CREATE SEQUENCE customcode_id_seq;
-CREATE TABLE customcode (
+CREATE TABLE bucardo.customcode (
   id       INTEGER     NOT NULL DEFAULT nextval('customcode_id_seq'),
              CONSTRAINT customcode_id_pk PRIMARY KEY (id),
   name     TEXT        NOT NULL UNIQUE,
@@ -2137,7 +2137,7 @@ CHECK (whenrun IN (
 'after_sync'
 ));
 
-CREATE TABLE customcode_map (
+CREATE TABLE bucardo.customcode_map (
   code     INTEGER     NOT NULL,
              CONSTRAINT customcode_map_code_fk FOREIGN KEY (code) REFERENCES customcode(id) ON DELETE CASCADE,
   sync     TEXT            NULL,
@@ -2196,7 +2196,7 @@ END;
 $bc$;
 
 -- Monitor how long data takes to move over, from commit to commit
-CREATE TABLE bucardo_rate (
+CREATE TABLE bucardo.bucardo_rate (
   sync         TEXT        NOT NULL,
   goat         INTEGER     NOT NULL,
   target       TEXT            NULL,
@@ -2207,7 +2207,7 @@ CREATE TABLE bucardo_rate (
 CREATE INDEX bucardo_rate_sync ON bucardo_rate(sync);
 
 -- Keep track of any upgrades as we go along
-CREATE TABLE upgrade_log (
+CREATE TABLE bucardo.upgrade_log (
   action   TEXT        NOT NULL,
   summary  TEXT        NOT NULL,
   version  TEXT        NOT NULL,
@@ -2216,7 +2216,7 @@ CREATE TABLE upgrade_log (
 
 -- Allow users to insert messages in the Bucardo logs
 
-CREATE FUNCTION bucardo_log_message_notify()
+CREATE FUNCTION bucardo.bucardo_log_message_notify()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $bc$
@@ -2226,7 +2226,7 @@ BEGIN
 END;
 $bc$;
 
-CREATE TABLE bucardo_log_message (
+CREATE TABLE bucardo.bucardo_log_message (
   msg TEXT NOT NULL,
   cdate TIMESTAMPTZ NOT NULL DEFAULT now()
 );
