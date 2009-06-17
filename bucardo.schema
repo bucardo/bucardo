@@ -243,17 +243,17 @@ ALTER TABLE goat ADD CONSTRAINT standard_conflict CHECK (standard_conflict IS NU
 --
 CREATE SEQUENCE bucardo_custom_trigger_id_seq;
 CREATE TABLE bucardo_custom_trigger (
-	id			 INTEGER	 	NOT NULL DEFAULT nextval('bucardo_custom_trigger_id_seq'),
-								CONSTRAINT bucardo_custom_trigger_id_pk PRIMARY KEY (id),
-	goat		 INTEGER 		NOT NULL,
-								CONSTRAINT bucardo_custom_trigger_goat_fk FOREIGN KEY (goat) REFERENCES goat(id) ON DELETE CASCADE,
-	trigger_name 		TEXT NOT NULL,
-	trigger_type 		TEXT NOT NULL,
-	trigger_language 	TEXT NOT NULL DEFAULT 'plpgsql',
-	trigger_body 		TEXT NOT NULL,
-	trigger_level	    TEXT NOT NULL,
-	status   			TEXT NOT NULL DEFAULT 'active',
-	cdate		    	TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                INTEGER     NOT NULL DEFAULT nextval('bucardo_custom_trigger_id_seq'),
+      CONSTRAINT bucardo_custom_trigger_id_pk PRIMARY KEY (id),
+  goat              INTEGER     NOT NULL,
+      CONSTRAINT bucardo_custom_trigger_goat_fk FOREIGN KEY (goat) REFERENCES goat(id) ON DELETE CASCADE,
+  trigger_name      TEXT        NOT NULL,
+  trigger_type      TEXT        NOT NULL,
+  trigger_language  TEXT        NOT NULL DEFAULT 'plpgsql',
+  trigger_body      TEXT        NOT NULL,
+  trigger_level     TEXT        NOT NULL,
+  status            TEXT        NOT NULL DEFAULT 'active',
+  cdate             TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 ALTER TABLE bucardo_custom_trigger ADD CONSTRAINT type_is_delta_or_trigger CHECK (trigger_type IN ('delta', 'triggerkick'));
@@ -644,7 +644,7 @@ if (!defined $row->{dbpass}) {
 }
 
 for (qw(host port name user pass conn)) {
-	$db{$_} = exists $row->{"db$_"} ? $row->{"db$_"} : '';
+    $db{$_} = exists $row->{"db$_"} ? $row->{"db$_"} : '';
 }
 
 ## Check that the port is numeric
@@ -699,13 +699,13 @@ $safeconn =~ s/'/''/go;
 elog(DEBUG, "Connecting as $db{dsn} user=$db{user} $$");
 
 eval {
-	$dbh = DBI->connect($db{dsn}, $db{user}, $db{pass},
-    	{AutoCommit=>1, RaiseError=>1, PrintError=>0});
+    $dbh = DBI->connect($db{dsn}, $db{user}, $db{pass},
+        {AutoCommit=>1, RaiseError=>1, PrintError=>0});
 };
 if ($@ or !$dbh) {
-	$SQL = "INSERT INTO db_connlog (db,connstring,status) VALUES ('$safename','$safeconn','unknown')";
-	spi_exec_query($SQL);
-	return "Failed to make database connection: $@";
+    $SQL = "INSERT INTO db_connlog (db,connstring,status) VALUES ('$safename','$safeconn','unknown')";
+    spi_exec_query($SQL);
+    return "Failed to make database connection: $@";
 }
 
 $version = $dbh->{pg_server_version};
@@ -1254,10 +1254,10 @@ $bc$
         $sth->execute('bucardo');
         $found{bc_schema} = $sth->fetchall_arrayref()->[0][0];
 
-		## If we are not a delta sync, we can jump to the ping part
+        ## If we are not a delta sync, we can jump to the ping part
         my $func0 = length($syncname)    <= 42 ? "bucardo_triggerkick_$syncname" : "bkick_$syncname";
         my $trigger0 = "bucardo_triggerkick_$syncname";
-		$delta or goto PINGCHECK;
+        $delta or goto PINGCHECK;
 
         ## (if bc_schema exists) Do these triggers exist on this table?
         my $trigger1 = "bucardo_add_delta";
@@ -1452,62 +1452,62 @@ $bc$
         }
 
         ## Ping needs a special function and trigger
-	 	if ($ping) {
-			my $custom_trigger_level;
-			my $custom_function_name;
-			$SQL = qq{ 	SELECT trigger_language,trigger_body,trigger_level FROM bucardo_custom_trigger
-			 			WHERE goat=$info->{id}
-						AND status='active'
-						AND trigger_type='triggerkick' };	
-			elog(DEBUG, "Running $SQL");
-			$rv = spi_exec_query($SQL);
-				
+         if ($ping) {
+            my $custom_trigger_level;
+            my $custom_function_name;
+            $SQL = qq{SELECT trigger_language,trigger_body,trigger_level FROM bucardo_custom_trigger
+                      WHERE goat=$info->{id}
+                      AND status='active'
+                      AND trigger_type='triggerkick' };
+            elog(DEBUG, "Running $SQL");
+            $rv = spi_exec_query($SQL);
+                
             if (!$found{func0} or $force or $rv->{processed}) {
 
-				if($rv->{processed}) {
-					$custom_function_name = $func0 . "_" . $info->{tablename};
-					$custom_trigger_level = $rv->{rows}[0]{trigger_level};
-					$SQL = qq{
-						CREATE OR REPLACE FUNCTION bucardo."$custom_function_name"()
-	                    RETURNS TRIGGER 
-	                    LANGUAGE $rv->{rows}[0]{trigger_language}
-	                    AS \$notify\$
-					};
-					$SQL .= qq{ $rv->{rows}[0]{trigger_body} };
-					$SQL .= qq{ \$notify\$; };
-				} 
-				else {
-                	$SQL = qq{
-	                    CREATE OR REPLACE FUNCTION bucardo."$func0"()
-	                    RETURNS TRIGGER 
-	                    LANGUAGE plpgsql
-	                    AS \$notify\$
-	                    BEGIN
-	                        EXECUTE 'NOTIFY "bucardo_kick_sync_$syncname"';
-	
-	                    RETURN NEW;
-	                    END;
-	                    \$notify\$;
-	                };
-				}
+                if($rv->{processed}) {
+                    $custom_function_name = $func0 . "_" . $info->{tablename};
+                    $custom_trigger_level = $rv->{rows}[0]{trigger_level};
+                    $SQL = qq{
+                        CREATE OR REPLACE FUNCTION bucardo."$custom_function_name"()
+                        RETURNS TRIGGER 
+                        LANGUAGE $rv->{rows}[0]{trigger_language}
+                        AS \$notify\$
+                    };
+                    $SQL .= qq{ $rv->{rows}[0]{trigger_body} };
+                    $SQL .= qq{ \$notify\$; };
+                } 
+                else {
+                    $SQL = qq{
+                        CREATE OR REPLACE FUNCTION bucardo."$func0"()
+                        RETURNS TRIGGER 
+                        LANGUAGE plpgsql
+                        AS \$notify\$
+                        BEGIN
+                            EXECUTE 'NOTIFY "bucardo_kick_sync_$syncname"';
+    
+                        RETURN NEW;
+                        END;
+                        \$notify\$;
+                    };
+                }
                 run_sql($SQL,$dbh);
             }
             if (!$found{trigger0}) {
-				if($custom_trigger_level && $custom_function_name) {
-                	$SQL = qq{
-	                    CREATE TRIGGER "$trigger0"
-	                    AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
-	                    FOR EACH $custom_trigger_level EXECUTE PROCEDURE bucardo."$custom_function_name"()
-	                };
-				} else
-				{
-					$SQL = qq{
-	                    CREATE TRIGGER "$trigger0"
-	                    AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
-	                    FOR EACH STATEMENT EXECUTE PROCEDURE bucardo."$func0"()
-	                };
-				}
-	            run_sql($SQL,$dbh);
+                if($custom_trigger_level && $custom_function_name) {
+                    $SQL = qq{
+                        CREATE TRIGGER "$trigger0"
+                        AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
+                        FOR EACH $custom_trigger_level EXECUTE PROCEDURE bucardo."$custom_function_name"()
+                    };
+                } else
+                {
+                    $SQL = qq{
+                        CREATE TRIGGER "$trigger0"
+                        AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
+                        FOR EACH STATEMENT EXECUTE PROCEDURE bucardo."$func0"()
+                    };
+                }
+                run_sql($SQL,$dbh);
             }
         }
 
@@ -1611,7 +1611,7 @@ $bc$
                 my $colname = "rowid$_";
                 $SQL = "SELECT count(*) FROM pg_catalog.pg_attribute a, pg_class c, pg_namespace n ".
                     "WHERE c.relnamespace = n.oid AND n.nspname = 'bucardo' AND a.attrelid = c.oid ".
-                        "AND c.relname = 'bucardo_delta' AND a.attname = '$colname'";
+                    "AND c.relname = 'bucardo_delta' AND a.attname = '$colname'";
                 $count = $dbh->selectall_arrayref($SQL)->[0][0];
                 if ($count != 1) {
                     $SQL = "ALTER TABLE bucardo.bucardo_delta ADD $colname TEXT NULL";
@@ -1650,28 +1650,28 @@ $bc$
             my $old = join ',' => map { qq{OLD."$_"} } @pkeys;
             my $clause = join ' OR ' => map { qq{OLD."$_" <> NEW."$_"} } @pkeys;
 
-			$SQL = qq{ 	SELECT trigger_language,trigger_body FROM bucardo_custom_trigger 
-						WHERE goat=$info->{id} 
-						AND status='active' 
-						AND trigger_type='delta' };
-			elog(DEBUG, "Running $SQL");
-			$rv = spi_exec_query($SQL);
+            $SQL = qq{SELECT trigger_language,trigger_body FROM bucardo_custom_trigger 
+                      WHERE goat=$info->{id} 
+                      AND status='active' 
+                      AND trigger_type='delta' };
+            elog(DEBUG, "Running $SQL");
+            $rv = spi_exec_query($SQL);
 
-			if(! $found{func1} and $rv->{processed}) {
-				$SQL = qq{
-					CREATE OR REPLACE FUNCTION bucardo.$func1()
+            if(! $found{func1} and $rv->{processed}) {
+                $SQL = qq{
+                    CREATE OR REPLACE FUNCTION bucardo.$func1()
                     RETURNS TRIGGER
                     LANGUAGE $rv->{rows}[0]{trigger_language}
-					SECURITY DEFINER
+                    SECURITY DEFINER
                     VOLATILE
                     AS
                     \$clone\$
-				};
-				$SQL .= qq{ $rv->{rows}[0]{trigger_body} };
-				$SQL .= qq{ \$clone\$; };
-				run_sql($SQL,$dbh);
-			} 
-			elsif (! $found{func1} and $pkeytype ne 'bytea') {
+                };
+                $SQL .= qq{ $rv->{rows}[0]{trigger_body} };
+                $SQL .= qq{ \$clone\$; };
+                run_sql($SQL,$dbh);
+            } 
+            elsif (! $found{func1} and $pkeytype ne 'bytea') {
                 $SQL = qq{
                     CREATE OR REPLACE FUNCTION bucardo.$func1()
                     RETURNS TRIGGER
