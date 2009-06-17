@@ -462,7 +462,7 @@ sub start_mcp {
 		exit 1;
 	}
 
-	## Create a new pid file
+	## Create a new (temporary) pid file
 	open my $pid, '>', $self->{pidfile} or die qq{Cannot write to $self->{pidfile}: $!\n};
 	my $now = scalar localtime;
 	print {$pid} "$$\n$old0\n$now\n";
@@ -516,6 +516,12 @@ sub start_mcp {
 	$self->{masterdbh} = $self->connect_database();
 	$self->{masterdbh}->do('NOTIFY bucardo_boot') or die 'NOTIFY bucardo_boot failed!';
 	$self->{masterdbh}->commit();
+
+	## Overwrite the PID file with our new value
+	open my $pid, '>', $self->{pidfile} or die qq{Cannot write to $self->{pidfile}: $!\n};
+	my $now = scalar localtime;
+	print {$pid} "$$\n$old0\n$now\n";
+	close $pid or warn qq{Could not close "$self->{pidfile}": $!\n};
 
 	## Start outputting some interesting things to the log
 	$self->glog("Starting Bucardo version $VERSION");
