@@ -57,10 +57,16 @@ Enhancements:
   - Make the audit_pid table more useful. Use sequences instead of 
     PIDs to find children. Allow for the audit_pid table to be toggled off. [GSM]
 
+  - Remove the debugstderr and debugstdout options, as they never worked 
+    correctly anyway. [GSM]
+
   - MCP listens for pings during table validations. [GSM]
 
   - Have master_q use a trigger, not multiple rules. Remove the need 
     for a separate create_child_q() function. [GSM]
+
+  - Default for log_showtime is now 'scalar localtime' rather than 
+    epoch seconds. [GSM]
 
 Bug fixes:
 
@@ -75,6 +81,10 @@ Bug fixes:
   - Change timestamp to timestamptz where needed inside Bucardo.pm [Yan Farmawan]
 
   - Put schema in db_getconn calls [Alex Bahlai]
+
+  - Record the proper PID for the MCP in the pid file [Goran Gugic]
+
+  - Set the tcp_* defaults in bucardo_config to zero (system default). [GSM]
 
   - Allow for dead columns when checking attnums. [GSM]
 
