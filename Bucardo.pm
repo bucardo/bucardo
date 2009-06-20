@@ -518,8 +518,8 @@ sub start_mcp {
 	$self->{masterdbh}->commit();
 
 	## Overwrite the PID file with our new value
-	open my $pid, '>', $self->{pidfile} or die qq{Cannot write to $self->{pidfile}: $!\n};
-	my $now = scalar localtime;
+	open $pid, '>', $self->{pidfile} or die qq{Cannot write to $self->{pidfile}: $!\n};
+	$now = scalar localtime;
 	print {$pid} "$$\n$old0\n$now\n";
 	close $pid or warn qq{Could not close "$self->{pidfile}": $!\n};
 
