@@ -392,7 +392,7 @@ sub fresh_database {
 sub empty_test_database {
 
 	## Wipe all data tables from a test database
-	## Takes a datbase handle as only arg
+	## Takes a database handle as only arg
 
 	my $self = shift;
 	my $dbh = shift;
