@@ -1282,10 +1282,10 @@ sub start_mcp {
 		## Let any listeners know we are done
 		$maindbh->do(qq{NOTIFY "bucardo_activated_sync_$syncname"}) or warn 'NOTIFY failed';
 		## We don't need to listen for activation requests anymore
-		$maindbh->do("UNLISTEN bucardo_activate_sync_$syncname");
+		$maindbh->do(qq{UNLISTEN "bucardo_activate_sync_$syncname"});
 		## But we do need to listen for deactivate and kick requests
-		$maindbh->do("LISTEN bucardo_deactivate_sync_$syncname");
-		$maindbh->do("LISTEN bucardo_kick_sync_$syncname");
+		$maindbh->do(qq{LISTEN "bucardo_deactivate_sync_$syncname"});
+		$maindbh->do(qq{LISTEN "bucardo_kick_sync_$syncname"});
 		$maindbh->commit();
 
 		## Redo our process name to include an updated list of active syncs
@@ -3565,7 +3565,7 @@ sub start_kid {
 	## because the system catalogs are not strictly MVCC. However, there is
 	## no other way to disable rules, which we must do.
 	## If we are 8.3 or higher, we simply use session_replication_role,
-	## which is completely safe (and faster)
+	## which is completely safe, and faster (thanks Jan!)
 	## Note that the source and target may have different methods
 
 	my $source_disable_trigrules = $sourcedbh->{pg_server_version} >= 80300 ? 'replica' : 'pg_class';
@@ -3777,7 +3777,7 @@ sub start_kid {
 			last KID;
 		}
 
-		## If persistent, do an occasional ping. Listen for messages
+		## If persistent, listen for messages and do an occasional ping.
 		if ($kidsalive) {
 			while (my $notify = $maindbh->func('pg_notifies')) {
 				my ($name, $pid) = @$notify;
@@ -3861,7 +3861,7 @@ sub start_kid {
 		}
 
 		## Start the main transaction. From here on out, speed is key
-		## Note that all database handles are currently not in a txn (commit or rollback called)
+		## Note that all database handles are currently not in a txn (last action was commit or rollback)
 		$targetdbh->do("SET TRANSACTION ISOLATION LEVEL $sync->{txnmode}");
 		if ($synctype eq 'swap' or $synctype eq 'pushdelta') {
 			$sourcedbh->do("SET TRANSACTION ISOLATION LEVEL $sync->{txnmode}");
