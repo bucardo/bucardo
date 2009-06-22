@@ -14,6 +14,7 @@ New features:
 
   - Add 'maxkicks' and 'lifetime' to syncs to force restart of controller 
     and kids after a certain number of kicks or time. [Josh Tolley]
+    Thanks to Backcountry.com.
 
   - Add the bucardo_rate table to track exactly how long replication takes
     on a per-sync and per-table basis. [GSM]
