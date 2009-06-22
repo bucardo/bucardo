@@ -978,18 +978,21 @@ sub restart_bucardo {
 	$self->stop_bucardo();
 
 	pass('Starting up Bucardo');
-	$dbh->do("LISTEN bucardo_boot");
-	$dbh->do("LISTEN bucardo_started");
+	$dbh->do('LISTEN bucardo_boot');
+	$dbh->do('LISTEN bucardo_started');
 	$dbh->commit();
 
 	$self->ctl('start testing');
 
 	my $bail = 10;
+	my $n;
   WAITFORIT: {
 		if ($bail--<0) {
 			die "Bucardo did not start, but we waited!\n";
 		}
-		last if $dbh->func('pg_notifies');
+		while ($n = $dbh->func('pg_notifies')) {
+			last WAITFORIT if $n->[0] eq 'bucardo_started';
+		}
 		$dbh->commit();
 		sleep 0.2;
 		redo;
