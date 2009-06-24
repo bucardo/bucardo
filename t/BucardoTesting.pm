@@ -973,13 +973,18 @@ sub restart_bucardo {
 	## Start Bucardo, but stop first if it is already running
 	## Pass in a database handle to the bucardo_control_test db
 
-	my ($self,$dbh) = @_;
+	my ($self,$dbh,$notice,$passmsg) = @_;
+
+	## Which notice is good enough?
+	$notice ||= 'bucardo_started';
+	$passmsg ||= 'Bucardo was started';
 
 	$self->stop_bucardo();
 
 	pass('Starting up Bucardo');
 	$dbh->do('LISTEN bucardo_boot');
 	$dbh->do('LISTEN bucardo_started');
+	$dbh->do('LISTEN bucardo_nosyncs');
 	$dbh->commit();
 
 	$self->ctl('start testing');
@@ -991,13 +996,13 @@ sub restart_bucardo {
 			die "Bucardo did not start, but we waited!\n";
 		}
 		while ($n = $dbh->func('pg_notifies')) {
-			last WAITFORIT if $n->[0] eq 'bucardo_started';
+			last WAITFORIT if $n->[0] eq $notice;
 		}
 		$dbh->commit();
 		sleep 0.2;
 		redo;
 	}
-	pass('Bucardo was started');
+	pass($passmsg);
 
 	return 1;
 

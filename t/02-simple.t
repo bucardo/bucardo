@@ -12,7 +12,7 @@ use Test::More 'no_plan';
 
 use BucardoTesting;
 my $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object failed\n";
-$location = 'pushdelta';
+$location = 'simple';
 
 use vars qw/$SQL $sth $t $i $result $count %sql %val %pkey/;
 
@@ -54,7 +54,8 @@ is_deeply($result, [[12,34]], $t);
 ## Test mismatched rows - kicking the sync should fail, as it will be inactive
 $dbhA->do("ALTER TABLE bucardo_test1 ADD newcol INT");
 $dbhA->commit();
-$bct->restart_bucardo($dbhX);
+$bct->restart_bucardo($dbhX,'bucardo_nosyncs','Bucardo exited because of no valid syncs');
+
 $dbhA->do("INSERT INTO bucardo_test1(id,inty) VALUES (44,55)");
 $dbhA->commit();
 eval {
