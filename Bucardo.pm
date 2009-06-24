@@ -630,6 +630,8 @@ sub start_mcp {
 	if (!$active_syncs) {
 		## Should we allow an option to hang around anyway?
 		$self->glog('No active syncs were found, so we are exiting');
+		$self->{masterdbh}->do('NOTIFY bucardo_nosyncs');
+		$self->{masterdbh}->commit();
 		exit 1;
 	}
 
