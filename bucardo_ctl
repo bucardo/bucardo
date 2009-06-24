@@ -666,6 +666,11 @@ sub status_all {
 	our ($synclist,$max);
 	($synclist,$max) = get_detailed_syncs();
 
+	if (! keys %$synclist) {
+		print "No syncs have been created yet.\n";
+		exit 0;
+	}
+
 	printf qq{%-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s\n},
 		$max->{name},'Name',
 		$max->{type}, 'Type',
