@@ -2272,7 +2272,10 @@ sub add_table {
 		$count = $sth->execute($herd);
 		$sth->finish();
 		if ($count != 1) {
-			die "Cannot add to non-existent herd: $herd\n";
+			$SQL = 'INSERT INTO herd(name) VALUES(?)';
+			$sth = $dbh->prepare($SQL);
+			$sth->execute($herd);
+			print qq{Created herd "$herd"\n};
 		}
 	}
 
