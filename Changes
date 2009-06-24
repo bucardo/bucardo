@@ -9,6 +9,9 @@ New features:
   - Add new 'onetimecopy' attribute to sync table, to allow recreation on 
     demand of pushdelta tables on slaves via COPY. [GSM]
 
+  - Support for replication after TRUNCATE. This will only work on 
+    Postgres version 8.4 and higher. [GSM]
+
   - Add log_conflict_details to allow logging of conflict information 
     to a separate file. [Adam Wendt]
 
