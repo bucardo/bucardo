@@ -35,7 +35,6 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Put version number into all functions
 - Document all LISTEN/NOTIFY strings in one area
 - Use 2PC where possible
-- Fix hole where ping true and not fullcopy - check for ready rows on startup.
 - May even want to check the above at regular intervals.
 - Let bucardo_ctl force reload of tables (e.g. onetimecopy / truncate)
 - Think about better handling of PID files on exit

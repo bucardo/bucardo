@@ -61,6 +61,9 @@ Enhancements:
   - Remove the debugstderr and debugstdout options, as they never worked 
     correctly anyway. [GSM]
 
+  - On startup, all syncs that may have trigger-based notifies are 
+    initially kicked. [GSM]
+
   - MCP listens for pings during table validations. [GSM]
 
   - Have master_q use a trigger, not multiple rules. Remove the need 

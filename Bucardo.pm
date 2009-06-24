@@ -662,6 +662,18 @@ sub start_mcp {
 	$mcpdbh->do('NOTIFY bucardo_started')  or warn 'NOTIFY failed';
 	$mcpdbh->commit();
 
+	## Kick all syncs that may have sent a notice while we were down.
+	for my $syncname (keys %{$self->{sync}}) {
+		my $s = $self->{sync}{$syncname};
+		## Skip inactive syncs
+		next unless $s->{mcp_active};
+		## Skip fullcopy syncs
+		next if $s->{synctype} eq 'fullcopy';
+		## Skip if ping is false
+		next if ! $s->{ping};
+		$s->{mcp_kicked} = 1;
+	}
+
 	## Start the main loop
 	$self->mcp_main();
 
