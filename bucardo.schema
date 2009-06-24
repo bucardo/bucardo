@@ -1336,30 +1336,35 @@ $bc$
         ## (if bc_schema exists) Does this table exist?
 
         if (!$found{bc_schema}) {
-            $found{bucardo_delta} = $found{bucardo_track} = $found{bucardo_delta_targets} = 0;
+            $found{bucardo_delta} = $found{bucardo_track} = $found{bucardo_delta_targets} = 
+            $found{bucardo_truncate_trigger} = $found{bucardo_truncate_trigger_log} = 0;
         }
         else {
             $SQL = qq{
-                SELECT max(t1), max(t2), max(t3)
+                SELECT max(t1), max(t2), max(t3), max(t4), max(t5)
                 FROM (
                 SELECT
                   CASE WHEN c.relname = 'bucardo_delta' THEN 1 ELSE 0 END AS t1,
                   CASE WHEN c.relname = 'bucardo_track' THEN 1 ELSE 0 END AS t2,
-                  CASE WHEN c.relname = 'bucardo_delta_targets' THEN 1 ELSE 0 END AS t3
+                  CASE WHEN c.relname = 'bucardo_delta_targets' THEN 1 ELSE 0 END AS t3,
+                  CASE WHEN c.relname = 'bucardo_truncate_trigger' THEN 1 ELSE 0 END AS t4,
+                  CASE WHEN c.relname = 'bucardo_truncate_trigger_log' THEN 1 ELSE 0 END AS t5
                 FROM   pg_catalog.pg_class c, pg_catalog.pg_namespace n
                 WHERE  c.relnamespace = n.oid
                 AND    c.relkind = 'r'
                 AND    n.nspname = 'bucardo'
-                AND    c.relname IN ('bucardo_delta','bucardo_track','bucardo_delta_targets')
+                AND    c.relname IN (?,?,?,?,?)
                 ) foo
             };
             elog(DEBUG, "Preparing to check tables: $SQL");
             $sth = $dbh->prepare($SQL);
-            $sth->execute();
+            $sth->execute('bucardo_delta','bucardo_track','bucardo_delta_targets','bucardo_truncate_trigger','bucardo_truncate_trigger_log');
             my $row = $sth->fetchall_arrayref()->[0];
             $found{'bucardo_delta'} = $row->[0];
             $found{'bucardo_track'} = $row->[1];
             $found{'bucardo_delta_targets'} = $row->[2];
+            $found{'bucardo_truncate_trigger'} = $row->[3];
+            $found{'bucardo_truncate_trigger_log'} = $row->[4];
         }
 
         ## (if bucardo_delta exists) Do these indexes exist?
@@ -1464,7 +1469,7 @@ $bc$
                 
             if (!$found{func0} or $force or $rv->{processed}) {
 
-                if($rv->{processed}) {
+                if ($rv->{processed}) {
                     $custom_function_name = $func0 . "_" . $info->{tablename};
                     $custom_trigger_level = $rv->{rows}[0]{trigger_level};
                     $SQL = qq{
@@ -1483,8 +1488,11 @@ $bc$
                         LANGUAGE plpgsql
                         AS \$notify\$
                         BEGIN
-                            EXECUTE 'NOTIFY "bucardo_kick_sync_$syncname"';
-    
+                          EXECUTE 'NOTIFY "bucardo_kick_sync_$syncname"';
+                          IF TG_OP = 'TRUNCATE' THEN
+                            INSERT INTO bucardo.bucardo_truncate_trigger(tablename,sname,tname,sync)
+                            VALUES (TG_RELID, TG_TABLE_SCHEMA, TG_TABLE_NAME, '$syncname');
+                          END IF;
                         RETURN NEW;
                         END;
                         \$notify\$;
@@ -1493,17 +1501,18 @@ $bc$
                 run_sql($SQL,$dbh);
             }
             if (!$found{trigger0}) {
-                if($custom_trigger_level && $custom_function_name) {
+                my $ttrig = $dbh->{pg_server_version} >= 80400 ? ' OR TRUNCATE' : '';
+                if ($custom_trigger_level && $custom_function_name) {
                     $SQL = qq{
                         CREATE TRIGGER "$trigger0"
-                        AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
+                        AFTER INSERT OR UPDATE OR DELETE$ttrig ON $safeschema.$safetable
                         FOR EACH $custom_trigger_level EXECUTE PROCEDURE bucardo."$custom_function_name"()
                     };
-                } else
+                }
                 {
                     $SQL = qq{
                         CREATE TRIGGER "$trigger0"
-                        AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
+                        AFTER INSERT OR UPDATE OR DELETE$ttrig ON $safeschema.$safetable
                         FOR EACH STATEMENT EXECUTE PROCEDURE bucardo."$func0"()
                     };
                 }
@@ -1592,6 +1601,44 @@ $bc$
                 };
                 run_sql($SQL,$dbh);
             }
+            if (! $found{bucardo_truncate_trigger}) {
+                $SQL = qq{
+                    CREATE TABLE bucardo.bucardo_truncate_trigger (
+                        tablename   OID         NOT NULL,
+                        sname       TEXT        NOT NULL,
+                        tname       TEXT        NOT NULL,
+                        sync        TEXT        NOT NULL,
+                        replicated  TIMESTAMPTZ     NULL,
+                        cdate       TIMESTAMPTZ NOT NULL DEFAULT now()
+                    );
+                };
+                run_sql($SQL,$dbh);
+
+                $SQL = q{CREATE INDEX bucardo_truncate_trigger_index ON }
+                     . q{bucardo.bucardo_truncate_trigger (sync, tablename) WHERE replicated IS NULL};
+                run_sql($SQL,$dbh);
+
+            }
+
+            if (! $found{bucardo_truncate_trigger_log}) {
+                $SQL = qq{
+                    CREATE TABLE bucardo.bucardo_truncate_trigger_log (
+                        tablename   OID         NOT NULL,
+                        sname       TEXT        NOT NULL,
+                        tname       TEXT        NOT NULL,
+                        sync        TEXT        NOT NULL,
+                        targetdb    TEXT        NOT NULL,
+                        replicated  TIMESTAMPTZ NOT NULL,
+                        cdate       TIMESTAMPTZ NOT NULL DEFAULT now()
+                    );
+                };
+                run_sql($SQL,$dbh);
+
+                $SQL = q{CREATE INDEX bucardo_truncate_trigger_log_index ON }
+                     . q{bucardo.bucardo_truncate_trigger_log (sync,targetdb,replicated)};
+                run_sql($SQL,$dbh);
+            }
+
             if ($force) {
                 if ($found{index1}) {
                     elog(DEBUG, qq{Dropping index "$safeindex1"});
@@ -1657,7 +1704,7 @@ $bc$
             elog(DEBUG, "Running $SQL");
             $rv = spi_exec_query($SQL);
 
-            if(! $found{func1} and $rv->{processed}) {
+            if (! $found{func1} and $rv->{processed}) {
                 $SQL = qq{
                     CREATE OR REPLACE FUNCTION bucardo.$func1()
                     RETURNS TRIGGER

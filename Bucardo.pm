@@ -3351,6 +3351,18 @@ sub start_kid {
 	## If we are using delta tables, prepare all relevant SQL
 	if ($synctype eq 'pushdelta' or $synctype eq 'swap') {
 
+		## Check for any unhandled truncates in general. If there are, no reason to even look at bucardo_delta
+		$SQL = 'SELECT tablename, MAX(cdate) FROM bucardo.bucardo_truncate_trigger '
+			. 'WHERE sync = ? AND replicated IS NULL GROUP BY 1';
+		$sth{source}{checktruncate} = $sourcedbh->prepare($SQL);
+		$sth{target}{checktruncate} = $targetdbh->prepare($SQL) if $synctype eq 'swap';
+
+		## Check for the latest truncate to this target for each table
+		$SQL = 'SELECT 1 FROM bucardo.bucardo_truncate_trigger_log '
+			. 'WHERE sync = ? AND targetdb=? AND tablename = ? AND replicated = ?';
+		$sth{source}{checktruncatelog} = $sourcedbh->prepare($SQL);
+		$sth{target}{checktruncatelog} = $targetdbh->prepare($SQL) if $synctype eq 'swap';
+
 		if ($sync->{does_makedelta}) {
 			$SQL = q{INSERT INTO bucardo.bucardo_track(txntime,tablename,targetdb) VALUES (now(),?,?)};
 			$sth{source}{inserttrack} = $sourcedbh->prepare($SQL) if $synctype eq 'swap';
@@ -3910,10 +3922,47 @@ sub start_kid {
 		## If doing a pushdelta or a swap, see if we have any delta rows to process
 		if ($synctype eq 'pushdelta' or $synctype eq 'swap') {
 
+			## Check for truncate activity. If found, switch to fullcopy for a table as needed.
+			## For now, just do pushdelta
+			$deltacount{sourcetruncate} = $sth{source}{checktruncate}->execute($syncname);
+			$sth{source}{checktruncate}->finish() if $deltacount{sourcetruncate} =~ s/0E0/0/o;
+			$self->glog(qq{Source truncate count: $deltacount{sourcetruncate}});
+			if ($deltacount{sourcetruncate}) {
+				## For each table that was truncated, see if this target has already handled it
+				for my $row (@{$sth{source}{checktruncate}->fetchall_arrayref()}) {
+					$count = $sth{source}{checktruncatelog}->execute($syncname, $targetdb, @$row);
+					$sth{source}{checktruncatelog}->finish();
+					($deltacount{source}{truncate}{$row->[0]} = $count) =~ s/0E0/0/o;
+					$deltacount{source}{truncatelog}{$row->[0]} = $row->[1];
+				}
+				## Which of the tables we are tracking need truncation support?
+				$SQL = 'INSERT INTO bucardo.bucardo_truncate_trigger_log (tablename,sname,tname,sync,targetdb,replicated) '
+					. 'VALUES(?,?,?,?,?,?)';
+				for my $g (@$goatlist) {
+					## deltacount may not exist = no truncation needed
+					## may exist but be zero = truncate!
+					## may exists and be positive = no truncation needed
+					$g->{source}{needstruncation} = 
+						(exists $deltacount{source}{truncate}{$g->{oid}} and !$deltacount{source}{truncate}{$g->{oid}})
+							? 1 : 0;
+					if ($g->{source}{needstruncation}) {
+						$sth = $sourcedbh->prepare_cached($SQL);
+						$sth->execute($g->{oid},$g->{safeschema},$g->{safetable},$syncname,$targetdb,
+							  $deltacount{source}{truncatelog}{$g->{oid}});
+						$deltacount{truncates}++;
+						$self->glog('Marking this truncate as done in bucardo_truncate_trigger_log');
+					}
+				}
+			}
+
 			## For each table in this herd, grab a count of changes
 			$deltacount{allsource} = $deltacount{alltarget} = 0;
 			for my $g (@$goatlist) {
 				($S,$T) = ($g->{safeschema},$g->{safetable});
+
+				## If this table was truncated on the source, we do nothing here
+				next if $g->{source}{needstruncation};
+
 				$deltacount{allsource} += $deltacount{source}{$S}{$T} = $sth{source}{$g}{getdelta}->execute();
 				$sth{source}{$g}{getdelta}->finish() if $deltacount{source}{$S}{$T} =~ s/0E0/0/o;
 				$self->glog(qq{Source delta count for $S.$T: $deltacount{source}{$S}{$T}});
@@ -3932,7 +3981,7 @@ sub start_kid {
 			$self->glog("Total delta count: $deltacount{all}");
 
 			## If no changes, rollback dbs, close out q, notify listeners, and leave or reloop
-			if (! $deltacount{all}) {
+			if (! $deltacount{all} and ! $deltacount{truncates}) {
 				$targetdbh->rollback();
 				$sourcedbh->rollback();
 				$sth{qend}->execute(0,0,0,$syncname,$targetdb,$$);
@@ -3965,11 +4014,13 @@ sub start_kid {
 		}
 
 		## FULLCOPY
-		if ($synctype eq 'fullcopy') {
+		if ($synctype eq 'fullcopy' or $deltacount{truncates}) {
 
 			for my $g (@$goatlist) {
 
 				($S,$T) = ($g->{safeschema},$g->{safetable});
+
+				next if $deltacount{truncates} and ! $g->{source}{needstruncation};
 
 				if ($g->{ghost}) {
 					$self->glog("Skipping ghost table $S.$T");
@@ -4015,7 +4066,7 @@ sub start_kid {
 
 				$self->glog("Emptying out target table $S.$T using $sync->{deletemethod}");
 				if ($sync->{deletemethod} eq 'truncate') {
-					$targetdbh->do("TRUNCATE TABLE $S.$T");
+					$targetdbh->do("TRUNCATE TABLE $S.$T"); ## XXX Always try truncate first, then eval to delete?
 				}
 				else {
 					($dmlcount{D}{target}{$S}{$T} = $targetdbh->do("DELETE FROM $S.$T")) =~ s/0E0/0/o;
@@ -4058,6 +4109,25 @@ sub start_kid {
 					$targetdbh->do("REINDEX TABLE $S.$T");
 				}
 
+				## If we just did a fullcopy, but the table is pushdelta or swap,
+				## we can clean out any older bucardo_delta entries
+				if ($sync->{onetimecopy} or $deltacount{truncates}) {
+					$SQL = "DELETE FROM bucardo.bucardo_delta WHERE txntime <= now() AND tablename = $g->{oid}";
+					$sth = $sourcedbh->prepare($SQL);
+					$count = $sth->execute();
+					$sth->finish();
+					$count =~ s/0E0/0/o;
+					$self->glog("Rows removed from bucardo_delta on source for $S.$T: $count");
+					## Swap? Other side(s) as well
+					if ($synctype eq 'swap') {
+						$SQL = "DELETE FROM bucardo.bucardo_delta WHERE txntime <= now() AND tablename = $g->{targetoid}{$targetdb}";
+						$sth = $targetdbh->prepare($SQL);
+						$count = $sth->execute();
+						$sth->finish();
+						$count =~ s/0E0/0/o;
+						$self->glog("Rows removed from bucardo_delta on target for $S.$T: $count");
+					}
+				}
 			} ## end each goat
 
 			if ($sync->{deletemethod} ne 'truncate') {
@@ -4068,12 +4138,15 @@ sub start_kid {
 		} ## end of synctype fullcopy
 
 		## PUSHDELTA
-		elsif ($synctype eq 'pushdelta') {
+		if ($synctype eq 'pushdelta') {
 
 			## Do each table in turn, ordered by descending priority and ascending id
 			for my $g (@$goatlist) {
 
 				($S,$T) = ($g->{safeschema},$g->{safetable});
+
+				## Skip if we've already handled this via fullcopy
+				next if $g->{source}{needstruncation};
 
 				## Skip this table if no rows have changed on the source
 				next unless $deltacount{source}{$S}{$T};
@@ -4316,7 +4389,7 @@ sub start_kid {
 		} ## end pushdelta
 
 		## SWAP
-		elsif ($synctype eq 'swap') {
+		if ($synctype eq 'swap') {
 
 			## Do each table in turn, ordered by descending priority and ascending id
 			for my $g (@$goatlist) {
@@ -5017,11 +5090,6 @@ sub start_kid {
 			} ## end each goat
 
 		} ## end swap
-
-		else {
-			$self->glog("UNKNOWN synctype $synctype: bailing");
-			die qq{Unknown sync type $synctype};
-		}
 
 		## Update bucardo_track table so that the bucardo_delta rows we just processed
 		##  are marked as "done" and ignored by subsequent runs
