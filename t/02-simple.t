@@ -30,7 +30,7 @@ $bct->add_test_databases('A B');
 $bct->add_test_tables_to_herd('A', 'testherd1');
 
 ## Create a new sync to pushdelta from A to B
-$t=q{Add sync works};
+$t=q{(simple) Add sync works};
 $i = $bct->ctl("add sync simpletest source=testherd1 type=pushdelta targetdb=B");
 like($i, qr{Sync added:}, $t);
 
@@ -59,9 +59,9 @@ $bct->restart_bucardo($dbhX,'bucardo_nosyncs','Bucardo exited because of no vali
 $dbhA->do("INSERT INTO bucardo_test1(id,inty) VALUES (44,55)");
 $dbhA->commit();
 eval {
-    wat_for_notice($dbhX, 'bucardo_syncdone_simpletest', 5);
+    wait_for_notice($dbhX, 'bucardo_syncdone_simpletest', 5, .1, 0);
 };
-ok($@, 'Bucardo correctly refused to start');
+like($@, qr{Gave up waiting for notice}, 'Bucardo correctly refused to start');
 
 ## Add the same column to B, then try again
 $dbhB->do("ALTER TABLE bucardo_test1 ADD newcol INT");

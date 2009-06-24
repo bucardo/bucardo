@@ -1052,6 +1052,8 @@ sub wait_for_notice {
 	my $text = shift;
 	my $timeout = shift || $TIMEOUT_NOTICE;
 	my $sleep = shift || $TIMEOUT_SLEEP;
+    my $bail = shift;
+    $bail = 1 if !defined($bail);
 	my $n;
 	eval {
 		local $SIG{ALRM} = sub { die "Lookout!\n"; };
@@ -1068,7 +1070,13 @@ sub wait_for_notice {
 	if ($@) {
 		if ($@ =~ /Lookout/o) {
 			my $line = (caller)[2];
-			Test::More::BAIL_OUT (qq{Gave up waiting for notice "$text": timed out at $timeout from line $line});
+            my $notice = qq{Gave up waiting for notice "$text": timed out at $timeout from line $line};
+			if ($bail) {
+                Test::More::BAIL_OUT ($notice);
+            }
+            else {
+                die $notice;
+            }
 			return;
 		}
 	}
