@@ -2142,6 +2142,8 @@ sub upgrade {
 		print "No schema changes were needed\n";
 	}
 
+	print "Don't forget to run '$0 validate all' as well: see the UPGRADE file for details\n";
+
 	exit 1;
 
 } ## end of upgrade
