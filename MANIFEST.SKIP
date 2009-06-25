@@ -5,8 +5,9 @@ Makefile\.old$
 ^blib
 pm_to_blib$
 \.tar\.gz$
-^tmp/
-^log
+.*tmp/
+log$
+log.bucardo
 .git/
 outgoingmail.
 bucardo_test_database_*

@@ -9,6 +9,7 @@ README.dev
 LICENSE
 TODO
 INSTALL
+UPGRADE
 MANIFEST
 MANIFEST.SKIP
 META.yml
@@ -46,6 +47,9 @@ t/08-wildkick.t
 t/09-uniqueconstraint.t
 t/10-makedelta.t
 t/11-customselect.t
+t/12-addtable.t
+t/13-ddl.t
+t/14-truncate.t
 t/98-cleanup.t
 t/99-perlcritic.t
 t/99-signature.t
