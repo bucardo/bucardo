@@ -1197,7 +1197,7 @@ sub list_goats {
 			$row->{db},
 			$row->{ping} ? 'Yes' : 'No',
 			$row->{makedelta} ? 'Yes' : 'No',
-			$row->{hasdelta} ? 'Yes' : 'No';
+			$row->{has_delta} ? 'Yes' : 'No';
 	}
 
 	exit;
