@@ -293,7 +293,8 @@ sub stop {
 	stop_bucardo();
 	print "Done\n" unless $QUIET;
 
-	exit 0;
+	exit 0 if $verb eq 'stop';
+
 }
 
 
