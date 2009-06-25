@@ -381,19 +381,49 @@ sub validate {
 
 	## Ask for one or more syncs to be validated
 
-	for my $syncname (@nouns) {
-		next if $syncname eq 'sync'; ## Allows $0 validate sync foobar
+	my @synclist;
 
-		## Make sure this sync exists
-		$SQL = 'SELECT status FROM sync WHERE name = ?';
+	if (!@nouns) {
+		print "Must specify 'all' or a list of syncs\n";
+		exit 0;
+	}
+
+	my $syncsvalid = 0;
+	if ($nouns[0] eq 'all' and ! defined $nouns[1]) {
+		$SQL = q{SELECT name FROM sync};
 		$sth = $dbh->prepare($SQL);
-		$count = $sth->execute($syncname);
-		if ($count != 1) {
-			warn "Invalid sync: $syncname\n";
+		$count = $sth->execute();
+		if ($count < 1) {
 			$sth->finish();
-			next;
+			print "Sorry, there are no syncs to validate!\n";
+			exit 0;
 		}
-		my $status = $sth->fetch()->[0];
+		for my $row (@{$sth->fetchall_arrayref()}) {
+			push @synclist => $row->[0];
+		}
+		$syncsvalid = 1;
+	}
+	else {
+		for my $name (@nouns) {
+			next if $name eq 'sync'; ## Allows $0 validate sync foobar
+			push @synclist => $name;
+		}
+	}
+
+	for my $syncname (@synclist) {
+
+		## Make sure this sync exists if needed
+		if (! $syncsvalid) {
+			$SQL = 'SELECT status FROM sync WHERE name = ?';
+			$sth = $dbh->prepare($SQL);
+			$count = $sth->execute($syncname);
+			if ($count != 1) {
+				warn "Invalid sync: $syncname\n";
+				$sth->finish();
+				next;
+			}
+			my $status = $sth->fetch()->[0]; ## not used yet
+		}
 
 		my $done = "bucardo_validated_sync_$syncname";
 		print "Validating sync $syncname...";
