@@ -145,6 +145,7 @@ my $STOPFILE       = "$PIDDIR/$stopfile";
 ## Handle all the verbs
 status_all()    if $verb eq 'status' and ! @nouns;
 status_detail() if $verb eq 'status';
+restart()       if $verb eq 'restart';
 start()         if $verb eq 'start';
 stop()          if $verb eq 'stop';
 reload_config() if $verb eq 'reload_config';
@@ -221,10 +222,18 @@ For more details, try 'man bucardo_ctl'
 	exit 0;
 }
 
+sub restart {
+	stop();
+	sleep 1;
+	start();
+}
+
 
 sub start {
 
 	## Attempt to start Bucardo
+
+	set_reason(1);
 
 	## Refuse to go on if we get a ping response within 5 seconds
 	$QUIET or print "Checking for existing processes\n";
@@ -243,8 +252,6 @@ sub start {
 	if ($VERSION ne $pm_version) {
 		die "Version mismatch: bucardo_ctl is $VERSION, but Bucardo.pm is $pm_version\n";
 	}
-
-	set_reason();
 
 	stop_bucardo();
 
@@ -280,7 +287,7 @@ sub stop {
 
 	## Attempt to stop Bucardo
 
-	set_reason();
+	set_reason(0);
 
 	print "Creating $STOPFILE ... " unless $QUIET;
 	stop_bucardo();
@@ -948,7 +955,10 @@ sub get_config {
 
 sub set_reason {
 
+	my $required = shift || 0;
+
 	if (! length $nouns) {
+		return 1 if ! $required;
 		warn qq{Please provide a reason. For example:\n$0 $verb "Adding new table -Greg"\n};
 		exit 1;
 	}
