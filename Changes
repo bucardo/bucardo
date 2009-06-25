@@ -22,7 +22,7 @@ New features:
   - Add the bucardo_rate table to track exactly how long replication takes
     on a per-sync and per-table basis. [GSM]
 
-  - Add more bucardo_ctl actions: reload, validate [GSM]
+  - Add more bucardo_ctl actions: install, reload, validate, restart [GSM]
 
   - Add in bucardo_compress_delta function, to remove duplicate rows from 
     the bucardo_delta table. [GSM]
@@ -74,6 +74,8 @@ Enhancements:
 
   - Default for log_showtime is now 'scalar localtime' rather than 
     epoch seconds. [GSM]
+
+  - No longer require a reason for the "stop" action. [GSM]
 
 Bug fixes:
 
