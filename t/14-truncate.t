@@ -68,6 +68,8 @@ wait_for_notice($dbhX, 'bucardo_syncdone_truncatetest', 5);
 
 $t=q{Truncate trigger works when source is truncated};
 $dbhA->do("INSERT into bucardo_test1(id,inty) VALUES (101,99)");
+$dbhX->func('pg_notifies');
+$dbhX->commit();
 $dbhA->commit();
 wait_for_notice($dbhX, 'bucardo_syncdone_truncatetest', 5);
 
@@ -80,6 +82,8 @@ $dbhA->do('DELETE FROM bucardo.bucardo_delta');
 $dbhA->do('TRUNCATE TABLE bucardo_test1');
 $dbhA->do("INSERT into bucardo_test1(id,inty) VALUES (102,99)");
 $dbhA->do("INSERT into bucardo_test1(id,inty) VALUES (103,99)");
+$dbhX->func('pg_notifies');
+$dbhX->commit();
 $dbhA->commit();
 
 wait_for_notice($dbhX, 'bucardo_syncdone_truncatetest', 5);
@@ -95,6 +99,8 @@ is_deeply($result, [], $t);
 $t=q{Truncate trigger works when source is truncated, but only for some tables in the sync};
 $dbhA->do('TRUNCATE TABLE bucardo_test1');
 $dbhA->do("INSERT into bucardo_test3(id,inty) VALUES (201,99)");
+$dbhX->func('pg_notifies');
+$dbhX->commit();
 $dbhA->commit();
 
 wait_for_notice($dbhX, 'bucardo_syncdone_truncatetest', 5);
