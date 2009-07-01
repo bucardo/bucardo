@@ -28,20 +28,20 @@ $bct->add_test_tables_to_herd('A', 'testherd1');
 
 ## Create a new sync to pushdelta from A to B
 my $t=q{Add sync works};
-my $i = $bct->ctl("add sync simpletest source=testherd1 type=pushdelta targetdb=B");
+my $i = $bct->ctl("add sync simpletest2 source=testherd1 type=pushdelta targetdb=B");
 like($i, qr{Sync added:}, $t);
 
 $bct->restart_bucardo($dbhX);
-$dbhX->do('LISTEN bucardo_syncdone_simpletest');
-$dbhX->do('LISTEN bucardo_syncerror_simpletest');
+$dbhX->do('LISTEN bucardo_syncdone_simpletest2');
+$dbhX->do('LISTEN bucardo_syncerror_simpletest2');
 $dbhX->commit();
 
 ## Add a row to a table, make sure it gets pushed
 $dbhA->do("INSERT INTO bucardo_test1(id,inty) VALUES (12,34)");
 $dbhA->commit();
 
-$bct->ctl("kick simpletest 0");
-wait_for_notice($dbhX, 'bucardo_syncdone_simpletest', 5);
+$bct->ctl("kick simpletest2 0");
+wait_for_notice($dbhX, 'bucardo_syncdone_simpletest2', 5);
 
 my $SQL = 'SELECT id,inty FROM bucardo_test1';
 my $result = $dbhB->selectall_arrayref($SQL);
@@ -58,14 +58,14 @@ $i = $bct->ctl("add table addtable db=A standard_conflict=source herd=testherd1"
 like($i, qr{Table added:}, 'Table added successfully');
 
 ## This line adds the triggers
-$bct->ctl('validate sync simpletest');
+$bct->ctl('validate sync simpletest2');
 
 $dbhA->do('INSERT INTO addtable VALUES (1, 10)');
 $dbhA->commit();
 
 $bct->restart_bucardo($dbhX);
-$bct->ctl("kick simpletest 0");
-wait_for_notice($dbhX, 'bucardo_syncdone_simpletest', 5);
+$bct->ctl("kick simpletest2 0");
+wait_for_notice($dbhX, 'bucardo_syncdone_simpletest2', 5);
 
 $SQL = 'SELECT id,data FROM addtable';
 $result = $dbhB->selectall_arrayref($SQL);
