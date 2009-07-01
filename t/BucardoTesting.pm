@@ -270,8 +270,8 @@ sub create_cluster {
 	## Make some minor adjustments
 	my $file = "$dirname/postgresql.conf";
 	open my $fh, '>>', $file or die qq{Could not open "$file": $!\n};
-	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\nlog_statement = 'all'\nclient_min_messages = WARNING\n\n",
-		$clusterinfo->{port};
+	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\nlog_statement = 'all'\nclient_min_messages = WARNING\nlog_line_prefix='%s[%s] '\n\n",
+		$clusterinfo->{port}, '%m', '%p';
 	print $fh "logging_collector = off\n";
 	close $fh or die qq{Could not close "$file": $!\n};
 
@@ -397,6 +397,10 @@ sub empty_test_database {
 	my $self = shift;
 	my $dbh = shift;
 
+	if ($dbh->{pg_server_version} >= 80300) {
+		$dbh->do(q{SET session_replication_role = 'replica'});
+	}
+
 	for my $table (sort keys %tabletype) {
 		$dbh->do("TRUNCATE TABLE $table");
 	}
@@ -405,6 +409,9 @@ sub empty_test_database {
 		$dbh->do("TRUNCATE TABLE $table");
 	}
 
+	if ($dbh->{pg_server_version} >= 80300) {
+		$dbh->do(q{SET session_replication_role = 'origin'});
+	}
 	$dbh->commit;
 
 	return;
