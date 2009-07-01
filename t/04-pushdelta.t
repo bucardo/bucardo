@@ -83,6 +83,7 @@ $sth->execute('moe', 3);
 $sth->execute('curly', 2);
 $dbhA->commit();
 
+$bct->ctl("kick pushdeltatest 0");
 wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 
 ## We want 1 2 3 to be larry, curly, moe
@@ -97,6 +98,7 @@ for my $table (sort keys %tabletype) {
 }
 $dbhA->do('DELETE FROM droptest');
 $dbhA->commit();
+$bct->ctl("kick pushdeltatest 0");
 wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 $dbhB->do('DELETE FROM droptest');
 $dbhB->commit();
@@ -157,6 +159,7 @@ for my $table (sort keys %tabletype) {
 ## Kick the source database, replicate one row in each table
 $bct->ctl("kick pushdeltatest 0");
 wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
+wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 
 ## Make sure second database has the new rows, and that triggers and rules did not fire
 for my $table (sort keys %tabletype) {
@@ -166,6 +169,8 @@ for my $table (sort keys %tabletype) {
 
 	test_empty_drop($table,$dbhB);
 }
+$bct->ctl("kick pushdeltatest 5");
+wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 
 ## Clear out any notices
 $dbhX->func('pg_notifies');
