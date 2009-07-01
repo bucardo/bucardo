@@ -513,7 +513,9 @@ sub start_mcp {
 	if ($seeya) {
 		exit 0;
 	}
-	$self->{masterdbh} = $self->connect_database();
+
+	my $mcp_backend;
+	($mcp_backend, $self->{masterdbh}) = $self->connect_database();
 	$self->{masterdbh}->do('NOTIFY bucardo_boot') or die 'NOTIFY bucardo_boot failed!';
 	$self->{masterdbh}->commit();
 
@@ -536,6 +538,7 @@ sub start_mcp {
 	chomp $systemtime;
 	$self->glog("Local system timezone: $systemtime  Database timezone: $dbtime->[2]");
 	$self->glog("PID: $$");
+	$self->glog("Backend PID: $mcp_backend");
 
 	## Again with the password trick
 	$self->{dbpass} = '<not shown>';
@@ -1338,7 +1341,13 @@ sub start_mcp {
 		$s->{sourcedb} = $s->{goatlist}[0]{db};
 
 		## Connect to the source database and prepare to check tables and columns
-		$self->{pingdbh}{$s->{sourcedb}} ||= $self->connect_database($s->{sourcedb});
+		if (! $self->{pingdbh}{$s->{sourcedb}}) {
+			my $backend;
+			($backend, $self->{pingdbh}{$s->{sourcedb}}) = $self->connect_database($s->{sourcedb});
+			if (defined $backend) {
+				$self->glog("Source database backend PID is $backend");
+			}
+		}
 		my $srcdbh = $self->{pingdbh}{$s->{sourcedb}};
  		if ($srcdbh eq 'inactive') {
 			$self->glog('Source database is inactive, cannot proceed. Consider making the sync inactive instead');
@@ -1382,7 +1391,13 @@ sub start_mcp {
 		if (defined $s->{targetdb}) {
 			my $tdb = $s->{targetdb};
 			$self->glog(qq{Connecting to target database "$tdb"});
-			$pdbh->{$tdb} ||= $self->connect_database($tdb);
+			if (! $pdbh->{$tdb}) {
+				my $backend;
+				($backend, $pdbh->{$tdb}) = $self->connect_database($tdb);
+				if (defined $backend) {
+					$self->glog("Target database backend PID is $backend");
+				}
+			}
 			## If the database is marked as inactive, we'll remove it from this syncs list
 			if ($pdbh->{$tdb} eq 'inactive') {
 				$self->glog(qq{Deleting inactive target database "$tdb"});
@@ -1396,7 +1411,13 @@ sub start_mcp {
 		elsif (defined $s->{targetgroup}) {
 			for my $tdb (@{$dbgroups->{$s->{targetgroup}}{members}}) {
 				$self->glog(qq{Connecting to target database "$tdb"});
-				$pdbh->{$tdb} ||= $self->connect_database($tdb);
+				if (! $pdbh->{$tdb}) {
+					my $backend;
+					($backend, $pdbh->{$tdb}) = $self->connect_database($tdb);
+					if (defined $backend) {
+						$self->glog("Target database backend PID is $backend");
+					}
+				}
 				if ($pdbh->{$tdb} eq 'inactive') {
 					$self->glog(qq{Deleting inactive target database "$tdb"});
 					delete $pdbh->{$tdb};
@@ -1970,7 +1991,8 @@ sub start_mcp {
 		}
 
 		## Reconnect to the master database for some final cleanups
-		my $finaldbh = $self->connect_database();
+		my ($finalbackend,$finaldbh) = $self->connect_database();
+		$self->glog("Final database backend PID is $finalbackend");
 
 		## Kill all children controllers belonging to us
 		if ($config{audit_pid}) {
@@ -2175,7 +2197,10 @@ sub start_controller {
 	};
 
 	## Connect to the master database
-	our $maindbh = $self->{masterdbh} = $self->connect_database();
+	my $ctl_backend;
+	($ctl_backend, $self->{masterdbh}) = $self->connect_database();
+	our $maindbh = $self->{masterdbh};
+	$self->glog("Bucardo database backend PID is $ctl_backend");
 
 	## Listen for kick requests from the MCP
 	my $kicklisten = "bucardo_ctl_kick_$syncname";
@@ -2185,7 +2210,6 @@ sub start_controller {
 	## Listen for a ping request
 	$maindbh->do('LISTEN bucardo_ctl_'.$$.'_ping');
 	$maindbh->commit();
-
 
 	## Add ourself to the audit table
 	if ($config{audit_pid}) {
@@ -3006,7 +3030,9 @@ sub cleanup_controller {
 
 	## Kill all Bucardo children mentioned in the audit table for this sync
 	if ($config{audit_pid}) {
-		my $finaldbh = $self->connect_database();
+		my ($finalbackend, $finaldbh) = $self->connect_database();
+		$self->glog("Final database backend PID is $finalbackend");
+
 		$SQL = q{
             SELECT pid
             FROM   bucardo.audit_pid
@@ -3199,7 +3225,8 @@ sub start_kid {
 		defined $sourcedbh and $sourcedbh and ($sourcedbh->rollback, $sourcedbh->disconnect);
 		defined $targetdbh and $targetdbh and ($targetdbh->rollback, $targetdbh->disconnect);
 		defined $maindbh   and $maindbh   and ($maindbh->rollback,   $maindbh->disconnect  );
-		my $finaldbh = $self->connect_database();
+		my ($finalbackend, $finaldbh) = $self->connect_database();
+		$self->glog("Final database backend PID is $finalbackend");
 
 		## Let anyone listening know that this target and sync aborted
 		$finaldbh->do(qq{NOTIFY "bucardo_synckill_${syncname}_$targetdb"}) or warn 'NOTIFY failed';
@@ -3296,7 +3323,10 @@ sub start_kid {
 	}; ## end $SIG{__DIE__}
 
 	## Connect to the main database; overwrites previous handle from the controller
-	$maindbh = $self->{masterdbh} = $self->connect_database();
+	my $kid_backend;
+	($kid_backend, $self->{masterdbh}) = $self->connect_database();
+	$maindbh = $self->{masterdbh};
+	$self->glog("Bucardo database backend PID is $kid_backend");
 
 	## Add ourself to the audit table
 	if ($config{audit_pid}) {
@@ -3341,17 +3371,25 @@ sub start_kid {
     };
 	$sth{qend} = $maindbh->prepare($SQL);
 
+	my $backend;
+
 	## Connect to the source database
-	$sourcedbh = $self->connect_database($sourcedb);
+	($backend, $sourcedbh) = $self->connect_database($sourcedb);
+	$self->glog("Source database backend PID is $backend");
+
 
 	## Connect to the target database
-	$targetdbh = $self->connect_database($targetdb);
+	($backend, $targetdbh) = $self->connect_database($targetdb);
+	$self->glog("Target database backend PID is $backend");
+
+	## Put our backend PIDs into the log
+	$SQL = 'SELECT pg_backend_pid()';
+	my $source_backend = $sourcedbh->selectall_arrayref($SQL)->[0][0];
+	my $target_backend = $targetdbh->selectall_arrayref($SQL)->[0][0];
+	$self->glog("Source backend PID: $source_backend. Target backend PID: $target_backend");
 
 	## Put the backend PIDs in place in the audit_pid table
 	if ($config{audit_pid}) {
-		$SQL = 'SELECT pg_backend_pid()';
-		my $source_backend = $sourcedbh->selectall_arrayref($SQL)->[0][0];
-		my $target_backend = $targetdbh->selectall_arrayref($SQL)->[0][0];
 		$SQL = q{
             UPDATE bucardo.audit_pid
             SET    source_backend = ?, target_backend = ?
@@ -5339,13 +5377,17 @@ sub connect_database {
 		 {AutoCommit=>0, RaiseError=>1, PrintError=>0}
 	);
 
+	$SQL = 'SELECT pg_backend_pid()';
+	my $backend = $dbh->selectall_arrayref($SQL)->[0][0];
+	$dbh->rollback();
+
 	if (!$id) {
 		## Prepend bucardo to the search path
 		$dbh->do(q{SELECT pg_catalog.set_config('search_path', 'bucardo,' || current_setting('search_path'), false)});
 		$dbh->commit();
 	}
 
-	return $dbh;
+	return $backend, $dbh;
 
 } ## end of connect_database
 
