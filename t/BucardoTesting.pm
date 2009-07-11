@@ -79,6 +79,12 @@ my %clusterinfo = (
 my $initdb = $ENV{PGBINDIR} ? "$ENV{PGBINDIR}/initdb" : 'initdb';
 my $pg_ctl = $ENV{PGBINDIR} ? "$ENV{PGBINDIR}/pg_ctl" : 'pg_ctl';
 
+my $pgversion = qx{$initdb -V};
+my ($pg_major_version, $pg_minor_version, $pg_point_version);
+if ($pgversion =~ /initdb \(PostgreSQL\) (\d+\..*)/) {
+    ($pg_major_version, $pg_minor_version, $pg_point_version) = split /\./, $1;
+}
+
 # Set a semi-unique name to make killing old tests easier
 my $xname = "bctest_$ENV{USER}";
 
@@ -272,7 +278,13 @@ sub create_cluster {
 	open my $fh, '>>', $file or die qq{Could not open "$file": $!\n};
 	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\nlog_statement = 'all'\nclient_min_messages = WARNING\nlog_line_prefix='%s[%s] '\n\n",
 		$clusterinfo->{port}, '%m', '%p';
-	print $fh "logging_collector = off\n";
+    if ($pg_major_version > 8 || ($pg_major_version == 8 && int($pg_minor_version) > 2)) {
+                # the int() call above prevents errors when the version is, for instance, '8.4devel'
+        print $fh "logging_collector = off\n";
+    }
+    else {
+        print $fh "redirect_stderr = off\n";
+    }
 	close $fh or die qq{Could not close "$file": $!\n};
 
 	return;

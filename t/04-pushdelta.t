@@ -172,14 +172,16 @@ for my $table (sort keys %tabletype) {
 $bct->ctl("kick pushdeltatest 5");
 wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 
-## Clear out any notices
-$dbhX->func('pg_notifies');
-$dbhX->commit();
-
 ## Adding a new row should cause the sync to fire without waiting for a kick
 for my $table (sort keys %tabletype) {
+    ## Clear out any notices
+    $dbhX->func('pg_notifies');
+    $dbhX->commit();
+
 	$dbhA->do("UPDATE $table SET inty = 2");
 	$dbhA->commit();
+    ## Hack.
+    sleep 2;
 	wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 
 	$t=qq{ Second table $table got the pushdelta row};

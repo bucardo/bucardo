@@ -2629,9 +2629,10 @@ sub start_controller {
 									for my $qpk (@{$g->{qpkey}}) {
 										$clause .= sprintf q{%s::%s = d.rowid%s::%s AND },
 											$g->{binarypkey}[$x] ? qq{ENCODE(t.$qpk,'base64')} : "t.$qpk",
-											$g->{pkeytype}[$x],
-											$x ? $x+1 : '',
-											$g->{pkeytype}[$x];
+# 8.2 can't cast ENCODE()'s TEXT return value to BYTEA; leaving at TEXT appears to work
+                                            $g->{binarypkey}[$x] ? 'text' : $g->{pkeytype}[$x],
+                                            $x ? $x+1 : '',
+                                            $g->{binarypkey}[$x] ? 'text' : $g->{pkeytype}[$x];
 										$cols ||= $g->{binarypkey}[0] ? qq{ENCODE(t.$qpk,'base64'),} : "t.$qpk";
 										$x++;
 									}
@@ -3514,9 +3515,10 @@ sub start_kid {
 				for my $qpk (@{$g->{qpkey}}) {
 					$clause .= sprintf q{%s::%s = d.rowid%s::%s AND },
 						$g->{binarypkey}[$x] ? qq{ENCODE(t.$qpk,'base64')} : "t.$qpk",
-						$g->{pkeytype}[$x],
+# 8.2 can't cast ENCODE()'s TEXT return value to BYTEA; leaving at TEXT appears to work
+                        $g->{binarypkey}[$x] ? 'text' : $g->{pkeytype}[$x],
 						$x ? $x+1 : '',
-						$g->{pkeytype}[$x];
+                        $g->{binarypkey}[$x] ? 'text' : $g->{pkeytype}[$x];
 					$cols .= $g->{binarypkey}[0] ? qq{ENCODE(t.$qpk,'base64'),} : "t.$qpk,";
 					$x++;
 				}
@@ -3657,7 +3659,7 @@ sub start_kid {
 			q{reltriggers = }
 			. q{(SELECT count(*) FROM pg_catalog.pg_trigger WHERE tgrelid = pg_catalog.pg_class.oid),}
 			. q{relhasrules = }
-			. q{CASE WHEN (SELECT COUNT(*) FROM pg_catalog.pg_rules WHERE schemaname=\$1 AND tablename=\$2) > 0 }
+			. q{CASE WHEN (SELECT COUNT(*) FROM pg_catalog.pg_rules WHERE schemaname=$1 AND tablename=$2) > 0 }
 			. q{THEN true ELSE false END};
 			## use critic
 
