@@ -4,6 +4,8 @@
 ##
 ## Copyright 2006-2009 Greg Sabino Mullane <greg@endpoint.com>
 
+## TODO: Make $0 distinguished from path in feedback
+
 package bucardo_ctl;
 use strict;
 use warnings;
@@ -23,11 +25,23 @@ our $VERSION = '3.2.7';
 *STDERR->autoflush(1);
 
 use vars qw/$dbh $SQL $sth %sth $count $info/;
+
 my $DEBUG            = 0;
 my $DATEFORMAT       = q{Mon DD, YYYY HH24:MI:SS};
 my $DEFAULT_DAYSBACK = 3;
 my $WAITSLEEP        = 1;
 my $PROGRESS         = 1;
+
+my $progname = $0;
+if (exists $ENV{PATH} and $progname =~ m{(.+)/(.+)}) {
+	my ($base, $name) = ($1,$2);
+	for my $seg (split /\:/ => $ENV{PATH}) {
+		if ($seg eq $base) {
+			$progname = $name;
+			last;
+		}
+	}
+}
 
 help() unless @ARGV;
 
@@ -188,7 +202,7 @@ kick() if $verb eq 'kick';
 help();
 
 sub help {
-	warn qq{Usage: $0 args
+	warn qq{Usage: $progname args
   install         ** Install the Bucardo database
 
   start <reason>  ** force existing sync(s) to quit, then start
@@ -960,7 +974,7 @@ sub set_reason {
 
 	if (! length $nouns) {
 		return 1 if ! $required;
-		warn qq{Please provide a reason. For example:\n$0 $verb "Adding new table -Greg"\n};
+		warn qq{Please provide a reason. For example:\n$progname $verb "Adding new table -Greg"\n};
 		exit 1;
 	}
 
@@ -976,7 +990,7 @@ sub set_reason {
 
 sub stop_bucardo {
 	open my $stop, '>', $STOPFILE or die qq{Could not create "$STOPFILE": $!\n};
-	print {$stop} "Stopped by $0 on " . (scalar localtime) . "\n";
+	print {$stop} "Stopped by $progname on " . (scalar localtime) . "\n";
 	close $stop or warn qq{Could not close "$STOPFILE": $!\n};
 	return;
 }
@@ -2143,7 +2157,7 @@ sub upgrade {
 		print "No schema changes were needed\n";
 	}
 
-	print "Don't forget to run '$0 validate all' as well: see the UPGRADE file for details\n";
+	print "Don't forget to run '$progname validate all' as well: see the UPGRADE file for details\n";
 
 	exit 1;
 
@@ -2760,11 +2774,11 @@ sub config {
 
 	## View or change a value inside the bucardo_config table
 
-	my $setusage = "Usage: $0 set setting=value [setting=value ...]\n";
+	my $setusage = "Usage: $progname set setting=value [setting=value ...]\n";
 
 	if (!@nouns) {
 		$verb eq 'set' and die $setusage;
-		die "Usage: $0 show <all|setting1> [settting2 ...]\n";
+		die "Usage: $progname show <all|setting1> [settting2 ...]\n";
 	}
 
 	$SQL = 'SELECT * FROM bucardo.bucardo_config';
@@ -3010,8 +3024,8 @@ sub install {
 	print "If you see any unexpected errors above, please report them to bucardo-general\@bucardo.org\n\n";
 
 	print "You should probably check over the configuration variables next, by running:\n";
-	print "$0 show all\n";
-	print "Change any setting by using: $0 set foo=bar\n\n";
+	print "$progname show all\n";
+	print "Change any setting by using: $progname set foo=bar\n\n";
 
 	exit;
 
