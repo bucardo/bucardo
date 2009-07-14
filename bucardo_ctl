@@ -247,7 +247,7 @@ sub start {
 
 	## Attempt to start Bucardo
 
-	set_reason(1);
+	set_reason(0);
 
 	## Refuse to go on if we get a ping response within 5 seconds
 	$QUIET or print "Checking for existing processes\n";
