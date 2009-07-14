@@ -1059,6 +1059,22 @@ $bc$
         elog(ERROR, "Source and target databases cannot be the same: $sourcedb");
     }
 
+    ## Make sure we have the plpgsql language installed for syncs that need it
+    if ($info->{synctype} eq 'pushdelta' or $info->{pushdelta} eq 'swap') {
+        (my $db = $sourcedb) =~ s/'/''/go;
+        my $rv = spi_exec_query("SELECT bucardo.db_getconn('$db') AS conn");
+        $rv->{processed} or elog(ERROR, qq{Error: Could not find a database named "$db"\n});
+        my ($dsn,$user,$pass) = split /\n/ => $rv->{rows}[0]{conn};
+        elog(DEBUG, "Connecting to $dsn as $user inside bucardo_validate_sync for language check");
+        my $dbh = $cache{dbh}{$db} = DBI->connect($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
+        $SQL = q{SELECT COUNT(*) FROM pg_language WHERE lanname = 'plpgsql'};
+        my $count = $dbh->selectall_arrayref($SQL)->[0][0];
+        if (! $count) {
+            $dbh->do('CREATE LANGUAGE plpgsql');
+            $dbh->commit();
+        }
+    }
+
     ## Loop through and check each table in turn, setting up as needed.
 
     my %badtable;
@@ -1457,7 +1473,7 @@ $bc$
         }
 
         ## Ping needs a special function and trigger
-         if ($ping) {
+        if ($ping) {
             my $custom_trigger_level;
             my $custom_function_name;
             $SQL = qq{SELECT trigger_language,trigger_body,trigger_level FROM bucardo_custom_trigger
