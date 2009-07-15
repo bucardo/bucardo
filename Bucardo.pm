@@ -1026,7 +1026,7 @@ sub start_mcp {
 							$count = kill 0 => $oldpid;
 							if (!$count) {
 								$self->glog(qq{Warning! PID $oldpid was not found. Removing PID file});
-								unlink $pidfile;
+								unlink $pidfile or $self->glog("Warning! Failed to unlink $pidfile");
 								$s->{mcp_problemchild} = 3;
 								next SYNC;
 							}
@@ -1043,7 +1043,7 @@ sub start_mcp {
 					}
 					$self->glog("No active pid $oldpid found. Killing just in case, and removing file");
 					kill $signumber{SIGTERM} => $oldpid;
-					unlink $pidfile;
+					unlink $pidfile or $self->glog("Warning! Failed to unlink $pidfile");
 					$s->{mcp_changed} = 1;
 				} ## end if pidfile found for this sync
 
@@ -2042,7 +2042,8 @@ sub start_mcp {
 		$finaldbh->disconnect();
 
 		## Remove our PID file
-		unlink $self->{pidfile};
+		unlink $self->{pidfile} or $self->glog("Warning! Failed to unlink $self->{pidfile}");
+
 		$self->glog(qq{Removed file "$self->{pidfile}"});
 
 		return;
@@ -3079,7 +3080,8 @@ sub cleanup_controller {
 	$self->glog("Controller exiting at cleanup_controller. Reason: $reason");
 
 	## Remove the pid file
-	unlink $self->{SYNCPIDFILE};
+	unlink $self->{SYNCPIDFILE} or $self->glog("Warning! Failed to unlink $self->{SYNCPIDFILE}");
+
 	$self->glog(qq{Removed file "$self->{SYNCPIDFILE}"});
 
 	return;
@@ -5283,7 +5285,7 @@ sub start_kid {
 		## Remove lock file if we used it
 		if ($lock_table_mode and -e $force_lock_file) {
 			$self->glog("Removing lock control file $force_lock_file");
-			unlink $force_lock_file;
+			unlink $force_lock_file or $self->glog("Warning! Failed to unlink $force_lock_file");
 		}
 
 		# Run all 'after_txn' code
