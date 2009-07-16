@@ -2868,7 +2868,7 @@ sub install {
 	my $ans;
 	my $host = $bcargs->{dbhost} || $ENV{DBHOST} || '<none>';
 	my $port = $bcargs->{dbport} || $ENV{DBPORT} || 5432;
-	my $user = $ENV{DBUSER} || 'postgres';
+	my $user = $bcargs->{dbuser} || $ENV{DBUSER} || 'postgres';
 
 	## Make sure the bucardo.schema file is available, and extract some config items
 	my ($fh, $schema_file) = find_bucardo_schema();
@@ -3016,8 +3016,8 @@ sub install {
 
 	print "Connecting to database 'bucardo' as user 'bucardo'\n";
 	my $BDSN  = 'dbi:Pg:dbname=bucardo';
-	$bcargs->{dbhost} and length $bcargs->{dbhost} and $BDSN .= ";host=$bcargs->{dbhost}";
-	$bcargs->{dbport} and length $bcargs->{dbport} and $BDSN .= ";port=$bcargs->{dbport}";
+	$host and $BDSN .= ";host=$host";
+	$port and $BDSN .= ";port=$port";
 	my $default_bucardo_password = 'goat';
 	$dbh = DBI->connect($BDSN, 'bucardo', $default_bucardo_password, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
 	$dbh->do('SET search_path = bucardo');
