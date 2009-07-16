@@ -29,6 +29,9 @@ provides:
   bucardo_ctl:
     file            : bucardo_ctl
     version         : 3.2.7
+  bucardo.schema:
+    file            : bucardo.schema
+    version         : 3.2.7
 
 resources:
   homepage          : http://bucardo.org/index.html

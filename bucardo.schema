@@ -1,5 +1,6 @@
 
 -- Schema for the main Bucardo database
+-- Version 3.2.7
 
 -- Should be run as a superuser
 

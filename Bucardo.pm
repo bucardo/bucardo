@@ -5481,7 +5481,7 @@ Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This documents describes Bucardo version 3.2.7
+This document describes version 3.2.7 of Bucardo
 
 =head1 SYNOPSIS
 
