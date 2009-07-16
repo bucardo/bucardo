@@ -3040,7 +3040,7 @@ bucardo_ctl - utility script for controlling the Bucardo program
 
 =head1 VERSION
 
-This documents describes bucardo_ctl version 3.2.7
+This document describes version 3.2.7 of bucardo_ctl
 
 =head1 SYNOPSIS
 
