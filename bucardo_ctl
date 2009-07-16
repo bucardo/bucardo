@@ -1695,6 +1695,29 @@ sub column_value {
 
 } ## end of column_value
 
+sub find_bucardo_schema {
+
+	## Locate the best bucardo.schema file and return a file handle and name for it
+
+	my $fh;
+
+	## Start by checking the current directory
+	my $schema_file = 'bucardo.schema';
+	return ($fh, $schema_file) if open $fh, '<', $schema_file;
+
+	## Try /usr/local/share/bucardo
+	$schema_file = '/usr/local/share/bucardo/bucardo.schema';
+	return ($fh, $schema_file) if open $fh, '<', $schema_file;
+
+	## Try /usr/share/bucardo
+	$schema_file = '/usr/share/bucardo/bucardo.schema';
+	return ($fh, $schema_file) if open $fh, '<', $schema_file;
+
+	die "Could not find the bucardo.schema file!\n";
+
+} ## end of find_bucardo_schema
+
+
 sub table_definition {
 
 	## Pull the complete table definition from the bucardo.schema file
@@ -1704,8 +1727,7 @@ sub table_definition {
 
 	my $def = '';
 
-	my $schema_file = 'bucardo.schema';
-	open my $fh, '<', $schema_file or die qq{Could not open "$schema_file": $!\n};
+	my ($fh, $schema_file) = find_bucardo_schema();
 	my @seq;
 	while (<$fh>) {
 		if (!$def) {
@@ -1940,9 +1962,7 @@ sub upgrade {
 	my $cfgsth = $dbh->prepare($SQL);
 	$SQL = 'INSERT INTO bucardo_config(setting,value,about) VALUES (?,?,?)';
 	my $newcfg = $dbh->prepare($SQL);
-	my $schema_file = 'bucardo.schema';
-	open my $fh, '<', $schema_file or die qq{Could not open "$schema_file": $!\n};
-
+	my ($fh, $schema_file) = find_bucardo_schema();
 	my %config;
 	my $inside = 0;
 	while (<$fh>) {
@@ -1967,7 +1987,6 @@ sub upgrade {
 			$newcfg->execute($setting,$value,$about);
 		}
 	}
-	close $fh or die qq{Could not close file "$schema_file": $!\n};
 
 	## Apply any specific row changes
 	for my $row (@row_values) {
@@ -1986,8 +2005,7 @@ sub upgrade {
 
 	## Parse the bucardo.schema file and verify the following types of objects exist:
 	## Functions, triggers, constraints, sequences, and indexes
-	$file = 'bucardo.schema';
-	open $fh, '<', $file or die qq{Could not open "$file": $!\n};
+	seek $fh, 0, 0;
 	my (@flist, @tlist, @ilist, @clist, @slist, @tablelist);
 	my ($fname,$args,$fbody) = ('','','');
 	my ($tname,$tbody) = ('','');
@@ -2853,8 +2871,7 @@ sub install {
 	my $user = $ENV{DBUSER} || 'postgres';
 
 	## Make sure the bucardo.schema file is available, and extract some config items
-	my $schemafile = 'bucardo.schema';
-	open my $fh, '<', $schemafile or die qq{Could not open "$schemafile": $!\n};
+	my ($fh, $schema_file) = find_bucardo_schema();
 	my %confvar = (piddir => '');
 	while (<$fh>) {
 		for my $string (keys %confvar) {
@@ -2863,7 +2880,7 @@ sub install {
 			}
 		}
 	}
-	close $fh or warn qq{Could not close "$schemafile": $!\n};
+	close $fh or warn qq{Could not close "$schema_file": $!\n};
 	for my $key (keys %confvar) {
 		if (!$confvar{$key}) {
 			warn "Could not find default configuration for $key!\n";
@@ -2987,7 +3004,7 @@ sub install {
 		die "Sorry, Bucardo requires Postgres version 8.1 or higher. This is only $maj.$min\n";
 	}
 
-	$COM = "$PSQL -AX -qt -f bucardo.schema";
+	$COM = "$PSQL -AX -qt -f $schema_file";
 
 	print "Attempting to create and populate the bucardo database and schema\n";
 
