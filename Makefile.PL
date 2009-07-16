@@ -8,7 +8,9 @@ my $VERSION = '3.2.7';
 
 WriteMakefile(
     NAME         => 'Bucardo',
-    VERSION_FROM => 'Bucardo.pm',
+    ABSTRACT     => 'Postgres asynchronous multi-master replication system',
+    AUTHOR       => 'Greg Sabino Mullane <greg@endpoint.com>',
+    LICENSE      => 'BSD',
     PREREQ_PM    => {
                      'DBD::Pg'             => '2.0',
                      'DBI'                 => '1.51',
@@ -21,14 +23,13 @@ WriteMakefile(
                      'Sys::Hostname'       => '1.11',
                      'Sys::Syslog'         => '0.13',
                  },
+    NO_META      => 1,
+    VERSION_FROM => 'Bucardo.pm',
     EXE_FILES    => ['bucardo_ctl'],
+    MAN1PODS     => { 'bucardo_ctl' => 'blib/man1/bucardo_ctl.1pm' },
     INST_ARCHLIB => 'none',
     INST_BIN     => 'none',
-    MAN1PODS     => { 'bucardo_ctl' => 'blib/man1/bucardo_ctl.1pm' },
-    ABSTRACT     => 'Postgres asynchronous multi-master replication system',
-    AUTHOR       => 'Greg Sabino Mullane <greg@endpoint.com>',
-    LICENSE      => 'BSD',
-    NO_META      => 1,
+    NORECURS     => 1,
     clean        => { FILES => 'log.bucardo.* *~ *.tmp outgoingmail.* bucardo_test_database*/' },
 );
 
