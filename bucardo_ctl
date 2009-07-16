@@ -4,8 +4,6 @@
 ##
 ## Copyright 2006-2009 Greg Sabino Mullane <greg@endpoint.com>
 
-## TODO: Make $0 distinguished from path in feedback
-
 package bucardo_ctl;
 use strict;
 use warnings;
