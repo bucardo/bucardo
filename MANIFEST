@@ -51,7 +51,5 @@ t/12-addtable.t
 t/13-ddl.t
 t/14-truncate.t
 t/98-cleanup.t
-t/99-perlcritic.t
 t/99-signature.t
-t/99-yaml.t
 t/BucardoTesting.pm

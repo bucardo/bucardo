@@ -15,3 +15,6 @@ none/
 .tmp$
 .blame$
 bucardo.warning.log
+t/00_release.t
+t/99-yaml.t
+t/99-perlcritic.t
