@@ -54,4 +54,25 @@ sub clean {
 	return $string;
 }
 
+sub blibdirs {
+	my $string = shift->SUPER::blibdirs_target(@_);
+	$string = qq{INST_SHARE = blib/share\n\n$string};
+	$string =~ s{(blibdirs : .+)}{$1 \$(INST_SHARE)\$(DFSEP).exists};
+	$string .= qq{\$(INST_SHARE)\$(DFSEP).exists :: Makefile.PL\n};
+	$string .= qq{\t\$(NOECHO) \$(MKPATH) \$(INST_SHARE)\n};
+	$string .= qq{\t\$(NOECHO) \$(CHMOD) 755 \$(INST_SHARE)\n};
+	$string .= qq{\t\$(NOECHO) \$(TOUCH) \$(INST_SHARE)\$(DFSEP).exists\n};
+	$string .= qq{\t\$(CP) bucardo.schema \$(INST_SHARE)/bucardo.schema\n};
+	$string .= qq{\t-\$(NOECHO) \$(CHMOD) \$(PERM_RW) \$(INST_SHARE)/bucardo.schema\n};
+	return $string;
+}
 
+sub install {
+	my $string = shift->SUPER::install(@_);
+	my $vars = qq{DESTINSTALLSHARE = \$(DESTDIR)/usr/local/share/bucardo\n};
+	$vars .= qq{DESTINSTALLSITESHARE = \$(DESTDIR)/usr/local/share/bucardo\n};
+	$vars .= qq{DESTINSTALLVENDORSHARE = \$(DESTDIR)/usr/share/bucardo};
+	$string = "\n$vars\n$string";
+	$string =~ s{(\t\$\(INST_BIN\) \$\((DESTINSTALL.*?)BIN.+)}{$1\n\t\t\$(INST_SHARE) \$($2SHARE) \\}g;
+	return $string;
+}
