@@ -718,7 +718,6 @@ my $count = $sth->execute();
 $sth->finish();
 if ($count < 1) {
    $dbh->do("CREATE LANGUAGE plpgsql");
-   $dbh->commit();
 }
 
 $dbh->disconnect();
