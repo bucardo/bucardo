@@ -3235,7 +3235,7 @@ sub install {
 
 	print "Connecting to database 'bucardo' as user 'bucardo'\n";
 	my $BDSN  = 'dbi:Pg:dbname=bucardo';
-	$host and $BDSN .= ";host=$host";
+	$host and $host ne '<none>' and $BDSN .= ";host=$host";
 	$port and $BDSN .= ";port=$port";
 	my $default_bucardo_password = 'goat';
 	$dbh = DBI->connect($BDSN, 'bucardo', $default_bucardo_password, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
