@@ -11,6 +11,7 @@ use 5.008003;
 use DBI;
 use IO::Handle;
 use Getopt::Long;
+Getopt::Long::Configure(qw/no_ignore_case/);
 use Time::HiRes 'sleep';
 use POSIX qw/ceil setsid/;
 use Data::Dumper 'Dumper';
@@ -109,6 +110,15 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
 	 'debugdir=s',
 	 'debugfile=i',
 	 'cleandebugs=i',
+
+	 ## Used internally
+	 'schema|n=s@',
+	 'exclude-schema|N=s@',
+	 'table|t=s@',
+	 'exclude-table|T=s@',
+	 'db=s',
+	 'herd=s',
+
 ) or die "\n";
 
 my $QUIET      = delete $bcargs->{ctlquiet};
@@ -1167,7 +1177,7 @@ sub list {
 	my $thing = shift @nouns;
 
 	list_dbs()   if $thing =~ /db/i   or $thing eq 'd';
-	list_goats() if $thing =~ /goat/i or $thing eq 'g';
+	list_goats() if $thing =~ /goat/i or $thing eq 'g' or $thing =~ /tab/;
 	list_herds() if $thing =~ /herd/i or $thing eq 'h';
 	list_syncs() if $thing =~ /sync/i or $thing eq 's';
 
@@ -1212,6 +1222,18 @@ sub list_dbs {
 
 } ## end of list_dbs
 
+
+sub get_dbs {
+
+	## Grab information about all entries in the 'db' table
+
+	$SQL = 'SELECT * FROM db ORDER BY name';
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	my $info = $sth->fetchall_hashref('name');
+	return $info;
+
+} ## end of get_dbs
 
 sub list_goats {
 
@@ -1492,7 +1514,8 @@ sub vate_sync {
 		print "OK\n";
 	} ## end each sync
 	exit 0;
-}
+
+} ## end of vate_sync
 
 sub add_item {
 
@@ -1521,6 +1544,16 @@ sub add_item {
 	}
 	elsif ($type eq 'dbgroup') {
 		add_dbgroup($type);
+	}
+	elsif ($type eq 'all') {
+		my $type2 = shift @nouns || '';
+		if ($type2 =~ /table/i) {
+			add_all_tables();
+		}
+		else {
+			warn "Must provide a valid type\n";
+			exit 1;
+		}
 	}
 	else {
 		warn "Cannot add: unknown type\n";
@@ -2275,6 +2308,192 @@ sub add_database {
 	exit 0;
 
 } ## end of add_database
+
+
+sub add_all_tables {
+
+	## Usage: add all table(s)
+	## Options:
+	## --db: use this database (internal name from the db table)
+	## --schema or -n: limit to one or more comma-separated schemas
+	## --exclude-schema or -N: exclude these schemas
+	## --table or -t: limit to the given tables
+	## --exclude-table or -t: exclude these tables
+	## --herd : name of the herd to add new tables to
+	##
+	## Future options: --prompt
+
+	## Grab the list of databases. If none, cowardly refuse to continue
+	my $dbs = get_dbs();
+	if (! keys %$dbs) {
+		die "Sorry, cannot add any tables until at least one database is defined\n";
+	}
+
+	## Have the picked one? Make sure it exists.
+	my $db;
+	if (exists $bcargs->{db}) {
+		if (! exists $dbs->{$bcargs->{db}}) {
+			die qq{sorry, could not find a database named "$bcargs->{db}"\n};
+		}
+		$db = $dbs->{$bcargs->{db}};
+	}
+	elsif (keys %$dbs == 1) {
+		($db) = values %$dbs;
+	}
+	else {
+		warn "Please specify which database to use with the --db option\n";
+		warn "Your choices are:\n";
+		for my $row (sort keys %$dbs) {
+			warn "--db=$row\n";
+		}
+		exit;
+	}
+
+	## Connect to the remote database
+	my $dbh2 = connect_database({name => $db->{name}});
+
+	## Generate a query to pull all tables we may possibly need
+	$SQL = q{SELECT nspname, relname FROM pg_class c }
+		. q{JOIN pg_namespace n ON (n.oid = c.relnamespace) }
+		. q{WHERE relkind = 'r' };
+
+	## Use optional arguments to refine the list of schemas
+	if (exists $bcargs->{schema}) {
+		$SQL .= ' AND nspname IN (';
+		for my $s (@{$bcargs->{schema}}) {
+			$s =~ s/^\s*(.+?)\s*$/$1/;
+			$SQL .= join ',' => map { "'$_'" } split /\s*,\s*/ => $s;
+			$SQL .= ',';
+		}
+		$SQL =~ s/,$/)/;
+	}
+	else {
+		$SQL .= q{AND n.nspname <> 'information_schema' AND nspname !~ '^pg'};
+	}
+
+	if (exists $bcargs->{'exclude-schema'}) {
+		$SQL .= ' AND nspname NOT IN (';
+		for my $s (@{$bcargs->{'exclude-schema'}}) {
+			$s =~ s/^\s*(.+?)\s*$/$1/;
+			$SQL .= join ',' => map { "'$_'" } split /\s*,\s*/ => $s;
+			$SQL .= ',';
+		}
+		$SQL =~ s/,$/)/;
+	}
+
+	## Use optional arguments to refine the list of tables
+	if (exists $bcargs->{table}) {
+		$SQL .= ' AND relname IN (';
+		for my $s (@{$bcargs->{table}}) {
+			$s =~ s/^\s*(.+?)\s*$/$1/;
+			$SQL .= join ',' => map { "'$_'" } split /\s*,\s*/ => $s;
+			$SQL .= ',';
+		}
+		$SQL =~ s/,$/)/;
+	}
+
+	if (exists $bcargs->{'exclude-table'}) {
+		$SQL .= ' AND relname NOT IN (';
+		for my $s (@{$bcargs->{'exclude-table'}}) {
+			$s =~ s/^\s*(.+?)\s*$/$1/;
+			$SQL .= join ',' => map { "'$_'" } split /\s*,\s*/ => $s;
+			$SQL .= ',';
+		}
+		$SQL =~ s/,$/)/;
+	}
+
+	## Fetch all the tables, bail if no matches are found
+	$sth = $dbh2->prepare($SQL);
+	$count = $sth->execute();
+	if ($count < 1) {
+		die "Sorry, no tables were found\n";
+	}
+
+	## Grab all current tables from the goat table.
+	## We'll only match on schema+table here, and NOT the db name
+	$SQL = 'SELECT schemaname, tablename FROM goat';
+	my %hastable;
+	for my $row (@{$dbh->selectall_arrayref($SQL)}) {
+		$hastable{$row->[0]}{$row->[1]}++;
+	}
+
+	## Do we have a herd request? Process it if so
+	my $herd = '';
+	my $addtoherd;
+	if (exists $bcargs->{herd}) {
+		$herd = $bcargs->{herd};
+		$SQL = 'SELECT 1 FROM herd WHERE name = ?';
+		my $herdcheck = $dbh->prepare($SQL);
+		$count = $herdcheck->execute($herd);
+		$herdcheck->finish();
+		if ($count < 1) {
+			print "Creating herd: $herd\n";
+			$SQL = 'INSERT INTO herd(name) VALUES (?)';
+			$herdcheck = $dbh->prepare($SQL);
+			$herdcheck->execute($herd);
+		}
+		$SQL = 'INSERT INTO herdmap(herd,goat) VALUES (?,?)';
+		$addtoherd = $dbh->prepare($SQL);
+	}
+
+	## Get ready to add tables to the goat table
+	$SQL = 'INSERT INTO bucardo.goat (db,schemaname,tablename) VALUES (?,?,?) RETURNING id';
+	my $addtable = $dbh->prepare($SQL);
+
+	## Walk through all returned tables from the remote database
+	my %count = (seenit => 0, added => 0);
+	for my $row (@{$sth->fetchall_arrayref()}) {
+		my ($S,$T) = @$row;
+		## Do we already have this one?
+		if (exists $hastable{$S}{$T}) {
+			$VERBOSE >= 1 and warn "Skipping table already in goat: $S.$T\n";
+			$count{seenit}++;
+			next;
+		}
+		$VERBOSE >= 1 and warn "Attempting to add $S.$T to the goat table\n";
+		$count = $addtable->execute($db->{name},$S,$T);
+		if ($count != 1) {
+			$addtable->finish();
+			warn "Failed to add table $S.$T to the goat table!\n";
+			next;
+		}
+		my $id = $addtable->fetch()->[0];
+		$VERBOSE >= 1 and warn "ID of new table $S.$T is $id\n";
+		$count{added}++;
+		if ($herd) {
+			$addtoherd->execute($herd, $id);
+			$VERBOSE >= 1 and warn "Added table $id to herd $herd\n";
+		}
+
+	}
+	$dbh->commit();
+
+	print "New tables added: $count{added}\n";
+	print "Tables already added: $count{seenit}\n";
+
+	exit;
+
+} ## end of add_all_tables
+
+
+sub connect_database {
+
+	## Connect to a datbase and return a dbh
+
+	my $dbh2;
+
+	my $opt = shift || {};
+
+	if (exists $opt->{name}) {
+		$SQL = qq{SELECT db_getconn('$opt->{name}')};
+		my $conn = $dbh->selectall_arrayref($SQL)->[0][0];
+		my ($dsn,$user,$pass) = split /\n/ => $conn;
+		$dbh2 = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1});
+	}
+
+	return $dbh2;
+
+} ## end of connect_database
 
 
 sub add_table {
