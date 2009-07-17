@@ -3409,14 +3409,12 @@ sub start_kid {
 		## Check for any unhandled truncates in general. If there are, no reason to even look at bucardo_delta
 		$SQL = 'SELECT tablename, MAX(cdate) FROM bucardo.bucardo_truncate_trigger '
 			. 'WHERE sync = ? AND replicated IS NULL GROUP BY 1';
-		$sth{source}{checktruncate} = $sourcedbh->prepare($SQL);
-		$sth{target}{checktruncate} = $targetdbh->prepare($SQL) if $synctype eq 'swap';
+		$sth{source}{checktruncate} = $sourcedbh->prepare($SQL) if $synctype eq 'pushdelta';
 
 		## Check for the latest truncate to this target for each table
 		$SQL = 'SELECT 1 FROM bucardo.bucardo_truncate_trigger_log '
 			. 'WHERE sync = ? AND targetdb=? AND tablename = ? AND replicated = ?';
-		$sth{source}{checktruncatelog} = $sourcedbh->prepare($SQL);
-		$sth{target}{checktruncatelog} = $targetdbh->prepare($SQL) if $synctype eq 'swap';
+		$sth{source}{checktruncatelog} = $sourcedbh->prepare($SQL) if $synctype eq 'pushdelta';
 
 		if ($sync->{does_makedelta}) {
 			$SQL = q{INSERT INTO bucardo.bucardo_track(txntime,tablename,targetdb) VALUES (now(),?,?)};
@@ -3980,33 +3978,35 @@ sub start_kid {
 
 			## Check for truncate activity. If found, switch to fullcopy for a table as needed.
 			## For now, just do pushdelta
-			$deltacount{sourcetruncate} = $sth{source}{checktruncate}->execute($syncname);
-			$sth{source}{checktruncate}->finish() if $deltacount{sourcetruncate} =~ s/0E0/0/o;
-			$self->glog(qq{Source truncate count: $deltacount{sourcetruncate}});
-			if ($deltacount{sourcetruncate}) {
-				## For each table that was truncated, see if this target has already handled it
-				for my $row (@{$sth{source}{checktruncate}->fetchall_arrayref()}) {
-					$count = $sth{source}{checktruncatelog}->execute($syncname, $targetdb, @$row);
-					$sth{source}{checktruncatelog}->finish();
-					($deltacount{source}{truncate}{$row->[0]} = $count) =~ s/0E0/0/o;
-					$deltacount{source}{truncatelog}{$row->[0]} = $row->[1];
-				}
-				## Which of the tables we are tracking need truncation support?
-				$SQL = 'INSERT INTO bucardo.bucardo_truncate_trigger_log (tablename,sname,tname,sync,targetdb,replicated) '
-					. 'VALUES(?,?,?,?,?,?)';
-				for my $g (@$goatlist) {
-					## deltacount may not exist = no truncation needed
-					## may exist but be zero = truncate!
-					## may exists and be positive = no truncation needed
-					$g->{source}{needstruncation} = 
-						(exists $deltacount{source}{truncate}{$g->{oid}} and !$deltacount{source}{truncate}{$g->{oid}})
+			if ($synctype eq 'pushdelta') {
+				$deltacount{sourcetruncate} = $sth{source}{checktruncate}->execute($syncname);
+				$sth{source}{checktruncate}->finish() if $deltacount{sourcetruncate} =~ s/0E0/0/o;
+				$self->glog(qq{Source truncate count: $deltacount{sourcetruncate}});
+				if ($deltacount{sourcetruncate}) {
+					## For each table that was truncated, see if this target has already handled it
+					for my $row (@{$sth{source}{checktruncate}->fetchall_arrayref()}) {
+						$count = $sth{source}{checktruncatelog}->execute($syncname, $targetdb, @$row);
+						$sth{source}{checktruncatelog}->finish();
+						($deltacount{source}{truncate}{$row->[0]} = $count) =~ s/0E0/0/o;
+						$deltacount{source}{truncatelog}{$row->[0]} = $row->[1];
+					}
+					## Which of the tables we are tracking need truncation support?
+					$SQL = 'INSERT INTO bucardo.bucardo_truncate_trigger_log (tablename,sname,tname,sync,targetdb,replicated) '
+						. 'VALUES(?,?,?,?,?,?)';
+					for my $g (@$goatlist) {
+						## deltacount may not exist = no truncation needed
+						## may exist but be zero = truncate!
+						## may exists and be positive = no truncation needed
+						$g->{source}{needstruncation} = 
+							(exists $deltacount{source}{truncate}{$g->{oid}} and !$deltacount{source}{truncate}{$g->{oid}})
 							? 1 : 0;
-					if ($g->{source}{needstruncation}) {
-						$sth = $sourcedbh->prepare_cached($SQL);
-						$sth->execute($g->{oid},$g->{safeschema},$g->{safetable},$syncname,$targetdb,
-							  $deltacount{source}{truncatelog}{$g->{oid}});
-						$deltacount{truncates}++;
-						$self->glog('Marking this truncate as done in bucardo_truncate_trigger_log');
+						if ($g->{source}{needstruncation}) {
+							$sth = $sourcedbh->prepare_cached($SQL);
+							$sth->execute($g->{oid},$g->{safeschema},$g->{safetable},$syncname,$targetdb,
+										  $deltacount{source}{truncatelog}{$g->{oid}});
+							$deltacount{truncates}++;
+							$self->glog('Marking this truncate as done in bucardo_truncate_trigger_log');
+						}
 					}
 				}
 			}
