@@ -71,7 +71,7 @@ if (-e '.bucardorc') {
 elsif (-e "$ENV{HOME}/.bucardorc") {
 	$file = "$ENV{HOME}/.bucardorc";
 }
-elsif (-e 'etc/bucardorc') {
+elsif (-e '/etc/bucardorc') {
 	$file = '/etc/bucardorc';
 }
 if (defined $file) {
