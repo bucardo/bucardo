@@ -121,6 +121,7 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
 	 'exclude-table|T=s@',
 	 'db=s',
 	 'herd=s',
+	 'piddir=s',
 
 ) or die "\n";
 
@@ -196,7 +197,7 @@ SYNCMATCH: for my $sync (@nouns) {
 		next SYNCMATCH;
 	}
     if ($sync =~ /%/) {
-        my $tmp = $dbh->selectall_arrayref(qq{SELECT name FROM sync WHERE name LIKE '$sync'});
+		my $tmp = $dbh->selectall_arrayref(qq{SELECT name FROM sync WHERE name LIKE '$sync'});
         if ($#{ $tmp } >= 0) {
             push @syncs, (map { $_->[0] } @$tmp);
             next SYNCMATCH;
@@ -3109,6 +3110,8 @@ sub install {
 		}
 	}
 
+	my $piddir = $bcargs->{piddir} || $confvar{piddir};
+
   GOOEY:
 	{
 
@@ -3117,7 +3120,7 @@ sub install {
 		print "1. Host:          $host\n";
 		print "2. Port:          $port\n";
 		print "3. User:          $user\n";
-		print "4. PID directory: $confvar{piddir}\n";
+		print "4. PID directory: $piddir\n";
 
 		print 'Enter a number to change it, P to proceed, or Q to quit: ';
 
@@ -3185,15 +3188,15 @@ sub install {
 					print "-->Sorry, that is not a valid directory\n";
 					redo GOOEY;
 				}
-				$confvar{piddir} = $new;
-				print "Changed PID dir to: $confvar{piddir}\n";
+				$piddir = $new;
+				print "Changed PID dir to: $piddir\n";
 			}
 		}
 		elsif ($ans =~ /^\s*Q/i) {
 			die "Goodbye!\n";
 		}
 		elsif ($ans =~ /^\s*P/i) {
-			if (! -d $confvar{piddir}) {
+			if (! -d $piddir) {
 				print "-->Sorry, that is not a valid PID directory\n";
 				redo GOOEY;
 			}
@@ -3246,6 +3249,7 @@ sub install {
 
 	$SQL = 'UPDATE bucardo_config SET value = ? WHERE setting = ?';
 	$sth = $dbh->prepare($SQL);
+	$confvar{piddir} = $piddir;
 	for my $key (sort keys %confvar) {
 		$count = $sth->execute($confvar{$key}, $key);
 		if ($count != 1) {
