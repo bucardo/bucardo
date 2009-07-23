@@ -11,8 +11,8 @@ use warnings;
 
 our $VERSION = '3.2.7';
 
-use sigtrap qw( die normal-signals );
-use Time::HiRes 'sleep';
+use sigtrap qw( die normal-signals ); ## die on HUP INT PIPE TERM
+use Time::HiRes 'sleep'; ## for better resolution than the built-in sleep
 use DBI 1.51;
 use DBD::Pg 2.0;
 my $DEFAULT = $DBD::Pg::DBDPG_DEFAULT;
