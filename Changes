@@ -1,6 +1,6 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-3.2.7 June 2009
+3.2.7 ?? 2009
 
 New features:
 
@@ -23,6 +23,8 @@ New features:
     on a per-sync and per-table basis. [GSM]
 
   - Add more bucardo_ctl actions: install, reload, validate, restart [GSM]
+
+  - Allow adding of all tables in a database at once via bucardo_ctl [GSM]
 
   - Add in bucardo_compress_delta function, to remove duplicate rows from 
     the bucardo_delta table. [GSM]
