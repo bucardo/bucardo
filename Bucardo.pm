@@ -98,11 +98,13 @@ our %config_about;
 
 sub new {
 
-	## Create a new Bucardo instance.
+	## Create a new Bucardo object and return it
+	## Takes a hashref of options as the only argument
 
 	my $class = shift;
 	my $params = shift || {};
 
+	## The hash for this object, with default values:
 	my $self = {
 		created      => scalar localtime,
 		ppid         => $$,
@@ -118,27 +120,29 @@ sub new {
 		bcquiet      => 0,
 		sendmail     => 1,
 		extraname    => '',
+		logprefix    => 'BC!',
 		version      => $VERSION,
 	};
 
-	## Add any passed in parameters to our hash
+	## Add any passed in parameters to our hash:
 	for (keys %$params) {
 		$self->{$_} = $params->{$_};
 	}
 
+	## Transform our hash into a genuine 'Bucardo' object:
 	bless $self, $class;
 
+	## Remove any previous debugging files if requested
 	if ($self->{cleandebugs}) {
+		## If the dir does not exists, silently proceed
 		if (opendir my $dh, $self->{debugdir}) {
 			for my $file (grep { /^log\.bucardo\./ } readdir $dh) {
-				unlink "$self->{debugdir}/$file";
+				my $f = "$self->{debugdir}/$file";
+				unlink "$self->{debugdir}/$file" or warn qq{Could not remove "$f": $!\n};
 			}
-			closedir $dh;
+			closedir $dh or warn qq{Could not closedir "$self->{debugdir}": $!\n};
 		}
 	}
-
-	## Set the "pre-MCP" three character log prefix. After this, it will all be MCP, CTL, or KID
-	$self->{logprefix} = 'BC!';
 
 	## Zombie stopper
 	$SIG{CHLD} = 'IGNORE';
@@ -153,7 +157,7 @@ sub new {
 		$self->glog("'** DRYRUN - Syncs will not be commited! **\n");
 	}
 
-	## This gets appended to the process description
+	## This gets appended to the process description ($0)
 	if ($self->{extraname}) {
 		$self->{extraname} = " ($self->{extraname})";
 	}
@@ -169,8 +173,10 @@ sub new {
 		openlog 'Bucardo', 'pid nowait', $config{syslog_facility};
 	}
 
-	## Setup our standard files to store PID and to signal stopping all processes
+	## Where to store our PID:
 	$self->{pidfile} = "$config{piddir}/$config{pidfile}";
+
+	## The file to ask all processes to stop:
 	$self->{stopfile} = "$config{piddir}/$config{stopfile}";
 
 	## Send all log lines starting with "Warning" to a separate file
