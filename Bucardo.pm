@@ -2,7 +2,11 @@
 
 ## The main Bucardo program
 ##
+## This script should only be called via the 'bucardo_ctl' program
+##
 ## Copyright 2006-2009 Greg Sabino Mullane <greg@endpoint.com>
+##
+## Please visit http://bucardo.org for more information
 
 package Bucardo;
 use 5.008003;
@@ -11,38 +15,40 @@ use warnings;
 
 our $VERSION = '3.2.7';
 
-use sigtrap qw( die normal-signals ); ## die on HUP INT PIPE TERM
-use Time::HiRes 'sleep'; ## for better resolution than the built-in sleep
-use DBI 1.51;
-use DBD::Pg 2.0;
-use Net::SMTP;
-use Sys::Hostname 'hostname';
-use IO::Handle;
-use Data::Dumper 'Dumper';
+use sigtrap qw( die normal-signals ); ## Call die() on HUP, INT, PIPE, or TERM
+use Config;                           ## Used to map signal names
+use Time::HiRes qw( sleep );          ## For better resolution than the built-in sleep
+use DBI 1.51;                         ## How Perl talks to databases
+use DBD::Pg 2.0;                      ## The Postgres driver for DBI
+use Net::SMTP;                        ## Used to send out email alerts
+use Sys::Hostname 'hostname';         ## Used for debugging/mail sending
+use IO::Handle qw( autoflush );       ## Used to prevent stdout/stderr buffering
+use Sys::Syslog qw( openlog syslog ); ## In case we are logging via syslog()
+use DBIx::Safe '1.2.4';               ## Filter out what DB calls customcode may use
+use Data::Dumper 'Dumper';            ## Used to dump information in email alerts
+
+## Formating of Dumper() calls:
 $Data::Dumper::Varname = 'BUCARDO';
 $Data::Dumper::Indent = 1;
-use Getopt::Long;
-use Config;
-## We can consider using require/eval magic to make Sys::Syslog optional
-use Sys::Syslog qw(openlog syslog);
-use DBIx::Safe '1.2.4'; ## e.g. yum install perl-DBIx-Safe
 
+## Common variables we don't want to declare over and over:
 use vars qw($SQL %SQL $sth %sth $count $info);
 
 ## Map system signal numbers to standard names
+## Allows us to do things like this: kill $signumber{USR1} => $pid;
 my $x = 0;
 my %signumber;
 for (split(' ', $Config{sig_name})) {
 	$signumber{$_} = $x++;
 }
 
-## Do not buffer output to stdout or stderr
+## Prevent buffering of output:
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
 
+## Configuration of DBIx::Safe
 ## Specify exactly what database handles are allowed to do within custom code
-
-## Here, 'strict' is inside the main transaction Bucardo uses to make changes
+## Here, 'strict' means 'inside the main transaction that Bucardo uses to make changes'
 my %dbix = (
 	source => {
 		strict => {
@@ -74,22 +80,25 @@ my %dbix = (
 	}
 );
 
-## Optional cleanup for the pidfiles
+## Optional cleanup for any PID files created
 ## The string PIDFILE will be replaced with the actual name
 ## This is a direct system call, so resist the urge to put this in bucardo_config!
-my $PIDCLEANUP = ''; ## "/bin/chgrp bucardo PIDFILE";
+my $PIDCLEANUP = ''; ## e.g. '/bin/chgrp bucardo PIDFILE';
 
+## Grab our full and shortened host name:
 my $hostname = hostname;
 my $shorthost = $hostname;
 $shorthost =~ s/^(.+?)\..*/$1/;
 
+## Items pulled from bucardo_config and shared everywhere:
 our %config;
 our %config_about;
 
+## Everything else is subroutines
 
 sub new {
 
-	## Create a new Bucardo instance. Primarily called by bucardo_ctl
+	## Create a new Bucardo instance.
 
 	my $class = shift;
 	my $params = shift || {};
@@ -5521,9 +5530,10 @@ this distribution.
 
 * DBI (1.51 or better)
 * DBD::Pg (2.0.0 or better)
-* IO::Handle
 * Sys::Hostname
 * Sys::Syslog
+* DBIx::Safe    ## Try 'yum install perl-DBIx-Safe' or visit bucardo.org
+
 
 =head1 BUGS
 
