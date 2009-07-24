@@ -189,8 +189,11 @@ sub new {
 
 sub connect_database {
 
-	## Given a database id, return a database handle for it
-	## Returns 'inactive' if the database is inactive according to the db table
+	## Connect to the given database
+	## First and only argument is the database id
+	## If blank or zero, we return the main database
+	## Returns the string 'inactive' if set as such in the db table
+	## Returns the database handle and the backedn PID
 
 	my $self = shift;
 
@@ -213,7 +216,7 @@ sub connect_database {
 
 		my $d = $db->{$id};
 		if ($d->{status} ne 'active') {
-			return 'inactive';
+			return 0, 'inactive';
 		}
 
 		$dsn = "dbi:Pg:dbname=$d->{dbname}";
@@ -232,6 +235,8 @@ sub connect_database {
 		 {AutoCommit=>0, RaiseError=>1, PrintError=>0}
 	);
 
+	## Grab the backend PID for this Postgres process
+	## Also a nice check that everything is working properly
 	$SQL = 'SELECT pg_backend_pid()';
 	my $backend = $dbh->selectall_arrayref($SQL)->[0][0];
 	$dbh->rollback();
@@ -250,6 +255,7 @@ sub connect_database {
 sub reload_config_database {
 
 	## Reload the %config and %config_about hashes from the bucardo_config table
+	## Calls commit on the masterdbh
 
 	my $self = shift;
 
@@ -279,16 +285,16 @@ sub reload_config_database {
 sub glog { ## no critic (RequireArgUnpacking)
 
 	## Reformat and log internal messages to the correct place
+	## First argument is the message
+	## Other arguments are used if $msg is a printf-style string
 
-	## Quick shortcut if verbose if off (not recommended!)
+	## Quick shortcut if verbose is 'off' (which is not recommended!)
 	return if ! $_[0]->{verbose};
 
 	my ($self,$msg,@extra) = @_;
 	chomp $msg;
 
-	my $is_warning = ($self->{warning_file} and $msg =~ /^Warning|ERROR|FATAL/o) ? 1 : 0;
-
-	## Any extra arguments means $msg is a printf-style string
+	## Apply any extra arguments to $msg as if it was a printf-style string
 	if (@extra) {
 		$msg = sprintf $msg, @extra;
 	}
@@ -309,9 +315,9 @@ sub glog { ## no critic (RequireArgUnpacking)
 	## If using syslog, send the message at the 'info' priority
 	$self->{debugsyslog} and syslog 'info', $msg;
 
-	## Possibly send warnings to a separate file
-	if ($is_warning) {
-		my $file = $self->{warning_file} or die;
+	## Warning messages may also get written to a separate file
+	if ($self->{warning_file} and $msg =~ /^Warning|ERROR|FATAL/o) {
+		my $file = $self->{warning_file};
 		open $self->{warningfilehandle}, '>>', $file or die qq{Could not append to "$file": $!\n};
 		print {$self->{warningfilehandle}} "$header $msg\n";
 		close $self->{warningfilehandle} or warn qq{Could not close "$file": $!\n};
