@@ -187,6 +187,95 @@ sub new {
 } ## end of new
 
 
+sub connect_database {
+
+	## Given a database id, return a database handle for it
+	## Returns 'inactive' if the database is inactive according to the db table
+
+	my $self = shift;
+
+	my $id = shift || 0;
+
+	my ($dsn,$dbh,$user,$pass);
+
+	## If id is 0, connect to the main database
+	if (!$id) {
+		$dsn = "dbi:Pg:dbname=$self->{dbname}";
+		defined $self->{dbport} and length $self->{dbport} and $dsn .= ";port=$self->{dbport}";
+		defined $self->{dbhost} and length $self->{dbhost} and $dsn .= ";host=$self->{dbhost}";
+		defined $self->{dbconn} and length $self->{dbconn} and $dsn .= ";$self->{dbconn}";
+		$user = $self->{dbuser};
+		$pass = $self->{dbpass};
+	}
+	else {
+		my $db = $self->get_dbs;
+		exists $db->{$id} or die qq{Invalid database id!: $id\n};
+
+		my $d = $db->{$id};
+		if ($d->{status} ne 'active') {
+			return 'inactive';
+		}
+
+		$dsn = "dbi:Pg:dbname=$d->{dbname}";
+		defined $d->{dbport} and length $d->{dbport} and $dsn .= ";port=$d->{dbport}";
+		defined $d->{dbhost} and length $d->{dbhost} and $dsn .= ";host=$d->{dbhost}";
+		length $d->{dbconn} and $dsn .= ";$d->{dbconn}";
+		$user = $d->{dbuser};
+		$pass = $d->{dbpass} || '';
+	}
+
+	$dbh = DBI->connect
+		(
+		 $dsn,
+		 $user,
+		 $pass,
+		 {AutoCommit=>0, RaiseError=>1, PrintError=>0}
+	);
+
+	$SQL = 'SELECT pg_backend_pid()';
+	my $backend = $dbh->selectall_arrayref($SQL)->[0][0];
+	$dbh->rollback();
+
+	if (!$id) {
+		## Prepend bucardo to the search path
+		$dbh->do(q{SELECT pg_catalog.set_config('search_path', 'bucardo,' || current_setting('search_path'), false)});
+		$dbh->commit();
+	}
+
+	return $backend, $dbh;
+
+} ## end of connect_database
+
+
+sub reload_config_database {
+
+	## Reload the %config and %config_about hashes from the bucardo_config table
+
+	my $self = shift;
+
+	undef %config;
+	undef %config_about;
+
+	$SQL = 'SELECT setting,value,about,type,name FROM bucardo_config';
+	$sth = $self->{masterdbh}->prepare($SQL);
+	$sth->execute();
+	for my $row (@{$sth->fetchall_arrayref({})}) {
+		if (defined $row->{type}) {
+			$config{$row->{type}}{$row->{name}}{$row->{setting}} = $row->{value};
+			$config_about{$row->{type}}{$row->{name}}{$row->{setting}} = $row->{about};
+		}
+		else {
+			$config{$row->{setting}} = $row->{value};
+			$config_about{$row->{setting}} = $row->{about};
+		}
+	}
+	$self->{masterdbh}->commit();
+
+	return;
+
+} ## end of reload_config_database
+
+
 sub glog { ## no critic (RequireArgUnpacking)
 
 	## Reformat and log internal messages to the correct place
@@ -1113,35 +1202,6 @@ sub start_mcp {
 
 		return;
 	}
-
-
-	sub reload_config_database {
-
-		## Reload the %config and %config_about hashes from the bucardo_config table
-
-		my $self = shift;
-
-		undef %config;
-		undef %config_about;
-
-		$SQL = 'SELECT setting,value,about,type,name FROM bucardo_config';
-		$sth = $self->{masterdbh}->prepare($SQL);
-		$sth->execute();
-		for my $row (@{$sth->fetchall_arrayref({})}) {
-			if (defined $row->{type}) {
-				$config{$row->{type}}{$row->{name}}{$row->{setting}} = $row->{value};
-				$config_about{$row->{type}}{$row->{name}}{$row->{setting}} = $row->{about};
-			}
-			else {
-				$config{$row->{setting}} = $row->{value};
-				$config_about{$row->{setting}} = $row->{about};
-			}
-		}
-		$self->{masterdbh}->commit();
-
-		return;
-
-	} ## end of reload_config_database
 
 
 	sub reload_mcp {
@@ -5348,66 +5408,6 @@ sub start_kid {
 	exit 0;
 
 } ## end of start_kid
-
-
-sub connect_database {
-
-	## Given a database id, return a database handle for it
-	## Returns 'inactive' if the database is inactive according to the db table
-
-	my $self = shift;
-
-	my $id = shift || 0;
-
-	my ($dsn,$dbh,$user,$pass);
-
-	## If id is 0, connect to the main database
-	if (!$id) {
-		$dsn = "dbi:Pg:dbname=$self->{dbname}";
-		defined $self->{dbport} and length $self->{dbport} and $dsn .= ";port=$self->{dbport}";
-		defined $self->{dbhost} and length $self->{dbhost} and $dsn .= ";host=$self->{dbhost}";
-		defined $self->{dbconn} and length $self->{dbconn} and $dsn .= ";$self->{dbconn}";
-		$user = $self->{dbuser};
-		$pass = $self->{dbpass};
-	}
-	else {
-		my $db = $self->get_dbs;
-		exists $db->{$id} or die qq{Invalid database id!: $id\n};
-
-		my $d = $db->{$id};
-		if ($d->{status} ne 'active') {
-			return 'inactive';
-		}
-
-		$dsn = "dbi:Pg:dbname=$d->{dbname}";
-		defined $d->{dbport} and length $d->{dbport} and $dsn .= ";port=$d->{dbport}";
-		defined $d->{dbhost} and length $d->{dbhost} and $dsn .= ";host=$d->{dbhost}";
-		length $d->{dbconn} and $dsn .= ";$d->{dbconn}";
-		$user = $d->{dbuser};
-		$pass = $d->{dbpass} || '';
-	}
-
-	$dbh = DBI->connect
-		(
-		 $dsn,
-		 $user,
-		 $pass,
-		 {AutoCommit=>0, RaiseError=>1, PrintError=>0}
-	);
-
-	$SQL = 'SELECT pg_backend_pid()';
-	my $backend = $dbh->selectall_arrayref($SQL)->[0][0];
-	$dbh->rollback();
-
-	if (!$id) {
-		## Prepend bucardo to the search path
-		$dbh->do(q{SELECT pg_catalog.set_config('search_path', 'bucardo,' || current_setting('search_path'), false)});
-		$dbh->commit();
-	}
-
-	return $backend, $dbh;
-
-} ## end of connect_database
 
 
 sub send_mail {
