@@ -625,10 +625,12 @@ sub start_mcp {
 
 	my $mcp_backend;
 	($mcp_backend, $self->{masterdbh}) = $self->connect_database();
+
+	## Let any listeners know we have gotten this far
 	$self->{masterdbh}->do('NOTIFY bucardo_boot') or die 'NOTIFY bucardo_boot failed!';
 	$self->{masterdbh}->commit();
 
-	## Overwrite the PID file with our new value
+	## Now that we've forked, overwrite the PID file with our new value
 	open $pid, '>', $self->{pidfile} or die qq{Cannot write to $self->{pidfile}: $!\n};
 	$now = scalar localtime;
 	print {$pid} "$$\n$old0\n$now\n";
@@ -2565,21 +2567,6 @@ sub start_controller {
 		}
 	}
 
-	## Reset the one-time-copy flag, so we only do it one time!
-	## Presumes that above kids worked without problems, of course
-	if ($otc) {
-		$otc = 0;
-		$SQL = 'UPDATE sync SET onetimecopy = 0 WHERE name = ?';
-		$sth = $maindbh->prepare($SQL);
-		$sth->execute($syncname);
-		$maindbh->commit();
-		$sync->{onetimecopy_savepid} = 0;
-		## Reset to the original values, in case we changed them
-		$sync->{synctype} = $synctype;
-		$sync->{kidsalive} = $kidsalive;
-		$sync->{track_rates} = $track_rates;
-	}
-
 	my $lastpingcheck = 0;
 
 	## A kid will control a specific sync for a specific targetdb
@@ -2650,6 +2637,20 @@ sub start_controller {
 						$maindbh->do(qq{NOTIFY "$notifymsg"}) or die "NOTIFY $notifymsg failed";
 						$self->glog(qq{Sent notice "bucardo_syncdone_$syncname"});
 						$maindbh->commit();
+
+						## Reset the one-time-copy flag, so we only do it one time!
+						if ($otc) {
+							$otc = 0;
+							$SQL = 'UPDATE sync SET onetimecopy = 0 WHERE name = ?';
+							$sth = $maindbh->prepare($SQL);
+							$sth->execute($syncname);
+							$maindbh->commit();
+							$sync->{onetimecopy_savepid} = 0;
+							## Reset to the original values, in case we changed them
+							$sync->{synctype} = $synctype;
+							$sync->{kidsalive} = $kidsalive;
+							$sync->{track_rates} = $track_rates;
+						}
 
 						## Run all after_sync custom codes
 						for my $code (@{$sync->{code_after_sync}}) {
