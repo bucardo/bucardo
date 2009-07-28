@@ -237,8 +237,6 @@ ALTER TABLE goat ADD CONSTRAINT pkey_needs_type CHECK (pkey = '' OR pkeytype IS 
 ALTER TABLE goat ADD CONSTRAINT standard_conflict CHECK (standard_conflict IS NULL
   OR standard_conflict IN ('source','target','skip','random','latest','abort'));
 
--- CREATE UNIQUE INDEX goats_r_unique ON goat(db,schemaname,tablename,reltype);
-
 --
 -- Set of filters for each goat.
 --
