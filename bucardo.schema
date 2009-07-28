@@ -782,6 +782,11 @@ if (!defined $new->{schemaname}) {
    die qq{Must provide a schemaname\n};
 }
 
+if (! $new->{reltype} ne 'table') {
+   return;
+}
+
+
 my ($dbname,$schema,$table,$pkey) =
    ($new->{db}, $new->{schemaname}, $new->{tablename}, $new->{pkey});
 
