@@ -148,7 +148,7 @@ $verb = lc $verb;
 my @nouns = @ARGV;
 my $nouns = join ' ' => @nouns;
 
-
+## Installation must happen before we try to connect!
 install() if $verb eq 'install';
 
 ## Grab current information from the bucardo_config file
@@ -217,32 +217,49 @@ sub help {
 	warn qq{Usage: $progname args
   install         ** Install the Bucardo database
 
-  start <reason>  ** force existing sync(s) to quit, then start
+  start <reason>  ** Force any existing sync(s) to quit, then starts Bucardo
 
-  stop <reason>   ** tell everyone to stop permanently, even the MCP
+  stop <reason>   ** Tell all Bucardo processes to stop permanently
 
-  list <type>     ** view short info about dbs, herds, goats, or syncs
+  list <type>     ** View short info about dbs, herds, goats, or syncs
 
   add <item_type> <item_name>
-                  ** add a new database, table, sync, herd, or database group
+                  ** Add a new database, table, sync, herd, or database group
     add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx
-    add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool
-    add sync syncname source=xxx targetdb=xxx targetgroup=xxx type=xxx makedelta=xxx 
-    add herd name
     add dbgroup name db1 db2 db3 ...
+    add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool
+    add all tables [db=internal_db_name]
+    add herd name
+    add sync syncname source=xxx targetdb=xxx targetgroup=xxx type=xxx
 
   kick <syncname(s)> [timeout]
-                  ** kick off one or more syncs, optionally wait for result (0 = wait until done)
+                  ** Kick off one or more syncs, optionally wait for result (0 = wait until done)
 
-  ping [timeout]  ** ping the MCP for a response
+  ping [timeout]  ** Ping the MCP process for a response, return a Nagios-friendly string
 
   status [--sort=col#] [--daysback=#]
-                  ** list information about all syncs
+                  ** List information about all syncs
 
   status syncname[s] [--daysback=#]
-                  ** list detailed information about one or more syncs
+                  ** List detailed information about one or more syncs
 
-  reload_config   ** force a running Bucardo to reload the bucardo_config table
+  reload syncname[s]
+                 ** Reload a sync 
+
+  validate syncname[s]
+                 ** Validate a sync
+
+  upgrade
+                 ** Upgrade Bucardo to the current version
+
+  message
+                 ** Write a message to the Bucardo logs
+
+  config [set|show]
+                 ** View or set configuration parameters
+
+  reload_config   ** Force a running Bucardo to reload the bucardo_config table
+
 For more details, try 'man bucardo_ctl'
 } unless $QUIET; ## Mostly for the test suite
 	exit 0;
@@ -3315,15 +3332,26 @@ This document describes version 3.2.7 of bucardo_ctl
 
   ./bucardo_ctl kick sync1 0 --retry=10
 
-  ./bucardoctl reload_config
+  ./bucardo_ctl reload_config
+
+  ./bucardo_ctl upgrade
+
+  ./bucardo_ctl reload sync
+
+  ./bucardo_ctl validate sync
+
+  ./bucardo_ctl message "Your message here"
+
+  ./bucardo_ctl config show
+
+  ./bucardo_ctl config set foo=bar baz=123
+
 
 =head1 DESCRIPTION
 
-The bucardo_ctl script is used to control the operation of a Bucardo process. Primarily it is 
-used for stopping and starting Bucardo, viewing current information, and for kicking off named 
-syncs. The script needs to know how to connect to the Bucardo database: this information can 
-be passed as arguments or hard-coded into the script itself. If you have multiple Bucardos 
-running, it is recommended that you create aliases for each database.
+The bucardo_ctl script is the main interaction to a running Bucardo instance. It can 
+be used to start and stop Bucardo, add new items, kick syncs, and even install and 
+upgrade Bucardo itself.
 
 =head1 COMMANDS
 
@@ -3335,6 +3363,27 @@ Usage: ./bucardo_ctl install
 
 Attempts to install the Bucardo schema from the file 'bucardo.schema' into an existing 
 Postgres cluster. The user 'bucardo' and database 'bucardo' will be created first as needed.
+This is an interactive installer, but you can supply the following values from the command 
+line:
+
+=over 2
+
+=item --dbuser
+
+=item --dbport
+
+=item --piddir
+
+=back
+
+=item B<upgrade>
+
+Usage: ./bucardo_ctl upgrade
+
+Upgrades an existing Bucardo installation to the current version of the bucardo_ctl script. 
+Requires that the bucardo_ctl script and the bucardo.schema file be the same version. All 
+changes should be backwards compatible, but you may need to re-validate existing scripts 
+to make sure changes get propagated to all databases.
 
 =item B<start>
 
@@ -3498,12 +3547,6 @@ confirmation from Bucardo that each sync has been successfully activated.
 Deactivates one or more named syncs. If given a timeout argument, it will wait until it has received 
 confirmation from Bucardo that the sync has been successfully deactivated.
 
-=item B<upgrade>
-
-Performs an upgrade of Bucardo itself, by making sure the connected Bucardo database has a copy of the 
-latest schema. This should always be run after upgrading Bucardo, and will prompt you before making 
-any permanent changes.
-
 =item B<message>
 
 Adds a message to the running Bucardo logs. This message will appear prefixed with "MESSAGE: ". If 
@@ -3646,9 +3689,10 @@ Forces removal of all old debug files before running.
 =head1 FILES
 
 In addition to command-line configurations, you can put any options inside of a file. The file F<.bucardorc> in 
-the current directory will be used if found. If not found, then the file F<~/.bucardorc> will be used. The format 
-of the file is option = value, one per line. Any line starting with a '#' will be skipped. Any values loaded 
-from a .bucardorc file will be overwritten by command-line options.
+the current directory will be used if found. If not found, then the file F<~/.bucardorc> will be used. Finally, 
+the file /etc/bucardorc will be used if available. The format of the file is option = value, one per line. Any 
+line starting with a '#' will be skipped. Any values loaded from a bucardorc file will be overwritten by 
+command-line options.
 
 =head1 ENVIRONMENT VARIABLES
 

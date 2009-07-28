@@ -84,16 +84,26 @@
 <pre>
   ./bucardo_ctl kick sync1 0 --retry=10</pre>
 <pre>
-  ./bucardoctl reload_config</pre>
+  ./bucardo_ctl reload_config</pre>
+<pre>
+  ./bucardo_ctl upgrade</pre>
+<pre>
+  ./bucardo_ctl reload sync</pre>
+<pre>
+  ./bucardo_ctl validate sync</pre>
+<pre>
+  ./bucardo_ctl message &quot;Your message here&quot;</pre>
+<pre>
+  ./bucardo_ctl config show</pre>
+<pre>
+  ./bucardo_ctl config set foo=bar baz=123</pre>
 <p>
 </p>
 <hr />
 <h1><a name="description">DESCRIPTION</a></h1>
-<p>The bucardo_ctl script is used to control the operation of a Bucardo process. Primarily it is 
-used for stopping and starting Bucardo, viewing current information, and for kicking off named 
-syncs. The script needs to know how to connect to the Bucardo database: this information can 
-be passed as arguments or hard-coded into the script itself. If you have multiple Bucardos 
-running, it is recommended that you create aliases for each database.</p>
+<p>The bucardo_ctl script is the main interaction to a running Bucardo instance. It can 
+be used to start and stop Bucardo, add new items, kick syncs, and even install and 
+upgrade Bucardo itself.</p>
 <p>
 </p>
 <hr />
@@ -104,7 +114,26 @@ running, it is recommended that you create aliases for each database.</p>
 <dd>
 <p>Usage: ./bucardo_ctl install</p>
 <p>Attempts to install the Bucardo schema from the file 'bucardo.schema' into an existing 
-Postgres cluster. The user 'bucardo' and database 'bucardo' will be created first as needed.</p>
+Postgres cluster. The user 'bucardo' and database 'bucardo' will be created first as needed.
+This is an interactive installer, but you can supply the following values from the command 
+line:</p>
+<dl>
+<dt><strong><a name="dbuser" class="item">--dbuser</a></strong></dt>
+
+<dt><strong><a name="dbport" class="item">--dbport</a></strong></dt>
+
+<dt><strong><a name="piddir" class="item">--piddir</a></strong></dt>
+
+</dl>
+</dd>
+<dt><strong><a name="upgrade" class="item"><strong>upgrade</strong></a></strong></dt>
+
+<dd>
+<p>Usage: ./bucardo_ctl upgrade</p>
+<p>Upgrades an existing Bucardo installation to the current version of the bucardo_ctl script. 
+Requires that the bucardo_ctl script and the bucardo.schema file be the same version. All 
+changes should be backwards compatible, but you may need to re-validate existing scripts 
+to make sure changes get propagated to all databases.</p>
 </dd>
 <dt><strong><a name="start" class="item"><strong>start</strong></a></strong></dt>
 
@@ -260,13 +289,6 @@ confirmation from Bucardo that each sync has been successfully activated.</p>
 <dd>
 <p>Deactivates one or more named syncs. If given a timeout argument, it will wait until it has received 
 confirmation from Bucardo that the sync has been successfully deactivated.</p>
-</dd>
-<dt><strong><a name="upgrade" class="item"><strong>upgrade</strong></a></strong></dt>
-
-<dd>
-<p>Performs an upgrade of Bucardo itself, by making sure the connected Bucardo database has a copy of the 
-latest schema. This should always be run after upgrading Bucardo, and will prompt you before making 
-any permanent changes.</p>
 </dd>
 <dt><strong><a name="message" class="item"><strong>message</strong></a></strong></dt>
 
@@ -425,9 +447,10 @@ before the name as well, so a debugname of &quot;rootdb&quot; would produce a lo
 <hr />
 <h1><a name="files">FILES</a></h1>
 <p>In addition to command-line configurations, you can put any options inside of a file. The file <em class="file">.bucardorc</em> in 
-the current directory will be used if found. If not found, then the file <em class="file">~/.bucardorc</em> will be used. The format 
-of the file is option = value, one per line. Any line starting with a '#' will be skipped. Any values loaded 
-from a .bucardorc file will be overwritten by command-line options.</p>
+the current directory will be used if found. If not found, then the file <em class="file">~/.bucardorc</em> will be used. Finally, 
+the file /etc/bucardorc will be used if available. The format of the file is option = value, one per line. Any 
+line starting with a '#' will be skipped. Any values loaded from a bucardorc file will be overwritten by 
+command-line options.</p>
 <p>
 </p>
 <hr />
