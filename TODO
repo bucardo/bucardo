@@ -40,3 +40,5 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Concept of a 'default' herd?
 - Consider intra-kid communication to copy tables one-by-one to keep things in cache
 - Use DBD::Pg async mode to reduce waiting, esp. for multi-master
+- Replicate sequences
+- Consider failover strategies
