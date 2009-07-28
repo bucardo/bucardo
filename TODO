@@ -1,10 +1,8 @@
-
 TODO list for Bucardo
 =====================
 
 These range the gamut from wildly speculative ideas to must-have features.
 
-- Check for triggers and rules, if none at all, allow no manipulation
 - Death-level custom code hooks
 - Better conflict example in test suite, uses database handles
 - Allow adjustable criteria for going into lock before sync mode
@@ -24,6 +22,7 @@ These range the gamut from wildly speculative ideas to must-have features.
 - I8n all messages/docs/etc.
 - Allow targets to be hard-linked: nobody goes on until everyone has finished
 - Support large objects
+- Support system tables (Postgres 12.0?)
 - Check for superuser on startup, to prevent errors that only show when a KID tries something.
 - Add a flag that allows for table structure checking before each sync
 - Make a Bucardo bundle for CPAN-like fun
@@ -31,7 +30,7 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Readonly slaves: trigger/rule to prevent with good message
 - bucardo_help() function to explain all
 - Handle non-orderable data types such as polygons
-- Put these into a bug tracker
+- Put this list into a bug tracker
 - Put version number into all functions
 - Document all LISTEN/NOTIFY strings in one area
 - Use 2PC where possible
@@ -39,3 +38,5 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Think about better handling of PID files on exit
 - If only one herd, add new tables to it
 - Concept of a 'default' herd?
+- Consider intra-kid communication to copy tables one-by-one to keep things in cache
+- Use DBD::Pg async mode to reduce waiting, esp. for multi-master
