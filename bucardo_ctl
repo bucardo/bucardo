@@ -1827,6 +1827,23 @@ sub upgrade {
 
 	my $self = shift;
 
+	## Ensure the bucardo.schema file is available and the correct version
+	my ($fh, $schema_file) = find_bucardo_schema();
+
+	my $schema_version = 0;
+	while (<$fh>) {
+		if (/\-\- Version (\d+\.\d+\.\d+)/) {
+			$schema_version = $1;
+			last;
+		}
+	}
+	if (! $schema_version) {
+		die qq{Could not find version number in the file "$schema_file"!\n};
+	}
+	if ($schema_version ne $VERSION) {
+		die qq{Cannot continue: bucardo_ctl is version $VERSION, but $schema_file is version $schema_version\n};
+	}
+
 	$dbh->do(q{SET escape_string_warning = 'OFF'});
 
 	my $changes = 0;
@@ -2016,9 +2033,9 @@ sub upgrade {
 	my $cfgsth = $dbh->prepare($SQL);
 	$SQL = 'INSERT INTO bucardo_config(setting,value,about) VALUES (?,?,?)';
 	my $newcfg = $dbh->prepare($SQL);
-	my ($fh, $schema_file) = find_bucardo_schema();
 	my %config;
 	my $inside = 0;
+	seek $fh, 0, 0;
 	while (<$fh>) {
 		if (!$inside) {
 			if (/^WITH DELIMITER/) {
@@ -2059,11 +2076,11 @@ sub upgrade {
 
 	## Parse the bucardo.schema file and verify the following types of objects exist:
 	## Functions, triggers, constraints, sequences, and indexes
-	seek $fh, 0, 0;
 	my (@flist, @tlist, @ilist, @clist, @slist, @tablelist);
 	my ($fname,$args,$fbody) = ('','','');
 	my ($tname,$tbody) = ('','');
 	my ($tablename,$tablebody) = ('','');
+	seek $fh, 0, 0;
 	while (<$fh>) {
 		if ($fbody) {
 			if (/^(\$bc\$;)/) {
@@ -2225,6 +2242,7 @@ sub upgrade {
 	}
 	else {
 		print "No schema changes were needed\n";
+		exit 1;
 	}
 
 	print "Don't forget to run '$progname validate all' as well: see the UPGRADE file for details\n";
