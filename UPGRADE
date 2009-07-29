@@ -26,8 +26,8 @@ step should be done on some systems as:
 
 sudo make install
 
-This will replace the existing Bucardo.pm file, the bucardo_ctl script, and 
-the associated man pages.
+This will replace the existing Bucardo.pm file, the bucardo_ctl script, the 
+bucardo.schema file, and the associated man pages.
 
 
 2. Stop Bucardo
@@ -46,11 +46,10 @@ existing Bucado database and upgrades the schema as needed.
 ./bucardo_ctl upgrade
 
 Note:
-* You will need to be in the same directory as the bucardo.schema file
 * This must be run on every Bucardo instance you have (most sites only use one)
 
 You should see a summary of any changes made, and then given a chance to 
-accept or reject the changes. You may want to run it again after to double 
+accept or reject the changes. You may want to run it again after, to double 
 check that the upgrade worked and no further changes are needed.
 
 A summary of all changes is stored in the bucardo.upgrade_log table.
