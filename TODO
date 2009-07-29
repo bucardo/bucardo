@@ -31,7 +31,6 @@ These range the gamut from wildly speculative ideas to must-have features.
 - bucardo_help() function to explain all
 - Handle non-orderable data types such as polygons
 - Put this list into a bug tracker
-- Put version number into all functions
 - Document all LISTEN/NOTIFY strings in one area
 - Use 2PC where possible
 - Let bucardo_ctl force reload of tables (e.g. onetimecopy / truncate)
