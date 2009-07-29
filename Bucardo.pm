@@ -3485,7 +3485,7 @@ sub start_kid {
 	}
 
 	## If we are using delta tables, prepare all relevant SQL
-	if ($synctype eq 'pushdelta' or $synctype eq 'swap') {
+	if ($synctype eq 'pushdelta') {
 
 		## Check for any unhandled truncates in general. If there are, no reason to even look at bucardo_delta
 		$SQL = 'SELECT tablename, MAX(cdate) FROM bucardo.bucardo_truncate_trigger '
@@ -3496,6 +3496,10 @@ sub start_kid {
 		$SQL = 'SELECT 1 FROM bucardo.bucardo_truncate_trigger_log '
 			. 'WHERE sync = ? AND targetdb=? AND tablename = ? AND replicated = ?';
 		$sth{source}{checktruncatelog} = $sourcedbh->prepare($SQL) if $synctype eq 'pushdelta';
+
+	}
+
+	if ($synctype eq 'pushdelta' or $synctype eq 'swap') {
 
 		if ($sync->{does_makedelta}) {
 			$SQL = q{INSERT INTO bucardo.bucardo_track(txntime,tablename,targetdb) VALUES (now(),?,?)};
