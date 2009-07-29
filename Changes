@@ -1,6 +1,6 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-3.2.7 ?? 2009
+4.0.0 ?? 2009
 
 New features:
 
@@ -10,7 +10,7 @@ New features:
     demand of pushdelta tables on slaves via COPY. [GSM]
 
   - Support for replication after TRUNCATE. This will only work on 
-    Postgres version 8.4 and higher. [GSM]
+    Postgres version 8.4 and higher, and only pushdelta syncs. [GSM]
 
   - Add log_conflict_details to allow logging of conflict information 
     to a separate file. [Adam Wendt]
