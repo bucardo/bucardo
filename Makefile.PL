@@ -27,8 +27,6 @@ WriteMakefile(
     VERSION_FROM => 'Bucardo.pm',
     EXE_FILES    => ['bucardo_ctl'],
     MAN1PODS     => { 'bucardo_ctl' => 'blib/man1/bucardo_ctl.1pm' },
-    INST_ARCHLIB => 'none',
-    INST_BIN     => 'none',
     NORECURS     => 1,
     clean        => { FILES => 'log.bucardo.* *~ *.tmp outgoingmail.* bucardo_test_database*/' },
 );
