@@ -159,10 +159,6 @@ The major number should very, very rarely change, and is saved for the truly maj
 indicate a change in functionality, new features, etc. The revision number is used for small 
 tweaks and bug fixes, and must be completely compatible with the version before it.
 
-Beta versions (aka release candidates) are the version with an underscore at the end of it. The 
-tells CPAN not to consider this a "real" release. For example, if the upcoming release is 1.9.3, 
-the first release candidate would be 1.9.3_1. A second would be 1.9.3_2 etc.
-
 Version numbers are currently set in seven files:
 
 README
