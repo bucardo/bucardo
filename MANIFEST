@@ -17,11 +17,11 @@ Makefile.PL
 Changes
 .gitignore
 
+scripts/README
 scripts/bucardo_rrd
 scripts/bucardo-report
 scripts/check_bucardo_sync
 scripts/bucardo_ctl.rc
-scripts/update_bucardo_schema.pl
 
 bucardo.html
 Bucardo.pm.html
