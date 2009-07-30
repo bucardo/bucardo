@@ -2153,10 +2153,9 @@ sub upgrade {
 			}
 			next;
 		}
-		if (/^CREATE (?:OR REPLACE )?FUNCTION\s+(\S+)/) {
+		if (/^CREATE (?:OR REPLACE )?FUNCTION\s+bucardo\.(\S+)/) {
 			$fname = $1;
 			$fbody .= $_;
-			$fname =~ s/bucardo\.//;
 			$fname =~ s/\((.*)\)// or die "No args found for function: $_\n";
 			$args = $1;
 			$args =~ s/,(\S)/, $1/g;
@@ -2167,7 +2166,7 @@ sub upgrade {
 			$tbody .= $_;
 			next;
 		}
-		if (/^CREATE TABLE bucardo.(\w+)/) {
+		if (/^CREATE TABLE bucardo\.(\w+)/) {
 			$tablename = $1;
 			$tablebody .= $_;
 			next;
@@ -2176,11 +2175,11 @@ sub upgrade {
 			push @ilist, [$1, $2, $_];
 			next;
 		}
-		if (/^ALTER TABLE (\S+) ADD CONSTRAINT (\S+)/) {
+		if (/^ALTER TABLE bucardo\.(\S+) ADD CONSTRAINT (\S+)/) {
 			push @clist, [$1, $2, $_];
 			next;
 		}
-		if (/^CREATE SEQUENCE (\w+)/) {
+		if (/^CREATE SEQUENCE bucardo\.(\w+)/) {
 			push @slist, [$1, $_];
 			next;
 		}
