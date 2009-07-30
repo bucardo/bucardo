@@ -269,6 +269,7 @@ sub restart {
 	stop();
 	sleep 1;
 	start();
+	return;
 }
 
 
@@ -338,6 +339,7 @@ sub stop {
 
 	exit 0 if $verb eq 'stop';
 
+	return;
 }
 
 

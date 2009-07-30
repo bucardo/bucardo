@@ -35,7 +35,6 @@ $Data::Dumper::Indent = 1;
 use vars qw($SQL %SQL $sth %sth $count $info);
 
 ## Map system signal numbers to standard names
-## Allows us to do things like this: kill $signumber{USR1} => $pid;
 my $x = 0;
 my %signumber;
 for (split(' ', $Config{sig_name})) {
@@ -4082,7 +4081,7 @@ sub start_kid {
 						## deltacount may not exist = no truncation needed
 						## may exist but be zero = truncate!
 						## may exists and be positive = no truncation needed
-						$g->{source}{needstruncation} = 
+						$g->{source}{needstruncation} =
 							(exists $deltacount{source}{truncate}{$g->{oid}} and !$deltacount{source}{truncate}{$g->{oid}})
 							? 1 : 0;
 						if ($g->{source}{needstruncation}) {
