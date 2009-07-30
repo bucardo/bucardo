@@ -39,12 +39,11 @@ CREATE TABLE bucardo.bucardo_config (
   cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX bucardo_config_unique ON bucardo_config(setting) WHERE name IS NULL;
+CREATE UNIQUE INDEX bucardo_config_unique ON bucardo.bucardo_config(setting) WHERE name IS NULL;
 
-CREATE UNIQUE INDEX bucardo_config_unique_name ON bucardo_config(setting,name,type) WHERE name IS NOT NULL;
+CREATE UNIQUE INDEX bucardo_config_unique_name ON bucardo.bucardo_config(setting,name,type) WHERE name IS NOT NULL;
 
-ALTER TABLE bucardo_config ADD CONSTRAINT valid_config_type
-  CHECK (type IN ('sync','goat'));
+ALTER TABLE bucardo.bucardo_config ADD CONSTRAINT valid_config_type CHECK (type IN ('sync','goat'));
 
 CREATE FUNCTION bucardo.check_bucardo_config()
 RETURNS TRIGGER
@@ -70,12 +69,12 @@ END;
 $bc$;
 
 CREATE TRIGGER check_bucardo_config
-  BEFORE INSERT OR UPDATE ON bucardo_config
-  FOR EACH ROW EXECUTE PROCEDURE check_bucardo_config();
+  BEFORE INSERT OR UPDATE ON bucardo.bucardo_config
+  FOR EACH ROW EXECUTE PROCEDURE bucardo.check_bucardo_config();
 
 
 -- Sleep times (all in seconds)
-COPY bucardo_config(setting,value,about)
+COPY bucardo.bucardo_config(setting,value,about)
 FROM STDIN
 WITH DELIMITER '|';
 kick_sleep|0.2|How long do we sleep while waiting for a kick response?
@@ -91,7 +90,7 @@ endsync_sleep|1.0|How long do we sleep when custom code requests an endsync?
 
 
 -- Various timeouts (times are in seconds)
-COPY bucardo_config(setting,value,about)
+COPY bucardo.bucardo_config(setting,value,about)
 FROM STDIN
 WITH DELIMITER '|';
 mcp_pingtime|60|How often do we ping check the MCP?
@@ -106,7 +105,7 @@ tcp_keepalives_count|0|How many probes to send. 0 indicates sticking with system
 \.
 
 -- Debug output
-COPY bucardo_config(setting,value,about)
+COPY bucardo.bucardo_config(setting,value,about)
 FROM STDIN
 WITH DELIMITER '|';
 audit_pid|1|Do we populate the audit_pid table or not?
@@ -119,7 +118,7 @@ warning_file|bucardo.warning.log|File containing all log lines starting with "Wa
 \.
 
 -- Versioning
-COPY bucardo_config(setting,value,about)
+COPY bucardo.bucardo_config(setting,value,about)
 FROM STDIN
 WITH DELIMITER '|';
 bucardo_version|4.0.0|Bucardo version this schema was created with
@@ -127,7 +126,7 @@ bucardo_current_version|4.0.0|Current version of Bucardo
 \.
 
 -- Other settings:
-COPY bucardo_config(setting,value,about)
+COPY bucardo.bucardo_config(setting,value,about)
 FROM STDIN
 WITH DELIMITER '|';
 default_email_from|nobody@example.com|Who the alert emails are sent as
@@ -165,8 +164,8 @@ CREATE TABLE bucardo.db (
   targetlimit SMALLINT    NOT NULL DEFAULT 0, -- maximum concurrent write connections to this database
   cdate       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE UNIQUE INDEX db_dsn_unique ON db(dbhost,dbport,dbname,dbuser) WHERE NOT name ~ '^bctest';
-ALTER TABLE db ADD CONSTRAINT db_status CHECK (status IN ('active','inactive'));
+CREATE UNIQUE INDEX db_dsn_unique ON bucardo.db(dbhost,dbport,dbname,dbuser) WHERE NOT name ~ '^bctest';
+ALTER TABLE bucardo.db ADD CONSTRAINT db_status CHECK (status IN ('active','inactive'));
 
 --
 -- Databases can belong to zero or more named groups
@@ -179,13 +178,13 @@ CREATE TABLE bucardo.dbgroup (
 
 CREATE TABLE bucardo.dbmap (
   db       TEXT        NOT NULL,
-             CONSTRAINT  dbmap_db_fk FOREIGN KEY (db) REFERENCES db(name) ON DELETE CASCADE,
+             CONSTRAINT  dbmap_db_fk FOREIGN KEY (db) REFERENCES bucardo.db(name) ON DELETE CASCADE,
   dbgroup  TEXT        NOT NULL,
-             CONSTRAINT  dbmap_dbgroup_fk FOREIGN KEY (dbgroup) REFERENCES dbgroup(name) ON DELETE CASCADE,
+             CONSTRAINT  dbmap_dbgroup_fk FOREIGN KEY (dbgroup) REFERENCES bucardo.dbgroup(name) ON DELETE CASCADE,
   priority SMALLINT    NOT NULL DEFAULT 0,
   cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE UNIQUE INDEX dbmap_unique ON dbmap(db,dbgroup);
+CREATE UNIQUE INDEX dbmap_unique ON bucardo.dbmap(db,dbgroup);
 
 
 --
@@ -193,7 +192,7 @@ CREATE UNIQUE INDEX dbmap_unique ON dbmap(db,dbgroup);
 --
 CREATE TABLE bucardo.db_connlog (
   db          TEXT        NOT NULL,
-                CONSTRAINT  db_connlog_dbid_fk FOREIGN KEY (db) REFERENCES db(name) ON DELETE CASCADE ON UPDATE CASCADE,
+                CONSTRAINT  db_connlog_dbid_fk FOREIGN KEY (db) REFERENCES bucardo.db(name) ON DELETE CASCADE ON UPDATE CASCADE,
   conndate    TIMESTAMPTZ NOT NULL DEFAULT now(),  -- when we first connected to it
   connstring  TEXT        NOT NULL,
   status      TEXT        NOT NULL DEFAULT 'unknown',
@@ -205,12 +204,12 @@ CREATE TABLE bucardo.db_connlog (
 --
 -- We need to track each item we want to replicate from or replicate to
 --
-CREATE SEQUENCE goat_id_seq;
+CREATE SEQUENCE bucardo.goat_id_seq;
 CREATE TABLE bucardo.goat (
   id                 INTEGER     NOT NULL DEFAULT nextval('goat_id_seq'),
                        CONSTRAINT goat_id_pk PRIMARY KEY (id),
   db                 TEXT        NOT NULL,
-                       CONSTRAINT goat_db_fk FOREIGN KEY (db) REFERENCES db(name) ON DELETE RESTRICT,
+                       CONSTRAINT goat_db_fk FOREIGN KEY (db) REFERENCES bucardo.db(name) ON DELETE RESTRICT,
   schemaname         TEXT        NOT NULL,
   tablename          TEXT        NOT NULL,
   reltype            TEXT        NOT NULL DEFAULT 'table',
@@ -228,24 +227,24 @@ CREATE TABLE bucardo.goat (
   strict_checking    BOOLEAN     NOT NULL DEFAULT 'true',
   cdate              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-ALTER TABLE goat ADD CONSTRAINT has_schemaname CHECK (length(schemaname) > 1);
+ALTER TABLE bucardo.goat ADD CONSTRAINT has_schemaname CHECK (length(schemaname) > 1);
 
-ALTER TABLE goat ADD CONSTRAINT custom_needs_pkey CHECK (customselect IS NULL OR length(pkey) > 1);
+ALTER TABLE bucardo.goat ADD CONSTRAINT custom_needs_pkey CHECK (customselect IS NULL OR length(pkey) > 1);
 
-ALTER TABLE goat ADD CONSTRAINT pkey_needs_type CHECK (pkey = '' OR pkeytype IS NOT NULL);
+ALTER TABLE bucardo.goat ADD CONSTRAINT pkey_needs_type CHECK (pkey = '' OR pkeytype IS NOT NULL);
 
-ALTER TABLE goat ADD CONSTRAINT standard_conflict CHECK (standard_conflict IS NULL
+ALTER TABLE bucardo.goat ADD CONSTRAINT standard_conflict CHECK (standard_conflict IS NULL
   OR standard_conflict IN ('source','target','skip','random','latest','abort'));
 
 --
 -- Set of filters for each goat.
 --
-CREATE SEQUENCE bucardo_custom_trigger_id_seq;
+CREATE SEQUENCE bucardo.bucardo_custom_trigger_id_seq;
 CREATE TABLE bucardo.bucardo_custom_trigger (
   id                INTEGER     NOT NULL DEFAULT nextval('bucardo_custom_trigger_id_seq'),
       CONSTRAINT bucardo_custom_trigger_id_pk PRIMARY KEY (id),
   goat              INTEGER     NOT NULL,
-      CONSTRAINT bucardo_custom_trigger_goat_fk FOREIGN KEY (goat) REFERENCES goat(id) ON DELETE CASCADE,
+      CONSTRAINT bucardo_custom_trigger_goat_fk FOREIGN KEY (goat) REFERENCES bucardo.goat(id) ON DELETE CASCADE,
   trigger_name      TEXT        NOT NULL,
   trigger_type      TEXT        NOT NULL,
   trigger_language  TEXT        NOT NULL DEFAULT 'plpgsql',
@@ -255,9 +254,9 @@ CREATE TABLE bucardo.bucardo_custom_trigger (
   cdate             TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-ALTER TABLE bucardo_custom_trigger ADD CONSTRAINT type_is_delta_or_trigger CHECK (trigger_type IN ('delta', 'triggerkick'));
-ALTER TABLE bucardo_custom_trigger ADD CONSTRAINT level_is_row_statement CHECK (trigger_level IN ('ROW', 'STATEMENT'));
-CREATE UNIQUE INDEX bucardo_custom_trigger_goat_type_unique ON bucardo_custom_trigger(goat, trigger_type);
+ALTER TABLE bucardo.bucardo_custom_trigger ADD CONSTRAINT type_is_delta_or_trigger CHECK (trigger_type IN ('delta', 'triggerkick'));
+ALTER TABLE bucardo.bucardo_custom_trigger ADD CONSTRAINT level_is_row_statement CHECK (trigger_level IN ('ROW', 'STATEMENT'));
+CREATE UNIQUE INDEX bucardo_custom_trigger_goat_type_unique ON bucardo.bucardo_custom_trigger(goat, trigger_type);
 
 --
 -- A group of goats. Ideally arranged in some sort of tree.
@@ -274,14 +273,14 @@ CREATE TABLE bucardo.herd (
 --
 CREATE TABLE bucardo.herdmap (
   herd      TEXT        NOT NULL,
-              CONSTRAINT herdmap_herd_fk FOREIGN KEY (herd) REFERENCES herd(name) ON DELETE CASCADE,
+              CONSTRAINT herdmap_herd_fk FOREIGN KEY (herd) REFERENCES bucardo.herd(name) ON DELETE CASCADE,
   goat      INTEGER     NOT NULL,
-              CONSTRAINT herdmap_goat_fk FOREIGN KEY (goat) REFERENCES goat(id) ON DELETE CASCADE,
+              CONSTRAINT herdmap_goat_fk FOREIGN KEY (goat) REFERENCES bucardo.goat(id) ON DELETE CASCADE,
   priority  SMALLINT    NOT NULL DEFAULT 0,
   cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE VIEW goats_in_herd AS
+CREATE VIEW bucardo.goats_in_herd AS
   SELECT hm.herd, g.*
   FROM goat g
   JOIN herdmap hm ON hm.goat = g.id;
@@ -329,8 +328,8 @@ $bc$
 $bc$;
 
 CREATE TRIGGER herdcheck
-  AFTER INSERT OR UPDATE ON herdmap
-  FOR EACH ROW EXECUTE PROCEDURE herdcheck();
+  AFTER INSERT OR UPDATE ON bucardo.herdmap
+  FOR EACH ROW EXECUTE PROCEDURE bucardo.herdcheck();
 
 
 --
@@ -340,11 +339,11 @@ CREATE TABLE bucardo.sync (
   name               TEXT        NOT NULL UNIQUE,
                        CONSTRAINT sync_name_pk PRIMARY KEY (name),
   source             TEXT        NOT NULL,
-                       CONSTRAINT sync_source_herd_fk FOREIGN KEY (source) REFERENCES herd(name) ON DELETE RESTRICT,
+                       CONSTRAINT sync_source_herd_fk FOREIGN KEY (source) REFERENCES bucardo.herd(name) ON DELETE RESTRICT,
   targetdb           TEXT            NULL,
-                       CONSTRAINT sync_targetdb_fk FOREIGN KEY (targetdb) REFERENCES db(name) ON DELETE RESTRICT,
+                       CONSTRAINT sync_targetdb_fk FOREIGN KEY (targetdb) REFERENCES bucardo.db(name) ON DELETE RESTRICT,
   targetgroup        TEXT            NULL,
-                       CONSTRAINT sync_targetgroup_fk FOREIGN KEY (targetgroup) REFERENCES dbgroup(name) ON DELETE RESTRICT,
+                       CONSTRAINT sync_targetgroup_fk FOREIGN KEY (targetgroup) REFERENCES bucardo.dbgroup(name) ON DELETE RESTRICT,
   synctype           TEXT        NOT NULL,
   stayalive          BOOLEAN     NOT NULL DEFAULT 'true', -- Does the sync controller stay connected?
   kidsalive          BOOLEAN     NOT NULL DEFAULT 'true', -- Do the children stay connected?
@@ -372,35 +371,34 @@ CREATE TABLE bucardo.sync (
   cdate              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE bucardo.sync ADD CONSTRAINT sync_type CHECK (synctype IN ('pushdelta','fullcopy','swap'));
 
-ALTER TABLE sync ADD CONSTRAINT sync_type CHECK (synctype IN ('pushdelta','fullcopy','swap'));
+ALTER TABLE bucardo.sync ADD CONSTRAINT sync_copytype CHECK (copytype IN ('insert','copy'));
 
-ALTER TABLE sync ADD CONSTRAINT sync_copytype CHECK (copytype IN ('insert','copy'));
+ALTER TABLE bucardo.sync ADD CONSTRAINT sync_deletemethod CHECK (deletemethod IN ('truncate', 'delete'));
 
-ALTER TABLE sync ADD CONSTRAINT sync_deletemethod CHECK (deletemethod IN ('truncate', 'delete'));
+CREATE UNIQUE INDEX sync_source_targetdb_type ON bucardo.sync(source, targetdb, synctype);
 
-CREATE UNIQUE INDEX sync_source_targetdb_type ON sync(source, targetdb, synctype);
+CREATE UNIQUE INDEX sync_source_targetgroup_type ON bucardo.sync(source, targetgroup, synctype);
 
-CREATE UNIQUE INDEX sync_source_targetgroup_type ON sync(source, targetgroup, synctype);
-
-ALTER TABLE sync ADD CONSTRAINT sync_validtarget CHECK
+ALTER TABLE bucardo.sync ADD CONSTRAINT sync_validtarget CHECK
   ((targetdb IS NULL AND targetgroup IS NOT NULL)
     OR
    (targetdb IS NOT NULL AND targetgroup IS NULL));
 
-ALTER TABLE sync ADD CONSTRAINT sync_swap_nogroup CHECK
+ALTER TABLE bucardo.sync ADD CONSTRAINT sync_swap_nogroup CHECK
   (synctype <> 'swap' or targetdb IS NOT NULL);
 
 -- Because NOTIFY is broke, make sure our names are simple:
-ALTER TABLE db      ADD CONSTRAINT db_name_sane      CHECK (name ~ E'^[a-zA-Z]\\w*$');
-ALTER TABLE dbgroup ADD CONSTRAINT dbgroup_name_sane CHECK (name ~ E'^[a-zA-Z]\\w*$');
-ALTER TABLE sync    ADD CONSTRAINT sync_name_sane    CHECK (name ~ E'^[a-zA-Z]\\w*$');
+ALTER TABLE bucardo.db      ADD CONSTRAINT db_name_sane      CHECK (name ~ E'^[a-zA-Z]\\w*$');
+ALTER TABLE bucardo.dbgroup ADD CONSTRAINT dbgroup_name_sane CHECK (name ~ E'^[a-zA-Z]\\w*$');
+ALTER TABLE bucardo.sync    ADD CONSTRAINT sync_name_sane    CHECK (name ~ E'^[a-zA-Z]\\w*$');
 
 
 --
 -- Track our children
 --
-CREATE SEQUENCE audit_pid_id_seq;
+CREATE SEQUENCE bucardo.audit_pid_id_seq;
 CREATE TABLE bucardo.audit_pid (
   id             INTEGER     NOT NULL DEFAULT nextval('audit_pid_id_seq'),
   parentid       INTEGER         NULL, -- CTL or MCP id
@@ -427,11 +425,11 @@ CREATE TABLE freezer.old_audit_pid AS SELECT * FROM audit_pid LIMIT 0;
 --
 CREATE TABLE bucardo.q (
   sync      TEXT           NULL,
-              CONSTRAINT q_sync_fk FOREIGN KEY (sync) REFERENCES sync(name) ON DELETE SET NULL,
+              CONSTRAINT q_sync_fk FOREIGN KEY (sync) REFERENCES bucardo.sync(name) ON DELETE SET NULL,
   sourcedb  TEXT           NULL,
-              CONSTRAINT q_sdb_fk FOREIGN KEY (sourcedb) REFERENCES db(name) ON DELETE SET NULL,
+              CONSTRAINT q_sdb_fk FOREIGN KEY (sourcedb) REFERENCES bucardo.db(name) ON DELETE SET NULL,
   targetdb  TEXT           NULL,
-              CONSTRAINT q_tdb_fk FOREIGN KEY (targetdb) REFERENCES db(name) ON DELETE SET NULL,
+              CONSTRAINT q_tdb_fk FOREIGN KEY (targetdb) REFERENCES bucardo.db(name) ON DELETE SET NULL,
   ppid      INTEGER     NOT NULL,
   pid       INTEGER         NULL,
   synctype  TEXT            NULL,
@@ -446,15 +444,15 @@ CREATE TABLE bucardo.q (
 );
 -- insert constraint - db and sync not null
 -- Can only be one unstarted source->target per sync
-CREATE UNIQUE INDEX q_unique ON q (sync,sourcedb,targetdb) WHERE started IS NULL;
+CREATE UNIQUE INDEX q_unique ON bucardo.q (sync,sourcedb,targetdb) WHERE started IS NULL;
 
-CREATE INDEX q_ppid ON q (ppid,pid) WHERE ended IS NULL AND aborted IS NULL;
+CREATE INDEX q_ppid ON bucardo.q (ppid,pid) WHERE ended IS NULL AND aborted IS NULL;
 
-CREATE INDEX q_aborted ON q(sync) WHERE started IS NOT NULL AND aborted IS NOT NULL AND ended IS NULL;
+CREATE INDEX q_aborted ON bucardo.q(sync) WHERE started IS NOT NULL AND aborted IS NOT NULL AND ended IS NULL;
 
-CREATE INDEX q_cleanup ON q(cdate) WHERE ended IS NOT NULL;
+CREATE INDEX q_cleanup ON bucardo.q(cdate) WHERE ended IS NOT NULL;
 
-CREATE INDEX q_stathelper ON q(cdate, sync) WHERE ended IS NOT NULL;
+CREATE INDEX q_stathelper ON bucardo.q(cdate, sync) WHERE ended IS NOT NULL;
 
 
 CREATE FUNCTION bucardo.bucardo_q()
@@ -498,14 +496,14 @@ CREATE FUNCTION bucardo.bucardo_purge_q_table(text)
 RETURNS BIGINT
 LANGUAGE SQL
 AS $bc$
-SELECT bucardo_purge_q_table($1::interval);
+SELECT bucardo.bucardo_purge_q_table($1::interval);
 $bc$;
 
 CREATE FUNCTION bucardo.bucardo_purge_q_table()
 RETURNS BIGINT
 LANGUAGE SQL
 AS $bc$
-SELECT bucardo_purge_q_table('2 hours'::interval);
+SELECT bucardo.bucardo_purge_q_table('2 hours'::interval);
 $bc$;
 
 CREATE FUNCTION bucardo.bucardo_purge_q_table(integer)
@@ -748,13 +746,13 @@ return;
 
 $bc$;
 
-CREATE TRIGGER db_change AFTER INSERT OR UPDATE ON db
-  FOR EACH ROW EXECUTE PROCEDURE db_change();
+CREATE TRIGGER db_change AFTER INSERT OR UPDATE ON bucardo.db
+  FOR EACH ROW EXECUTE PROCEDURE bucardo.db_change();
 
 --
 -- Setup the goat table after any change
 --
-CREATE OR REPLACE FUNCTION validate_goat()
+CREATE OR REPLACE FUNCTION bucardo.validate_goat()
 RETURNS TRIGGER
 LANGUAGE plperlu
 SECURITY DEFINER
@@ -929,14 +927,14 @@ die qq{Could not find a matching unique constraint that provides those columns\n
 $bc$; -- End of validate_goat()
 
 CREATE TRIGGER validate_goat
-  BEFORE INSERT OR UPDATE ON goat
-  FOR EACH ROW EXECUTE PROCEDURE validate_goat();
+  BEFORE INSERT OR UPDATE ON bucardo.goat
+  FOR EACH ROW EXECUTE PROCEDURE bucardo.validate_goat();
 
 --
 -- Check that the goat tables are ready and compatible
 --
 
-CREATE OR REPLACE FUNCTION validate_sync(text,integer)
+CREATE OR REPLACE FUNCTION bucardo.validate_sync(text,integer)
 RETURNS TEXT
 LANGUAGE plperlu
 SECURITY DEFINER
@@ -2017,7 +2015,7 @@ $bc$
 DECLARE count INTEGER = 0; myrec RECORD;
 BEGIN
 FOR myrec IN SELECT name FROM sync ORDER BY name LOOP
-  PERFORM validate_sync(myrec.name, $1);
+  PERFORM bucardo.validate_sync(myrec.name, $1);
   count = count + 1;
 END LOOP;
 RETURN count;
@@ -2029,7 +2027,7 @@ RETURNS INTEGER
 LANGUAGE SQL
 AS
 $bc$
-SELECT validate_all_syncs(0);
+SELECT bucardo.validate_all_syncs(0);
 $bc$;
 
 CREATE FUNCTION bucardo.validate_sync()
@@ -2071,8 +2069,8 @@ AS $bc$
 $bc$;
 
 CREATE TRIGGER validate_sync
-  AFTER INSERT OR UPDATE ON sync
-  FOR EACH ROW EXECUTE PROCEDURE validate_sync();
+  AFTER INSERT OR UPDATE ON bucardo.sync
+  FOR EACH ROW EXECUTE PROCEDURE bucardo.validate_sync();
 
 CREATE FUNCTION bucardo.bucardo_delete_sync()
 RETURNS TRIGGER
@@ -2171,10 +2169,10 @@ AS $bc$
 $bc$;
 
 CREATE TRIGGER bucardo_delete_sync
-  AFTER DELETE ON sync
-  FOR EACH ROW EXECUTE PROCEDURE bucardo_delete_sync();
+  AFTER DELETE ON bucardo.sync
+  FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delete_sync();
 
-CREATE SEQUENCE customcode_id_seq;
+CREATE SEQUENCE bucardo.customcode_id_seq;
 CREATE TABLE bucardo.customcode (
   id       INTEGER     NOT NULL DEFAULT nextval('customcode_id_seq'),
              CONSTRAINT customcode_id_pk PRIMARY KEY (id),
@@ -2186,7 +2184,7 @@ CREATE TABLE bucardo.customcode (
   src_code TEXT        NOT NULL,
   cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-ALTER TABLE customcode ADD CONSTRAINT customcode_whenrun
+ALTER TABLE bucardo.customcode ADD CONSTRAINT customcode_whenrun
 CHECK (whenrun IN (
 'before_txn',
 'before_check_rows',
@@ -2204,23 +2202,23 @@ CHECK (whenrun IN (
 
 CREATE TABLE bucardo.customcode_map (
   code     INTEGER     NOT NULL,
-             CONSTRAINT customcode_map_code_fk FOREIGN KEY (code) REFERENCES customcode(id) ON DELETE CASCADE,
+             CONSTRAINT customcode_map_code_fk FOREIGN KEY (code) REFERENCES bucardo.customcode(id) ON DELETE CASCADE,
   sync     TEXT            NULL,
-             CONSTRAINT customcode_map_sync_fk FOREIGN KEY (sync) REFERENCES sync(name) ON DELETE SET NULL,
+             CONSTRAINT customcode_map_sync_fk FOREIGN KEY (sync) REFERENCES bucardo.sync(name) ON DELETE SET NULL,
   goat     INTEGER         NULL,
-             CONSTRAINT customcode_map_goat_fk FOREIGN KEY (goat) REFERENCES goat(id) ON DELETE SET NULL,
+             CONSTRAINT customcode_map_goat_fk FOREIGN KEY (goat) REFERENCES bucardo.goat(id) ON DELETE SET NULL,
   active   BOOLEAN     NOT NULL DEFAULT 'true',
   priority SMALLINT    NOT NULL DEFAULT 0,
   cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-ALTER TABLE customcode_map ADD CONSTRAINT customcode_map_syncgoat
-CHECK (sync IS NULL OR goat IS NULL);
+ALTER TABLE bucardo.customcode_map ADD CONSTRAINT customcode_map_syncgoat
+  CHECK (sync IS NULL OR goat IS NULL);
 
-CREATE UNIQUE INDEX customcode_map_unique_sync ON customcode_map(code,sync) WHERE sync IS NOT NULL;
-CREATE UNIQUE INDEX customcode_map_unique_goat ON customcode_map(code,goat) WHERE goat IS NOT NULL;
+CREATE UNIQUE INDEX customcode_map_unique_sync ON bucardo.customcode_map(code,sync) WHERE sync IS NOT NULL;
+CREATE UNIQUE INDEX customcode_map_unique_goat ON bucardo.customcode_map(code,goat) WHERE goat IS NOT NULL;
 
 
-CREATE OR REPLACE FUNCTION find_unused_goats()
+CREATE OR REPLACE FUNCTION bucardo.find_unused_goats()
 RETURNS SETOF text
 LANGUAGE plpgsql
 AS $bc$
@@ -2269,7 +2267,7 @@ CREATE TABLE bucardo.bucardo_rate (
   slavecommit  TIMESTAMPTZ NOT NULL,
   total        INTEGER     NOT NULL
 );
-CREATE INDEX bucardo_rate_sync ON bucardo_rate(sync);
+CREATE INDEX bucardo_rate_sync ON bucardo.bucardo_rate(sync);
 
 -- Keep track of any upgrades as we go along
 CREATE TABLE bucardo.upgrade_log (
@@ -2296,8 +2294,8 @@ CREATE TABLE bucardo.bucardo_log_message (
   cdate TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE TRIGGER bucardo_log_message_trigger
-  AFTER INSERT ON bucardo_log_message
-  FOR EACH STATEMENT EXECUTE PROCEDURE bucardo_log_message_notify();
+  AFTER INSERT ON bucardo.bucardo_log_message
+  FOR EACH STATEMENT EXECUTE PROCEDURE bucardo.bucardo_log_message_notify();
 
 
 --
