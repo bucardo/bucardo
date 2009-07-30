@@ -221,14 +221,15 @@ sub help {
 
   stop <reason>   ** Tell all Bucardo processes to stop permanently
 
-  list <type>     ** View short info about dbs, herds, goats, or syncs
+  list <type>     ** View short info about dbs, tables, sequences, syncs, or herds
 
   add <item_type> <item_name>
                   ** Add a new database, table, sync, herd, or database group
     add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx
     add dbgroup name db1 db2 db3 ...
-    add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool
-    add all tables [db=internal_db_name]
+    add table [schema].table db=internal_db_name [ping=bool] [standard_conflict=xxx] [makedelta=bool]
+    add all tables [db=internal_db_name] [herd=herd_name]
+    add sequence [schema].name [herd=name]
     add herd name
     add sync syncname source=xxx targetdb=xxx targetgroup=xxx type=xxx
 
@@ -1193,16 +1194,17 @@ ORDER BY started DESC LIMIT 1
 
 sub list {
 
-	my $msg = "Need to specify what to list: db, goat, herd, or sync\n";
+	my $msg = "Need to specify what to list: db, table, sequence, sync, or herd\n";
 	if (!@nouns) {
 		die $msg;
 	}
 	my $thing = shift @nouns;
 
-	list_dbs()   if $thing =~ /db/i   or $thing eq 'd';
-	list_goats() if $thing =~ /goat/i or $thing eq 'g' or $thing =~ /tab/;
-	list_herds() if $thing =~ /herd/i or $thing eq 'h';
-	list_syncs() if $thing =~ /sync/i or $thing eq 's';
+	list_dbs()       if $thing =~ /db/i   or $thing eq 'd';
+	list_tables()    if $thing =~ /tab/i  or $thing eq 't';
+	list_sequences() if $thing =~ /seq/i;
+	list_syncs()     if $thing =~ /sync/i or $thing eq 's';
+	list_herds()     if $thing =~ /herd/i or $thing eq 'h';
 
 	die $msg;
 
@@ -1258,26 +1260,27 @@ sub get_dbs {
 
 } ## end of get_dbs
 
-sub list_goats {
 
-	## Show information about all or some subset of the 'goat' table
+sub list_tables {
+
+	## Show information about all or some tables in the 'goat' table
 	## Keep to three lines or less if possible
 
 	## If any nouns left, treat as wildcards
-	my $WHERE = '';
+	my $AND = '';
 	for my $term (@nouns) {
-		$WHERE .= sprintf q{%s lower(tablename) ~ %s},
-			$WHERE ? ' OR' : 'WHERE',
+		$AND .= sprintf q{%s lower(tablename) ~ %s},
+			$AND ? ' OR' : '',
 				$dbh->quote(lc $term);
 	}
 
-	$SQL = "SELECT * FROM goat $WHERE ORDER BY schemaname, tablename";
+	$SQL = "SELECT * FROM goat WHERE reltype = 'table' $AND ORDER BY schemaname, tablename";
 	$sth = $dbh->prepare($SQL);
 	$count = $sth->execute();
 	if ($count < 1) {
 		$sth->finish();
 		printf "There are no%s entries in the 'goat' table.\n",
-			$WHERE ? ' matching' : '';
+			$AND ? ' matching' : '';
 		exit;
 	}
 
@@ -1300,7 +1303,40 @@ sub list_goats {
 
 	exit;
 
-} ## end of list_goats
+} ## end of list_tables
+
+
+sub list_sequences {
+
+	## Show information about all or some sequences in the 'goat' table
+	## Keep to three lines or less if possible
+
+	## If any nouns left, treat as wildcards
+	my $AND = '';
+	for my $term (@nouns) {
+		$AND .= sprintf q{%s lower(tablename) ~ %s},
+			$AND ? ' OR' : '',
+				$dbh->quote(lc $term);
+	}
+
+	$SQL = "SELECT * FROM goat WHERE reltype = 'sequence' $AND ORDER BY schemaname, tablename";
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute();
+	if ($count < 1) {
+		$sth->finish();
+		printf "There are no%s entries in the 'goat' table.\n",
+			$AND ? ' matching' : '';
+		exit;
+	}
+
+	$info = $sth->fetchall_arrayref({});
+	for my $row (@$info) {
+		print "Sequence $row->{id}: $row->{schemaname}.$row->{tablename}\n";
+	}
+
+	exit;
+
+} ## end of list_sequences
 
 
 sub list_herds {
@@ -1556,7 +1592,7 @@ sub add_item {
 	if ($type eq 'db' or $type eq 'database') {
 		add_database($type);
 	}
-	elsif ($type eq 'table' or $type eq 'goat') {
+	elsif ($type eq 'table') {
 		add_table($type);
 	}
 	elsif ($type eq 'sync') {
@@ -1572,6 +1608,9 @@ sub add_item {
 		my $type2 = shift @nouns || '';
 		if ($type2 =~ /table/i) {
 			add_all_tables();
+		}
+		elsif ($type2 =~ /sequence/i) {
+			add_all_sequences();
 		}
 		else {
 			warn "Must provide a valid type\n";
@@ -1624,8 +1663,11 @@ sub remove_item {
 	if ($type eq 'db' or $type eq 'database') {
 		remove_database($type);
 	}
-	elsif ($type eq 'table' or $type eq 'goat') {
+	elsif ($type eq 'table') {
 		remove_table($type);
+	}
+	elsif ($type eq 'sequence') {
+		remove_sequence($type);
 	}
 	elsif ($type eq 'sync') {
 		remove_sync($type);
@@ -2452,7 +2494,7 @@ sub add_all_tables {
 
 	## Grab all current tables from the goat table.
 	## We'll only match on schema+table here, and NOT the db name
-	$SQL = 'SELECT schemaname, tablename FROM goat';
+	$SQL = q{SELECT schemaname, tablename FROM goat WHERE reltype= 'table'};
 	my %hastable;
 	for my $row (@{$dbh->selectall_arrayref($SQL)}) {
 		$hastable{$row->[0]}{$row->[1]}++;
@@ -2515,6 +2557,175 @@ sub add_all_tables {
 	exit;
 
 } ## end of add_all_tables
+
+
+sub add_all_sequences {
+
+	## Usage: add all sequences
+	## Options:
+	## --db: use this database (internal name from the db table)
+	## --schema or -n: limit to one or more comma-separated schemas
+	## --exclude-schema or -N: exclude these schemas
+	## --table or -t: limit to the given tables
+	## --exclude-table or -t: exclude these tables
+	## --herd : name of the herd to add new tables to
+	##
+	## Future options: --prompt
+
+	my $otype = 'sequence';
+	my $otypes = 'sequences';
+
+	## Grab the list of databases. If none, cowardly refuse to continue
+	my $dbs = get_dbs();
+	if (! keys %$dbs) {
+		die "Sorry, cannot add any $otypes until at least one database is defined\n";
+	}
+
+	## Have the picked one? Make sure it exists.
+	my $db;
+	if (exists $bcargs->{db}) {
+		if (! exists $dbs->{$bcargs->{db}}) {
+			die qq{sorry, could not find a database named "$bcargs->{db}"\n};
+		}
+		$db = $dbs->{$bcargs->{db}};
+	}
+	elsif (keys %$dbs == 1) {
+		($db) = values %$dbs;
+	}
+	else {
+		warn "Please specify which database to use with the --db option\n";
+		warn "Your choices are:\n";
+		for my $row (sort keys %$dbs) {
+			warn "--db=$row\n";
+		}
+		exit;
+	}
+
+	## Connect to the remote database
+	my $dbh2 = connect_database({name => $db->{name}});
+
+	## Generate a query to pull all tables we may possibly need
+	$SQL = q{SELECT nspname, relname FROM pg_class c }
+		. q{JOIN pg_namespace n ON (n.oid = c.relnamespace) }
+		. q{WHERE relkind = 'S' };
+
+	## Use optional arguments to refine the list of schemas
+	if (exists $bcargs->{schema}) {
+		$SQL .= ' AND nspname IN (';
+		for my $s (@{$bcargs->{schema}}) {
+			$s =~ s/^\s*(.+?)\s*$/$1/;
+			$SQL .= join ',' => map { "'$_'" } split /\s*,\s*/ => $s;
+			$SQL .= ',';
+		}
+		$SQL =~ s/,$/)/;
+	}
+	else {
+		$SQL .= q{AND n.nspname <> 'information_schema' AND nspname !~ '^pg'};
+	}
+
+	if (exists $bcargs->{'exclude-schema'}) {
+		$SQL .= ' AND nspname NOT IN (';
+		for my $s (@{$bcargs->{'exclude-schema'}}) {
+			$s =~ s/^\s*(.+?)\s*$/$1/;
+			$SQL .= join ',' => map { "'$_'" } split /\s*,\s*/ => $s;
+			$SQL .= ',';
+		}
+		$SQL =~ s/,$/)/;
+	}
+
+	## Use optional arguments to refine the list of tables
+	if (exists $bcargs->{table}) {
+		$SQL .= ' AND relname IN (';
+		for my $s (@{$bcargs->{table}}) {
+			$s =~ s/^\s*(.+?)\s*$/$1/;
+			$SQL .= join ',' => map { "'$_'" } split /\s*,\s*/ => $s;
+			$SQL .= ',';
+		}
+		$SQL =~ s/,$/)/;
+	}
+
+	if (exists $bcargs->{'exclude-table'}) {
+		$SQL .= ' AND relname NOT IN (';
+		for my $s (@{$bcargs->{'exclude-table'}}) {
+			$s =~ s/^\s*(.+?)\s*$/$1/;
+			$SQL .= join ',' => map { "'$_'" } split /\s*,\s*/ => $s;
+			$SQL .= ',';
+		}
+		$SQL =~ s/,$/)/;
+	}
+
+	## Fetch all the tables, bail if no matches are found
+	$sth = $dbh2->prepare($SQL);
+	$count = $sth->execute();
+	if ($count < 1) {
+		die "Sorry, no $otypes were found\n";
+	}
+
+	## Grab all current sequences from the goat table.
+	## We'll only match on schema+table here, and NOT the db name
+	$SQL = q{SELECT schemaname, tablename FROM goat WHERE reltype= 'sequence'};
+	my %hastable;
+	for my $row (@{$dbh->selectall_arrayref($SQL)}) {
+		$hastable{$row->[0]}{$row->[1]}++;
+	}
+
+	## Do we have a herd request? Process it if so
+	my $herd = '';
+	my $addtoherd;
+	if (exists $bcargs->{herd}) {
+		$herd = $bcargs->{herd};
+		$SQL = 'SELECT 1 FROM herd WHERE name = ?';
+		my $herdcheck = $dbh->prepare($SQL);
+		$count = $herdcheck->execute($herd);
+		$herdcheck->finish();
+		if ($count < 1) {
+			print "Creating herd: $herd\n";
+			$SQL = 'INSERT INTO herd(name) VALUES (?)';
+			$herdcheck = $dbh->prepare($SQL);
+			$herdcheck->execute($herd);
+		}
+		$SQL = 'INSERT INTO herdmap(herd,goat) VALUES (?,?)';
+		$addtoherd = $dbh->prepare($SQL);
+	}
+
+	## Get ready to add tables to the goat table
+	$SQL = 'INSERT INTO bucardo.goat (db,schemaname,tablename,reltype) VALUES (?,?,?,?) RETURNING id';
+	my $addtable = $dbh->prepare($SQL);
+
+	## Walk through all returned tables from the remote database
+	my %count = (seenit => 0, added => 0);
+	for my $row (@{$sth->fetchall_arrayref()}) {
+		my ($S,$T) = @$row;
+		## Do we already have this one?
+		if (exists $hastable{$S}{$T}) {
+			$VERBOSE >= 1 and warn "Skipping $otype already in goat: $S.$T\n";
+			$count{seenit}++;
+			next;
+		}
+		$VERBOSE >= 1 and warn "Attempting to add $S.$T to the goat table\n";
+		$count = $addtable->execute($db->{name},$S,$T,$otype);
+		if ($count != 1) {
+			$addtable->finish();
+			warn "Failed to add $otype $S.$T to the goat table!\n";
+			next;
+		}
+		my $id = $addtable->fetch()->[0];
+		$VERBOSE >= 1 and warn "ID of new $otype $S.$T is $id\n";
+		$count{added}++;
+		if ($herd) {
+			$addtoherd->execute($herd, $id);
+			$VERBOSE >= 1 and warn "Added $otype $id to herd $herd\n";
+		}
+
+	}
+	$dbh->commit();
+
+	print "New $otypes added: $count{added}\n";
+	print ucfirst($otypes) . " already added: $count{seenit}\n";
+
+	exit;
+
+} ## end of add_all_sequences
 
 
 sub connect_database {
@@ -3434,8 +3645,8 @@ is also used by Bucardo when it exits and sends out mail about its death.
 
 Usage: ./bucardo_ctl list <type> <regex>
 
-Lists summary information about databases, goats, herds, or syncs. Adding anything after the 
-type will look up all matching entries.
+Lists summary information about databases, tables, sequences, syncs, or herds. Adding anything 
+after the type will look up all matching entries.
 
 =item B<add>
 
@@ -3443,7 +3654,13 @@ Usage:  add <item_type> <item_name>
 
 Usage:  add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx
 
-Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool
+Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool herd=xxx
+
+Usage:  add all tables herd=xxx
+
+Usage:  add sequence [schema].table herd=xxx
+
+Usage:  add all sequences herd=xxx
 
 Usage:  add sync syncname options
 
