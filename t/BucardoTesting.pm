@@ -17,7 +17,7 @@ use vars qw/$SQL $sth $count $COM %dbh/;
 my $DEBUG = 0; ## XXX
 
 use base 'Exporter';
-our @EXPORT = qw/%tabletype %val compare_tables bc_deeply wait_for_notice $location/;
+our @EXPORT = qw/%tabletype %sequences %val compare_tables bc_deeply wait_for_notice $location/;
 
 our $location = 'setup';
 my $testmsg  = ' ?';
@@ -54,6 +54,13 @@ our %tabletype =
 	 );
 
 our @tables2empty = (qw/droptest bucardo_test_multicol/);
+
+our %sequences =
+	(
+	'bucardo_test_seq1' => '',
+	'bucardo_test_seq2' => '',
+	'bucardo_test_seq3' => '',
+	);
 
 my %debug = (
 			 recreatedb     => 0,
@@ -638,6 +645,21 @@ sub add_test_schema {
         data TEXT,
         PRIMARY KEY (id, id2, id3))});
 	}
+
+	## Create one table for each table type
+	for my $seq (sort keys %sequences) {
+
+		local $dbh->{Warn} = 0;
+
+		## Does the sequence already exist? If so, drop it.
+		if (table_exists($dbh => $seq)) {
+			$dbh->do("DROP SEQUENCE $seq");
+		}
+
+		$SQL = qq{CREATE SEQUENCE $seq};
+		$dbh->do($SQL);
+	}
+
 	$dbh->commit();
 
 	return;
@@ -960,7 +982,7 @@ sub add_test_databases {
 
 sub add_test_tables_to_herd {
 
-	## Add all of the test tables to a herd
+	## Add all of the test tables (and sequences) to a herd
 	## Create the herd if it does not exist
 	## First arg is database name, second arg is the herdname
 
@@ -979,6 +1001,13 @@ sub add_test_tables_to_herd {
 	$result = $self->ctl($com);
 	if ($result !~ /Tables? added:/) {
 		die "Failed to add tables: $result (command was: $com)\n";
+	}
+
+	$addstring = join ' ' => sort keys %sequences;
+	$com = "add sequence $addstring db=$db herd=$herd";
+	$result = $self->ctl($com);
+	if ($result !~ /Sequences? added:/) {
+		die "Failed to add sequences: $result (command was: $com)\n";
 	}
 
 	return;
