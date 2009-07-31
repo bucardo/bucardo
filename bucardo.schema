@@ -1354,35 +1354,38 @@ $bc$
         ## (if bc_schema exists) Does this table exist?
 
         if (!$found{bc_schema}) {
-            $found{bucardo_delta} = $found{bucardo_track} = $found{bucardo_delta_targets} = 
-            $found{bucardo_truncate_trigger} = $found{bucardo_truncate_trigger_log} = 0;
+            $found{bucardo_delta} = $found{bucardo_track} = $found{bucardo_delta_targets}
+			= $found{bucardo_truncate_trigger} = $found{bucardo_truncate_trigger_log}
+			= $found{bucardo_sequences} = 0;
         }
         else {
             $SQL = qq{
-                SELECT max(t1), max(t2), max(t3), max(t4), max(t5)
+                SELECT max(t1), max(t2), max(t3), max(t4), max(t5), max(t6)
                 FROM (
                 SELECT
                   CASE WHEN c.relname = 'bucardo_delta' THEN 1 ELSE 0 END AS t1,
                   CASE WHEN c.relname = 'bucardo_track' THEN 1 ELSE 0 END AS t2,
                   CASE WHEN c.relname = 'bucardo_delta_targets' THEN 1 ELSE 0 END AS t3,
                   CASE WHEN c.relname = 'bucardo_truncate_trigger' THEN 1 ELSE 0 END AS t4,
-                  CASE WHEN c.relname = 'bucardo_truncate_trigger_log' THEN 1 ELSE 0 END AS t5
+                  CASE WHEN c.relname = 'bucardo_truncate_trigger_log' THEN 1 ELSE 0 END AS t5,
+                  CASE WHEN c.relname = 'bucardo_sequences' THEN 1 ELSE 0 END AS t6
                 FROM   pg_catalog.pg_class c, pg_catalog.pg_namespace n
                 WHERE  c.relnamespace = n.oid
                 AND    c.relkind = 'r'
                 AND    n.nspname = 'bucardo'
-                AND    c.relname IN (?,?,?,?,?)
+                AND    c.relname IN (?,?,?,?,?,?)
                 ) foo
             };
             elog(DEBUG, "Preparing to check tables: $SQL");
             $sth = $dbh->prepare($SQL);
-            $sth->execute('bucardo_delta','bucardo_track','bucardo_delta_targets','bucardo_truncate_trigger','bucardo_truncate_trigger_log');
+            $sth->execute('bucardo_delta','bucardo_track','bucardo_delta_targets','bucardo_truncate_trigger','bucardo_truncate_trigger_log','bucardo_sequences');
             my $row = $sth->fetchall_arrayref()->[0];
             $found{'bucardo_delta'} = $row->[0];
             $found{'bucardo_track'} = $row->[1];
             $found{'bucardo_delta_targets'} = $row->[2];
             $found{'bucardo_truncate_trigger'} = $row->[3];
             $found{'bucardo_truncate_trigger_log'} = $row->[4];
+            $found{'bucardo_sequences'} = $row->[5];
         }
 
         ## (if bucardo_delta exists) Do these indexes exist?
@@ -1654,6 +1657,20 @@ $bc$
 
                 $SQL = q{CREATE INDEX bucardo_truncate_trigger_log_index ON }
                      . q{bucardo.bucardo_truncate_trigger_log (sync,targetdb,replicated)};
+                run_sql($SQL,$dbh);
+            }
+
+            if (! $found{bucardo_sequences}) {
+                $SQL = qq{
+                    CREATE TABLE bucardo.bucardo_sequences (
+                        tablename   OID         NOT NULL,
+                        value       BIGINT      NOT NULL
+                    );
+                };
+                run_sql($SQL,$dbh);
+
+                $SQL = q{CREATE INDEX bucardo_sequences_tablename ON }
+                     . q{bucardo.bucardo_sequences (tablename)};
                 run_sql($SQL,$dbh);
             }
 
