@@ -981,7 +981,7 @@ $bc$
 
     ## Process the source herd
     $SQL = qq{
-        SELECT id, db, schemaname, tablename, pkey, pkeytype,
+        SELECT id, db, schemaname, tablename, pkey, pkeytype, reltype, 
                standard_conflict, ping AS goatping,
                pg_catalog.quote_ident(db)         AS safedb,
                pg_catalog.quote_ident(schemaname) AS safeschema,
@@ -1032,7 +1032,7 @@ $bc$
     }
     if (! keys %$targetdb) {
         elog(NOTICE, "No target databases found");
-        return "No target databases foud for this sync";
+        return "No target databases found for this sync";
     }
 
     ## We only want to check active databases
@@ -1128,6 +1128,7 @@ $bc$
                for my $table (sort keys %{$sourcetable{$schema}}) {
                    my $toid = $cache{oid}{$sourcedb}{$schema}{$table};
                    my $ot = $cache{oid}{$tdb}{$schema}{$table};
+                   next if ! defined $ot; ## e.g. a sequence
                    elog(DEBUG, "Adding oid $toid to source, other is $ot for $schema.$table");
                    my $count = $sthc->execute($toid,$tdb);
                    $sthc->finish();
@@ -1196,7 +1197,7 @@ $bc$
             $cache->{dbh}{$db} = $dbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
         }
 
-        if ($info->{synctype} =~ /swap|delta/) {
+        if ($info->{synctype} =~ /swap|delta/ and $info->{reltype} eq 'table') {
             if (! $pkey) {
                 if (!$force) {
                     elog(ERROR, qq{Table "$schema.$table" must specify a primary key when using a sync of '$info->{synctype}'});
@@ -1235,20 +1236,22 @@ $bc$
             SELECT c.oid
             FROM   pg_catalog.pg_class c, pg_catalog.pg_namespace n
             WHERE  c.relnamespace = n.oid
-            AND    c.relkind = 'r'
+            AND    c.relkind = ?
             AND    n.nspname = ?
             AND    c.relname = ?
         };
         elog(DEBUG, "SQL: $SQL Args: $schema, $table");
         $sth = $dbh->prepare($SQL);
-        my $count = $sth->execute($schema,$table);
+        my $count = $sth->execute($info->{reltype} eq 'table' ? 'r' : 'S',$schema,$table);
         if ($count < 1) {
             $sth->finish();
-            elog(ERROR, qq{No such table found for database $db: "$schema.$table"});
+            elog(ERROR, qq{No such $info->{reltype} found for database $db: "$schema.$table"});
         }
         $oid = $sth->fetchall_arrayref()->[0][0];
 
         $cache->{oid}{$db}{$schema}{$table} = $oid;
+
+        return 1 if $info->{reltype} ne 'table';
 
         ## Make sure it does not have any verboten columns
         $SQL = qq{
@@ -1355,8 +1358,8 @@ $bc$
 
         if (!$found{bc_schema}) {
             $found{bucardo_delta} = $found{bucardo_track} = $found{bucardo_delta_targets}
-			= $found{bucardo_truncate_trigger} = $found{bucardo_truncate_trigger_log}
-			= $found{bucardo_sequences} = 0;
+            = $found{bucardo_truncate_trigger} = $found{bucardo_truncate_trigger_log}
+            = $found{bucardo_sequences} = 0;
         }
         else {
             $SQL = qq{
@@ -1664,12 +1667,13 @@ $bc$
                 $SQL = qq{
                     CREATE TABLE bucardo.bucardo_sequences (
                         tablename   OID         NOT NULL,
-                        value       BIGINT      NOT NULL
+                        value       BIGINT      NOT NULL,
+                        iscalled    BOOL        NOT NULL
                     );
                 };
                 run_sql($SQL,$dbh);
 
-                $SQL = q{CREATE INDEX bucardo_sequences_tablename ON }
+                $SQL = q{CREATE UNIQUE INDEX bucardo_sequences_tablename ON }
                      . q{bucardo.bucardo_sequences (tablename)};
                 run_sql($SQL,$dbh);
             }

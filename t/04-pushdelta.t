@@ -8,7 +8,7 @@ use warnings;
 use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More 'no_plan';
+use Test::More tests => 194;
 
 use BucardoTesting;
 my $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object failed\n";
@@ -90,6 +90,41 @@ wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 $SQL = 'SELECT id, email FROM bucardo_test1 ORDER BY id';
 $t='Pushdelta handled a unique index without any problems';
 $result = [[1,'larry'],[2,'curly'],[3,'moe']];
+bc_deeply($result, $dbhB, $SQL, $t);
+
+## Sequence testing
+
+$dbhA->do("SELECT setval('bucardo_test_seq1', 123)");
+$dbhA->commit();
+
+$bct->ctl("kick pushdeltatest 0");
+wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
+
+$SQL = q{SELECT nextval('bucardo_test_seq1')};
+$t='Pushdelta replicated a sequence properly';
+$result = [[123+1]];
+bc_deeply($result, $dbhB, $SQL, $t);
+
+$dbhA->do("SELECT setval('bucardo_test_seq1', 223, false)");
+$dbhA->commit();
+
+$bct->ctl("kick pushdeltatest 0");
+wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
+
+$SQL = q{SELECT nextval('bucardo_test_seq1')};
+$t='Pushdelta replicated a sequence properly with a false setval';
+$result = [[223]];
+bc_deeply($result, $dbhB, $SQL, $t);
+
+$dbhA->do("SELECT setval('bucardo_test_seq1', 345, true)");
+$dbhA->commit();
+
+$bct->ctl("kick pushdeltatest 0");
+wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
+
+$SQL = q{SELECT nextval('bucardo_test_seq1')};
+$t='Pushdelta replicated a sequence properly with a true setval';
+$result = [[345+1]];
 bc_deeply($result, $dbhB, $SQL, $t);
 
 ## Reset the tables

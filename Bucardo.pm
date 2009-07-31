@@ -1594,6 +1594,9 @@ sub start_mcp {
 		$s->{track_rates} = 0 if $s->{synctype} eq 'fullcopy';
 		my $makedeltagoats = 0;
 		for my $g (@{$s->{goatlist}}) {
+			## None of this applies to non-tables
+			next if $g->{reltype} ne 'table';
+
 			if ($g->{makedelta}) {
 				$s->{does_makedelta} = 1;
 				$g->{does_makedelta} = 1;
@@ -1619,13 +1622,13 @@ sub start_mcp {
 
 		## Go through each table and make sure it exists and matches everywhere
 		for my $g (@{$s->{goatlist}}) {
-			$self->glog(qq{  Inspecting source table $g->{schemaname}.$g->{tablename} on database "$s->{sourcedb}"});
+			$self->glog(qq{  Inspecting source $g->{reltype} $g->{schemaname}.$g->{tablename} on database "$s->{sourcedb}"});
 
 			## Check the source table, save escaped versions of the names
 			$sth = $sth{checktable};
 			$count = $sth->execute($g->{schemaname},$g->{tablename});
 			if ($count != 1) {
-				my $msg = qq{Could not find table $g->{schemaname}.$g->{tablename}\n};
+				my $msg = qq{Could not find $g->{reltype} $g->{schemaname}.$g->{tablename}\n};
 				$self->glog($msg);
 				warn $msg;
 				return 0;
@@ -1634,6 +1637,9 @@ sub start_mcp {
 			## Store oid and quoted names for this goat
 			($g->{oid},$g->{safeschema},$g->{safetable},$g->{safeschemaliteral},$g->{safetableliteral})
 				= @{$sth->fetchall_arrayref()->[0]};
+
+			## If not a table, we can skip the rest
+			next if $g->{reltype} ne 'table';
 
 			## Save information about each column in the primary key
 			if (!defined $g->{pkey} or !defined $g->{qpkey}) {
@@ -1868,7 +1874,7 @@ sub start_mcp {
 
 			} ## end each target database
 
-			## If we got a custom query, figure out which columns to transfer
+			## If we have a custom query, figure out which columns to transfer
 
 			## TODO: Allow remote databases to have only a subset of columns
 
@@ -2336,7 +2342,9 @@ sub start_controller {
 		if (defined $m->{customselect}) {
 			$self->glog("   customselect: $m->{customselect}");
 		}
-		$self->glog('    Target oids: ' . join ' ' => map { "$_:$m->{targetoid}{$_}" } sort keys %{$m->{targetoid}});
+		if ($m->{reltype} eq 'table') {
+			$self->glog('    Target oids: ' . join ' ' => map { "$_:$m->{targetoid}{$_}" } sort keys %{$m->{targetoid}});
+		}
 	}
 
 	## Load database information to get concurrency information
@@ -2663,6 +2671,8 @@ sub start_controller {
 								for my $g (@{$sync->{goatlist}}) {
 
 									next unless $g->{has_delta};
+
+									next if $g->{reltype} ne 'table';
 
 									## TODO: Do a deltacount for fullcopy?
 
@@ -3507,6 +3517,9 @@ sub start_kid {
 		}
 
 		for my $g (@$goatlist) {
+
+			next if $g->{reltype} ne 'table';
+
 			($S,$T) = ($g->{safeschema},$g->{safetable});
 
 			if ($g->{does_makedelta}) {
@@ -3733,6 +3746,7 @@ sub start_kid {
         };
 		$SQL .= join "OR\n"
 			=> map { "(nspname=$_->{safeschemaliteral} AND relname=$_->{safetableliteral})" }
+			grep { $_->{reltype} eq 'table' }
 			@$goatlist;
 		$SQL .= ')';
 		$SQL{disable_trigrules} .= ";\n" if $SQL{disable_trigrules};
@@ -3762,6 +3776,7 @@ sub start_kid {
 					 $sql =~ s/\$2/$_->{safetableliteral}/g;
 					 $sql;
 				 }
+				grep { $_->{reltype} eq 'table' }
 				@$goatlist;
 
 		$SQL{enable_trigrules} .= ";\n" if $SQL{enable_trigrules};
@@ -4037,6 +4052,7 @@ sub start_kid {
 		if ($lock_table_mode) {
 			$self->glog("Locking all table in $lock_table_mode MODE");
 			for my $g (@$goatlist) {
+				next if $g->{reltype} ne 'table';
 				my $com = "$g->{safeschema}.$g->{safetable} IN $lock_table_mode MODE";
 				$self->glog("$sourcedb: Locking table $com");
 				$sourcedbh->do("LOCK TABLE $com");
@@ -4078,6 +4094,7 @@ sub start_kid {
 					$SQL = 'INSERT INTO bucardo.bucardo_truncate_trigger_log (tablename,sname,tname,sync,targetdb,replicated) '
 						. 'VALUES(?,?,?,?,?,?)';
 					for my $g (@$goatlist) {
+						next if $g->{reltype} ne 'table';
 						## deltacount may not exist = no truncation needed
 						## may exist but be zero = truncate!
 						## may exists and be positive = no truncation needed
@@ -4098,10 +4115,65 @@ sub start_kid {
 			## For each table in this herd, grab a count of changes
 			$deltacount{allsource} = $deltacount{alltarget} = 0;
 			for my $g (@$goatlist) {
-				($S,$T) = ($g->{safeschema},$g->{safetable});
 
 				## If this table was truncated on the source, we do nothing here
 				next if $g->{source}{needstruncation};
+
+				($S,$T) = ($g->{safeschema},$g->{safetable});
+
+				## We'll handle sequence changes here and now (pushdelta only)
+				if ($synctype eq 'pushdelta' and $g->{reltype} eq 'sequence') {
+
+					$self->glog("Checking sequence $S.$T");
+
+					$SQL = "SELECT last_value, log_cnt FROM $S.$T";
+					my ($lastval, $logcnt) = @{$sourcedbh->selectall_arrayref($SQL)->[0]};
+					my $iscalled = $logcnt ? 0 : 1;
+
+					## Check our internal table to see if we really need to propagate this sequence
+					$SQL = 'SELECT value, iscalled FROM bucardo.bucardo_sequences WHERE tablename = ?';
+					$sth = $sourcedbh->prepare($SQL);
+					$count = $sth->execute($g->{oid});
+					my $newval = 0;
+					if ($count < 1) {
+						$newval = 1; ## Never before seen, so add to the table
+						$sth->finish();
+					}
+					else {
+						my ($oldval,$oldcalled) = @{$sth->fetchall_arrayref()->[0]};
+						if ($oldval != $lastval) {
+							$newval = 2; ## Value has changed
+						}
+						elsif ($oldcalled ne $iscalled) {
+							$newval = 3; ## is_called has changed
+						}
+					}
+					if ($newval) {
+						$self->glog("Setting sequence $S.$T to value of $lastval, is_called is $iscalled");
+						$SQL = "SELECT setval('$S.$T', $lastval, '$iscalled')";
+						$targetdbh->do($SQL);
+
+						## Copy the change to our internal table
+						if ($newval == 1) {
+							$SQL = 'INSERT INTO bucardo.bucardo_sequences (tablename, value, iscalled) VALUES (?,?,?)';
+							$sth = $sourcedbh->prepare($SQL);
+							$sth->execute($g->{oid},$lastval,$iscalled);
+						}
+						else {
+							$SQL = 'UPDATE bucardo.bucardo_sequences SET value=?, iscalled=? WHERE tablename=?';
+							$sth = $sourcedbh->prepare($SQL);
+							$sth->execute($lastval,$iscalled,$g->{oid});
+						}
+
+						## Internal note so we know things have changed
+						$deltacount{sequences}++;
+
+					}
+
+				}
+
+				## No need to continue unless we are a table
+				next if $g->{reltype} ne 'table';
 
 				$deltacount{allsource} += $deltacount{source}{$S}{$T} = $sth{source}{$g}{getdelta}->execute();
 				$sth{source}{$g}{getdelta}->finish() if $deltacount{source}{$S}{$T} =~ s/0E0/0/o;
@@ -4164,6 +4236,20 @@ sub start_kid {
 
 				if ($g->{ghost}) {
 					$self->glog("Skipping ghost table $S.$T");
+					next;
+				}
+
+				## Handle sequences first, by simply forcing a setval
+				if ($g->{reltype} eq 'sequence') {
+					$SQL = "SELECT last_value, log_cnt FROM $S.$T";
+					my ($lastval, $logcnt) = @{$sourcedbh->selectall_arrayref($SQL)->[0]};
+					my $iscalled = $logcnt ? 0 : 1;
+
+					$self->glog("Setting sequence $S.$T to value of $lastval, is_called is $iscalled");
+					$SQL = "SELECT setval('$S.$T', $lastval, '$iscalled')";
+					$targetdbh->do($SQL);
+
+					## No need to continue any further
 					next;
 				}
 
@@ -4280,13 +4366,16 @@ sub start_kid {
 		## PUSHDELTA
 		if ($synctype eq 'pushdelta') {
 
-			## Do each table in turn, ordered by descending priority and ascending id
+			## Do each goat in turn, ordered by descending priority and ascending id
 			for my $g (@$goatlist) {
 
 				($S,$T) = ($g->{safeschema},$g->{safetable});
 
 				## Skip if we've already handled this via fullcopy
 				next if $g->{source}{needstruncation};
+
+				## No need to proceed unless we're a table
+				next if $g->{reltype} ne 'table';
 
 				## Skip this table if no rows have changed on the source
 				next unless $deltacount{source}{$S}{$T};
@@ -4535,6 +4624,13 @@ sub start_kid {
 			for my $g (@$goatlist) {
 
 				($S,$T) = ($g->{safeschema},$g->{safetable});
+
+				if ($g->{reltype} eq 'sequence') {
+					## XXX Fix this:
+					$self->glog('No support for sequences in swap syncs at the moment');
+
+					next;
+				}
 
 				## Skip if neither source not target has changes for this table
 				next unless $deltacount{source}{$S}{$T} or $deltacount{target}{$S}{$T};
@@ -5235,6 +5331,7 @@ sub start_kid {
 		##  are marked as "done" and ignored by subsequent runs
 		if ($synctype eq 'pushdelta' or $synctype eq 'swap') {
 			for my $g (@$goatlist) {
+				next if $g->{reltype} ne 'table';
 				($S,$T) = ($g->{safeschema},$g->{safetable});
 				delete $g->{rateinfo};
 				if ($deltacount{source}{$S}{$T}) {
@@ -5325,7 +5422,7 @@ sub start_kid {
 			$SQL = 'INSERT INTO bucardo_rate(sync,goat,target,mastercommit,slavecommit,total) VALUES (?,?,?,?,?,?)';
 			$sth = $maindbh->prepare($SQL);
 			for my $g (@$goatlist) {
-				next if ! exists $g->{rateinfo};
+				next if ! exists $g->{rateinfo} or $g->{reltype} ne 'table';
 				($S,$T) = ($g->{safeschema},$g->{safetable});
 				if ($deltacount{source}{$S}{$T}) {
 					for my $time (@{$g->{rateinfo}{source}}) {
@@ -5345,7 +5442,7 @@ sub start_kid {
 			and $sync->{analyze_after_copy}
 			and !$self->{dryrun}) {
 			for my $g (@$goatlist) {
-				next if ! $g->{analyze_after_copy};
+				next if ! $g->{analyze_after_copy} or $g->{reltype} ne 'table';
 				if ($g->{onetimecopy_ifempty}) {
 					$g->{onetimecopy_ifempty} = 0;
 					next;
