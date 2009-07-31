@@ -1691,6 +1691,9 @@ sub remove_database {
 sub remove_table {
 	die "Not implemented yet\n";
 }
+sub remove_seqquence {
+	die "Not implemented yet\n";
+}
 sub remove_herd {
 	die "Not implemented yet\n";
 }
@@ -2962,7 +2965,7 @@ sub add_sequence {
 	}
 
 	## Add these to the database
-	$SQL = "INSERT INTO bucardo.goat (db,schemaname,tablename,reltype) VALUES (?,?,?,?) RETURNING id";
+	$SQL = 'INSERT INTO bucardo.goat (db,schemaname,tablename,reltype) VALUES (?,?,?,?) RETURNING id';
 	if ($DEBUG) {
 		warn "SQL: $SQL\n";
 		warn Dumper \@tables;
