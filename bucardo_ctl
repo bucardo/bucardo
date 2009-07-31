@@ -1595,6 +1595,9 @@ sub add_item {
 	elsif ($type eq 'table') {
 		add_table($type);
 	}
+	elsif ($type eq 'sequence') {
+		add_sequence($type);
+	}
 	elsif ($type eq 'sync') {
 		add_sync($type);
 	}
@@ -2886,6 +2889,128 @@ sub add_table {
 	exit 0;
 
 } ## end of add_table
+
+
+sub add_sequence {
+
+	my $type = shift;
+
+	## Usage: add sequence [schema].table db=internal_db_name herd=herd_name
+
+	my $DEFAULT_SCHEMA = 'public';
+
+	## Any single words are sequence names.
+	my (@newnouns,@tables);
+	for (@nouns) {
+		if (/=/) {
+			push @newnouns => $_;
+		}
+		else {
+			if (/^(\w*?)?\.?(\w+)$/) {
+				push @tables => length $1 ? [$1,$2] : [$DEFAULT_SCHEMA,$2];
+			}
+			else {
+				warn "Invalid sequence name: $_\n";
+				exit 1;
+			}
+		}
+	}
+	@nouns = @newnouns;
+
+	if (! @tables) {
+		warn "Usage: add $type <name>";
+		exit 1;
+	}
+
+	## The rest is the options. If not there, we fill in the defaults
+	my $info = join ' ' => @nouns;
+	## Command line name, default value, database column name
+	my %arg = (
+			   db                => ['',      ''],
+			   herd              => ['',      ''],
+			   );
+	my $args = process_args($info);
+	for my $name (sort keys %$args) {
+		next if $name eq 'extraargs';
+		my $value = $args->{$name};
+		if (!exists $arg{$name}) {
+			die "Unknown option '$name'\n";
+		}
+		$arg{$name}[0] = $value;
+	}
+
+	if (! length $arg{db}[0]) {
+		die "Please specify a database with db=<name>\n";
+	}
+	my $db = $arg{db}[0];
+
+	my $herd;
+	if ($arg{herd}->[0]) {
+		$herd = $arg{herd}->[0];
+		delete $arg{herd};
+		## Does this herd exist?
+		$SQL = 'SELECT 1 FROM herd WHERE name = ?';
+		$sth = $dbh->prepare($SQL);
+		$count = $sth->execute($herd);
+		$sth->finish();
+		if ($count != 1) {
+			$SQL = 'INSERT INTO herd(name) VALUES(?)';
+			$sth = $dbh->prepare($SQL);
+			$sth->execute($herd);
+			print qq{Created herd "$herd"\n};
+		}
+	}
+
+	## Add these to the database
+	$SQL = "INSERT INTO bucardo.goat (db,schemaname,tablename,reltype) VALUES (?,?,?,?) RETURNING id";
+	if ($DEBUG) {
+		warn "SQL: $SQL\n";
+		warn Dumper \@tables;
+	}
+	$sth = $dbh->prepare($SQL);
+	my @id;
+	for (@tables) {
+		my ($schema,$table) = @$_;
+		eval {
+			if ($DEBUG >= 2) {
+				warn "SQL: $SQL\n";
+				my $ss = defined $schema ? $schema : '<undef>';
+				warn "Args: $db, $ss, $table, sequence\n";
+			}
+			$count = $sth->execute($db,$schema,$table,'sequence');
+			push @id => $sth->fetch()->[0];
+		};
+		if ($@) {
+			die "Sequence add failed: $@\n";
+		}
+		$DEBUG and warn "Insert count: $count\n";
+	}
+
+	## Add them to the herd if it was specificed
+	if (defined $herd) {
+		$SQL = 'INSERT INTO herdmap (goat,herd,priority) VALUES (?,?,?)';
+		$sth = $dbh->prepare($SQL);
+		for (@id) {
+			if ($DEBUG) {
+				warn "SQL: $SQL\n";
+				warn Dumper [$_, $herd, 0];
+			}
+			$sth->execute($_,$herd,0);
+		}
+	}
+
+	$dbh->commit();
+
+	my $tablelist = sprintf '%s added: ', @tables > 1 ? 'Sequences' : 'Sequence';
+	for (@tables) {
+		$tablelist .= sprintf '%s%s, ', $_->[0] ? "$_->[0]." : '', $_->[1];
+	}
+	$tablelist =~ s/, $//;
+	warn "$tablelist\n";
+
+	exit 0;
+
+} ## end of add_sequence
 
 
 sub add_sync {
