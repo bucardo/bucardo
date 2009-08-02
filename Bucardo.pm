@@ -1638,77 +1638,106 @@ sub start_mcp {
 			($g->{oid},$g->{safeschema},$g->{safetable},$g->{safeschemaliteral},$g->{safetableliteral})
 				= @{$sth->fetchall_arrayref()->[0]};
 
-			## If not a table, we can skip the rest
-			next if $g->{reltype} ne 'table';
+			## If swap, verify the standard_conflict
+			if ($s->{synctype} eq 'swap' and $g->{standard_conflict}) {
+				my $sc = $g->{standard_conflict};
+				die qq{Unknown standard_conflict for $syncname $g->{schemaname}.$g->{tablename}: $sc\n}
+					unless
+					'source' eq $sc or
+					'target' eq $sc or
+					'skip'   eq $sc or
+					'random' eq $sc or
+					'latest' eq $sc or
+					'abort'  eq $sc;
+				$self->glog(qq{    Standard conflict method "$sc" chosen});
+			} ## end standard conflict
 
-			## Save information about each column in the primary key
-			if (!defined $g->{pkey} or !defined $g->{qpkey}) {
-				die "Table $g->{safetable} has no pkey or qpkey - do you need to run validate_goat on it?\n";
+			## Swap syncs must have some way of resolving conflicts
+			if ($s->{synctype} eq 'swap' and !$g->{standard_conflict} and !exists $g->{code_conflict}) {
+				$self->glog(qq{Warning! Tables used in swaps must specify a conflict handler. $g->{schemaname}.$g->{tablename} appears to have neither standard or custom handler.});
+				return 0;
 			}
 
-			## Much of this is used later on, for speed of performing the sync
-			$g->{pkeyjoined}     = $g->{pkey};
-			$g->{qpkeyjoined}    = $g->{qpkey};
-			$g->{pkeytypejoined} = $g->{pkeytypejoined};
-			$g->{pkey}           = [split /\|/o => $g->{pkey}];
-			$g->{qpkey}          = [split /\|/o => $g->{qpkey}];
-			$g->{pkeytype}       = [split /\|/o => $g->{pkeytype}];
-			$g->{pkcols}         = @{$g->{pkey}};
-			$g->{hasbinarypk}    = 0;
-			for (@{$g->{pkey}}) {
-				push @{$g->{binarypkey}} => 0;
-			}
+			my $colinfo;
+			if ($g->{reltype} eq 'table') {
 
-			## Check the source columns, and save them
-			$sth = $sth{checkcols};
-			$sth->execute($g->{oid});
-			my $colinfo = $sth->fetchall_hashref('attname');
-			## Allow for 'dead' columns in the attnum ordering
-			$x=1;
-			for (sort { $colinfo->{$a}{attnum} <=> $colinfo->{$b}{attnum} } keys %$colinfo) {
-				$colinfo->{$_}{realattnum} = $x++;
-			}
-			$g->{columnhash} = $colinfo;
-
-			## Build lists of columns
-			$x = 1;
-			$g->{cols} = [];
-			$g->{safecols} = [];
-		  COL: for my $colname (sort { $colinfo->{$a}{attnum} <=> $colinfo->{$b}{attnum} } keys %$colinfo) {
-				## Skip if this column is part of the primary key
-				for my $pk (@{$g->{pkey}}) {
-					next COL if $pk eq $colname;
+				## Save information about each column in the primary key
+				if (!defined $g->{pkey} or !defined $g->{qpkey}) {
+					die "Table $g->{safetable} has no pkey or qpkey - do you need to run validate_goat on it?\n";
 				}
-				push @{$g->{cols}}, $colname;
-				push @{$g->{safecols}}, $colinfo->{$colname}{qattname};
-				$colinfo->{$colname}{order} = $x++;
-			}
 
-			## Stringified versions of the above lists, for ease later on
-			$g->{columnlist} = join ',' => @{$g->{cols}};
-			$g->{safecolumnlist} = join ',' => @{$g->{safecols}};
+				## Much of this is used later on, for speed of performing the sync
+				$g->{pkeyjoined}     = $g->{pkey};
+				$g->{qpkeyjoined}    = $g->{qpkey};
+				$g->{pkeytypejoined} = $g->{pkeytypejoined};
+				$g->{pkey}           = [split /\|/o => $g->{pkey}];
+				$g->{qpkey}          = [split /\|/o => $g->{qpkey}];
+				$g->{pkeytype}       = [split /\|/o => $g->{pkeytype}];
+				$g->{pkcols}         = @{$g->{pkey}};
+				$g->{hasbinarypk}    = 0;
+				for (@{$g->{pkey}}) {
+					push @{$g->{binarypkey}} => 0;
+				}
 
-			## Note which columns are bytea
-		  BCOL: for my $colname (keys %$colinfo) {
-				my $c = $colinfo->{$colname};
-				next if $c->{atttypid} != 17; ## Yes, it's hardcoded, no sweat
-				$x = 0;
-				for my $pk (@{$g->{pkey}}) {
-					if ($colname eq $pk) {
-						$g->{binarypkey}[$x] = 1;
-						$g->{hasbinarypk} = 1;
-						next BCOL;
+				## Check the source columns, and save them
+				$sth = $sth{checkcols};
+				$sth->execute($g->{oid});
+				$colinfo = $sth->fetchall_hashref('attname');
+				## Allow for 'dead' columns in the attnum ordering
+				$x=1;
+				for (sort { $colinfo->{$a}{attnum} <=> $colinfo->{$b}{attnum} } keys %$colinfo) {
+					$colinfo->{$_}{realattnum} = $x++;
+				}
+				$g->{columnhash} = $colinfo;
+
+				## Build lists of columns
+				$x = 1;
+				$g->{cols} = [];
+				$g->{safecols} = [];
+			  COL: for my $colname (sort { $colinfo->{$a}{attnum} <=> $colinfo->{$b}{attnum} } keys %$colinfo) {
+					## Skip if this column is part of the primary key
+					for my $pk (@{$g->{pkey}}) {
+						next COL if $pk eq $colname;
 					}
-					$x++;
+					push @{$g->{cols}}, $colname;
+					push @{$g->{safecols}}, $colinfo->{$colname}{qattname};
+					$colinfo->{$colname}{order} = $x++;
 				}
-				## This is used to bind_param these as binary during inserts and updates
-				push @{$g->{binarycols}}, $colinfo->{$colname}{order};
+
+				## Stringified versions of the above lists, for ease later on
+				$g->{columnlist} = join ',' => @{$g->{cols}};
+				$g->{safecolumnlist} = join ',' => @{$g->{safecols}};
+
+				## Note which columns are bytea
+			  BCOL: for my $colname (keys %$colinfo) {
+					my $c = $colinfo->{$colname};
+					next if $c->{atttypid} != 17; ## Yes, it's hardcoded, no sweat
+					$x = 0;
+					for my $pk (@{$g->{pkey}}) {
+						if ($colname eq $pk) {
+							$g->{binarypkey}[$x] = 1;
+							$g->{hasbinarypk} = 1;
+							next BCOL;
+						}
+						$x++;
+					}
+					## This is used to bind_param these as binary during inserts and updates
+					push @{$g->{binarycols}}, $colinfo->{$colname}{order};
+				}
+
+			} ## end if reltype is table
+
+			## If a sequence, grab all info as a hash
+			## Saves us from worrying about future changes or version specific columns
+			if ($g->{reltype} eq 'sequence') {
+				$SQL = "SELECT * FROM $g->{safeschema}.$g->{safetable}";
+				$sth = $srcdbh->prepare($SQL);
+				$sth->execute();
+				$g->{sequenceinfo} = $sth->fetchall_arrayref({})->[0];
 			}
 
-			## Verify tables and columns on remote databases
-
+			## Verify sequences or tables+columns on remote databases
 			## TODO: Fork to speed this up? (more than one target at a time)
-
 			my $maindbh = $self->{masterdbh};
 			for my $db (sort keys %targetdbh) {
 
@@ -1729,8 +1758,30 @@ sub start_mcp {
 					}
 				}
 
-				## Grab oid and quoted information about the table on the remote database
+				## Get a handle for the remote database
 				my $dbh = $pdbh->{$db};
+
+				## If a sequence, verify the information and move on
+				if ($g->{reltype} eq 'sequence') {
+					$SQL = "SELECT * FROM $g->{safeschema}.$g->{safetable}";
+					$sth = $dbh->prepare($SQL);
+					$sth->execute();
+					$info = $sth->fetchall_arrayref({})->[0];
+					for my $key (sort keys %$info) {
+						if (! exists $g->{sequenceinfo}{$key}) {
+							$self->glog('Warning! Sequence on target has item $key, but source does not!');
+							next;
+						}
+						my $sseq = $g->{sequenceinfo}{$key};
+						if ($info->{$key} ne $sseq) {
+							$self->glog("Warning! Sequence mismatch. Source $key=$sseq, target is $info->{$key}");
+							next;
+						}
+					}
+					next;
+				}
+
+				## Grab oid and quoted information about the table on the remote database
 				$sth = $dbh->prepare($SQL{checktable});
 				$count = $sth->execute($g->{schemaname},$g->{tablename});
 				if ($count != 1) {
@@ -1775,7 +1826,6 @@ sub start_mcp {
 						warn $msg;
 						next;
 					}
-
 
 					## Almost always fatal: types do not match up
 					if ($scol->{ftype} ne $fcol->{ftype}) {
@@ -1874,6 +1924,9 @@ sub start_mcp {
 
 			} ## end each target database
 
+			## If not a table, we can skip the rest
+			next if $g->{reltype} ne 'table';
+
 			## If we have a custom query, figure out which columns to transfer
 
 			## TODO: Allow remote databases to have only a subset of columns
@@ -1938,26 +1991,6 @@ sub start_mcp {
 				$g->{safecolumnlist} = join ',' => @$info2;
 
 			} ## end custom select
-
-			## If swap, verify the standard_conflict
-			if ($s->{synctype} eq 'swap' and $g->{standard_conflict}) {
-				my $sc = $g->{standard_conflict};
-				die qq{Unknown standard_conflict for $syncname $g->{schemaname}.$g->{tablename}: $sc\n}
-					unless
-					'source' eq $sc or
-					'target' eq $sc or
-					'skip'   eq $sc or
-					'random' eq $sc or
-					'latest' eq $sc or
-					'abort'  eq $sc;
-				$self->glog(qq{    Standard conflict method "$sc" chosen});
-			} ## end standard conflict
-
-			## Swap syncs must have some way of resolving conflicts
-			if ($s->{synctype} eq 'swap' and !$g->{standard_conflict} and !exists $g->{code_conflict}) {
-				$self->glog(qq{Warning! Tables used in swaps must specify a conflict handler. $g->{schemaname}.$g->{tablename} appears to have neither standard or custom handler.});
-				return 0;
-			}
 
 		} ## end each goat
 
