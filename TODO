@@ -5,6 +5,9 @@ These range the gamut from wildly speculative ideas to must-have features.
 
 - Have Bucardo do the cleanups based on PG version, rather than cronjobs
   (e.g. vacuum pg_listener, purge_bucardo_delta)
+- Implement "log shipping" for pushdelta slaves. This could be done by creating 
+  a SQL dump consisting of DELETE from <tab> WHERE pk IN (...); COPY <tab> 
+  FROM STDIN; ...
 - Death-level custom code hooks
 - Better conflict example in test suite, uses database handles
 - Allow adjustable criteria for going into lock before sync mode
