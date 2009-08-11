@@ -240,7 +240,7 @@ sub help {
     add all tables [db=internal_db_name] [herd=herd_name]
     add sequence [schema].name [herd=name]
     add herd name
-    add sync syncname source=xxx targetdb=xxx targetgroup=xxx type=xxx
+    add sync syncname source=xxx targetdb=xxx targetgroup=xxx type=xxx tables=x,y,z
 
   kick <syncname(s)> [timeout]
                   ** Kick off one or more syncs, optionally wait for result (0 = wait until done)
@@ -3050,6 +3050,7 @@ sub add_sync {
 			   usecustomselect => ['', ''],
 			   lifetime        => ['', ''],
 			   maxkicks        => [0,  ''],
+			   tables          => ['', ''],
 			   );
 	my $args = process_args($info);
 	for my $name (sort keys %$args) {
@@ -3062,12 +3063,47 @@ sub add_sync {
 	}
 	$arg{name} = [$item_name];
 
+	## Does this source exist? If not, and its a database, create a herd for the tables
+	my $sourceherd = $arg{source}[0];
+	$SQL = 'SELECT 1 FROM bucardo.herd WHERE name = ?';
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute($sourceherd);
+	$sth->finish();
+	if ($count < 1) {
+		if (! $arg{tables}) {
+			die "No such source herd: $sourceherd\n";
+		}
+		## We've got some tables. Do we know which database this is?
+		$SQL = 'SELECT 1 FROM bucardo.db WHERE name = ?';
+		$sth = $dbh->prepare($SQL);
+		$count = $sth->execute($sourceherd);
+		$sth->finish();
+		if ($count < 1) {
+			die "No such database: $sourceherd\n";
+		}
+		$SQL = 'INSERT INTO bucardo.herd(name) VALUES (?)';
+		$sth = $dbh->prepare($SQL);
+		$sth->execute($item_name);
+
+		## Add all tables given to the new herd
+		$SQL = qq{INSERT INTO herdmap(herd,goat) VALUES (?,(SELECT id FROM goat WHERE tablename=? AND db =?))};
+		$sth = $dbh->prepare($SQL);
+		for my $table (split /,/ => $arg{tables}[0]) {
+			$sth->execute($item_name,$table,$sourceherd);
+		}
+
+		## Swap out the herd name
+		$arg{source}[0] = $item_name;
+
+	}
+
 	## Lots of checks go here...
 
 	my ($cols,$phs) = ('','');
 	my @vals;
 	for my $col (sort keys %arg) {
 		next if ! length $arg{$col}[0];
+		next if $col eq 'tables';
 		my $name = $arg{$col}[1] || $col;
 		$cols .= "$name,";
 		$phs .= '?,';
