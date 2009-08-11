@@ -64,7 +64,7 @@ my $bcargs = {
 
 ## This option must come before the GetOptions call
 for my $arg (@ARGV) {
-	if ($arg eq 'no-bucardorc') {
+	if ($arg eq '--no-bucardorc') {
 		$bcargs->{'no-bucardorc'} = 1;
 		last;
 	}
