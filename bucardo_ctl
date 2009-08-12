@@ -73,16 +73,18 @@ for my $arg (@ARGV) {
 ## Values are first read from a .bucardorc, either in the current dir, or the home dir.
 ## These will be overwritten by command-line args.
 my $file;
-if (-e '.bucardorc') {
-	$file = '.bucardorc';
+if (! $bcargs->{'no-bucardorc'}) {
+	if (-e '.bucardorc') {
+		$file = '.bucardorc';
+	}
+	elsif (-e "$ENV{HOME}/.bucardorc") {
+		$file = "$ENV{HOME}/.bucardorc";
+	}
+	elsif (-e '/etc/bucardorc') {
+		$file = '/etc/bucardorc';
+	}
 }
-elsif (-e "$ENV{HOME}/.bucardorc") {
-	$file = "$ENV{HOME}/.bucardorc";
-}
-elsif (-e '/etc/bucardorc') {
-	$file = '/etc/bucardorc';
-}
-if (defined $file and ! $bcargs->{'no-bucardorc'}) {
+if (defined $file) {
 	open my $rc, '<', $file or die qq{Could not open "$file": $!\n};
 	while (<$rc>) {
 		next if /^\s*#/;
