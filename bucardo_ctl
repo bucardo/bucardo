@@ -3,6 +3,8 @@
 ## Script to control Bucardo
 ##
 ## Copyright 2006-2009 Greg Sabino Mullane <greg@endpoint.com>
+##
+## Please see http://bucardo.org/ for full documentation
 
 package bucardo_ctl;
 use strict;
@@ -196,9 +198,9 @@ message()       if $verb eq 'message';
 list()          if $verb eq 'list';
 config()        if $verb eq 'set' or $verb eq 'show';
 validate()      if $verb eq 'validate';
+update()        if $verb eq 'update';
 
-
-## For the rest, we expect a list of sync with an optional decimal "timeout"
+## For the rest, we expect a list of syncs with an optional decimal "timeout"
 my $adverb;
 my $syncs = get_syncs();
 my @syncs;
@@ -514,6 +516,79 @@ sub validate {
 	exit 0;
 
 } ## end of validate
+
+
+sub update {
+
+	## Update some object in the database
+	## e.g. bucardo_ctl update sync foobar onetimecopy=2
+
+	my $usage = "Usage: update <item> <name> <name=value>...\n";
+
+	my $item = shift @nouns or die $usage;
+	my $name = shift @nouns or die $usage;
+	@nouns or die $usage;
+
+	my $info;
+	if ('sync' eq $item) {
+		$SQL = 'SELECT * FROM sync WHERE name = ?';
+	}
+	elsif ('goat' eq $item) {
+		$SQL = 'SELECT * FROM goat WHERE id = ?';
+		## Later on, allow use of name and schema.name
+	}
+	else {
+		die "Invalid item: must be sync\n";
+	}
+
+	if ($name =~ s/\*//) {
+		$SQL =~ s/=/~/;
+	}
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute($name);
+	if ($count < 1) {
+		$sth->finish();
+		die qq{No matches found for sync "$name"\n};
+	}
+	$dbh->{pg_bool_tf} = 1;
+	$info = $sth->fetchall_arrayref({});
+
+	## Process each change in turn
+	my %change;
+	for my $arg (@nouns) {
+		$arg =~ /(.+)=(.+)/ or die "Invalid argument: must be of form name=value\n";
+		my ($n,$v) = (lc $1,$2);
+		$n =~ /^\w+$/ or die "Invalid name\n";
+		for my $i (@{$info}) {
+			my $localname = $item eq 'sync' ? $i->{name} : "$i->{schemaname}.$i->{tablename}";
+			my $localid = $item eq 'sync' ? $i->{name} : $i->{id};
+			if (! exists $i->{$n}) {
+				die qq{Sorry, cannot change "$n" for $item "$localname"\n};
+			}
+			$SQL = "UPDATE sync SET $n = ? WHERE name = ?";
+			$sth = $dbh->prepare($SQL);
+			$sth->execute($v, $localid);
+			push @{$change{$localname}} => [$n, $i->{$n}, $v];
+		}
+	}
+
+	if (! keys %change) {
+		print "No changes made\n";
+		exit 0;
+	}
+
+	for my $thing (sort keys %change) {
+		print qq{Changes made to $item "$thing":\n};
+		for my $row (@{$change{$thing}}) {
+			print qq{ * $row->[0] : changed from "$row->[1]" to "$row->[2]"\n};
+		}
+	}
+
+	$dbh->commit();
+	$dbh->disconnect();
+	exit 0;
+
+} ## end of update
 
 
 sub ping {
@@ -984,6 +1059,7 @@ Expired time:         $s->{expired}
 Stayalive:            $s->{stayalive}      Kidsalive: $s->{kidsalive}
 Rebuild index:        $s->{rebuild_index}      Do_listen: $s->{do_listen}
 Ping:                 $s->{ping}      Makedelta: $s->{makedelta}
+Onetimecopy:          $s->{onetimecopy}
 };
 		if ($s->{synctype} eq 'fullcopy'){
 			print qq{Custom select:     $s->{usecustomselect} $s->{copyextra}\n};
