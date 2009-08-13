@@ -3088,10 +3088,16 @@ sub add_sync {
 		$sth->execute($item_name);
 
 		## Add all tables given to the new herd
-		$SQL = qq{INSERT INTO herdmap(herd,goat) VALUES (?,(SELECT id FROM goat WHERE tablename=? AND db =?))};
+		## May be the same table in more than one schema, in which case we add them all!
+		$SQL = qq{SELECT id FROM goat WHERE tablename=? AND db =?};
+		my $sth_goat = $dbh->prepare($SQL);
+		$SQL = qq{INSERT INTO herdmap(herd,goat) VALUES (?,?)};
 		$sth = $dbh->prepare($SQL);
 		for my $table (split /,/ => $arg{tables}[0]) {
-			$sth->execute($item_name,$table,$sourceherd);
+			$sth_goat->execute($table,$sourceherd);
+			for my $row (@{$sth_goat->fetchall_arrayref()}) {
+				$sth->execute($item_name,$row->[0]);
+			}
 		}
 
 		## Swap out the herd name
