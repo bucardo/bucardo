@@ -22,7 +22,7 @@ New features:
   - Add the bucardo_rate table to track exactly how long replication takes
     on a per-sync and per-table basis. [GSM]
 
-  - Add more bucardo_ctl actions: install, reload, validate, restart [GSM]
+  - Add more bucardo_ctl actions: install, reload, validate, restart, update [GSM]
 
   - Allow adding of all tables in a database at once via bucardo_ctl [GSM]
 
