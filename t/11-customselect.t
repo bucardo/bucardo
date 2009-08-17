@@ -31,8 +31,10 @@ $bct->add_test_tables_to_herd('A', 'testherd1');
 
 ## Create tables for this test
 for my $dbh (($dbhA, $dbhB)) {
-	$dbh->do('DROP TABLE IF EXISTS customselect');
-	$dbh->do('DROP TABLE IF EXISTS csmulti');
+    # This could be DROP TABLE IF EXISTS, except that we want to support PostgreSQL 8.1
+    for my $tbl (@{ $dbh->selectall_arrayref(q{SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename in ('csmulti', 'customselect')}) } ) {
+        $dbh->do("DROP TABLE $tbl");
+    }
     $dbh->do(q{
         CREATE TABLE customselect (
             id INTEGER PRIMARY KEY,

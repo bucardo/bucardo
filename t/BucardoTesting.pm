@@ -140,6 +140,9 @@ for (1..30) {
 	$val{BYTEA}{$_} = "$_\0Z";
 }
 
+sub get_version {
+    return ($pg_major_version, $pg_minor_version, $pg_point_version);
+}
 
 sub new {
 
