@@ -4258,6 +4258,8 @@ sub start_kid {
 			$sourcedbh->do($SQL{disable_trigrules});
 		}
 
+        my $cs_temptable;
+
 		## FULLCOPY
 		if ($synctype eq 'fullcopy' or $deltacount{truncates}) {
 
@@ -4312,10 +4314,11 @@ sub start_kid {
 				my ($srccmd,$tgtcmd);
 				if ($sync->{usecustomselect} and $g->{customselect}) {
 					## TODO: Use COPY () format if 8.2 or greater
-					my $temptable = "bucardo_temp_$g->{tablename}_$$"; ## Raw version, not "safetable"
-					$self->glog("Creating temp table $temptable for custom select on $S.$T");
-					$sourcedbh->do("CREATE TEMP TABLE $temptable ON COMMIT DROP AS $g->{customselect}");
-					$srccmd = "COPY $temptable TO STDOUT $sync->{copyextra}";
+					$cs_temptable = "bucardo_temp_$g->{tablename}_$$"; ## Raw version, not "safetable"
+					$self->glog("Creating temp table $cs_temptable for custom select on $S.$T");
+					$sourcedbh->do("CREATE TEMP TABLE $cs_temptable AS $g->{customselect}");
+					#$sourcedbh->do("CREATE TEMP TABLE $cs_temptable ON COMMIT DROP AS $g->{customselect}");
+					$srccmd = "COPY $cs_temptable TO STDOUT $sync->{copyextra}";
 					$tgtcmd = "COPY $S.$T($g->{safecolumnlist}) FROM STDIN $sync->{copyextra}";
 				}
 				else {
@@ -4520,6 +4523,8 @@ sub start_kid {
 							my ($srccmd,$temptable);
 							if (! $source_modern_copy) {
 								$temptable = "bucardo_tempcopy_$$";
+                                $self->glog("Creating temporary table $temptable for copy on $S.$T, and savepoint bucardo_$$ along with it");
+                                $sourcedbh->pg_savepoint("bucardo_$$");
 								$srccmd = "CREATE TEMP TABLE $temptable AS SELECT * FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)";
 
 								$sourcedbh->do($srccmd);
@@ -4542,6 +4547,7 @@ sub start_kid {
 							$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T} = @$info;
 
 							if (! $source_modern_copy) {
+                                $self->glog("Dropping temporary table $temptable");
 								$sourcedbh->do("DROP TABLE $temptable");
 							}
 
@@ -4583,6 +4589,12 @@ sub start_kid {
 						## First, we rollback any changes we've made on the target
 						$self->glog("Rolling back to target savepoint, due to database error: $DBI::errstr");
 						$targetdbh->pg_rollback_to("bucardo_$$");
+                        if (! $source_modern_copy) {
+                            # Also roll back to source savepoint, so we can try
+                            # creating the temp table again
+                            $self->glog('Rolling back to source savepoint as well, to remove temp table');
+                            $sourcedbh->pg_rollback_to("bucardo_$$");
+                        }
 
 						## Now run one or more exception handlers
 						my $runagain = 0;
@@ -5432,6 +5444,10 @@ sub start_kid {
 			$self->glog('Issuing final commit for source and target');
 			$sourcedbh->commit();
 			$targetdbh->commit();
+            if (defined($cs_temptable)) {
+                $self->glog("Dropping temp table $cs_temptable created for customselect");
+                $sourcedbh->do("DROP TABLE $cs_temptable");
+            }
 		}
 
 		## Capture the current time. now() is good enough as we just committed or rolled back
