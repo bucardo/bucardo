@@ -239,8 +239,13 @@ ALTER TABLE bucardo.goat ADD CONSTRAINT custom_needs_pkey CHECK (customselect IS
 
 ALTER TABLE bucardo.goat ADD CONSTRAINT pkey_needs_type CHECK (pkey = '' OR pkeytype IS NOT NULL);
 
-ALTER TABLE bucardo.goat ADD CONSTRAINT standard_conflict CHECK (standard_conflict IS NULL
+ALTER TABLE bucardo.goat ADD CONSTRAINT standard_conflict
+  CHECK (reltype <> 'table' OR standard_conflict IS NULL
   OR standard_conflict IN ('source','target','skip','random','latest','abort'));
+
+ALTER TABLE bucardo.goat ADD CONSTRAINT standard_conflict_sequence 
+  CHECK (reltype <> 'sequence' OR standard_conflict IS NULL
+  OR standard_conflict IN ('source','target','skip','lowest','highest'));
 
 --
 -- Set of filters for each goat.

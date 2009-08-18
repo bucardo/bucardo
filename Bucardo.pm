@@ -1,5 +1,7 @@
 #!perl -- -*-cperl-*-
 
+## XXX: Make sure targetiod is set for sequences as well
+
 ## The main Bucardo program
 ##
 ## This script should only be called via the 'bucardo_ctl' program
@@ -1641,14 +1643,28 @@ sub start_mcp {
 			## If swap, verify the standard_conflict
 			if ($s->{synctype} eq 'swap' and $g->{standard_conflict}) {
 				my $sc = $g->{standard_conflict};
-				die qq{Unknown standard_conflict for $syncname $g->{schemaname}.$g->{tablename}: $sc\n}
-					unless
-					'source' eq $sc or
-					'target' eq $sc or
-					'skip'   eq $sc or
-					'random' eq $sc or
-					'latest' eq $sc or
-					'abort'  eq $sc;
+				if ($g->{reltype} eq 'table') {
+					die qq{Unknown standard_conflict for $syncname $g->{schemaname}.$g->{tablename}: $sc\n}
+						unless
+						'source' eq $sc or
+						'target' eq $sc or
+						'skip'   eq $sc or
+						'random' eq $sc or
+						'latest' eq $sc or
+						'abort'  eq $sc;
+				}
+				elsif ($g->{reltype} eq 'sequence') {
+					die qq{Unknown standard_conflict for $syncname $g->{schemaname}.$g->{tablename}: $sc\n}
+						unless
+						'source'  eq $sc or
+						'target'  eq $sc or
+						'skip'    eq $sc or
+						'lowest'  eq $sc or
+						'highest' eq $sc;
+				}
+				else {
+					die q{Invalid reltype!};
+				}
 				$self->glog(qq{    Standard conflict method "$sc" chosen});
 			} ## end standard conflict
 
@@ -4659,9 +4675,153 @@ sub start_kid {
 				($S,$T) = ($g->{safeschema},$g->{safetable});
 
 				if ($g->{reltype} eq 'sequence') {
-					## XXX Fix this:
-					$self->glog('No support for sequences in swap syncs at the moment');
+					my $action = 0; ## 0 = skip, 1 = source->target, 2 = target->source
+					$g->{tempschema} = {};
+					my $SEQUENCESQL = "SELECT last_value, log_cnt FROM $S.$T";
+					if (exists $g->{code_conflict}) {
+						$self->glog('No support for custom conflict handlers for sequences yet!');
+					}
+					else {
+						my $sc = $g->{standard_conflict};
+						if ('skip' eq $sc) {
+							$action = 0;
+						}
+						elsif ('source' eq $sc) {
+							$action = 1;
+						}
+						elsif ('target' eq $sc) {
+							$action = 2;
+						}
+						elsif ('lowest' eq $sc and 'highest' eq $sc) {
+							($g->{tempschema}{s}{lastval},$g->{tempschema}{s}{logcnt}) =
+								@{$sourcedbh->selectall_arrayref($SEQUENCESQL)->[0]};
+							($g->{tempschema}{t}{lastval},$g->{tempschema}{t}{logcnt}) =
+								@{$targetdbh->selectall_arrayref($SEQUENCESQL)->[0]};
+							if ($g->{tempschema}{s}{lastval} > $g->{tempschema}{t}{lastval}) {
+								$action = 'lowest' eq $sc ? 2 : 1;
+							}
+							elsif ($g->{tempschema}{s}{lastval} < $g->{tempschema}{t}{lastval}) {
+								$action = 'lowest' eq $sc ? 1 : 2;
+							}
+							else {
+								$action = 0;
+							}
+						}
+						else {
+							die "Unknown conflict type for sequence: $sc\n";
+						}
+					}
 
+					if (0 == $action) {
+						$self->glog("No action taken for sequence $S.$T");
+						next;
+					}
+
+					## Internal note so we know things have changed
+					$deltacount{sequences}++;
+
+					## Get the last seen value
+					my $LASTSEQUENCESQL = 'SELECT value, iscalled FROM bucardo.bucardo_sequences WHERE tablename = ?';
+
+					## Source wins - copy its value to the target
+					if (1 == $action) {
+						$self->glog("Copying value of $S.$T from source to target");
+
+						if (! exists $g->{tempschema}{s}) {
+							($g->{tempschema}{s}{lastval},$g->{tempschema}{s}{logcnt}) =
+								@{$sourcedbh->selectall_arrayref($SEQUENCESQL)->[0]};
+						}
+
+						my $lastval = $g->{tempschema}{s}{lastval};
+						my $iscalled = $g->{tempschema}{s}{logcnt} ? 0 : 1;
+
+						## Has it changed since last visit?
+						$sth = $sourcedbh->prepare($LASTSEQUENCESQL);
+						$count = $sth->execute($g->{oid});
+						my $newval = 0;
+						if ($count < 1) {
+							$newval = 1; ## Never before seen, so add to the table
+							$sth->finish();
+						}
+						else {
+							my ($oldval,$oldcalled) = @{$sth->fetchall_arrayref()->[0]};
+							if ($oldval != $lastval) {
+								$newval = 2; ## Value has changed
+							}
+							elsif ($oldcalled ne $iscalled) {
+								$newval = 3; ## is_called has changed
+							}
+						}
+						## Has not changed, so we simply move on to the next goat
+						next if ! $newval;
+
+						## Apply to the target
+						$self->glog("Setting sequence $S.$T on target to value of $lastval, is_called is $iscalled");
+						$SQL = "SELECT setval('$S.$T', $lastval, '$iscalled')";
+						$targetdbh->do($SQL);
+
+						## Save to the target's internal table
+						## Rather than worry about upserts, we'll just delete/insert every time
+						$SQL = 'DELETE FROM bucardo.bucardo_sequences WHERE tablename = ?';
+						$sth = $sourcedbh->prepare($SQL);
+						$sth->execute($g->{targetoid}{$targetdb});
+						$SQL = 'INSERT INTO bucardo.bucardo_sequences (tablename, value, iscalled) VALUES (?,?,?)';
+						$sth = $sourcedbh->prepare($SQL);
+						$sth->execute($g->{targetoid}{$targetdb},$lastval,$iscalled);
+
+						## Internal note so we know things have changed
+						$deltacount{sequences}++;
+
+						## Done: jump to the next goat
+						next;
+					}
+
+					## Target wins - copy its value to the source
+					$self->glog("Copying value of $S.$T from target to source");
+
+					if (! exists $g->{tempschema}{t}) {
+						($g->{tempschema}{t}{lastval},$g->{tempschema}{t}{logcnt}) =
+							@{$targetdbh->selectall_arrayref($SEQUENCESQL)->[0]};
+					}
+
+					my $lastval = $g->{tempschema}{t}{lastval};
+					my $iscalled = $g->{tempschema}{t}{logcnt} ? 0 : 1;
+
+					## Has it changed since last visit?
+					$sth = $sourcedbh->prepare($LASTSEQUENCESQL);
+					$count = $sth->execute($g->{oid});
+					my $newval = 0;
+					if ($count < 1) {
+						$newval = 1; ## Never before seen, so add to the table
+						$sth->finish();
+					}
+					else {
+						my ($oldval,$oldcalled) = @{$sth->fetchall_arrayref()->[0]};
+						if ($oldval != $lastval) {
+							$newval = 2; ## Value has changed
+						}
+						elsif ($oldcalled ne $iscalled) {
+							$newval = 3; ## is_called has changed
+						}
+					}
+					## Has not changed, so we simply move on to the next goat
+					next if ! $newval;
+
+					## Apply to the source
+					$self->glog("Setting sequence $S.$T on source to value of $lastval, is_called is $iscalled");
+					$SQL = "SELECT setval('$S.$T', $lastval, '$iscalled')";
+					$sourcedbh->do($SQL);
+
+					## Save to the source's internal table
+					## Rather than worry about upserts, we'll just delete/insert every time
+					$SQL = 'DELETE FROM bucardo.bucardo_sequences WHERE tablename = ?';
+					$sth = $targetdbh->prepare($SQL);
+					$sth->execute($g->{oid});
+					$SQL = 'INSERT INTO bucardo.bucardo_sequences (tablename, value, iscalled) VALUES (?,?,?)';
+					$sth = $targetdbh->prepare($SQL);
+					$sth->execute($g->{oid},$lastval,$iscalled);
+
+					## Proceed to the next goat
 					next;
 				}
 
