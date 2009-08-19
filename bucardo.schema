@@ -1542,7 +1542,7 @@ $bc$
                         FOR EACH $custom_trigger_level EXECUTE PROCEDURE bucardo."$custom_function_name"()
                     };
                 }
-                {
+                else {
                     $SQL = qq{
                         CREATE TRIGGER "$trigger0"
                         AFTER INSERT OR UPDATE OR DELETE$ttrig ON $safeschema.$safetable
