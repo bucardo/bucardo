@@ -243,7 +243,7 @@ sub help {
     add table [schema].table db=internal_db_name [ping=bool] [standard_conflict=xxx] [makedelta=bool]
     add all tables [db=internal_db_name] [herd=herd_name]
     add sequence [schema].name [herd=name]
-    add herd name
+    add herd name goat1 goat2 goat3...
     add sync syncname source=xxx targetdb=xxx targetgroup=xxx type=xxx tables=x,y,z
 
   kick <syncname(s)> [timeout]
