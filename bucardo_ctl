@@ -3603,7 +3603,7 @@ sub install {
 	my $ans;
 	my $host = $bcargs->{dbhost} || $ENV{DBHOST} || '<none>';
 	my $port = $bcargs->{dbport} || $ENV{DBPORT} || 5432;
-	my $user = $bcargs->{dbuser} || $ENV{DBUSER} || 'postgres';
+	my $user = $ENV{DBUSER} || 'postgres';
 
 	## Make sure the bucardo.schema file is available, and extract some config items
 	my ($fh, $schema_file) = find_bucardo_schema();
