@@ -60,6 +60,8 @@ Enhancements:
 
   - Add more tests and improve existing ones. [Josh Tolley]
 
+  - Force READ WRITE mode so Bucardo works on read only databases. [GSM]
+
   - Make the audit_pid table more useful. Use sequences instead of 
     PIDs to find children. Allow for the audit_pid table to be toggled off. [GSM]
 

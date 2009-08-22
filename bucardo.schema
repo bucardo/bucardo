@@ -1206,6 +1206,7 @@ $bc$
             $cache->{dbh}{$db} = $dbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
         }
 
+		$dbh->do('SET TRANSACTION READ WRITE');
         if ($info->{synctype} =~ /swap|delta/ and $info->{reltype} eq 'table') {
             if (! $pkey) {
                 if (!$force) {
