@@ -50,6 +50,7 @@ t/11-customselect.t
 t/12-addtable.t
 t/13-ddl.t
 t/14-truncate.t
+t/15-star.t
 t/98-cleanup.t
 t/99-signature.t
 t/BucardoTesting.pm
