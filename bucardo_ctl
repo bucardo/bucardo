@@ -64,11 +64,13 @@ my $bcargs = {
 			  cleandebugs  => 0,
 		  };
 
-## This option must come before the GetOptions call
+## These options must come before the GetOptions call
 for my $arg (@ARGV) {
 	if ($arg eq '--no-bucardorc') {
 		$bcargs->{'no-bucardorc'} = 1;
-		last;
+	}
+	if ($arg =~ /--bucardorc=(.+)/) {
+		$bcargs->{'bucardorc'} = $1;
 	}
 }
 
@@ -76,7 +78,11 @@ for my $arg (@ARGV) {
 ## These will be overwritten by command-line args.
 my $file;
 if (! $bcargs->{'no-bucardorc'}) {
-	if (-e '.bucardorc') {
+	if ($bcargs->{bucardorc}) {
+		-e $bcargs->{bucardorc} or die qq{Could not find the file "$bcargs->{bucardorc}"\n};
+		$file = $bcargs->{bucardorc};
+	}
+	elsif (-e '.bucardorc') {
 		$file = '.bucardorc';
 	}
 	elsif (-e "$ENV{HOME}/.bucardorc") {
@@ -134,6 +140,8 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
 	 'db=s',
 	 'herd=s',
 	 'piddir=s',
+	 ## These two already handled above, but need to be here so GetOptions is happy:
+	 'bucardorc=s',
 	 'no-bucardorc',
 
 ) or die "\n";
@@ -4193,7 +4201,9 @@ In addition to command-line configurations, you can put any options inside of a 
 the current directory will be used if found. If not found, then the file F<~/.bucardorc> will be used. Finally, 
 the file /etc/bucardorc will be used if available. The format of the file is option = value, one per line. Any 
 line starting with a '#' will be skipped. Any values loaded from a bucardorc file will be overwritten by 
-command-line options. All bucardorc files can be ignored by supplying a C<--no-bucardorc> argument.
+command-line options. All bucardorc files can be ignored by supplying a C<--no-bucardorc> argument. A specific 
+file can be forced with the C<--bucardorc=file> option; if this option is set, bucardo_ctl will refuse to run 
+unless that file can be read.
 
 =head1 ENVIRONMENT VARIABLES
 
