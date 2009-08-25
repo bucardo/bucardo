@@ -559,7 +559,64 @@ sub update {
 		die qq{No matches found for sync "$name"\n};
 	}
 	$dbh->{pg_bool_tf} = 1;
-	$info = $sth->fetchall_arrayref({});
+	$info = $sth->fetchall_arrayref({})->[0];
+
+	if ('sync' eq $item and $nouns[0] eq 'add') {
+		my $miniusage = "Usage: update syncs add table|sequence <name(s)>\n";
+		shift @nouns;
+		my $thing = shift @nouns or die $miniusage;
+		@nouns or die $miniusage;
+
+		## Grab all goats in the source herd for this sync
+		my $sourceherd = $info->{source};
+		$SQL = 'SELECT id, schemaname, tablename FROM goat g'
+			. ' JOIN herdmap h ON (h.goat = g.id) AND h.herd = ?';
+		$sth = $dbh->prepare($SQL);
+		$sth->execute($sourceherd);
+		my $herdlist = $sth->fetchall_hashref('id');
+
+		for my $tab (@nouns) {
+			## All of these must be valid tables
+			my $t = $tab;
+			my $wild = ($t =~ s/\*//) ? 1 : 0;
+			my $find;
+			if ($t =~ s/(\w+)\.//) {
+				my $schema = $1;
+				$SQL = 'SELECT * FROM goat WHERE tablename = ? AND schemaname = ?';
+				$wild and $SQL =~ s/=/~/;
+				$find = $dbh->prepare_cached($SQL);
+				$count = $find->execute($wild ? "^$t" : $t, $schema);
+			}
+			else {
+				$SQL = 'SELECT * FROM goat WHERE tablename = ?';
+				$wild and $SQL =~ s/=/~/;
+				$find = $dbh->prepare($SQL);
+				$count = $find->execute($wild ? "^$t" : $t);
+			}
+			if ($count < 1) {
+				die qq{Unknown table: $tab\n};
+			}
+			elsif ($count > 1 and ! $wild) {
+				die qq{More than one table found for $tab: use wildcards or a schema\n};
+			}
+
+			my $tabinfo = $find->fetchall_arrayref({});
+			for my $tab2 (@$tabinfo) {
+				my $tabid = $tab2->{id};
+				my $tablename = "$tab2->{schemaname}.$tab2->{tablename}";
+				if ( exists $herdlist->{$tabid}) {
+					warn "Skipping table $tablename: already part of that sync\n";
+					next;
+				}
+				$SQL = 'INSERT INTO herdmap(herd,goat) VALUES (?,?)';
+				my $add = $dbh->prepare($SQL);
+				$add->execute($sourceherd,$tabid);
+				warn "Added table $tablename to herd $sourceherd\n";
+			}
+		}
+		$dbh->commit();
+		exit;
+	}
 
 	## Process each change in turn
 	my %change;
@@ -567,17 +624,15 @@ sub update {
 		$arg =~ /(.+)=(.+)/ or die "Invalid argument: must be of form name=value\n";
 		my ($n,$v) = (lc $1,$2);
 		$n =~ /^\w+$/ or die "Invalid name\n";
-		for my $i (@{$info}) {
-			my $localname = $item eq 'sync' ? $i->{name} : "$i->{schemaname}.$i->{tablename}";
-			my $localid = $item eq 'sync' ? $i->{name} : $i->{id};
-			if (! exists $i->{$n}) {
-				die qq{Sorry, cannot change "$n" for $item "$localname"\n};
-			}
-			$SQL = "UPDATE sync SET $n = ? WHERE name = ?";
-			$sth = $dbh->prepare($SQL);
-			$sth->execute($v, $localid);
-			push @{$change{$localname}} => [$n, $i->{$n}, $v];
+		my $localname = $item eq 'sync' ? $info->{name} : "$info->{schemaname}.$info->{tablename}";
+		my $localid = $item eq 'sync' ? $info->{name} : $info->{id};
+		if (! exists $info->{$n}) {
+			die qq{Sorry, cannot change "$n" for $item "$localname"\n};
 		}
+		$SQL = "UPDATE sync SET $n = ? WHERE name = ?";
+		$sth = $dbh->prepare($SQL);
+		$sth->execute($v, $localid);
+		push @{$change{$localname}} => [$n, $info->{$n}, $v];
 	}
 
 	if (! keys %change) {
