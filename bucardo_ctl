@@ -410,6 +410,8 @@ sub reload {
 
 	## Ask for one or more syncs to be reloaded
 
+    @nouns or die "Usage: reload <syncname>\n";
+
 	for my $syncname (@nouns) {
 		next if $syncname eq 'sync'; ## Allows $0 reload sync foobar
 
