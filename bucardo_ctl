@@ -565,9 +565,9 @@ sub update {
 	$dbh->{pg_bool_tf} = 1;
 	$info = $sth->fetchall_arrayref({})->[0];
 
-	if ('sync' eq $item and $nouns[0] eq 'add') {
-		my $miniusage = "Usage: update syncs add table|sequence <name(s)>\n";
-		shift @nouns;
+	if ('sync' eq $item and ($nouns[0] eq 'add' or $nouns[0] eq 'remove')) {
+		my $v = shift @nouns;
+		my $miniusage = "Usage: update syncs $v table|sequence <name(s)>\n";
 		my $thing = shift @nouns or die $miniusage;
 		@nouns or die $miniusage;
 
@@ -608,14 +608,27 @@ sub update {
 			for my $tab2 (@$tabinfo) {
 				my $tabid = $tab2->{id};
 				my $tablename = "$tab2->{schemaname}.$tab2->{tablename}";
-				if ( exists $herdlist->{$tabid}) {
-					warn "Skipping table $tablename: already part of that sync\n";
+				my $type = $tab2->{reltype};
+				if ($v eq 'add' and exists $herdlist->{$tabid}) {
+					warn "Skipping $type $tablename: already part of that sync\n";
 					next;
 				}
-				$SQL = 'INSERT INTO herdmap(herd,goat) VALUES (?,?)';
-				my $add = $dbh->prepare($SQL);
-				$add->execute($sourceherd,$tabid);
-				warn "Added table $tablename to herd $sourceherd\n";
+				if ($v eq 'remove' and !exists $herdlist->{$tabid}) {
+					warn "Skipping $type $tablename: does not belong to the sync\n";
+					next;
+				}
+				if ($v eq 'add') {
+					$SQL = 'INSERT INTO herdmap(herd,goat) VALUES (?,?)';
+					my $add = $dbh->prepare($SQL);
+					$add->execute($sourceherd,$tabid);
+					warn "Added $type $tablename to herd $sourceherd\n";
+				}
+				else {
+					$SQL = 'DELETE FROM herdmap WHERE herd = ? AND goat = ?';
+					my $delete = $dbh->prepare($SQL);
+					$delete->execute($sourceherd,$tabid);
+					warn "Removed $type $tablename from herd $sourceherd\n";
+				}
 			}
 		}
 		$dbh->commit();
