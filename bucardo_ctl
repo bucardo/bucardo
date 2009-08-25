@@ -3178,6 +3178,7 @@ sub add_sync {
 			   lifetime        => ['', ''],
 			   maxkicks        => [0,  ''],
 			   tables          => ['', ''],
+			   onetimecopy     => ['', ''],
 			   );
 	my $args = process_args($info);
 	for my $name (sort keys %$args) {
