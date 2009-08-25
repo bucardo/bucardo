@@ -207,6 +207,7 @@ list()          if $verb eq 'list';
 config()        if $verb eq 'set' or $verb eq 'show';
 validate()      if $verb eq 'validate';
 update()        if $verb eq 'update';
+delete_item()   if $verb eq 'delete';
 
 ## For the rest, we expect a list of syncs with an optional decimal "timeout"
 my $adverb;
@@ -224,6 +225,7 @@ SYNCMATCH: for my $sync (@nouns) {
             next SYNCMATCH;
         }
     }
+	next if $sync eq 'sync';
 	if (! exists $syncs->{$sync}) {
 		die qq{Sync "$sync" does not appear to exist\n};
 	}
@@ -410,7 +412,7 @@ sub reload {
 
 	## Ask for one or more syncs to be reloaded
 
-    @nouns or die "Usage: reload <syncname>\n";
+	@nouns or die "Usage: reload <syncname>\n";
 
 	for my $syncname (@nouns) {
 		next if $syncname eq 'sync'; ## Allows $0 reload sync foobar
@@ -1733,7 +1735,8 @@ sub vate_sync {
 
 	my $wait = (defined $adverb and $adverb eq '0') ? 1 : 0;
 	for my $sync (@syncs) {
-		$QUIET or print qq{$ucname sync $sync};
+		(my $vname = $ucname) =~ s/e$/ing/;
+		$QUIET or print qq{$vname sync $sync};
 		my $done = "bucardo_${name}d_sync_$sync";
 		$dbh->do(qq{NOTIFY "bucardo_${name}_sync_$sync"});
 		if ($wait) {
@@ -1811,6 +1814,46 @@ sub add_item {
 	exit 1;
 
 } ## end of add_item
+
+
+sub delete_item {
+
+	my $self = shift;
+
+	if (!@nouns) {
+		warn "Usage: delete <item_type> <item_name>\n";
+		exit 1;
+	}
+
+	## First word must be a type we know about
+	my $type = shift @nouns;
+	$type = lc $type;
+
+	if ($type eq 'db' or $type eq 'database') {
+		delete_database($type);
+	}
+	elsif ($type eq 'table') {
+		delete_table($type);
+	}
+	elsif ($type eq 'sequence') {
+		delete_sequence($type);
+	}
+	elsif ($type eq 'sync') {
+		delete_sync($type);
+	}
+	elsif ($type eq 'herd') {
+		delete_herd($type);
+	}
+	elsif ($type eq 'dbgroup') {
+		delete_dbgroup($type);
+	}
+	else {
+		warn "Cannot delete: unknown type\n";
+	}
+	exit 1;
+
+} ## end of delete_item
+
 
 sub alter_item {
 
@@ -3328,6 +3371,58 @@ sub add_sync {
 	exit 0;
 
 } ## end of add_sync
+
+
+sub delete_sync {
+
+	my $type = shift;
+
+	## Usage: delete sync syncname
+
+	my $name = shift @nouns;
+
+	## Does the sync exist?
+	$SQL = 'SELECT * FROM sync WHERE name = ?';
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute($name);
+	if (1 != $count) {
+		$sth->finish();
+		die qq{Failed to find a sync named "$name"\n};
+	}
+
+	print "Deleting $name\n";
+
+	## Is this sync currently running?
+	my $dname = "bucardo_deactivate_sync_$name";
+	$SQL = q{SELECT 1 FROM pg_listener WHERE relname = ?};
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute($dname);
+	$sth->finish();
+	if (1 == $count) {
+		die qq{Cannot delete an active sync: please deactivate first\n};
+	}
+
+	## We want to confirm this
+	print "Are you sure you want to delete this sync?\n";
+	print "This action cannot be undone\n";
+	print "Proceed? ";
+	my $ans = <STDIN>;
+	exit 0 unless $ans =~ /^Y/i;
+
+	$SQL = 'DELETE FROM sync WHERE name = ?';
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute($name);
+	if (1 != $count) {
+		die qq{Deletion of sync "$name" failed\n};
+	}
+	print "Sync deleted: $name\n";
+
+	print "Note: table triggers are not automatically removed!\n";
+	$dbh->commit();
+
+	exit 0;
+
+} ## end of delete_sync
 
 
 sub alter_sync {
