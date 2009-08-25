@@ -1295,11 +1295,12 @@ sub list {
 	}
 	my $thing = shift @nouns;
 
-	list_dbs()       if $thing =~ /db/i   or $thing eq 'd';
-	list_tables()    if $thing =~ /tab/i  or $thing eq 't';
-	list_sequences() if $thing =~ /seq/i;
-	list_syncs()     if $thing =~ /sync/i or $thing eq 's';
-	list_herds()     if $thing =~ /herd/i or $thing eq 'h';
+	list_dbgroups()  if $thing =~ /dbgroup/i or $thing eq 'g';
+	list_dbs()       if $thing =~ /db/i      or $thing eq 'd';
+	list_tables()    if $thing =~ /tab/i     or $thing eq 't';
+	list_sequences() if $thing =~ /seq/i     or $thing eq 'q';
+	list_syncs()     if $thing =~ /sync/i    or $thing eq 's';
+	list_herds()     if $thing =~ /herd/i    or $thing eq 'h';
 
 	die $msg;
 
@@ -1341,6 +1342,38 @@ sub list_dbs {
 	exit;
 
 } ## end of list_dbs
+
+
+sub list_dbgroups {
+
+	## Show information about all or some subset of the 'dbgroup' table
+
+	## If any nouns left, treat as wildcards
+	my $WHERE = '';
+	for my $term (@nouns) {
+		$WHERE .= sprintf q{%s lower(name) ~ %s},
+			$WHERE ? ' OR' : 'WHERE',
+			$dbh->quote(lc $term);
+	}
+
+	$SQL = "SELECT * FROM dbgroup $WHERE ORDER BY name";
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute();
+	if ($count < 1) {
+		$sth->finish();
+		printf "There are no%s entries in the 'dbgroup' table.\n",
+			$WHERE ? ' matching' : '';
+		exit;
+	}
+
+	$info = $sth->fetchall_arrayref({});
+	for my $row (@$info) {
+		print "Name: $row->{name}\n";
+	}
+
+	exit;
+
+} ## end of list_dbgroups
 
 
 sub get_dbs {
