@@ -430,8 +430,8 @@ sub reload {
 
 		my $done = "bucardo_reloaded_sync_$syncname";
 		print "Reloading sync $syncname...";
-		$dbh->do("LISTEN $done");
-		$dbh->do("NOTIFY bucardo_reload_sync_$syncname");
+		$dbh->do(qq{LISTEN "$done"});
+		$dbh->do(qq{NOTIFY "bucardo_reload_sync_$syncname"});
 		$dbh->commit();
 
 		sleep 0.1;
