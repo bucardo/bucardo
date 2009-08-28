@@ -4,11 +4,13 @@ use warnings;
 use 5.008003;
 
 ## No version.pm for this one, as the prereqs are not loaded yet.
-my $VERSION = '3.2.7';
+my $VERSION = '4.0.0';
 
 WriteMakefile(
     NAME         => 'Bucardo',
-    VERSION_FROM => 'Bucardo.pm',
+    ABSTRACT     => 'Postgres asynchronous multi-master replication system',
+    AUTHOR       => 'Greg Sabino Mullane <greg@endpoint.com>',
+    LICENSE      => 'BSD',
     PREREQ_PM    => {
                      'DBD::Pg'             => '2.0',
                      'DBI'                 => '1.51',
@@ -21,14 +23,11 @@ WriteMakefile(
                      'Sys::Hostname'       => '1.11',
                      'Sys::Syslog'         => '0.13',
                  },
-    EXE_FILES    => ['bucardo_ctl'],
-    INST_ARCHLIB => 'none',
-    INST_BIN     => 'none',
-    MAN1PODS     => { 'bucardo_ctl' => 'blib/man1/bucardo_ctl.1pm' },
-    ABSTRACT     => 'Postgres asynchronous multi-master replication system',
-    AUTHOR       => 'Greg Sabino Mullane <greg@endpoint.com>',
-    LICENSE      => 'BSD',
     NO_META      => 1,
+    VERSION_FROM => 'Bucardo.pm',
+    EXE_FILES    => ['bucardo_ctl'],
+    MAN1PODS     => { 'bucardo_ctl' => 'blib/man1/bucardo_ctl.1pm' },
+    NORECURS     => 1,
     clean        => { FILES => 'log.bucardo.* *~ *.tmp outgoingmail.* bucardo_test_database*/' },
 );
 
@@ -53,4 +52,25 @@ sub clean {
 	return $string;
 }
 
+sub blibdirs {
+	my $string = shift->SUPER::blibdirs_target(@_);
+	$string = qq{INST_SHARE = blib/share\n\n$string};
+	$string =~ s{(blibdirs : .+)}{$1 \$(INST_SHARE)\$(DFSEP).exists};
+	$string .= qq{\$(INST_SHARE)\$(DFSEP).exists :: Makefile.PL\n};
+	$string .= qq{\t\$(NOECHO) \$(MKPATH) \$(INST_SHARE)\n};
+	$string .= qq{\t\$(NOECHO) \$(CHMOD) 755 \$(INST_SHARE)\n};
+	$string .= qq{\t\$(NOECHO) \$(TOUCH) \$(INST_SHARE)\$(DFSEP).exists\n};
+	$string .= qq{\t\$(CP) bucardo.schema \$(INST_SHARE)/bucardo.schema\n};
+	$string .= qq{\t-\$(NOECHO) \$(CHMOD) \$(PERM_RW) \$(INST_SHARE)/bucardo.schema\n};
+	return $string;
+}
 
+sub install {
+	my $string = shift->SUPER::install(@_);
+	my $vars = qq{DESTINSTALLSHARE = \$(DESTDIR)/usr/local/share/bucardo\n};
+	$vars .= qq{DESTINSTALLSITESHARE = \$(DESTDIR)/usr/local/share/bucardo\n};
+	$vars .= qq{DESTINSTALLVENDORSHARE = \$(DESTDIR)/usr/share/bucardo};
+	$string = "\n$vars\n$string";
+	$string =~ s{(\t\$\(INST_BIN\) \$\((DESTINSTALL.*?)BIN.+)}{$1\n\t\t\$(INST_SHARE) \$($2SHARE) \\}g;
+	return $string;
+}

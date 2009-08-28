@@ -9,6 +9,8 @@ pm_to_blib
 ## Editor temporary files:
 *~
 *.swp
+*#
+.#*
 
 ## Git stuff
 *.blame
@@ -17,7 +19,7 @@ pm_to_blib
 
 ## Testing artifacts:
 bucardo_test_database_*
-bucardo.warning.log
+*.log
 log.bucardo
 
 ## Temporary files:

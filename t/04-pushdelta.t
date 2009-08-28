@@ -8,15 +8,13 @@ use warnings;
 use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More 'no_plan';
+use Test::More tests => 194;
 
 use BucardoTesting;
 my $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object failed\n";
 $location = 'pushdelta';
 
 use vars qw/$SQL $sth $t $i $result $count %sql %val %pkey/;
-
-unlink 'log.bucardo';
 
 pass("*** Beginning 'pushdelta' tests");
 
@@ -85,6 +83,7 @@ $sth->execute('moe', 3);
 $sth->execute('curly', 2);
 $dbhA->commit();
 
+$bct->ctl("kick pushdeltatest 0");
 wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 
 ## We want 1 2 3 to be larry, curly, moe
@@ -93,12 +92,48 @@ $t='Pushdelta handled a unique index without any problems';
 $result = [[1,'larry'],[2,'curly'],[3,'moe']];
 bc_deeply($result, $dbhB, $SQL, $t);
 
+## Sequence testing
+
+$dbhA->do("SELECT setval('bucardo_test_seq1', 123)");
+$dbhA->commit();
+
+$bct->ctl("kick pushdeltatest 0");
+wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
+
+$SQL = q{SELECT nextval('bucardo_test_seq1')};
+$t='Pushdelta replicated a sequence properly';
+$result = [[123+1]];
+bc_deeply($result, $dbhB, $SQL, $t);
+
+$dbhA->do("SELECT setval('bucardo_test_seq1', 223, false)");
+$dbhA->commit();
+
+$bct->ctl("kick pushdeltatest 0");
+wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
+
+$SQL = q{SELECT nextval('bucardo_test_seq1')};
+$t='Pushdelta replicated a sequence properly with a false setval';
+$result = [[223]];
+bc_deeply($result, $dbhB, $SQL, $t);
+
+$dbhA->do("SELECT setval('bucardo_test_seq1', 345, true)");
+$dbhA->commit();
+
+$bct->ctl("kick pushdeltatest 0");
+wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
+
+$SQL = q{SELECT nextval('bucardo_test_seq1')};
+$t='Pushdelta replicated a sequence properly with a true setval';
+$result = [[345+1]];
+bc_deeply($result, $dbhB, $SQL, $t);
+
 ## Reset the tables
 for my $table (sort keys %tabletype) {
 	$dbhA->do("DELETE FROM $table");
 }
 $dbhA->do('DELETE FROM droptest');
 $dbhA->commit();
+$bct->ctl("kick pushdeltatest 0");
 wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 $dbhB->do('DELETE FROM droptest');
 $dbhB->commit();
@@ -159,6 +194,7 @@ for my $table (sort keys %tabletype) {
 ## Kick the source database, replicate one row in each table
 $bct->ctl("kick pushdeltatest 0");
 wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
+wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 
 ## Make sure second database has the new rows, and that triggers and rules did not fire
 for my $table (sort keys %tabletype) {
@@ -168,15 +204,19 @@ for my $table (sort keys %tabletype) {
 
 	test_empty_drop($table,$dbhB);
 }
-
-## Clear out any notices
-$dbhX->func('pg_notifies');
-$dbhX->commit();
+$bct->ctl("kick pushdeltatest 5");
+wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 
 ## Adding a new row should cause the sync to fire without waiting for a kick
 for my $table (sort keys %tabletype) {
+    ## Clear out any notices
+    $dbhX->func('pg_notifies');
+    $dbhX->commit();
+
 	$dbhA->do("UPDATE $table SET inty = 2");
 	$dbhA->commit();
+    ## Hack.
+    sleep 2;
 	wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 
 	$t=qq{ Second table $table got the pushdelta row};

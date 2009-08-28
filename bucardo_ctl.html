@@ -48,7 +48,7 @@
 </p>
 <hr />
 <h1><a name="version">VERSION</a></h1>
-<p>This documents describes bucardo_ctl version 3.2.7</p>
+<p>This document describes version 4.0.0 of bucardo_ctl</p>
 <p>
 </p>
 <hr />
@@ -62,7 +62,7 @@
 <pre>
   ./bucardo_ctl add database newdb name=internal_name port=5432 host=myserver user=postgres</pre>
 <pre>
-  ./bucardo_ctl add table some_schema.some_table db=internal_db_name ping=bool standard_conflict=source</pre>
+  ./bucardo_ctl add table some_schema.some_table db=internal_db_name ping=bool standard_conflict=x herd=x</pre>
 <pre>
   ./bucardo_ctl add herd newherd</pre>
 <pre>
@@ -84,54 +84,73 @@
 <pre>
   ./bucardo_ctl kick sync1 0 --retry=10</pre>
 <pre>
-  ./bucardoctl reload_config</pre>
+  ./bucardo_ctl reload_config</pre>
+<pre>
+  ./bucardo_ctl upgrade</pre>
+<pre>
+  ./bucardo_ctl reload sync</pre>
+<pre>
+  ./bucardo_ctl validate sync</pre>
+<pre>
+  ./bucardo_ctl message &quot;Your message here&quot;</pre>
+<pre>
+  ./bucardo_ctl config show</pre>
+<pre>
+  ./bucardo_ctl config set foo=bar baz=123</pre>
 <p>
 </p>
 <hr />
 <h1><a name="description">DESCRIPTION</a></h1>
-<p>The bucardo_ctl script is used to control the operation of a Bucardo process. Primarily it is 
-used for stopping and starting Bucardo, viewing current information, and for kicking off named 
-syncs. The script needs to know how to connect to the Bucardo database: this information can 
-be passed as arguments or hard-coded into the script itself. If you have multiple Bucardos 
-running, it is recommended that you create aliases for each database.</p>
+<p>The bucardo_ctl script is the main interaction to a running Bucardo instance. It can 
+be used to start and stop Bucardo, add new items, kick syncs, and even install and 
+upgrade Bucardo itself.</p>
 <p>
 </p>
 <hr />
 <h1><a name="commands">COMMANDS</a></h1>
 <dl>
-<dt><strong><a name="install" class="item"><strong>install</strong></a></strong>
+<dt><strong><a name="install" class="item"><strong>install</strong></a></strong></dt>
 
 <dd>
 <p>Usage: ./bucardo_ctl install</p>
-</dd>
-<dd>
 <p>Attempts to install the Bucardo schema from the file 'bucardo.schema' into an existing 
-Postgres cluster. The user 'bucardo' and database 'bucardo' will be created first as needed.</p>
+Postgres cluster. The user 'bucardo' and database 'bucardo' will be created first as needed.
+This is an interactive installer, but you can supply the following values from the command 
+line:</p>
+<dl>
+<dt><strong><a name="dbuser" class="item">--dbuser</a></strong></dt>
+
+<dt><strong><a name="dbport" class="item">--dbport</a></strong></dt>
+
+<dt><strong><a name="piddir" class="item">--piddir</a></strong></dt>
+
+</dl>
 </dd>
-</li>
-<dt><strong><a name="start" class="item"><strong>start</strong></a></strong>
+<dt><strong><a name="upgrade" class="item"><strong>upgrade</strong></a></strong></dt>
+
+<dd>
+<p>Usage: ./bucardo_ctl upgrade</p>
+<p>Upgrades an existing Bucardo installation to the current version of the bucardo_ctl script. 
+Requires that the bucardo_ctl script and the bucardo.schema file be the same version. All 
+changes should be backwards compatible, but you may need to re-validate existing scripts 
+to make sure changes get propagated to all databases.</p>
+</dd>
+<dt><strong><a name="start" class="item"><strong>start</strong></a></strong></dt>
 
 <dd>
 <p>Usage: ./bucardo_ctl start &quot;Reason --name&quot;</p>
-</dd>
-<dd>
 <p>Restarts Bucardo cleanly by first issuing the equivalent of a stop to ask any existing Bucardo 
 proceses to exit, and then starting a new Bucardo MCP process. A short reason and name should 
 be provided - these are logged in the reason_file file and sent in the email sent when Bucardo 
 has been started up.</p>
-</dd>
-<dd>
 <p>Before attempting to kill any old processes, a ping command with a timeout of 5 seconds is issued. 
 If this returns successfully (indicating an active MCP process already running), the script will 
 exit with a return value of 2.</p>
 </dd>
-</li>
-<dt><strong><a name="stop" class="item"><strong>stop</strong></a></strong>
+<dt><strong><a name="stop" class="item"><strong>stop</strong></a></strong></dt>
 
 <dd>
 <p>Usage: ./bucardo_ctl stop &quot;Reason --name&quot;</p>
-</dd>
-<dd>
 <p>Forces Bucardo to quit by creating a stop file which all MCP, CTL, and KID processes should 
 detect and cause them to exit. Note that active syncs will not exit right away, as they 
 will not look for the stop file until they have finished their current run. Typically, 
@@ -140,58 +159,36 @@ processes have stopped. One should also provide a reason for issuing the stop - 
 this is a short explanation and your name. This is logged in the reason_file file and 
 is also used by Bucardo when it exits and sends out mail about its death.</p>
 </dd>
-</li>
-<dt><strong><a name="list" class="item"><strong>list</strong></a></strong>
+<dt><strong><a name="list" class="item"><strong>list</strong></a></strong></dt>
 
 <dd>
 <p>Usage: ./bucardo_ctl list &lt;type&gt; &lt;regex&gt;</p>
-</dd>
-<dd>
 <p>Lists summary information about databases, goats, herds, or syncs. Adding anything after the 
 type will look up all matching entries.</p>
 </dd>
-</li>
-<dt><strong><a name="add" class="item"><strong>add</strong></a></strong>
+<dt><strong><a name="add" class="item"><strong>add</strong></a></strong></dt>
 
 <dd>
 <p>Usage:  add &lt;item_type&gt; &lt;item_name&gt;</p>
-</dd>
-<dd>
 <p>Usage:  add database &lt;dbname&gt; name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx</p>
-</dd>
-<dd>
 <p>Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool</p>
-</dd>
-<dd>
 <p>Usage:  add sync syncname options</p>
-</dd>
-<dd>
 <p>Usage:  add herd name</p>
-</dd>
-<dd>
 <p>Usage:  add dbgroup name db1 db2 db3 ...</p>
-</dd>
-<dd>
 <p>Tells Bucardo about new objects it should know about. These commands can
 replace direct manipulation of the tables in the bucardo schema for the
 supported object types (you'll still need to add things like the mappings between objects on your own).</p>
 </dd>
-</li>
-<dt><strong><a name="alter" class="item"><strong>alter</strong></a></strong>
+<dt><strong><a name="alter" class="item"><strong>alter</strong></a></strong></dt>
 
 <dd>
 <p>Usage:  alter sync syncname [targetgroup=foo | targetdb=foo]</p>
-</dd>
-<dd>
 <p>Alters an existing sync, allowing modification to the target database or target database group</p>
 </dd>
-</li>
-<dt><strong><a name="kick" class="item"><strong>kick</strong></a></strong>
+<dt><strong><a name="kick" class="item"><strong>kick</strong></a></strong></dt>
 
 <dd>
 <p>Usage: ./bucardo_ctl kick &lt;syncname(s)&gt; [timeout]</p>
-</dd>
-<dd>
 <p>Tells one or more named syncs to fire as soon as possible. Note that this simply sends a request that 
 the sync fire: it may not start right away if the same sync is already running, or if the source or 
 target database has exceeded the number of allowed Bucardo connections. If the final argument is a 
@@ -199,59 +196,43 @@ number, it is treated as a timeout. If this number is zero, the bucardo_ctl comm
 until the sync has finished. For any other number, the sync will wait at most that number of seconds. 
 If any sync has not finished before the timeout, a false value is returned. In all other cases, a 
 true value is returned.</p>
-</dd>
-<dd>
 <p>If a timeout is given, the total completion time in seconds is also displayed. If the sync is going to 
 multiple targets, the time that each target takes from the start of the kick is also shown as each 
 target finishes.</p>
 </dd>
-</li>
-<dt><strong><a name="reload_config" class="item"><strong>reload_config</strong></a></strong>
+<dt><strong><a name="reload_config" class="item"><strong>reload_config</strong></a></strong></dt>
 
 <dd>
 <p>Forces Bucardo to reload the bucardo_config file, and then restart all processes to ensure that the new 
 information is loaded.</p>
 </dd>
-</li>
-<dt><strong><a name="show" class="item"><strong>show</strong></a></strong>
+<dt><strong><a name="show" class="item"><strong>show</strong></a></strong></dt>
 
 <dd>
 <p>Usage: ./bucardo_ctl show &lt;all|setting1&gt; [setting2..]</p>
-</dd>
-<dd>
 <p>Shows the current values in the bucardo_config table. Use the keyword 'all' to see all the settings, or 
 specify one or more search terms.</p>
 </dd>
-</li>
-<dt><strong><a name="set" class="item"><strong>set</strong></a></strong>
+<dt><strong><a name="set" class="item"><strong>set</strong></a></strong></dt>
 
 <dd>
 <p>Usage: ./bucardo_ctl set setting1=value [setting2=value]</p>
-</dd>
-<dd>
 <p>Sets one or more items inside the bucardo_config table. Setting names are case-insensitive.</p>
 </dd>
-</li>
-<dt><strong><a name="ping" class="item"><strong>ping</strong></a></strong>
+<dt><strong><a name="ping" class="item"><strong>ping</strong></a></strong></dt>
 
 <dd>
 <p>Sends a ping notice to the MCP process to see if it will respond. By default, it will wait 15 seconds. A 
 numeric argument will change this timeout. Using a 0 as the timeout indicates waiting forever. If a response 
 was returned, the program will exit with a value of 0. If it times out, the value will be 1.</p>
 </dd>
-</li>
-<dt><strong><a name="status" class="item"><strong>status</strong></a></strong>
+<dt><strong><a name="status" class="item"><strong>status</strong></a></strong></dt>
 
 <dd>
 <p>Usage: ./bucardo_ctl status [syncname(s)] [--sort=#] [--daysback=#] [--showdays]</p>
-</dd>
-<dd>
 <p>Shows the current status of all known syncs in a tabular format. If given one or more syncnames, 
 shows detailed information for each one.</p>
-</dd>
-<dd>
 <p>When showing all syncs, the columns are:</p>
-</dd>
 <ol>
 <li><strong><a name="name" class="item"><strong>Name</strong></a></strong>
 
@@ -296,36 +277,26 @@ this is merely a historical record and does not represent an active process.</p>
 <p>The amount of time the last failed sync took before it was aborted.</p>
 </li>
 </ol>
-<dt><strong><a name="activate_syncname_syncname2_syncname3_timeout" class="item"><strong>activate</strong> syncname [syncname2 syncname3 ...] [timeout]</a></strong>
+</dd>
+<dt><strong><a name="activate_syncname_syncname2_syncname3_timeout" class="item"><strong>activate</strong> syncname [syncname2 syncname3 ...] [timeout]</a></strong></dt>
 
 <dd>
 <p>Activates one or more named syncs. If given a timeout argument, it will wait until it has received 
 confirmation from Bucardo that each sync has been successfully activated.</p>
 </dd>
-</li>
-<dt><strong><a name="deactivate_syncname_syncname2_syncname3_timeout" class="item"><strong>deactivate</strong> syncname [syncname2 syncname3 ...] [timeout]</a></strong>
+<dt><strong><a name="deactivate_syncname_syncname2_syncname3_timeout" class="item"><strong>deactivate</strong> syncname [syncname2 syncname3 ...] [timeout]</a></strong></dt>
 
 <dd>
 <p>Deactivates one or more named syncs. If given a timeout argument, it will wait until it has received 
 confirmation from Bucardo that the sync has been successfully deactivated.</p>
 </dd>
-</li>
-<dt><strong><a name="upgrade" class="item"><strong>upgrade</strong></a></strong>
-
-<dd>
-<p>Performs an upgrade of Bucardo itself, by making sure the connected Bucardo database has a copy of the 
-latest schema. This should always be run after upgrading Bucardo, and will prompt you before making 
-any permanent changes.</p>
-</dd>
-</li>
-<dt><strong><a name="message" class="item"><strong>message</strong></a></strong>
+<dt><strong><a name="message" class="item"><strong>message</strong></a></strong></dt>
 
 <dd>
 <p>Adds a message to the running Bucardo logs. This message will appear prefixed with &quot;MESSAGE: &quot;. If 
 Bucardo is not running, the message will go to the logs the next time Bucardo is running and someone 
 adds another message.</p>
 </dd>
-</li>
 </dl>
 <p>
 </p>
@@ -334,183 +305,152 @@ adds another message.</p>
 <p>It is usually easier to set most of these options at the top of the script, or make an alias for them, 
 as they will not change very often if at all.</p>
 <dl>
-<dt><strong><a name="dbport_number" class="item"><strong>--dbport=number</strong></a></strong>
+<dt><strong><a name="dbport_number" class="item"><strong>--dbport=number</strong></a></strong></dt>
 
-<dt><strong><a name="dbhost_string" class="item"><strong>--dbhost=string</strong></a></strong>
+<dt><strong><a name="dbhost_string" class="item"><strong>--dbhost=string</strong></a></strong></dt>
 
-<dt><strong><a name="dbname_string" class="item"><strong>--dbname=string</strong></a></strong>
+<dt><strong><a name="dbname_string" class="item"><strong>--dbname=string</strong></a></strong></dt>
 
-<dt><strong><a name="dbuser_string" class="item"><strong>--dbuser=string</strong></a></strong>
+<dt><strong><a name="dbuser_string" class="item"><strong>--dbuser=string</strong></a></strong></dt>
 
-<dt><strong><a name="dbpass_string" class="item"><strong>--dbpass=string</strong></a></strong>
+<dt><strong><a name="dbpass_string" class="item"><strong>--dbpass=string</strong></a></strong></dt>
 
 <dd>
 <p>The port, host, and name of the Bucardo database, the user to connect as, and the password to use.</p>
 </dd>
-</li>
-<dt><strong><a name="verbose" class="item"><strong>--verbose</strong></a></strong>
+<dt><strong><a name="verbose" class="item"><strong>--verbose</strong></a></strong></dt>
 
 <dd>
 <p>Tells Bucardo (not bucardo_ctl) to run in verbose mode. Default is on. Turning this off is not recommended.</p>
 </dd>
-</li>
-<dt><strong><a name="ctlverbose" class="item"><strong>--ctlverbose</strong></a></strong>
+<dt><strong><a name="ctlverbose" class="item"><strong>--ctlverbose</strong></a></strong></dt>
 
 <dd>
 <p>Makes bucardo_ctl run verbosely. Default is off.</p>
 </dd>
-</li>
-<dt><strong><a name="ctlquiet" class="item"><strong>--ctlquiet</strong></a></strong>
+<dt><strong><a name="ctlquiet" class="item"><strong>--ctlquiet</strong></a></strong></dt>
 
 <dd>
 <p>Tells bucardo_ctl to be as quiet as possible. Default is off.</p>
 </dd>
-</li>
-<dt><strong><a name="help" class="item"><strong>--help</strong></a></strong>
+<dt><strong><a name="help" class="item"><strong>--help</strong></a></strong></dt>
 
 <dd>
 <p>Shows a brief summary of usage for bucardo_ctl.</p>
 </dd>
-</li>
 </dl>
 <p>
 </p>
 <h2><a name="kick_arguments">Kick arguments</a></h2>
 <p>The following arguments are only used with the 'kick' command:</p>
 <dl>
-<dt><strong><a name="retry" class="item"><strong>--retry=#</strong></a></strong>
+<dt><strong><a name="retry" class="item"><strong>--retry=#</strong></a></strong></dt>
 
 <dd>
 <p>The number of times to retry a sync if it fails. Defaults to 0.</p>
 </dd>
-</li>
-<dt><strong><a name="retrysleep" class="item"><strong>--retrysleep</strong></a></strong>
+<dt><strong><a name="retrysleep" class="item"><strong>--retrysleep</strong></a></strong></dt>
 
 <dd>
 <p>How long to sleep, in seconds, between each retry attempt.</p>
 </dd>
-</li>
-<dt><strong><a name="notimer" class="item"><strong>--notimer</strong></a></strong>
+<dt><strong><a name="notimer" class="item"><strong>--notimer</strong></a></strong></dt>
 
 <dd>
 <p>By default, kicks with a timeout argument give a running real-time summary of time elapsed by 
 using the backspace character. This may not be wanted if running a kick, for example, 
 via a cronjob, so turning --notimer on will simply print the entire message without backspaces.</p>
 </dd>
-</li>
 </dl>
 <p>
 </p>
 <h2><a name="status_arguments">Status arguments</a></h2>
 <p>The following arguments are only used with the 'status' command:</p>
 <dl>
-<dt><strong><a name="daysback" class="item"><strong>--daysback=#</strong></a></strong>
+<dt><strong><a name="daysback" class="item"><strong>--daysback=#</strong></a></strong></dt>
 
 <dd>
 <p>Sets how many days backwards to search the old 'q' logs for information. Defaults to 3 days.</p>
 </dd>
-</li>
-<dt><strong><a name="showdays" class="item"><strong>--showdays</strong></a></strong>
+<dt><strong><a name="showdays" class="item"><strong>--showdays</strong></a></strong></dt>
 
 <dd>
 <p>Specifies whether or not do list the time interval with days, or simply show the hours. For example, 
 &quot;3d 12h 6m 3s&quot; vs. &quot;48h 6m 3s&quot;</p>
 </dd>
-</li>
-<dt><strong><a name="compress" class="item"><strong>--compress</strong></a></strong>
+<dt><strong><a name="compress" class="item"><strong>--compress</strong></a></strong></dt>
 
 <dd>
 <p>Specifies whether or not to compress the time interval by removing spaces. Mostly used to limit 
 the width of the 'status' display.</p>
 </dd>
-</li>
-<dt><strong><a name="sort" class="item"><strong>--sort=#</strong></a></strong>
+<dt><strong><a name="sort" class="item"><strong>--sort=#</strong></a></strong></dt>
 
 <dd>
 <p>Requests sorting of the 'status' output by one of the nine columns. Use a negative number to reverse 
 the sort order.</p>
 </dd>
-</li>
 </dl>
 <p>
 </p>
 <h2><a name="startup_arguments">Startup arguments</a></h2>
 <p>The following arguments are only applicable when using the &quot;start&quot; command:</p>
 <dl>
-<dt><strong><a name="sendmail" class="item"><strong>--sendmail</strong></a></strong>
+<dt><strong><a name="sendmail" class="item"><strong>--sendmail</strong></a></strong></dt>
 
 <dd>
 <p>Tells Bucardo whether or not to send mail on interesting events: startup, shutdown, and errors. Default is on.
 Only applicable when using ./bucardo_ctl start.</p>
 </dd>
-</li>
-<dt><strong><a name="extraname_string" class="item"><strong>--extraname=string</strong></a></strong>
+<dt><strong><a name="extraname_string" class="item"><strong>--extraname=string</strong></a></strong></dt>
 
 <dd>
 <p>A short string that will be appended to the version string as output by the Bucardo process names. Mostly 
 useful for debugging.</p>
 </dd>
-</li>
-<dt><strong><a name="debugfilesep" class="item"><strong>--debugfilesep</strong></a></strong>
+<dt><strong><a name="debugfilesep" class="item"><strong>--debugfilesep</strong></a></strong></dt>
 
 <dd>
 <p>Forces creation of separate log files for each Bucardo process of the form &quot;log.bucardo.X.Y&quot;, 
 where X is the type of process (MCP, CTL, or KID), and Y is the process ID.</p>
 </dd>
-</li>
-<dt><strong><a name="debugstderr" class="item"><strong>--debugstderr</strong></a></strong>
-
-<dd>
-<p>Sends all log messages to standard error. Off by default.</p>
-</dd>
-</li>
-<dt><strong><a name="debugstdout" class="item"><strong>--debugstdout</strong></a></strong>
-
-<dd>
-<p>Sends all log messages to standard out. Off by default.</p>
-</dd>
-</li>
-<dt><strong><a name="debugsyslog" class="item"><strong>--debugsyslog</strong></a></strong>
+<dt><strong><a name="debugsyslog" class="item"><strong>--debugsyslog</strong></a></strong></dt>
 
 <dd>
 <p>Sends all log messages to the syslog daemon. On by default. The facility used is controlled by 
 the row &quot;syslog_facility&quot; in the bucardo_config table, and defaults to &quot;LOG_LOCAL1&quot;.</p>
 </dd>
-</li>
-<dt><strong><a name="debugfile" class="item"><strong>--debugfile</strong></a></strong>
+<dt><strong><a name="debugfile" class="item"><strong>--debugfile</strong></a></strong></dt>
 
 <dd>
 <p>If set, writes detailed debugging information to one or more files.</p>
 </dd>
-</li>
-<dt><strong><a name="debugdir_directory_name" class="item"><strong>--debugdir=directory name</strong></a></strong>
+<dt><strong><a name="debugdir_directory_name" class="item"><strong>--debugdir=directory name</strong></a></strong></dt>
 
 <dd>
 <p>Directory where the debug files should go.</p>
 </dd>
-</li>
-<dt><strong><a name="debugname_string" class="item"><strong>--debugname=string</strong></a></strong>
+<dt><strong><a name="debugname_string" class="item"><strong>--debugname=string</strong></a></strong></dt>
 
 <dd>
 <p>Appends the given string to the end of the default debug file name, &quot;log.bucardo&quot;. A dot is added 
 before the name as well, so a debugname of &quot;rootdb&quot; would produce a log file named &quot;log.bucardo.rootdb&quot;.</p>
 </dd>
-</li>
-<dt><strong><a name="cleandebugs" class="item"><strong>--cleandebugs</strong></a></strong>
+<dt><strong><a name="cleandebugs" class="item"><strong>--cleandebugs</strong></a></strong></dt>
 
 <dd>
 <p>Forces removal of all old debug files before running.</p>
 </dd>
-</li>
 </dl>
 <p>
 </p>
 <hr />
 <h1><a name="files">FILES</a></h1>
 <p>In addition to command-line configurations, you can put any options inside of a file. The file <em class="file">.bucardorc</em> in 
-the current directory will be used if found. If not found, then the file <em class="file">~/.bucardorc</em> will be used. The format 
-of the file is option = value, one per line. Any line starting with a '#' will be skipped. Any values loaded 
-from a .bucardorc file will be overwritten by command-line options.</p>
+the current directory will be used if found. If not found, then the file <em class="file">~/.bucardorc</em> will be used. Finally, 
+the file /etc/bucardorc will be used if available. The format of the file is option = value, one per line. Any 
+line starting with a '#' will be skipped. Any values loaded from a bucardorc file will be overwritten by 
+command-line options.</p>
 <p>
 </p>
 <hr />

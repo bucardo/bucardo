@@ -31,6 +31,10 @@ $bct->add_test_tables_to_herd('A', 'testherd1');
 
 ## Create tables for this test
 for my $dbh (($dbhA, $dbhB)) {
+    # This could be DROP TABLE IF EXISTS, except that we want to support PostgreSQL 8.1
+    for my $tbl (@{ $dbh->selectall_arrayref(q{SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename in ('csmulti', 'customselect')}) } ) {
+        $dbh->do("DROP TABLE $tbl");
+    }
     $dbh->do(q{
         CREATE TABLE customselect (
             id INTEGER PRIMARY KEY,
@@ -54,10 +58,10 @@ $bct->ctl('add herd herd1');
 $bct->ctl('add table customselect db=A herd=herd1');
 $i = $bct->ctl('add sync customselectsync source=herd1 type=fullcopy targetdb=B usecustomselect=true');
 like($i, qr{Sync added:}, 'Added customselect sync');
-$dbhX->do(q{update goat set customselect = $$select id, 'aaa' as field1, field2, field3 from customselect$$ where tablename = 'customselect'});
+$dbhX->do(q{update goat set customselect = $$select id, 'aaa'::text as field1, field2, field3 from customselect$$ where tablename = 'customselect'});
 $bct->ctl('add herd herd2');
 $bct->ctl('add table csmulti db=A herd=herd2');
-$dbhX->do(q{update goat set customselect = $$select id1, id2, 'aaa' as field1, field2, field3 from csmulti$$ where tablename = 'csmulti'});
+$dbhX->do(q{update goat set customselect = $$select id1, id2, 'aaa'::text as field1, field2, field3 from csmulti$$ where tablename = 'csmulti'});
 $i = $bct->ctl('add sync csmulti source=herd2 type=fullcopy targetdb=B usecustomselect=true');
 like($i, qr{Sync added:}, 'Added multi-column primary key customselect sync');
 $dbhX->commit();

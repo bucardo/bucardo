@@ -1,33 +1,39 @@
 #!perl -- -*-cperl-*-
 
+## XXX: Make sure targetiod is set for sequences as well
+
 ## The main Bucardo program
 ##
+## This script should only be called via the 'bucardo_ctl' program
+##
 ## Copyright 2006-2009 Greg Sabino Mullane <greg@endpoint.com>
+##
+## Please visit http://bucardo.org for more information
 
 package Bucardo;
 use 5.008003;
 use strict;
 use warnings;
 
-our $VERSION = '3.2.7';
+our $VERSION = '4.0.0';
 
-use sigtrap qw( die normal-signals );
-use Time::HiRes 'sleep';
-use DBI 1.51;
-use DBD::Pg 2.0;
-my $DEFAULT = $DBD::Pg::DBDPG_DEFAULT;
-use Net::SMTP;
-use Sys::Hostname 'hostname';
-use IO::Handle;
-use Data::Dumper 'Dumper';
+use sigtrap qw( die normal-signals ); ## Call die() on HUP, INT, PIPE, or TERM
+use Config;                           ## Used to map signal names
+use Time::HiRes qw( sleep );          ## For better resolution than the built-in sleep
+use DBI 1.51;                         ## How Perl talks to databases
+use DBD::Pg 2.0;                      ## The Postgres driver for DBI
+use Net::SMTP;                        ## Used to send out email alerts
+use Sys::Hostname 'hostname';         ## Used for debugging/mail sending
+use IO::Handle qw( autoflush );       ## Used to prevent stdout/stderr buffering
+use Sys::Syslog qw( openlog syslog ); ## In case we are logging via syslog()
+use DBIx::Safe '1.2.4';               ## Filter out what DB calls customcode may use
+use Data::Dumper 'Dumper';            ## Used to dump information in email alerts
+
+## Formating of Dumper() calls:
 $Data::Dumper::Varname = 'BUCARDO';
 $Data::Dumper::Indent = 1;
-use Getopt::Long;
-use Config;
-## We can consider using require/eval magic to make Sys::Syslog optional
-use Sys::Syslog qw(openlog syslog);
-use DBIx::Safe '1.2.4'; ## e.g. yum install perl-DBIx-Safe
 
+## Common variables we don't want to declare over and over:
 use vars qw($SQL %SQL $sth %sth $count $info);
 
 ## Map system signal numbers to standard names
@@ -37,13 +43,13 @@ for (split(' ', $Config{sig_name})) {
 	$signumber{$_} = $x++;
 }
 
-## Do not buffer output to stdout or stderr
+## Prevent buffering of output:
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
 
+## Configuration of DBIx::Safe
 ## Specify exactly what database handles are allowed to do within custom code
-
-## Here, 'strict' is inside the main transaction Bucardo uses to make changes
+## Here, 'strict' means 'inside the main transaction that Bucardo uses to make changes'
 my %dbix = (
 	source => {
 		strict => {
@@ -75,26 +81,31 @@ my %dbix = (
 	}
 );
 
-## Optional cleanup for the pidfiles
+## Optional cleanup for any PID files created
 ## The string PIDFILE will be replaced with the actual name
 ## This is a direct system call, so resist the urge to put this in bucardo_config!
-my $PIDCLEANUP = ''; ## "/bin/chgrp bucardo PIDFILE";
+my $PIDCLEANUP = ''; ## e.g. '/bin/chgrp bucardo PIDFILE';
 
+## Grab our full and shortened host name:
 my $hostname = hostname;
 my $shorthost = $hostname;
 $shorthost =~ s/^(.+?)\..*/$1/;
 
+## Items pulled from bucardo_config and shared everywhere:
 our %config;
 our %config_about;
 
+## Everything else is subroutines
 
 sub new {
 
-	## Create a new Bucardo instance. Primarily called by bucardo_ctl
+	## Create a new Bucardo object and return it
+	## Takes a hashref of options as the only argument
 
 	my $class = shift;
 	my $params = shift || {};
 
+	## The hash for this object, with default values:
 	my $self = {
 		created      => scalar localtime,
 		ppid         => $$,
@@ -106,33 +117,33 @@ sub new {
 		debugfilesep => 0,
 		debugname    => '',
 		cleandebugs  => 0,
-		debugstderr  => 0,
-		debugstdout  => 0,
 		dryrun       => 0,
 		bcquiet      => 0,
 		sendmail     => 1,
 		extraname    => '',
+		logprefix    => 'BC!',
 		version      => $VERSION,
 	};
 
-	## Add any passed in parameters to our hash
+	## Add any passed in parameters to our hash:
 	for (keys %$params) {
 		$self->{$_} = $params->{$_};
 	}
 
+	## Transform our hash into a genuine 'Bucardo' object:
 	bless $self, $class;
 
+	## Remove any previous debugging files if requested
 	if ($self->{cleandebugs}) {
+		## If the dir does not exists, silently proceed
 		if (opendir my $dh, $self->{debugdir}) {
 			for my $file (grep { /^log\.bucardo\./ } readdir $dh) {
-				unlink "$self->{debugdir}/$file";
+				my $f = "$self->{debugdir}/$file";
+				unlink "$self->{debugdir}/$file" or warn qq{Could not remove "$f": $!\n};
 			}
-			closedir $dh;
+			closedir $dh or warn qq{Could not closedir "$self->{debugdir}": $!\n};
 		}
 	}
-
-	## Set the "pre-MCP" three character log prefix. After this, it will all be MCP, CTL, or KID
-	$self->{logprefix} = 'BC!';
 
 	## Zombie stopper
 	$SIG{CHLD} = 'IGNORE';
@@ -144,10 +155,10 @@ sub new {
 		$self->{dryrun} = 1;
 	}
 	if ($self->{dryrun}) {
-		print {*STDERR} "** DRYRUN - Syncs will not be commited! **\n";
+		$self->glog("'** DRYRUN - Syncs will not be commited! **\n");
 	}
 
-	## This gets appended to the process description
+	## This gets appended to the process description ($0)
 	if ($self->{extraname}) {
 		$self->{extraname} = " ($self->{extraname})";
 	}
@@ -163,8 +174,10 @@ sub new {
 		openlog 'Bucardo', 'pid nowait', $config{syslog_facility};
 	}
 
-	## Setup our standard files to store PID and to signal stopping all processes
+	## Where to store our PID:
 	$self->{pidfile} = "$config{piddir}/$config{pidfile}";
+
+	## The file to ask all processes to stop:
 	$self->{stopfile} = "$config{piddir}/$config{stopfile}";
 
 	## Send all log lines starting with "Warning" to a separate file
@@ -175,19 +188,114 @@ sub new {
 } ## end of new
 
 
+sub connect_database {
+
+	## Connect to the given database
+	## First and only argument is the database id
+	## If blank or zero, we return the main database
+	## Returns the string 'inactive' if set as such in the db table
+	## Returns the database handle and the backedn PID
+
+	my $self = shift;
+
+	my $id = shift || 0;
+
+	my ($dsn,$dbh,$user,$pass);
+
+	## If id is 0, connect to the main database
+	if (!$id) {
+		$dsn = "dbi:Pg:dbname=$self->{dbname}";
+		defined $self->{dbport} and length $self->{dbport} and $dsn .= ";port=$self->{dbport}";
+		defined $self->{dbhost} and length $self->{dbhost} and $dsn .= ";host=$self->{dbhost}";
+		defined $self->{dbconn} and length $self->{dbconn} and $dsn .= ";$self->{dbconn}";
+		$user = $self->{dbuser};
+		$pass = $self->{dbpass};
+	}
+	else {
+		my $db = $self->get_dbs;
+		exists $db->{$id} or die qq{Invalid database id!: $id\n};
+
+		my $d = $db->{$id};
+		if ($d->{status} ne 'active') {
+			return 0, 'inactive';
+		}
+
+		$dsn = "dbi:Pg:dbname=$d->{dbname}";
+		defined $d->{dbport} and length $d->{dbport} and $dsn .= ";port=$d->{dbport}";
+		defined $d->{dbhost} and length $d->{dbhost} and $dsn .= ";host=$d->{dbhost}";
+		length $d->{dbconn} and $dsn .= ";$d->{dbconn}";
+		$user = $d->{dbuser};
+		$pass = $d->{dbpass} || '';
+	}
+
+	$dbh = DBI->connect
+		(
+		 $dsn,
+		 $user,
+		 $pass,
+		 {AutoCommit=>0, RaiseError=>1, PrintError=>0}
+	);
+
+	## Grab the backend PID for this Postgres process
+	## Also a nice check that everything is working properly
+	$SQL = 'SELECT pg_backend_pid()';
+	my $backend = $dbh->selectall_arrayref($SQL)->[0][0];
+	$dbh->rollback();
+
+	if (!$id) {
+		## Prepend bucardo to the search path
+		$dbh->do(q{SELECT pg_catalog.set_config('search_path', 'bucardo,' || current_setting('search_path'), false)});
+		$dbh->commit();
+	}
+
+	return $backend, $dbh;
+
+} ## end of connect_database
+
+
+sub reload_config_database {
+
+	## Reload the %config and %config_about hashes from the bucardo_config table
+	## Calls commit on the masterdbh
+
+	my $self = shift;
+
+	undef %config;
+	undef %config_about;
+
+	$SQL = 'SELECT setting,value,about,type,name FROM bucardo_config';
+	$sth = $self->{masterdbh}->prepare($SQL);
+	$sth->execute();
+	for my $row (@{$sth->fetchall_arrayref({})}) {
+		if (defined $row->{type}) {
+			$config{$row->{type}}{$row->{name}}{$row->{setting}} = $row->{value};
+			$config_about{$row->{type}}{$row->{name}}{$row->{setting}} = $row->{about};
+		}
+		else {
+			$config{$row->{setting}} = $row->{value};
+			$config_about{$row->{setting}} = $row->{about};
+		}
+	}
+	$self->{masterdbh}->commit();
+
+	return;
+
+} ## end of reload_config_database
+
+
 sub glog { ## no critic (RequireArgUnpacking)
 
 	## Reformat and log internal messages to the correct place
+	## First argument is the message
+	## Other arguments are used if $msg is a printf-style string
 
-	## Quick shortcut if verbose if off (not recommended!)
+	## Quick shortcut if verbose is 'off' (which is not recommended!)
 	return if ! $_[0]->{verbose};
 
 	my ($self,$msg,@extra) = @_;
 	chomp $msg;
 
-	my $is_warning = ($self->{warning_file} and $msg =~ /^Warning|ERROR|FATAL/o) ? 1 : 0;
-
-	## Any extra arguments means $msg is a printf-style string
+	## Apply any extra arguments to $msg as if it was a printf-style string
 	if (@extra) {
 		$msg = sprintf $msg, @extra;
 	}
@@ -208,15 +316,9 @@ sub glog { ## no critic (RequireArgUnpacking)
 	## If using syslog, send the message at the 'info' priority
 	$self->{debugsyslog} and syslog 'info', $msg;
 
-	## Possibly send the message to stderr
-	$self->{debugstderr} and print {*STDERR} "$header $msg\n";
-
-	## Possibly send the message to stdout
-	$self->{debugstdout} and print {*STDOUT} "$header $msg\n";
-
-	## Possibly send warnings to a separate file
-	if ($is_warning) {
-		my $file = $self->{warning_file} or die;
+	## Warning messages may also get written to a separate file
+	if ($self->{warning_file} and $msg =~ /^Warning|ERROR|FATAL/o) {
+		my $file = $self->{warning_file};
 		open $self->{warningfilehandle}, '>>', $file or die qq{Could not append to "$file": $!\n};
 		print {$self->{warningfilehandle}} "$header $msg\n";
 		close $self->{warningfilehandle} or warn qq{Could not close "$file": $!\n};
@@ -245,7 +347,7 @@ sub glog { ## no critic (RequireArgUnpacking)
 		## Write the message.
 		## If not writing to separate files, prepend the PID to the message
 		printf {$self->{debugfilehandle}{$$}{$file}} "%s%s %s\n",
-			(!$self->{debugfilesep} and !$config{log_showpid}) ? "($$) " : '',
+			(!$self->{debugfilesep} and $config{log_showpid}) ? "($$) " : '',
 			$header,
 			$msg;
 	}
@@ -470,7 +572,7 @@ sub start_mcp {
 		exit 1;
 	}
 
-	## Create a new pid file
+	## Create a new (temporary) pid file
 	open my $pid, '>', $self->{pidfile} or die qq{Cannot write to $self->{pidfile}: $!\n};
 	my $now = scalar localtime;
 	print {$pid} "$$\n$old0\n$now\n";
@@ -521,9 +623,19 @@ sub start_mcp {
 	if ($seeya) {
 		exit 0;
 	}
-	$self->{masterdbh} = $self->connect_database();
+
+	my $mcp_backend;
+	($mcp_backend, $self->{masterdbh}) = $self->connect_database();
+
+	## Let any listeners know we have gotten this far
 	$self->{masterdbh}->do('NOTIFY bucardo_boot') or die 'NOTIFY bucardo_boot failed!';
 	$self->{masterdbh}->commit();
+
+	## Now that we've forked, overwrite the PID file with our new value
+	open $pid, '>', $self->{pidfile} or die qq{Cannot write to $self->{pidfile}: $!\n};
+	$now = scalar localtime;
+	print {$pid} "$$\n$old0\n$now\n";
+	close $pid or warn qq{Could not close "$self->{pidfile}": $!\n};
 
 	## Start outputting some interesting things to the log
 	$self->glog("Starting Bucardo version $VERSION");
@@ -537,6 +649,8 @@ sub start_mcp {
 	$systemtime = qx{/bin/date +"%Z"} || '?';
 	chomp $systemtime;
 	$self->glog("Local system timezone: $systemtime  Database timezone: $dbtime->[2]");
+	$self->glog("PID: $$");
+	$self->glog("Backend PID: $mcp_backend");
 
 	## Again with the password trick
 	$self->{dbpass} = '<not shown>';
@@ -631,6 +745,8 @@ sub start_mcp {
 	if (!$active_syncs) {
 		## Should we allow an option to hang around anyway?
 		$self->glog('No active syncs were found, so we are exiting');
+		$self->{masterdbh}->do('NOTIFY bucardo_nosyncs');
+		$self->{masterdbh}->commit();
 		exit 1;
 	}
 
@@ -660,6 +776,18 @@ sub start_mcp {
 	}
 	$mcpdbh->do('NOTIFY bucardo_started')  or warn 'NOTIFY failed';
 	$mcpdbh->commit();
+
+	## Kick all syncs that may have sent a notice while we were down.
+	for my $syncname (keys %{$self->{sync}}) {
+		my $s = $self->{sync}{$syncname};
+		## Skip inactive syncs
+		next unless $s->{mcp_active};
+		## Skip fullcopy syncs
+		next if $s->{synctype} eq 'fullcopy';
+		## Skip if ping is false
+		next if ! $s->{ping};
+		$s->{mcp_kicked} = 1;
+	}
 
 	## Start the main loop
 	$self->mcp_main();
@@ -1010,7 +1138,7 @@ sub start_mcp {
 							$count = kill 0 => $oldpid;
 							if (!$count) {
 								$self->glog(qq{Warning! PID $oldpid was not found. Removing PID file});
-								unlink $pidfile;
+								unlink $pidfile or $self->glog("Warning! Failed to unlink $pidfile");
 								$s->{mcp_problemchild} = 3;
 								next SYNC;
 							}
@@ -1027,7 +1155,7 @@ sub start_mcp {
 					}
 					$self->glog("No active pid $oldpid found. Killing just in case, and removing file");
 					kill $signumber{SIGTERM} => $oldpid;
-					unlink $pidfile;
+					unlink $pidfile or $self->glog("Warning! Failed to unlink $pidfile");
 					$s->{mcp_changed} = 1;
 				} ## end if pidfile found for this sync
 
@@ -1080,36 +1208,9 @@ sub start_mcp {
 		## Reset counters for ctl restart via maxkicks and lifetime settings
 		$s->{ctl_kick_counts} = 0;
 		$s->{start_time} = time();
-	}
-
-
-	sub reload_config_database {
-
-		## Reload the %config and %config_about hashes from the bucardo_config table
-
-		my $self = shift;
-
-		undef %config;
-		undef %config_about;
-
-		$SQL = 'SELECT setting,value,about,type,name FROM bucardo_config';
-		$sth = $self->{masterdbh}->prepare($SQL);
-		$sth->execute();
-		for my $row (@{$sth->fetchall_arrayref({})}) {
-			if (defined $row->{type}) {
-				$config{$row->{type}}{$row->{name}}{$row->{setting}} = $row->{value};
-				$config_about{$row->{type}}{$row->{name}}{$row->{setting}} = $row->{about};
-			}
-			else {
-				$config{$row->{setting}} = $row->{value};
-				$config_about{$row->{setting}} = $row->{about};
-			}
-		}
-		$self->{masterdbh}->commit();
 
 		return;
-
-	} ## end of reload_config_database
+	}
 
 
 	sub reload_mcp {
@@ -1187,7 +1288,7 @@ sub start_mcp {
 		} ## end each sync
 
 		## Change our process name, and list all active syncs
-		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active syncs:";
+		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active syncs: ";
 		$0 .= join ',' => @activesyncs;
 
 		my $count = @activesyncs;
@@ -1231,8 +1332,14 @@ sub start_mcp {
 				 'kick_sync',
 			 ) {
 
-				## If the sync is inactive, no sense in listening for anything but an activate request
-				next if $self->{sync}{$syncname}{status} ne 'active' and $l ne 'activate_sync';
+				## If the sync is inactive, no sense in listening for anything but activate/reload requests
+				if ($self->{sync}{$syncname}{status} ne 'active') {
+					next if $l eq 'deactivate_sync' or $l eq 'kick_sync';
+				}
+				else {
+					## If sync is active, no need to listen for an activate request
+					next if $l eq 'activate_sync';
+				}
 
 				my $listen = "bucardo_${l}_$syncname";
 				$maindbh->do(qq{LISTEN "$listen"}) or die "LISTEN $listen failed";
@@ -1274,6 +1381,11 @@ sub start_mcp {
 
 		## Let any listeners know we are done
 		$maindbh->do(qq{NOTIFY "bucardo_activated_sync_$syncname"}) or warn 'NOTIFY failed';
+		## We don't need to listen for activation requests anymore
+		$maindbh->do(qq{UNLISTEN "bucardo_activate_sync_$syncname"});
+		## But we do need to listen for deactivate and kick requests
+		$maindbh->do(qq{LISTEN "bucardo_deactivate_sync_$syncname"});
+		$maindbh->do(qq{LISTEN "bucardo_kick_sync_$syncname"});
 		$maindbh->commit();
 
 		## Redo our process name to include an updated list of active syncs
@@ -1283,7 +1395,7 @@ sub start_mcp {
 			push @activesyncs, $syncname;
 		}
 
-		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active syncs:";
+		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active syncs: ";
 		$0 .= join ',' => @activesyncs;
 
 		return 1;
@@ -1312,7 +1424,13 @@ sub start_mcp {
 		$s->{sourcedb} = $s->{goatlist}[0]{db};
 
 		## Connect to the source database and prepare to check tables and columns
-		$self->{pingdbh}{$s->{sourcedb}} ||= $self->connect_database($s->{sourcedb});
+		if (! $self->{pingdbh}{$s->{sourcedb}}) {
+			my $backend;
+			($backend, $self->{pingdbh}{$s->{sourcedb}}) = $self->connect_database($s->{sourcedb});
+			if (defined $backend) {
+				$self->glog("Source database backend PID is $backend");
+			}
+		}
 		my $srcdbh = $self->{pingdbh}{$s->{sourcedb}};
  		if ($srcdbh eq 'inactive') {
 			$self->glog('Source database is inactive, cannot proceed. Consider making the sync inactive instead');
@@ -1356,7 +1474,13 @@ sub start_mcp {
 		if (defined $s->{targetdb}) {
 			my $tdb = $s->{targetdb};
 			$self->glog(qq{Connecting to target database "$tdb"});
-			$pdbh->{$tdb} ||= $self->connect_database($tdb);
+			if (! $pdbh->{$tdb}) {
+				my $backend;
+				($backend, $pdbh->{$tdb}) = $self->connect_database($tdb);
+				if (defined $backend) {
+					$self->glog("Target database backend PID is $backend");
+				}
+			}
 			## If the database is marked as inactive, we'll remove it from this syncs list
 			if ($pdbh->{$tdb} eq 'inactive') {
 				$self->glog(qq{Deleting inactive target database "$tdb"});
@@ -1370,7 +1494,13 @@ sub start_mcp {
 		elsif (defined $s->{targetgroup}) {
 			for my $tdb (@{$dbgroups->{$s->{targetgroup}}{members}}) {
 				$self->glog(qq{Connecting to target database "$tdb"});
-				$pdbh->{$tdb} ||= $self->connect_database($tdb);
+				if (! $pdbh->{$tdb}) {
+					my $backend;
+					($backend, $pdbh->{$tdb}) = $self->connect_database($tdb);
+					if (defined $backend) {
+						$self->glog("Target database backend PID is $backend");
+					}
+				}
 				if ($pdbh->{$tdb} eq 'inactive') {
 					$self->glog(qq{Deleting inactive target database "$tdb"});
 					delete $pdbh->{$tdb};
@@ -1466,6 +1596,9 @@ sub start_mcp {
 		$s->{track_rates} = 0 if $s->{synctype} eq 'fullcopy';
 		my $makedeltagoats = 0;
 		for my $g (@{$s->{goatlist}}) {
+			## None of this applies to non-tables
+			next if $g->{reltype} ne 'table';
+
 			if ($g->{makedelta}) {
 				$s->{does_makedelta} = 1;
 				$g->{does_makedelta} = 1;
@@ -1491,13 +1624,13 @@ sub start_mcp {
 
 		## Go through each table and make sure it exists and matches everywhere
 		for my $g (@{$s->{goatlist}}) {
-			$self->glog(qq{  Inspecting source table $g->{schemaname}.$g->{tablename} on database "$s->{sourcedb}"});
+			$self->glog(qq{  Inspecting source $g->{reltype} $g->{schemaname}.$g->{tablename} on database "$s->{sourcedb}"});
 
 			## Check the source table, save escaped versions of the names
 			$sth = $sth{checktable};
 			$count = $sth->execute($g->{schemaname},$g->{tablename});
 			if ($count != 1) {
-				my $msg = qq{Could not find table $g->{schemaname}.$g->{tablename}\n};
+				my $msg = qq{Could not find $g->{reltype} $g->{schemaname}.$g->{tablename}\n};
 				$self->glog($msg);
 				warn $msg;
 				return 0;
@@ -1507,74 +1640,120 @@ sub start_mcp {
 			($g->{oid},$g->{safeschema},$g->{safetable},$g->{safeschemaliteral},$g->{safetableliteral})
 				= @{$sth->fetchall_arrayref()->[0]};
 
-			## Save information about each column in the primary key
-			if (!defined $g->{pkey} or !defined $g->{qpkey}) {
-				die "Table $g->{safetable} has no pkey or qpkey - do you need to run validate_goat on it?\n";
-			}
-
-			## Much of this is used later on, for speed of performing the sync
-			$g->{pkeyjoined}     = $g->{pkey};
-			$g->{qpkeyjoined}    = $g->{qpkey};
-			$g->{pkeytypejoined} = $g->{pkeytypejoined};
-			$g->{pkey}           = [split /\|/o => $g->{pkey}];
-			$g->{qpkey}          = [split /\|/o => $g->{qpkey}];
-			$g->{pkeytype}       = [split /\|/o => $g->{pkeytype}];
-			$g->{pkcols}         = @{$g->{pkey}};
-			$g->{hasbinarypk}    = 0;
-			for (@{$g->{pkey}}) {
-				push @{$g->{binarypkey}} => 0;
-			}
-
-			## Check the source columns, and save them
-			$sth = $sth{checkcols};
-			$sth->execute($g->{oid});
-			my $colinfo = $sth->fetchall_hashref('attname');
-			## Allow for 'dead' columns in the attnum ordering
-			$x=1;
-			for (sort { $colinfo->{$a}{attnum} <=> $colinfo->{$b}{attnum} } keys %$colinfo) {
-				$colinfo->{$_}{realattnum} = $x++;
-			}
-			$g->{columnhash} = $colinfo;
-
-			## Build lists of columns
-			$x = 1;
-			$g->{cols} = [];
-			$g->{safecols} = [];
-		  COL: for my $colname (sort { $colinfo->{$a}{attnum} <=> $colinfo->{$b}{attnum} } keys %$colinfo) {
-				## Skip if this column is part of the primary key
-				for my $pk (@{$g->{pkey}}) {
-					next COL if $pk eq $colname;
+			## If swap, verify the standard_conflict
+			if ($s->{synctype} eq 'swap' and $g->{standard_conflict}) {
+				my $sc = $g->{standard_conflict};
+				if ($g->{reltype} eq 'table') {
+					die qq{Unknown standard_conflict for $syncname $g->{schemaname}.$g->{tablename}: $sc\n}
+						unless
+						'source' eq $sc or
+						'target' eq $sc or
+						'skip'   eq $sc or
+						'random' eq $sc or
+						'latest' eq $sc or
+						'abort'  eq $sc;
 				}
-				push @{$g->{cols}}, $colname;
-				push @{$g->{safecols}}, $colinfo->{$colname}{qattname};
-				$colinfo->{$colname}{order} = $x++;
+				elsif ($g->{reltype} eq 'sequence') {
+					die qq{Unknown standard_conflict for $syncname $g->{schemaname}.$g->{tablename}: $sc\n}
+						unless
+						'source'  eq $sc or
+						'target'  eq $sc or
+						'skip'    eq $sc or
+						'lowest'  eq $sc or
+						'highest' eq $sc;
+				}
+				else {
+					die q{Invalid reltype!};
+				}
+				$self->glog(qq{    Standard conflict method "$sc" chosen});
+			} ## end standard conflict
+
+			## Swap syncs must have some way of resolving conflicts
+			if ($s->{synctype} eq 'swap' and !$g->{standard_conflict} and !exists $g->{code_conflict}) {
+				$self->glog(qq{Warning! Tables used in swaps must specify a conflict handler. $g->{schemaname}.$g->{tablename} appears to have neither standard or custom handler.});
+				return 0;
 			}
 
-			## Stringified versions of the above lists, for ease later on
-			$g->{columnlist} = join ',' => @{$g->{cols}};
-			$g->{safecolumnlist} = join ',' => @{$g->{safecols}};
+			my $colinfo;
+			if ($g->{reltype} eq 'table') {
 
-			## Note which columns are bytea
-		  BCOL: for my $colname (keys %$colinfo) {
-				my $c = $colinfo->{$colname};
-				next if $c->{atttypid} != 17; ## Yes, it's hardcoded, no sweat
-				$x = 0;
-				for my $pk (@{$g->{pkey}}) {
-					if ($colname eq $pk) {
-						$g->{binarypkey}[$x] = 1;
-						$g->{hasbinarypk} = 1;
-						next BCOL;
+				## Save information about each column in the primary key
+				if (!defined $g->{pkey} or !defined $g->{qpkey}) {
+					die "Table $g->{safetable} has no pkey or qpkey - do you need to run validate_goat on it?\n";
+				}
+
+				## Much of this is used later on, for speed of performing the sync
+				$g->{pkeyjoined}     = $g->{pkey};
+				$g->{qpkeyjoined}    = $g->{qpkey};
+				$g->{pkeytypejoined} = $g->{pkeytypejoined};
+				$g->{pkey}           = [split /\|/o => $g->{pkey}];
+				$g->{qpkey}          = [split /\|/o => $g->{qpkey}];
+				$g->{pkeytype}       = [split /\|/o => $g->{pkeytype}];
+				$g->{pkcols}         = @{$g->{pkey}};
+				$g->{hasbinarypk}    = 0;
+				for (@{$g->{pkey}}) {
+					push @{$g->{binarypkey}} => 0;
+				}
+
+				## Check the source columns, and save them
+				$sth = $sth{checkcols};
+				$sth->execute($g->{oid});
+				$colinfo = $sth->fetchall_hashref('attname');
+				## Allow for 'dead' columns in the attnum ordering
+				$x=1;
+				for (sort { $colinfo->{$a}{attnum} <=> $colinfo->{$b}{attnum} } keys %$colinfo) {
+					$colinfo->{$_}{realattnum} = $x++;
+				}
+				$g->{columnhash} = $colinfo;
+
+				## Build lists of columns
+				$x = 1;
+				$g->{cols} = [];
+				$g->{safecols} = [];
+			  COL: for my $colname (sort { $colinfo->{$a}{attnum} <=> $colinfo->{$b}{attnum} } keys %$colinfo) {
+					## Skip if this column is part of the primary key
+					for my $pk (@{$g->{pkey}}) {
+						next COL if $pk eq $colname;
 					}
-					$x++;
+					push @{$g->{cols}}, $colname;
+					push @{$g->{safecols}}, $colinfo->{$colname}{qattname};
+					$colinfo->{$colname}{order} = $x++;
 				}
-				## This is used to bind_param these as binary during inserts and updates
-				push @{$g->{binarycols}}, $colinfo->{$colname}{order};
+
+				## Stringified versions of the above lists, for ease later on
+				$g->{columnlist} = join ',' => @{$g->{cols}};
+				$g->{safecolumnlist} = join ',' => @{$g->{safecols}};
+
+				## Note which columns are bytea
+			  BCOL: for my $colname (keys %$colinfo) {
+					my $c = $colinfo->{$colname};
+					next if $c->{atttypid} != 17; ## Yes, it's hardcoded, no sweat
+					$x = 0;
+					for my $pk (@{$g->{pkey}}) {
+						if ($colname eq $pk) {
+							$g->{binarypkey}[$x] = 1;
+							$g->{hasbinarypk} = 1;
+							next BCOL;
+						}
+						$x++;
+					}
+					## This is used to bind_param these as binary during inserts and updates
+					push @{$g->{binarycols}}, $colinfo->{$colname}{order};
+				}
+
+			} ## end if reltype is table
+
+			## If a sequence, grab all info as a hash
+			## Saves us from worrying about future changes or version specific columns
+			if ($g->{reltype} eq 'sequence') {
+				$SQL = "SELECT * FROM $g->{safeschema}.$g->{safetable}";
+				$sth = $srcdbh->prepare($SQL);
+				$sth->execute();
+				$g->{sequenceinfo} = $sth->fetchall_arrayref({})->[0];
 			}
 
-			## Verify tables and columns on remote databases
-
+			## Verify sequences or tables+columns on remote databases
 			## TODO: Fork to speed this up? (more than one target at a time)
-
 			my $maindbh = $self->{masterdbh};
 			for my $db (sort keys %targetdbh) {
 
@@ -1595,8 +1774,30 @@ sub start_mcp {
 					}
 				}
 
-				## Grab oid and quoted information about the table on the remote database
+				## Get a handle for the remote database
 				my $dbh = $pdbh->{$db};
+
+				## If a sequence, verify the information and move on
+				if ($g->{reltype} eq 'sequence') {
+					$SQL = "SELECT * FROM $g->{safeschema}.$g->{safetable}";
+					$sth = $dbh->prepare($SQL);
+					$sth->execute();
+					$info = $sth->fetchall_arrayref({})->[0];
+					for my $key (sort keys %$info) {
+						if (! exists $g->{sequenceinfo}{$key}) {
+							$self->glog('Warning! Sequence on target has item $key, but source does not!');
+							next;
+						}
+						my $sseq = $g->{sequenceinfo}{$key};
+						if ($info->{$key} ne $sseq) {
+							$self->glog("Warning! Sequence mismatch. Source $key=$sseq, target is $info->{$key}");
+							next;
+						}
+					}
+					next;
+				}
+
+				## Grab oid and quoted information about the table on the remote database
 				$sth = $dbh->prepare($SQL{checktable});
 				$count = $sth->execute($g->{schemaname},$g->{tablename});
 				if ($count != 1) {
@@ -1627,7 +1828,11 @@ sub start_mcp {
 
 				## Check each column in alphabetic order
 				for my $colname (sort keys %$colinfo) {
-					$self->glog(qq{    Checking column on target database "$db": "$colname"});
+					## Simple var mapping to make the following code sane
+					my $fcol = $targetcolinfo->{$colname};
+					my $scol = $colinfo->{$colname};
+
+					$self->glog(qq{    Checking column on target database "$db": "$colname" ($scol->{ftype})});
 
 					## Always fatal: column on source but not target
 					if (! exists $targetcolinfo->{$colname}) {
@@ -1637,10 +1842,6 @@ sub start_mcp {
 						warn $msg;
 						next;
 					}
-
-					## Simple var mapping to make the following code sane
-					my $fcol = $targetcolinfo->{$colname};
-					my $scol = $colinfo->{$colname};
 
 					## Almost always fatal: types do not match up
 					if ($scol->{ftype} ne $fcol->{ftype}) {
@@ -1739,7 +1940,10 @@ sub start_mcp {
 
 			} ## end each target database
 
-			## If we got a custom query, figure out which columns to transfer
+			## If not a table, we can skip the rest
+			next if $g->{reltype} ne 'table';
+
+			## If we have a custom query, figure out which columns to transfer
 
 			## TODO: Allow remote databases to have only a subset of columns
 
@@ -1804,26 +2008,6 @@ sub start_mcp {
 
 			} ## end custom select
 
-			## If swap, verify the standard_conflict
-			if ($s->{synctype} eq 'swap' and $g->{standard_conflict}) {
-				my $sc = $g->{standard_conflict};
-				die qq{Unknown standard_conflict for $syncname $g->{schemaname}.$g->{tablename}: $sc\n}
-					unless
-					'source' eq $sc or
-					'target' eq $sc or
-					'skip'   eq $sc or
-					'random' eq $sc or
-					'latest' eq $sc or
-					'abort'  eq $sc;
-				$self->glog(qq{    Standard conflict method "$sc" chosen});
-			} ## end standard conflict
-
-			## Swap syncs must have some way of resolving conflicts
-			if ($s->{synctype} eq 'swap' and !$g->{standard_conflict} and !exists $g->{code_conflict}) {
-				$self->glog(qq{Warning! Tables used in swaps must specify a conflict handler. $g->{schemaname}.$g->{tablename} appears to have neither standard or custom handler.});
-				return 0;
-			}
-
 		} ## end each goat
 
 		## Listen to the source if pinging
@@ -1878,7 +2062,34 @@ sub start_mcp {
 
 		## Let any listeners know we are done
 		$maindbh->do(qq{NOTIFY "bucardo_deactivated_sync_$syncname"}) or warn 'NOTIFY failed';
+		## We don't need to listen for deactivation or kick requests
+		$maindbh->do("UNLISTEN bucardo_deactivate_sync_$syncname");
+		$maindbh->do("UNLISTEN bucardo_kick_sync_$syncname");
+		## But we do need to listen for an activation request
+		$maindbh->do("LISTEN bucardo_activate_sync_$syncname");
 		$maindbh->commit();
+
+		## If we are listening for kicks on the source, stop doing so
+		$self->{pingdbh}{$s->{sourcedb}} ||= $self->connect_database($s->{sourcedb});
+		my $srcdbh = $self->{pingdbh}{$s->{sourcedb}};
+		$srcdbh->commit();
+		if ($s->{ping} or $s->{do_listen}) {
+			my $l = "bucardo_kick_sync_$syncname";
+			$self->glog(qq{Unlistening on source server "$s->{sourcedb}" for "$l"});
+			$srcdbh->do(qq{UNLISTEN "$l"}) or warn "UNLISTEN $l failed";
+			$srcdbh->commit();
+			## Same for the targets, but only if synctype is also "swap"
+			if ($s->{synctype} eq 'swap') {
+				my $pdbh = $self->{pingdbh};
+				for my $db (sort keys %$pdbh) {
+					my $dbh = $pdbh->{$db};
+					my $lname = "bucardo_kick_sync_$syncname";
+					$self->glog(qq{Unlistening on remote server $db for "$lname"});
+					$dbh->do(qq{UNLISTEN "$lname"}) or warn "UNLISTEN $lname failed";
+					$dbh->commit();
+				}
+			}
+		}
 
 		## Redo our process name to include an updated list of active syncs
 		my @activesyncs;
@@ -1886,7 +2097,7 @@ sub start_mcp {
 			push @activesyncs, $syncname;
 		}
 
-		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active syncs:";
+		$0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active syncs: ";
 		$0 .= join ',' => @activesyncs;
 
 		return 1;
@@ -1916,7 +2127,8 @@ sub start_mcp {
 		}
 
 		## Reconnect to the master database for some final cleanups
-		my $finaldbh = $self->connect_database();
+		my ($finalbackend,$finaldbh) = $self->connect_database();
+		$self->glog("Final database backend PID is $finalbackend");
 
 		## Kill all children controllers belonging to us
 		if ($config{audit_pid}) {
@@ -1966,7 +2178,8 @@ sub start_mcp {
 		$finaldbh->disconnect();
 
 		## Remove our PID file
-		unlink $self->{pidfile};
+		unlink $self->{pidfile} or $self->glog("Warning! Failed to unlink $self->{pidfile}");
+
 		$self->glog(qq{Removed file "$self->{pidfile}"});
 
 		return;
@@ -2032,6 +2245,7 @@ sub start_controller {
 
 	my $msg = qq{Controller starting for sync "$syncname". Source herd is "$source"};
 	$self->glog($msg);
+	$self->glog("PID: $$");
 
 	## Log some startup information, and squirrel some away for later emailing
 	my $showtarget = sprintf '%s: %s',
@@ -2048,7 +2262,7 @@ sub start_controller {
 	$mailmsg .= "$msg\n";
 
 	my $lts = $sync->{lifetimesecs};
-	my $lti = $sync->{lifetime};
+	my $lti = $sync->{lifetime} || '<NULL>';
 	my $mks = $sync->{maxkicks};
 	$msg = qq{  lifetimesecs: $lts ($lti) maxkicks: $mks};
 	$self->glog($msg);
@@ -2120,7 +2334,10 @@ sub start_controller {
 	};
 
 	## Connect to the master database
-	our $maindbh = $self->{masterdbh} = $self->connect_database();
+	my $ctl_backend;
+	($ctl_backend, $self->{masterdbh}) = $self->connect_database();
+	our $maindbh = $self->{masterdbh};
+	$self->glog("Bucardo database backend PID is $ctl_backend");
 
 	## Listen for kick requests from the MCP
 	my $kicklisten = "bucardo_ctl_kick_$syncname";
@@ -2130,7 +2347,6 @@ sub start_controller {
 	## Listen for a ping request
 	$maindbh->do('LISTEN bucardo_ctl_'.$$.'_ping');
 	$maindbh->commit();
-
 
 	## Add ourself to the audit table
 	if ($config{audit_pid}) {
@@ -2175,7 +2391,9 @@ sub start_controller {
 		if (defined $m->{customselect}) {
 			$self->glog("   customselect: $m->{customselect}");
 		}
-		$self->glog('    Target oids: ' . join ' ' => map { "$_:$m->{targetoid}{$_}" } sort keys %{$m->{targetoid}});
+		if ($m->{reltype} eq 'table') {
+			$self->glog('    Target oids: ' . join ' ' => map { "$_:$m->{targetoid}{$_}" } sort keys %{$m->{targetoid}});
+		}
 	}
 
 	## Load database information to get concurrency information
@@ -2405,21 +2623,6 @@ sub start_controller {
 		}
 	}
 
-	## Reset the one-time-copy flag, so we only do it one time!
-	## Presumes that above kids worked without problems, of course
-	if ($otc) {
-		$otc = 0;
-		$SQL = 'UPDATE sync SET onetimecopy = 0 WHERE name = ?';
-		$sth = $maindbh->prepare($SQL);
-		$sth->execute($syncname);
-		$maindbh->commit();
-		$sync->{onetimecopy_savepid} = 0;
-		## Reset to the original values, in case we changed them
-		$sync->{synctype} = $synctype;
-		$sync->{kidsalive} = $kidsalive;
-		$sync->{track_rates} = $track_rates;
-	}
-
 	my $lastpingcheck = 0;
 
 	## A kid will control a specific sync for a specific targetdb
@@ -2491,6 +2694,20 @@ sub start_controller {
 						$self->glog(qq{Sent notice "bucardo_syncdone_$syncname"});
 						$maindbh->commit();
 
+						## Reset the one-time-copy flag, so we only do it one time!
+						if ($otc) {
+							$otc = 0;
+							$SQL = 'UPDATE sync SET onetimecopy = 0 WHERE name = ?';
+							$sth = $maindbh->prepare($SQL);
+							$sth->execute($syncname);
+							$maindbh->commit();
+							$sync->{onetimecopy_savepid} = 0;
+							## Reset to the original values, in case we changed them
+							$sync->{synctype} = $synctype;
+							$sync->{kidsalive} = $kidsalive;
+							$sync->{track_rates} = $track_rates;
+						}
+
 						## Run all after_sync custom codes
 						for my $code (@{$sync->{code_after_sync}}) {
 							## Do we need row information?
@@ -2503,6 +2720,8 @@ sub start_controller {
 								for my $g (@{$sync->{goatlist}}) {
 
 									next unless $g->{has_delta};
+
+									next if $g->{reltype} ne 'table';
 
 									## TODO: Do a deltacount for fullcopy?
 
@@ -2550,9 +2769,10 @@ sub start_controller {
 									for my $qpk (@{$g->{qpkey}}) {
 										$clause .= sprintf q{%s::%s = d.rowid%s::%s AND },
 											$g->{binarypkey}[$x] ? qq{ENCODE(t.$qpk,'base64')} : "t.$qpk",
-											$g->{pkeytype}[$x],
-											$x ? $x+1 : '',
-											$g->{pkeytype}[$x];
+# 8.2 can't cast ENCODE()'s TEXT return value to BYTEA; leaving at TEXT appears to work
+                                            $g->{binarypkey}[$x] ? 'text' : $g->{pkeytype}[$x],
+                                            $x ? $x+1 : '',
+                                            $g->{binarypkey}[$x] ? 'text' : $g->{pkeytype}[$x];
 										$cols ||= $g->{binarypkey}[0] ? qq{ENCODE(t.$qpk,'base64'),} : "t.$qpk";
 										$x++;
 									}
@@ -2951,7 +3171,9 @@ sub cleanup_controller {
 
 	## Kill all Bucardo children mentioned in the audit table for this sync
 	if ($config{audit_pid}) {
-		my $finaldbh = $self->connect_database();
+		my ($finalbackend, $finaldbh) = $self->connect_database();
+		$self->glog("Final database backend PID is $finalbackend");
+
 		$SQL = q{
             SELECT pid
             FROM   bucardo.audit_pid
@@ -2997,7 +3219,8 @@ sub cleanup_controller {
 	$self->glog("Controller exiting at cleanup_controller. Reason: $reason");
 
 	## Remove the pid file
-	unlink $self->{SYNCPIDFILE};
+	unlink $self->{SYNCPIDFILE} or $self->glog("Warning! Failed to unlink $self->{SYNCPIDFILE}");
+
 	$self->glog(qq{Removed file "$self->{SYNCPIDFILE}"});
 
 	return;
@@ -3073,6 +3296,7 @@ sub start_kid {
 	$0 = qq{Bucardo Kid.$self->{extraname} Sync "$syncname": ($synctype) "$sourcedb" -> "$targetdb"};
 	$self->{logprefix} = 'KID';
 	$self->glog(qq{New kid, syncs "$sourcedb" to "$targetdb" for sync "$syncname" alive=$kidsalive Parent=$self->{parent} Type=$synctype});
+	$self->glog("PID: $$");
 
 	## Establish these early so the DIE block can use them
 	our ($maindbh,$sourcedbh,$targetdbh);
@@ -3143,7 +3367,8 @@ sub start_kid {
 		defined $sourcedbh and $sourcedbh and ($sourcedbh->rollback, $sourcedbh->disconnect);
 		defined $targetdbh and $targetdbh and ($targetdbh->rollback, $targetdbh->disconnect);
 		defined $maindbh   and $maindbh   and ($maindbh->rollback,   $maindbh->disconnect  );
-		my $finaldbh = $self->connect_database();
+		my ($finalbackend, $finaldbh) = $self->connect_database();
+		$self->glog("Final database backend PID is $finalbackend");
 
 		## Let anyone listening know that this target and sync aborted
 		$finaldbh->do(qq{NOTIFY "bucardo_synckill_${syncname}_$targetdb"}) or warn 'NOTIFY failed';
@@ -3240,7 +3465,10 @@ sub start_kid {
 	}; ## end $SIG{__DIE__}
 
 	## Connect to the main database; overwrites previous handle from the controller
-	$maindbh = $self->{masterdbh} = $self->connect_database();
+	my $kid_backend;
+	($kid_backend, $self->{masterdbh}) = $self->connect_database();
+	$maindbh = $self->{masterdbh};
+	$self->glog("Bucardo database backend PID is $kid_backend");
 
 	## Add ourself to the audit table
 	if ($config{audit_pid}) {
@@ -3285,17 +3513,25 @@ sub start_kid {
     };
 	$sth{qend} = $maindbh->prepare($SQL);
 
+	my $backend;
+
 	## Connect to the source database
-	$sourcedbh = $self->connect_database($sourcedb);
+	($backend, $sourcedbh) = $self->connect_database($sourcedb);
+	$self->glog("Source database backend PID is $backend");
+
 
 	## Connect to the target database
-	$targetdbh = $self->connect_database($targetdb);
+	($backend, $targetdbh) = $self->connect_database($targetdb);
+	$self->glog("Target database backend PID is $backend");
+
+	## Put our backend PIDs into the log
+	$SQL = 'SELECT pg_backend_pid()';
+	my $source_backend = $sourcedbh->selectall_arrayref($SQL)->[0][0];
+	my $target_backend = $targetdbh->selectall_arrayref($SQL)->[0][0];
+	$self->glog("Source backend PID: $source_backend. Target backend PID: $target_backend");
 
 	## Put the backend PIDs in place in the audit_pid table
 	if ($config{audit_pid}) {
-		$SQL = 'SELECT pg_backend_pid()';
-		my $source_backend = $sourcedbh->selectall_arrayref($SQL)->[0][0];
-		my $target_backend = $targetdbh->selectall_arrayref($SQL)->[0][0];
 		$SQL = q{
             UPDATE bucardo.audit_pid
             SET    source_backend = ?, target_backend = ?
@@ -3307,6 +3543,20 @@ sub start_kid {
 	}
 
 	## If we are using delta tables, prepare all relevant SQL
+	if ($synctype eq 'pushdelta') {
+
+		## Check for any unhandled truncates in general. If there are, no reason to even look at bucardo_delta
+		$SQL = 'SELECT tablename, MAX(cdate) FROM bucardo.bucardo_truncate_trigger '
+			. 'WHERE sync = ? AND replicated IS NULL GROUP BY 1';
+		$sth{source}{checktruncate} = $sourcedbh->prepare($SQL) if $synctype eq 'pushdelta';
+
+		## Check for the latest truncate to this target for each table
+		$SQL = 'SELECT 1 FROM bucardo.bucardo_truncate_trigger_log '
+			. 'WHERE sync = ? AND targetdb=? AND tablename = ? AND replicated = ?';
+		$sth{source}{checktruncatelog} = $sourcedbh->prepare($SQL) if $synctype eq 'pushdelta';
+
+	}
+
 	if ($synctype eq 'pushdelta' or $synctype eq 'swap') {
 
 		if ($sync->{does_makedelta}) {
@@ -3316,6 +3566,9 @@ sub start_kid {
 		}
 
 		for my $g (@$goatlist) {
+
+			next if $g->{reltype} ne 'table';
+
 			($S,$T) = ($g->{safeschema},$g->{safetable});
 
 			if ($g->{does_makedelta}) {
@@ -3408,9 +3661,10 @@ sub start_kid {
 				for my $qpk (@{$g->{qpkey}}) {
 					$clause .= sprintf q{%s::%s = d.rowid%s::%s AND },
 						$g->{binarypkey}[$x] ? qq{ENCODE(t.$qpk,'base64')} : "t.$qpk",
-						$g->{pkeytype}[$x],
+# 8.2 can't cast ENCODE()'s TEXT return value to BYTEA; leaving at TEXT appears to work
+                        $g->{binarypkey}[$x] ? 'text' : $g->{pkeytype}[$x],
 						$x ? $x+1 : '',
-						$g->{pkeytype}[$x];
+                        $g->{binarypkey}[$x] ? 'text' : $g->{pkeytype}[$x];
 					$cols .= $g->{binarypkey}[0] ? qq{ENCODE(t.$qpk,'base64'),} : "t.$qpk,";
 					$x++;
 				}
@@ -3523,7 +3777,7 @@ sub start_kid {
 	## because the system catalogs are not strictly MVCC. However, there is
 	## no other way to disable rules, which we must do.
 	## If we are 8.3 or higher, we simply use session_replication_role,
-	## which is completely safe (and faster)
+	## which is completely safe, and faster (thanks Jan!)
 	## Note that the source and target may have different methods
 
 	my $source_disable_trigrules = $sourcedbh->{pg_server_version} >= 80300 ? 'replica' : 'pg_class';
@@ -3541,6 +3795,7 @@ sub start_kid {
         };
 		$SQL .= join "OR\n"
 			=> map { "(nspname=$_->{safeschemaliteral} AND relname=$_->{safetableliteral})" }
+			grep { $_->{reltype} eq 'table' }
 			@$goatlist;
 		$SQL .= ')';
 		$SQL{disable_trigrules} .= ";\n" if $SQL{disable_trigrules};
@@ -3551,7 +3806,7 @@ sub start_kid {
 			q{reltriggers = }
 			. q{(SELECT count(*) FROM pg_catalog.pg_trigger WHERE tgrelid = pg_catalog.pg_class.oid),}
 			. q{relhasrules = }
-			. q{CASE WHEN (SELECT COUNT(*) FROM pg_catalog.pg_rules WHERE schemaname=\$1 AND tablename=\$2) > 0 }
+			. q{CASE WHEN (SELECT COUNT(*) FROM pg_catalog.pg_rules WHERE schemaname=$1 AND tablename=$2) > 0 }
 			. q{THEN true ELSE false END};
 			## use critic
 
@@ -3570,6 +3825,7 @@ sub start_kid {
 					 $sql =~ s/\$2/$_->{safetableliteral}/g;
 					 $sql;
 				 }
+				grep { $_->{reltype} eq 'table' }
 				@$goatlist;
 
 		$SQL{enable_trigrules} .= ";\n" if $SQL{enable_trigrules};
@@ -3735,7 +3991,7 @@ sub start_kid {
 			last KID;
 		}
 
-		## If persistent, do an occasional ping. Listen for messages
+		## If persistent, listen for messages and do an occasional ping.
 		if ($kidsalive) {
 			while (my $notify = $maindbh->func('pg_notifies')) {
 				my ($name, $pid) = @$notify;
@@ -3819,10 +4075,10 @@ sub start_kid {
 		}
 
 		## Start the main transaction. From here on out, speed is key
-		## Note that all database handles are currently not in a txn (commit or rollback called)
-		$targetdbh->do("SET TRANSACTION ISOLATION LEVEL $sync->{txnmode}");
+		## Note that all database handles are currently not in a txn (last action was commit or rollback)
+		$targetdbh->do("SET TRANSACTION ISOLATION LEVEL $sync->{txnmode} READ WRITE");
 		if ($synctype eq 'swap' or $synctype eq 'pushdelta') {
-			$sourcedbh->do("SET TRANSACTION ISOLATION LEVEL $sync->{txnmode}");
+			$sourcedbh->do("SET TRANSACTION ISOLATION LEVEL $sync->{txnmode} READ WRITE");
 		}
 
 		## We may want to lock all the tables
@@ -3845,6 +4101,7 @@ sub start_kid {
 		if ($lock_table_mode) {
 			$self->glog("Locking all table in $lock_table_mode MODE");
 			for my $g (@$goatlist) {
+				next if $g->{reltype} ne 'table';
 				my $com = "$g->{safeschema}.$g->{safetable} IN $lock_table_mode MODE";
 				$self->glog("$sourcedb: Locking table $com");
 				$sourcedbh->do("LOCK TABLE $com");
@@ -3868,10 +4125,105 @@ sub start_kid {
 		## If doing a pushdelta or a swap, see if we have any delta rows to process
 		if ($synctype eq 'pushdelta' or $synctype eq 'swap') {
 
+			## Check for truncate activity. If found, switch to fullcopy for a table as needed.
+			## For now, just do pushdelta
+			if ($synctype eq 'pushdelta') {
+				$deltacount{sourcetruncate} = $sth{source}{checktruncate}->execute($syncname);
+				$sth{source}{checktruncate}->finish() if $deltacount{sourcetruncate} =~ s/0E0/0/o;
+				$self->glog(qq{Source truncate count: $deltacount{sourcetruncate}});
+				if ($deltacount{sourcetruncate}) {
+					## For each table that was truncated, see if this target has already handled it
+					for my $row (@{$sth{source}{checktruncate}->fetchall_arrayref()}) {
+						$count = $sth{source}{checktruncatelog}->execute($syncname, $targetdb, @$row);
+						$sth{source}{checktruncatelog}->finish();
+						($deltacount{source}{truncate}{$row->[0]} = $count) =~ s/0E0/0/o;
+						$deltacount{source}{truncatelog}{$row->[0]} = $row->[1];
+					}
+					## Which of the tables we are tracking need truncation support?
+					$SQL = 'INSERT INTO bucardo.bucardo_truncate_trigger_log (tablename,sname,tname,sync,targetdb,replicated) '
+						. 'VALUES(?,?,?,?,?,?)';
+					for my $g (@$goatlist) {
+						next if $g->{reltype} ne 'table';
+						## deltacount may not exist = no truncation needed
+						## may exist but be zero = truncate!
+						## may exists and be positive = no truncation needed
+						$g->{source}{needstruncation} =
+							(exists $deltacount{source}{truncate}{$g->{oid}} and !$deltacount{source}{truncate}{$g->{oid}})
+							? 1 : 0;
+						if ($g->{source}{needstruncation}) {
+							$sth = $sourcedbh->prepare_cached($SQL);
+							$sth->execute($g->{oid},$g->{safeschema},$g->{safetable},$syncname,$targetdb,
+										  $deltacount{source}{truncatelog}{$g->{oid}});
+							$deltacount{truncates}++;
+							$self->glog('Marking this truncate as done in bucardo_truncate_trigger_log');
+						}
+					}
+				}
+			}
+
 			## For each table in this herd, grab a count of changes
 			$deltacount{allsource} = $deltacount{alltarget} = 0;
 			for my $g (@$goatlist) {
+
+				## If this table was truncated on the source, we do nothing here
+				next if $g->{source}{needstruncation};
+
 				($S,$T) = ($g->{safeschema},$g->{safetable});
+
+				## We'll handle sequence changes here and now (pushdelta only)
+				if ($synctype eq 'pushdelta' and $g->{reltype} eq 'sequence') {
+
+					$self->glog("Checking sequence $S.$T");
+
+					$SQL = "SELECT last_value, log_cnt FROM $S.$T";
+					my ($lastval, $logcnt) = @{$sourcedbh->selectall_arrayref($SQL)->[0]};
+					my $iscalled = $logcnt ? 0 : 1;
+
+					## Check our internal table to see if we really need to propagate this sequence
+					$SQL = 'SELECT value, iscalled FROM bucardo.bucardo_sequences WHERE tablename = ?';
+					$sth = $sourcedbh->prepare($SQL);
+					$count = $sth->execute($g->{oid});
+					my $newval = 0;
+					if ($count < 1) {
+						$newval = 1; ## Never before seen, so add to the table
+						$sth->finish();
+					}
+					else {
+						my ($oldval,$oldcalled) = @{$sth->fetchall_arrayref()->[0]};
+						if ($oldval != $lastval) {
+							$newval = 2; ## Value has changed
+						}
+						elsif ($oldcalled ne $iscalled) {
+							$newval = 3; ## is_called has changed
+						}
+					}
+					if ($newval) {
+						$self->glog("Setting sequence $S.$T to value of $lastval, is_called is $iscalled");
+						$SQL = "SELECT setval('$S.$T', $lastval, '$iscalled')";
+						$targetdbh->do($SQL);
+
+						## Copy the change to our internal table
+						if ($newval == 1) {
+							$SQL = 'INSERT INTO bucardo.bucardo_sequences (tablename, value, iscalled) VALUES (?,?,?)';
+							$sth = $sourcedbh->prepare($SQL);
+							$sth->execute($g->{oid},$lastval,$iscalled);
+						}
+						else {
+							$SQL = 'UPDATE bucardo.bucardo_sequences SET value=?, iscalled=? WHERE tablename=?';
+							$sth = $sourcedbh->prepare($SQL);
+							$sth->execute($lastval,$iscalled,$g->{oid});
+						}
+
+						## Internal note so we know things have changed
+						$deltacount{sequences}++;
+
+					}
+
+				}
+
+				## No need to continue unless we are a table
+				next if $g->{reltype} ne 'table';
+
 				$deltacount{allsource} += $deltacount{source}{$S}{$T} = $sth{source}{$g}{getdelta}->execute();
 				$sth{source}{$g}{getdelta}->finish() if $deltacount{source}{$S}{$T} =~ s/0E0/0/o;
 				$self->glog(qq{Source delta count for $S.$T: $deltacount{source}{$S}{$T}});
@@ -3890,7 +4242,7 @@ sub start_kid {
 			$self->glog("Total delta count: $deltacount{all}");
 
 			## If no changes, rollback dbs, close out q, notify listeners, and leave or reloop
-			if (! $deltacount{all}) {
+			if (! $deltacount{all} and ! $deltacount{truncates}) {
 				$targetdbh->rollback();
 				$sourcedbh->rollback();
 				$sth{qend}->execute(0,0,0,$syncname,$targetdb,$$);
@@ -3922,15 +4274,33 @@ sub start_kid {
 			$sourcedbh->do($SQL{disable_trigrules});
 		}
 
+        my $cs_temptable;
+
 		## FULLCOPY
-		if ($synctype eq 'fullcopy') {
+		if ($synctype eq 'fullcopy' or $deltacount{truncates}) {
 
 			for my $g (@$goatlist) {
 
 				($S,$T) = ($g->{safeschema},$g->{safetable});
 
+				next if $deltacount{truncates} and ! $g->{source}{needstruncation};
+
 				if ($g->{ghost}) {
 					$self->glog("Skipping ghost table $S.$T");
+					next;
+				}
+
+				## Handle sequences first, by simply forcing a setval
+				if ($g->{reltype} eq 'sequence') {
+					$SQL = "SELECT last_value, log_cnt FROM $S.$T";
+					my ($lastval, $logcnt) = @{$sourcedbh->selectall_arrayref($SQL)->[0]};
+					my $iscalled = $logcnt ? 0 : 1;
+
+					$self->glog("Setting sequence $S.$T to value of $lastval, is_called is $iscalled");
+					$SQL = "SELECT setval('$S.$T', $lastval, '$iscalled')";
+					$targetdbh->do($SQL);
+
+					## No need to continue any further
 					next;
 				}
 
@@ -3960,10 +4330,11 @@ sub start_kid {
 				my ($srccmd,$tgtcmd);
 				if ($sync->{usecustomselect} and $g->{customselect}) {
 					## TODO: Use COPY () format if 8.2 or greater
-					my $temptable = "bucardo_temp_$g->{tablename}_$$"; ## Raw version, not "safetable"
-					$self->glog("Creating temp table $temptable for custom select on $S.$T");
-					$sourcedbh->do("CREATE TEMP TABLE $temptable ON COMMIT DROP AS $g->{customselect}");
-					$srccmd = "COPY $temptable TO STDOUT $sync->{copyextra}";
+					$cs_temptable = "bucardo_temp_$g->{tablename}_$$"; ## Raw version, not "safetable"
+					$self->glog("Creating temp table $cs_temptable for custom select on $S.$T");
+					$sourcedbh->do("CREATE TEMP TABLE $cs_temptable AS $g->{customselect}");
+					#$sourcedbh->do("CREATE TEMP TABLE $cs_temptable ON COMMIT DROP AS $g->{customselect}");
+					$srccmd = "COPY $cs_temptable TO STDOUT $sync->{copyextra}";
 					$tgtcmd = "COPY $S.$T($g->{safecolumnlist}) FROM STDIN $sync->{copyextra}";
 				}
 				else {
@@ -3973,7 +4344,7 @@ sub start_kid {
 
 				$self->glog("Emptying out target table $S.$T using $sync->{deletemethod}");
 				if ($sync->{deletemethod} eq 'truncate') {
-					$targetdbh->do("TRUNCATE TABLE $S.$T");
+					$targetdbh->do("TRUNCATE TABLE $S.$T"); ## XXX Always try truncate first, then eval to delete?
 				}
 				else {
 					($dmlcount{D}{target}{$S}{$T} = $targetdbh->do("DELETE FROM $S.$T")) =~ s/0E0/0/o;
@@ -4016,6 +4387,25 @@ sub start_kid {
 					$targetdbh->do("REINDEX TABLE $S.$T");
 				}
 
+				## If we just did a fullcopy, but the table is pushdelta or swap,
+				## we can clean out any older bucardo_delta entries
+				if ($sync->{onetimecopy} or $deltacount{truncates}) {
+					$SQL = "DELETE FROM bucardo.bucardo_delta WHERE txntime <= now() AND tablename = $g->{oid}";
+					$sth = $sourcedbh->prepare($SQL);
+					$count = $sth->execute();
+					$sth->finish();
+					$count =~ s/0E0/0/o;
+					$self->glog("Rows removed from bucardo_delta on source for $S.$T: $count");
+					## Swap? Other side(s) as well
+					if ($synctype eq 'swap') {
+						$SQL = "DELETE FROM bucardo.bucardo_delta WHERE txntime <= now() AND tablename = $g->{targetoid}{$targetdb}";
+						$sth = $targetdbh->prepare($SQL);
+						$count = $sth->execute();
+						$sth->finish();
+						$count =~ s/0E0/0/o;
+						$self->glog("Rows removed from bucardo_delta on target for $S.$T: $count");
+					}
+				}
 			} ## end each goat
 
 			if ($sync->{deletemethod} ne 'truncate') {
@@ -4026,12 +4416,18 @@ sub start_kid {
 		} ## end of synctype fullcopy
 
 		## PUSHDELTA
-		elsif ($synctype eq 'pushdelta') {
+		if ($synctype eq 'pushdelta') {
 
-			## Do each table in turn, ordered by descending priority and ascending id
+			## Do each goat in turn, ordered by descending priority and ascending id
 			for my $g (@$goatlist) {
 
 				($S,$T) = ($g->{safeschema},$g->{safetable});
+
+				## Skip if we've already handled this via fullcopy
+				next if $g->{source}{needstruncation};
+
+				## No need to proceed unless we're a table
+				next if $g->{reltype} ne 'table';
 
 				## Skip this table if no rows have changed on the source
 				next unless $deltacount{source}{$S}{$T};
@@ -4132,10 +4528,10 @@ sub start_kid {
 							## If rows were deleted from source, we are also deleting from target
 							## If rows were inserted to source, they won't be on the target anyway
 							## If rows were updated on source, we'll insert later (update = delete + insert)
+							$self->glog(qq{Deleting rows from $S.$T});
 							$SQL = "DELETE FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)";
 							($count = $targetdbh->do($SQL)) =~ s/0E0/0/o;
 							$dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T} = $count;
-
 
 							## COPY over all affected rows from source to target
 
@@ -4143,6 +4539,8 @@ sub start_kid {
 							my ($srccmd,$temptable);
 							if (! $source_modern_copy) {
 								$temptable = "bucardo_tempcopy_$$";
+                                $self->glog("Creating temporary table $temptable for copy on $S.$T, and savepoint bucardo_$$ along with it");
+                                $sourcedbh->pg_savepoint("bucardo_$$");
 								$srccmd = "CREATE TEMP TABLE $temptable AS SELECT * FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)";
 
 								$sourcedbh->do($srccmd);
@@ -4165,6 +4563,7 @@ sub start_kid {
 							$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T} = @$info;
 
 							if (! $source_modern_copy) {
+                                $self->glog("Dropping temporary table $temptable");
 								$sourcedbh->do("DROP TABLE $temptable");
 							}
 
@@ -4206,6 +4605,12 @@ sub start_kid {
 						## First, we rollback any changes we've made on the target
 						$self->glog("Rolling back to target savepoint, due to database error: $DBI::errstr");
 						$targetdbh->pg_rollback_to("bucardo_$$");
+                        if (! $source_modern_copy) {
+                            # Also roll back to source savepoint, so we can try
+                            # creating the temp table again
+                            $self->glog('Rolling back to source savepoint as well, to remove temp table');
+                            $sourcedbh->pg_rollback_to("bucardo_$$");
+                        }
 
 						## Now run one or more exception handlers
 						my $runagain = 0;
@@ -4274,12 +4679,163 @@ sub start_kid {
 		} ## end pushdelta
 
 		## SWAP
-		elsif ($synctype eq 'swap') {
+		if ($synctype eq 'swap') {
 
 			## Do each table in turn, ordered by descending priority and ascending id
 			for my $g (@$goatlist) {
 
 				($S,$T) = ($g->{safeschema},$g->{safetable});
+
+				if ($g->{reltype} eq 'sequence') {
+					my $action = 0; ## 0 = skip, 1 = source->target, 2 = target->source
+					$g->{tempschema} = {};
+					my $SEQUENCESQL = "SELECT last_value, log_cnt FROM $S.$T";
+					if (exists $g->{code_conflict}) {
+						$self->glog('No support for custom conflict handlers for sequences yet!');
+					}
+					else {
+						my $sc = $g->{standard_conflict};
+						if ('skip' eq $sc) {
+							$action = 0;
+						}
+						elsif ('source' eq $sc) {
+							$action = 1;
+						}
+						elsif ('target' eq $sc) {
+							$action = 2;
+						}
+						elsif ('lowest' eq $sc and 'highest' eq $sc) {
+							($g->{tempschema}{s}{lastval},$g->{tempschema}{s}{logcnt}) =
+								@{$sourcedbh->selectall_arrayref($SEQUENCESQL)->[0]};
+							($g->{tempschema}{t}{lastval},$g->{tempschema}{t}{logcnt}) =
+								@{$targetdbh->selectall_arrayref($SEQUENCESQL)->[0]};
+							if ($g->{tempschema}{s}{lastval} > $g->{tempschema}{t}{lastval}) {
+								$action = 'lowest' eq $sc ? 2 : 1;
+							}
+							elsif ($g->{tempschema}{s}{lastval} < $g->{tempschema}{t}{lastval}) {
+								$action = 'lowest' eq $sc ? 1 : 2;
+							}
+							else {
+								$action = 0;
+							}
+						}
+						else {
+							die "Unknown conflict type for sequence: $sc\n";
+						}
+					}
+
+					if (0 == $action) {
+						$self->glog("No action taken for sequence $S.$T");
+						next;
+					}
+
+					## Internal note so we know things have changed
+					$deltacount{sequences}++;
+
+					## Get the last seen value
+					my $LASTSEQUENCESQL = 'SELECT value, iscalled FROM bucardo.bucardo_sequences WHERE tablename = ?';
+
+					## Source wins - copy its value to the target
+					if (1 == $action) {
+						$self->glog("Copying value of $S.$T from source to target");
+
+						if (! exists $g->{tempschema}{s}) {
+							($g->{tempschema}{s}{lastval},$g->{tempschema}{s}{logcnt}) =
+								@{$sourcedbh->selectall_arrayref($SEQUENCESQL)->[0]};
+						}
+
+						my $lastval = $g->{tempschema}{s}{lastval};
+						my $iscalled = $g->{tempschema}{s}{logcnt} ? 0 : 1;
+
+						## Has it changed since last visit?
+						$sth = $sourcedbh->prepare($LASTSEQUENCESQL);
+						$count = $sth->execute($g->{oid});
+						my $newval = 0;
+						if ($count < 1) {
+							$newval = 1; ## Never before seen, so add to the table
+							$sth->finish();
+						}
+						else {
+							my ($oldval,$oldcalled) = @{$sth->fetchall_arrayref()->[0]};
+							if ($oldval != $lastval) {
+								$newval = 2; ## Value has changed
+							}
+							elsif ($oldcalled ne $iscalled) {
+								$newval = 3; ## is_called has changed
+							}
+						}
+						## Has not changed, so we simply move on to the next goat
+						next if ! $newval;
+
+						## Apply to the target
+						$self->glog("Setting sequence $S.$T on target to value of $lastval, is_called is $iscalled");
+						$SQL = "SELECT setval('$S.$T', $lastval, '$iscalled')";
+						$targetdbh->do($SQL);
+
+						## Save to the target's internal table
+						## Rather than worry about upserts, we'll just delete/insert every time
+						$SQL = 'DELETE FROM bucardo.bucardo_sequences WHERE tablename = ?';
+						$sth = $sourcedbh->prepare($SQL);
+						$sth->execute($g->{targetoid}{$targetdb});
+						$SQL = 'INSERT INTO bucardo.bucardo_sequences (tablename, value, iscalled) VALUES (?,?,?)';
+						$sth = $sourcedbh->prepare($SQL);
+						$sth->execute($g->{targetoid}{$targetdb},$lastval,$iscalled);
+
+						## Internal note so we know things have changed
+						$deltacount{sequences}++;
+
+						## Done: jump to the next goat
+						next;
+					}
+
+					## Target wins - copy its value to the source
+					$self->glog("Copying value of $S.$T from target to source");
+
+					if (! exists $g->{tempschema}{t}) {
+						($g->{tempschema}{t}{lastval},$g->{tempschema}{t}{logcnt}) =
+							@{$targetdbh->selectall_arrayref($SEQUENCESQL)->[0]};
+					}
+
+					my $lastval = $g->{tempschema}{t}{lastval};
+					my $iscalled = $g->{tempschema}{t}{logcnt} ? 0 : 1;
+
+					## Has it changed since last visit?
+					$sth = $sourcedbh->prepare($LASTSEQUENCESQL);
+					$count = $sth->execute($g->{oid});
+					my $newval = 0;
+					if ($count < 1) {
+						$newval = 1; ## Never before seen, so add to the table
+						$sth->finish();
+					}
+					else {
+						my ($oldval,$oldcalled) = @{$sth->fetchall_arrayref()->[0]};
+						if ($oldval != $lastval) {
+							$newval = 2; ## Value has changed
+						}
+						elsif ($oldcalled ne $iscalled) {
+							$newval = 3; ## is_called has changed
+						}
+					}
+					## Has not changed, so we simply move on to the next goat
+					next if ! $newval;
+
+					## Apply to the source
+					$self->glog("Setting sequence $S.$T on source to value of $lastval, is_called is $iscalled");
+					$SQL = "SELECT setval('$S.$T', $lastval, '$iscalled')";
+					$sourcedbh->do($SQL);
+
+					## Save to the source's internal table
+					## Rather than worry about upserts, we'll just delete/insert every time
+					$SQL = 'DELETE FROM bucardo.bucardo_sequences WHERE tablename = ?';
+					$sth = $targetdbh->prepare($SQL);
+					$sth->execute($g->{oid});
+					$SQL = 'INSERT INTO bucardo.bucardo_sequences (tablename, value, iscalled) VALUES (?,?,?)';
+					$sth = $targetdbh->prepare($SQL);
+					$sth->execute($g->{oid},$lastval,$iscalled);
+
+					## Proceed to the next goat
+					next;
+				}
 
 				## Skip if neither source not target has changes for this table
 				next unless $deltacount{source}{$S}{$T} or $deltacount{target}{$S}{$T};
@@ -4976,15 +5532,11 @@ sub start_kid {
 
 		} ## end swap
 
-		else {
-			$self->glog("UNKNOWN synctype $synctype: bailing");
-			die qq{Unknown sync type $synctype};
-		}
-
 		## Update bucardo_track table so that the bucardo_delta rows we just processed
 		##  are marked as "done" and ignored by subsequent runs
 		if ($synctype eq 'pushdelta' or $synctype eq 'swap') {
 			for my $g (@$goatlist) {
+				next if $g->{reltype} ne 'table';
 				($S,$T) = ($g->{safeschema},$g->{safetable});
 				delete $g->{rateinfo};
 				if ($deltacount{source}{$S}{$T}) {
@@ -5052,6 +5604,10 @@ sub start_kid {
 			$self->glog('Issuing final commit for source and target');
 			$sourcedbh->commit();
 			$targetdbh->commit();
+            if (defined($cs_temptable)) {
+                $self->glog("Dropping temp table $cs_temptable created for customselect");
+                $sourcedbh->do("DROP TABLE $cs_temptable");
+            }
 		}
 
 		## Capture the current time. now() is good enough as we just committed or rolled back
@@ -5075,7 +5631,7 @@ sub start_kid {
 			$SQL = 'INSERT INTO bucardo_rate(sync,goat,target,mastercommit,slavecommit,total) VALUES (?,?,?,?,?,?)';
 			$sth = $maindbh->prepare($SQL);
 			for my $g (@$goatlist) {
-				next if ! exists $g->{rateinfo};
+				next if ! exists $g->{rateinfo} or $g->{reltype} ne 'table';
 				($S,$T) = ($g->{safeschema},$g->{safetable});
 				if ($deltacount{source}{$S}{$T}) {
 					for my $time (@{$g->{rateinfo}{source}}) {
@@ -5095,7 +5651,7 @@ sub start_kid {
 			and $sync->{analyze_after_copy}
 			and !$self->{dryrun}) {
 			for my $g (@$goatlist) {
-				next if ! $g->{analyze_after_copy};
+				next if ! $g->{analyze_after_copy} or $g->{reltype} ne 'table';
 				if ($g->{onetimecopy_ifempty}) {
 					$g->{onetimecopy_ifempty} = 0;
 					next;
@@ -5119,7 +5675,7 @@ sub start_kid {
 		## Remove lock file if we used it
 		if ($lock_table_mode and -e $force_lock_file) {
 			$self->glog("Removing lock control file $force_lock_file");
-			unlink $force_lock_file;
+			unlink $force_lock_file or $self->glog("Warning! Failed to unlink $force_lock_file");
 		}
 
 		# Run all 'after_txn' code
@@ -5168,62 +5724,6 @@ sub start_kid {
 	exit 0;
 
 } ## end of start_kid
-
-
-sub connect_database {
-
-	## Given a database id, return a database handle for it
-	## Returns 'inactive' if the database is inactive according to the db table
-
-	my $self = shift;
-
-	my $id = shift || 0;
-
-	my ($dsn,$dbh,$user,$pass);
-
-	## If id is 0, connect to the main database
-	if (!$id) {
-		$dsn = "dbi:Pg:dbname=$self->{dbname}";
-		defined $self->{dbport} and length $self->{dbport} and $dsn .= ";port=$self->{dbport}";
-		defined $self->{dbhost} and length $self->{dbhost} and $dsn .= ";host=$self->{dbhost}";
-		defined $self->{dbconn} and length $self->{dbconn} and $dsn .= ";$self->{dbconn}";
-		$user = $self->{dbuser};
-		$pass = $self->{dbpass};
-	}
-	else {
-		my $db = $self->get_dbs;
-		exists $db->{$id} or die qq{Invalid database id!: $id\n};
-
-		my $d = $db->{$id};
-		if ($d->{status} ne 'active') {
-			return 'inactive';
-		}
-
-		$dsn = "dbi:Pg:dbname=$d->{dbname}";
-		defined $d->{dbport} and length $d->{dbport} and $dsn .= ";port=$d->{dbport}";
-		defined $d->{dbhost} and length $d->{dbhost} and $dsn .= ";host=$d->{dbhost}";
-		length $d->{dbconn} and $dsn .= ";$d->{dbconn}";
-		$user = $d->{dbuser};
-		$pass = $d->{dbpass} || '';
-	}
-
-	$dbh = DBI->connect
-		(
-		 $dsn,
-		 $user,
-		 $pass,
-		 {AutoCommit=>0, RaiseError=>1, PrintError=>0}
-	);
-
-	if (!$id) {
-		## Prepend bucardo to the search path
-		$dbh->do(q{SELECT pg_catalog.set_config('search_path', 'bucardo,' || current_setting('search_path'), false)});
-		$dbh->commit();
-	}
-
-	return $dbh;
-
-} ## end of connect_database
 
 
 sub send_mail {
@@ -5311,7 +5811,7 @@ Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This documents describes Bucardo version 3.2.7
+This document describes version 4.0.0 of Bucardo
 
 =head1 SYNOPSIS
 
@@ -5352,9 +5852,10 @@ this distribution.
 
 * DBI (1.51 or better)
 * DBD::Pg (2.0.0 or better)
-* IO::Handle
 * Sys::Hostname
 * Sys::Syslog
+* DBIx::Safe    ## Try 'yum install perl-DBIx-Safe' or visit bucardo.org
+
 
 =head1 BUGS
 

@@ -1,0 +1,20 @@
+This directory contains various helper scripts.
+
+* bucardo_ctl.rc
+
+Sample rc file for controlling Bucardo
+
+* bucardo-report
+
+Web-based report on Bucardo activity
+
+* bucardo_rrd
+
+Grab a bunch of Bucardo stats for cacti
+
+* check_bucardo_sync
+
+Check the status of Bucardo through the stats page
+
+
+

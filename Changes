@@ -1,6 +1,6 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-3.2.7 June 2009
+4.0.0 ?? 2009
 
 New features:
 
@@ -9,16 +9,22 @@ New features:
   - Add new 'onetimecopy' attribute to sync table, to allow recreation on 
     demand of pushdelta tables on slaves via COPY. [GSM]
 
+  - Support for replication after TRUNCATE. This will only work on 
+    Postgres version 8.4 and higher, and only pushdelta syncs. [GSM]
+
   - Add log_conflict_details to allow logging of conflict information 
     to a separate file. [Adam Wendt]
 
   - Add 'maxkicks' and 'lifetime' to syncs to force restart of controller 
     and kids after a certain number of kicks or time. [Josh Tolley]
+    Thanks to Backcountry.com.
 
   - Add the bucardo_rate table to track exactly how long replication takes
     on a per-sync and per-table basis. [GSM]
 
-  - Add more bucardo_ctl actions: reload, validate [GSM]
+  - Add more bucardo_ctl actions: install, reload, validate, restart, update [GSM]
+
+  - Allow adding of all tables in a database at once via bucardo_ctl [GSM]
 
   - Add in bucardo_compress_delta function, to remove duplicate rows from 
     the bucardo_delta table. [GSM]
@@ -54,13 +60,26 @@ Enhancements:
 
   - Add more tests and improve existing ones. [Josh Tolley]
 
+  - Force READ WRITE mode so Bucardo works on read only databases. [GSM]
+
   - Make the audit_pid table more useful. Use sequences instead of 
     PIDs to find children. Allow for the audit_pid table to be toggled off. [GSM]
+
+  - Remove the debugstderr and debugstdout options, as they never worked 
+    correctly anyway. [GSM]
+
+  - On startup, all syncs that may have trigger-based notifies are 
+    initially kicked. [GSM]
 
   - MCP listens for pings during table validations. [GSM]
 
   - Have master_q use a trigger, not multiple rules. Remove the need 
     for a separate create_child_q() function. [GSM]
+
+  - Default for log_showtime is now 'scalar localtime' rather than 
+    epoch seconds. [GSM]
+
+  - No longer require a reason for the "stop" action. [GSM]
 
 Bug fixes:
 
@@ -75,6 +94,10 @@ Bug fixes:
   - Change timestamp to timestamptz where needed inside Bucardo.pm [Yan Farmawan]
 
   - Put schema in db_getconn calls [Alex Bahlai]
+
+  - Record the proper PID for the MCP in the pid file [Goran Gugic]
+
+  - Set the tcp_* defaults in bucardo_config to zero (system default). [GSM]
 
   - Allow for dead columns when checking attnums. [GSM]
 

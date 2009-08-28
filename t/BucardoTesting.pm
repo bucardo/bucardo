@@ -17,7 +17,7 @@ use vars qw/$SQL $sth $count $COM %dbh/;
 my $DEBUG = 0; ## XXX
 
 use base 'Exporter';
-our @EXPORT = qw/%tabletype %val compare_tables bc_deeply wait_for_notice $location/;
+our @EXPORT = qw/%tabletype %sequences %val compare_tables bc_deeply wait_for_notice $location/;
 
 our $location = 'setup';
 my $testmsg  = ' ?';
@@ -55,6 +55,13 @@ our %tabletype =
 
 our @tables2empty = (qw/droptest bucardo_test_multicol/);
 
+our %sequences =
+	(
+	'bucardo_test_seq1' => '',
+	'bucardo_test_seq2' => '',
+	'bucardo_test_seq3' => '',
+	);
+
 my %debug = (
 			 recreatedb     => 0,
 			 recreateschema => 1,
@@ -76,8 +83,14 @@ my %clusterinfo = (
 );
 
 ## Location of files
-my $initdb = 'initdb';
-my $pg_ctl = 'pg_ctl';
+my $initdb = $ENV{PGBINDIR} ? "$ENV{PGBINDIR}/initdb" : 'initdb';
+my $pg_ctl = $ENV{PGBINDIR} ? "$ENV{PGBINDIR}/pg_ctl" : 'pg_ctl';
+
+my $pgversion = qx{$initdb -V};
+my ($pg_major_version, $pg_minor_version, $pg_point_version);
+if ($pgversion =~ /initdb \(PostgreSQL\) (\d+\..*)/) {
+    ($pg_major_version, $pg_minor_version, $pg_point_version) = split /\./, $1;
+}
 
 # Set a semi-unique name to make killing old tests easier
 my $xname = "bctest_$ENV{USER}";
@@ -127,6 +140,9 @@ for (1..30) {
 	$val{BYTEA}{$_} = "$_\0Z";
 }
 
+sub get_version {
+    return ($pg_major_version, $pg_minor_version, $pg_point_version);
+}
 
 sub new {
 
@@ -270,9 +286,15 @@ sub create_cluster {
 	## Make some minor adjustments
 	my $file = "$dirname/postgresql.conf";
 	open my $fh, '>>', $file or die qq{Could not open "$file": $!\n};
-	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\nlog_statement = 'all'\nclient_min_messages = WARNING\n\n",
-		$clusterinfo->{port};
-	print $fh "logging_collector = off\n";
+	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\nlog_statement = 'all'\nclient_min_messages = WARNING\nlog_line_prefix='%s[%s] '\n\n",
+		$clusterinfo->{port}, '%m', '%p';
+    if ($pg_major_version > 8 || ($pg_major_version == 8 && int($pg_minor_version) > 2)) {
+                # the int() call above prevents errors when the version is, for instance, '8.4devel'
+        print $fh "logging_collector = off\n";
+    }
+    else {
+        print $fh "redirect_stderr = off\n";
+    }
 	close $fh or die qq{Could not close "$file": $!\n};
 
 	return;
@@ -392,10 +414,14 @@ sub fresh_database {
 sub empty_test_database {
 
 	## Wipe all data tables from a test database
-	## Takes a datbase handle as only arg
+	## Takes a database handle as only arg
 
 	my $self = shift;
 	my $dbh = shift;
+
+	if ($dbh->{pg_server_version} >= 80300) {
+		$dbh->do(q{SET session_replication_role = 'replica'});
+	}
 
 	for my $table (sort keys %tabletype) {
 		$dbh->do("TRUNCATE TABLE $table");
@@ -405,6 +431,9 @@ sub empty_test_database {
 		$dbh->do("TRUNCATE TABLE $table");
 	}
 
+	if ($dbh->{pg_server_version} >= 80300) {
+		$dbh->do(q{SET session_replication_role = 'origin'});
+	}
 	$dbh->commit;
 
 	return;
@@ -619,6 +648,21 @@ sub add_test_schema {
         data TEXT,
         PRIMARY KEY (id, id2, id3))});
 	}
+
+	## Create one table for each table type
+	for my $seq (sort keys %sequences) {
+
+		local $dbh->{Warn} = 0;
+
+		## Does the sequence already exist? If so, drop it.
+		if (table_exists($dbh => $seq)) {
+			$dbh->do("DROP SEQUENCE $seq");
+		}
+
+		$SQL = qq{CREATE SEQUENCE $seq};
+		$dbh->do($SQL);
+	}
+
 	$dbh->commit();
 
 	return;
@@ -941,7 +985,7 @@ sub add_test_databases {
 
 sub add_test_tables_to_herd {
 
-	## Add all of the test tables to a herd
+	## Add all of the test tables (and sequences) to a herd
 	## Create the herd if it does not exist
 	## First arg is database name, second arg is the herdname
 
@@ -949,13 +993,24 @@ sub add_test_tables_to_herd {
 	my $db = shift;
 	my $herd = shift;
 
-	$self->ctl("add herd $herd");
+	my $result = $self->ctl("add herd $herd");
+	if ($result !~ /Herd added/) {
+		die "Failed to add herd $herd: $result\n";
+	}
 
 	my $addstring = join ' ' => sort keys %tabletype;
     $addstring .= ' bucardo_test_multicol';
-	my $result = $self->ctl("add table $addstring db=$db herd=$herd");
+	my $com = "add table $addstring db=$db herd=$herd";
+	$result = $self->ctl($com);
 	if ($result !~ /Tables? added:/) {
-		die "Failed to add tables: $result\n";
+		die "Failed to add tables: $result (command was: $com)\n";
+	}
+
+	$addstring = join ' ' => sort keys %sequences;
+	$com = "add sequence $addstring db=$db herd=$herd";
+	$result = $self->ctl($com);
+	if ($result !~ /Sequences? added:/) {
+		die "Failed to add sequences: $result (command was: $com)\n";
 	}
 
 	return;
@@ -969,28 +1024,36 @@ sub restart_bucardo {
 	## Start Bucardo, but stop first if it is already running
 	## Pass in a database handle to the bucardo_control_test db
 
-	my ($self,$dbh) = @_;
+	my ($self,$dbh,$notice,$passmsg) = @_;
+
+	## Which notice is good enough?
+	$notice ||= 'bucardo_started';
+	$passmsg ||= 'Bucardo was started';
 
 	$self->stop_bucardo();
 
 	pass('Starting up Bucardo');
-	$dbh->do("LISTEN bucardo_boot");
-	$dbh->do("LISTEN bucardo_started");
+	$dbh->do('LISTEN bucardo_boot');
+	$dbh->do('LISTEN bucardo_started');
+	$dbh->do('LISTEN bucardo_nosyncs');
 	$dbh->commit();
 
 	$self->ctl('start testing');
 
 	my $bail = 10;
+	my $n;
   WAITFORIT: {
 		if ($bail--<0) {
 			die "Bucardo did not start, but we waited!\n";
 		}
-		last if $dbh->func('pg_notifies');
+		while ($n = $dbh->func('pg_notifies')) {
+			last WAITFORIT if $n->[0] eq $notice;
+		}
 		$dbh->commit();
 		sleep 0.2;
 		redo;
 	}
-	pass('Bucardo was started');
+	pass($passmsg);
 
 	return 1;
 
@@ -1040,6 +1103,8 @@ sub wait_for_notice {
 	my $text = shift;
 	my $timeout = shift || $TIMEOUT_NOTICE;
 	my $sleep = shift || $TIMEOUT_SLEEP;
+    my $bail = shift;
+    $bail = 1 if !defined($bail);
 	my $n;
 	eval {
 		local $SIG{ALRM} = sub { die "Lookout!\n"; };
@@ -1056,7 +1121,13 @@ sub wait_for_notice {
 	if ($@) {
 		if ($@ =~ /Lookout/o) {
 			my $line = (caller)[2];
-			Test::More::BAIL_OUT (qq{Gave up waiting for notice "$text": timed out at $timeout from line $line});
+            my $notice = qq{Gave up waiting for notice "$text": timed out at $timeout from line $line};
+			if ($bail) {
+                Test::More::BAIL_OUT ($notice);
+            }
+            else {
+                die $notice;
+            }
 			return;
 		}
 	}

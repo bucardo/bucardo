@@ -5,8 +5,9 @@ Makefile\.old$
 ^blib
 pm_to_blib$
 \.tar\.gz$
-^tmp/
-^log
+.*tmp/
+log$
+log.bucardo
 .git/
 outgoingmail.
 bucardo_test_database_*
@@ -14,3 +15,6 @@ none/
 .tmp$
 .blame$
 bucardo.warning.log
+t/00_release.t
+t/99-yaml.t
+t/99-perlcritic.t

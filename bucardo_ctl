@@ -3,6 +3,8 @@
 ## Script to control Bucardo
 ##
 ## Copyright 2006-2009 Greg Sabino Mullane <greg@endpoint.com>
+##
+## Please see http://bucardo.org/ for full documentation
 
 package bucardo_ctl;
 use strict;
@@ -11,23 +13,36 @@ use 5.008003;
 use DBI;
 use IO::Handle;
 use Getopt::Long;
+Getopt::Long::Configure(qw/no_ignore_case/);
 use Time::HiRes 'sleep';
 use POSIX qw/ceil setsid/;
 use Data::Dumper 'Dumper';
 
 return 1 if $ENV{BUCARDO_CTL_TEST};
 
-our $VERSION = '3.2.7';
+our $VERSION = '4.0.0';
 
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
 
 use vars qw/$dbh $SQL $sth %sth $count $info/;
+
 my $DEBUG            = 0;
 my $DATEFORMAT       = q{Mon DD, YYYY HH24:MI:SS};
 my $DEFAULT_DAYSBACK = 3;
 my $WAITSLEEP        = 1;
 my $PROGRESS         = 1;
+
+my $progname = $0;
+if (exists $ENV{PATH} and $progname =~ m{(.+)/(.+)}) {
+	my ($base, $name) = ($1,$2);
+	for my $seg (split /\:/ => $ENV{PATH}) {
+		if ($seg eq $base) {
+			$progname = $name;
+			last;
+		}
+	}
+}
 
 help() unless @ARGV;
 
@@ -44,21 +59,38 @@ my $bcargs = {
 			  debugfilesep => 0,
 			  debugdir     => '.',
 			  debugname    => '',
-			  debugstderr  => 1,
-			  debugstdout  => 0,
 			  debugsyslog  => 1,
 			  debugfile    => 1,
 			  cleandebugs  => 0,
 		  };
 
+## These options must come before the GetOptions call
+for my $arg (@ARGV) {
+	if ($arg eq '--no-bucardorc') {
+		$bcargs->{'no-bucardorc'} = 1;
+	}
+	if ($arg =~ /--bucardorc=(.+)/) {
+		$bcargs->{'bucardorc'} = $1;
+	}
+}
+
 ## Values are first read from a .bucardorc, either in the current dir, or the home dir.
 ## These will be overwritten by command-line args.
 my $file;
-if (-e '.bucardorc') {
-	$file = '.bucardorc';
-}
-elsif (-e "$ENV{HOME}/.bucardorc") {
-	$file = "$ENV{HOME}/.bucardorc";
+if (! $bcargs->{'no-bucardorc'}) {
+	if ($bcargs->{bucardorc}) {
+		-e $bcargs->{bucardorc} or die qq{Could not find the file "$bcargs->{bucardorc}"\n};
+		$file = $bcargs->{bucardorc};
+	}
+	elsif (-e '.bucardorc') {
+		$file = '.bucardorc';
+	}
+	elsif (-e "$ENV{HOME}/.bucardorc") {
+		$file = "$ENV{HOME}/.bucardorc";
+	}
+	elsif (-e '/etc/bucardorc') {
+		$file = '/etc/bucardorc';
+	}
 }
 if (defined $file) {
 	open my $rc, '<', $file or die qq{Could not open "$file": $!\n};
@@ -95,12 +127,23 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
 	 'extraname=s',
 	 'debugfilesep',
 	 'debugname=s',
-	 'debugstderr=i',
-	 'debugstdout=i',
 	 'debugsyslog=i',
 	 'debugdir=s',
 	 'debugfile=i',
 	 'cleandebugs=i',
+
+	 ## Used internally
+	 'schema|n=s@',
+	 'exclude-schema|N=s@',
+	 'table|t=s@',
+	 'exclude-table|T=s@',
+	 'db=s',
+	 'herd=s',
+	 'piddir=s',
+	 ## These two already handled above, but need to be here so GetOptions is happy:
+	 'bucardorc=s',
+	 'no-bucardorc',
+
 ) or die "\n";
 
 my $QUIET      = delete $bcargs->{ctlquiet};
@@ -126,7 +169,7 @@ $verb = lc $verb;
 my @nouns = @ARGV;
 my $nouns = join ' ' => @nouns;
 
-
+## Installation must happen before we try to connect!
 install() if $verb eq 'install';
 
 ## Grab current information from the bucardo_config file
@@ -149,6 +192,7 @@ my $STOPFILE       = "$PIDDIR/$stopfile";
 ## Handle all the verbs
 status_all()    if $verb eq 'status' and ! @nouns;
 status_detail() if $verb eq 'status';
+restart()       if $verb eq 'restart';
 start()         if $verb eq 'start';
 stop()          if $verb eq 'stop';
 reload_config() if $verb eq 'reload_config';
@@ -162,9 +206,10 @@ message()       if $verb eq 'message';
 list()          if $verb eq 'list';
 config()        if $verb eq 'set' or $verb eq 'show';
 validate()      if $verb eq 'validate';
+update()        if $verb eq 'update';
+delete_item()   if $verb eq 'delete';
 
-
-## For the rest, we expect a list of sync with an optional decimal "timeout"
+## For the rest, we expect a list of syncs with an optional decimal "timeout"
 my $adverb;
 my $syncs = get_syncs();
 my @syncs;
@@ -174,12 +219,13 @@ SYNCMATCH: for my $sync (@nouns) {
 		next SYNCMATCH;
 	}
     if ($sync =~ /%/) {
-        my $tmp = $dbh->selectall_arrayref(qq{SELECT name FROM sync WHERE name LIKE '$sync'});
+		my $tmp = $dbh->selectall_arrayref(qq{SELECT name FROM sync WHERE name LIKE '$sync'});
         if ($#{ $tmp } >= 0) {
             push @syncs, (map { $_->[0] } @$tmp);
             next SYNCMATCH;
         }
     }
+	next if $sync eq 'sync';
 	if (! exists $syncs->{$sync}) {
 		die qq{Sync "$sync" does not appear to exist\n};
 	}
@@ -191,44 +237,71 @@ kick() if $verb eq 'kick';
 help();
 
 sub help {
-	warn qq{Usage: $0 args
+	warn qq{Usage: $progname args
   install         ** Install the Bucardo database
 
-  start <reason>  ** force existing sync(s) to quit, then start
+  start <reason>  ** Force any existing sync(s) to quit, then starts Bucardo
 
-  stop <reason>   ** tell everyone to stop permanently, even the MCP
+  stop <reason>   ** Tell all Bucardo processes to stop permanently
 
-  list <type>     ** view short info about dbs, herds, goats, or syncs
+  list <type>     ** View short info about dbs, tables, sequences, syncs, or herds
 
   add <item_type> <item_name>
-                  ** add a new database, table, sync, herd, or database group
+                  ** Add a new database, table, sync, herd, or database group
     add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx
-    add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool
-    add sync syncname source=xxx targetdb=xxx targetgroup=xxx type=xxx makedelta=xxx 
-    add herd name
     add dbgroup name db1 db2 db3 ...
+    add table [schema].table db=internal_db_name [ping=bool] [standard_conflict=xxx] [makedelta=bool]
+    add all tables [db=internal_db_name] [herd=herd_name]
+    add sequence [schema].name [herd=name]
+    add herd name goat1 goat2 goat3...
+    add sync syncname source=xxx targetdb=xxx targetgroup=xxx type=xxx tables=x,y,z
 
   kick <syncname(s)> [timeout]
-                  ** kick off one or more syncs, optionally wait for result (0 = wait until done)
+                  ** Kick off one or more syncs, optionally wait for result (0 = wait until done)
 
-  ping [timeout]  ** ping the MCP for a response
+  ping [timeout]  ** Ping the MCP process for a response, return a Nagios-friendly string
 
   status [--sort=col#] [--daysback=#]
-                  ** list information about all syncs
+                  ** List information about all syncs
 
   status syncname[s] [--daysback=#]
-                  ** list detailed information about one or more syncs
+                  ** List detailed information about one or more syncs
 
-  reload_config   ** force a running Bucardo to reload the bucardo_config table
+  reload syncname[s]
+                 ** Reload a sync 
+
+  validate syncname[s]
+                 ** Validate a sync
+
+  upgrade
+                 ** Upgrade Bucardo to the current version
+
+  message
+                 ** Write a message to the Bucardo logs
+
+  config [set|show]
+                 ** View or set configuration parameters
+
+  reload_config   ** Force a running Bucardo to reload the bucardo_config table
+
 For more details, try 'man bucardo_ctl'
 } unless $QUIET; ## Mostly for the test suite
 	exit 0;
+}
+
+sub restart {
+	stop();
+	sleep 1;
+	start();
+	return;
 }
 
 
 sub start {
 
 	## Attempt to start Bucardo
+
+	set_reason(0);
 
 	## Refuse to go on if we get a ping response within 5 seconds
 	$QUIET or print "Checking for existing processes\n";
@@ -247,8 +320,6 @@ sub start {
 	if ($VERSION ne $pm_version) {
 		die "Version mismatch: bucardo_ctl is $VERSION, but Bucardo.pm is $pm_version\n";
 	}
-
-	set_reason();
 
 	stop_bucardo();
 
@@ -284,13 +355,15 @@ sub stop {
 
 	## Attempt to stop Bucardo
 
-	set_reason();
+	set_reason(0);
 
 	print "Creating $STOPFILE ... " unless $QUIET;
 	stop_bucardo();
 	print "Done\n" unless $QUIET;
 
-	exit 0;
+	exit 0 if $verb eq 'stop';
+
+	return;
 }
 
 
@@ -339,6 +412,8 @@ sub reload {
 
 	## Ask for one or more syncs to be reloaded
 
+	@nouns or die "Usage: reload <syncname>\n";
+
 	for my $syncname (@nouns) {
 		next if $syncname eq 'sync'; ## Allows $0 reload sync foobar
 
@@ -359,8 +434,8 @@ sub reload {
 
 		my $done = "bucardo_reloaded_sync_$syncname";
 		print "Reloading sync $syncname...";
-		$dbh->do("LISTEN $done");
-		$dbh->do("NOTIFY bucardo_reload_sync_$syncname");
+		$dbh->do(qq{LISTEN "$done"});
+		$dbh->do(qq{NOTIFY "bucardo_reload_sync_$syncname"});
 		$dbh->commit();
 
 		sleep 0.1;
@@ -385,23 +460,53 @@ sub validate {
 
 	## Ask for one or more syncs to be validated
 
-	for my $syncname (@nouns) {
-		next if $syncname eq 'sync'; ## Allows $0 validate sync foobar
+	my @synclist;
 
-		## Make sure this sync exists
-		$SQL = 'SELECT status FROM sync WHERE name = ?';
+	if (!@nouns) {
+		print "Must specify 'all' or a list of syncs\n";
+		exit 0;
+	}
+
+	my $syncsvalid = 0;
+	if ($nouns[0] eq 'all' and ! defined $nouns[1]) {
+		$SQL = q{SELECT name FROM sync};
 		$sth = $dbh->prepare($SQL);
-		$count = $sth->execute($syncname);
-		if ($count != 1) {
-			warn "Invalid sync: $syncname\n";
+		$count = $sth->execute();
+		if ($count < 1) {
 			$sth->finish();
-			next;
+			print "Sorry, there are no syncs to validate!\n";
+			exit 0;
 		}
-		my $status = $sth->fetch()->[0];
+		for my $row (@{$sth->fetchall_arrayref()}) {
+			push @synclist => $row->[0];
+		}
+		$syncsvalid = 1;
+	}
+	else {
+		for my $name (@nouns) {
+			next if $name eq 'sync'; ## Allows $0 validate sync foobar
+			push @synclist => $name;
+		}
+	}
+
+	for my $syncname (@synclist) {
+
+		## Make sure this sync exists if needed
+		if (! $syncsvalid) {
+			$SQL = 'SELECT status FROM sync WHERE name = ?';
+			$sth = $dbh->prepare($SQL);
+			$count = $sth->execute($syncname);
+			if ($count != 1) {
+				warn "Invalid sync: $syncname\n";
+				$sth->finish();
+				next;
+			}
+			my $status = $sth->fetch()->[0]; ## not used yet
+		}
 
 		my $done = "bucardo_validated_sync_$syncname";
 		print "Validating sync $syncname...";
-		$dbh->do("LISTEN $done");
+		$dbh->do(qq{LISTEN "$done"});
 		$SQL = 'SELECT validate_sync(?)';
 		$sth = $dbh->prepare($SQL);
 		$sth->execute($syncname);
@@ -423,6 +528,134 @@ sub validate {
 	exit 0;
 
 } ## end of validate
+
+
+sub update {
+
+	## Update some object in the database
+	## e.g. bucardo_ctl update sync foobar onetimecopy=2
+
+	my $usage = "Usage: update <item> <name> <name=value>...\n";
+
+	my $item = shift @nouns or die $usage;
+	my $name = shift @nouns or die $usage;
+	@nouns or die $usage;
+
+	my $info;
+	if ('sync' eq $item) {
+		$SQL = 'SELECT * FROM sync WHERE name = ?';
+	}
+	elsif ('goat' eq $item) {
+		$SQL = 'SELECT * FROM goat WHERE id = ?';
+		## Later on, allow use of name and schema.name
+	}
+	else {
+		die "Invalid item: must be sync\n";
+	}
+
+	if ($name =~ s/\*//) {
+		$SQL =~ s/=/~/;
+	}
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute($name);
+	if ($count < 1) {
+		$sth->finish();
+		die qq{No matches found for sync "$name"\n};
+	}
+	$dbh->{pg_bool_tf} = 1;
+	$info = $sth->fetchall_arrayref({})->[0];
+
+	if ('sync' eq $item and $nouns[0] eq 'add') {
+		my $miniusage = "Usage: update syncs add table|sequence <name(s)>\n";
+		shift @nouns;
+		my $thing = shift @nouns or die $miniusage;
+		@nouns or die $miniusage;
+
+		## Grab all goats in the source herd for this sync
+		my $sourceherd = $info->{source};
+		$SQL = 'SELECT id, schemaname, tablename FROM goat g'
+			. ' JOIN herdmap h ON (h.goat = g.id) AND h.herd = ?';
+		$sth = $dbh->prepare($SQL);
+		$sth->execute($sourceherd);
+		my $herdlist = $sth->fetchall_hashref('id');
+
+		for my $tab (@nouns) {
+			## All of these must be valid tables
+			my $t = $tab;
+			my $wild = ($t =~ s/\*//) ? 1 : 0;
+			my $find;
+			if ($t =~ s/(\w+)\.//) {
+				my $schema = $1;
+				$SQL = 'SELECT * FROM goat WHERE tablename = ? AND schemaname = ?';
+				$wild and $SQL =~ s/=/~/;
+				$find = $dbh->prepare_cached($SQL);
+				$count = $find->execute($wild ? "^$t" : $t, $schema);
+			}
+			else {
+				$SQL = 'SELECT * FROM goat WHERE tablename = ?';
+				$wild and $SQL =~ s/=/~/;
+				$find = $dbh->prepare($SQL);
+				$count = $find->execute($wild ? "^$t" : $t);
+			}
+			if ($count < 1) {
+				die qq{Unknown table: $tab\n};
+			}
+			elsif ($count > 1 and ! $wild) {
+				die qq{More than one table found for $tab: use wildcards or a schema\n};
+			}
+
+			my $tabinfo = $find->fetchall_arrayref({});
+			for my $tab2 (@$tabinfo) {
+				my $tabid = $tab2->{id};
+				my $tablename = "$tab2->{schemaname}.$tab2->{tablename}";
+				if ( exists $herdlist->{$tabid}) {
+					warn "Skipping table $tablename: already part of that sync\n";
+					next;
+				}
+				$SQL = 'INSERT INTO herdmap(herd,goat) VALUES (?,?)';
+				my $add = $dbh->prepare($SQL);
+				$add->execute($sourceherd,$tabid);
+				warn "Added table $tablename to herd $sourceherd\n";
+			}
+		}
+		$dbh->commit();
+		exit;
+	}
+
+	## Process each change in turn
+	my %change;
+	for my $arg (@nouns) {
+		$arg =~ /(.+)=(.+)/ or die "Invalid argument: must be of form name=value\n";
+		my ($n,$v) = (lc $1,$2);
+		$n =~ /^\w+$/ or die "Invalid name\n";
+		my $localname = $item eq 'sync' ? $info->{name} : "$info->{schemaname}.$info->{tablename}";
+		my $localid = $item eq 'sync' ? $info->{name} : $info->{id};
+		if (! exists $info->{$n}) {
+			die qq{Sorry, cannot change "$n" for $item "$localname"\n};
+		}
+		$SQL = "UPDATE sync SET $n = ? WHERE name = ?";
+		$sth = $dbh->prepare($SQL);
+		$sth->execute($v, $localid);
+		push @{$change{$localname}} => [$n, $info->{$n}, $v];
+	}
+
+	if (! keys %change) {
+		print "No changes made\n";
+		exit 0;
+	}
+
+	for my $thing (sort keys %change) {
+		print qq{Changes made to $item "$thing":\n};
+		for my $row (@{$change{$thing}}) {
+			print qq{ * $row->[0] : changed from "$row->[1]" to "$row->[2]"\n};
+		}
+	}
+
+	$dbh->commit();
+	$dbh->disconnect();
+	exit 0;
+
+} ## end of update
 
 
 sub ping {
@@ -468,6 +701,40 @@ sub ping {
 	return;
 
 } ## end of ping
+
+
+sub process_args {
+
+	## Break apart a string of args, return a clean hashref
+
+	my $string = shift or return {};
+	$string .= ' ';
+
+	my %arg;
+
+	while ($string =~ m/(\w+)\s*=\s*"(.+?)" /g) {
+		$arg{$1} = $2;
+	}
+	$string =~ s/\w+\s*=\s*".+?" / /g;
+
+	while ($string =~ m/(\w+)\s*=\s*'(.+?)' /g) {
+		$arg{$1} = $2;
+	}
+	$string =~ s/\w+\s*=\s*'.+?' / /g;
+
+	while ($string =~ m/(\w+)\s*=\s*(\S+)/g) {
+		$arg{$1} = $2;
+	}
+	$string =~ s/\w+\s*=\s*\S+/ /g;
+
+	if ($string =~ /\S/) {
+		$string =~ s/^\s+//;
+		$arg{extraargs} = [split /\s+/ => $string];
+	}
+
+	return \%arg;
+
+} ## end of process_args
 
 sub kick {
 
@@ -635,6 +902,11 @@ sub status_all {
 
 	our ($synclist,$max);
 	($synclist,$max) = get_detailed_syncs();
+
+	if (! keys %$synclist) {
+		print "No syncs have been created yet.\n";
+		exit 0;
+	}
 
 	printf qq{%-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s\n},
 		$max->{name},'Name',
@@ -854,6 +1126,7 @@ Expired time:         $s->{expired}
 Stayalive:            $s->{stayalive}      Kidsalive: $s->{kidsalive}
 Rebuild index:        $s->{rebuild_index}      Do_listen: $s->{do_listen}
 Ping:                 $s->{ping}      Makedelta: $s->{makedelta}
+Onetimecopy:          $s->{onetimecopy}
 };
 		if ($s->{synctype} eq 'fullcopy'){
 			print qq{Custom select:     $s->{usecustomselect} $s->{copyextra}\n};
@@ -883,8 +1156,11 @@ sub get_config {
 
 sub set_reason {
 
+	my $required = shift || 0;
+
 	if (! length $nouns) {
-		warn qq{Please provide a reason. For example:\n$0 $verb "Adding new table -Greg"\n};
+		return 1 if ! $required;
+		warn qq{Please provide a reason. For example:\n$progname $verb "Adding new table -Greg"\n};
 		exit 1;
 	}
 
@@ -900,7 +1176,7 @@ sub set_reason {
 
 sub stop_bucardo {
 	open my $stop, '>', $STOPFILE or die qq{Could not create "$STOPFILE": $!\n};
-	print {$stop} "Stopped by $0 on " . (scalar localtime) . "\n";
+	print {$stop} "Stopped by $progname on " . (scalar localtime) . "\n";
 	close $stop or warn qq{Could not close "$STOPFILE": $!\n};
 	return;
 }
@@ -1072,16 +1348,18 @@ ORDER BY started DESC LIMIT 1
 
 sub list {
 
-	my $msg = "Need to specify what to list: db, goat, herd, or sync\n";
+	my $msg = "Need to specify what to list: db, table, sequence, sync, or herd\n";
 	if (!@nouns) {
 		die $msg;
 	}
 	my $thing = shift @nouns;
 
-	list_dbs()   if $thing =~ /db/i   or $thing eq 'd';
-	list_goats() if $thing =~ /goat/i or $thing eq 'g';
-	list_herds() if $thing =~ /herd/i or $thing eq 'h';
-	list_syncs() if $thing =~ /sync/i or $thing eq 's';
+	list_dbgroups()  if $thing =~ /dbgroup/i or $thing eq 'g';
+	list_dbs()       if $thing =~ /db/i      or $thing eq 'd';
+	list_tables()    if $thing =~ /tab/i     or $thing eq 't';
+	list_sequences() if $thing =~ /seq/i     or $thing eq 'q';
+	list_syncs()     if $thing =~ /sync/i    or $thing eq 's';
+	list_herds()     if $thing =~ /herd/i    or $thing eq 'h';
 
 	die $msg;
 
@@ -1125,26 +1403,71 @@ sub list_dbs {
 } ## end of list_dbs
 
 
-sub list_goats {
+sub list_dbgroups {
 
-	## Show information about all or some subset of the 'goat' table
-	## Keep to three lines or less if possible
+	## Show information about all or some subset of the 'dbgroup' table
 
 	## If any nouns left, treat as wildcards
 	my $WHERE = '';
 	for my $term (@nouns) {
-		$WHERE .= sprintf q{%s lower(tablename) ~ %s},
+		$WHERE .= sprintf q{%s lower(name) ~ %s},
 			$WHERE ? ' OR' : 'WHERE',
+			$dbh->quote(lc $term);
+	}
+
+	$SQL = "SELECT * FROM dbgroup $WHERE ORDER BY name";
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute();
+	if ($count < 1) {
+		$sth->finish();
+		printf "There are no%s entries in the 'dbgroup' table.\n",
+			$WHERE ? ' matching' : '';
+		exit;
+	}
+
+	$info = $sth->fetchall_arrayref({});
+	for my $row (@$info) {
+		print "Name: $row->{name}\n";
+	}
+
+	exit;
+
+} ## end of list_dbgroups
+
+
+sub get_dbs {
+
+	## Grab information about all entries in the 'db' table
+
+	$SQL = 'SELECT * FROM db ORDER BY name';
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	my $info = $sth->fetchall_hashref('name');
+	return $info;
+
+} ## end of get_dbs
+
+
+sub list_tables {
+
+	## Show information about all or some tables in the 'goat' table
+	## Keep to three lines or less if possible
+
+	## If any nouns left, treat as wildcards
+	my $AND = '';
+	for my $term (@nouns) {
+		$AND .= sprintf q{%s lower(tablename) ~ %s},
+			$AND ? ' OR' : '',
 				$dbh->quote(lc $term);
 	}
 
-	$SQL = "SELECT * FROM goat $WHERE ORDER BY schemaname, tablename";
+	$SQL = "SELECT * FROM goat WHERE reltype = 'table' $AND ORDER BY schemaname, tablename";
 	$sth = $dbh->prepare($SQL);
 	$count = $sth->execute();
 	if ($count < 1) {
 		$sth->finish();
 		printf "There are no%s entries in the 'goat' table.\n",
-			$WHERE ? ' matching' : '';
+			$AND ? ' matching' : '';
 		exit;
 	}
 
@@ -1162,12 +1485,45 @@ sub list_goats {
 			$row->{db},
 			$row->{ping} ? 'Yes' : 'No',
 			$row->{makedelta} ? 'Yes' : 'No',
-			$row->{hasdelta} ? 'Yes' : 'No';
+			$row->{has_delta} ? 'Yes' : 'No';
 	}
 
 	exit;
 
-} ## end of list_goats
+} ## end of list_tables
+
+
+sub list_sequences {
+
+	## Show information about all or some sequences in the 'goat' table
+	## Keep to three lines or less if possible
+
+	## If any nouns left, treat as wildcards
+	my $AND = '';
+	for my $term (@nouns) {
+		$AND .= sprintf q{%s lower(tablename) ~ %s},
+			$AND ? ' OR' : '',
+				$dbh->quote(lc $term);
+	}
+
+	$SQL = "SELECT * FROM goat WHERE reltype = 'sequence' $AND ORDER BY schemaname, tablename";
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute();
+	if ($count < 1) {
+		$sth->finish();
+		printf "There are no%s entries in the 'goat' table.\n",
+			$AND ? ' matching' : '';
+		exit;
+	}
+
+	$info = $sth->fetchall_arrayref({});
+	for my $row (@$info) {
+		print "Sequence $row->{id}: $row->{schemaname}.$row->{tablename}\n";
+	}
+
+	exit;
+
+} ## end of list_sequences
 
 
 sub list_herds {
@@ -1379,7 +1735,8 @@ sub vate_sync {
 
 	my $wait = (defined $adverb and $adverb eq '0') ? 1 : 0;
 	for my $sync (@syncs) {
-		$QUIET or print qq{$ucname sync $sync};
+		(my $vname = $ucname) =~ s/e$/ing/;
+		$QUIET or print qq{$vname sync $sync};
 		my $done = "bucardo_${name}d_sync_$sync";
 		$dbh->do(qq{NOTIFY "bucardo_${name}_sync_$sync"});
 		if ($wait) {
@@ -1404,7 +1761,8 @@ sub vate_sync {
 		print "OK\n";
 	} ## end each sync
 	exit 0;
-}
+
+} ## end of vate_sync
 
 sub add_item {
 
@@ -1422,8 +1780,11 @@ sub add_item {
 	if ($type eq 'db' or $type eq 'database') {
 		add_database($type);
 	}
-	elsif ($type eq 'table' or $type eq 'goat') {
+	elsif ($type eq 'table') {
 		add_table($type);
+	}
+	elsif ($type eq 'sequence') {
+		add_sequence($type);
 	}
 	elsif ($type eq 'sync') {
 		add_sync($type);
@@ -1434,12 +1795,65 @@ sub add_item {
 	elsif ($type eq 'dbgroup') {
 		add_dbgroup($type);
 	}
+	elsif ($type eq 'all') {
+		my $type2 = shift @nouns || '';
+		if ($type2 =~ /table/i) {
+			add_all_tables();
+		}
+		elsif ($type2 =~ /sequence/i) {
+			add_all_sequences();
+		}
+		else {
+			warn "Must provide a valid type\n";
+			exit 1;
+		}
+	}
 	else {
 		warn "Cannot add: unknown type\n";
 	}
 	exit 1;
 
 } ## end of add_item
+
+
+sub delete_item {
+
+	my $self = shift;
+
+	if (!@nouns) {
+		warn "Usage: delete <item_type> <item_name>\n";
+		exit 1;
+	}
+
+	## First word must be a type we know about
+	my $type = shift @nouns;
+	$type = lc $type;
+
+	if ($type eq 'db' or $type eq 'database') {
+		delete_database($type);
+	}
+	elsif ($type eq 'table') {
+		delete_table($type);
+	}
+	elsif ($type eq 'sequence') {
+		delete_sequence($type);
+	}
+	elsif ($type eq 'sync') {
+		delete_sync($type);
+	}
+	elsif ($type eq 'herd') {
+		delete_herd($type);
+	}
+	elsif ($type eq 'dbgroup') {
+		delete_dbgroup($type);
+	}
+	else {
+		warn "Cannot delete: unknown type\n";
+	}
+	exit 1;
+
+} ## end of delete_item
+
 
 sub alter_item {
 
@@ -1480,8 +1894,11 @@ sub remove_item {
 	if ($type eq 'db' or $type eq 'database') {
 		remove_database($type);
 	}
-	elsif ($type eq 'table' or $type eq 'goat') {
+	elsif ($type eq 'table') {
 		remove_table($type);
+	}
+	elsif ($type eq 'sequence') {
+		remove_sequence($type);
 	}
 	elsif ($type eq 'sync') {
 		remove_sync($type);
@@ -1500,6 +1917,9 @@ sub remove_database {
 	die "Not implemented yet\n";
 }
 sub remove_table {
+	die "Not implemented yet\n";
+}
+sub remove_seqquence {
 	die "Not implemented yet\n";
 }
 sub remove_herd {
@@ -1607,6 +2027,29 @@ sub column_value {
 
 } ## end of column_value
 
+sub find_bucardo_schema {
+
+	## Locate the best bucardo.schema file and return a file handle and name for it
+
+	my $fh;
+
+	## Start by checking the current directory
+	my $schema_file = 'bucardo.schema';
+	return ($fh, $schema_file) if open $fh, '<', $schema_file;
+
+	## Try /usr/local/share/bucardo
+	$schema_file = '/usr/local/share/bucardo/bucardo.schema';
+	return ($fh, $schema_file) if open $fh, '<', $schema_file;
+
+	## Try /usr/share/bucardo
+	$schema_file = '/usr/share/bucardo/bucardo.schema';
+	return ($fh, $schema_file) if open $fh, '<', $schema_file;
+
+	die "Could not find the bucardo.schema file!\n";
+
+} ## end of find_bucardo_schema
+
+
 sub table_definition {
 
 	## Pull the complete table definition from the bucardo.schema file
@@ -1616,8 +2059,7 @@ sub table_definition {
 
 	my $def = '';
 
-	my $schema_file = 'bucardo.schema';
-	open my $fh, '<', $schema_file or die qq{Could not open "$schema_file": $!\n};
+	my ($fh, $schema_file) = find_bucardo_schema();
 	my @seq;
 	while (<$fh>) {
 		if (!$def) {
@@ -1640,28 +2082,6 @@ sub table_definition {
 } ## end of table_definition
 
 
-sub upgrade_and_log {
-
-	my $action = shift;
-	my $short = shift || $action;
-
-	eval {
-		$dbh->do($action);
-	};
-	if ($@) {
-		my $line = (caller)[2];
-		die "From line $line, action $action\n$@\n";
-	}
-
-	$SQL = 'INSERT INTO upgrade_log(action,version,summary) VALUES (?,?,?)';
-	$sth = $dbh->prepare($SQL);
-	$sth->execute($action,$VERSION,$short);
-
-	return;
-
-} ## end of upgrade_and_log
-
-
 sub function_exists {
 
 	my ($schema,$name,$args) = @_;
@@ -1681,12 +2101,26 @@ sub function_exists {
 
 sub upgrade {
 
-	## Make upgrades to an existing schema to match the current version
-	## This is generally not reversible, so we throw plenty of warnings
+	## Make upgrades to an existing Bucardo schema to match the current version
 
 	my $self = shift;
 
-	my $default_schema = 'bucardo';
+	## Ensure the bucardo.schema file is available and the correct version
+	my ($fh, $schema_file) = find_bucardo_schema();
+
+	my $schema_version = 0;
+	while (<$fh>) {
+		if (/\-\- Version (\d+\.\d+\.\d+)/) {
+			$schema_version = $1;
+			last;
+		}
+	}
+	if (! $schema_version) {
+		die qq{Could not find version number in the file "$schema_file"!\n};
+	}
+	if ($schema_version ne $VERSION) {
+		die qq{Cannot continue: bucardo_ctl is version $VERSION, but $schema_file is version $schema_version\n};
+	}
 
 	$dbh->do(q{SET escape_string_warning = 'OFF'});
 
@@ -1694,23 +2128,35 @@ sub upgrade {
 
 	## Make sure the upgrade_log table is in place
 
-	if (!relation_exists($default_schema, 'upgrade_log')) {
+	if (!relation_exists('bucardo', 'upgrade_log')) {
 		my ($seqlist, $tabledef) = table_definition('upgrade_log');
 		upgrade_and_log($tabledef,'CREATE TABLE upgrade_log');
 		$dbh->commit();
 	}
 
-	my @new_sequences = (
-		'audit_pid_id_seq',
-	);
-
 	my @old_sequences = (
 		'dbgroup_id_seq',
 	);
 
-	my @new_tables = (
-		['bucardo', 'bucardo_log_message'],
-		['bucardo', 'bucardo_rate'],
+	my @old_constraints = (
+		['bucardo', 'goat', 'goat_pkeytype_check'],
+		['bucardo', 'sync', 'sync_replica_allornone'],
+		['bucardo', 'sync', 'sync_disable_triggers_method'],
+		['bucardo', 'sync', 'sync_disable_rules_method'],
+	);
+
+	my @old_columns = (
+		['bucardo', 'sync', 'disable_rules'],
+		['bucardo', 'sync', 'disable_triggers'],
+	);
+
+	my @old_functions = (
+		['create_child_q', 'text'],
+	);
+
+	my @old_indexes = (
+        ['bucardo', 'sync', 'sync_source_targetdb'],
+        ['bucardo', 'sync', 'sync_source_targetgroup'],
 	);
 
 	my @new_columns = (
@@ -1744,56 +2190,25 @@ sub upgrade {
 		['bucardo', 'goat', 'schemaname', 'NO DEFAULT'],
 	);
 
-	my @old_columns = (
-		['bucardo', 'sync', 'disable_rules'],
-		['bucardo', 'sync', 'disable_triggers'],
-	);
-
 	my @row_values = (
 
 		['bucardo_config','about',q{setting = 'log_showtime'}, 1,
 		 'Show timestamp in the log output?  0=off  1=seconds since epoch  2=scalar gmtime  3=scalar localtime'],
 	);
 
-	my @old_constraints = (
-		['bucardo', 'goat', 'goat_pkeytype_check'],
-		['bucardo', 'sync', 'sync_replica_allornone'],
-		['bucardo', 'sync', 'sync_disable_triggers_method'],
-		['bucardo', 'sync', 'sync_disable_rules_method'],
-	);
-
-	my @new_constraints = (
-	);
-
-	my @old_functions = (
-		['create_child_q', 'text'],
-	);
-
-	my @old_indexes = (
-        ['bucardo', 'sync', 'sync_source_targetdb'],
-        ['bucardo', 'sync', 'sync_source_targetgroup'],
-	);
-
-	my @new_indexes = (
-        ['bucardo', 'sync', 'sync_source_targetdb_type', 'UNIQUE source,targetdb,synctype'],
-        ['bucardo', 'sync', 'sync_source_targetgroup_type', 'UNIQUE source,targetgroup,synctype'],
-	);
-
 	my @drop_all_rules = (
 		['freezer','master_q'],
 	);
 
-	## Drop all existing rules from this table:
+	## Drop all existing rules from a table:
 	for my $row (@drop_all_rules) {
 		my ($schema,$table) = @$row;
-		print "Checking $schema and $table\n";
 		my $oid = relation_exists($schema,$table);
 		if (!$oid) {
 			warn "Could not find table $schema.$table to check!\n";
 			next;
 		}
-		$SQL = 'SELECT rulename FROM pg_rewrite WHERE ev_class = ? ORDER BY rulename'
-;
+		$SQL = 'SELECT rulename FROM pg_rewrite WHERE ev_class = ? ORDER BY rulename';
 		$sth = $dbh->prepare($SQL);
 		$count = $sth->execute($oid);
 		if ($count < 1) {
@@ -1807,86 +2222,43 @@ sub upgrade {
 		}
 	}
 
+	## Drop any old sequences
+	for my $sequence (@old_sequences) {
+		next if !relation_exists('bucardo', $sequence);
+		upgrade_and_log("DROP SEQUENCE bucardo.$sequence");
+		clog "Dropped sequence: $sequence";
+		$changes++;
+	}
+
+	## Drop any old constraints
 	for my $con (@old_constraints) {
 		my ($schema, $table, $constraint) = @$con;
-		if (!constraint_exists($schema, $table, $constraint)) {
-			clog "  Constraint $constraint does not exist";
-		}
-		else {
-			upgrade_and_log(qq{ALTER TABLE $schema.$table DROP CONSTRAINT "$constraint"});
-			clog "Dropped constraint $constraint ON $schema.$table";
-			$changes++;
-		}
+		next if !constraint_exists($schema, $table, $constraint);
+		upgrade_and_log(qq{ALTER TABLE $schema.$table DROP CONSTRAINT "$constraint"});
+		clog "Dropped constraint $constraint ON $schema.$table";
+		$changes++;
 	}
 
-	for my $sequence (@new_sequences) {
-		if (relation_exists($default_schema, $sequence)) {
-			clog "  Sequence already exists: $sequence";
-		}
-		else {
-			upgrade_and_log("CREATE SEQUENCE $default_schema.$sequence");
-			clog "Created sequence: $sequence";
-			$changes++;
-		}
-	}
-
-	for my $sequence (@old_sequences) {
-		if (!relation_exists($default_schema, $sequence)) {
-			clog "  Sequence does not exist: $sequence";
-		}
-		else {
-
-			upgrade_and_log("DROP SEQUENCE $default_schema.$sequence");
-			clog "Dropped sequence: $sequence";
-			$changes++;
-		}
-	}
-
-	for my $row (@new_tables) {
-		my ($schema,$table) = @$row;
-		if (relation_exists($schema, $table)) {
-			clog "  Table already exists: $table\n";
-		}
-		else {
-			my ($seqlist, $tabledef) = table_definition($table);
-			for my $sequence (@$seqlist) {
-				if (!relation_exists($schema, $sequence)) {
-					upgrade_and_log("CREATE SEQUENCE $schema.$sequence");
-					clog "Created sequence: $sequence";
-				}
-			}
-			upgrade_and_log($tabledef, "CREATE TABLE $table");
-			clog "Created table: $table\n";
-			$changes++;
-		}
-	}
-
+	## Add new columns as needed
 	for my $row (@new_columns) {
 		my ($schema,$table,$column,$def) = @$row;
-		if (column_exists($schema, $table, $column)) {
-			clog "  Column already exists: $schema.$table.$column";
-		}
-		else {
-			$def =~ s/\s+/ /g;
-			$dbh->do("ALTER TABLE $schema.$table ADD COLUMN $column $def");
-			clog "Created column: $schema.$table.$column $def";
-			$changes++;
-		}
+		next if column_exists($schema, $table, $column);
+		$def =~ s/\s+/ /g;
+		$dbh->do("ALTER TABLE $schema.$table ADD COLUMN $column $def");
+		clog "Created column: $schema.$table.$column $def";
+		$changes++;
 	}
 
+	## Change any altered columns
 	for my $row (@altered_columns) {
 		my ($schema,$table,$column,$change) = @$row;
 		next if ! column_exists($schema, $table, $column);
 		if ($change eq 'NO DEFAULT') {
 			my $def = column_default($schema, $table, $column);
-			if (!$def) {
-				clog "  Column $schema.$table.$column already has no DEFAULT";
-			}
-			else {
-				upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column DROP DEFAULT");
-				clog "Removed DEFAULT ($def) from $schema.$table.$column";
-				$changes++;
-			}
+			next if !$def;
+			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column DROP DEFAULT");
+			clog "Removed DEFAULT ($def) from $schema.$table.$column";
+			$changes++;
 		}
 		elsif ($change =~ /^RENAME\s+(\w+)/) {
 			my $newname = $1;
@@ -1897,86 +2269,51 @@ sub upgrade {
 		elsif ($change =~ /^DEFAULT\s+(.+)/) {
 			my $newname = $1;
 			my $oldname = column_default($schema, $table, $column);
-			if ($newname eq $oldname) {
-				clog "  Column $schema.$table.$column already has a DEFAULT of $newname";
-			}
-			else {
-				upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column SET DEFAULT $newname");
-				clog("Changed DEFAULT on $schema.$table.$column to $newname");
-				$changes++;
-			}
+			next if $newname eq $oldname;
+			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column SET DEFAULT $newname");
+			clog("Changed DEFAULT on $schema.$table.$column to $newname");
+			$changes++;
 		}
 		else {
 			die qq{Do not know how to handle altered column spec of "$change"};
 		}
 	}
 
+	## Drop any old columns
 	for my $row (@old_columns) {
 		my ($schema,$table,$column) = @$row;
-		if (!column_exists($schema, $table, $column)) {
-			clog "  Column already removed: $schema.$table.$column";
-		}
-		else {
-			$dbh->do("ALTER TABLE $schema.$table DROP COLUMN $column");
-			clog "Dropped column: $schema.$table.$column";
-			$changes++;
-		}
+		next if !column_exists($schema, $table, $column);
+		$dbh->do("ALTER TABLE $schema.$table DROP COLUMN $column");
+		clog "Dropped column: $schema.$table.$column";
+		$changes++;
 	}
 
-	for my $row (@new_constraints) {
-		my ($schema,$table,$name,$def) = @$row;
-		if (constraint_exists($schema, $table, $name)) {
-			clog "  Contraint $name on $schema.$table already exists";
-		}
-		else {
-			$dbh->do("ALTER TABLE $schema.$table ADD CONSTRAINT $name $def");
-			clog "Added constraint $name to $schema.$table";
-			$changes++;
-		}
-	}
-
+	## Drop any old indexes
 	for my $row (@old_indexes) {
 		my ($schema,$table,$name) = @$row;
-		if (!relation_exists($schema, $name)) {
-			clog "  Index already removed: $schema.$table.$name";
-		}
-		else {
-			$dbh->do("DROP INDEX $name");
-			clog "Dropped index $name";
-			$changes++;
-		}
+		next if !relation_exists($schema, $name);
+		$dbh->do("DROP INDEX $name");
+		clog "Dropped index $name";
+		$changes++;
 	}
 
-	for my $row (@new_indexes) {
-		my ($schema,$table,$name,$def) = @$row;
-		if (relation_exists($schema, $name)) {
-			clog "  Index already exists: $schema.$table.$name";
-		}
-		else {
-			my $unique = $def =~ s/^UNIQUE\s*// ? 1 : 0;
-			my $COM = sprintf 'CREATE %sINDEX %s ON %s.%s (%s)',
-				$unique ? 'UNIQUE ' : '',
-                $name,
-				$schema,
-                $table,
-                $def;
-			$dbh->do($COM);
-			clog "Created index $name on $name";
-			$changes++;
-		}
+	## Drop any old functions
+	for my $row (@old_functions) {
+		my ($name, $args) = @$row;
+		next if ! function_exists('bucardo', $name, $args);
+		clog "Dropped function $name($args)";
+		upgrade_and_log(qq{DROP FUNCTION bucardo."$name"($args)});
+		$changes++;
 	}
-
 
 	## Check for any new config items
 	$SQL = 'SELECT value FROM bucardo_config WHERE lower(setting) = ?';
 	my $cfgsth = $dbh->prepare($SQL);
 	$SQL = 'INSERT INTO bucardo_config(setting,value,about) VALUES (?,?,?)';
 	my $newcfg = $dbh->prepare($SQL);
-	my $schema_file = 'bucardo.schema';
-	open my $fh, '<', $file or die qq{Could not open "$schema_file": $!\n};
-
 	my %config;
 	my $inside = 0;
+	seek $fh, 0, 0;
 	while (<$fh>) {
 		if (!$inside) {
 			if (/^WITH DELIMITER/) {
@@ -1999,44 +2336,29 @@ sub upgrade {
 			$newcfg->execute($setting,$value,$about);
 		}
 	}
-	close $fh or die qq{Could not close file "$schema_file": $!\n};
 
+	## Apply any specific row changes
 	for my $row (@row_values) {
 		my ($table,$column,$where,$force,$value) = @$row;
-		my $val = column_value($default_schema,$table,$column,$where);
+		my $val = column_value('bucardo',$table,$column,$where);
 		if (!defined $val) {
 			die "Failed to find $table.$column where $where!\n";
 		}
-		if ($val eq $value) {
-			clog "  Value of $table.$column where $where is already correct";
-		}
-		else {
-			$SQL = sprintf "UPDATE $default_schema.$table SET $column=%s WHERE $where",
-				$dbh->quote($value);
-			upgrade_and_log($SQL);
-			clog "New value set for $default_schema.$table.$column WHERE $where";
-			$changes++;
-		}
+		next if $val eq $value;
+		$SQL = sprintf "UPDATE bucardo.$table SET $column=%s WHERE $where",
+			$dbh->quote($value);
+		upgrade_and_log($SQL);
+		clog "New value set for bucardo.$table.$column WHERE $where";
+		$changes++;
 	}
 
-	for my $row (@old_functions) {
-		my ($name, $args) = @$row;
-		if (function_exists('bucardo', $name, $args)) {
-			clog "Dropping deprecated function $name($args)";
-			upgrade_and_log(qq{DROP FUNCTION bucardo."$name"($args)});
-			$changes++;
-		}
-		else {
-			clog "  Deprecated function $name($args) does not exist";
-		}
-	}
-
-	## Now we check all the functions, triggers, and indexes within bucardo.schema
-	$file = 'bucardo.schema';
-	open $fh, '<', $file or die qq{Could not open "$file": $!\n};
-	my (@flist, @tlist, @ilist);
+	## Parse the bucardo.schema file and verify the following types of objects exist:
+	## Functions, triggers, constraints, sequences, and indexes
+	my (@flist, @tlist, @ilist, @clist, @slist, @tablelist);
 	my ($fname,$args,$fbody) = ('','','');
 	my ($tname,$tbody) = ('','');
+	my ($tablename,$tablebody) = ('','');
+	seek $fh, 0, 0;
 	while (<$fh>) {
 		if ($fbody) {
 			if (/^(\$bc\$;)/) {
@@ -2057,10 +2379,17 @@ sub upgrade {
 			}
 			next;
 		}
-		if (/^CREATE (?:OR REPLACE )?FUNCTION\s+(\S+)/) {
+		if ($tablebody) {
+			$tablebody .= $_;
+			if (/;/) {
+				push @tablelist, [$tablename, $tablebody];
+				$tablebody = $tablename = '';
+			}
+			next;
+		}
+		if (/^CREATE (?:OR REPLACE )?FUNCTION\s+bucardo\.(\S+)/) {
 			$fname = $1;
 			$fbody .= $_;
-			$fname =~ s/bucardo\.//;
 			$fname =~ s/\((.*)\)// or die "No args found for function: $_\n";
 			$args = $1;
 			$args =~ s/,(\S)/, $1/g;
@@ -2071,8 +2400,21 @@ sub upgrade {
 			$tbody .= $_;
 			next;
 		}
-		if (/^CREATE INDEX (\S+)/) {
-			push @ilist, [$1, $_];
+		if (/^CREATE TABLE bucardo\.(\w+)/) {
+			$tablename = $1;
+			$tablebody .= $_;
+			next;
+		}
+		if (/^CREATE (UNIQUE )?INDEX (\S+)/) {
+			push @ilist, [$1, $2, $_];
+			next;
+		}
+		if (/^ALTER TABLE bucardo\.(\S+) ADD CONSTRAINT (\S+)/) {
+			push @clist, [$1, $2, $_];
+			next;
+		}
+		if (/^CREATE SEQUENCE bucardo\.(\w+)/) {
+			push @slist, [$1, $_];
 			next;
 		}
 	}
@@ -2082,11 +2424,11 @@ sub upgrade {
 	my $md5sth = $dbh->prepare($SQL);
 	for my $row (@flist) {
 		my ($name,$arg,$body) = @$row;
-		my $oldbody = function_exists($default_schema,$name,$arg);
+		my $oldbody = function_exists('bucardo',$name,$arg);
 		if (!$oldbody) {
-			$body =~ s/FUNCTION /FUNCTION $default_schema./;
-			upgrade_and_log($body,"CREATE FUNCTION $default_schema.$name($arg)");
-			clog "Added function $default_schema.$name($arg)";
+			$body =~ s/FUNCTION /FUNCTION bucardo./;
+			upgrade_and_log($body,"CREATE FUNCTION bucardo.$name($arg)");
+			clog "Added function bucardo.$name($arg)";
 			$changes++;
 			next;
 		}
@@ -2094,12 +2436,11 @@ sub upgrade {
 		$realbody =~ s/.*?\$bc\$(.+)\$bc\$;/$1/sm;
 		$md5sth->execute($realbody);
 		my $newbody = $md5sth->fetchall_arrayref()->[0][0];
-		if ($oldbody eq $newbody) {
-			clog "  Function unchanged: $default_schema.$name($arg)";
-			next;
-		}
+		next if $oldbody eq $newbody;
 		$body =~ s/^CREATE FUNCTION/CREATE OR REPLACE FUNCTION/;
-		$body =~ s/FUNCTION /FUNCTION $default_schema./;
+		if ($body !~ /FUNCTION bucardo/) {
+			$body =~ s/FUNCTION /FUNCTION bucardo./;
+		}
 		(my $short = $body) =~ s/^(.+?)\n.*/$1/s;
 		$dbh->do('SAVEPOINT bucardo_upgrade');
 		eval { upgrade_and_log($body,$short); };
@@ -2113,35 +2454,53 @@ sub upgrade {
 		else {
 			$dbh->do('RELEASE bucardo_upgrade');
 		}
-		clog "Updated function: $default_schema.$name($arg)";
+		clog "Updated function: bucardo.$name($arg)";
+		$changes++;
+	}
+
+	## Check for any added sequences
+	for my $row (@slist) {
+		my ($sname,$body) = @$row;
+		next if relation_exists('bucardo', $sname);
+		upgrade_and_log($body);
+		clog "Created sequence $sname";
+		$changes++;
+	}
+
+	## Check for any added tables
+	for my $row (@tablelist) {
+		my ($name,$body) = @$row;
+		next if relation_exists('bucardo', $name);
+		upgrade_and_log($body);
+		clog "Created table $name";
 		$changes++;
 	}
 
 	## Check for any added triggers
 	for my $row (@tlist) {
 		my ($name,$body) = @$row;
-		if (trigger_exists($name)) {
-			clog "  Trigger $name already exists";
-		}
-		else {
-			upgrade_and_log($body);
-			clog "Created trigger $name";
-			$changes++;
-		}
+		next if trigger_exists($name);
+		upgrade_and_log($body);
+		clog "Created trigger $name";
+		$changes++;
 	}
 
 	## Check for any added indexes
 	for my $row (@ilist) {
-		my ($name,$body) = @$row;
-		if (relation_exists('bucardo',$name)) {
-			clog "  Index $name already exists";
-		}
-		else {
-			warn "DOES NOT EXIST? $name";
-			upgrade_and_log($body);
-			clog "Created index $name";
-			$changes++;
-		}
+		my ($uniq,$name,$body) = @$row;
+		next if relation_exists('bucardo',$name);
+		upgrade_and_log($body);
+		clog "Created index $name";
+		$changes++;
+	}
+
+	## Check for any added constraints
+	for my $row (@clist) {
+		my ($name,$cname,$body) = @$row;
+		next if constraint_exists('bucardo', $name, $cname);
+		upgrade_and_log($body);
+		clog "Created constraint $cname on $name";
+		$changes++;
 	}
 
 	## The freezer.q_staging table is no longer needed, but we must empty it before dropping
@@ -2158,10 +2517,38 @@ sub upgrade {
 		$dbh->commit();
 		print "Changes have been commited\n";
 	}
+	else {
+		print "No schema changes were needed\n";
+		exit 1;
+	}
+
+	print "Don't forget to run '$progname validate all' as well: see the UPGRADE file for details\n";
 
 	exit 1;
 
 } ## end of upgrade
+
+
+sub upgrade_and_log {
+
+	my $action = shift;
+	my $short = shift || $action;
+
+	eval {
+		$dbh->do($action);
+	};
+	if ($@) {
+		my $line = (caller)[2];
+		die "From line $line, action $action\n$@\n";
+	}
+
+	$SQL = 'INSERT INTO upgrade_log(action,version,summary) VALUES (?,?,?)';
+	$sth = $dbh->prepare($SQL);
+	$sth->execute($action,$VERSION,$short);
+
+	return;
+
+} ## end of upgrade_and_log
 
 
 sub add_database {
@@ -2180,7 +2567,6 @@ sub add_database {
 
 	## The rest is the options. If not there, we fill in the defaults
 	my $info = join ' ' => @nouns;
-	my $delim = $info =~ /\|/ ? '\s*\|\s*' : '\\s+';
 	## Command line name, default value, database column name
 	my %arg = (
 			   name        => [$item_name, ''],
@@ -2194,11 +2580,10 @@ sub add_database {
 			   sourcelimit => ['',         ''],
 			   targetlimit => ['',         ''],
 			   );
-	for my $arg (split /$delim/ => $info) {
-		if ($arg !~ /(.+)=(.+)/o) {
-			die qq{Invalid argument\n};
-		}
-		my ($name,$value) = ($1,$2);
+	my $args = process_args($info);
+	for my $name (sort keys %$args) {
+		next if $name eq 'extraargs';
+		my $value = $args->{$name};
 		if (!exists $arg{$name}) {
 			die "Unknown option '$name'\n";
 		}
@@ -2241,6 +2626,365 @@ sub add_database {
 } ## end of add_database
 
 
+sub add_all_tables {
+
+	## Usage: add all table(s)
+	## Options:
+	## --db: use this database (internal name from the db table)
+	## --schema or -n: limit to one or more comma-separated schemas
+	## --exclude-schema or -N: exclude these schemas
+	## --table or -t: limit to the given tables
+	## --exclude-table or -t: exclude these tables
+	## --herd : name of the herd to add new tables to
+	##
+	## Future options: --prompt
+
+	## Grab the list of databases. If none, cowardly refuse to continue
+	my $dbs = get_dbs();
+	if (! keys %$dbs) {
+		die "Sorry, cannot add any tables until at least one database is defined\n";
+	}
+
+	## Have the picked one? Make sure it exists.
+	my $db;
+	if (exists $bcargs->{db}) {
+		if (! exists $dbs->{$bcargs->{db}}) {
+			die qq{sorry, could not find a database named "$bcargs->{db}"\n};
+		}
+		$db = $dbs->{$bcargs->{db}};
+	}
+	elsif (keys %$dbs == 1) {
+		($db) = values %$dbs;
+	}
+	else {
+		warn "Please specify which database to use with the --db option\n";
+		warn "Your choices are:\n";
+		for my $row (sort keys %$dbs) {
+			warn "--db=$row\n";
+		}
+		exit;
+	}
+
+	## Connect to the remote database
+	my $dbh2 = connect_database({name => $db->{name}});
+
+	## Generate a query to pull all tables we may possibly need
+	$SQL = q{SELECT nspname, relname FROM pg_class c }
+		. q{JOIN pg_namespace n ON (n.oid = c.relnamespace) }
+		. q{WHERE relkind = 'r' };
+
+	## Use optional arguments to refine the list of schemas
+	if (exists $bcargs->{schema}) {
+		$SQL .= ' AND nspname IN (';
+		for my $s (@{$bcargs->{schema}}) {
+			$s =~ s/^\s*(.+?)\s*$/$1/;
+			$SQL .= join ',' => map { "'$_'" } split /\s*,\s*/ => $s;
+			$SQL .= ',';
+		}
+		$SQL =~ s/,$/)/;
+	}
+	else {
+		$SQL .= q{AND n.nspname <> 'information_schema' AND nspname !~ '^pg'};
+	}
+
+	if (exists $bcargs->{'exclude-schema'}) {
+		$SQL .= ' AND nspname NOT IN (';
+		for my $s (@{$bcargs->{'exclude-schema'}}) {
+			$s =~ s/^\s*(.+?)\s*$/$1/;
+			$SQL .= join ',' => map { "'$_'" } split /\s*,\s*/ => $s;
+			$SQL .= ',';
+		}
+		$SQL =~ s/,$/)/;
+	}
+
+	## Use optional arguments to refine the list of tables
+	if (exists $bcargs->{table}) {
+		$SQL .= ' AND relname IN (';
+		for my $s (@{$bcargs->{table}}) {
+			$s =~ s/^\s*(.+?)\s*$/$1/;
+			$SQL .= join ',' => map { "'$_'" } split /\s*,\s*/ => $s;
+			$SQL .= ',';
+		}
+		$SQL =~ s/,$/)/;
+	}
+
+	if (exists $bcargs->{'exclude-table'}) {
+		$SQL .= ' AND relname NOT IN (';
+		for my $s (@{$bcargs->{'exclude-table'}}) {
+			$s =~ s/^\s*(.+?)\s*$/$1/;
+			$SQL .= join ',' => map { "'$_'" } split /\s*,\s*/ => $s;
+			$SQL .= ',';
+		}
+		$SQL =~ s/,$/)/;
+	}
+
+	## Fetch all the tables, bail if no matches are found
+	$sth = $dbh2->prepare($SQL);
+	$count = $sth->execute();
+	if ($count < 1) {
+		die "Sorry, no tables were found\n";
+	}
+
+	## Grab all current tables from the goat table.
+	## We'll only match on schema+table here, and NOT the db name
+	$SQL = q{SELECT schemaname, tablename FROM goat WHERE reltype= 'table'};
+	my %hastable;
+	for my $row (@{$dbh->selectall_arrayref($SQL)}) {
+		$hastable{$row->[0]}{$row->[1]}++;
+	}
+
+	## Do we have a herd request? Process it if so
+	my $herd = '';
+	my $addtoherd;
+	if (exists $bcargs->{herd}) {
+		$herd = $bcargs->{herd};
+		$SQL = 'SELECT 1 FROM herd WHERE name = ?';
+		my $herdcheck = $dbh->prepare($SQL);
+		$count = $herdcheck->execute($herd);
+		$herdcheck->finish();
+		if ($count < 1) {
+			print "Creating herd: $herd\n";
+			$SQL = 'INSERT INTO herd(name) VALUES (?)';
+			$herdcheck = $dbh->prepare($SQL);
+			$herdcheck->execute($herd);
+		}
+		$SQL = 'INSERT INTO herdmap(herd,goat) VALUES (?,?)';
+		$addtoherd = $dbh->prepare($SQL);
+	}
+
+	## Get ready to add tables to the goat table
+	$SQL = q{INSERT INTO bucardo.goat (db,schemaname,tablename) VALUES (?,?,?)};
+	#$SQL = 'INSERT INTO bucardo.goat (db,schemaname,tablename) VALUES (?,?,?) RETURNING id';
+	my $addtable = $dbh->prepare($SQL);
+
+	## Walk through all returned tables from the remote database
+	my %count = (seenit => 0, added => 0);
+	for my $row (@{$sth->fetchall_arrayref()}) {
+		my ($S,$T) = @$row;
+		## Do we already have this one?
+		if (exists $hastable{$S}{$T}) {
+			$VERBOSE >= 1 and warn "Skipping table already in goat: $S.$T\n";
+			$count{seenit}++;
+			next;
+		}
+		$VERBOSE >= 1 and warn "Attempting to add $S.$T to the goat table\n";
+		$count = $addtable->execute($db->{name},$S,$T);
+		if ($count != 1) {
+			$addtable->finish();
+			warn "Failed to add table $S.$T to the goat table!\n";
+			next;
+		}
+		my $id = $dbh->selectall_arrayref(q{SELECT currval('bucardo.goat_id_seq')});
+		#my $id = $addtable->fetch()->[0];
+		$VERBOSE >= 1 and warn "ID of new table $S.$T is $id\n";
+		$count{added}++;
+		if ($herd) {
+			$addtoherd->execute($herd, $id);
+			$VERBOSE >= 1 and warn "Added table $id to herd $herd\n";
+		}
+
+	}
+	$dbh->commit();
+
+	print "New tables added: $count{added}\n";
+	print "Tables already added: $count{seenit}\n";
+
+	exit;
+
+} ## end of add_all_tables
+
+
+sub add_all_sequences {
+
+	## Usage: add all sequences
+	## Options:
+	## --db: use this database (internal name from the db table)
+	## --schema or -n: limit to one or more comma-separated schemas
+	## --exclude-schema or -N: exclude these schemas
+	## --table or -t: limit to the given tables
+	## --exclude-table or -t: exclude these tables
+	## --herd : name of the herd to add new tables to
+	##
+	## Future options: --prompt
+
+	my $otype = 'sequence';
+	my $otypes = 'sequences';
+
+	## Grab the list of databases. If none, cowardly refuse to continue
+	my $dbs = get_dbs();
+	if (! keys %$dbs) {
+		die "Sorry, cannot add any $otypes until at least one database is defined\n";
+	}
+
+	## Have the picked one? Make sure it exists.
+	my $db;
+	if (exists $bcargs->{db}) {
+		if (! exists $dbs->{$bcargs->{db}}) {
+			die qq{sorry, could not find a database named "$bcargs->{db}"\n};
+		}
+		$db = $dbs->{$bcargs->{db}};
+	}
+	elsif (keys %$dbs == 1) {
+		($db) = values %$dbs;
+	}
+	else {
+		warn "Please specify which database to use with the --db option\n";
+		warn "Your choices are:\n";
+		for my $row (sort keys %$dbs) {
+			warn "--db=$row\n";
+		}
+		exit;
+	}
+
+	## Connect to the remote database
+	my $dbh2 = connect_database({name => $db->{name}});
+
+	## Generate a query to pull all tables we may possibly need
+	$SQL = q{SELECT nspname, relname FROM pg_class c }
+		. q{JOIN pg_namespace n ON (n.oid = c.relnamespace) }
+		. q{WHERE relkind = 'S' };
+
+	## Use optional arguments to refine the list of schemas
+	if (exists $bcargs->{schema}) {
+		$SQL .= ' AND nspname IN (';
+		for my $s (@{$bcargs->{schema}}) {
+			$s =~ s/^\s*(.+?)\s*$/$1/;
+			$SQL .= join ',' => map { "'$_'" } split /\s*,\s*/ => $s;
+			$SQL .= ',';
+		}
+		$SQL =~ s/,$/)/;
+	}
+	else {
+		$SQL .= q{AND n.nspname <> 'information_schema' AND nspname !~ '^pg'};
+	}
+
+	if (exists $bcargs->{'exclude-schema'}) {
+		$SQL .= ' AND nspname NOT IN (';
+		for my $s (@{$bcargs->{'exclude-schema'}}) {
+			$s =~ s/^\s*(.+?)\s*$/$1/;
+			$SQL .= join ',' => map { "'$_'" } split /\s*,\s*/ => $s;
+			$SQL .= ',';
+		}
+		$SQL =~ s/,$/)/;
+	}
+
+	## Use optional arguments to refine the list of tables
+	if (exists $bcargs->{table}) {
+		$SQL .= ' AND relname IN (';
+		for my $s (@{$bcargs->{table}}) {
+			$s =~ s/^\s*(.+?)\s*$/$1/;
+			$SQL .= join ',' => map { "'$_'" } split /\s*,\s*/ => $s;
+			$SQL .= ',';
+		}
+		$SQL =~ s/,$/)/;
+	}
+
+	if (exists $bcargs->{'exclude-table'}) {
+		$SQL .= ' AND relname NOT IN (';
+		for my $s (@{$bcargs->{'exclude-table'}}) {
+			$s =~ s/^\s*(.+?)\s*$/$1/;
+			$SQL .= join ',' => map { "'$_'" } split /\s*,\s*/ => $s;
+			$SQL .= ',';
+		}
+		$SQL =~ s/,$/)/;
+	}
+
+	## Fetch all the tables, bail if no matches are found
+	$sth = $dbh2->prepare($SQL);
+	$count = $sth->execute();
+	if ($count < 1) {
+		die "Sorry, no $otypes were found\n";
+	}
+
+	## Grab all current sequences from the goat table.
+	## We'll only match on schema+table here, and NOT the db name
+	$SQL = q{SELECT schemaname, tablename FROM goat WHERE reltype= 'sequence'};
+	my %hastable;
+	for my $row (@{$dbh->selectall_arrayref($SQL)}) {
+		$hastable{$row->[0]}{$row->[1]}++;
+	}
+
+	## Do we have a herd request? Process it if so
+	my $herd = '';
+	my $addtoherd;
+	if (exists $bcargs->{herd}) {
+		$herd = $bcargs->{herd};
+		$SQL = 'SELECT 1 FROM herd WHERE name = ?';
+		my $herdcheck = $dbh->prepare($SQL);
+		$count = $herdcheck->execute($herd);
+		$herdcheck->finish();
+		if ($count < 1) {
+			print "Creating herd: $herd\n";
+			$SQL = 'INSERT INTO herd(name) VALUES (?)';
+			$herdcheck = $dbh->prepare($SQL);
+			$herdcheck->execute($herd);
+		}
+		$SQL = 'INSERT INTO herdmap(herd,goat) VALUES (?,?)';
+		$addtoherd = $dbh->prepare($SQL);
+	}
+
+	## Get ready to add tables to the goat table
+	$SQL = 'INSERT INTO bucardo.goat (db,schemaname,tablename,reltype) VALUES (?,?,?,?)';
+	#$SQL = 'INSERT INTO bucardo.goat (db,schemaname,tablename,reltype) VALUES (?,?,?,?) RETURNING id';
+	my $addtable = $dbh->prepare($SQL);
+
+	## Walk through all returned tables from the remote database
+	my %count = (seenit => 0, added => 0);
+	for my $row (@{$sth->fetchall_arrayref()}) {
+		my ($S,$T) = @$row;
+		## Do we already have this one?
+		if (exists $hastable{$S}{$T}) {
+			$VERBOSE >= 1 and warn "Skipping $otype already in goat: $S.$T\n";
+			$count{seenit}++;
+			next;
+		}
+		$VERBOSE >= 1 and warn "Attempting to add $S.$T to the goat table\n";
+		$count = $addtable->execute($db->{name},$S,$T,$otype);
+		if ($count != 1) {
+			$addtable->finish();
+			warn "Failed to add $otype $S.$T to the goat table!\n";
+			next;
+		}
+        my $id = $dbh->selectall_arrayref(q{SELECT currval('bucardo.goat_id_seq');})->[0][0];
+		#my $id = $addtable->fetch()->[0];
+		$VERBOSE >= 1 and warn "ID of new $otype $S.$T is $id\n";
+		$count{added}++;
+		if ($herd) {
+			$addtoherd->execute($herd, $id);
+			$VERBOSE >= 1 and warn "Added $otype $id to herd $herd\n";
+		}
+
+	}
+	$dbh->commit();
+
+	print "New $otypes added: $count{added}\n";
+	print ucfirst($otypes) . " already added: $count{seenit}\n";
+
+	exit;
+
+} ## end of add_all_sequences
+
+
+sub connect_database {
+
+	## Connect to a datbase and return a dbh
+
+	my $dbh2;
+
+	my $opt = shift || {};
+
+	if (exists $opt->{name}) {
+		$SQL = qq{SELECT db_getconn('$opt->{name}')};
+		my $conn = $dbh->selectall_arrayref($SQL)->[0][0];
+		my ($dsn,$user,$pass) = split /\n/ => $conn;
+		$dbh2 = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1});
+	}
+
+	return $dbh2;
+
+} ## end of connect_database
+
+
 sub add_table {
 
 	my $type = shift;
@@ -2275,7 +3019,6 @@ sub add_table {
 
 	## The rest is the options. If not there, we fill in the defaults
 	my $info = join ' ' => @nouns;
-	my $delim = $info =~ /\|/ ? '\s*\|\s*' : '\\s+';
 	## Command line name, default value, database column name
 	my %arg = (
 			   db                => ['',      ''],
@@ -2284,11 +3027,10 @@ sub add_table {
 			   herd              => ['',      ''],
 			   makedelta         => ['',      ''],
 			   );
-	for my $arg (split /$delim/ => $info) {
-		if ($arg !~ /(.+)=(.+)/o) {
-			die qq{Invalid argument: ($arg)\n};
-		}
-		my ($name,$value) = ($1,$2);
+	my $args = process_args($info);
+	for my $name (sort keys %$args) {
+		next if $name eq 'extraargs';
+		my $value = $args->{$name};
 		if (!exists $arg{$name}) {
 			die "Unknown option '$name'\n";
 		}
@@ -2306,12 +3048,15 @@ sub add_table {
 		$herd = $arg{herd}->[0];
 		delete $arg{herd};
 		## Does this herd exist?
-		$SQL = 'SELECT count(*) FROM herd WHERE name = ?';
+		$SQL = 'SELECT 1 FROM herd WHERE name = ?';
 		$sth = $dbh->prepare($SQL);
 		$count = $sth->execute($herd);
 		$sth->finish();
 		if ($count != 1) {
-			die "Cannot add to non-existent herd: $herd\n";
+			$SQL = 'INSERT INTO herd(name) VALUES(?)';
+			$sth = $dbh->prepare($SQL);
+			$sth->execute($herd);
+			print qq{Created herd "$herd"\n};
 		}
 	}
 
@@ -2328,7 +3073,8 @@ sub add_table {
 	$phs =~ s/,$//;
 
 	## Add these to the database
-	$SQL = "INSERT INTO bucardo.goat ($cols,schemaname,tablename) VALUES ($phs,?,?) RETURNING id";
+	$SQL = "INSERT INTO bucardo.goat ($cols,schemaname,tablename) VALUES ($phs,?,?)"; 
+	#$SQL = "INSERT INTO bucardo.goat ($cols,schemaname,tablename) VALUES ($phs,?,?) RETURNING id";
 	if ($DEBUG) {
 		warn "SQL: $SQL\n";
 		warn Dumper \@tables;
@@ -2340,12 +3086,13 @@ sub add_table {
 		eval {
 			if ($DEBUG >= 2) {
 				warn "SQL: $SQL\n";
-				my $args = join ',' => @vals;
+				my $localargs = join ',' => @vals;
 				my $ss = defined $schema ? $schema : '<undef>';
-				warn "Args: $args, $ss, $table\n";
+				warn "Args: $localargs, $ss, $table\n";
 			}
 			$count = $sth->execute(@vals,$schema,$table);
-			push @id => $sth->fetch()->[0];
+            push @id, $dbh->selectall_arrayref(q{SELECT currval('bucardo.goat_id_seq');})->[0][0];
+			#push @id => $sth->fetch()->[0];
 		};
 		if ($@) {
 			die "Table add failed: $@\n";
@@ -2358,6 +3105,10 @@ sub add_table {
 		$SQL = 'INSERT INTO herdmap (goat,herd,priority) VALUES (?,?,?)';
 		$sth = $dbh->prepare($SQL);
 		for (@id) {
+			if ($DEBUG) {
+				warn "SQL: $SQL\n";
+				warn Dumper [$_, $herd, 0];
+			}
 			$sth->execute($_,$herd,0);
 		}
 	}
@@ -2377,6 +3128,130 @@ sub add_table {
 } ## end of add_table
 
 
+sub add_sequence {
+
+	my $type = shift;
+
+	## Usage: add sequence [schema].table db=internal_db_name herd=herd_name
+
+	my $DEFAULT_SCHEMA = 'public';
+
+	## Any single words are sequence names.
+	my (@newnouns,@tables);
+	for (@nouns) {
+		if (/=/) {
+			push @newnouns => $_;
+		}
+		else {
+			if (/^(\w*?)?\.?(\w+)$/) {
+				push @tables => length $1 ? [$1,$2] : [$DEFAULT_SCHEMA,$2];
+			}
+			else {
+				warn "Invalid sequence name: $_\n";
+				exit 1;
+			}
+		}
+	}
+	@nouns = @newnouns;
+
+	if (! @tables) {
+		warn "Usage: add $type <name>";
+		exit 1;
+	}
+
+	## The rest is the options. If not there, we fill in the defaults
+	my $info = join ' ' => @nouns;
+	## Command line name, default value, database column name
+	my %arg = (
+			   db                => ['',      ''],
+			   herd              => ['',      ''],
+			   );
+	my $args = process_args($info);
+	for my $name (sort keys %$args) {
+		next if $name eq 'extraargs';
+		my $value = $args->{$name};
+		if (!exists $arg{$name}) {
+			die "Unknown option '$name'\n";
+		}
+		$arg{$name}[0] = $value;
+	}
+
+	if (! length $arg{db}[0]) {
+		die "Please specify a database with db=<name>\n";
+	}
+	my $db = $arg{db}[0];
+
+	my $herd;
+	if ($arg{herd}->[0]) {
+		$herd = $arg{herd}->[0];
+		delete $arg{herd};
+		## Does this herd exist?
+		$SQL = 'SELECT 1 FROM herd WHERE name = ?';
+		$sth = $dbh->prepare($SQL);
+		$count = $sth->execute($herd);
+		$sth->finish();
+		if ($count != 1) {
+			$SQL = 'INSERT INTO herd(name) VALUES(?)';
+			$sth = $dbh->prepare($SQL);
+			$sth->execute($herd);
+			print qq{Created herd "$herd"\n};
+		}
+	}
+
+	## Add these to the database
+	$SQL = 'INSERT INTO bucardo.goat (db,schemaname,tablename,reltype) VALUES (?,?,?,?)';
+	#$SQL = 'INSERT INTO bucardo.goat (db,schemaname,tablename,reltype) VALUES (?,?,?,?) RETURNING id';
+	if ($DEBUG) {
+		warn "SQL: $SQL\n";
+		warn Dumper \@tables;
+	}
+	$sth = $dbh->prepare($SQL);
+	my @id;
+	for (@tables) {
+		my ($schema,$table) = @$_;
+		eval {
+			if ($DEBUG >= 2) {
+				warn "SQL: $SQL\n";
+				my $ss = defined $schema ? $schema : '<undef>';
+				warn "Args: $db, $ss, $table, sequence\n";
+			}
+			$count = $sth->execute($db,$schema,$table,'sequence');
+            push @id, $dbh->selectall_arrayref(q{SELECT currval('bucardo.goat_id_seq');})->[0][0];
+			#push @id => $sth->fetch()->[0];
+		};
+		if ($@) {
+			die "Sequence add failed: $@\n";
+		}
+		$DEBUG and warn "Insert count: $count\n";
+	}
+
+	## Add them to the herd if it was specificed
+	if (defined $herd) {
+		$SQL = 'INSERT INTO herdmap (goat,herd,priority) VALUES (?,?,?)';
+		$sth = $dbh->prepare($SQL);
+		for (@id) {
+			if ($DEBUG) {
+				warn "SQL: $SQL\n";
+				warn Dumper [$_, $herd, 0];
+			}
+			$sth->execute($_,$herd,0);
+		}
+	}
+
+	$dbh->commit();
+
+	my $tablelist = sprintf '%s added: ', @tables > 1 ? 'Sequences' : 'Sequence';
+	for (@tables) {
+		$tablelist .= sprintf '%s%s, ', $_->[0] ? "$_->[0]." : '', $_->[1];
+	}
+	$tablelist =~ s/, $//;
+	warn "$tablelist\n";
+
+	exit 0;
+
+} ## end of add_sequence
+
+
 sub add_sync {
 
 	my $type = shift;
@@ -2392,7 +3267,6 @@ sub add_sync {
 
 	## The rest is the options. If not there, we fill in the defaults
 	my $info = join ' ' => @nouns;
-	my $delim = $info =~ /\|/ ? '\s*\|\s*' : '\\s+';
 	## Command line name, default value, database column name
 	my %arg = (
 			   source          => ['', ''],
@@ -2401,12 +3275,15 @@ sub add_sync {
 			   type            => ['', 'synctype'],
 			   makedelta       => ['', ''],
 			   usecustomselect => ['', ''],
+			   lifetime        => ['', ''],
+			   maxkicks        => [0,  ''],
+			   tables          => ['', ''],
+			   onetimecopy     => ['', ''],
 			   );
-	for my $arg (split /$delim/ => $info) {
-		if ($arg !~ /(.+)=(.+)/o) {
-			die qq{Invalid argument\n};
-		}
-		my ($name,$value) = ($1,$2);
+	my $args = process_args($info);
+	for my $name (sort keys %$args) {
+		next if $name eq 'extraargs';
+		my $value = $args->{$name};
 		if (!exists $arg{$name}) {
 			die "Unknown option '$name'\n";
 		}
@@ -2414,12 +3291,53 @@ sub add_sync {
 	}
 	$arg{name} = [$item_name];
 
+	## Does this source exist? If not, and its a database, create a herd for the tables
+	my $sourceherd = $arg{source}[0];
+	$SQL = 'SELECT 1 FROM bucardo.herd WHERE name = ?';
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute($sourceherd);
+	$sth->finish();
+	if ($count < 1) {
+		if (! $arg{tables}) {
+			die "No such source herd: $sourceherd\n";
+		}
+		## We've got some tables. Do we know which database this is?
+		$SQL = 'SELECT 1 FROM bucardo.db WHERE name = ?';
+		$sth = $dbh->prepare($SQL);
+		$count = $sth->execute($sourceherd);
+		$sth->finish();
+		if ($count < 1) {
+			die "No such database: $sourceherd\n";
+		}
+		$SQL = 'INSERT INTO bucardo.herd(name) VALUES (?)';
+		$sth = $dbh->prepare($SQL);
+		$sth->execute($item_name);
+
+		## Add all tables given to the new herd
+		## May be the same table in more than one schema, in which case we add them all!
+		$SQL = qq{SELECT id FROM goat WHERE tablename=? AND db =?};
+		my $sth_goat = $dbh->prepare($SQL);
+		$SQL = qq{INSERT INTO herdmap(herd,goat) VALUES (?,?)};
+		$sth = $dbh->prepare($SQL);
+		for my $table (split /,/ => $arg{tables}[0]) {
+			$sth_goat->execute($table,$sourceherd);
+			for my $row (@{$sth_goat->fetchall_arrayref()}) {
+				$sth->execute($item_name,$row->[0]);
+			}
+		}
+
+		## Swap out the herd name
+		$arg{source}[0] = $item_name;
+
+	}
+
 	## Lots of checks go here...
 
 	my ($cols,$phs) = ('','');
 	my @vals;
 	for my $col (sort keys %arg) {
 		next if ! length $arg{$col}[0];
+		next if $col eq 'tables';
 		my $name = $arg{$col}[1] || $col;
 		$cols .= "$name,";
 		$phs .= '?,';
@@ -2455,6 +3373,58 @@ sub add_sync {
 } ## end of add_sync
 
 
+sub delete_sync {
+
+	my $type = shift;
+
+	## Usage: delete sync syncname
+
+	my $name = shift @nouns;
+
+	## Does the sync exist?
+	$SQL = 'SELECT * FROM sync WHERE name = ?';
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute($name);
+	if (1 != $count) {
+		$sth->finish();
+		die qq{Failed to find a sync named "$name"\n};
+	}
+
+	print "Deleting $name\n";
+
+	## Is this sync currently running?
+	my $dname = "bucardo_deactivate_sync_$name";
+	$SQL = q{SELECT 1 FROM pg_listener WHERE relname = ?};
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute($dname);
+	$sth->finish();
+	if (1 == $count) {
+		die qq{Cannot delete an active sync: please deactivate first\n};
+	}
+
+	## We want to confirm this
+	print "Are you sure you want to delete this sync?\n";
+	print "This action cannot be undone\n";
+	print "Proceed? ";
+	my $ans = <STDIN>;
+	exit 0 unless $ans =~ /^Y/i;
+
+	$SQL = 'DELETE FROM sync WHERE name = ?';
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute($name);
+	if (1 != $count) {
+		die qq{Deletion of sync "$name" failed\n};
+	}
+	print "Sync deleted: $name\n";
+
+	print "Note: table triggers are not automatically removed!\n";
+	$dbh->commit();
+
+	exit 0;
+
+} ## end of delete_sync
+
+
 sub alter_sync {
 
 	## Modify an existing sync
@@ -2474,17 +3444,15 @@ sub alter_sync {
 
 	## The rest is the options.
 	my $info = join ' ' => @nouns;
-	my $delim = $info =~ /\|/ ? '\s*\|\s*' : '\\s+';
 	## Command line name, value
 	my %arg = (
 			   targetdb    => '',
 			   targetgroup => '',
 			   );
-	for my $arg (split /$delim/ => $info) {
-		if ($arg !~ /(.+)=(.+)/o) {
-			die qq{Invalid argument\n};
-		}
-		my ($name,$value) = ($1,$2);
+	my $args = process_args($info);
+	for my $name (sort keys %$args) {
+		next if $name eq 'extraargs';
+		my $value = $args->{$name};
 		if (!exists $arg{$name}) {
 			die "Unknown option '$name'\n";
 		}
@@ -2612,6 +3580,7 @@ sub add_herd {
 	## Usage: add herd name (goat1, goat2, ...)
 
 	my $item_name = shift @nouns || '';
+
 	if (!length $item_name) {
 		warn "Usage: add $type <name> goats";
 		exit 1;
@@ -2619,18 +3588,19 @@ sub add_herd {
 
 	## The rest is the options. If not there, we fill in the defaults
 	my $info = join ' ' => @nouns;
-	my $delim = $info =~ /\|/ ? '\s*\|\s*' : '\\s+';
 	## Command line name, default value, database column name
 	my %arg = (
 			   );
 
 	my @goatlist;
-	for my $arg (split /$delim/ => $info) {
-		if ($arg !~ /(.+)=(.+)/o) {
-			push @goatlist, $arg;
-			next;
-		}
-		my ($name,$value) = ($1,$2);
+	my $args = process_args($info);
+
+	for my $gname (@{$args->{extraargs}}) {
+		push @goatlist => $gname;
+	}
+	for my $name (sort keys %$args) {
+		next if $name eq 'extraargs';
+		my $value = $args->{$name};
 		if (!exists $arg{$name}) {
 			die "Unknown option '$name'\n";
 		}
@@ -2749,11 +3719,11 @@ sub config {
 
 	## View or change a value inside the bucardo_config table
 
-	my $setusage = "Usage: $0 set setting=value [setting=value ...]\n";
+	my $setusage = "Usage: $progname set setting=value [setting=value ...]\n";
 
 	if (!@nouns) {
 		$verb eq 'set' and die $setusage;
-		die "Usage: $0 show <all|setting1> [settting2 ...]\n";
+		die "Usage: $progname show <all|setting1> [settting2 ...]\n";
 	}
 
 	$SQL = 'SELECT * FROM bucardo.bucardo_config';
@@ -2830,8 +3800,7 @@ sub install {
 	my $user = $ENV{DBUSER} || 'postgres';
 
 	## Make sure the bucardo.schema file is available, and extract some config items
-	my $schemafile = 'bucardo.schema';
-	open my $fh, '<', $schemafile or die qq{Could not open "$schemafile": $!\n};
+	my ($fh, $schema_file) = find_bucardo_schema();
 	my %confvar = (piddir => '');
 	while (<$fh>) {
 		for my $string (keys %confvar) {
@@ -2840,12 +3809,14 @@ sub install {
 			}
 		}
 	}
-	close $fh or warn qq{Could not close "$schemafile": $!\n};
+	close $fh or warn qq{Could not close "$schema_file": $!\n};
 	for my $key (keys %confvar) {
 		if (!$confvar{$key}) {
 			warn "Could not find default configuration for $key!\n";
 		}
 	}
+
+	my $piddir = $bcargs->{piddir} || $confvar{piddir};
 
   GOOEY:
 	{
@@ -2855,7 +3826,7 @@ sub install {
 		print "1. Host:          $host\n";
 		print "2. Port:          $port\n";
 		print "3. User:          $user\n";
-		print "4. PID directory: $confvar{piddir}\n";
+		print "4. PID directory: $piddir\n";
 
 		print 'Enter a number to change it, P to proceed, or Q to quit: ';
 
@@ -2923,15 +3894,15 @@ sub install {
 					print "-->Sorry, that is not a valid directory\n";
 					redo GOOEY;
 				}
-				$confvar{piddir} = $new;
-				print "Changed PID dir to: $confvar{piddir}\n";
+				$piddir = $new;
+				print "Changed PID dir to: $piddir\n";
 			}
 		}
 		elsif ($ans =~ /^\s*Q/i) {
 			die "Goodbye!\n";
 		}
 		elsif ($ans =~ /^\s*P/i) {
-			if (! -d $confvar{piddir}) {
+			if (! -d $piddir) {
 				print "-->Sorry, that is not a valid PID directory\n";
 				redo GOOEY;
 			}
@@ -2964,7 +3935,7 @@ sub install {
 		die "Sorry, Bucardo requires Postgres version 8.1 or higher. This is only $maj.$min\n";
 	}
 
-	$COM = "$PSQL -AX -qt -f bucardo.schema";
+	$COM = "$PSQL -AX -qt -f $schema_file";
 
 	print "Attempting to create and populate the bucardo database and schema\n";
 
@@ -2976,14 +3947,15 @@ sub install {
 
 	print "Connecting to database 'bucardo' as user 'bucardo'\n";
 	my $BDSN  = 'dbi:Pg:dbname=bucardo';
-	$bcargs->{dbhost} and length $bcargs->{dbhost} and $BDSN .= ";host=$bcargs->{dbhost}";
-	$bcargs->{dbport} and length $bcargs->{dbport} and $BDSN .= ";port=$bcargs->{dbport}";
+	$host and $host ne '<none>' and $BDSN .= ";host=$host";
+	$port and $BDSN .= ";port=$port";
 	my $default_bucardo_password = 'goat';
 	$dbh = DBI->connect($BDSN, 'bucardo', $default_bucardo_password, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
 	$dbh->do('SET search_path = bucardo');
 
 	$SQL = 'UPDATE bucardo_config SET value = ? WHERE setting = ?';
 	$sth = $dbh->prepare($SQL);
+	$confvar{piddir} = $piddir;
 	for my $key (sort keys %confvar) {
 		$count = $sth->execute($confvar{$key}, $key);
 		if ($count != 1) {
@@ -2999,8 +3971,8 @@ sub install {
 	print "If you see any unexpected errors above, please report them to bucardo-general\@bucardo.org\n\n";
 
 	print "You should probably check over the configuration variables next, by running:\n";
-	print "$0 show all\n";
-	print "Change any setting by using: $0 set foo=bar\n\n";
+	print "$progname show all\n";
+	print "Change any setting by using: $progname set foo=bar\n\n";
 
 	exit;
 
@@ -3015,7 +3987,7 @@ bucardo_ctl - utility script for controlling the Bucardo program
 
 =head1 VERSION
 
-This documents describes bucardo_ctl version 3.2.7
+This document describes version 4.0.0 of bucardo_ctl
 
 =head1 SYNOPSIS
 
@@ -3049,15 +4021,26 @@ This documents describes bucardo_ctl version 3.2.7
 
   ./bucardo_ctl kick sync1 0 --retry=10
 
-  ./bucardoctl reload_config
+  ./bucardo_ctl reload_config
+
+  ./bucardo_ctl upgrade
+
+  ./bucardo_ctl reload sync
+
+  ./bucardo_ctl validate sync
+
+  ./bucardo_ctl message "Your message here"
+
+  ./bucardo_ctl config show
+
+  ./bucardo_ctl config set foo=bar baz=123
+
 
 =head1 DESCRIPTION
 
-The bucardo_ctl script is used to control the operation of a Bucardo process. Primarily it is 
-used for stopping and starting Bucardo, viewing current information, and for kicking off named 
-syncs. The script needs to know how to connect to the Bucardo database: this information can 
-be passed as arguments or hard-coded into the script itself. If you have multiple Bucardos 
-running, it is recommended that you create aliases for each database.
+The bucardo_ctl script is the main interaction to a running Bucardo instance. It can 
+be used to start and stop Bucardo, add new items, kick syncs, and even install and 
+upgrade Bucardo itself.
 
 =head1 COMMANDS
 
@@ -3069,6 +4052,27 @@ Usage: ./bucardo_ctl install
 
 Attempts to install the Bucardo schema from the file 'bucardo.schema' into an existing 
 Postgres cluster. The user 'bucardo' and database 'bucardo' will be created first as needed.
+This is an interactive installer, but you can supply the following values from the command 
+line:
+
+=over 2
+
+=item --dbuser
+
+=item --dbport
+
+=item --piddir
+
+=back
+
+=item B<upgrade>
+
+Usage: ./bucardo_ctl upgrade
+
+Upgrades an existing Bucardo installation to the current version of the bucardo_ctl script. 
+Requires that the bucardo_ctl script and the bucardo.schema file be the same version. All 
+changes should be backwards compatible, but you may need to re-validate existing scripts 
+to make sure changes get propagated to all databases.
 
 =item B<start>
 
@@ -3099,8 +4103,8 @@ is also used by Bucardo when it exits and sends out mail about its death.
 
 Usage: ./bucardo_ctl list <type> <regex>
 
-Lists summary information about databases, goats, herds, or syncs. Adding anything after the 
-type will look up all matching entries.
+Lists summary information about databases, tables, sequences, syncs, or herds. Adding anything 
+after the type will look up all matching entries.
 
 =item B<add>
 
@@ -3108,7 +4112,13 @@ Usage:  add <item_type> <item_name>
 
 Usage:  add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx
 
-Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool
+Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool herd=xxx
+
+Usage:  add all tables herd=xxx
+
+Usage:  add sequence [schema].table herd=xxx
+
+Usage:  add all sequences herd=xxx
 
 Usage:  add sync syncname options
 
@@ -3232,12 +4242,6 @@ confirmation from Bucardo that each sync has been successfully activated.
 Deactivates one or more named syncs. If given a timeout argument, it will wait until it has received 
 confirmation from Bucardo that the sync has been successfully deactivated.
 
-=item B<upgrade>
-
-Performs an upgrade of Bucardo itself, by making sure the connected Bucardo database has a copy of the 
-latest schema. This should always be run after upgrading Bucardo, and will prompt you before making 
-any permanent changes.
-
 =item B<message>
 
 Adds a message to the running Bucardo logs. This message will appear prefixed with "MESSAGE: ". If 
@@ -3353,14 +4357,6 @@ useful for debugging.
 Forces creation of separate log files for each Bucardo process of the form "log.bucardo.X.Y", 
 where X is the type of process (MCP, CTL, or KID), and Y is the process ID.
 
-=item B<--debugstderr>
-
-Sends all log messages to standard error. Off by default.
-
-=item B<--debugstdout>
-
-Sends all log messages to standard out. Off by default.
-
 =item B<--debugsyslog>
 
 Sends all log messages to the syslog daemon. On by default. The facility used is controlled by 
@@ -3388,9 +4384,12 @@ Forces removal of all old debug files before running.
 =head1 FILES
 
 In addition to command-line configurations, you can put any options inside of a file. The file F<.bucardorc> in 
-the current directory will be used if found. If not found, then the file F<~/.bucardorc> will be used. The format 
-of the file is option = value, one per line. Any line starting with a '#' will be skipped. Any values loaded 
-from a .bucardorc file will be overwritten by command-line options.
+the current directory will be used if found. If not found, then the file F<~/.bucardorc> will be used. Finally, 
+the file /etc/bucardorc will be used if available. The format of the file is option = value, one per line. Any 
+line starting with a '#' will be skipped. Any values loaded from a bucardorc file will be overwritten by 
+command-line options. All bucardorc files can be ignored by supplying a C<--no-bucardorc> argument. A specific 
+file can be forced with the C<--bucardorc=file> option; if this option is set, bucardo_ctl will refuse to run 
+unless that file can be read.
 
 =head1 ENVIRONMENT VARIABLES
 

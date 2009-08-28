@@ -9,6 +9,7 @@ README.dev
 LICENSE
 TODO
 INSTALL
+UPGRADE
 MANIFEST
 MANIFEST.SKIP
 META.yml
@@ -16,11 +17,11 @@ Makefile.PL
 Changes
 .gitignore
 
+scripts/README
 scripts/bucardo_rrd
 scripts/bucardo-report
 scripts/check_bucardo_sync
 scripts/bucardo_ctl.rc
-scripts/update_bucardo_schema.pl
 
 bucardo.html
 Bucardo.pm.html
@@ -46,8 +47,10 @@ t/08-wildkick.t
 t/09-uniqueconstraint.t
 t/10-makedelta.t
 t/11-customselect.t
+t/12-addtable.t
+t/13-ddl.t
+t/14-truncate.t
+t/15-star.t
 t/98-cleanup.t
-t/99-perlcritic.t
 t/99-signature.t
-t/99-yaml.t
 t/BucardoTesting.pm
