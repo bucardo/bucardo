@@ -2767,7 +2767,6 @@ sub add_all_tables {
 
 	## Get ready to add tables to the goat table
 	$SQL = q{INSERT INTO bucardo.goat (db,schemaname,tablename) VALUES (?,?,?)};
-	#$SQL = 'INSERT INTO bucardo.goat (db,schemaname,tablename) VALUES (?,?,?) RETURNING id';
 	my $addtable = $dbh->prepare($SQL);
 
 	## Walk through all returned tables from the remote database
@@ -2787,8 +2786,8 @@ sub add_all_tables {
 			warn "Failed to add table $S.$T to the goat table!\n";
 			next;
 		}
-		my $id = $dbh->selectall_arrayref(q{SELECT currval('bucardo.goat_id_seq')});
-		#my $id = $addtable->fetch()->[0];
+		$SQL = q{SELECT currval('bucardo.goat_id_seq')};
+		my $id = $dbh->selectall_arrayref($SQL)->[0][0];
 		$VERBOSE >= 1 and warn "ID of new table $S.$T is $id\n";
 		$count{added}++;
 		if ($herd) {
@@ -2938,7 +2937,6 @@ sub add_all_sequences {
 
 	## Get ready to add tables to the goat table
 	$SQL = 'INSERT INTO bucardo.goat (db,schemaname,tablename,reltype) VALUES (?,?,?,?)';
-	#$SQL = 'INSERT INTO bucardo.goat (db,schemaname,tablename,reltype) VALUES (?,?,?,?) RETURNING id';
 	my $addtable = $dbh->prepare($SQL);
 
 	## Walk through all returned tables from the remote database
@@ -2958,8 +2956,8 @@ sub add_all_sequences {
 			warn "Failed to add $otype $S.$T to the goat table!\n";
 			next;
 		}
-        my $id = $dbh->selectall_arrayref(q{SELECT currval('bucardo.goat_id_seq');})->[0][0];
-		#my $id = $addtable->fetch()->[0];
+        $SQL = q{SELECT currval('bucardo.goat_id_seq')};
+        my $id = $dbh->selectall_arrayref($SQL)->[0][0];
 		$VERBOSE >= 1 and warn "ID of new $otype $S.$T is $id\n";
 		$count{added}++;
 		if ($herd) {
@@ -3087,7 +3085,6 @@ sub add_table {
 
 	## Add these to the database
 	$SQL = "INSERT INTO bucardo.goat ($cols,schemaname,tablename) VALUES ($phs,?,?)"; 
-	#$SQL = "INSERT INTO bucardo.goat ($cols,schemaname,tablename) VALUES ($phs,?,?) RETURNING id";
 	if ($DEBUG) {
 		warn "SQL: $SQL\n";
 		warn Dumper \@tables;
@@ -3104,8 +3101,8 @@ sub add_table {
 				warn "Args: $localargs, $ss, $table\n";
 			}
 			$count = $sth->execute(@vals,$schema,$table);
-            push @id, $dbh->selectall_arrayref(q{SELECT currval('bucardo.goat_id_seq');})->[0][0];
-			#push @id => $sth->fetch()->[0];
+            $SQL = q{SELECT currval('bucardo.goat_id_seq')};
+            push @id, $dbh->selectall_arrayref($SQL)->[0][0];
 		};
 		if ($@) {
 			die "Table add failed: $@\n";
@@ -3213,7 +3210,6 @@ sub add_sequence {
 
 	## Add these to the database
 	$SQL = 'INSERT INTO bucardo.goat (db,schemaname,tablename,reltype) VALUES (?,?,?,?)';
-	#$SQL = 'INSERT INTO bucardo.goat (db,schemaname,tablename,reltype) VALUES (?,?,?,?) RETURNING id';
 	if ($DEBUG) {
 		warn "SQL: $SQL\n";
 		warn Dumper \@tables;
@@ -3229,8 +3225,8 @@ sub add_sequence {
 				warn "Args: $db, $ss, $table, sequence\n";
 			}
 			$count = $sth->execute($db,$schema,$table,'sequence');
-            push @id, $dbh->selectall_arrayref(q{SELECT currval('bucardo.goat_id_seq');})->[0][0];
-			#push @id => $sth->fetch()->[0];
+            $SQL = q{SELECT currval('bucardo.goat_id_seq')};
+            push @id, $dbh->selectall_arrayref($SQL)->[0][0];
 		};
 		if ($@) {
 			die "Sequence add failed: $@\n";
