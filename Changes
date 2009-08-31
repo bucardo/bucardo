@@ -19,6 +19,9 @@ New features:
     and kids after a certain number of kicks or time. [Josh Tolley]
     Thanks to Backcountry.com.
 
+  - Add the bucardo_custom_trigger table, which allows tight control of exactly 
+    what items in a table will be replicated. [Ben Allen]
+
   - Add the bucardo_rate table to track exactly how long replication takes
     on a per-sync and per-table basis. [GSM]
 
