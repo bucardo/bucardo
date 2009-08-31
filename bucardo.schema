@@ -290,6 +290,7 @@ CREATE TABLE bucardo.herdmap (
   priority  SMALLINT    NOT NULL DEFAULT 0,
   cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE UNIQUE INDEX bucardo_herdmap_unique ON bucardo.herdmap(herd,goat);
 
 CREATE VIEW bucardo.goats_in_herd AS
   SELECT hm.herd, g.*
