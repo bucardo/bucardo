@@ -72,6 +72,9 @@ for my $arg (@ARGV) {
 	if ($arg =~ /--bucardorc=(.+)/) {
 		$bcargs->{'bucardorc'} = $1;
 	}
+	if ($arg =~ /^\-+\?$/) {
+		help();
+	}
 }
 
 ## Values are first read from a .bucardorc, either in the current dir, or the home dir.
