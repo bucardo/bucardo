@@ -109,6 +109,7 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
 	 'ctlquiet+',
 	 'notimer',
 	 'help',
+	 'version',
 	 'daysback=i',
 	 'sort=i',
 	 'showdays',
@@ -148,6 +149,12 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
 
 my $QUIET      = delete $bcargs->{ctlquiet};
 help() if $bcargs->{help};
+
+if ($bcargs->{version}) {
+	print "bucardo_ctl version $VERSION\n";
+	exit 0;
+}
+
 
 my $VERBOSE    = delete $bcargs->{ctlverbose};
 my $DAYSBACK   = delete $bcargs->{daysback} || $DEFAULT_DAYSBACK;
