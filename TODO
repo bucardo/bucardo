@@ -47,3 +47,4 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Replicate sequences
 - Consider failover strategies
 - Log validate_sync changes somewhere, add rollback statements
+- Standardize all the bucardo_ctl arguments: some things accept foo=bar, some require --foo=bar
