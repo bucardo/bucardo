@@ -3884,7 +3884,7 @@ sub install {
 	my ($maj,$min,$rev) = ($1,$2,$3);
 	$rev =~ s/^\.//;
 
-	print "Version is: $maj.$min\n";
+	print "Postgres version is: $maj.$min\n";
 
 	if ($maj < 8 or (8 == $maj and $min < 1)) {
 		die "Sorry, Bucardo requires Postgres version 8.1 or higher. This is only $maj.$min\n";
