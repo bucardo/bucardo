@@ -634,7 +634,7 @@ sub update {
 					my $add = $dbh->prepare($SQL);
 					$add->execute($sourceherd,$tabid);
 					warn "Added $type $tablename to herd $sourceherd\n";
-					if ($type eq 'table' and 0) {
+					if ($type eq 'table') {
 						$validate_msg = 1;
 					}
 				}
