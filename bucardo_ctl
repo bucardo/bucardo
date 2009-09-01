@@ -575,9 +575,11 @@ sub update {
 	$dbh->{pg_bool_tf} = 1;
 	$info = $sth->fetchall_arrayref({})->[0];
 
+	my $validate_msg = 0;
+
 	if ('sync' eq $item and ($nouns[0] eq 'add' or $nouns[0] eq 'remove')) {
 		my $v = shift @nouns;
-		my $miniusage = "Usage: update syncs $v table|sequence <name(s)>\n";
+		my $miniusage = "Usage: update sync $name $v table|sequence <name(s)>\n";
 		my $thing = shift @nouns or die $miniusage;
 		@nouns or die $miniusage;
 
@@ -632,6 +634,9 @@ sub update {
 					my $add = $dbh->prepare($SQL);
 					$add->execute($sourceherd,$tabid);
 					warn "Added $type $tablename to herd $sourceherd\n";
+					if ($type eq 'table' and 0) {
+						$validate_msg = 1;
+					}
 				}
 				else {
 					$SQL = 'DELETE FROM herdmap WHERE herd = ? AND goat = ?';
@@ -641,6 +646,11 @@ sub update {
 				}
 			}
 		}
+
+		if ($validate_msg) {
+			print qq{Don't forget to run bucardo_ctl validate $name\n};
+		}
+
 		$dbh->commit();
 		exit 0;
 	}
@@ -3219,6 +3229,7 @@ sub add_sync {
 	my $type = shift;
 
 	## Usage: add sync syncname options
+	my $usage = "Usage: bucardo_ctl add sync <syncname> source=<herdname> targetdb=<dbname> type=<synctype>\n";
 
 	## The first word is the sync name
 	my $item_name = shift @nouns || '';
@@ -3254,7 +3265,7 @@ sub add_sync {
 	$arg{name} = [$item_name];
 
 	## Does this source exist? If not, and its a database, create a herd for the tables
-	my $sourceherd = $arg{source}[0];
+	my $sourceherd = $arg{source}[0] || die $usage;
 	$SQL = 'SELECT 1 FROM bucardo.herd WHERE name = ?';
 	$sth = $dbh->prepare($SQL);
 	$count = $sth->execute($sourceherd);
