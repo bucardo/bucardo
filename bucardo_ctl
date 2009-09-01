@@ -1411,13 +1411,26 @@ sub list_dbs {
 	}
 
 	$info = $sth->fetchall_arrayref({});
+
+    my ($maxdb,$maxstat,$maxlim1,$maxlim2,$showlim) = (1,1,1,1,0);
+    for my $row (@$info) {
+        $maxdb = length $row->{name} if length $row->{name} > $maxdb;
+        $maxstat = length $row->{status} if length $row->{status} > $maxstat;
+        $maxlim1 = length $row->{sourcelimit} if length $row->{sourcelimit} > $maxlim1;
+        $maxlim2 = length $row->{targetlimit} if length $row->{targetlimit} > $maxlim2;
+        $showlim = 1 if $row->{sourcelimit} or $row->{targetlimit};
+    }
+
 	for my $row (@$info) {
-		print "Database: $row->{name}   Status: $row->{status}\n";
-		if ($row->{sourcelimit} != 0 or $row->{targetlimit} != 0) {
-			print "Limits: source:$row->{sourcelimit} / target:$row->{targetlimit}\n";
+		printf "Database: %-*s  Status: %-*s  ",
+            $maxdb, $row->{name},
+            $maxstat, $row->{status};
+		if ($showlim) {
+			printf "Limits: %-*s/%-*s  ",
+                $maxlim1, $row->{sourcelimit},
+                $maxlim2, $row->{targetlimit},
 		}
 		print "Conn: psql -h $row->{dbhost} -p $row->{dbport} -U $row->{dbuser} -d $row->{dbname}\n";
-		print "\n";
 	}
 
 	exit 0;
@@ -1505,7 +1518,7 @@ sub list_tables {
    }
 
 	for my $row (@$info) {
-		printf "Table: %-*s  DB:%-*s  PK:%-*s\n",
+		printf "Table: %-*s  DB: %-*s  PK: %-*s\n",
             $maxtable, "$row->{schemaname}.$row->{tablename}",
             $maxdb, $row->{db},
             $maxpkey, $row->{pk};
@@ -1657,7 +1670,7 @@ sub list_syncs {
         $maxtarget = $tsize if $tsize > $maxtarget;
 	}
 	for my $row (@$info) {
-		printf "Sync: %-*s  Type:%-9s  Source:%-*s  %s:%-*s  Status:%s\n",
+		printf "Sync: %-*s  Type: %-9s  Source: %-*s  %s: %-*s  Status: %s\n",
 			$namelen, $row->{name},
 			$row->{synctype},
             $maxsource, $row->{source},
