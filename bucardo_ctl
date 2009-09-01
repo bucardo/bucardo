@@ -3387,6 +3387,35 @@ sub delete_sync {
 } ## end of delete_sync
 
 
+sub delete_herd {
+
+	## Usage: delete herd herdname
+
+	my $name = shift @nouns;
+
+	$SQL = q{DELETE FROM herd WHERE name = ?};
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute($name);
+	if (1 != $count) {
+		$sth->finish();
+		die qq{Failed to find a herd named "$name"\n};
+	}
+
+	## We want to confirm this
+	print qq{Are you sure you want to delete the herd "$name"?\n};
+	print qq{This action cannot be undone\n};
+	print q{Proceed? };
+	my $ans = <STDIN>;
+	exit 0 unless $ans =~ /^Y/i;
+
+	$dbh->commit();
+	print "Herd deleted: $name\n";
+
+	exit 0;
+
+} ## end of delete_herd
+
+
 sub alter_sync {
 
 	## Modify an existing sync
