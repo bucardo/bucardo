@@ -1494,20 +1494,21 @@ sub list_tables {
 	}
 
 	$info = $sth->fetchall_arrayref({});
+
+    my ($maxtable,$maxdb,$maxpkey) = (1,1,1);
+    for my $row (@$info) {
+        my $name = "$row->{schemaname}.$row->{tablename}";
+        $maxtable = length $name if length $name > $maxtable;
+        $name = $row->{pk} = $row->{pkey} ? "$row->{pkey} ($row->{pkeytype})" : 'none';
+        $maxpkey = length $name if length $name > $maxpkey;
+        $maxdb = length $row->{db} if length $row->{db} > $maxdb;
+   }
+
 	for my $row (@$info) {
-		printf "Table $row->{id}: $row->{schemaname}.$row->{tablename}%s\n",
-			$row->{ghost} ? ' GHOST TABLE' : '';
-		if ($row->{pkey}) {
-			print "  PK: $row->{pkey} ($row->{pkeytype})\n";
-		}
-		if ($row->{customselect}) {
-			print "  Custom select: $row->{customselect}\n";
-		}
-		printf "  DB: %s | Ping: %s  | Makedelta: %s | Has delta: %s\n",
-			$row->{db},
-			$row->{ping} ? 'Yes' : 'No',
-			$row->{makedelta} ? 'Yes' : 'No',
-			$row->{has_delta} ? 'Yes' : 'No';
+		printf "Table: %-*s  DB:%-*s  PK:%-*s\n",
+            $maxtable, "$row->{schemaname}.$row->{tablename}",
+            $maxdb, $row->{db},
+            $maxpkey, $row->{pk};
 	}
 
 	exit 0;
