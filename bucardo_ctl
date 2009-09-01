@@ -1627,13 +1627,6 @@ sub list_herds {
         }
 	}
 
-	## If requesting (or matching) a single herd, show the goats in detail
-	if (@nouns and $count == 1 and !$VERBOSE) {
-		for my $name (@{$herdmap->{$info->[0]{name}}}) {
-			print "  $name\n";
-		}
-	}
-
 	exit 0;
 
 } ## end of list_herds
