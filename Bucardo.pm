@@ -1,7 +1,5 @@
 #!perl -- -*-cperl-*-
 
-## XXX: Make sure targetiod is set for sequences as well
-
 ## The main Bucardo program
 ##
 ## This script should only be called via the 'bucardo_ctl' program
