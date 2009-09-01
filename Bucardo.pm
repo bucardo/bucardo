@@ -107,7 +107,7 @@ sub new {
 	my $self = {
 		created      => scalar localtime,
 		ppid         => $$,
-		verbose      => 0,
+		verbose      => 1,
 		debugsyslog  => 1,
 		debugdir     => './tmp',
 		debugfile    => 0,
@@ -116,7 +116,6 @@ sub new {
 		debugname    => '',
 		cleandebugs  => 0,
 		dryrun       => 0,
-		bcquiet      => 0,
 		sendmail     => 1,
 		extraname    => '',
 		logprefix    => 'BC!',

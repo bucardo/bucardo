@@ -48,12 +48,12 @@ help() unless @ARGV;
 
 ## Default arguments - most are for the bc constructor
 my $bcargs = {
-			  ctlquiet     => 0,
-			  ctlverbose   => 0,
+			  quiet        => 0,
+			  verbose      => 0,
+			  bcverbose    => 1,
 			  dbname       => 'bucardo',
 			  dbuser       => 'bucardo',
 			  dbpass       => '',
-			  verbose      => 1, ## Highly recommended to leave this on
 			  sendmail     => 0,
 			  extraname    => '',
 			  debugfilesep => 0,
@@ -108,8 +108,8 @@ if (defined $file) {
 
 GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
 	($bcargs,
-	 'ctlverbose+',
-	 'ctlquiet+',
+	 'verbose+',
+	 'quiet+',
 	 'notimer',
 	 'help',
 	 'version',
@@ -121,12 +121,12 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
 	 'retrysleep=i',
 
 	 ## These are sent to the constructor:
+	 'bcverbose',
 	 'dbport=i',
 	 'dbhost=s',
 	 'dbname=s',
 	 'dbuser=s',
 	 'dbpass=s',
-	 'verbose=i',
 	 'sendmail=i',
 	 'extraname=s',
 	 'debugfilesep',
@@ -150,7 +150,8 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
 
 ) or die "\n";
 
-my $QUIET      = delete $bcargs->{ctlquiet};
+my $QUIET = delete $bcargs->{quiet};
+
 help() if $bcargs->{help};
 
 if ($bcargs->{version}) {
@@ -158,8 +159,7 @@ if ($bcargs->{version}) {
 	exit 0;
 }
 
-
-my $VERBOSE    = delete $bcargs->{ctlverbose};
+my $VERBOSE    = delete $bcargs->{verbose};
 my $DAYSBACK   = delete $bcargs->{daysback} || $DEFAULT_DAYSBACK;
 my $COMPRESS   = delete $bcargs->{compress};
 my $SHOWDAYS   = delete $bcargs->{showdays} || 1;
@@ -2781,32 +2781,55 @@ sub add_all_tables {
 
 	## Walk through all returned tables from the remote database
 	my %count = (seenit => 0, added => 0);
+    my (%old, %new, %fail);
 	for my $row (@{$sth->fetchall_arrayref()}) {
 		my ($S,$T) = @$row;
 		## Do we already have this one?
 		if (exists $hastable{$S}{$T}) {
-			$VERBOSE >= 1 and warn "Skipping table already in goat: $S.$T\n";
+			$VERBOSE >= 2 and warn "Skipping table already in goat: $S.$T\n";
 			$count{seenit}++;
+            $old{$S}{$T} = 1;
 			next;
 		}
-		$VERBOSE >= 1 and warn "Attempting to add $S.$T to the goat table\n";
+		$VERBOSE >= 2 and warn "Attempting to add $S.$T to the goat table\n";
 		$count = $addtable->execute($db->{name},$S,$T);
 		if ($count != 1) {
 			$addtable->finish();
 			warn "Failed to add table $S.$T to the goat table!\n";
+            $fail{$S}{$T} = 1;
 			next;
 		}
 		$SQL = q{SELECT currval('bucardo.goat_id_seq')};
 		my $id = $dbh->selectall_arrayref($SQL)->[0][0];
-		$VERBOSE >= 1 and warn "ID of new table $S.$T is $id\n";
+		$VERBOSE >= 2 and warn "ID of new table $S.$T is $id\n";
 		$count{added}++;
+        $new{$S}{$T} = 1;
 		if ($herd) {
 			$addtoherd->execute($herd, $id);
-			$VERBOSE >= 1 and warn "Added table $id to herd $herd\n";
+			$VERBOSE >= 2 and warn "Added table $id to herd $herd\n";
 		}
 
 	}
 	$dbh->commit();
+
+    if ($VERBOSE >= 1) {
+        if (%new) {
+            print "New tables:\n";
+            for my $s (sort keys %new) {
+                for my $t (sort keys %{$new{$s}}) {
+                    print "  $s.$t\n";
+                }
+            }
+        }
+        if (%fail) {
+            print "Failed to add tables:\n";
+            for my $s (sort keys %fail) {
+                for my $t (sort keys %{$fail{$s}}) {
+                    print "  $s.$t\n";
+                }
+            }
+        }
+    }
 
 	print "New tables added: $count{added}\n";
 	print "Tables already added: $count{seenit}\n";
@@ -4290,13 +4313,9 @@ The port, host, and name of the Bucardo database, the user to connect as, and th
 
 =item B<--verbose>
 
-Tells Bucardo (not bucardo_ctl) to run in verbose mode. Default is on. Turning this off is not recommended.
-
-=item B<--ctlverbose>
-
 Makes bucardo_ctl run verbosely. Default is off.
 
-=item B<--ctlquiet>
+=item B<--quiet>
 
 Tells bucardo_ctl to be as quiet as possible. Default is off.
 
