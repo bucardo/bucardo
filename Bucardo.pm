@@ -4365,6 +4365,7 @@ sub start_kid {
 				$self->glog("Running on $sourcedb: $srccmd");
 				$sourcedbh->do($srccmd);
 
+				my $startotc = $sync->{onetimecopy} ? time : 0;
 				$self->glog("Running on $targetdb: $tgtcmd");
 				$targetdbh->do($tgtcmd);
 				my $buffer='';
@@ -4374,7 +4375,8 @@ sub start_kid {
 					$dmlcount{I}{target}{$S}{$T}++;
 				}
 				$targetdbh->pg_putcopyend();
-				$self->glog(qq{End COPY of $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
+				my $otc = $sync->{onetimecopy} ? (sprintf "(OTC:%ds )", time-$startotc) : '';
+				$self->glog(qq{End ${otc}COPY of $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
 				$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
 
 				if ($hasindex) {
