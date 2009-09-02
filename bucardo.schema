@@ -2126,6 +2126,14 @@ AS $bc$
     ## Gather up a list of tables used in this sync, as well as the source database handle
 
     (my $herd = $old->{source}) =~ s/'/''/go;
+
+    ## Does this herd exist?
+    $SQL = qq{SELECT 1 FROM herd WHERE name = '$herd'};
+    $rv = spi_exec_query($SQL);
+    if (!$rv->{processed}) {
+       elog(ERROR, "Cannot delete: sync refers to an invalid herd: $herd");
+    }
+
     $SQL = qq{
         SELECT db, pg_catalog.quote_ident(schemaname) AS safeschema,
                    pg_catalog.quote_ident(tablename)  AS safetable
@@ -2134,7 +2142,10 @@ AS $bc$
         AND    h.herd = '$herd'
     };
     $rv = spi_exec_query($SQL);
-    $rv->{processed} or die qq{No such herd: $herd};
+	if (!$rv->{processed}) {
+	  elog(DEBUG, 'Herd has no members, so no further work needed');
+      return;
+    }
     my $sourcedb = $rv->{rows}[0]{db};
     elog(DEBUG, "Got a sourcedb of $sourcedb for herd of $herd");
     my %relation;
