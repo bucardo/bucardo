@@ -3251,6 +3251,7 @@ sub add_sync {
 			   lifetime        => ['', ''],
 			   maxkicks        => [0,  ''],
 			   tables          => ['', ''],
+			   status          => ['', ''],
 			   onetimecopy     => ['', ''],
 			   );
 	my $args = process_args($info);
