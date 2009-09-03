@@ -1505,11 +1505,11 @@ sub list_dbs {
     }
 
 	for my $row (@$info) {
-		printf "Database: %-*s  Status: %-*s  ",
+		printf 'Database: %-*s  Status: %-*s  ',
             $maxdb, $row->{name},
             $maxstat, $row->{status};
 		if ($showlim) {
-			printf "Limits: %-*s/%-*s  ",
+			printf 'Limits: %-*s/%-*s  ',
                 $maxlim1, $row->{sourcelimit},
                 $maxlim2, $row->{targetlimit},
 		}
@@ -1702,15 +1702,15 @@ sub list_herds {
     ## Print out the results
 	for my $row (@$herdinfo) {
         my $hname = $row->{name};
-        my $syncs = '';
+        my $showsyncs = '';
         $count = $synclist->execute($hname);
         if ($count) {
-            $syncs = join ' ' => map { $_->[0] } @{$synclist->fetchall_arrayref()};
+            $showsyncs = join ' ' => map { $_->[0] } @{$synclist->fetchall_arrayref()};
         }
 		printf "Herd: %-*s   Goats: %*d%s\n",
 			$namelen, $hname,
 			$goatlen, scalar @{$herdmap->{$hname}},
-            $syncs ? "  Syncs: $syncs" : '';
+            $showsyncs ? "  Syncs: $showsyncs" : '';
         if ($VERBOSE >= 1) {
             for my $name (@{$herdmap->{$hname}}) {
                 my $type = ucfirst($name->{reltype});
@@ -2064,7 +2064,7 @@ sub remove_database {
 sub remove_table {
 	die "Not implemented yet\n";
 }
-sub remove_seqquence {
+sub remove_sequence {
 	die "Not implemented yet\n";
 }
 sub remove_herd {
@@ -2828,9 +2828,11 @@ sub add_database {
 
 sub add_all_tables {
     add_all_goats('table');
+	return;
 }
 sub add_all_sequences {
     add_all_goats('sequence');
+	return;
 }
 
 sub add_all_goats {
@@ -3129,7 +3131,7 @@ sub add_table {
 	$phs =~ s/,$//;
 
 	## Add these to the database
-	$SQL = "INSERT INTO bucardo.goat ($cols,schemaname,tablename) VALUES ($phs,?,?)"; 
+	$SQL = "INSERT INTO bucardo.goat ($cols,schemaname,tablename) VALUES ($phs,?,?)";
 	if ($DEBUG) {
 		warn "SQL: $SQL\n";
 		warn Dumper \@tables;
@@ -3376,9 +3378,9 @@ sub add_sync {
 
 		## Add all tables given to the new herd
 		## May be the same table in more than one schema, in which case we add them all!
-		$SQL = qq{SELECT id FROM goat WHERE tablename=? AND db =?};
+		$SQL = q{SELECT id FROM goat WHERE tablename=? AND db =?};
 		my $sth_goat = $dbh->prepare($SQL);
-		$SQL = qq{INSERT INTO herdmap(herd,goat) VALUES (?,?)};
+		$SQL = q{INSERT INTO herdmap(herd,goat) VALUES (?,?)};
 		$sth = $dbh->prepare($SQL);
 		for my $table (split /,/ => $arg{tables}[0]) {
 			$sth_goat->execute($table,$sourceherd);
@@ -3466,7 +3468,7 @@ sub delete_sync {
 	## We want to confirm this
 	print "Are you sure you want to delete this sync?\n";
 	print "This action cannot be undone\n";
-	print "Proceed? ";
+	print 'Proceed? ';
 	my $ans = <STDIN>;
 	exit 0 unless $ans =~ /^Y/i;
 
