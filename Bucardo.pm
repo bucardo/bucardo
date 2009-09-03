@@ -27,7 +27,7 @@ use Sys::Syslog qw( openlog syslog ); ## In case we are logging via syslog()
 use DBIx::Safe '1.2.4';               ## Filter out what DB calls customcode may use
 use Data::Dumper 'Dumper';            ## Used to dump information in email alerts
 
-## Formating of Dumper() calls:
+## Formatting of Dumper() calls:
 $Data::Dumper::Varname = 'BUCARDO';
 $Data::Dumper::Indent = 1;
 

@@ -74,7 +74,7 @@ bucardo.schema - The schema for Bucardo. Contains a version number in two places
 
 BucardoTesting.pm - Shared routines for setup and teardown.
 
-bucard.test.helper - Helper script for bucardo_ctl calling.
+bucardo.test.helper - Helper script for bucardo_ctl calling.
 
 bucardo.test.data - Connection information for the tests.
 
@@ -95,6 +95,8 @@ t/99-pod.t - Verifies the POD of Pg.pm. Requires Test::POD version 0.95, and
 
 t/99-signature.t - Uses Module::Signature to verify SIGNATURE file. All tests are skipped 
   if the environment variable TEST_SIGNATURE is not set.
+
+t/99-spellcheck.t - Spell checks all files and comments
 
 t/99-yaml.t - Uses Test::YAML::Meta to verify the META.yml file.
 

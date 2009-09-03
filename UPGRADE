@@ -41,7 +41,7 @@ the upgrade is performed. This can be done by running:
 3. Upgrade the Bucardo database
 
 The bucardo_ctl script has an 'upgrade' command that connects to the 
-existing Bucado database and upgrades the schema as needed. 
+existing Bucardo database and upgrades the schema as needed. 
 
 ./bucardo_ctl upgrade
 

@@ -113,7 +113,7 @@ Bug fixes:
 
   - Auto-detect primary keys (or unique indexes) for added tables. [GSM]
 
-  - Add update_bucardo_schema.pl to faciliate version changes. [GSM]
+  - Add update_bucardo_schema.pl to facilitate version changes. [GSM]
 
   - Use correct quoted/non-quoted versions of primary keys to allow 
     primary keys with spaces, etc. [GSM]

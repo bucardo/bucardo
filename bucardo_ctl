@@ -4118,7 +4118,7 @@ to make sure changes get propagated to all databases.
 Usage: ./bucardo_ctl start "Reason --name"
 
 Restarts Bucardo cleanly by first issuing the equivalent of a stop to ask any existing Bucardo 
-proceses to exit, and then starting a new Bucardo MCP process. A short reason and name should 
+processes to exit, and then starting a new Bucardo MCP process. A short reason and name should 
 be provided - these are logged in the reason_file file and sent in the email sent when Bucardo 
 has been started up.
 
@@ -4237,7 +4237,7 @@ appear, and if it is expired, a C<E!> will appear.
 
 =item 3. B<State>
 
-The current status of this sync. If no sync is running, C<idle> will appear. If a sync has been rquested, but has not 
+The current status of this sync. If no sync is running, C<idle> will appear. If a sync has been requested, but has not 
 started yet, C<WAIT> will appear, along with how long since the sync was requested. If a sync is 
 currently running, C<RUN> will appear, followed by the amount of time the sync has been running, followed by which 
 target the sync is running against. Note that syncs running to more than one database at a time will only show 
@@ -4250,7 +4250,7 @@ this is merely a historical record and does not represent an active process.
 
 =item 5. B<Last_good>
 
-How long since this sync last ran succesfully. Remember that this is affected by the --daysback parameter.
+How long since this sync last ran successfully. Remember that this is affected by the --daysback parameter.
 
 =item 6. B<Time>
 
