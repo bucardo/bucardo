@@ -7,6 +7,10 @@ use warnings;
 use Test::More;
 select(($|=1,select(STDERR),$|=1)[1]);
 
+if (! $ENV{TEST_AUTHOR}) {
+	plan (skip_all =>  "Must set \$ENV{TEST_AUTHOR} to run this test");
+}
+
 plan tests => 2;
 
 my $V = 0.03;
