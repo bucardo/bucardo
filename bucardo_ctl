@@ -27,7 +27,6 @@ our $VERSION = '4.0.0';
 
 use vars qw/$dbh $SQL $sth %sth $count $info/;
 
-my $DEBUG            = 0;
 my $DATEFORMAT       = q{Mon DD, YYYY HH24:MI:SS};
 my $DEFAULT_DAYSBACK = 3;
 my $WAITSLEEP        = 1;
@@ -112,6 +111,7 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
 	 'quiet+',
 	 'notimer',
 	 'help',
+	 'debug',
 	 'version',
 	 'daysback=i',
 	 'sort=i',
@@ -160,6 +160,7 @@ if ($bcargs->{version}) {
 }
 
 my $VERBOSE    = delete $bcargs->{verbose};
+my $DEBUG      = delete $bcargs->{debug} || 0;
 my $DAYSBACK   = delete $bcargs->{daysback} || $DEFAULT_DAYSBACK;
 my $COMPRESS   = delete $bcargs->{compress};
 my $SHOWDAYS   = delete $bcargs->{showdays} || 1;
@@ -728,7 +729,17 @@ sub update {
 			die qq{Sorry, cannot change "$n" for $item "$localname"\n};
 		}
 		$SQL = "UPDATE sync SET $n = ? WHERE name = ?";
+		if ($n eq 'targetgroup') {
+			$SQL =~ s/SET/SET targetdb=NULL,/;
+		}
+		elsif ($n eq 'targetdb') {
+			$SQL =~ s/SET/SET targetgroup=NULL,/;
+		}
 		$sth = $dbh->prepare($SQL);
+		if ($DEBUG) {
+			warn "SQL: $SQL\n";
+			warn "Args: $v, $localid\n";
+		}
 		$sth->execute($v, $localid);
 		push @{$change{$localname}} => [$n, $info->{$n}, $v];
 	}
@@ -741,7 +752,8 @@ sub update {
 	for my $thing (sort keys %change) {
 		print qq{Changes made to $item "$thing":\n};
 		for my $row (@{$change{$thing}}) {
-			print qq{ * $row->[0] : changed from "$row->[1]" to "$row->[2]"\n};
+			my $old = $row->[1] || '(null)';
+			print qq{ * $row->[0] : changed from "$old" to "$row->[2]"\n};
 		}
 	}
 
