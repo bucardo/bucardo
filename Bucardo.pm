@@ -1791,6 +1791,18 @@ sub start_mcp {
 							next;
 						}
 					}
+
+					## Grab oid of the sequence on the remote database
+					$sth = $dbh->prepare($SQL{checktable});
+					$count = $sth->execute($g->{schemaname},$g->{tablename});
+					if ($count != 1) {
+						my $msg = qq{Could not find remote sequence $g->{schemaname}.$g->{tablename} on $db\n};
+						$self->glog($msg);
+						warn $msg;
+						return 0;
+					}
+					$g->{targetoid}{$db} = $sth->fetchall_arrayref()->[0][0];
+
 					next;
 				}
 
