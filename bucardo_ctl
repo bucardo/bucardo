@@ -2820,7 +2820,7 @@ sub add_database {
 
 	$dbh->commit();
 
-	warn "Database added: $arg{name}[0]\n";
+	$QUIET or print "Database added: $arg{name}[0]\n";
 	exit 0;
 
 } ## end of add_database
@@ -3172,12 +3172,15 @@ sub add_table {
 
 	$dbh->commit();
 
+	exit 0 if $QUIET;
+
 	my $tablelist = sprintf '%s added: ', @tables > 1 ? 'Tables' : 'Table';
 	for (@tables) {
 		$tablelist .= sprintf '%s%s, ', $_->[0] ? "$_->[0]." : '', $_->[1];
 	}
 	$tablelist =~ s/, $//;
-	warn "$tablelist\n";
+	print "$tablelist\n";
+
 	exit 0;
 
 } ## end of add_table
@@ -3294,12 +3297,14 @@ sub add_sequence {
 
 	$dbh->commit();
 
+	exit 0 if $QUIET;
+
 	my $tablelist = sprintf '%s added: ', @tables > 1 ? 'Sequences' : 'Sequence';
 	for (@tables) {
 		$tablelist .= sprintf '%s%s, ', $_->[0] ? "$_->[0]." : '', $_->[1];
 	}
 	$tablelist =~ s/, $//;
-	warn "$tablelist\n";
+	print "$tablelist\n";
 
 	exit 0;
 
@@ -3423,7 +3428,7 @@ sub add_sync {
 
 	$dbh->commit();
 
-	warn "Sync added: $item_name\n";
+	$QUIET or print "Sync added: $item_name\n";
 	exit 0;
 
 } ## end of add_sync
@@ -3637,9 +3642,7 @@ sub alter_sync {
 
 	$dbh->commit();
 
-	warn "Sync updated: $item_name ($SQL)\n";
-
-	# warn about not forgetting to reload the sync if active?
+	$QUIET or print "Sync updated: $item_name ($SQL)\n";
 
 	exit 0;
 
@@ -3681,7 +3684,9 @@ sub remove_sync {
 		exit 1;
 	}
 	$dbh->commit();
-	warn "Sync removed: $item_name\n";
+
+	$QUIET or print "Sync removed: $item_name\n";
+
 	exit 0;
 
 } ## end of remove_sync
@@ -3745,7 +3750,9 @@ sub add_herd {
 	if ($@) {
 		die "Failed to add herd: $@\n";
 	}
-	warn "Herd added: $item_name\n";
+
+	$QUIET or print "Herd added: $item_name\n";
+
 	if (@goatlist) {
 		$SQL = q{INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,(SELECT id FROM bucardo.goat WHERE tablename=?))};
 		$sth = $dbh->prepare($SQL);
@@ -3823,7 +3830,7 @@ sub add_dbgroup {
 	}
 	$dbh->commit();
 
-	warn "Database group added: $name\n";
+	$QUIET or print "Database group added: $name\n";
 	exit 0;
 
 } ## end of add_dbgroup
