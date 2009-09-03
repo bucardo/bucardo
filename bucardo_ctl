@@ -559,8 +559,11 @@ sub update {
 		$SQL = 'SELECT * FROM goat WHERE id = ?';
 		## Later on, allow use of name and schema.name
 	}
+	elsif ('dbgroup' eq $item) {
+		$SQL = 'SELECT * FROM dbgroup WHERE name = ?';
+	}
 	else {
-		die "Invalid item: must be sync\n";
+		die "Invalid item: must be sync or dbgroup\n";
 	}
 
 	if ($name =~ s/\*//) {
@@ -570,7 +573,7 @@ sub update {
 	$count = $sth->execute($name);
 	if ($count < 1) {
 		$sth->finish();
-		die qq{No matches found for sync "$name"\n};
+		die qq{No matches found for $item "$name"\n};
 	}
 	$dbh->{pg_bool_tf} = 1;
 	$info = $sth->fetchall_arrayref({})->[0];
@@ -654,6 +657,64 @@ sub update {
 		$dbh->commit();
 		exit 0;
 	}
+
+	if ('dbgroup' eq $item and ($nouns[0] eq 'add' or $nouns[0] eq 'remove')) {
+		my $v = shift @nouns;
+		my $miniusage = "Usage: update dbgroup $name $v <dbname(s)>\n";
+		@nouns or die $miniusage;
+
+		## Grab all databases in this group
+		$SQL = 'SELECT db, priority FROM dbmap WHERE dbgroup = ?';
+		$sth = $dbh->prepare($SQL);
+		$sth->execute($name);
+		my $dblist = $sth->fetchall_hashref('db');
+
+		for my $db (@nouns) {
+			## All of these must be valid databases
+			my $d = $db;
+			my $wild = ($d =~ s/\*//) ? 1 : 0;
+			my $find;
+			$SQL = 'SELECT * FROM db WHERE name = ?';
+			$wild and $SQL =~ s/=/~/;
+			$find = $dbh->prepare($SQL);
+			$count = $find->execute($wild ? "^$d" : $d);
+			if ($count < 1) {
+				die qq{Unknown database: $db\n};
+			}
+			elsif ($count > 1 and ! $wild) {
+				die qq{More than one database found for $db\n};
+			}
+
+			if ($v eq 'add' and exists $dblist->{$d}) {
+				warn "Skipping dbgroup $db: already part of that group\n";
+				next;
+			}
+			if ($v eq 'remove' and !exists $dblist->{$d}) {
+				warn "Skipping dbgroup $db: does not belong to that group\n";
+				next;
+			}
+			my $dbinfo = $find->fetchall_arrayref({});
+			for my $db2 (@$dbinfo) {
+				my $dbname = $db2->{name};
+				if ($v eq 'add') {
+					$SQL = 'INSERT INTO dbmap(db,dbgroup) VALUES (?,?)';
+					my $add = $dbh->prepare($SQL);
+					$add->execute($dbname,$name);
+					warn "Added database $dbname to database group $name\n";
+				}
+				else {
+					$SQL = 'DELETE FROM dbmap WHERE db = ? AND dbgroup = ?';
+					my $delete = $dbh->prepare($SQL);
+					$delete->execute($dbname,$name);
+					warn "Removed database $dbname from database group $name\n";
+				}
+			}
+		}
+
+		$dbh->commit();
+		exit 0;
+	}
+
 
 	## Process each change in turn
 	my %change;
@@ -1380,7 +1441,7 @@ ORDER BY started DESC LIMIT 1
 
 sub list {
 
-	my $msg = "Need to specify what to list: db, table, sequence, sync, or herd\n";
+	my $msg = "Need to specify what to list: db, dbgroup, table, sequence, sync, or herd\n";
 	if (!@nouns) {
 		die $msg;
 	}
@@ -1469,10 +1530,19 @@ sub list_dbgroups {
 			$WHERE ? ' matching' : '';
 		exit 1;
 	}
-
 	$info = $sth->fetchall_arrayref({});
+
+	## We want to list all members of this group
+	$SQL = 'SELECT * FROM dbmap WHERE dbgroup = ?';
+	$sth = $dbh->prepare($SQL);
 	for my $row (@$info) {
-		print "Name: $row->{name}\n";
+		my $dbs = '';
+		$count = $sth->execute($row->{name});
+		if ($count >= 1) {
+			$dbs = '  Members: ';
+			$dbs .= join ',' => map { $_->[0] } @{$sth->fetchall_arrayref()};
+		}
+		print "Database group: $row->{name}$dbs\n";
 	}
 
 	exit 0;
@@ -1673,13 +1743,13 @@ sub list_syncs {
         $maxtarget = $tsize if $tsize > $maxtarget;
 	}
 	for my $row (@$info) {
-		printf "Sync: %-*s  Type: %-9s  Source: %-*s  %s: %-*s  Status: %s\n",
+		printf "Sync: %-*s  (%-9s)  %-*s %-3s %-*s  (%s)\n",
 			$namelen, $row->{name},
 			$row->{synctype},
-            $maxsource, $row->{source},
-			$row->{targetdb} ? 'Target-DB' : 'Target-group',
+			$maxsource, $row->{source},
+			$row->{synctype} eq 'swap' ? '<=>' : '=>',
 			$maxtarget, $row->{targetdb} || $row->{targetgroup},
-			$row->{status};
+				ucfirst $row->{status};
 	}
 
 	exit 0;
@@ -3428,6 +3498,35 @@ sub delete_herd {
 } ## end of delete_herd
 
 
+sub delete_dbgroup {
+
+	## Usage: delete dbgroup name
+
+	my $name = shift @nouns;
+
+	$SQL = q{DELETE FROM dbgroup WHERE name = ?};
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute($name);
+	if (1 != $count) {
+		$sth->finish();
+		die qq{Failed to find a dbgroup named "$name"\n};
+	}
+
+	## We want to confirm this
+	print qq{Are you sure you want to delete the database group "$name"?\n};
+	print qq{This action cannot be undone\n};
+	print q{Proceed? };
+	my $ans = <STDIN>;
+	exit 0 unless $ans =~ /^Y/i;
+
+	$dbh->commit();
+	print "Database group deleted: $name\n";
+
+	exit 0;
+
+} ## end of delete_dbgroup
+
+
 sub alter_sync {
 
 	## Modify an existing sync
@@ -3712,7 +3811,7 @@ sub add_dbgroup {
 	}
 	$dbh->commit();
 
-	warn "Group updated\n";
+	warn "Database group added: $name\n";
 	exit 0;
 
 } ## end of add_dbgroup
