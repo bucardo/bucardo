@@ -970,7 +970,7 @@ sub start_mcp {
 						## no critic (ProhibitHardTabs)
 						for my $val (qw/checksecs stayalive limitdbs do_listen txnmode deletemethod status ping
 										analyze_after_copy targetgroup targetdb usecustomselect onetimecopy
-										lifetimesecs maxkicks/) {
+										lifetimesecs maxkicks rebuild_index/) {
 							$sync->{$syncname}{$val} = $self->{sync}{$syncname}{$val} = $info->{$val};
 						}
 						## use critic
@@ -4365,8 +4365,8 @@ sub start_kid {
 				$self->glog("Running on $sourcedb: $srccmd");
 				$sourcedbh->do($srccmd);
 
-				my $startotc = $sync->{onetimecopy} ? time : 0;
 				$self->glog("Running on $targetdb: $tgtcmd");
+				my $startotc = $sync->{onetimecopy} ? time : 0;
 				$targetdbh->do($tgtcmd);
 				my $buffer='';
 				$dmlcount{I}{target}{$S}{$T} = 0;
@@ -4375,8 +4375,8 @@ sub start_kid {
 					$dmlcount{I}{target}{$S}{$T}++;
 				}
 				$targetdbh->pg_putcopyend();
-				my $otc = $sync->{onetimecopy} ? (sprintf "(OTC:%ds )", time-$startotc) : '';
-				$self->glog(qq{End ${otc}COPY of $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
+				my $otc = $startotc ? (sprintf "(OTC: %ds) ", time-$startotc) : '';
+				$self->glog(qq{${otc}End COPY of $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
 				$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
 
 				if ($hasindex) {
@@ -4384,6 +4384,9 @@ sub start_kid {
 					$targetdbh->do($SQL);
 					$self->glog("Reindexing table $S.$T on $targetdb");
 					$targetdbh->do("REINDEX TABLE $S.$T");
+					if ($otc) {
+						$self->glog(sprintf qq{(OTC: %ds) REINDEX TABLE $S.$T}, time-$startotc);
+					}
 				}
 
 				## If we just did a fullcopy, but the table is pushdelta or swap,
