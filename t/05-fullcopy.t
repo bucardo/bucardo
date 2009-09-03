@@ -183,7 +183,7 @@ bc_deeply($result, $dbhB, $SQL, $t);
 ## Add another slave
 $t=q{Add dbgroup works};
 $i = $bct->ctl("add dbgroup tgroup B C");
-like($i, qr{Group updated|already exists}, $t);
+like($i, qr{Database group added|already exists}, $t);
 
 $t=q{Alter sync works};
 $dbhB->commit();
