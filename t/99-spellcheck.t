@@ -11,8 +11,8 @@ select(($|=1,select(STDERR),$|=1)[1]);
 
 my (@testfiles, @textfiles, @podfiles, @commentfiles, $fh);
 
-if (!$ENV{TEST_AUTHOR}) {
-	plan skip_all => 'Set the environment variable TEST_AUTHOR to enable this test';
+if (! $ENV{RELEASE_TESTING}) {
+	plan (skip_all =>  'Test skipped unless environment variable RELEASE_TESTING is set');
 }
 elsif (!eval { require Text::SpellChecker; 1 }) {
 	plan skip_all => 'Could not find Text::SpellChecker';
