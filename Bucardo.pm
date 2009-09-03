@@ -4340,10 +4340,25 @@ sub start_kid {
 				}
 
 				$self->glog("Emptying out target table $S.$T using $sync->{deletemethod}");
+				my $empty_by_delete = 1;
 				if ($sync->{deletemethod} eq 'truncate') {
-					$targetdbh->do("TRUNCATE TABLE $S.$T"); ## XXX Always try truncate first, then eval to delete?
+					## Temporarily override our kid-level handler due to the eval
+					local $SIG{__DIE__} = sub {};
+					$targetdbh->do('SAVEPOINT truncate_attempt');
+					eval {
+						$targetdbh->do("TRUNCATE TABLE $S.$T");
+					};
+					if ($@) {
+						$self->glog("Truncation of $S.$T failed, so we will try a delete");
+						$targetdbh->do('ROLLBACK TO truncate_attempt');
+						$empty_by_delete = 2;
+					}
+					else {
+						$targetdbh->do('RELEASE truncate_attempt');
+						$empty_by_delete = 0;
+					}
 				}
-				else {
+				if ($empty_by_delete) {
 					($dmlcount{D}{target}{$S}{$T} = $targetdbh->do("DELETE FROM $S.$T")) =~ s/0E0/0/o;
 					$dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
 					$self->glog("Rows deleted from $S.$T: $dmlcount{D}{target}{$S}{$T}");
