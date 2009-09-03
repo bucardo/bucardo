@@ -37,9 +37,7 @@ $bct->add_test_tables_to_herd('A', 'testherd1');
 
 ## Pushdelta sync from A to B
 my $t=q{Add sync works};
-print "Adding sync\n";
 my $i = $bct->ctl("add sync multicolpushdeltatest source=testherd1 type=pushdelta targetdb=B");
-print "Added sync: $i\n";
 like($i, qr{Sync added:}, $t);
 
 $bct->restart_bucardo($dbhX);
