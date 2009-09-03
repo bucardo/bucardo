@@ -29,7 +29,7 @@ profile-strictness = quiet
 [-RegularExpressions::ProhibitCaptureWithoutTest]
 [-ValuesAndExpressions::ProhibitMixedBooleanOperators]
 [-Variables::RequireLocalizedPunctuationVars]
-
+[-InputOutput::ProhibitExplicitStdin]
 
 ##
 ## Three:
