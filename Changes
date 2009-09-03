@@ -1,6 +1,6 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-4.0.0 2009
+4.0.0 September 2009
 
 New features:
 
@@ -70,6 +70,8 @@ Enhancements:
 
   - Remove the debugstderr and debugstdout options, as they never worked 
     correctly anyway. [GSM]
+
+  - When truncating during fullcopy, fallback to delete if it fails. [GSM]
 
   - On startup, all syncs that may have trigger-based notifies are 
     initially kicked. [GSM]
