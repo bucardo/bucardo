@@ -1782,7 +1782,7 @@ sub start_mcp {
 					$info = $sth->fetchall_arrayref({})->[0];
 					for my $key (sort keys %$info) {
 						if (! exists $g->{sequenceinfo}{$key}) {
-							$self->glog('Warning! Sequence on target has item $key, but source does not!');
+							$self->glog(qq{Warning! Sequence on target has item $key, but source does not!});
 							next;
 						}
 						my $sseq = $g->{sequenceinfo}{$key};
@@ -4375,7 +4375,7 @@ sub start_kid {
 					$dmlcount{I}{target}{$S}{$T}++;
 				}
 				$targetdbh->pg_putcopyend();
-				my $otc = $startotc ? (sprintf "(OTC: %ds) ", time-$startotc) : '';
+				my $otc = $startotc ? (sprintf '(OTC: %ds) ', time-$startotc) : '';
 				$self->glog(qq{${otc}End COPY of $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
 				$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
 
