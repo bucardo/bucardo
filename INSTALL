@@ -1,3 +1,6 @@
+It is recommended that you create a 'bucardo' user on your system 
+that will be responsible for running Bucardo.
+
 Install Bucardo like any other Perl module:
 
 perl Makefile.PL
@@ -5,14 +8,13 @@ make
 make test
 make install
 
-The last step must be done as root.
+The last step must be done as root. You may be able to do this by running:
 
-Note that 'make test' is a rather complex and long process.
+sudo make install
+
+Note that 'make test' is a rather long and involved process.
 However, because Bucardo is fairly complex, testing is highly 
 recommended before installing.
-
-It is recommended that you create a new user named 'bucardo' on your system 
-that will contain the Bucardo files, or use the 'postgres' user.
 
 Once the above has been run, you will need to create a Bucardo database. 
 This can be done by running:
@@ -20,10 +22,12 @@ This can be done by running:
 bucardo_ctl install
 
 There should be no errors: if there are, please report them to 
-bucardo-general@bucardo.org or ask on the main mailing list for help.
+bucardo-general@bucardo.org or ask on IRC for help.
+
+IRC: #bucardo irc.freenode.net
 
 Bucardo by default logs to syslog, and does so very verbosely. It is 
-recommended that you reroute your bucardo log traffic to another file. 
+recommended that you reroute your bucardo syslog traffic to another file. 
 This can be done by adding this line to your /etc/syslog.conf file:
 
 local1.*      -/var/log/bucardo.log
@@ -37,3 +41,4 @@ new configuration file.
 
 Please see the documentation at http://bucardo.org for information on how to 
 start using Bucardo once it is installed.
+
