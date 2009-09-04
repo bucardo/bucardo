@@ -69,7 +69,17 @@ sub install {
 	my $string = shift->SUPER::install(@_);
 	my $vars = qq{DESTINSTALLSHARE = \$(DESTDIR)/usr/local/share/bucardo\n};
 	$vars .= qq{DESTINSTALLSITESHARE = \$(DESTDIR)/usr/local/share/bucardo\n};
-	$vars .= qq{DESTINSTALLVENDORSHARE = \$(DESTDIR)/usr/share/bucardo};
+	$vars .= qq{DESTINSTALLVENDORSHARE = \$(DESTDIR)/usr/share/bucardo\n};
+
+	if ($ENV{INSTALL_BUCARDODIR}) {
+		for my $dir (qw{SCRIPT LIB MAN1DIR MAN3DIR}) {
+			$vars .= qq{INSTALLSITE$dir=$ENV{INSTALL_BUCARDODIR}\n};
+		}
+		for my $dir (qw{SITEARCH ARCHLIB SITESHARE}) {
+			$vars .= qq{DESTINSTALL$dir=$ENV{INSTALL_BUCARDODIR}\n};
+		}
+	}
+
 	$string = "\n$vars\n$string";
 	$string =~ s{(\t\$\(INST_BIN\) \$\((DESTINSTALL.*?)BIN.+)}{$1\n\t\t\$(INST_SHARE) \$($2SHARE) \\}g;
 	return $string;
