@@ -140,7 +140,7 @@ to make sure changes get propagated to all databases.</p>
 <dd>
 <p>Usage: ./bucardo_ctl start &quot;Reason --name&quot;</p>
 <p>Restarts Bucardo cleanly by first issuing the equivalent of a stop to ask any existing Bucardo 
-proceses to exit, and then starting a new Bucardo MCP process. A short reason and name should 
+processes to exit, and then starting a new Bucardo MCP process. A short reason and name should 
 be provided - these are logged in the reason_file file and sent in the email sent when Bucardo 
 has been started up.</p>
 <p>Before attempting to kill any old processes, a ping command with a timeout of 5 seconds is issued. 
@@ -163,15 +163,18 @@ is also used by Bucardo when it exits and sends out mail about its death.</p>
 
 <dd>
 <p>Usage: ./bucardo_ctl list &lt;type&gt; &lt;regex&gt;</p>
-<p>Lists summary information about databases, goats, herds, or syncs. Adding anything after the 
-type will look up all matching entries.</p>
+<p>Lists summary information about databases, tables, sequences, syncs, or herds. Adding anything 
+after the type will look up all matching entries.</p>
 </dd>
 <dt><strong><a name="add" class="item"><strong>add</strong></a></strong></dt>
 
 <dd>
 <p>Usage:  add &lt;item_type&gt; &lt;item_name&gt;</p>
 <p>Usage:  add database &lt;dbname&gt; name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx</p>
-<p>Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool</p>
+<p>Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool herd=xxx</p>
+<p>Usage:  add all tables herd=xxx</p>
+<p>Usage:  add sequence [schema].table herd=xxx</p>
+<p>Usage:  add all sequences herd=xxx</p>
 <p>Usage:  add sync syncname options</p>
 <p>Usage:  add herd name</p>
 <p>Usage:  add dbgroup name db1 db2 db3 ...</p>
@@ -245,7 +248,7 @@ appear, and if it is expired, a <code>E!</code> will appear.</p>
 </li>
 <li><strong><a name="state" class="item"><strong>State</strong></a></strong>
 
-<p>The current status of this sync. If no sync is running, <code>idle</code> will appear. If a sync has been rquested, but has not 
+<p>The current status of this sync. If no sync is running, <code>idle</code> will appear. If a sync has been requested, but has not 
 started yet, <code>WAIT</code> will appear, along with how long since the sync was requested. If a sync is 
 currently running, <code>RUN</code> will appear, followed by the amount of time the sync has been running, followed by which 
 target the sync is running against. Note that syncs running to more than one database at a time will only show 
@@ -258,7 +261,7 @@ this is merely a historical record and does not represent an active process.</p>
 </li>
 <li><strong><a name="last_good" class="item"><strong>Last_good</strong></a></strong>
 
-<p>How long since this sync last ran succesfully. Remember that this is affected by the --daysback parameter.</p>
+<p>How long since this sync last ran successfully. Remember that this is affected by the --daysback parameter.</p>
 </li>
 <li><strong><a name="time" class="item"><strong>Time</strong></a></strong>
 
@@ -321,14 +324,9 @@ as they will not change very often if at all.</p>
 <dt><strong><a name="verbose" class="item"><strong>--verbose</strong></a></strong></dt>
 
 <dd>
-<p>Tells Bucardo (not bucardo_ctl) to run in verbose mode. Default is on. Turning this off is not recommended.</p>
-</dd>
-<dt><strong><a name="ctlverbose" class="item"><strong>--ctlverbose</strong></a></strong></dt>
-
-<dd>
 <p>Makes bucardo_ctl run verbosely. Default is off.</p>
 </dd>
-<dt><strong><a name="ctlquiet" class="item"><strong>--ctlquiet</strong></a></strong></dt>
+<dt><strong><a name="quiet" class="item"><strong>--quiet</strong></a></strong></dt>
 
 <dd>
 <p>Tells bucardo_ctl to be as quiet as possible. Default is off.</p>
@@ -450,7 +448,9 @@ before the name as well, so a debugname of &quot;rootdb&quot; would produce a lo
 the current directory will be used if found. If not found, then the file <em class="file">~/.bucardorc</em> will be used. Finally, 
 the file /etc/bucardorc will be used if available. The format of the file is option = value, one per line. Any 
 line starting with a '#' will be skipped. Any values loaded from a bucardorc file will be overwritten by 
-command-line options.</p>
+command-line options. All bucardorc files can be ignored by supplying a <code>--no-bucardorc</code> argument. A specific 
+file can be forced with the <code>--bucardorc=file</code> option; if this option is set, bucardo_ctl will refuse to run 
+unless that file can be read.</p>
 <p>
 </p>
 <hr />
