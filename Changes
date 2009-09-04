@@ -1,5 +1,9 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
+4.1.0
+
+  - Add INSTALL_BUCARDODIR for quick and dirty 'make install' [GSM]
+
 4.0.0 September 2009
 
 New features:
