@@ -3340,9 +3340,10 @@ sub start_kid {
 
 		## If the error was because we could not serialize, maybe add a sleep time
 		my $gotosleep = 0;
-		if ($tstate eq '40001' or $sstate eq '40001') {
+		if (($tstate eq '40001' or $sstate eq '40001') and $config{kid_serial_sleep}) {
 			$gotosleep = $config{kid_serial_sleep};
 			$self->glog("Could not serialize, sleeping for $gotosleep seconds");
+			sleep $gotosleep;
 		}
 
 		## TODO: Decide if we want to do this, and make better decision rules for it
