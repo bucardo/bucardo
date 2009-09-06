@@ -3369,7 +3369,7 @@ sub start_kid {
 		elsif ($sstate eq '40P01') {
 			$msg .= $self->get_deadlock_details($sourcedbh, $msg);
 		}
-		elsif ($mstate eq '40P04') {
+		elsif ($mstate eq '40P01') { ## very unlikely
 			$msg .= $self->get_deadlock_details($maindbh, $msg);
 		}
 
