@@ -146,6 +146,7 @@ reason_file|bucardo.restart.reason.log|File to hold reasons for stopping and sta
 stats_script_url|http://www.bucardo.org/|Location of the stats script
 stopfile|fullstopbucardo|Name of the semaphore file used to stop Bucardo processes
 syslog_facility|LOG_LOCAL1|Which syslog facility level to use
+autosync_ddl|newcol|Which DDL changing conditions do we try to remedy automatically?
 upsert_attempts|3|How many times do we try out the upsert loop?
 \.
 
