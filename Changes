@@ -19,6 +19,8 @@ New features:
     and kids after a certain number of kicks or time. [Josh Tolley]
     Thanks to Backcountry.com.
 
+  - Allow replication of sequences. [GSM]
+
   - Add the bucardo_custom_trigger table, which allows tight control of exactly 
     what items in a table will be replicated. [Ben Allen]
 
@@ -27,7 +29,7 @@ New features:
 
   - Add more bucardo_ctl actions: install, reload, validate, restart, update [GSM]
 
-  - Allow adding of all tables in a database at once via bucardo_ctl [GSM]
+  - Allow adding of all tables and sequences in a database at once via bucardo_ctl [GSM]
 
   - Add in bucardo_compress_delta function, to remove duplicate rows from 
     the bucardo_delta table. [GSM]
