@@ -2806,6 +2806,14 @@ sub add_all_goats {
 	## --exclude-table or -t: exclude these tables
 	## --herd: name of the herd to add new tables to
 
+	## Transform command-line args to traditional format
+	## e.g. db=foo becomes the equivalent of --db=foo
+	for my $noun (@nouns) {
+		if ($noun =~ /(\w+)=(\w+)/) {
+			$bcargs->{$1} = $2;
+		}
+	}
+
 	## Grab the list of databases. If none, cowardly refuse to continue
 	my $dbs = get_dbs();
 	if (! keys %$dbs) {
