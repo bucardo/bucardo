@@ -3420,6 +3420,7 @@ sub start_kid {
 		$finaldbh->commit();
 		$finaldbh->disconnect();
 
+		## Only done from serialize at the moment
 		sleep $gotosleep if $gotosleep;
 
 		## If a clean exit was requested, exit right now
