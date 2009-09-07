@@ -430,6 +430,9 @@ CREATE TABLE bucardo.audit_pid (
   death          TEXT            NULL
 );
 
+
+CREATE UNIQUE INDEX audit_pid_id ON bucardo.audit_pid(id);
+
 CREATE TABLE freezer.old_audit_pid AS SELECT * FROM audit_pid LIMIT 0;
 
 --
