@@ -752,18 +752,24 @@ sub start_mcp {
 		$self->reload_mcp();
 	};
 
-	## Enter ourself into the audit_pid file (if config{audit_pid} is set)
+	## Let others know we're here
 	my $mcpdbh = $self->{masterdbh};
-	my $synclist;
-	for (sort keys %{$self->{sync}}) {
-		$synclist .= "$_:$self->{sync}{$_}{mcp_active} | ";
-	}
-	if (! defined $synclist) {
-		die qq{The sync table appears to be empty!\n};
-	}
-	$synclist =~ s/\| $//;
+	$mcpdbh->do('NOTIFY bucardo_started')  or warn 'NOTIFY failed';
+	$mcpdbh->commit();
+
 	$self->{cdate} = scalar localtime;
+
+	## Enter ourself into the audit_pid file (if config{audit_pid} is set)
 	if ($config{audit_pid}) {
+		my $synclist;
+		for (sort keys %{$self->{sync}}) {
+			$synclist .= "$_:$self->{sync}{$_}{mcp_active} | ";
+		}
+		if (! defined $synclist) {
+			die qq{The sync table appears to be empty!\n};
+		}
+		$synclist =~ s/\| $//;
+
 		$SQL = q{SELECT nextval('audit_pid_id_seq')};
 		$self->{mcpauditid} = $mcpdbh->selectall_arrayref($SQL)->[0][0];
 		$SQL = q{INSERT INTO bucardo.audit_pid (type,id,familyid,sync,ppid,pid,birthdate) }.
@@ -771,8 +777,6 @@ sub start_mcp {
 		$sth = $mcpdbh->prepare($SQL);
 		$sth->execute($self->{mcpauditid},$self->{mcpauditid},$synclist,$self->{cdate});
 	}
-	$mcpdbh->do('NOTIFY bucardo_started')  or warn 'NOTIFY failed';
-	$mcpdbh->commit();
 
 	## Kick all syncs that may have sent a notice while we were down.
 	for my $syncname (keys %{$self->{sync}}) {
@@ -3242,7 +3246,7 @@ sub get_deadlock_details {
 	## Given a database handle, extract deadlock details from it
 	## Returns a detailed string, or an empty one
 
-	my ($self,$dldbh, $dlerr) = @_;
+	my ($self, $dldbh, $dlerr) = @_;
 	return '' unless $dlerr =~ /Process \d+ waits for /;
 	return '' unless defined $dldbh and $dldbh;
 
