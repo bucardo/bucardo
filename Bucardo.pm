@@ -171,6 +171,9 @@ sub new {
 		openlog 'Bucardo', 'pid nowait', $config{syslog_facility};
 	}
 
+	## Figure out if we are writing emails to a file
+	$self->{sendmail_file} = $ENV{BUCARDO_EMAIL_DEBUG_FILE} || $config{email_debug_file} || '';
+
 	## Where to store our PID:
 	$self->{pidfile} = "$config{piddir}/$config{pidfile}";
 
@@ -2293,7 +2296,7 @@ sub start_controller {
 		my $line = (caller)[2];
 
 		## Callers can prevent an email being sent by setting this before they die
-		if (! $self->{clean_exit}) {
+		if (! $self->{clean_exit} and ($self->{sendmail} or $self->{sendmail_file})) {
 			my $warn = $diemsg =~ /MCP request/ ? '' : 'Warning! ';
 			$self->glog(qq{${warn}Controller for "$syncname" was killed at line $line: $diemsg});
 			for (values %{$self->{dbs}}) {
@@ -3428,21 +3431,22 @@ sub start_kid {
 			exit 1;
 		}
 
-		## Send an email
-		my $warn = $msg =~ /CTL request/ ? '' : 'Warning! ';
-		my $line = (caller)[2];
-		$self->glog(qq{${warn}Child for sync "$syncname" ("$sourcedb" -> "$targetdb") was killed at line $line: $msg});
+		## Send an email as needed
+		if ($self->{sendmail} or $self->{sendmail_file}) {
+			my $warn = $msg =~ /CTL request/ ? '' : 'Warning! ';
+			my $line = (caller)[2];
+			$self->glog(qq{${warn}Child for sync "$syncname" ("$sourcedb" -> "$targetdb") was killed at line $line: $msg});
 
-		## Never display the database password
-		for (values %{$self->{dbs}}) {
-			$_->{dbpass} = '???';
-		}
-		$self->{dbpass} = '???';
+			## Never display the database password
+			for (values %{$self->{dbs}}) {
+				$_->{dbpass} = '???';
+			}
+			$self->{dbpass} = '???';
 
-		## Create the body of the message to be mailed
-		my $dump = Dumper $self;
-		## no critic (ProhibitHardTabs)
-		my $body = qq{
+			## Create the body of the message to be mailed
+			my $dump = Dumper $self;
+			## no critic (ProhibitHardTabs)
+			my $body = qq{
 			Kid $$ has been killed at line $line
 			Error: $msg
 			Possible suspects: $S.$T: $pkval
@@ -3455,24 +3459,25 @@ sub start_kid {
 			Rows set to aborted: $count
 			Version: $VERSION
 			Loops: $kidloop
-		};
-		## use critic
-		$body =~ s/^\s+//gsm;
-		my $moresub = '';
-		if ($msg =~ /Found stopfile/) {
-			$moresub = ' (stopfile)';
+			};
+			## use critic
+			$body =~ s/^\s+//gsm;
+			my $moresub = '';
+			if ($msg =~ /Found stopfile/) {
+				$moresub = ' (stopfile)';
+			}
+			elsif ($tstate eq '40001' or $sstate eq '40001') {
+				$moresub = ' (serialization)';
+			}
+			elsif ($mstate eq '40P04' or $sstate eq '40P04' or $tstate eq '40P04') {
+				$moresub = ' (deadlock)';
+			}
+			elsif ($msg =~ /could not connect/) {
+				$moresub = ' (no connection)';
+			}
+			my $subject = qq{Bucardo kid for "$syncname" killed on $shorthost$moresub};
+			$self->send_mail({ body => "$body\n", subject => $subject });
 		}
-		elsif ($tstate eq '40001' or $sstate eq '40001') {
-			$moresub = ' (serialization)';
-		}
-		elsif ($mstate eq '40P04' or $sstate eq '40P04' or $tstate eq '40P04') {
-			$moresub = ' (deadlock)';
-		}
-		elsif ($msg =~ /could not connect/) {
-			$moresub = ' (no connection)';
-		}
-		my $subject = qq{Bucardo kid for "$syncname" killed on $shorthost$moresub};
-		$self->send_mail({ body => "$body\n", subject => $subject });
 
 		exit 1;
 
@@ -5768,6 +5773,8 @@ sub send_mail {
 
 	my ($self,$arg) = @_;
 
+	return if ! $self->{sendmail} and ! $self->{sendmail_file};
+
 	## If 'default_email_from' is not set, we default to currentuser@currenthost
 	my $from = $config{default_email_from} || (getpwuid($>) . '@' . $hostname);
 
@@ -5807,12 +5814,11 @@ sub send_mail {
 		}
 	}
 
-	my $sendmail_file = $ENV{BUCARDO_EMAIL_DEBUG_FILE} || $config{email_debug_file} || '';
-	if ($sendmail_file) {
+	if ($self->{sendmail_file}) {
 		my $fh;
 		## This happens rare enough to not worry about caching the file handle
-		if (! open $fh, '>>', $sendmail_file) {
-			$self->glog(qq{Warning: Could not open sendmail file "$sendmail_file": $!\n});
+		if (! open $fh, '>>', $self->{sendmail_file}) {
+			$self->glog(qq{Warning: Could not open sendmail file "$self->{sendmail_file}": $!\n});
 			return;
 		}
 		my $now = scalar localtime;
@@ -5825,7 +5831,7 @@ Date: $now
 $arg->{body}
 
 };
-		close $fh or warn qq{Could not close "$sendmail_file": $!\n};
+		close $fh or warn qq{Could not close "$self->{sendmail_file}": $!\n};
 	}
 
 	return;
