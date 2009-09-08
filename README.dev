@@ -279,7 +279,11 @@ Make sure that anything new has been documented properly, usually as pod inside 
 A good way to do this is to use the tests in 99-pod.t - they will run automatically as 
 part of the test suite if the right modules are installed.
 
+* Make sure the wiki is updated as well.
+
 * Run "perl Makefile.PL"
+
+* Run "make html". This will create the html docs for Bucardo.pm and bucardo_ctl.
 
 * Run "make dist". Double check that the tarball created has the correct version name.
 
@@ -287,7 +291,7 @@ part of the test suite if the right modules are installed.
 but not inside the MANIFEST file (or the MANIFEST.SKIP file). If there are any new files here 
 that should be part of the distribution, add them to the MANIFEST file, commit your changes, 
 and then re-run. Note that files ending in ".tmp" are currently skipped, so this is a good 
-extension for any miscellaneous files you have that use often (e.g. libpq-fe.h.tmp)
+extension for any miscellaneous files you have that use often.
 
 * Run "make skipcheck". This will show you a list of files that will not be packed into the 
 release tarball. Make sure there is nothing important here.
@@ -295,23 +299,15 @@ release tarball. Make sure there is nothing important here.
 * Run "make disttest". This unpacks the tarball, then runs "make" and "make test" on it.
 You may also want to remove the directory it creates later by using "make realclean"
 
-* Run "make manifypods". This will create the html docs for Bucardo.pm and bucardo_ctl.
-
 * Update the SIGNATURE file with Module::Signature. This should be done as the 
-very last step.
+very last step. Running "make sifgnature" will do the signing for you.
 
 * Create a tag for the new version with "git tag".
   Example: git tag -u 14964ac8 -m "Version 4.0.1" 4.0.1
 
-* Make checksums
-
-Generate md5 and sha1 checksums of the tarball. Include this in your emails.
-
-* Create a new tarball, containing all three modules: Bucardo, DBIx::Safe, and Test::Dynamic.
+* Create a new tarball with "make dist". Sign it: "gpg -ba <name>"
 
 * Announce to the bucardo-announce list.
-
-* Announce to the pgsql-general list.
 
 * Post to pgsql-announce if this is a major or important version.
 
@@ -331,6 +327,14 @@ and adding it in. If not, bug them.
 http://www.postgresql.org/community/weeklynews/
 
 * Tell Greg to post on PlanetPostgresql.
+
+* On the bucardo.org server:
+
+Put the new tarball and tarball.asc file in place
+Update the download page
+Update any pages that refer to the latest version
+Update the latest_release.txt file
+
 
 =====================
 == Tips and Tricks ==
