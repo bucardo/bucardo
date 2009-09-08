@@ -48,7 +48,7 @@
 </p>
 <hr />
 <h1><a name="version">VERSION</a></h1>
-<p>This document describes version 4.0.0 of bucardo_ctl</p>
+<p>This document describes version 4.0.1 of bucardo_ctl</p>
 <p>
 </p>
 <hr />
@@ -60,15 +60,19 @@
 <pre>
   ./bucardo_ctl add sync testsync source=herd1 type=pushdelta targetdb=B</pre>
 <pre>
-  ./bucardo_ctl add database newdb name=internal_name port=5432 host=myserver user=postgres</pre>
+  ./bucardo_ctl add sync testsync source=herd1 type=pushdelta targetdb=B tables=tab1,tab2,tab3</pre>
 <pre>
-  ./bucardo_ctl add table some_schema.some_table db=internal_db_name ping=bool standard_conflict=x herd=x</pre>
+  ./bucardo_ctl add database newdb name=internal_name port=5432 host=myserver</pre>
 <pre>
-  ./bucardo_ctl add herd newherd</pre>
+  ./bucardo_ctl add all tables db=foo</pre>
+<pre>
+  ./bucardo_ctl add all sequences db=foo</pre>
+<pre>
+  ./bucardo_ctl add herd newherd table1 table2 table3 ...</pre>
 <pre>
   ./bucardo_ctl add dbgroup name db1 db2 db3 ...</pre>
 <pre>
-  ./bucardo_ctl alter sync syncname targetgroup=foo targetdb=foo</pre>
+  ./bucardo_ctl alter sync syncname targetgroup=foo targetdb=foo onetimecopy=2</pre>
 <pre>
   ./bucardo_ctl start &quot;Starting up - Greg&quot;</pre>
 <pre>
@@ -82,7 +86,7 @@
 <pre>
   ./bucardo_ctl kick sync1 sync2</pre>
 <pre>
-  ./bucardo_ctl kick sync1 0 --retry=10</pre>
+  ./bucardo_ctl kick sync1 0</pre>
 <pre>
   ./bucardo_ctl reload_config</pre>
 <pre>
@@ -103,7 +107,8 @@
 <h1><a name="description">DESCRIPTION</a></h1>
 <p>The bucardo_ctl script is the main interaction to a running Bucardo instance. It can 
 be used to start and stop Bucardo, add new items, kick syncs, and even install and 
-upgrade Bucardo itself.</p>
+upgrade Bucardo itself. For more complete documentation, please view the wiki at:</p>
+<p><a href="http://bucardo.org/">http://bucardo.org/</a></p>
 <p>
 </p>
 <hr />
