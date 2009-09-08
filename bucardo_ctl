@@ -4044,15 +4044,19 @@ This document describes version 4.0.1 of bucardo_ctl
 
   ./bucardo_ctl add sync testsync source=herd1 type=pushdelta targetdb=B
 
-  ./bucardo_ctl add database newdb name=internal_name port=5432 host=myserver user=postgres
+  ./bucardo_ctl add sync testsync source=herd1 type=pushdelta targetdb=B tables=tab1,tab2,tab3
 
-  ./bucardo_ctl add table some_schema.some_table db=internal_db_name ping=bool standard_conflict=x herd=x
+  ./bucardo_ctl add database newdb name=internal_name port=5432 host=myserver
 
-  ./bucardo_ctl add herd newherd
+  ./bucardo_ctl add all tables db=foo
+
+  ./bucardo_ctl add all sequences db=foo
+
+  ./bucardo_ctl add herd newherd table1 table2 table3 ...
 
   ./bucardo_ctl add dbgroup name db1 db2 db3 ...
 
-  ./bucardo_ctl alter sync syncname targetgroup=foo targetdb=foo
+  ./bucardo_ctl alter sync syncname targetgroup=foo targetdb=foo onetimecopy=2
 
   ./bucardo_ctl start "Starting up - Greg"
 
@@ -4066,7 +4070,7 @@ This document describes version 4.0.1 of bucardo_ctl
 
   ./bucardo_ctl kick sync1 sync2
 
-  ./bucardo_ctl kick sync1 0 --retry=10
+  ./bucardo_ctl kick sync1 0
 
   ./bucardo_ctl reload_config
 
@@ -4087,7 +4091,9 @@ This document describes version 4.0.1 of bucardo_ctl
 
 The bucardo_ctl script is the main interaction to a running Bucardo instance. It can 
 be used to start and stop Bucardo, add new items, kick syncs, and even install and 
-upgrade Bucardo itself.
+upgrade Bucardo itself. For more complete documentation, please view the wiki at:
+
+http://bucardo.org/
 
 =head1 COMMANDS
 
