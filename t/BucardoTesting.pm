@@ -901,6 +901,7 @@ sub add_bucardo_schema_to_database {
 	$sth = $dbh->prepare('UPDATE bucardo.bucardo_config SET value = $2 WHERE setting = $1');
 	$count = $sth->execute('piddir' => $PIDDIR);
 	$count = $sth->execute('reason_file' => "$PIDDIR/reason");
+	$count = $sth->execute('audit_pid' => 1);
 	$dbh->commit();
 
 } ## end of add_bucardo_schema_to_database
