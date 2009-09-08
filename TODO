@@ -3,6 +3,8 @@ TODO list for Bucardo
 
 These range the gamut from wildly speculative ideas to must-have features.
 
+- Fix problem where plperl does not exist, but 'bucardo_ctl install' 
+  happily reports everything as good.
 - Have Bucardo do the cleanups based on PG version, rather than cronjobs
   (e.g. vacuum pg_listener, purge_bucardo_delta)
 - Implement "log shipping" for pushdelta slaves. This could be done by creating 
