@@ -301,6 +301,7 @@ You may also want to remove the directory it creates later by using "make realcl
 very last step.
 
 * Create a tag for the new version with "git tag".
+  Example: git tag -u 14964ac8 -m "Version 4.0.1" 4.0.1
 
 * Make checksums
 
