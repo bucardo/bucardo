@@ -159,6 +159,7 @@ subdirectory
 Backcountry
 Bahlai
 Boes
+BUCARDODIR
 Deckelmann
 Farmawan
 FreeBSD
@@ -265,18 +266,22 @@ PostgreSQL
 README
 TODO
 YAML
+addtable
 bc
 blib
 checksums
 cperl
 ctl
 dbdpg
+ddl
 dev
 distcheck
+distclean
 disttest
 emacs
 fe
 filename
+gitignore
 html
 http
 libpq
@@ -284,6 +289,9 @@ makefile
 manifypods
 md
 mis
+multicolpk
+multicolpushdelta
+multicolswap
 nosetup
 perlcritic
 perlcriticrc
@@ -297,7 +305,9 @@ submitnews
 teardown
 testname
 tmp
+uniqueconstraint
 weeklynews
+wildkick
 www
 yaml
 yml
@@ -307,8 +317,12 @@ yml
 conf
 config
 ctl
+freenode
 http
+IRC
+irc
 syslog
+wiki
 
 ## Bucardo.pm
 
