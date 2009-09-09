@@ -159,17 +159,20 @@ subdirectory
 Backcountry
 Bahlai
 Boes
+BSD's
 BUCARDODIR
 Deckelmann
 Farmawan
 FreeBSD
 GSM
 Gugic
+Kebrt
 PID
 PIDs
 SMTP
 Sendmail
 Tolley
+Vilem
 Wendt
 Yan
 attnums
@@ -219,8 +222,10 @@ onetimecopy
 orderable
 pid
 pkey
+plperl
 regex
 timeslices
+wildcard
 
 ## bucardo_ctl
 
@@ -267,6 +272,8 @@ README
 TODO
 YAML
 addtable
+asc
+ba
 bc
 blib
 checksums
@@ -282,6 +289,7 @@ emacs
 fe
 filename
 gitignore
+gpg
 html
 http
 libpq
@@ -305,6 +313,7 @@ submitnews
 teardown
 testname
 tmp
+txt
 uniqueconstraint
 weeklynews
 wildkick

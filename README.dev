@@ -300,7 +300,7 @@ release tarball. Make sure there is nothing important here.
 You may also want to remove the directory it creates later by using "make realclean"
 
 * Update the SIGNATURE file with Module::Signature. This should be done as the 
-very last step. Running "make sifgnature" will do the signing for you.
+very last step. Running "make signature" will do the signing for you.
 
 * Create a tag for the new version with "git tag".
   Example: git tag -u 14964ac8 -m "Version 4.0.1" 4.0.1
