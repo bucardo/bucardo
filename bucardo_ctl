@@ -229,11 +229,28 @@ SYNCMATCH: for my $sync (@nouns) {
 		next SYNCMATCH;
 	}
     if ($sync =~ /%/) {
-		my $tmp = $dbh->selectall_arrayref(qq{SELECT name FROM sync WHERE name LIKE '$sync'});
-        if ($#{ $tmp } >= 0) {
-            push @syncs, (map { $_->[0] } @$tmp);
-            next SYNCMATCH;
-        }
+		$SQL = qq{SELECT name FROM sync WHERE name LIKE '$sync'};
+		my $tmp = $dbh->selectall_arrayref($SQL);
+		push @syncs, (map { $_->[0] } @$tmp);
+		next SYNCMATCH;
+    }
+    if ($sync =~ /^\*(\w+)\*$/) {
+		$SQL = qq{SELECT name FROM sync WHERE name ~ '$1'};
+		my $tmp = $dbh->selectall_arrayref($SQL);
+		push @syncs => map { $_->[0] } @$tmp;
+		next SYNCMATCH;
+    }
+    if ($sync =~ /^\*(\w+)$/) {
+		$SQL = qq{SELECT name FROM sync WHERE name ~ '$1\$'};
+		my $tmp = $dbh->selectall_arrayref($SQL);
+		push @syncs => map { $_->[0] } @$tmp;
+		next SYNCMATCH;
+    }
+    if ($sync =~ /^(\w+)\*$/) {
+		$SQL = qq{SELECT name FROM sync WHERE name ~ '^$1'};
+		my $tmp = $dbh->selectall_arrayref($SQL);
+		push @syncs => map { $_->[0] } @$tmp;
+		next SYNCMATCH;
     }
 	next if $sync eq 'sync';
 	if (! exists $syncs->{$sync}) {
