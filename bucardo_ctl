@@ -3862,6 +3862,7 @@ sub install {
 	my $host = $bcargs->{dbhost} || $ENV{DBHOST} || '<none>';
 	my $port = $bcargs->{dbport} || $ENV{DBPORT} || 5432;
 	my $user = $ENV{DBUSER} || 'postgres';
+    my $dbname = $bcargs->{dbname} || $ENV{DBNAME} || 'postgres';
 
 	## Make sure the bucardo.schema file is available, and extract some config items
 	my ($fh, $schema_file) = find_bucardo_schema();
@@ -3890,7 +3891,8 @@ sub install {
 		print "1. Host:          $host\n";
 		print "2. Port:          $port\n";
 		print "3. User:          $user\n";
-		print "4. PID directory: $piddir\n";
+		print "4. Database:      $dbname\n";
+		print "5. PID directory: $piddir\n";
 
 		print 'Enter a number to change it, P to proceed, or Q to quit: ';
 
@@ -3941,6 +3943,20 @@ sub install {
 			}
 			elsif (4 == $num) {
 				if (!length $new) {
+					print 'Change the database name to: ';
+					$new = <>;
+					print "\n";
+					chomp $new;
+				}
+				if (! length $new) {
+					print "-->Sorry, you must specify a database name\n\n";
+					redo GOOEY;
+				}
+				$dbname = $new;
+				print "Changed database name to: $dbname\n";
+			}
+			elsif (5 == $num) {
+				if (!length $new) {
 					print 'Change the PID directory to: ';
 					$new = <>;
 					print "\n";
@@ -3980,7 +3996,7 @@ sub install {
 
 	}
 
-	my $PSQL = "psql -p $port -U $user -c 'SELECT version()'";
+	my $PSQL = "psql -p $port -U $user -d $dbname -c 'SELECT version()'";
 	$host !~ /</ and $PSQL .= " --host=$host";
 
 	my $COM = "$PSQL -c 'SELECT version()'";
@@ -4127,11 +4143,13 @@ line:
 
 =over 2
 
-=item --dbuser
+=item --dbuser (defaults to postgres)
 
-=item --dbport
+=item --dbname (defaults to postgres)
 
-=item --piddir
+=item --dbport (defaults to 5432)
+
+=item --piddir (defaults to /var/run/bucardo/)
 
 =back
 
