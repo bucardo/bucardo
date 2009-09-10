@@ -2079,10 +2079,10 @@ sub start_mcp {
 		## Let any listeners know we are done
 		$maindbh->do(qq{NOTIFY "bucardo_deactivated_sync_$syncname"}) or warn 'NOTIFY failed';
 		## We don't need to listen for deactivation or kick requests
-		$maindbh->do("UNLISTEN bucardo_deactivate_sync_$syncname");
-		$maindbh->do("UNLISTEN bucardo_kick_sync_$syncname");
+		$maindbh->do(qq{UNLISTEN "bucardo_deactivate_sync_$syncname"});
+		$maindbh->do(qq{UNLISTEN "bucardo_kick_sync_$syncname"});
 		## But we do need to listen for an activation request
-		$maindbh->do("LISTEN bucardo_activate_sync_$syncname");
+		$maindbh->do(qq{LISTEN "bucardo_activate_sync_$syncname"});
 		$maindbh->commit();
 
 		## If we are listening for kicks on the source, stop doing so
