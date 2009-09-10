@@ -2030,8 +2030,11 @@ sub remove_item {
 	elsif ($type eq 'herd') {
 		remove_herd($type);
 	}
+	elsif ($type eq 'dbgroup') {
+		remove_dbgroup($type);
+	}
 	else {
-		warn "Cannot add: unknown type\n";
+		warn "Cannot delete: unknown type\n";
 	}
 	exit 1;
 
