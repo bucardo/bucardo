@@ -1706,8 +1706,9 @@ sub list_herds {
     ## Figure out the spacing
 	my ($namelen,$goatlen) = (5,1);
 	for my $row (@$herdinfo) {
-		my $num = @{$herdmap->{$row->{name}}};
 		$namelen = length $row->{name} if length $row->{name} > $namelen;
+		next if ! exists $herdmap->{$row->{name}};
+		my $num = @{$herdmap->{$row->{name}}};
 		$goatlen = length $num if length $num > $goatlen;
 	}
 
@@ -1725,7 +1726,7 @@ sub list_herds {
         }
 		printf "Herd: %-*s   Goats: %*d%s\n",
 			$namelen, $hname,
-			$goatlen, scalar @{$herdmap->{$hname}},
+			$goatlen, exists $herdmap->{$hname} ? scalar @{$herdmap->{$hname}} : 0,
             $showsyncs ? "  Syncs: $showsyncs" : '';
         if ($VERBOSE >= 1) {
             for my $name (@{$herdmap->{$hname}}) {
