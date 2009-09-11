@@ -1780,8 +1780,14 @@ sub list_syncs {
 	## Show information about all or some subset of the 'sync' table
 
 	## If any nouns left, treat as wildcards
+	## Strip out special words from the nouns list as modifiers
+	my @mod;
 	my $WHERE = '';
 	for my $term (@nouns) {
+		if ($term =~ /^swap|pushdelta|fullcopy$/i) {
+			push @mod => lc $term;
+			next;
+		}
 		my $wild = $term =~ s/[\*\%]//g ? '~' : '=';
 		$WHERE .= sprintf q{%s lower(name) %s %s },
 			$WHERE ? 'OR' : 'WHERE',
@@ -1790,12 +1796,22 @@ sub list_syncs {
 	}
 
 	$SQL = "SELECT * FROM sync $WHERE ORDER BY name";
+	my $mod = join ' OR ' => map { "synctype = '$_'" } @mod;
+	if ($mod) {
+		if ($SQL =~ /WHERE /) {
+			$SQL =~ s/WHERE (.+)\s+ORDER BY/WHERE ($mod) AND ($1) ORDER BY/;
+		}
+		else {
+			$SQL =~ s/sync/sync WHERE $mod/;
+		}
+	}
+
 	$sth = $dbh->prepare($SQL);
 	$count = $sth->execute();
 	if ($count < 1) {
 		$sth->finish();
 		printf "There are no%s entries in the 'sync' table.\n",
-			$WHERE ? ' matching' : '';
+			$SQL =~ /WHERE/ ? ' matching' : '';
 		exit 1;
 	}
 
