@@ -71,7 +71,7 @@ for my $arg (@ARGV) {
 	if ($arg =~ /--bucardorc=(.+)/) {
 		$bcargs->{'bucardorc'} = $1;
 	}
-	if ($arg =~ /^\-+\?$/) {
+	if ($arg =~ /^-+\?$/) {
 		help();
 	}
 }
@@ -276,10 +276,10 @@ if ($gotall) {
 	my @typelimit;
 	my $active = 0;
 	for my $v (@allvars) {
-		if ($v =~ /^copy|fullcopy$/i) {
+		if ($v =~ /^(?:copy|fullcopy)$/i) {
 			push @typelimit => 'fullcopy';
 		}
-		elsif ($v =~ /^delta|pushdelta$/i) {
+		elsif ($v =~ /^(?:delta|pushdelta)$/i) {
 			push @typelimit => 'pushdelta';
 		}
 		elsif ($v =~ /^swap$/i) {
@@ -1834,11 +1834,11 @@ sub list_syncs {
 	my @mod;
 	my $WHERE = '';
 	for my $term (@nouns) {
-		if ($term =~ /^swap|pushdelta|fullcopy$/i) {
+		if ($term =~ /^(?:swap|pushdelta|fullcopy)$/i) {
 			push @mod => lc $term;
 			next;
 		}
-		my $wild = $term =~ s/[\*\%]//g ? '~' : '=';
+		my $wild = $term =~ s/[*%]//g ? '~' : '=';
 		$WHERE .= sprintf q{%s lower(name) %s %s },
 			$WHERE ? 'OR' : 'WHERE',
 			$wild,
@@ -3960,7 +3960,7 @@ sub add_dbgroup {
 		my $changepri = $dbh->prepare($SQL);
 		for my $db (@nouns) {
 			my $newpri  = 1;
-			if ($db =~ s/\=(\d+)//) { $newpri = $1; }
+			if ($db =~ s/=(\d+)//) { $newpri = $1; }
 			$count = $gotdb->execute($db);
 			$gotdb->finish();
 			if ($count != 1) {
