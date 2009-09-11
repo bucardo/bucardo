@@ -223,11 +223,24 @@ update()        if $verb eq 'update';
 my $adverb;
 my $syncs = get_syncs();
 my @syncs;
+my $gotall = 0;
+my @allvars;
 SYNCMATCH: for my $sync (@nouns) {
 	if ($sync =~ /^\d+$/) {
 		$adverb = $sync;
 		next SYNCMATCH;
 	}
+
+	if ($sync eq 'all') { ## All proceeding nouns are treated special!
+		$gotall = 1;
+		next SYNCMATCH;
+	}
+
+	if ($gotall) {
+		push @allvars => $sync;
+		next;
+	}
+
     if ($sync =~ /%/) {
 		$SQL = qq{SELECT name FROM sync WHERE name LIKE '$sync'};
 		my $tmp = $dbh->selectall_arrayref($SQL);
@@ -258,6 +271,43 @@ SYNCMATCH: for my $sync (@nouns) {
 	}
 	push @syncs, $sync;
 }
+
+if ($gotall) {
+	my @typelimit;
+	my $active = 0;
+	for my $v (@allvars) {
+		if ($v =~ /^copy|fullcopy$/i) {
+			push @typelimit => 'fullcopy';
+		}
+		elsif ($v =~ /^delta|pushdelta$/i) {
+			push @typelimit => 'pushdelta';
+		}
+		elsif ($v =~ /^swap$/i) {
+			push @typelimit => 'swap';
+		}
+		elsif ($v =~ /^active$/i) {
+			$active = 1;
+		}
+		else {
+			die "Usage: ... all [copy|delta|swap]\n";
+		}
+	}
+	my $WHERE = '';
+	if (@typelimit) {
+		$WHERE = 'WHERE ' . (join ' OR ' => map { "synctype = '$_'" } @typelimit);
+	}
+	if ($active) {
+		$WHERE
+			? ($WHERE =~ s/WHERE /WHERE status = 'active' AND /)
+			: ($WHERE = q{WHERE status = 'active'});
+	}
+	$SQL = "SELECT name FROM sync $WHERE ORDER BY priority DESC, name ASC";
+	$sth = $dbh->prepare($SQL);
+	undef @syncs;
+	my $tmp = $dbh->selectall_arrayref($SQL);
+	push @syncs => map { $_->[0] } @$tmp;
+}
+
 vate_sync() if $verb eq 'activate' or $verb eq 'deactivate';
 kick() if $verb eq 'kick';
 
