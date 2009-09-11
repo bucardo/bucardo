@@ -815,6 +815,7 @@ sub update {
 	## Can be sync, dbgroup, table, schema, or db
 	my %change;
 	for my $arg (@nouns) {
+		next if $arg eq 'set';
 		$arg =~ /(.+)=(.+)/ or die "Invalid argument: must be of form name=value\n";
 		my ($n,$v) = (lc $1,$2);
 		$n =~ /^\w+$/ or die "Invalid name\n";
