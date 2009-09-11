@@ -2234,7 +2234,9 @@ sub constraint_definition {
 
 	$def =~ s/\((\(.+\))\)/$1/;
 	$def =~ s/(\w+) = ANY \(ARRAY\[(.+)\]\)/$1 IN ($2)/;
+	$def =~ s/<> ALL \(ARRAY\[(.+)\]\)/NOT IN ($1)/;
 	$def =~ s/::text//g;
+	$def =~ s/(\w+) ~ '/$1 ~ E'/g;
 
 	return $def;
 
@@ -2627,6 +2629,7 @@ sub upgrade {
 	my ($fname,$args,$fbody) = ('','','');
 	my ($tname,$tbody) = ('','');
 	my ($tablename,$tablebody) = ('','');
+	my ($altername,$alterbody,$alterstat) = ('','','');
 	seek $fh, 0, 0;
 	while (<$fh>) {
 		if ($fbody) {
@@ -2662,6 +2665,18 @@ sub upgrade {
 			}
 			next;
 		}
+		if ($altername) {
+			$alterbody =~ s/\s+$//;
+			$alterbody ? s/^\s+/ / : s/^\s+//;
+			s/\s+$/ /;
+			$alterbody .= $_;
+			$alterstat .= $_;
+			if ($alterbody =~ s/;\s*$//) {
+				push @clist, [$altername->[0], $altername->[1], $alterbody, $alterstat];
+				$alterbody = $altername = $alterstat = '';
+			}
+			next;
+		}
 		if (/^CREATE (?:OR REPLACE )?FUNCTION\s+bucardo\.(\S+)/) {
 			$fname = $1;
 			$fbody .= $_;
@@ -2684,8 +2699,10 @@ sub upgrade {
 			push @ilist, [$1, $2, $_];
 			next;
 		}
-		if (/^ALTER TABLE bucardo\.(\S+) ADD CONSTRAINT (\S+)/) {
-			push @clist, [$1, $2, $_];
+		if (/^ALTER TABLE bucardo\.(\S+)\s+ADD CONSTRAINT\s*(\S+)\s*(\S*.*)/) {
+			$altername = [$1,$2];
+			$alterbody = $3 || '';
+			$alterstat = $_;
 			next;
 		}
 		if (/^CREATE SEQUENCE bucardo\.(\w+)/) {
@@ -2771,11 +2788,27 @@ sub upgrade {
 
 	## Check for any added constraints
 	for my $row (@clist) {
-		my ($name,$cname,$body) = @$row;
-		next if constraint_exists('bucardo', $name, $cname);
-		upgrade_and_log($body);
-		clog "Created constraint $cname on $name";
-		$changes++;
+		my ($tname,$cname,$cdef,$body) = @$row;
+		if (! constraint_exists('bucardo', $tname, $cname)) {
+			upgrade_and_log($body);
+			clog "Created constraint $cname on $tname";
+			$changes++;
+			next;
+		}
+
+		## Clean up the constraint to make it match what comes back from the database:
+		$cdef =~ s/;$//;
+		$cdef =~ s/','/', '/g;
+		if ($cdef =~ s/([^)]) (OR|AND) (\w)/$1) $2 ($3/g) {
+			$cdef =~ s/CHECK (.+)/CHECK ($1)/;
+		}
+		my $condef = constraint_definition($cname);
+		if ($condef ne $cdef) {
+			upgrade_and_log("ALTER TABLE $tname DROP CONSTRAINT $cname");
+			upgrade_and_log("ALTER TABLE $tname ADD CONSTRAINT $cname $cdef");
+			clog "Altered constraint $cname on $tname";
+			$changes++;
+		}
 	}
 
 	## Check that any bare constraints (e.g. foreign keys) are unchanged
