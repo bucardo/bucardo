@@ -561,6 +561,7 @@ sub update {
 
 	## Update some object in the database
 	## e.g. bucardo_ctl update sync foobar onetimecopy=2
+	## e.g. bucardo_ctl update sync add tab1
 
 	my $usage = "Usage: update <item> <name> <name=value>...\n";
 
@@ -569,36 +570,62 @@ sub update {
 	@nouns or die $usage;
 
 	my $info;
-	if ('sync' eq $item) {
-		$SQL = 'SELECT * FROM sync WHERE name = ?';
+	my $lookupcol = 'name';
+	my $tabname;
+	if ($item =~ /^syn/i) {
+		$tabname = $item = 'sync';
 	}
-	elsif ('goat' eq $item) {
-		$SQL = 'SELECT * FROM goat WHERE id = ?';
-		## Later on, allow use of name and schema.name
+	elsif ($item =~ /^tab/i or $item =~ /^seq/i) {
+		$tabname = 'goat';
+		$lookupcol = 'tablename';
 	}
-	elsif ('dbgroup' eq $item) {
-		$SQL = 'SELECT * FROM dbgroup WHERE name = ?';
+	elsif ($item =~ /^dbg/i) {
+		$tabname = $item = 'dbgroup';
+	}
+	elsif ($item =~ /^db/i) {
+		$tabname = $item = 'db';
 	}
 	else {
-		die "Invalid item: must be sync or dbgroup\n";
+		die "Invalid item: must be sync, table, sequence, db, or dbgroup\n";
 	}
 
-	if ($name =~ s/\*//) {
-		$SQL =~ s/=/~/;
+	$SQL = "SELECT * FROM $tabname WHERE $lookupcol = ?";
+	if ($tabname eq 'goat' and $name =~ /(.+)\.(.+)/) {
+		my ($sname,$tname) = ($1,$2);
+		$SQL = 'SELECT * FROM goat WHERE schemaname=? AND tablename=?';
+		if ($sname =~ s/\*//) {
+			$SQL =~ s/=/~/;
+		}
+		if ($tname =~ s/\*//) {
+			$SQL =~ s/=\?$/~?/;
+		}
+		$sth = $dbh->prepare($SQL);
+		$count = $sth->execute($sname,$tname);
 	}
-	$sth = $dbh->prepare($SQL);
-	$count = $sth->execute($name);
+	else {
+		if ($name =~ s/\*//) {
+			$SQL =~ s/=/~/;
+		}
+		$sth = $dbh->prepare($SQL);
+		$count = $sth->execute($name);
+	}
+
 	if ($count < 1) {
 		$sth->finish();
 		die qq{No matches found for $item "$name"\n};
 	}
+
+	my $pkcol = $tabname eq 'goat' ? 'id' : 'name';
+
 	$dbh->{pg_bool_tf} = 1;
-	$info = $sth->fetchall_arrayref({})->[0];
+	$info = $sth->fetchall_arrayref({});
 
 	my $validate_msg = 0;
 
 	if ('sync' eq $item and ($nouns[0] eq 'add' or $nouns[0] eq 'remove')) {
 		my $v = shift @nouns;
+		die "Can only $v to one sync at a time\n" if @$info > 1;
+		$info = $info->[0];
 		my $miniusage = "Usage: update sync $name $v table|sequence <name(s)>\n";
 		my $thing = shift @nouns or die $miniusage;
 		@nouns or die $miniusage;
@@ -618,16 +645,16 @@ sub update {
 			my $find;
 			if ($t =~ s/(\w+)\.//) {
 				my $schema = $1;
-				$SQL = 'SELECT * FROM goat WHERE tablename = ? AND schemaname = ?';
+				$SQL = 'SELECT * FROM goat WHERE tablename = ? AND schemaname = ? AND reltype = ?';
 				$wild and $SQL =~ s/=/~/;
 				$find = $dbh->prepare_cached($SQL);
-				$count = $find->execute($wild ? "^$t" : $t, $schema);
+				$count = $find->execute($wild ? "^$t" : $t, $schema, $thing);
 			}
 			else {
-				$SQL = 'SELECT * FROM goat WHERE tablename = ?';
+				$SQL = 'SELECT * FROM goat WHERE tablename = ? AND reltype = ?';
 				$wild and $SQL =~ s/=/~/;
 				$find = $dbh->prepare($SQL);
-				$count = $find->execute($wild ? "^$t" : $t);
+				$count = $find->execute($wild ? "^$t" : $t, $thing);
 			}
 			if ($count < 1) {
 				die qq{Unknown table: $tab\n};
@@ -677,6 +704,8 @@ sub update {
 
 	if ('dbgroup' eq $item and ($nouns[0] eq 'add' or $nouns[0] eq 'remove')) {
 		my $v = shift @nouns;
+		die "Can only $v to one dbgroup at a time\n" if @$info > 1;
+		$info = $info->[0];
 		my $miniusage = "Usage: update dbgroup $name $v <dbname(s)>\n";
 		@nouns or die $miniusage;
 
@@ -732,32 +761,37 @@ sub update {
 		exit 0;
 	}
 
-
 	## Process each change in turn
+	## Can be sync, dbgroup, table, schema, or db
 	my %change;
 	for my $arg (@nouns) {
 		$arg =~ /(.+)=(.+)/ or die "Invalid argument: must be of form name=value\n";
 		my ($n,$v) = (lc $1,$2);
 		$n =~ /^\w+$/ or die "Invalid name\n";
-		my $localname = $item eq 'sync' ? $info->{name} : "$info->{schemaname}.$info->{tablename}";
-		my $localid = $item eq 'sync' ? $info->{name} : $info->{id};
-		if (! exists $info->{$n}) {
-			die qq{Sorry, cannot change "$n" for $item "$localname"\n};
+		for my $row (@$info) {
+			my $localname = $tabname eq 'goat' ? "$row->{schemaname}.$row->{tablename}" : $row->{name};
+			my $localid = $tabname eq 'goat' ? $row->{id} : $row->{name};
+			if (! exists $row->{$n}) {
+				die qq{Sorry, cannot change "$n" for $item "$localname"\n};
+			}
+			$SQL = "UPDATE $tabname SET $n = ? WHERE $pkcol = ?";
+
+			## Only one of targetdb and targetgroup can be set, no NULL the other one
+			if ($n eq 'targetgroup') {
+				$SQL =~ s/SET/SET targetdb=NULL,/;
+			}
+			elsif ($n eq 'targetdb') {
+				$SQL =~ s/SET/SET targetgroup=NULL,/;
+			}
+
+			$sth = $dbh->prepare($SQL);
+			if ($DEBUG) {
+				warn "SQL: $SQL\n";
+				warn "Args: $v, $localid\n";
+			}
+			$sth->execute($v, $localid);
+			push @{$change{$localname}} => [$n, $row->{$n}, $v];
 		}
-		$SQL = "UPDATE sync SET $n = ? WHERE name = ?";
-		if ($n eq 'targetgroup') {
-			$SQL =~ s/SET/SET targetdb=NULL,/;
-		}
-		elsif ($n eq 'targetdb') {
-			$SQL =~ s/SET/SET targetgroup=NULL,/;
-		}
-		$sth = $dbh->prepare($SQL);
-		if ($DEBUG) {
-			warn "SQL: $SQL\n";
-			warn "Args: $v, $localid\n";
-		}
-		$sth->execute($v, $localid);
-		push @{$change{$localname}} => [$n, $info->{$n}, $v];
 	}
 
 	if (! keys %change) {
@@ -1748,9 +1782,10 @@ sub list_syncs {
 	## If any nouns left, treat as wildcards
 	my $WHERE = '';
 	for my $term (@nouns) {
-		$term =~ s/[\*\%]//g;
-		$WHERE .= sprintf q{%s lower(name) ~ %s },
+		my $wild = $term =~ s/[\*\%]//g ? '~' : '=';
+		$WHERE .= sprintf q{%s lower(name) %s %s },
 			$WHERE ? 'OR' : 'WHERE',
+			$wild,
 			$dbh->quote(lc $term);
 	}
 
@@ -1765,21 +1800,43 @@ sub list_syncs {
 	}
 
 	$info = $sth->fetchall_arrayref({});
-	my ($namelen,$goatlen,$maxsource,$maxtarget) = (5,1,3,3);
+	my ($namelen,$goatlen,$maxsource,$maxtarget,$maxtype) = (5,1,3,3,4);
 	for my $row (@$info) {
 		$namelen = length $row->{name} if length $row->{name} > $namelen;
         $maxsource = length $row->{source} if length $row->{source} > $maxsource;
         my $tsize = $row->{targetdb} ? length $row->{targetdb} : length $row->{targetgroup};
         $maxtarget = $tsize if $tsize > $maxtarget;
+        $maxtype = length $row->{synctype} if length $row->{synctype} > $maxtype;
 	}
+
+	## If in verbose mode, grab all the tables as well
+	my $tabinfo;
+	if ($VERBOSE >= 1) {
+		$SQL = 'SELECT reltype,schemaname,tablename FROM goat g JOIN herdmap h ON (h.goat = g.id) '
+			. ' JOIN sync s ON (s.source = h.herd AND s.name = ?) ORDER BY h.priority DESC, h.goat ASC';
+		$sth = $dbh->prepare($SQL);
+		for my $row (@$info) {
+			$sth->execute($row->{name});
+			for my $irow (@{$sth->fetchall_arrayref()}) {
+				push @{$tabinfo->{$row->{name}}} => $irow;
+			}
+		}
+	}
+
 	for my $row (@$info) {
-		printf "Sync: %-*s  (%-9s)  %-*s %-3s %-*s  (%s)\n",
+		printf "Sync: %-*s  (%-*s)  %-*s %-3s %-*s  (%s)\n",
 			$namelen, $row->{name},
-			$row->{synctype},
+			$maxtype, $row->{synctype},
 			$maxsource, $row->{source},
 			$row->{synctype} eq 'swap' ? '<=>' : '=>',
 			$maxtarget, $row->{targetdb} || $row->{targetgroup},
 				ucfirst $row->{status};
+		if ($VERBOSE >= 1) {
+			for my $irow (@{$tabinfo->{$row->{name}}}) {
+				printf "  %s %s.%s\n",
+					ucfirst($irow->[0]),$irow->[1],$irow->[2];
+			}
+		}
 	}
 
 	exit 0;
