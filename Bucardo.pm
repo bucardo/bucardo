@@ -3064,14 +3064,14 @@ sub start_controller {
 			}
 			## Got any more slots for this target db?
 			elsif ($limitperdb and $dbinuse{target}{$dbname} >= $dbinfo->{$dbname}{targetlimit}) {
-				$self->glog(qq{No room in queue for another target database "$dbname" Limit: $dbinfo->{$dbname}{targetlimit} Used: $dbinuse{target}{$dbname}});
+				$self->glog(qq{No room in queue for target db "$dbname" ($syncname) Limit: $dbinfo->{$dbname}{targetlimit} Used: $dbinuse{target}{$dbname}});
 				shift @q for (1..$offset);
 				$queueclear = 0;
 				next Q;
 			}
 			## Got any more slots for this source db?
 			elsif ($limitperdb and $dbinuse{source}{$sourcedb} >= $dbinfo->{$sourcedb}{sourcelimit}) {
-				$self->glog(qq{No room in queue for another source database "$dbname" Limit: $dbinfo->{$dbname}{sourcelimit} Used: $dbinuse{source}{$dbname}});
+				$self->glog(qq{No room in queue for source db "$dbname" ($syncname) Limit: $dbinfo->{$dbname}{sourcelimit} Used: $dbinuse{source}{$dbname}});
 				shift @q for (1..$offset);
 				$queueclear = 0;
 				next Q;
@@ -3079,7 +3079,7 @@ sub start_controller {
 			else {
 				$ok2add = 1;
 				$activecount++;
-				$self->glog(qq{Added "$dbname" to queue, because we had free slots});
+				$self->glog(qq{Added "$dbname" to queue for sync $syncname, because we had free slots});
 				$offset++;
 			}
 
