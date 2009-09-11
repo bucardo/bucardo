@@ -1250,6 +1250,23 @@ sub start_mcp {
 
 		$self->glog('LOADING TABLE sync. Rows=%d', scalar (keys %{$self->{sync}}));
 
+		## At this point, we are authoritative, so we can safely clean out the q table
+		$SQL = q{
+          UPDATE bucardo.q
+          SET aborted=now(), whydie=?
+          WHERE started is NOT NULL
+          AND ended IS NULL
+          AND aborted IS NULL
+        };
+		my $maindbh = $self->{masterdbh};
+		$sth = $maindbh->prepare($SQL);
+		my $cleanmsg = 'MCP removing stale q entry';
+		$count = $sth->execute($cleanmsg);
+		$maindbh->commit();
+		if ($count >= 1) {
+			$self->glog("Entries cleaned from the q table: $count");
+		}
+
 		## Load each sync in alphabetical order
 		my @activesyncs;
 		for (sort keys %{$self->{sync}}) {
