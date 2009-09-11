@@ -2034,7 +2034,7 @@ sub remove_item {
 		remove_dbgroup($type);
 	}
 	else {
-		warn "Cannot delete: unknown type\n";
+		warn "Cannot remove: unknown type\n";
 	}
 	exit 1;
 
@@ -2150,6 +2150,22 @@ sub column_value {
 	return $dbh->selectall_arrayref($SQL)->[0][0];
 
 } ## end of column_value
+
+sub constraint_definition {
+
+	my $name = shift;
+
+	my $SQL = qq{SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = '$name'};
+	my $def = $dbh->selectall_arrayref($SQL)->[0][0];
+
+	$def =~ s/\((\(.+\))\)/$1/;
+	$def =~ s/(\w+) = ANY \(ARRAY\[(.+)\]\)/$1 IN ($2)/;
+	$def =~ s/::text//g;
+
+	return $def;
+
+} ## end of constraint_definition
+
 
 sub find_bucardo_schema {
 
@@ -2533,7 +2549,7 @@ sub upgrade {
 
 	## Parse the bucardo.schema file and verify the following types of objects exist:
 	## Functions, triggers, constraints, sequences, and indexes
-	my (@flist, @tlist, @ilist, @clist, @slist, @tablelist);
+	my (@flist, @tlist, @ilist, @clist, @clist2, @slist, @tablelist);
 	my ($fname,$args,$fbody) = ('','','');
 	my ($tname,$tbody) = ('','');
 	my ($tablename,$tablebody) = ('','');
@@ -2560,6 +2576,12 @@ sub upgrade {
 		}
 		if ($tablebody) {
 			$tablebody .= $_;
+			if (/^\s*CONSTRAINT\s+(\w+)\s+(.+?)\s*$/) {
+				my ($cname,$def) = ($1,$2);
+				$def =~ s/,$//;
+				$def =~ s/\bbucardo\.//;
+				push @clist2, [$tablename, $cname, $def];
+			}
 			if (/;/) {
 				push @tablelist, [$tablename, $tablebody];
 				$tablebody = $tablename = '';
@@ -2680,6 +2702,18 @@ sub upgrade {
 		upgrade_and_log($body);
 		clog "Created constraint $cname on $name";
 		$changes++;
+	}
+
+	## Check that any bare constraints (e.g. foreign keys) are unchanged
+	for my $row (@clist2) {
+		my ($tname,$cname,$cdef) = @$row;
+		my $condef = constraint_definition($cname);
+		if ($condef ne $cdef) {
+			upgrade_and_log("ALTER TABLE $tname DROP CONSTRAINT $cname");
+			upgrade_and_log("ALTER TABLE $tname ADD CONSTRAINT $cname $cdef");
+			clog "Altered constraint $cname on $tname";
+			$changes++;
+		}
 	}
 
 	## The freezer.q_staging table is no longer needed, but we must empty it before dropping
