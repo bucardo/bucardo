@@ -183,9 +183,9 @@ CREATE TABLE bucardo.dbgroup (
 
 CREATE TABLE bucardo.dbmap (
   db       TEXT        NOT NULL,
-             CONSTRAINT  dbmap_db_fk FOREIGN KEY (db) REFERENCES bucardo.db(name) ON DELETE CASCADE,
+             CONSTRAINT  dbmap_db_fk FOREIGN KEY (db) REFERENCES bucardo.db(name) ON UPDATE CASCADE ON DELETE CASCADE,
   dbgroup  TEXT        NOT NULL,
-             CONSTRAINT  dbmap_dbgroup_fk FOREIGN KEY (dbgroup) REFERENCES bucardo.dbgroup(name) ON DELETE CASCADE,
+             CONSTRAINT  dbmap_dbgroup_fk FOREIGN KEY (dbgroup) REFERENCES bucardo.dbgroup(name) ON UPDATE CASCADE ON DELETE CASCADE,
   priority SMALLINT    NOT NULL DEFAULT 0,
   cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -197,7 +197,7 @@ CREATE UNIQUE INDEX dbmap_unique ON bucardo.dbmap(db,dbgroup);
 --
 CREATE TABLE bucardo.db_connlog (
   db          TEXT        NOT NULL,
-                CONSTRAINT  db_connlog_dbid_fk FOREIGN KEY (db) REFERENCES bucardo.db(name) ON DELETE CASCADE ON UPDATE CASCADE,
+                CONSTRAINT  db_connlog_dbid_fk FOREIGN KEY (db) REFERENCES bucardo.db(name) ON UPDATE CASCADE ON DELETE CASCADE,
   conndate    TIMESTAMPTZ NOT NULL DEFAULT now(),  -- when we first connected to it
   connstring  TEXT        NOT NULL,
   status      TEXT        NOT NULL DEFAULT 'unknown',
@@ -214,7 +214,7 @@ CREATE TABLE bucardo.goat (
   id                 INTEGER     NOT NULL DEFAULT nextval('goat_id_seq'),
                        CONSTRAINT goat_id_pk PRIMARY KEY (id),
   db                 TEXT        NOT NULL,
-                       CONSTRAINT goat_db_fk FOREIGN KEY (db) REFERENCES bucardo.db(name) ON DELETE RESTRICT,
+                       CONSTRAINT goat_db_fk FOREIGN KEY (db) REFERENCES bucardo.db(name) ON UPDATE CASCADE ON DELETE RESTRICT,
   schemaname         TEXT        NOT NULL,
   tablename          TEXT        NOT NULL,
   reltype            TEXT        NOT NULL DEFAULT 'table',
@@ -285,7 +285,7 @@ CREATE TABLE bucardo.herd (
 --
 CREATE TABLE bucardo.herdmap (
   herd      TEXT        NOT NULL,
-              CONSTRAINT herdmap_herd_fk FOREIGN KEY (herd) REFERENCES bucardo.herd(name) ON DELETE CASCADE,
+              CONSTRAINT herdmap_herd_fk FOREIGN KEY (herd) REFERENCES bucardo.herd(name) ON UPDATE CASCADE ON DELETE CASCADE,
   goat      INTEGER     NOT NULL,
               CONSTRAINT herdmap_goat_fk FOREIGN KEY (goat) REFERENCES bucardo.goat(id) ON DELETE CASCADE,
   priority  SMALLINT    NOT NULL DEFAULT 0,
@@ -352,11 +352,11 @@ CREATE TABLE bucardo.sync (
   name               TEXT        NOT NULL UNIQUE,
                        CONSTRAINT sync_name_pk PRIMARY KEY (name),
   source             TEXT        NOT NULL,
-                       CONSTRAINT sync_source_herd_fk FOREIGN KEY (source) REFERENCES bucardo.herd(name) ON DELETE RESTRICT,
+                       CONSTRAINT sync_source_herd_fk FOREIGN KEY (source) REFERENCES bucardo.herd(name) ON UPDATE CASCADE ON DELETE RESTRICT,
   targetdb           TEXT            NULL,
-                       CONSTRAINT sync_targetdb_fk FOREIGN KEY (targetdb) REFERENCES bucardo.db(name) ON DELETE RESTRICT,
+                       CONSTRAINT sync_targetdb_fk FOREIGN KEY (targetdb) REFERENCES bucardo.db(name) ON UPDATE CASCADE ON DELETE RESTRICT,
   targetgroup        TEXT            NULL,
-                       CONSTRAINT sync_targetgroup_fk FOREIGN KEY (targetgroup) REFERENCES bucardo.dbgroup(name) ON DELETE RESTRICT,
+                       CONSTRAINT sync_targetgroup_fk FOREIGN KEY (targetgroup) REFERENCES bucardo.dbgroup(name) ON UPDATE CASCADE ON DELETE RESTRICT,
   synctype           TEXT        NOT NULL,
   stayalive          BOOLEAN     NOT NULL DEFAULT 'true', -- Does the sync controller stay connected?
   kidsalive          BOOLEAN     NOT NULL DEFAULT 'true', -- Do the children stay connected?
@@ -441,11 +441,11 @@ CREATE TABLE freezer.old_audit_pid AS SELECT * FROM audit_pid LIMIT 0;
 --
 CREATE TABLE bucardo.q (
   sync      TEXT           NULL,
-              CONSTRAINT q_sync_fk FOREIGN KEY (sync) REFERENCES bucardo.sync(name) ON DELETE SET NULL,
+              CONSTRAINT q_sync_fk FOREIGN KEY (sync) REFERENCES bucardo.sync(name) ON UPDATE CASCADE ON DELETE SET NULL,
   sourcedb  TEXT           NULL,
-              CONSTRAINT q_sdb_fk FOREIGN KEY (sourcedb) REFERENCES bucardo.db(name) ON DELETE SET NULL,
+              CONSTRAINT q_sdb_fk FOREIGN KEY (sourcedb) REFERENCES bucardo.db(name) ON UPDATE CASCADE ON DELETE SET NULL,
   targetdb  TEXT           NULL,
-              CONSTRAINT q_tdb_fk FOREIGN KEY (targetdb) REFERENCES bucardo.db(name) ON DELETE SET NULL,
+              CONSTRAINT q_tdb_fk FOREIGN KEY (targetdb) REFERENCES bucardo.db(name) ON UPDATE CASCADE ON DELETE SET NULL,
   ppid      INTEGER     NOT NULL,
   pid       INTEGER         NULL,
   synctype  TEXT            NULL,
@@ -2253,7 +2253,7 @@ CREATE TABLE bucardo.customcode_map (
   code     INTEGER     NOT NULL,
              CONSTRAINT customcode_map_code_fk FOREIGN KEY (code) REFERENCES bucardo.customcode(id) ON DELETE CASCADE,
   sync     TEXT            NULL,
-             CONSTRAINT customcode_map_sync_fk FOREIGN KEY (sync) REFERENCES bucardo.sync(name) ON DELETE SET NULL,
+             CONSTRAINT customcode_map_sync_fk FOREIGN KEY (sync) REFERENCES bucardo.sync(name) ON UPDATE CASCADE ON DELETE SET NULL,
   goat     INTEGER         NULL,
              CONSTRAINT customcode_map_goat_fk FOREIGN KEY (goat) REFERENCES bucardo.goat(id) ON DELETE SET NULL,
   active   BOOLEAN     NOT NULL DEFAULT 'true',
