@@ -1748,6 +1748,7 @@ sub list_syncs {
 	## If any nouns left, treat as wildcards
 	my $WHERE = '';
 	for my $term (@nouns) {
+		$term =~ s/[\*\%]//g;
 		$WHERE .= sprintf q{%s lower(name) ~ %s },
 			$WHERE ? 'OR' : 'WHERE',
 			$dbh->quote(lc $term);
