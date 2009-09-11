@@ -3482,6 +3482,10 @@ sub add_sync {
 	}
 	$arg{name} = [$item_name];
 
+	if (! $arg{type}->[0]) {
+		die "Need to specify the type of sync: pushdelta, fullcopy, or swap\n";
+	}
+
 	## Does this source exist? If not, and its a database, create a herd for the tables
 	my $sourceherd = $arg{source}[0] || die $usage;
 	$SQL = 'SELECT 1 FROM bucardo.herd WHERE name = ?';
