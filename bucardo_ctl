@@ -3401,11 +3401,21 @@ sub add_sync {
 		## May be the same table in more than one schema, in which case we add them all!
 		$SQL = q{SELECT id FROM goat WHERE tablename=? AND db =?};
 		my $sth_goat = $dbh->prepare($SQL);
+		$SQL = q{SELECT id FROM goat WHERE schemaname = ? AND tablename=? AND db =?};
+		my $sth_goat_schema = $dbh->prepare($SQL);
 		$SQL = q{INSERT INTO herdmap(herd,goat) VALUES (?,?)};
 		$sth = $dbh->prepare($SQL);
 		for my $table (split /,/ => $arg{tables}[0]) {
-			$sth_goat->execute($table,$sourceherd);
-			for my $row (@{$sth_goat->fetchall_arrayref()}) {
+			my $sthg;
+			if ($table =~ /(.+)\.(.+)/) {
+				$sthg = $sth_goat_schema;
+				$sthg->execute($1,$2,$sourceherd);
+			}
+			else {
+				$sthg = $sth_goat;
+				$sthg->execute($table,$sourceherd);
+			}
+			for my $row (@{$sthg->fetchall_arrayref()}) {
 				$sth->execute($item_name,$row->[0]);
 			}
 		}
