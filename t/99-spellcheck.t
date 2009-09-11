@@ -172,6 +172,7 @@ PIDs
 SMTP
 Sendmail
 Tolley
+UNLISTEN
 Vilem
 Wendt
 Yan
@@ -224,6 +225,8 @@ pid
 pkey
 plperl
 regex
+synctype
+synctypes
 timeslices
 wildcard
 

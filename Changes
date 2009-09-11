@@ -8,6 +8,27 @@
   - Allow "foo*", "*foo", and "*foo*" wildcard format in bucardo_ctl 
     when specifying syncs, e.g. bucardo_ctl kick ABC* [GSM]
 
+  - Allow special cases for bucardo_ctl kick: "all [synctype] [active]" [GSM]
+
+  - Prohibit syncs from having names reserved for synctypes. [GSM]
+
+  - Add --verbose option to 'bucardo_ctl list syncs' to show tables [GSM]
+
+  - Clear out stale q entries on startup, created when a kid was hit with a 
+    kill -9. This was causing Bucardo to think the q slot was still active. [GSM]
+
+  - Change validate_sync notice to LOG [GSM]
+
+  - Allow name changes for syncs, herds, dbs, dbgroups [GSM]
+
+  - Allow filtering of 'bucardo_ctl list syncs' by synctype [GSM]
+
+  - Allow 'bucardo_ctl add sync tables=...' to work with schema.table format [GSM]
+
+  - Allow multiple items to be changed at one time with 'bucardo_ctl update item' [GSM]
+
+  - Fix cases where we were not quoting the UNLISTEN names [GSM]
+
 4.0.1 September 8, 2009
 
   - Fix to allow "add all tables db=foo" to work as expected. [GSM]
