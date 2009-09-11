@@ -241,12 +241,12 @@ ALTER TABLE bucardo.goat ADD CONSTRAINT custom_needs_pkey CHECK (customselect IS
 ALTER TABLE bucardo.goat ADD CONSTRAINT pkey_needs_type CHECK (pkey = '' OR pkeytype IS NOT NULL);
 
 ALTER TABLE bucardo.goat ADD CONSTRAINT standard_conflict
-  CHECK (reltype <> 'table' OR standard_conflict IS NULL
-  OR standard_conflict IN ('source','target','skip','random','latest','abort'));
+  CHECK (((reltype <> 'table') OR (standard_conflict IS NULL)) OR (standard_conflict 
+  IN ('source','target','skip','random','latest','abort')));
 
 ALTER TABLE bucardo.goat ADD CONSTRAINT standard_conflict_sequence 
-  CHECK (reltype <> 'sequence' OR standard_conflict IS NULL
-  OR standard_conflict IN ('source','target','skip','lowest','highest'));
+  CHECK (((reltype <> 'sequence') OR (standard_conflict IS NULL)) OR (standard_conflict
+  IN ('source','target','skip','lowest','highest')));
 
 --
 -- Set of filters for each goat.
@@ -267,7 +267,9 @@ CREATE TABLE bucardo.bucardo_custom_trigger (
 );
 
 ALTER TABLE bucardo.bucardo_custom_trigger ADD CONSTRAINT type_is_delta_or_trigger CHECK (trigger_type IN ('delta', 'triggerkick'));
+
 ALTER TABLE bucardo.bucardo_custom_trigger ADD CONSTRAINT level_is_row_statement CHECK (trigger_level IN ('ROW', 'STATEMENT'));
+
 CREATE UNIQUE INDEX bucardo_custom_trigger_goat_type_unique ON bucardo.bucardo_custom_trigger(goat, trigger_type);
 
 --
@@ -395,17 +397,20 @@ CREATE UNIQUE INDEX sync_source_targetdb_type ON bucardo.sync(source, targetdb, 
 CREATE UNIQUE INDEX sync_source_targetgroup_type ON bucardo.sync(source, targetgroup, synctype);
 
 ALTER TABLE bucardo.sync ADD CONSTRAINT sync_validtarget CHECK
-  ((targetdb IS NULL AND targetgroup IS NOT NULL)
-    OR
-   (targetdb IS NOT NULL AND targetgroup IS NULL));
+  (((targetdb IS NULL) AND (targetgroup IS NOT NULL))
+  OR
+  ((targetdb IS NOT NULL) AND (targetgroup IS NULL)));
 
 ALTER TABLE bucardo.sync ADD CONSTRAINT sync_swap_nogroup CHECK
-  (synctype <> 'swap' or targetdb IS NOT NULL);
+  (synctype <> 'swap' OR targetdb IS NOT NULL);
 
 -- Because NOTIFY is broke, make sure our names are simple:
 ALTER TABLE bucardo.db      ADD CONSTRAINT db_name_sane      CHECK (name ~ E'^[a-zA-Z]\\w*$');
+
 ALTER TABLE bucardo.dbgroup ADD CONSTRAINT dbgroup_name_sane CHECK (name ~ E'^[a-zA-Z]\\w*$');
-ALTER TABLE bucardo.sync    ADD CONSTRAINT sync_name_sane    CHECK (name ~ E'^[a-zA-Z]\\w*$');
+
+ALTER TABLE bucardo.sync    ADD CONSTRAINT sync_name_sane
+  CHECK (name ~ E'^[a-zA-Z]\\w*$' AND lower(name) NOT IN ('pushdelta','fullcopy','swap'));
 
 
 --
@@ -2234,20 +2239,18 @@ CREATE TABLE bucardo.customcode (
   cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE bucardo.customcode ADD CONSTRAINT customcode_whenrun
-CHECK (whenrun IN (
-'before_txn',
-'before_check_rows',
-'before_trigger_drop',
-'after_trigger_drop',
-'after_table_sync',
-'exception',
-'conflict',
-'before_trigger_enable',
-'after_trigger_enable',
-'after_txn',
-'before_sync',
-'after_sync'
-));
+  CHECK (whenrun IN ('before_txn',
+  'before_check_rows',
+  'before_trigger_drop',
+  'after_trigger_drop',
+  'after_table_sync',
+  'exception',
+  'conflict',
+  'before_trigger_enable',
+  'after_trigger_enable',
+  'after_txn',
+  'before_sync',
+  'after_sync'));
 
 CREATE TABLE bucardo.customcode_map (
   code     INTEGER     NOT NULL,
