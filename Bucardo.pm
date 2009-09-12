@@ -4385,12 +4385,13 @@ sub start_kid {
 
 				$self->glog("Emptying out target table $S.$T using $sync->{deletemethod}");
 				my $empty_by_delete = 1;
-				if ($sync->{deletemethod} eq 'truncate') {
+				if ($sync->{deletemethod} =~ /^truncate/o) {
 					## Temporarily override our kid-level handler due to the eval
 					local $SIG{__DIE__} = sub {};
+					my $cascade = $sync->{deletemethod} =~ /cascade/ ? ' CASCADE' : '';
 					$targetdbh->do('SAVEPOINT truncate_attempt');
 					eval {
-						$targetdbh->do("TRUNCATE TABLE $S.$T");
+						$targetdbh->do("TRUNCATE TABLE $S.$T $cascade");
 					};
 					if ($@) {
 						$self->glog("Truncation of $S.$T failed, so we will try a delete");

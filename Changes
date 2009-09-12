@@ -8,6 +8,8 @@
   - Allow "foo*", "*foo", and "*foo*" wildcard format in bucardo_ctl 
     when specifying syncs, e.g. bucardo_ctl kick ABC* [GSM]
 
+  - Allow new delete method of "truncate_cascade" for syncs [GSM]
+
   - Allow special cases for bucardo_ctl kick: "all [synctype] [active]" [GSM]
 
   - Prohibit syncs from having names reserved for synctypes. [GSM]
