@@ -31,6 +31,8 @@
 
   - Fix cases where we were not quoting the UNLISTEN names [GSM]
 
+  - Remove duplicate PID numbers from log [GSM]
+
 4.0.1 September 8, 2009
 
   - Fix to allow "add all tables db=foo" to work as expected. [GSM]

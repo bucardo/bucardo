@@ -305,7 +305,7 @@ sub glog { ## no critic (RequireArgUnpacking)
 	$msg = "$prefix $msg";
 
 	## We may also show other optional things: PID, timestamp, line we came from
-	my $header = sprintf '%s%s%s',
+	my $header = sprintf '%s%s',
 		$config{log_showpid}  ? "($$) " : '',
 		1 == $config{log_showtime}       ? ('['.time.'] ')
 			: 2 == $config{log_showtime} ? ('['.scalar gmtime(time).'] ')
@@ -345,9 +345,7 @@ sub glog { ## no critic (RequireArgUnpacking)
 		}
 
 		## Write the message.
-		## If not writing to separate files, prepend the PID to the message
 		printf {$self->{debugfilehandle}{$$}{$file}} "%s%s %s\n",
-			(!$self->{debugfilesep} and $config{log_showpid}) ? "($$) " : '',
 			$header,
 			$msg;
 	}
