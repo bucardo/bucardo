@@ -345,7 +345,7 @@ sub glog { ## no critic (RequireArgUnpacking)
 		}
 
 		## Write the message.
-		printf {$self->{debugfilehandle}{$$}{$file}} "%s%s %s\n",
+		printf {$self->{debugfilehandle}{$$}{$file}} "%s %s\n",
 			$header,
 			$msg;
 	}
