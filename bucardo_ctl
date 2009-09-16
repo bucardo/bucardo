@@ -3565,12 +3565,19 @@ sub add_sync {
 			my $sthg;
 			if ($table =~ /(.+)\.(.+)/) {
 				$sthg = $sth_goat_schema;
-				$sthg->execute($1,$2,$sourceherd);
+				$count = $sthg->execute($1,$2,$sourceherd);
 			}
 			else {
 				$sthg = $sth_goat;
-				$sthg->execute($table,$sourceherd);
+				$count = $sthg->execute($table,$sourceherd);
 			}
+			## If the table is not known to us, try and add it
+			if ($count < 1) {
+				$sthg->finish();
+				@nouns = ($table, "db=$sourceherd");
+				add_table();
+  			}
+
 			for my $row (@{$sthg->fetchall_arrayref()}) {
 				$sth->execute($item_name,$row->[0]);
 			}
@@ -3947,7 +3954,7 @@ sub add_dbgroup {
 		$SQL = 'UPDATE dbmap SET priority = ? WHERE db=? AND dbgroup=?';
 		my $changepri = $dbh->prepare($SQL);
 		for my $db (@nouns) {
-			my $newpri  = 1;
+			my $newpri = 1;
 			if ($db =~ s/=(\d+)//) { $newpri = $1; }
 			$count = $gotdb->execute($db);
 			$gotdb->finish();
