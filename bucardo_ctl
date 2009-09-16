@@ -2069,9 +2069,11 @@ sub add_item {
 	}
 	elsif ($type eq 'table') {
 		add_table();
+		exit 0;
 	}
 	elsif ($type eq 'sequence') {
 		add_sequence();
+		exit 0;
 	}
 	elsif ($type eq 'sync') {
 		add_sync();
@@ -3349,7 +3351,7 @@ sub add_table {
 
 	$dbh->commit();
 
-	exit 0 if $QUIET;
+	return if $QUIET;
 
 	my $tablelist = sprintf '%s added: ', @tables > 1 ? 'Tables' : 'Table';
 	for (@tables) {
@@ -3358,7 +3360,7 @@ sub add_table {
 	$tablelist =~ s/, $//;
 	print "$tablelist\n";
 
-	exit 0;
+	return;
 
 } ## end of add_table
 
@@ -3472,7 +3474,7 @@ sub add_sequence {
 
 	$dbh->commit();
 
-	exit 0 if $QUIET;
+	return if $QUIET;
 
 	my $tablelist = sprintf '%s added: ', @tables > 1 ? 'Sequences' : 'Sequence';
 	for (@tables) {
@@ -3481,7 +3483,7 @@ sub add_sequence {
 	$tablelist =~ s/, $//;
 	print "$tablelist\n";
 
-	exit 0;
+	return;
 
 } ## end of add_sequence
 
@@ -3616,6 +3618,7 @@ sub add_sync {
 	$dbh->commit();
 
 	$QUIET or print "Sync added: $item_name\n";
+
 	exit 0;
 
 } ## end of add_sync
