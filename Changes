@@ -1,37 +1,40 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-4.0.2
+4.0.2 September 16, 2009
 
   - Add the name of the database to the install choices, as some systems 
     have mismatched names (BSD's 'pgsql' user) [Vilem Kebrt]
 
-  - Allow "foo*", "*foo", and "*foo*" wildcard format in bucardo_ctl 
-    when specifying syncs, e.g. bucardo_ctl kick ABC* [GSM]
-
-  - Allow new delete method of "truncate_cascade" for syncs [GSM]
-
-  - Allow special cases for bucardo_ctl kick: "all [synctype] [active]" [GSM]
-
-  - Prohibit syncs from having names reserved for synctypes. [GSM]
-
-  - Add --verbose option to 'bucardo_ctl list syncs' to show tables [GSM]
-
   - Clear out stale q entries on startup, created when a kid was hit with a 
     kill -9. This was causing Bucardo to think the q slot was still active. [GSM]
 
-  - Change validate_sync notice to LOG [GSM]
+  - Fix cases where we were not quoting the UNLISTEN names [GSM]
 
-  - Allow name changes for syncs, herds, dbs, dbgroups [GSM]
+  - Remove duplicate PID numbers from log [GSM]
+
+  - Prohibit syncs from having names reserved for synctypes. [GSM]
+
+  - Add new delete method of "truncate_cascade" for syncs [GSM]
+
+  - Allow "foo*", "*foo", and "*foo*" wildcard format in bucardo_ctl 
+    when specifying syncs, e.g. bucardo_ctl kick ABC* [GSM]
+
+  - Allow special cases for bucardo_ctl kick: "all [synctype] [active]" [GSM]
 
   - Allow filtering of 'bucardo_ctl list syncs' by synctype [GSM]
 
   - Allow 'bucardo_ctl add sync tables=...' to work with schema.table format [GSM]
 
+  - Add --verbose option to 'bucardo_ctl list syncs' to show tables [GSM]
+
+  - Allow name changes for syncs, herds, dbs, dbgroups [GSM]
+
+  - Automatically add missing tables when doing 
+    "bucardo_ctl add sync source=dbname ... tables=x,y,z" [GSM]
+
   - Allow multiple items to be changed at one time with 'bucardo_ctl update item' [GSM]
 
-  - Fix cases where we were not quoting the UNLISTEN names [GSM]
-
-  - Remove duplicate PID numbers from log [GSM]
+  - Change validate_sync notice to LOG [GSM]
 
 4.0.1 September 8, 2009
 
