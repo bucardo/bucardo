@@ -1,6 +1,14 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-4.0.2 September 16, 2009
+
+Bucardo version 4.0.3, released September 16, 2009
+
+  - Fix some minor problems with bucardo_ctl and "add sync" [GSM]
+
+  - Allow ping to be specified for new tables added via "add sync" [GSM]
+
+
+Bucardo version 4.0.2, released September 16, 2009
 
   - Add the name of the database to the install choices, as some systems 
     have mismatched names (BSD's 'pgsql' user) [Vilem Kebrt]
@@ -36,7 +44,8 @@
 
   - Change validate_sync notice to LOG [GSM]
 
-4.0.1 September 8, 2009
+
+Bucardo version 4.0.1, released September 8, 2009
 
   - Fix to allow "add all tables db=foo" to work as expected. [GSM]
 
@@ -44,7 +53,8 @@
 
   - Fix broken WHERE clause inside bucardo_ctl for "add table" [GSM]
 
-4.0.0 September 7, 2009
+
+Version 4.0.0, released September 7, 2009
 
 New features:
 
@@ -156,7 +166,8 @@ Bug fixes:
 
   - Do not attempt respawn of MCP if mcp_dbproblem_sleep is 0. [GSM]
 
-3.1.0 April 6, 2008
+
+Bucardo version 3.1.0, released April 6, 2008
 
   - Fix race condition in bucardo_delta/bucardo_track updates 
     for pushdelta syncs. [GSM]
@@ -174,12 +185,14 @@ Bug fixes:
 
   - Support bytea in primary key and regular columns. [GSM]
 
-3.0.9 Released March 26, 2008
+
+Bucardo version 3.0.9, released March 26, 2008
 
   - Fix problem causing killed controller to not re-do interrupted syncs 
     on restart. [GSM]
 
-3.0.8 Released February 5, 2008
+
+Bucardo version 3.0.8, released February 5, 2008
 
   - Fix error in 'latest' conflict code. [Adam Wendt].
 
@@ -193,7 +206,8 @@ Bug fixes:
 
   - Fix problem with after_sync code not firing at correct time for staylive kids. [GSM]
 
-3.0.7 Released October 11, 2007
+
+Bucardo version 3.0.7, released October 11, 2007
 
  - Allow bucardo_ctl options to be specified in a .bucardorc file. [GSM]
 
@@ -217,5 +231,6 @@ Bug fixes:
  - Add ping method to CTL and KID processes. [GSM]
 
 
-3.0.6 - First public release, September 2007
+Bucardo version 3.0.6 - First public release, September 1, 2007
+
 
