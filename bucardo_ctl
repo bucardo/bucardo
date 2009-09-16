@@ -2065,22 +2065,22 @@ sub add_item {
 	$type = lc $type;
 
 	if ($type eq 'db' or $type eq 'database') {
-		add_database($type);
+		add_database();
 	}
 	elsif ($type eq 'table') {
-		add_table($type);
+		add_table();
 	}
 	elsif ($type eq 'sequence') {
-		add_sequence($type);
+		add_sequence();
 	}
 	elsif ($type eq 'sync') {
-		add_sync($type);
+		add_sync();
 	}
 	elsif ($type eq 'herd') {
-		add_herd($type);
+		add_herd();
 	}
 	elsif ($type eq 'dbgroup') {
-		add_dbgroup($type);
+		add_dbgroup();
 	}
 	elsif ($type eq 'all') {
 		my $type2 = shift @nouns || '';
@@ -2117,7 +2117,7 @@ sub alter_item {
 	$type = lc $type;
 
 	if ($type eq 'sync') {
-		alter_sync($type);
+		alter_sync();
 	}
 	else {
 		warn "Cannot alter: unknown type\n";
@@ -2141,22 +2141,22 @@ sub remove_item {
 	$type = lc $type;
 
 	if ($type eq 'db' or $type eq 'database') {
-		remove_database($type);
+		remove_database();
 	}
 	elsif ($type eq 'table') {
-		remove_table($type);
+		remove_table();
 	}
 	elsif ($type eq 'sequence') {
-		remove_sequence($type);
+		remove_sequence();
 	}
 	elsif ($type eq 'sync') {
-		remove_sync($type);
+		remove_sync();
 	}
 	elsif ($type eq 'herd') {
-		remove_herd($type);
+		remove_herd();
 	}
 	elsif ($type eq 'dbgroup') {
-		remove_dbgroup($type);
+		remove_dbgroup();
 	}
 	else {
 		warn "Cannot remove: unknown type\n";
@@ -2924,15 +2924,13 @@ sub upgrade_and_log {
 
 sub add_database {
 
-	my $type = shift;
-
 	## Usage: add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass=xxx
 	## service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx
 
 	## The first word is the name of the database we connect to (column dbname)
 	my $item_name = shift @nouns || '';
 	if (!length $item_name) {
-		warn "Usage: add $type <name>";
+		warn "Usage: add db <name>";
 		exit 1;
 	}
 
@@ -3224,8 +3222,6 @@ sub connect_database {
 
 sub add_table {
 
-	my $type = shift;
-
 	## Usage: add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool herd=herd_name
 
 	## TODO: Make this smarter
@@ -3250,7 +3246,7 @@ sub add_table {
 	@nouns = @newnouns;
 
 	if (! @tables) {
-		warn "Usage: add $type <name>";
+		warn "Usage: add table <name>";
 		exit 1;
 	}
 
@@ -3369,8 +3365,6 @@ sub add_table {
 
 sub add_sequence {
 
-	my $type = shift;
-
 	## Usage: add sequence [schema].table db=internal_db_name herd=herd_name
 
 	my $DEFAULT_SCHEMA = 'public';
@@ -3394,7 +3388,7 @@ sub add_sequence {
 	@nouns = @newnouns;
 
 	if (! @tables) {
-		warn "Usage: add $type <name>";
+		warn "Usage: add sequence <name>";
 		exit 1;
 	}
 
@@ -3494,15 +3488,13 @@ sub add_sequence {
 
 sub add_sync {
 
-	my $type = shift;
-
 	## Usage: add sync syncname options
 	my $usage = "Usage: bucardo_ctl add sync <syncname> source=<herdname> targetdb=<dbname> type=<synctype>\n";
 
 	## The first word is the sync name
 	my $item_name = shift @nouns || '';
 	if (!length $item_name) {
-		warn "Usage: add $type <name>";
+		warn "Usage: add sync <name>";
 		exit 1;
 	}
 
@@ -3631,8 +3623,6 @@ sub add_sync {
 
 sub remove_sync {
 
-	my $type = shift;
-
 	## Usage: remove sync syncname
 
 	my $name = shift @nouns;
@@ -3748,12 +3738,10 @@ sub alter_sync {
 	## targetdb=foo    - add/change the targetdb
 	## If a target already exists of other type, it is set to null
 
-	my $type = shift;
-
 	## The first word is the sync name
 	my $item_name = shift @nouns || '';
 	if (!length $item_name) {
-		warn "Usage: alter $type <name>";
+		warn "Usage: alter sync <name>";
 		exit 1;
 	}
 
@@ -3847,14 +3835,12 @@ sub alter_sync {
 
 sub add_herd {
 
-	my $type = shift;
-
 	## Usage: add herd name (goat1, goat2, ...)
 
 	my $item_name = shift @nouns || '';
 
 	if (!length $item_name) {
-		warn "Usage: add $type <name> goats";
+		warn "Usage: add herd <name> goats";
 		exit 1;
 	}
 
@@ -3928,13 +3914,11 @@ sub add_herd {
 
 sub add_dbgroup {
 
-	my $type = shift;
-
 	## Usage: add dbgroup name db1 db2 db3 ...
 
 	my $name = shift @nouns || '';
 	if (!length $name) {
-		warn "Usage: add $type <name>";
+		warn "Usage: add dbgroup <name>";
 		exit 1;
 	}
 
