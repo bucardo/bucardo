@@ -39,7 +39,7 @@ like($i, qr{Usage: add db <name>}, $t);
 
 $t = q{Calling bucardo_ctl with 'add database' gives expected message};
 $i = $bct->ctl('add database');
-like($i, qr{Usage: add database <name>}, $t);
+like($i, qr{Usage: add db <name>}, $t);
 
 # Create another database for testing
 my $dbhB = $bct->blank_database('B');
