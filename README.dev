@@ -247,11 +247,11 @@ This is a comprehensive checklist of all the steps required to release a
 new version, whether beta or regular. It is assumed you are very familiar with the 
 other sections referenced herein (indicated with **)
 
-* Test on variety of versions (see ** Heavy Testing), including the optional tests.
+* Test on variety of versions of Postgres
 
 * Make sure everything is up to date and committed in git.
 
-* Update the versions (see ** Version Numbers) in all relevant files.
+* Update the versions in all relevant files. Use t/00_release.t to verify this.
 
 * If a final version, put the release date into the Changes file.
 
@@ -306,6 +306,10 @@ very last step. Running "make signature" will do the signing for you.
   Example: git tag -u 14964ac8 -m "Version 4.0.1" 4.0.1
 
 * Create a new tarball with "make dist". Sign it: "gpg -ba <name>"
+
+* Put the tarball and detached sig file in the downloads directory on bucardo.org
+
+* Update the wiki pages for the new version: Bucardo/Downloads, Bucardo/Changes
 
 * Announce to the bucardo-announce list.
 
