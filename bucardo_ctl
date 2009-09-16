@@ -3515,10 +3515,17 @@ sub add_sync {
 			   tables          => ['', ''],
 			   status          => ['', ''],
 			   onetimecopy     => ['', ''],
+			   ping            => ['', ''],
 			   );
 	my $args = process_args($info);
+	my $newtableping = '';
 	for my $name (sort keys %$args) {
 		next if $name eq 'extraargs';
+		## Used for new tables only:
+		if ($name eq 'ping') {
+			$newtableping = $args->{$name};
+			next;
+		}
 		my $value = $args->{$name};
 		if (!exists $arg{$name}) {
 			die "Unknown option '$name'\n";
@@ -3590,6 +3597,7 @@ sub add_sync {
 				if ($count < 1) {
 					$sthg->finish();
 					@nouns = ($table, "db=$sourceherd");
+					length $newtableping and push @nouns, "ping=$newtableping";
 					add_table();
 					redo;
 				}
