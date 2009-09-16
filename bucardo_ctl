@@ -3551,7 +3551,21 @@ sub add_sync {
 		}
 		$SQL = 'INSERT INTO bucardo.herd(name) VALUES (?)';
 		$sth = $dbh->prepare($SQL);
-		$sth->execute($item_name);
+		eval {
+			$sth->execute($item_name);
+		};
+ 		## If this fails, and the herd is empty, use it anyway
+ 		if ($@) {
+ 			die $@ unless $@ =~ /"herd_name_pk"/;
+ 			$dbh->rollback();
+ 			$SQL = 'SELECT * FROM herdmap WHERE herd = ?';
+ 			$sth = $dbh->prepare($SQL);
+ 			$count = $sth->execute($item_name);
+ 			$sth->finish();
+ 			if ($count >= 1) {
+ 				die qq{Cannot create sync: source herd "$item_name" already exists and contains tables\n};
+ 			}
+ 		}
 
 		## Add all tables given to the new herd
 		## May be the same table in more than one schema, in which case we add them all!
