@@ -48,7 +48,7 @@
 </p>
 <hr />
 <h1><a name="version">VERSION</a></h1>
-<p>This document describes version 4.0.1 of bucardo_ctl</p>
+<p>This document describes version 4.0.2 of bucardo_ctl</p>
 <p>
 </p>
 <hr />
@@ -123,11 +123,13 @@ Postgres cluster. The user 'bucardo' and database 'bucardo' will be created firs
 This is an interactive installer, but you can supply the following values from the command 
 line:</p>
 <dl>
-<dt><strong><a name="dbuser" class="item">--dbuser</a></strong></dt>
+<dt><strong><a name="dbuser" class="item">--dbuser (defaults to postgres)</a></strong></dt>
 
-<dt><strong><a name="dbport" class="item">--dbport</a></strong></dt>
+<dt><strong><a name="dbname" class="item">--dbname (defaults to postgres)</a></strong></dt>
 
-<dt><strong><a name="piddir" class="item">--piddir</a></strong></dt>
+<dt><strong><a name="dbport" class="item">--dbport (defaults to 5432)</a></strong></dt>
+
+<dt><strong><a name="piddir" class="item">--piddir (defaults to /var/run/bucardo/)</a></strong></dt>
 
 </dl>
 </dd>
