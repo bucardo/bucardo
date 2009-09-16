@@ -4080,7 +4080,7 @@ sub install {
 	my $host = $bcargs->{dbhost} || $ENV{DBHOST} || '<none>';
 	my $port = $bcargs->{dbport} || $ENV{DBPORT} || 5432;
 	my $user = $ENV{DBUSER} || 'postgres';
-    my $dbname = $bcargs->{dbname} || $ENV{DBNAME} || 'postgres';
+    my $dbname = $ENV{DBNAME} || 'postgres';
 
 	## Make sure the bucardo.schema file is available, and extract some config items
 	my ($fh, $schema_file) = find_bucardo_schema();
