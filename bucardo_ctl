@@ -3574,26 +3574,29 @@ sub add_sync {
 		$SQL = q{SELECT id FROM goat WHERE schemaname = ? AND tablename=? AND db =?};
 		my $sth_goat_schema = $dbh->prepare($SQL);
 		$SQL = q{INSERT INTO herdmap(herd,goat) VALUES (?,?)};
-		$sth = $dbh->prepare($SQL);
+		my $sth_i = $dbh->prepare($SQL);
 		for my $table (split /,/ => $arg{tables}[0]) {
 			my $sthg;
-			if ($table =~ /(.+)\.(.+)/) {
-				$sthg = $sth_goat_schema;
-				$count = $sthg->execute($1,$2,$sourceherd);
+			{
+				if ($table =~ /(.+)\.(.+)/) {
+					$sthg = $sth_goat_schema;
+					$count = $sthg->execute($1,$2,$sourceherd);
+				}
+				else {
+					$sthg = $sth_goat;
+					$count = $sthg->execute($table,$sourceherd);
+				}
+				## If the table is not known to us, try and add it
+				if ($count < 1) {
+					$sthg->finish();
+					@nouns = ($table, "db=$sourceherd");
+					add_table();
+					redo;
+				}
 			}
-			else {
-				$sthg = $sth_goat;
-				$count = $sthg->execute($table,$sourceherd);
-			}
-			## If the table is not known to us, try and add it
-			if ($count < 1) {
-				$sthg->finish();
-				@nouns = ($table, "db=$sourceherd");
-				add_table();
-  			}
 
 			for my $row (@{$sthg->fetchall_arrayref()}) {
-				$sth->execute($item_name,$row->[0]);
+				$sth_i->execute($item_name,$row->[0]);
 			}
 		}
 
