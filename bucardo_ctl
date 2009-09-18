@@ -3070,8 +3070,8 @@ sub add_all_goats {
 		. q{JOIN pg_namespace n ON (n.oid = c.relnamespace) }
 		. qq{WHERE relkind = '$kind' };
 
-    ## We always exclude information_schema and system schemas
-    $SQL .= q{AND n.nspname <> 'information_schema' AND nspname !~ '^pg'};
+    ## We always exclude information_schema, system, and bucardo schemas
+    $SQL .= q{AND n.nspname <> 'information_schema' AND nspname !~ '^pg' AND nspname !~ '^bucardo'};
 
     my @clause;
 
