@@ -3033,7 +3033,7 @@ sub add_all_goats {
 		die "Sorry, cannot add any ${type}s until at least one database has been added\n";
 	}
 
-    ## If there is more than one database, it must be selected via --db
+    ## If there is more than one database, it must be selected via db=
 	my $db;
     my $showdbs = 0;
 	if (exists $bcargs->{db}) {
@@ -3049,14 +3049,14 @@ sub add_all_goats {
 		($db) = values %$dbs;
 	}
 	else {
-		warn "Please specify which database to use with the --db option\n";
+		warn "Please specify which database to use with the db=<name> option\n";
         $showdbs = 1;
     }
 
     if ($showdbs) {
 		warn "Database choices:\n";
         for my $row (sort keys %$dbs) {
-			warn "--db=$row\n";
+			warn "  db=$row\n";
 		}
 		exit 1;
 	}
