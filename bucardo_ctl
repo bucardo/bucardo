@@ -3215,7 +3215,7 @@ sub connect_database {
 		$SQL = qq{SELECT db_getconn('$opt->{name}')};
 		my $conn = $dbh->selectall_arrayref($SQL)->[0][0];
 		my ($dsn,$user,$pass) = split /\n/ => $conn;
-		$dbh2 = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1});
+		$dbh2 = DBI->connect_cached($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1});
 	}
 
 	return $dbh2;
