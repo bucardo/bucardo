@@ -219,6 +219,7 @@ list()          if $verb eq 'list';
 config()        if $verb eq 'set' or $verb eq 'show';
 validate()      if $verb eq 'validate';
 update()        if $verb eq 'update';
+inspect()       if $verb eq 'inspect';
 
 ## For the rest, we expect a list of syncs with an optional decimal "timeout"
 my $adverb;
@@ -1551,6 +1552,129 @@ ORDER BY started DESC LIMIT 1
 	return $synclist, \%max;
 
 } ## end of get_detailed_syncs
+
+
+sub inspect {
+
+	my $msg = "Need to specify what to inspect: table, sync, or herd\n";
+	if (!@nouns) {
+		die $msg;
+	}
+	my $thing = shift @nouns;
+
+	inspect_table() if $thing =~ /tab/i  or $thing eq 't';
+	inspect_sync()  if $thing =~ /sync/i or $thing eq 's';
+	inspect_herd()  if $thing =~ /herd/i or $thing eq 'h';
+
+	die $msg;
+
+} ## end of inspect
+
+
+sub inspect_table {
+
+	## Must be given a name
+	@nouns or die "Usage: bucardo_ctl inspect table <tablename>\n";
+
+	$SQL = q{SELECT * FROM goat WHERE tablename=?};
+	my $sth_goat = $dbh->prepare($SQL);
+	$SQL = q{SELECT * FROM goat WHERE schemaname = ? AND tablename=?};
+	my $sth_goat_schema = $dbh->prepare($SQL);
+	my @tables;
+	for my $name (@nouns) {
+		my $sthg;
+		if ($name =~ /(.+)\.(.+)/) {
+			$sthg = $sth_goat_schema;
+			$count = $sthg->execute($1,$2);
+		}
+		else {
+			$sthg = $sth_goat;
+			$count = $sthg->execute($name);
+		}
+		if ($count < 1) {
+			die "Unknown table: $name\n";
+		}
+
+		for my $row (@{$sthg->fetchall_arrayref({})}) {
+			push @tables, $row;
+		}
+
+	}
+
+	for my $t (@tables) {
+		my ($s,$t,$db,$id) = @$t{qw/schemaname tablename db id/};
+		print "Inspecting $s.$t on $db\n";
+		## Grab all other tables referenced by this one
+		my $tablist = get_reffed_tables($s,$t,$db);
+
+		## Check that each referenced table is in a herd with this table
+		load_bucardo_info();
+
+		for my $tab (@$tablist) {
+			my ($type,$tab1,$tab2,$name,$def) = @$tab;
+			my $table = $type==1 ? $tab1 : $tab2;
+			if ($table !~ /(.+)\.(.+)/) {
+				die "Invalid table information\n";
+			}
+			my $schema = $1;
+			$table = $2;
+
+			## Make sure that each herd with this table also has this new table
+			my $ggoat = $global{goat};
+			my $hherd = $global{herd};
+			for my $herd (sort keys %{$ggoat->{$id}{herd}}) {
+				next if exists $hherd->{$herd}{hasgoat}{$schema}{$table};
+				printf "Table %s.%s is in herd %s, but $schema.$table (used as FK%s) is not\n",
+					$s,$t,$herd,
+						$type == 1 ? '' : ' target';
+
+			}
+		}
+	}
+
+	exit 0;
+
+}
+
+
+sub inspect_herd {
+	die "Not implemented yet\n";
+}
+
+
+sub inspect_sync {
+	die "Not implemented yet\n";
+}
+
+
+sub get_reffed_tables {
+
+	my ($s,$t,$db) = @_;
+
+	my $rdbh = connect_database({name => $db});
+
+	## So we get the schemas
+	$rdbh->do("SET search_path = pg_catalog");
+
+	$SQL= q{
+SELECT CASE WHEN conrelid=x.toid THEN 1 ELSE 2 END,
+ confrelid::regclass::text,
+ conrelid::regclass::text,
+ conname,
+ pg_get_constraintdef(oid, true)
+FROM pg_constraint, 
+(SELECT c.oid AS toid FROM pg_class c JOIN pg_namespace n
+   ON (n.oid=c.relnamespace) WHERE nspname=? AND relname=?
+) x
+WHERE contype = 'f' AND
+(confrelid = x.toid OR conrelid = x.toid)
+};
+
+	$sth = $rdbh->prepare($SQL);
+	$count = $sth->execute($s,$t);
+	return $sth->fetchall_arrayref();
+
+} ## end of get_reffed_tables
 
 
 sub load_bucardo_info {
