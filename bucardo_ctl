@@ -26,7 +26,7 @@ our $VERSION = '4.0.3';
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
 
-use vars qw/$dbh $SQL $sth %sth $count $info/;
+use vars qw/$dbh $SQL $sth %sth $count $info %global/;
 
 my $DATEFORMAT       = q{Mon DD, YYYY HH24:MI:SS};
 my $DEFAULT_DAYSBACK = 3;
@@ -1551,6 +1551,56 @@ ORDER BY started DESC LIMIT 1
 	return $synclist, \%max;
 
 } ## end of get_detailed_syncs
+
+
+sub load_bucardo_info {
+
+	## One-time load of all information from the database
+
+	## Grab all goat information
+	$SQL = 'SELECT * FROM goat';
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	my $goat = $sth->fetchall_hashref('id');
+
+	## Grab all herd information
+	$SQL = 'SELECT * FROM herd';
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	my $herd = $sth->fetchall_hashref('name');
+
+	## Grab all herdmap information, stick into previous hashes
+	$SQL = 'SELECT * FROM herdmap ORDER BY priority DESC, goat ASC';
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	for my $row (@{$sth->fetchall_arrayref({})}) {
+		my ($g,$h,$p) = @$row{qw/goat herd priority/};
+		$goat->{$g}{herd}{$h} = $p;
+		push @{$herd->{$h}{goat}} => [$g,$p];
+		my ($s,$t) = @{$goat->{$g}}{qw/schemaname tablename/};
+		$herd->{$h}{hasgoat}{$s}{$t} = $p;
+	}
+
+	## Grab all sync information
+	$SQL = 'SELECT * FROM sync';
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	my $sync;
+	for my $row (@{$sth->fetchall_arrayref({})}) {
+		my ($name,$p,$source) = @$row{qw/name priority source/};
+		$sync->{$name} = $row;
+		## Add in herd information
+		$sync->{$name}{herd} = $herd->{$source};
+	}
+
+	$global{goat} = $goat;
+	$global{herd} = $herd;
+	$global{sync} = $sync;
+
+
+	return;
+
+} ## end of load_bucardo_info
 
 
 sub list {
