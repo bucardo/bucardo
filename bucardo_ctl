@@ -17,6 +17,7 @@ Getopt::Long::Configure(qw/no_ignore_case/);
 use Time::HiRes 'sleep';
 use POSIX qw/ceil setsid/;
 use Data::Dumper 'Dumper';
+$Data::Dumper::Indent = 1;
 
 return 1 if $ENV{BUCARDO_CTL_TEST};
 
