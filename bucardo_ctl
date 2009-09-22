@@ -1625,11 +1625,17 @@ sub inspect_table {
 			my $ggoat = $global{goat};
 			my $hherd = $global{herd};
 			for my $herd (sort keys %{$ggoat->{$id}{herd}}) {
+				$seenit{fktable} = 1;
 				next if exists $hherd->{$herd}{hasgoat}{$schema}{$table};
-				printf "Table %s.%s is in herd %s, but $schema.$table (used as FK%s) is not\n",
-					$s,$t,$herd,
+				printf "Table %s.%s is in herd %s, but %s.%s (used as FK%s) is not\n",
+					$s, $t, $herd, $schema, $table,
 						$type == 1 ? '' : ' target';
 
+			}
+			if (! exists $seenit{fktable}) {
+				printf "Table %s.%s is used as FK%s by %s.%s\n",
+					$s,$t,$type==1 ? '' : ' target', $schema, $table;
+				delete $seenit{fktable};
 			}
 		}
 	}
