@@ -1723,6 +1723,8 @@ sub load_bucardo_info {
 		$sync->{$name} = $row;
 		## Add in herd information
 		$sync->{$name}{herd} = $herd->{$source};
+		## Add this sync back to the herd
+		$herd->{$source}{sync}{$name}++;
 	}
 
 	$global{goat} = $goat;
@@ -1891,20 +1893,43 @@ sub list_tables {
 
 	$info = $sth->fetchall_arrayref({});
 
-    my ($maxtable,$maxdb,$maxpkey) = (1,1,1);
-    for my $row (@$info) {
-        my $name = "$row->{schemaname}.$row->{tablename}";
-        $maxtable = length $name if length $name > $maxtable;
-        $name = $row->{pk} = $row->{pkey} ? "$row->{pkey} ($row->{pkeytype})" : 'none';
-        $maxpkey = length $name if length $name > $maxpkey;
-        $maxdb = length $row->{db} if length $row->{db} > $maxdb;
+	## Are we showing verbose information? Get matching herds
+	$VERBOSE and load_bucardo_info();
+
+	my ($maxtable,$maxdb,$maxpkey) = (1,1,1);
+	for my $row (@$info) {
+		my $name = "$row->{schemaname}.$row->{tablename}";
+		$maxtable = length $name if length $name > $maxtable;
+		$name = $row->{pk} = $row->{pkey} ? "$row->{pkey} ($row->{pkeytype})" : 'none';
+		$maxpkey = length $name if length $name > $maxpkey;
+		$maxdb = length $row->{db} if length $row->{db} > $maxdb;
    }
 
 	for my $row (@$info) {
 		printf "Table: %-*s  DB: %-*s  PK: %-*s\n",
-            $maxtable, "$row->{schemaname}.$row->{tablename}",
-            $maxdb, $row->{db},
-            $maxpkey, $row->{pk};
+			$maxtable, "$row->{schemaname}.$row->{tablename}",
+			$maxdb, $row->{db},
+			$maxpkey, $row->{pk};
+		if ($VERBOSE) {
+			my $g = $global{goat}->{$row->{id}};
+			if (exists $g->{herd}) {
+				print "  Belongs to herds: ";
+				print join ', ' => sort keys %{$g->{herd}};
+				print "\n";
+				my %syncs;
+				for my $herd (keys %{$g->{herd}}) {
+					my $h = $global{herd}->{$herd};
+					for my $s (keys %{$h->{sync}}) {
+						$syncs{$s}++;
+					}
+				}
+				if (keys %syncs) {
+					print "  Belongs to syncs: ";
+					print join ', ' => sort keys %syncs;
+					print "\n";
+				}
+			}
+		}
 	}
 
 	exit 0;
@@ -1966,7 +1991,7 @@ sub list_herds {
 			$dbh->quote(lc $term);
 	}
 
-    ## Grab the herds
+	## Grab the herds
 	$SQL = "SELECT * FROM herd $WHERE ORDER BY name";
 	$sth = $dbh->prepare($SQL);
 	$count = $sth->execute();
@@ -1978,7 +2003,7 @@ sub list_herds {
 	}
 	my $herdinfo = $sth->fetchall_arrayref({});
 
-    ## Figure out the spacing
+	## Figure out the spacing
 	my ($namelen,$goatlen) = (5,1);
 	for my $row (@$herdinfo) {
 		$namelen = length $row->{name} if length $row->{name} > $namelen;
@@ -1987,28 +2012,28 @@ sub list_herds {
 		$goatlen = length $num if length $num > $goatlen;
 	}
 
-    ## See which syncs are used by which herds
-    $SQL = 'SELECT name FROM sync WHERE source = ?';
-    my $synclist = $dbh->prepare($SQL);
+	## See which syncs are used by which herds
+	$SQL = 'SELECT name FROM sync WHERE source = ?';
+	my $synclist = $dbh->prepare($SQL);
 
-    ## Print out the results
+	## Print out the results
 	for my $row (@$herdinfo) {
-        my $hname = $row->{name};
-        my $showsyncs = '';
-        $count = $synclist->execute($hname);
-        if ($count) {
-            $showsyncs = join ' ' => map { $_->[0] } @{$synclist->fetchall_arrayref()};
-        }
+		my $hname = $row->{name};
+		my $showsyncs = '';
+		$count = $synclist->execute($hname);
+		if ($count) {
+			$showsyncs = join ' ' => map { $_->[0] } @{$synclist->fetchall_arrayref()};
+		}
 		printf "Herd: %-*s   Goats: %*d%s\n",
 			$namelen, $hname,
 			$goatlen, exists $herdmap->{$hname} ? scalar @{$herdmap->{$hname}} : 0,
-            $showsyncs ? "  Syncs: $showsyncs" : '';
-        if ($VERBOSE >= 1) {
-            for my $name (@{$herdmap->{$hname}}) {
-                my $type = ucfirst($name->{reltype});
-                print "  $type $name->{schemaname}.$name->{tablename}\n";
-            }
-        }
+			$showsyncs ? "  Syncs: $showsyncs" : '';
+		if ($VERBOSE >= 1) {
+			for my $name (@{$herdmap->{$hname}}) {
+				my $type = ucfirst($name->{reltype});
+				print "  $type $name->{schemaname}.$name->{tablename}\n";
+			}
+		}
 	}
 
 	exit 0;
@@ -2060,10 +2085,10 @@ sub list_syncs {
 	my ($namelen,$goatlen,$maxsource,$maxtarget,$maxtype) = (5,1,3,3,4);
 	for my $row (@$info) {
 		$namelen = length $row->{name} if length $row->{name} > $namelen;
-        $maxsource = length $row->{source} if length $row->{source} > $maxsource;
-        my $tsize = $row->{targetdb} ? length $row->{targetdb} : length $row->{targetgroup};
-        $maxtarget = $tsize if $tsize > $maxtarget;
-        $maxtype = length $row->{synctype} if length $row->{synctype} > $maxtype;
+		$maxsource = length $row->{source} if length $row->{source} > $maxsource;
+		my $tsize = $row->{targetdb} ? length $row->{targetdb} : length $row->{targetgroup};
+		$maxtarget = $tsize if $tsize > $maxtarget;
+		$maxtype = length $row->{synctype} if length $row->{synctype} > $maxtype;
 	}
 
 	## If in verbose mode, grab all the tables as well
