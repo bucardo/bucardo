@@ -243,30 +243,30 @@ SYNCMATCH: for my $sync (@nouns) {
 		next;
 	}
 
-    if ($sync =~ /%/) {
+	if ($sync =~ /%/) {
 		$SQL = qq{SELECT name FROM sync WHERE name LIKE '$sync'};
 		my $tmp = $dbh->selectall_arrayref($SQL);
 		push @syncs, (map { $_->[0] } @$tmp);
 		next SYNCMATCH;
-    }
-    if ($sync =~ /^\*(\w+)\*$/) {
+	}
+	if ($sync =~ /^\*(\w+)\*$/) {
 		$SQL = qq{SELECT name FROM sync WHERE name ~ '$1'};
 		my $tmp = $dbh->selectall_arrayref($SQL);
 		push @syncs => map { $_->[0] } @$tmp;
 		next SYNCMATCH;
-    }
-    if ($sync =~ /^\*(\w+)$/) {
+	}
+	if ($sync =~ /^\*(\w+)$/) {
 		$SQL = qq{SELECT name FROM sync WHERE name ~ '$1\$'};
 		my $tmp = $dbh->selectall_arrayref($SQL);
 		push @syncs => map { $_->[0] } @$tmp;
 		next SYNCMATCH;
-    }
-    if ($sync =~ /^(\w+)\*$/) {
+	}
+	if ($sync =~ /^(\w+)\*$/) {
 		$SQL = qq{SELECT name FROM sync WHERE name ~ '^$1'};
 		my $tmp = $dbh->selectall_arrayref($SQL);
 		push @syncs => map { $_->[0] } @$tmp;
 		next SYNCMATCH;
-    }
+	}
 	next if $sync eq 'sync';
 	if (! exists $syncs->{$sync}) {
 		die qq{Sync "$sync" does not appear to exist\n};
@@ -1227,8 +1227,8 @@ sub status_detail {
 	for my $sync (sort @nouns) {
 		$DEBUG and warn "Verify sync: $sync\n";
 		if (!exists $synclist->{$sync}) {
-            ## If a number, skip for ease of "kick name #" toggling
-            $sync !~ /^\d+$/ and die "No such sync: $sync\n";
+			## If a number, skip for ease of "kick name #" toggling
+			$sync !~ /^\d+$/ and die "No such sync: $sync\n";
 		}
 		else {
 			push @synclist => $sync;
@@ -1781,23 +1781,23 @@ sub list_dbs {
 
 	$info = $sth->fetchall_arrayref({});
 
-    my ($maxdb,$maxstat,$maxlim1,$maxlim2,$showlim) = (1,1,1,1,0);
-    for my $row (@$info) {
-        $maxdb = length $row->{name} if length $row->{name} > $maxdb;
-        $maxstat = length $row->{status} if length $row->{status} > $maxstat;
-        $maxlim1 = length $row->{sourcelimit} if length $row->{sourcelimit} > $maxlim1;
-        $maxlim2 = length $row->{targetlimit} if length $row->{targetlimit} > $maxlim2;
-        $showlim = 1 if $row->{sourcelimit} or $row->{targetlimit};
-    }
+	my ($maxdb,$maxstat,$maxlim1,$maxlim2,$showlim) = (1,1,1,1,0);
+	for my $row (@$info) {
+		$maxdb = length $row->{name} if length $row->{name} > $maxdb;
+		$maxstat = length $row->{status} if length $row->{status} > $maxstat;
+		$maxlim1 = length $row->{sourcelimit} if length $row->{sourcelimit} > $maxlim1;
+		$maxlim2 = length $row->{targetlimit} if length $row->{targetlimit} > $maxlim2;
+		$showlim = 1 if $row->{sourcelimit} or $row->{targetlimit};
+	}
 
 	for my $row (@$info) {
 		printf 'Database: %-*s  Status: %-*s  ',
-            $maxdb, $row->{name},
-            $maxstat, $row->{status};
+			$maxdb, $row->{name},
+			$maxstat, $row->{status};
 		if ($showlim) {
 			printf 'Limits: %-*s/%-*s  ',
-                $maxlim1, $row->{sourcelimit},
-                $maxlim2, $row->{targetlimit},
+				$maxlim1, $row->{sourcelimit},
+				$maxlim2, $row->{targetlimit},
 		}
 		print "Conn: psql -h $row->{dbhost} -p $row->{dbport} -U $row->{dbuser} -d $row->{dbname}\n";
 	}
@@ -2585,56 +2585,56 @@ sub function_exists {
 
 sub generate_clause {
 
-    ## Generate a snippet of SQL for a WHERE clause
+	## Generate a snippet of SQL for a WHERE clause
 
-    my $arg = shift or die;
-    return '' if ! $arg->{items};
+	my $arg = shift or die;
+	return '' if ! $arg->{items};
 
-    my $col = $arg->{col} or die;
-    my $items = $arg->{items};
-    my ($NOT,$NOTR) = ('','');
-    if (exists $arg->{not}) {
-        $NOT = 'NOT ';
-        $NOTR = '!';
-    }
-    my $andor = exists $arg->{andor} ? uc($arg->{andor}) : $NOT ? 'AND' : 'OR';
+	my $col = $arg->{col} or die;
+	my $items = $arg->{items};
+	my ($NOT,$NOTR) = ('','');
+	if (exists $arg->{not}) {
+		$NOT = 'NOT ';
+		$NOTR = '!';
+	}
+	my $andor = exists $arg->{andor} ? uc($arg->{andor}) : $NOT ? 'AND' : 'OR';
 
-    my (@oneitem,@itemlist);
-    for my $name (@{$items}) {
-        $name =~ s/^\s*(.+?)\s*$/$1/;
-        ## Contains:
-        if ($name =~ s/^\*(.+)\*$/$1/) {
-            push @oneitem => "$col ${NOTR}~ " . qquote($1);
-        }
-        ## Starts with:
-        elsif ($name =~ s/^\*(.+)/$1/) {
-            push @oneitem => "$col ${NOTR}~ " . qquote("$1\$");
-        }
-        ## Ends with:
-        elsif ($name =~ s/(.+)\*$/$1/) {
-            push @oneitem => "$col ${NOTR}~ " . qquote("^$1");
-        }
-        else {
-            push @itemlist => qquote($name);
-        }
-    }
+	my (@oneitem,@itemlist);
+	for my $name (@{$items}) {
+		$name =~ s/^\s*(.+?)\s*$/$1/;
+		## Contains:
+		if ($name =~ s/^\*(.+)\*$/$1/) {
+			push @oneitem => "$col ${NOTR}~ " . qquote($1);
+		}
+		## Starts with:
+		elsif ($name =~ s/^\*(.+)/$1/) {
+			push @oneitem => "$col ${NOTR}~ " . qquote("$1\$");
+		}
+		## Ends with:
+		elsif ($name =~ s/(.+)\*$/$1/) {
+			push @oneitem => "$col ${NOTR}~ " . qquote("^$1");
+		}
+		else {
+			push @itemlist => qquote($name);
+		}
+	}
 
-    if (@itemlist) {
-        my $list = sprintf "$col ${NOT}IN (" . (join ',' => @itemlist) . ')';
-        push @oneitem => $list;
-    }
-    my $SQL = join " $andor " => @oneitem;
+	if (@itemlist) {
+		my $list = sprintf "$col ${NOT}IN (" . (join ',' => @itemlist) . ')';
+		push @oneitem => $list;
+	}
+	my $SQL = join " $andor " => @oneitem;
 
-    return $SQL;
+	return $SQL;
 
 } ## end of generate_clause
 
 
 sub qquote {
-    ## Quick quote
-    my $thing = shift;
-    $thing =~ s/'/''/g;
-    return qq{'$thing'};
+	## Quick quote
+	my $thing = shift;
+	$thing =~ s/'/''/g;
+	return qq{'$thing'};
 }
 
 
@@ -2694,8 +2694,8 @@ sub upgrade {
 	);
 
 	my @old_indexes = (
-        ['bucardo', 'sync', 'sync_source_targetdb'],
-        ['bucardo', 'sync', 'sync_source_targetgroup'],
+		['bucardo', 'sync', 'sync_source_targetdb'],
+		['bucardo', 'sync', 'sync_source_targetgroup'],
 	);
 
 	my @new_columns = (
@@ -3213,17 +3213,17 @@ sub add_database {
 
 
 sub add_all_tables {
-    add_all_goats('table');
+	add_all_goats('table');
 	return;
 }
 sub add_all_sequences {
-    add_all_goats('sequence');
+	add_all_goats('sequence');
 	return;
 }
 
 sub add_all_goats {
 
-    my $type = shift;
+	my $type = shift;
 
 	## Usage: add all table(s) | add all sequence(s)
 	## Options:
@@ -3248,29 +3248,29 @@ sub add_all_goats {
 		die "Sorry, cannot add any ${type}s until at least one database has been added\n";
 	}
 
-    ## If there is more than one database, it must be selected via db=
+	## If there is more than one database, it must be selected via db=
 	my $db;
-    my $showdbs = 0;
+	my $showdbs = 0;
 	if (exists $bcargs->{db}) {
 		if (! exists $dbs->{$bcargs->{db}}) {
 			warn qq{Sorry, could not find a database named "$bcargs->{db}"\n};
-            $showdbs = 1;
+			$showdbs = 1;
 		}
-        else {
-            $db = $dbs->{$bcargs->{db}};
-        }
+		else {
+			$db = $dbs->{$bcargs->{db}};
+		}
 	}
 	elsif (keys %$dbs == 1) {
 		($db) = values %$dbs;
 	}
 	else {
 		warn "Please specify which database to use with the db=<name> option\n";
-        $showdbs = 1;
-    }
+		$showdbs = 1;
+	}
 
-    if ($showdbs) {
+	if ($showdbs) {
 		warn "Database choices:\n";
-        for my $row (sort keys %$dbs) {
+		for my $row (sort keys %$dbs) {
 			warn "  db=$row\n";
 		}
 		exit 1;
@@ -3280,35 +3280,35 @@ sub add_all_goats {
 	my $dbh2 = connect_database({name => $db->{name}});
 
 	## Query to pull all tables we may possibly need
-    my $kind = $type eq 'table' ? 'r' : 'S';
+	my $kind = $type eq 'table' ? 'r' : 'S';
 	$SQL = q{SELECT nspname, relname FROM pg_class c }
 		. q{JOIN pg_namespace n ON (n.oid = c.relnamespace) }
 		. qq{WHERE relkind = '$kind' };
 
-    ## We always exclude information_schema, system, and bucardo schemas
-    $SQL .= q{AND n.nspname <> 'information_schema' AND nspname !~ '^pg' AND nspname !~ '^bucardo'};
+	## We always exclude information_schema, system, and bucardo schemas
+	$SQL .= q{AND n.nspname <> 'information_schema' AND nspname !~ '^pg' AND nspname !~ '^bucardo'};
 
-    my @clause;
+	my @clause;
 
-    ## If they gave a schema option, restrict the query by namespace
-    push @clause => generate_clause({col => 'nspname', items => $bcargs->{schema}});
+	## If they gave a schema option, restrict the query by namespace
+	push @clause => generate_clause({col => 'nspname', items => $bcargs->{schema}});
 
-    ## If they have asked to exclude schemas, append that to the namespace clause
-    push @clause => generate_clause({col => 'nspname', items => $bcargs->{'exclude-schema'}, not => 1});
+	## If they have asked to exclude schemas, append that to the namespace clause
+	push @clause => generate_clause({col => 'nspname', items => $bcargs->{'exclude-schema'}, not => 1});
 
-    ## If they gave a table option, restrict the query by relname
-    push @clause => generate_clause({col => 'relname', items => $bcargs->{table}});
+	## If they gave a table option, restrict the query by relname
+	push @clause => generate_clause({col => 'relname', items => $bcargs->{table}});
 
-    ## If they have asked to exclude tables, append that to the relname clause
-    push @clause => generate_clause({col => 'relname', items => $bcargs->{'exclude-table'}, not => 1});
+	## If they have asked to exclude tables, append that to the relname clause
+	push @clause => generate_clause({col => 'relname', items => $bcargs->{'exclude-table'}, not => 1});
 
-    for my $c (@clause) {
-        next if ! $c;
-        $SQL .= "\nAND ($c)";
-    }
+	for my $c (@clause) {
+		next if ! $c;
+		$SQL .= "\nAND ($c)";
+	}
 
 	## Fetch all the items, bail if no matches are found
-    $VERBOSE >= 2 and warn "Query: $SQL\n";
+	$VERBOSE >= 2 and warn "Query: $SQL\n";
 	$sth = $dbh2->prepare($SQL);
 	$count = $sth->execute();
 	if ($count < 1) {
@@ -3348,14 +3348,14 @@ sub add_all_goats {
 
 	## Walk through all returned tables from the remote database
 	my %count = (seenit => 0, added => 0);
-    my (%old, %new, %fail);
+	my (%old, %new, %fail);
 	for my $row (@{$sth->fetchall_arrayref()}) {
 		my ($S,$T) = @$row;
 		## Do we already have this one?
 		if (exists $hastable{$S}{$T}) {
 			$VERBOSE >= 2 and warn "Skipping $type already in goat: $S.$T\n";
 			$count{seenit}++;
-            $old{$S}{$T} = 1;
+			$old{$S}{$T} = 1;
 			next;
 		}
 		$VERBOSE >= 2 and warn "Attempting to add $S.$T to the goat table\n";
@@ -3363,21 +3363,21 @@ sub add_all_goats {
 		if ($count != 1) {
 			$addtable->finish();
 			warn "Failed to add $type $S.$T to the goat table!\n";
-            $fail{$S}{$T} = 1;
+			$fail{$S}{$T} = 1;
 			next;
 		}
 		$SQL = q{SELECT currval('bucardo.goat_id_seq')};
 		my $id = $dbh->selectall_arrayref($SQL)->[0][0];
 		$VERBOSE >= 2 and warn "ID of new table $S.$T is $id\n";
 
-        ## Pull the information back out about this item
-        $SQL = 'SELECT * FROM goat WHERE id = ?';
-        $sth = $dbh->prepare($SQL);
-        $sth->execute($id);
-        my $info = $sth->fetchall_arrayref({});
+		## Pull the information back out about this item
+		$SQL = 'SELECT * FROM goat WHERE id = ?';
+		$sth = $dbh->prepare($SQL);
+		$sth->execute($id);
+		my $info = $sth->fetchall_arrayref({});
 
 		$count{added}++;
-        $new{$S}{$T} = 1;
+		$new{$S}{$T} = 1;
 		if ($herd) {
 			$addtoherd->execute($herd, $id);
 			$VERBOSE >= 2 and warn "Added $type $id to herd $herd\n";
@@ -3386,30 +3386,30 @@ sub add_all_goats {
 	}
 	$dbh->commit();
 
-    if ($VERBOSE >= 1) {
-        if (%new) {
-            print "New ${type}s:\n";
-            for my $s (sort keys %new) {
-                for my $t (sort keys %{$new{$s}}) {
-                    print "  $s.$t\n";
-                }
-            }
-        }
-        if (%fail) {
-            print "Failed to add ${type}s:\n";
-            for my $s (sort keys %fail) {
-                for my $t (sort keys %{$fail{$s}}) {
-                    print "  $s.$t\n";
-                }
-            }
-        }
-    }
+	if ($VERBOSE >= 1) {
+		if (%new) {
+			print "New ${type}s:\n";
+			for my $s (sort keys %new) {
+				for my $t (sort keys %{$new{$s}}) {
+					print "  $s.$t\n";
+				}
+			}
+		}
+		if (%fail) {
+			print "Failed to add ${type}s:\n";
+			for my $s (sort keys %fail) {
+				for my $t (sort keys %{$fail{$s}}) {
+					print "  $s.$t\n";
+				}
+			}
+		}
+	}
 
 	print "New ${type}s added: $count{added}\n";
 	print "Already added: $count{seenit}\n";
 
-    $dbh->disconnect();
-    $dbh2->disconnect();
+	$dbh->disconnect();
+	$dbh2->disconnect();
 
 	exit 0;
 
@@ -3540,8 +3540,8 @@ sub add_table {
 				warn "Args: $localargs, $ss, $table\n";
 			}
 			$count = $sth->execute(@vals,$schema,$table);
-            $SQL = q{SELECT currval('bucardo.goat_id_seq')};
-            push @id, $dbh->selectall_arrayref($SQL)->[0][0];
+			$SQL = q{SELECT currval('bucardo.goat_id_seq')};
+			push @id, $dbh->selectall_arrayref($SQL)->[0][0];
 		};
 		if ($@) {
 			die "Table add failed: $@\n";
@@ -3665,8 +3665,8 @@ sub add_sequence {
 				warn "Args: $db, $ss, $table, sequence\n";
 			}
 			$count = $sth->execute($db,$schema,$table,'sequence');
-            $SQL = q{SELECT currval('bucardo.goat_id_seq')};
-            push @id, $dbh->selectall_arrayref($SQL)->[0][0];
+			$SQL = q{SELECT currval('bucardo.goat_id_seq')};
+			push @id, $dbh->selectall_arrayref($SQL)->[0][0];
 		};
 		if ($@) {
 			die "Sequence add failed: $@\n";
@@ -4097,8 +4097,7 @@ sub add_herd {
 	## The rest is the options. If not there, we fill in the defaults
 	my $info = join ' ' => @nouns;
 	## Command line name, default value, database column name
-	my %arg = (
-			   );
+	my %arg = ();
 
 	my @goatlist;
 	my $args = process_args($info);
@@ -4306,7 +4305,7 @@ sub install {
 	my $host = $bcargs->{dbhost} || $ENV{DBHOST} || '<none>';
 	my $port = $bcargs->{dbport} || $ENV{DBPORT} || 5432;
 	my $user = $ENV{DBUSER} || 'postgres';
-    my $dbname = $ENV{DBNAME} || 'postgres';
+	my $dbname = $ENV{DBNAME} || 'postgres';
 
 	## Make sure the bucardo.schema file is available, and extract some config items
 	my ($fh, $schema_file) = find_bucardo_schema();
