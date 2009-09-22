@@ -194,7 +194,7 @@ sub connect_database {
 	## First and only argument is the database id
 	## If blank or zero, we return the main database
 	## Returns the string 'inactive' if set as such in the db table
-	## Returns the database handle and the backedn PID
+	## Returns the database handle and the backend PID
 
 	my $self = shift;
 
