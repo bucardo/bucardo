@@ -1867,9 +1867,16 @@ sub list_tables {
 	## If any nouns left, treat as wildcards
 	my $AND = '';
 	for my $term (@nouns) {
-		$AND .= sprintf q{%s lower(tablename) ~ %s},
-			$AND ? 'OR' : 'AND',
-				$dbh->quote(lc $term);
+		if ($term =~ s/\*?(.+)\*?/$1/) {
+			$AND .= sprintf q{%s lower(tablename) = %s},
+				$AND ? 'OR' : 'AND',
+					$dbh->quote(lc $term);
+		}
+		else {
+			$AND .= sprintf q{%s lower(tablename) ~ %s},
+				$AND ? 'OR' : 'AND',
+					$dbh->quote(lc $term);
+		}
 	}
 
 	$SQL = "SELECT * FROM goat WHERE reltype = 'table' $AND ORDER BY schemaname, tablename";
