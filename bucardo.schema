@@ -225,7 +225,7 @@ CREATE TABLE bucardo.goat (
   ping               BOOLEAN         NULL,                 -- overrides sync-level ping
   customselect       TEXT            NULL,
   makedelta          BOOLEAN         NULL,
-  rebuild_index      BOOLEAN         NULL,                 -- overrides sync-level rebuild_index
+  rebuild_index      SMALLINT    NOT NULL DEFAULT 0,       -- overrides sync-level rebuild_index
   ghost              BOOLEAN     NOT NULL DEFAULT 'false', -- only drop triggers, do not replicate
   standard_conflict  TEXT            NULL,
   analyze_after_copy BOOLEAN     NOT NULL DEFAULT 'true',
@@ -372,7 +372,7 @@ CREATE TABLE bucardo.sync (
   checktime          INTERVAL        NULL,                   -- How often to check if we've not heard anything?
   status             TEXT        NOT NULL DEFAULT 'active',  -- Possibly CHECK / FK ('stopped','paused','b0rken')
   makedelta          BOOLEAN     NOT NULL DEFAULT 'false',
-  rebuild_index      BOOLEAN     NOT NULL DEFAULT 'false',   -- Load without indexes and then REINDEX table
+  rebuild_index      SMALLINT    NOT NULL DEFAULT 0,     -- Load without indexes and then REINDEX table
   priority           SMALLINT    NOT NULL DEFAULT 0,     -- Higher is better
   txnmode            TEXT        NOT NULL DEFAULT 'SERIALIZABLE',
   analyze_after_copy BOOLEAN     NOT NULL DEFAULT 'true',

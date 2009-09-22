@@ -4497,7 +4497,7 @@ sub start_kid {
 
 				## If requested, disable all indexes, then enable and rebuild them after we COPY
 				my $hasindex = 0;
-				if ($g->{rebuild_index}) {
+				if ($g->{rebuild_index} == 2) {
 					$SQL = "SELECT relhasindex FROM pg_class WHERE oid = $toid";
 					$hasindex = $targetdbh->selectall_arrayref($SQL)->[0][0];
 					if ($hasindex) {
@@ -4909,7 +4909,7 @@ sub start_kid {
 				my ($toid,$hasindex_src,$hasindex_tgt) = ($g->{targetoid}{$targetdb},0,0);
 
 				## If requested, turn off indexes before making changes
-				if ($g->{rebuild_index}) {
+				if ($g->{rebuild_index} == 2) {
 					$SQL = "SELECT relhasindex FROM pg_class WHERE oid = $g->{oid}";
 					$hasindex_src = $sourcedbh->selectall_arrayref($SQL)->[0][0];
 					if ($hasindex_src) {

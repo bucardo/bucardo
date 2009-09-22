@@ -1271,7 +1271,7 @@ sub status_detail {
 		}
 
 		## Should be 'yes' or 'no'
-		for (qw/makedelta analyze_after_copy stayalive kidsalive ping rebuild_index do_listen usecustomselect/) {
+		for (qw/makedelta analyze_after_copy stayalive kidsalive ping do_listen usecustomselect/) {
 			$s->{$_} = (defined $s->{$_} and $s->{$_}) ? 'yes' : 'no ';
 		}
 
@@ -2493,6 +2493,24 @@ sub column_value {
 
 } ## end of column_value
 
+sub column_type {
+
+	my ($schema,$table,$column) = @_;
+	my $SQL = 'SELECT  pg_catalog.format_type(a.atttypid, a.atttypmod) '.
+		'FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n, '.
+		'pg_catalog.pg_attribute a '.
+		'WHERE n.oid=c.relnamespace AND n.nspname = ? AND c.relname = ? '.
+		'AND a.attname = ? AND a.attrelid = c.oid';
+	my $sth = $dbh->prepare_cached($SQL);
+	my $count = $sth->execute($schema,$table,$column);
+	if ($count eq '0E0') {
+		$sth->finish();
+		return '';
+	}
+	return $sth->fetchall_arrayref()->[0][0];
+
+} ## end of column_type
+
 sub constraint_definition {
 
 	my $name = shift;
@@ -2698,6 +2716,10 @@ sub upgrade {
 		['bucardo', 'sync', 'sync_source_targetgroup'],
 	);
 
+	my @old_views = (
+		'goats_in_herd'
+	);
+
 	my @new_columns = (
 		['bucardo', 'audit_pid', 'id',              q{INTEGER NOT NULL DEFAULT nextval('audit_pid_id_seq')}],
 		['bucardo', 'audit_pid', 'parentid',        q{INTEGER     NULL}],
@@ -2726,7 +2748,9 @@ sub upgrade {
 	);
 
 	my @altered_columns = (
-		['bucardo', 'goat', 'schemaname', 'NO DEFAULT'],
+		['bucardo', 'goat', 'schemaname',    'NO DEFAULT'],
+		['bucardo', 'goat', 'rebuild_index', 'BOOL2SMALLINT'],
+		['bucardo', 'sync', 'rebuild_index', 'BOOL2SMALLINT'],
 	);
 
 	my @row_values = (
@@ -2759,6 +2783,14 @@ sub upgrade {
 			clog "Dropped rule $rule on table $schema.$table";
 			$changes++;
 		}
+	}
+
+	## Drop any old views
+	for my $name (@old_views) {
+		next if !relation_exists('bucardo', $name);
+		$dbh->do("DROP VIEW $name");
+		clog "Dropped view $name";
+		$changes++;
 	}
 
 	## Drop any old sequences
@@ -2811,6 +2843,16 @@ sub upgrade {
 			next if $newname eq $oldname;
 			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column SET DEFAULT $newname");
 			clog("Changed DEFAULT on $schema.$table.$column to $newname");
+			$changes++;
+		}
+		elsif ($change eq 'BOOL2SMALLINT') {
+			my $oldtype = column_type($schema, $table, $column);
+			next if $oldtype eq 'smallint';
+			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column DROP DEFAULT");
+			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column TYPE smallint "
+							. "USING CASE WHEN $column IS NULL OR $column IS FALSE THEN 0 ELSE 1 END");
+			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column SET DEFAULT 0");
+			clog("Changed type of $schema.$table.$column to smallint");
 			$changes++;
 		}
 		else {
