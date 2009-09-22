@@ -1610,6 +1610,7 @@ sub inspect_table {
 		## Check that each referenced table is in a herd with this table
 		load_bucardo_info();
 
+		my %seenit;
 		for my $tab (@$tablist) {
 			my ($type,$tab1,$tab2,$name,$def) = @$tab;
 			my $table = $type==1 ? $tab1 : $tab2;
@@ -1618,6 +1619,7 @@ sub inspect_table {
 			}
 			my $schema = $1;
 			$table = $2;
+			next if $seenit{"$schema.$table.$type"}++;
 
 			## Make sure that each herd with this table also has this new table
 			my $ggoat = $global{goat};
