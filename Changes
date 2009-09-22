@@ -1,6 +1,23 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
 
+  - Add "bucardo_ctl inspect table" to show all dependencies, as well 
+    as cross referencing against herds the table is in [GSM]
+
+  - Fix an error wher validate_sync tries to recreate an existing trigger; 
+    occured when a fullcopy sync was set to ping=true [GSM]
+
+  - When using "bucardo_ctl add all tables", ignore any tables inside 
+    schemas starting with 'bucardo' [GSM]
+
+  - Allow --verbose flag for list syncs to show linked tables [GSM]
+
+  - Allow --verbose flag for list tables to show linked herds and syncs [GSM]
+
+  - Change rebuild_index to a smallint: a 1 only runs it with a fullcopy.
+    If you really want to use it otherwise, set it to 2 [GSM]
+
+
 Bucardo version 4.0.3, released September 16, 2009
 
   - Fix some minor problems with bucardo_ctl and "add sync" [GSM]
