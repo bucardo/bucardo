@@ -11,6 +11,10 @@
   - Fix an error wher validate_sync tries to recreate an existing trigger; 
     occured when a fullcopy sync was set to ping=true [GSM]
 
+  - When using "bucardo_ctl add all tables db=<name>", make sure we only 
+    look for the already added tables for that specific database.
+    [Selena Deckelmann and Josh Tolley]
+
   - When using "bucardo_ctl add all tables", ignore any tables inside 
     schemas starting with 'bucardo' [GSM]
 

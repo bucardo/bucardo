@@ -3358,8 +3358,7 @@ sub add_all_goats {
 	}
 
 	## Grab all current tables or sequences from the goat table.
-	## We'll only match on schema+table here, and NOT the db name
-	$SQL = qq{SELECT schemaname, tablename FROM goat WHERE reltype= '$type'};
+	$SQL = qq{SELECT schemaname, tablename FROM goat WHERE reltype= '$type' AND db = '$db->{name}'};
 	my %hastable;
 	for my $row (@{$dbh->selectall_arrayref($SQL)}) {
 		$hastable{$row->[0]}{$row->[1]}++;
