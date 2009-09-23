@@ -200,7 +200,7 @@ sub connect_database {
 
 	my $id = shift || 0;
 
-	my ($dsn,$dbh,$user,$pass);
+	my ($dsn,$dbh,$user,$pass,$ssp);
 
 	## If id is 0, connect to the main database
 	if (!$id) {
@@ -210,6 +210,7 @@ sub connect_database {
 		defined $self->{dbconn} and length $self->{dbconn} and $dsn .= ";$self->{dbconn}";
 		$user = $self->{dbuser};
 		$pass = $self->{dbpass};
+		$ssp = 1;
 	}
 	else {
 		my $db = $self->get_dbs;
@@ -226,6 +227,7 @@ sub connect_database {
 		length $d->{dbconn} and $dsn .= ";$d->{dbconn}";
 		$user = $d->{dbuser};
 		$pass = $d->{dbpass} || '';
+		$ssp = $d->{server_side_prepares};
 	}
 
 	$dbh = DBI->connect
@@ -235,6 +237,13 @@ sub connect_database {
 		 $pass,
 		 {AutoCommit=>0, RaiseError=>1, PrintError=>0}
 	);
+
+	## If we are using something like pgbouncer, we need to tell Bucardo not to
+	## use server-side prepared statements, as they will not span commits/rollbacks.
+	if (! $ssp) {
+		$dbh->{pg_server_prepare} = 0;
+		$self->glog("Turning off server-side prepares for this database connection");
+	}
 
 	## Grab the backend PID for this Postgres process
 	## Also a nice check that everything is working properly

@@ -154,20 +154,21 @@ upsert_attempts|3|How many times do we try out the upsert loop?
 -- Keep track of every database we need to connect to
 --
 CREATE TABLE bucardo.db (
-  name        TEXT        NOT NULL,  -- local name for convenience, not necessarily database name
-                CONSTRAINT db_name_pk PRIMARY KEY (name),
-  dbhost      TEXT        NOT NULL DEFAULT '',
-  dbport      TEXT        NOT NULL DEFAULT 5432,
-  dbname      TEXT        NOT NULL,
-  dbuser      TEXT        NOT NULL,
-  dbpass      TEXT            NULL,
-  dbconn      TEXT        NOT NULL DEFAULT '',  -- string to add to the generated dsn
-  dbservice   TEXT            NULL,
-  pgpass      TEXT            NULL,      -- local file with connection info same as pgpass
-  status      TEXT        NOT NULL DEFAULT 'active',
-  sourcelimit SMALLINT    NOT NULL DEFAULT 0, -- maximum concurrent read connections to this database
-  targetlimit SMALLINT    NOT NULL DEFAULT 0, -- maximum concurrent write connections to this database
-  cdate       TIMESTAMPTZ NOT NULL DEFAULT now()
+  name                 TEXT        NOT NULL,  -- local name for convenience, not necessarily database name
+                         CONSTRAINT db_name_pk PRIMARY KEY (name),
+  dbhost               TEXT        NOT NULL DEFAULT '',
+  dbport               TEXT        NOT NULL DEFAULT 5432,
+  dbname               TEXT        NOT NULL,
+  dbuser               TEXT        NOT NULL,
+  dbpass               TEXT            NULL,
+  dbconn               TEXT        NOT NULL DEFAULT '',  -- string to add to the generated dsn
+  dbservice            TEXT            NULL,
+  pgpass               TEXT            NULL,      -- local file with connection info same as pgpass
+  status               TEXT        NOT NULL DEFAULT 'active',
+  sourcelimit          SMALLINT    NOT NULL DEFAULT 0, -- maximum concurrent read connections to this database
+  targetlimit          SMALLINT    NOT NULL DEFAULT 0, -- maximum concurrent write connections to this database
+  server_side_prepares BOOLEAN     NOT NULL DEFAULT 'true',
+  cdate                TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX db_dsn_unique ON bucardo.db(dbhost,dbport,dbname,dbuser) WHERE NOT name ~ '^bctest';
 ALTER TABLE bucardo.db ADD CONSTRAINT db_status CHECK (status IN ('active','inactive'));

@@ -15,6 +15,11 @@
     look for the already added tables for that specific database.
     [Selena Deckelmann and Josh Tolley]
 
+  - Add new boolean column to the "db" table named "server_side_prepares", which 
+    is true by default. If off, Bucardo will not use server-side prepared 
+    statements, and thus can be used in PgBouncer's transaction mode.
+    [GSM, idea by Andrew Spencer]
+
   - When using "bucardo_ctl add all tables", ignore any tables inside 
     schemas starting with 'bucardo' [GSM]
 
