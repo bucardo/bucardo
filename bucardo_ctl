@@ -828,6 +828,13 @@ sub update {
 			if (! exists $row->{$n}) {
 				die qq{Sorry, cannot change "$n" for $item "$localname"\n};
 			}
+			if ($tabname eq 'db' and $n eq 'dbhost' and $v eq 'none') {
+				$SQL = "UPDATE db SET dbhost = '' WHERE $pkcol = ?";
+				$sth = $dbh->prepare($SQL);
+				$sth->execute($localid);
+				push @{$change{$localname}} => [$n, $row->{$n}, 'NULL'];
+				next;
+			}
 			$SQL = "UPDATE $tabname SET $n = ? WHERE $pkcol = ?";
 
 			## Only one of targetdb and targetgroup can be set, no NULL the other one
