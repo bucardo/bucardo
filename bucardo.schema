@@ -1337,7 +1337,15 @@ $bc$
         ## (if bc_schema exists) Do these supporting functions exist?
         (my $noquotepkey = $safepkey) =~ s/^"(.+)"$/$1/;
         my $func1 = length($noquotepkey) <= 45 ? "bucardo_add_delta_$noquotepkey" : "bad_$noquotepkey";
+        if (length $func1 > 63) {
+            $SQL = qq{SELECT 'bucardo_add_delta_'::text || md5('$schema$table$noquotepkey') AS m};
+            $func1 = spi_exec_query($SQL)->{rows}[0]{m};
+        }
         my $func2 = length($noquotepkey) <= 38 ? "bucardo_add_delta_binary_$noquotepkey" : "badb_$noquotepkey";
+        if (length $func2 > 63) {
+            $SQL = qq{SELECT 'bucardo_add_delta_b_'::text || md5('$schema$table$noquotepkey') AS m};
+            $func2 = spi_exec_query($SQL)->{rows}[0]{m};
+        }
         my $func3 = "bucardo_purge_delta";
         my $func4 = "bucardo_compress_delta";
         if ($safepkey =~ /^"/) {

@@ -1,6 +1,10 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
 
+  - Fix problem with possible function name collision when the names 
+    of the combined columns in the primary key is greater than NAMEDATALEN, 
+    which we'll assume is 63. [GSM]
+
   - Add "bucardo_ctl inspect table" to show all dependencies, as well 
     as cross referencing against herds the table is in [GSM]
 
