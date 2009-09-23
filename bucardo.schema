@@ -295,11 +295,6 @@ CREATE TABLE bucardo.herdmap (
 );
 CREATE UNIQUE INDEX bucardo_herdmap_unique ON bucardo.herdmap(herd,goat);
 
-CREATE VIEW bucardo.goats_in_herd AS
-  SELECT hm.herd, g.*
-  FROM goat g
-  JOIN herdmap hm ON hm.goat = g.id;
-
 CREATE FUNCTION bucardo.herdcheck()
 RETURNS TRIGGER
 LANGUAGE plperlu
