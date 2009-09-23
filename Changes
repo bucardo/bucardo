@@ -30,6 +30,9 @@
   - Change rebuild_index to a smallint: a 1 only runs it with a fullcopy.
     If you really want to use it otherwise, set it to 2 [GSM]
 
+  - Allow the dbhost to be turned off (local socket only) in the db table 
+    when using "bucardo_ctl update db <name> host=non. [GSM]
+
 
 Bucardo version 4.0.3, released September 16, 2009
 
