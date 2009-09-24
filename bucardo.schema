@@ -1430,14 +1430,10 @@ $bc$
             };
             elog(DEBUG, "Preparing to check tables: $SQL");
             $sth = $dbh->prepare($SQL);
-            $sth->execute('bucardo_delta','bucardo_track','bucardo_delta_targets','bucardo_truncate_trigger','bucardo_truncate_trigger_log','bucardo_sequences');
+            my @cols = qw( bucardo_delta bucardo_track bucardo_delta_targets bucardo_truncate_trigger bucardo_truncate_trigger_log bucardo_sequences );
+            $sth->execute(@cols);
             my $row = $sth->fetchall_arrayref()->[0];
-            $found{'bucardo_delta'} = $row->[0];
-            $found{'bucardo_track'} = $row->[1];
-            $found{'bucardo_delta_targets'} = $row->[2];
-            $found{'bucardo_truncate_trigger'} = $row->[3];
-            $found{'bucardo_truncate_trigger_log'} = $row->[4];
-            $found{'bucardo_sequences'} = $row->[5];
+            @found{@cols} = @$row;
         }
 
         ## (if bucardo_delta exists) Do these indexes exist?
@@ -1482,7 +1478,7 @@ $bc$
         }
 
         if (!$found{bucardo_delta}) {
-            $found{index1} = $found{index2} = $found{index3} = $found{index4} = $found{index5} = 0;
+            $found{"index$_"} = 0 for 1..5;
         }
         else {
             $SQL = qq{
