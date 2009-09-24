@@ -242,7 +242,7 @@ sub connect_database {
 	## use server-side prepared statements, as they will not span commits/rollbacks.
 	if (! $ssp) {
 		$dbh->{pg_server_prepare} = 0;
-		$self->glog("Turning off server-side prepares for this database connection");
+		$self->glog('Turning off server-side prepares for this database connection');
 	}
 
 	## Grab the backend PID for this Postgres process

@@ -1670,7 +1670,7 @@ sub get_reffed_tables {
 	my $rdbh = connect_database({name => $db});
 
 	## So we get the schemas
-	$rdbh->do("SET search_path = pg_catalog");
+	$rdbh->do('SET search_path = pg_catalog');
 
 	$SQL= q{
 SELECT CASE WHEN conrelid=x.toid THEN 1 ELSE 2 END,
@@ -1809,7 +1809,7 @@ sub list_dbs {
 		}
 		print "Conn: psql -h $row->{dbhost} -p $row->{dbport} -U $row->{dbuser} -d $row->{dbname}";
 		if (! $row->{server_side_prepares}) {
-			print " (SSP is off)";
+			print ' (SSP is off)';
 		}
 		print "\n";
 	}
@@ -1925,7 +1925,7 @@ sub list_tables {
 		if ($VERBOSE) {
 			my $g = $global{goat}->{$row->{id}};
 			if (exists $g->{herd}) {
-				print "  Belongs to herds: ";
+				print '  Belongs to herds: ';
 				print join ', ' => sort keys %{$g->{herd}};
 				print "\n";
 				my %syncs;
@@ -1936,7 +1936,7 @@ sub list_tables {
 					}
 				}
 				if (keys %syncs) {
-					print "  Belongs to syncs: ";
+					print '  Belongs to syncs: ';
 					print join ', ' => sort keys %syncs;
 					print "\n";
 				}
@@ -3202,7 +3202,7 @@ sub add_database {
 	## The first word is the name of the database we connect to (column dbname)
 	my $item_name = shift @nouns || '';
 	if (!length $item_name) {
-		warn "Usage: add db <name>";
+		warn "Usage: add db <name>\n";
 		exit 1;
 	}
 
@@ -3518,7 +3518,7 @@ sub add_table {
 	@nouns = @newnouns;
 
 	if (! @tables) {
-		warn "Usage: add table <name>";
+		warn "Usage: add table <name>\n";
 		exit 1;
 	}
 
@@ -3660,7 +3660,7 @@ sub add_sequence {
 	@nouns = @newnouns;
 
 	if (! @tables) {
-		warn "Usage: add sequence <name>";
+		warn "Usage: add sequence <name>\n";
 		exit 1;
 	}
 
@@ -3766,7 +3766,7 @@ sub add_sync {
 	## The first word is the sync name
 	my $item_name = shift @nouns || '';
 	if (!length $item_name) {
-		warn "Usage: add sync <name>";
+		warn "Usage: add sync <name>\n";
 		exit 1;
 	}
 
@@ -4046,7 +4046,7 @@ sub alter_sync {
 	## The first word is the sync name
 	my $item_name = shift @nouns || '';
 	if (!length $item_name) {
-		warn "Usage: alter sync <name>";
+		warn "Usage: alter sync <name>\n";
 		exit 1;
 	}
 
@@ -4145,7 +4145,7 @@ sub add_herd {
 	my $item_name = shift @nouns || '';
 
 	if (!length $item_name) {
-		warn "Usage: add herd <name> goats";
+		warn "Usage: add herd <name> goats\n";
 		exit 1;
 	}
 
@@ -4222,7 +4222,7 @@ sub add_dbgroup {
 
 	my $name = shift @nouns || '';
 	if (!length $name) {
-		warn "Usage: add dbgroup <name>";
+		warn "Usage: add dbgroup <name>\n";
 		exit 1;
 	}
 

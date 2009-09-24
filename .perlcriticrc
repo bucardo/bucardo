@@ -27,6 +27,7 @@ profile-strictness = quiet
 [-Modules::RequireEndWithOne]
 ## This does such a poor job we have to exclude it
 [-RegularExpressions::ProhibitCaptureWithoutTest]
+[-RegularExpressions::ProhibitFixedStringMatches]
 [-ValuesAndExpressions::ProhibitMixedBooleanOperators]
 [-Variables::RequireLocalizedPunctuationVars]
 [-InputOutput::ProhibitExplicitStdin]
