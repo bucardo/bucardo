@@ -9,8 +9,8 @@ Bucardo version 4.0.4
   - Add "bucardo_ctl inspect table" to show all dependencies, as well 
     as cross referencing against herds the table is in [GSM]
 
-  - Fix an error wher validate_sync tries to recreate an existing trigger; 
-    occured when a fullcopy sync was set to ping=true [GSM]
+  - Fix an error when validate_sync tries to recreate an existing trigger; 
+    occurred when a fullcopy sync was set to ping=true [GSM]
 
   - When using "bucardo_ctl add all tables db=<name>", make sure we only 
     look for the already added tables for that specific database.
@@ -20,6 +20,11 @@ Bucardo version 4.0.4
     is true by default. If off, Bucardo will not use server-side prepared 
     statements, and thus can be used in PgBouncer's transaction mode.
     [GSM, idea by Andrew Spencer]
+
+  - During pushdelta, break large number of rows for a single table until multiple 
+    DELETE and COPY calls, to help debugging, to allow for a progress indicator 
+    both at the Bucardo and Postgres levels, and to prevent crashes seen on 
+    older versions of Postgres when very large IN() lists are used. [GSM]
 
   - When using "bucardo_ctl add all tables", ignore any tables inside 
     schemas starting with 'bucardo' [GSM]

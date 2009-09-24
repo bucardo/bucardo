@@ -167,6 +167,8 @@ FreeBSD
 GSM
 Gugic
 Kebrt
+NAMEDATALEN
+PgBouncer's
 PID
 PIDs
 SMTP
@@ -177,10 +179,12 @@ Vilem
 Wendt
 Yan
 attnums
+boolean
 bytea
 config
 ctl
 customcode
+dbhost
 dbproblem
 dbs
 debugstderr
@@ -198,6 +202,7 @@ pid
 ppid
 rc
 respawn
+schemas
 smallint
 sourcedbh
 staylive
@@ -310,6 +315,7 @@ postgresql
 pragma
 realclean
 sha
+sig
 skipcheck
 spellcheck
 submitnews

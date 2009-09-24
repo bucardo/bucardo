@@ -4598,9 +4598,40 @@ sub start_kid {
 							## If rows were inserted to source, they won't be on the target anyway
 							## If rows were updated on source, we'll insert later (update = delete + insert)
 							$self->glog(qq{Deleting rows from $S.$T});
-							$SQL = "DELETE FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)";
-							($count = $targetdbh->do($SQL)) =~ s/0E0/0/o;
-							$dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T} = $count;
+
+							## If we've got a very large number of values, break the DELETEs into multiples
+							my @delchunks;
+							if (length $pkvals > 10_000) {
+								## How many items in the IN () clause
+								my $deletebatch = 1_000;
+								my $dcount = 0;
+								my $delcount = 0;
+								for my $row (@$info) {
+									my $inner = join ',' => map { s/\'/''/go; qq{'$_'}; } @$row;
+									## Put this group of pks into a temporary array
+									$delchunks[$delcount] .= $g->{pkcols} > 1 ? "($inner)," : "$inner,";
+									## Once we reach out limit, start appending to the next bit of the array
+									if ($dcount++ >= $deletebatch) {
+										$delcount++;
+										$dcount = 0;
+									}
+								}
+								$dcount = 1;
+								for my $chunk (@delchunks) {
+									## Remove the trailing comma
+									chop $chunk;
+									$SQL = "DELETE /* chunk $dcount */ FROM $S.$T WHERE $g->{pkeycols} IN ($chunk)";
+									$self->glog("Deleting chunk $dcount");
+									($count = $targetdbh->do($SQL)) =~ s/0E0/0/o;
+									$dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T} = $count;
+									$dcount++;
+								}
+							}
+							else {
+								$SQL = "DELETE FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)";
+								($count = $targetdbh->do($SQL)) =~ s/0E0/0/o;
+								$dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T} = $count;
+							}
 
 							## COPY over all affected rows from source to target
 
@@ -4615,18 +4646,34 @@ sub start_kid {
 								$sourcedbh->do($srccmd);
 								$srccmd = "COPY $temptable TO STDOUT";
 							}
-							else {
+							elsif (! @delchunks) {
 								$srccmd = "COPY (SELECT * FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)) TO STDOUT";
 							}
 
 							my $tgtcmd = "COPY $S.$T FROM STDIN";
-							$sourcedbh->do($srccmd);
 							$targetdbh->do($tgtcmd);
 							my $buffer = '';
 							$self->glog(qq{Begin COPY to $S.$T});
-							while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
-								$targetdbh->pg_putcopydata($buffer);
+
+							if ($source_modern_copy and @delchunks) {
+								my $dcount = 1;
+								for my $chunk (@delchunks) {
+									$srccmd = "COPY /* chunk $dcount */ (SELECT * FROM $S.$T WHERE $g->{pkeycols} IN ($chunk)) TO STDOUT";
+									$sourcedbh->do($srccmd);
+									$self->glog("Copying chunk $dcount");
+									$dcount++;
+									while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
+										$targetdbh->pg_putcopydata($buffer);
+									}
+								}
 							}
+							else {
+								$sourcedbh->do($srccmd);
+								while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
+									$targetdbh->pg_putcopydata($buffer);
+								}
+							}
+
 							$targetdbh->pg_putcopyend();
 							$self->glog(qq{End COPY to $S.$T});
 							$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T} = @$info;
