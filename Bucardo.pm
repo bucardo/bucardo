@@ -2808,11 +2808,11 @@ sub start_controller {
 									$x = 0;
 									for my $qpk (@{$g->{qpkey}}) {
 										$clause .= sprintf q{%s::%s = d.rowid%s::%s AND },
-											$g->{binarypkey}[$x] ? qq{ENCODE(t.$qpk,'base64')} : "t.$qpk",
+										$g->{binarypkey}[$x] ? qq{ENCODE(t.$qpk,'base64')} : "t.$qpk",
 # 8.2 can't cast ENCODE()'s TEXT return value to BYTEA; leaving at TEXT appears to work
-                                            $g->{binarypkey}[$x] ? 'text' : $g->{pkeytype}[$x],
-                                            $x ? $x+1 : '',
-                                            $g->{binarypkey}[$x] ? 'text' : $g->{pkeytype}[$x];
+										$g->{binarypkey}[$x] ? 'text' : $g->{pkeytype}[$x],
+										$x ? $x+1 : '',
+										$g->{binarypkey}[$x] ? 'text' : $g->{pkeytype}[$x];
 										$cols ||= $g->{binarypkey}[0] ? qq{ENCODE(t.$qpk,'base64'),} : "t.$qpk";
 										$x++;
 									}
@@ -4118,16 +4118,16 @@ sub start_kid {
 		my $lock_table_mode = '';
 		my $force_lock_file = "/tmp/bucardo-force-lock-$syncname";
 		if (-e $force_lock_file) {
-		  $lock_table_mode = 'EXCLUSIVE';
-		  if (-s _ and (open my $fh, '<', "$force_lock_file")) {
-			my $newmode = <$fh>;
-			close $fh or warn qq{Could not close "$force_lock_file": $!\n};
-			if (defined $newmode) {
-			  chomp $newmode;
-			  $lock_table_mode = $newmode if $newmode =~ /^\s*\w[ \w]+\s*$/o;
+			$lock_table_mode = 'EXCLUSIVE';
+			if (-s _ and (open my $fh, '<', "$force_lock_file")) {
+				my $newmode = <$fh>;
+				close $fh or warn qq{Could not close "$force_lock_file": $!\n};
+				if (defined $newmode) {
+					chomp $newmode;
+					$lock_table_mode = $newmode if $newmode =~ /^\s*\w[ \w]+\s*$/o;
+				}
 			}
-		  }
-		  $self->glog(qq{Found lock control file "$force_lock_file". Mode: $lock_table_mode});
+			$self->glog(qq{Found lock control file "$force_lock_file". Mode: $lock_table_mode});
 		}
 
 		if ($lock_table_mode) {
@@ -4185,7 +4185,7 @@ sub start_kid {
 						if ($g->{source}{needstruncation}) {
 							$sth = $sourcedbh->prepare_cached($SQL);
 							$sth->execute($g->{oid},$g->{safeschema},$g->{safetable},$syncname,$targetdb,
-										  $deltacount{source}{truncatelog}{$g->{oid}});
+										$deltacount{source}{truncatelog}{$g->{oid}});
 							$deltacount{truncates}++;
 							$self->glog('Marking this truncate as done in bucardo_truncate_trigger_log');
 						}
@@ -4306,7 +4306,7 @@ sub start_kid {
 			$sourcedbh->do($SQL{disable_trigrules});
 		}
 
-        my $cs_temptable;
+		my $cs_temptable;
 
 		## FULLCOPY
 		if ($synctype eq 'fullcopy' or $deltacount{truncates}) {
@@ -4623,8 +4623,8 @@ sub start_kid {
 							my ($srccmd,$temptable);
 							if (! $source_modern_copy) {
 								$temptable = "bucardo_tempcopy_$$";
-                                $self->glog("Creating temporary table $temptable for copy on $S.$T, and savepoint bucardo_$$ along with it");
-                                $sourcedbh->pg_savepoint("bucardo_$$");
+								$self->glog("Creating temporary table $temptable for copy on $S.$T, and savepoint bucardo_$$ along with it");
+								$sourcedbh->pg_savepoint("bucardo_$$");
 								$srccmd = "CREATE TEMP TABLE $temptable AS SELECT * FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)";
 
 								$sourcedbh->do($srccmd);
@@ -4663,7 +4663,7 @@ sub start_kid {
 							$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T} = @$info;
 
 							if (! $source_modern_copy) {
-                                $self->glog("Dropping temporary table $temptable");
+								$self->glog("Dropping temporary table $temptable");
 								$sourcedbh->do("DROP TABLE $temptable");
 							}
 
@@ -4705,12 +4705,12 @@ sub start_kid {
 						## First, we rollback any changes we've made on the target
 						$self->glog("Rolling back to target savepoint, due to database error: $DBI::errstr");
 						$targetdbh->pg_rollback_to("bucardo_$$");
-                        if (! $source_modern_copy) {
-                            # Also roll back to source savepoint, so we can try
-                            # creating the temp table again
-                            $self->glog('Rolling back to source savepoint as well, to remove temp table');
-                            $sourcedbh->pg_rollback_to("bucardo_$$");
-                        }
+						if (! $source_modern_copy) {
+							# Also roll back to source savepoint, so we can try
+							# creating the temp table again
+							$self->glog('Rolling back to source savepoint as well, to remove temp table');
+							$sourcedbh->pg_rollback_to("bucardo_$$");
+						}
 
 						## Now run one or more exception handlers
 						my $runagain = 0;
@@ -5704,10 +5704,10 @@ sub start_kid {
 			$self->glog('Issuing final commit for source and target');
 			$sourcedbh->commit();
 			$targetdbh->commit();
-            if (defined($cs_temptable)) {
-                $self->glog("Dropping temp table $cs_temptable created for customselect");
-                $sourcedbh->do("DROP TABLE $cs_temptable");
-            }
+			if (defined($cs_temptable)) {
+				$self->glog("Dropping temp table $cs_temptable created for customselect");
+				$sourcedbh->do("DROP TABLE $cs_temptable");
+			}
 		}
 
 		## Capture the current time. now() is good enough as we just committed or rolled back
