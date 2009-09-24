@@ -3381,22 +3381,6 @@ sub start_kid {
 			$self->glog("Could not serialize, sleeping for $gotosleep seconds");
 		}
 
-		## TODO: Decide if we want to do this, and make better decision rules for it
-		if (0 or $tstate eq '40001' or $sstate eq '40001') {
-			$self->glog('Could not serialize, requesting next run to have EXCLUSIVE locking');
-			my $forcename = "/tmp/bucardo-force-lock-$syncname";
-			if (-e $forcename) {
-				$self->glog(qq{File "$forcename" already exists, will not create});
-			}
-			elsif (open my $fh, '>', $forcename) {
-				print {$fh} "EXCLUSIVE\nCreate by kid $$ due to previous serialization error\n";
-				close $fh or warn qq{Could not close "$forcename": $!\n};
-			}
-			else {
-				$self->glog(qq{Warning! Could not create "$forcename": $!\n});
-			}
-		}
-
 		## If this was a deadlock problem, try and gather more information
 		if ($tstate eq '40P01') {
 			$msg .= $self->get_deadlock_details($targetdbh, $msg);
