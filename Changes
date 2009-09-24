@@ -1,6 +1,6 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-Bucardo version 4.0.4
+Bucardo version 4.1.0, released September 24, 2009
 
   - Fix problem with possible function name collision when the names 
     of the combined columns in the primary key is greater than NAMEDATALEN, 
