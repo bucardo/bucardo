@@ -622,7 +622,7 @@ LANGUAGE plperlu
 SECURITY DEFINER
 AS $bc$
 
-## Given the name of a db, return a connection string, username, and password
+## Given the name of a db, return a connection string, username, password, and attribs
 
 use strict; use warnings; use DBI;
 my ($name, $SQL, $rv, $row, %db);
@@ -675,7 +675,10 @@ length $db{host} and $connstring .= ";host=$db{host}";
 length $db{port} and $connstring .= ";port=$db{port}";
 length $db{conn} and $connstring .= ";$db{conn}";
 
-return "$connstring\n$db{user}\n$db{pass}";
+my $ssp = $row->{server_side_prepares};
+$ssp = 1 if ! defined $ssp;
+
+return "$connstring\n$db{user}\n$db{pass}\n$ssp";
 
 $bc$;
 
@@ -1081,9 +1084,10 @@ $bc$
         (my $db = $sourcedb) =~ s/'/''/go;
         my $rv = spi_exec_query("SELECT bucardo.db_getconn('$db') AS conn");
         $rv->{processed} or elog(ERROR, qq{Error: Could not find a database named "$db"\n});
-        my ($dsn,$user,$pass) = split /\n/ => $rv->{rows}[0]{conn};
+        my ($dsn,$user,$pass,$ssp) = split /\n/ => $rv->{rows}[0]{conn};
         elog(DEBUG, "Connecting to $dsn as $user inside bucardo_validate_sync for language check");
         my $dbh = $cache{dbh}{$db} = DBI->connect($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
+        $ssp or $dbh->{pg_server_prepare} = 0;
         $SQL = q{SELECT COUNT(*) FROM pg_language WHERE lanname = 'plpgsql'};
         my $count = $dbh->selectall_arrayref($SQL)->[0][0];
         if (! $count) {
@@ -1201,7 +1205,7 @@ $bc$
         $db =~ s/'/''/go;
         my $rv = spi_exec_query("SELECT bucardo.db_getconn('$db') AS conn");
         $rv->{processed} or elog(ERROR, qq{Error: Could not find a database named "$db"\n});
-        my ($dsn,$user,$pass) = split /\n/ => $rv->{rows}[0]{conn};
+        my ($dsn,$user,$pass,$ssp) = split /\n/ => $rv->{rows}[0]{conn};
         elog(DEBUG, "Connecting to $dsn as $user inside bucardo_validate_sync");
         my $dbh;
         if (exists $cache->{dbh}{$db}) {
@@ -1210,6 +1214,7 @@ $bc$
         }
         else {
             $cache->{dbh}{$db} = $dbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
+            $ssp or $dbh->{pg_server_prepare}=0;
         }
 
 		$dbh->do('SET TRANSACTION READ WRITE');
@@ -2168,9 +2173,10 @@ AS $bc$
     }
     $rv = spi_exec_query("SELECT bucardo.db_getconn('$sourcedb') AS conn");
     $rv->{processed} or die qq{Could not find a database named "$sourcedb"};
-    my ($dsn,$user,$pass) = split /\n/ => $rv->{rows}[0]{conn};
+    my ($dsn,$user,$pass,$ssp) = split /\n/ => $rv->{rows}[0]{conn};
     elog(DEBUG, "Connecting to $dsn as $user inside bucardo_delete_sync");
     my $sdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
+    $ssp or $sdbh->{pg_server_prepare} = 0;
 
     ## Get the list of target databases
 
@@ -2210,9 +2216,11 @@ AS $bc$
     (my $targetdb = $old->{targetdb}) =~ s/'/''/go;
     $rv = spi_exec_query("SELECT bucardo.db_getconn('$targetdb') AS conn");
     $rv->{processed} or die qq{Could not find a database named "$targetdb"};
-    ($dsn,$user,$pass) = split /\n/ => $rv->{rows}[0]{conn};
+    ($dsn,$user,$pass,$ssp) = split /\n/ => $rv->{rows}[0]{conn};
     elog(DEBUG, "Connecting to $dsn as $user inside bucardo_delete_sync");
     my $tdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
+    $ssp or $tdbh->{pg_server_prepare} = 0;
+
 
     $sth = $tdbh->prepare($SQL);
     for my $schema (sort keys %relation) {
