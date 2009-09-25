@@ -38,7 +38,7 @@ exit if fork;
 		open my $fh, '<', $controlfile or die qq{Could not open "$controlfile": $!\n};
 		my $commands = <$fh>;
 		close $fh or warn qq{Could not close "$controlfile": $!\n};
-		system "./bucardo_ctl $commands";
+		system "$CTL $commands";
 		unlink $controlfile;
 	}
 
