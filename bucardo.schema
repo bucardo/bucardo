@@ -1762,8 +1762,8 @@ $bc$
             for (2..$numpkeys) {
                 $rowids .= ",rowid$_";
             }
-            my $new = join ',' => map { qq{NEW."$_"} } @pkeys;
-            my $old = join ',' => map { qq{OLD."$_"} } @pkeys;
+            my $new = join ',' => map { qq{NEW."$_"::text} } @pkeys;
+            my $old = join ',' => map { qq{OLD."$_"::text} } @pkeys;
             my $clause = join ' OR ' => map { qq{OLD."$_" <> NEW."$_"} } @pkeys;
 
             $SQL = qq{SELECT trigger_language,trigger_body FROM bucardo_custom_trigger 
