@@ -60,7 +60,7 @@ for my $i (1..5) {
 
     $bct->ctl(qq{kick test$i});
     eval {
-        wait_for_notice($dbhX, "bucardo_syncdone_test$i", 5);
+        wait_for_notice($dbhX, "bucardo_syncdone_test$i", 10);
     };
     ok(! $@, "Sync $i pushed");
     my $res = $dbhB->selectall_arrayref("SELECT * FROM swap$i");
