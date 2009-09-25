@@ -1,5 +1,13 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
+
+ - Respect server_side_prepares db setting in validate_sync. Previously, 
+   this function would fail if validating more than one table at a time 
+   and the database was set as server_side_prepares off [GSM]
+
+ - Make sure we cast rowid* to text within the bucardo_add_delta-called 
+   functions, for picky versions of Postgres. [GSM]
+
 Bucardo version 4.1.1, released September 24, 2009
 
  - Fix case where Bucardo was too eager to lock tables post serialization 
