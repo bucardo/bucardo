@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use Time::HiRes qw/sleep gettimeofday tv_interval/;
 
-my $CTL = './bucardo_ctl';
+my $CTL = 'blib/scripts/bucardo_ctl';
 ## Test things out
 -e $CTL or die qq{Could not find "$CTL": $!\n};
 
