@@ -4207,9 +4207,8 @@ sub start_kid {
 
 					$self->glog("Checking sequence $S.$T");
 
-					$SQL = "SELECT last_value, log_cnt FROM $S.$T";
-					my ($lastval, $logcnt) = @{$sourcedbh->selectall_arrayref($SQL)->[0]};
-					my $iscalled = $logcnt ? 0 : 1;
+					$SQL = "SELECT last_value, is_called FROM $S.$T";
+					my ($lastval, $iscalled) = @{$sourcedbh->selectall_arrayref($SQL)->[0]};
 
 					## Check our internal table to see if we really need to propagate this sequence
 					$SQL = 'SELECT value, iscalled FROM bucardo.bucardo_sequences WHERE tablename = ?';
@@ -4324,9 +4323,8 @@ sub start_kid {
 
 				## Handle sequences first, by simply forcing a setval
 				if ($g->{reltype} eq 'sequence') {
-					$SQL = "SELECT last_value, log_cnt FROM $S.$T";
-					my ($lastval, $logcnt) = @{$sourcedbh->selectall_arrayref($SQL)->[0]};
-					my $iscalled = $logcnt ? 0 : 1;
+					$SQL = "SELECT last_value, iscalled FROM $S.$T";
+					my ($lastval, $iscalled) = @{$sourcedbh->selectall_arrayref($SQL)->[0]};
 
 					$self->glog("Setting sequence $S.$T to value of $lastval, is_called is $iscalled");
 					$SQL = "SELECT setval('$S.$T', $lastval, '$iscalled')";
@@ -4789,7 +4787,7 @@ sub start_kid {
 				if ($g->{reltype} eq 'sequence') {
 					my $action = 0; ## 0 = skip, 1 = source->target, 2 = target->source
 					$g->{tempschema} = {};
-					my $SEQUENCESQL = "SELECT last_value, log_cnt FROM $S.$T";
+					my $SEQUENCESQL = "SELECT last_value, is_called FROM $S.$T";
 					if (exists $g->{code_conflict}) {
 						$self->glog('No support for custom conflict handlers for sequences yet!');
 					}
@@ -4805,9 +4803,9 @@ sub start_kid {
 							$action = 2;
 						}
 						elsif ('lowest' eq $sc and 'highest' eq $sc) {
-							($g->{tempschema}{s}{lastval},$g->{tempschema}{s}{logcnt}) =
+							($g->{tempschema}{s}{lastval},$g->{tempschema}{s}{iscalled}) =
 								@{$sourcedbh->selectall_arrayref($SEQUENCESQL)->[0]};
-							($g->{tempschema}{t}{lastval},$g->{tempschema}{t}{logcnt}) =
+							($g->{tempschema}{t}{lastval},$g->{tempschema}{t}{iscalled}) =
 								@{$targetdbh->selectall_arrayref($SEQUENCESQL)->[0]};
 							if ($g->{tempschema}{s}{lastval} > $g->{tempschema}{t}{lastval}) {
 								$action = 'lowest' eq $sc ? 2 : 1;
@@ -4840,12 +4838,12 @@ sub start_kid {
 						$self->glog("Copying value of $S.$T from source to target");
 
 						if (! exists $g->{tempschema}{s}) {
-							($g->{tempschema}{s}{lastval},$g->{tempschema}{s}{logcnt}) =
+							($g->{tempschema}{s}{lastval},$g->{tempschema}{s}{iscalled}) =
 								@{$sourcedbh->selectall_arrayref($SEQUENCESQL)->[0]};
 						}
 
 						my $lastval = $g->{tempschema}{s}{lastval};
-						my $iscalled = $g->{tempschema}{s}{logcnt} ? 0 : 1;
+						my $iscalled = $g->{tempschema}{s}{iscalled};
 
 						## Has it changed since last visit?
 						$sth = $sourcedbh->prepare($LASTSEQUENCESQL);
@@ -4892,12 +4890,12 @@ sub start_kid {
 					$self->glog("Copying value of $S.$T from target to source");
 
 					if (! exists $g->{tempschema}{t}) {
-						($g->{tempschema}{t}{lastval},$g->{tempschema}{t}{logcnt}) =
+						($g->{tempschema}{t}{lastval},$g->{tempschema}{t}{iscalled}) =
 							@{$targetdbh->selectall_arrayref($SEQUENCESQL)->[0]};
 					}
 
 					my $lastval = $g->{tempschema}{t}{lastval};
-					my $iscalled = $g->{tempschema}{t}{logcnt} ? 0 : 1;
+					my $iscalled = $g->{tempschema}{t}{iscalled};
 
 					## Has it changed since last visit?
 					$sth = $sourcedbh->prepare($LASTSEQUENCESQL);

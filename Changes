@@ -1,5 +1,9 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
+Bucardo version 4.1.2, released September 25, 2009
+
+ - Fix sequence replication by setting is_called properly on the targets
+   [GSM, thanks to Selena Deckelmann for discovering this]
 
  - Respect server_side_prepares db setting in validate_sync. Previously, 
    this function would fail if validating more than one table at a time 
