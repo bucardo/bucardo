@@ -527,6 +527,8 @@ sub connect_database {
 	my $dbh = DBI->connect($dsn, '', '', {AutoCommit=>0, RaiseError=>1, PrintError=>0});
 
 	$dbh->ping();
+	$dbh->do('SET search_path = public');
+	$dbh->commit();
 
 	return $dbh;
 
