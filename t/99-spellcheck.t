@@ -202,6 +202,7 @@ pid
 ppid
 rc
 respawn
+rowid
 schemas
 smallint
 sourcedbh
