@@ -4513,11 +4513,20 @@ sub install {
 		die "Sorry, Bucardo requires Postgres version 8.1 or higher. This is only $maj.$min\n";
 	}
 
-	$COM = "$PSQL -AX -qt -f $schema_file";
+	$COM = "$PSQL -AX -qt -f $schema_file 2>&1";
 
 	print "Attempting to create and populate the bucardo database and schema\n";
 
 	$res= qx{$COM};
+
+	if ($res !~ m{Pl/PerlU was successfully installed}) {
+		warn "\nINSTALLATION FAILED!\n\n";
+		warn "Installation cannot proceed unless the Pl/PerlU language is available\n";
+		warn "This is usually available as a separate package\n";
+		warn "For example, you might try: yum install postgresql-plperl\n";
+		warn "If compiling from source, add the --with-perl option to your ./configure command\n\n";
+		exit 1;
+	}
 
 	print "Database creation is complete\n\n";
 
