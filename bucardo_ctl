@@ -1697,6 +1697,27 @@ sub load_bucardo_info {
 
 	## One-time load of all information from the database
 
+	## Grab all database information
+	$SQL = 'SELECT * FROM db';
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	my $db = $sth->fetchall_hashref('name');
+
+	## Grab all database information
+	$SQL = 'SELECT * FROM dbgroup';
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	my $dbgroup = $sth->fetchall_hashref('name');
+
+	## Map databases to their groups
+	$SQL = 'SELECT * FROM dbmap';
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	for my $row (@{$sth->fetchall_arrayref({})}) {
+		$db->{$row->{db}}{group}{$row->{dbgroup}}++;
+		$dbgroup->{$row->{dbgroup}}{db}{$row->{db}}++;
+	}
+
 	## Grab all goat information
 	$SQL = 'SELECT * FROM goat';
 	$sth = $dbh->prepare($SQL);
@@ -1719,6 +1740,8 @@ sub load_bucardo_info {
 		push @{$herd->{$h}{goat}} => [$g,$p];
 		my ($s,$t) = @{$goat->{$g}}{qw/schemaname tablename/};
 		$herd->{$h}{hasgoat}{$s}{$t} = $p;
+		## Assign each herd to a datbase via its included goats
+		$herd->{$h}{db} = $goat->{$g}{db};
 	}
 
 	## Grab all sync information
@@ -1727,14 +1750,28 @@ sub load_bucardo_info {
 	$sth->execute();
 	my $sync;
 	for my $row (@{$sth->fetchall_arrayref({})}) {
-		my ($name,$p,$source) = @$row{qw/name priority source/};
+		my ($name,$p,$source,$td,$tg) = @$row{qw/name priority source targetdb targetgroup/};
 		$sync->{$name} = $row;
 		## Add in herd information
 		$sync->{$name}{herd} = $herd->{$source};
 		## Add this sync back to the herd
 		$herd->{$source}{sync}{$name}++;
+		## Add this sync back to the source database
+		if (defined $herd->{$source}{db}) {
+			$db->{$herd->{$source}{db}}{sourcesync}{$name}++;
+		}
+		if (defined $td) {
+			$db->{$td}{targetsync}{$name}++;
+		}
+		elsif (defined $tg) {
+			for my $idb (keys %{$dbgroup->{$tg}{db}}) {
+				$db->{$idb}{targetsync}{$name}++;
+			}
+		}
 	}
 
+	$global{dbgroup} = $dbgroup;
+	$global{db} = $db;
 	$global{goat} = $goat;
 	$global{herd} = $herd;
 	$global{sync} = $sync;
@@ -1753,12 +1790,12 @@ sub list {
 	}
 	my $thing = shift @nouns;
 
-	list_dbgroups()  if $thing =~ /dbgroup/i or $thing eq 'g';
-	list_dbs()       if $thing =~ /db/i      or $thing eq 'd';
-	list_tables()    if $thing =~ /tab/i     or $thing eq 't';
-	list_sequences() if $thing =~ /seq/i     or $thing eq 'q';
-	list_syncs()     if $thing =~ /sync/i    or $thing eq 's';
-	list_herds()     if $thing =~ /herd/i    or $thing eq 'h';
+	list_dbgroups()  if $thing =~ /dbg/i   or $thing eq 'g';
+	list_dbs()       if $thing =~ /db/i    or $thing eq 'd';
+	list_tables()    if $thing =~ /ta/i    or $thing eq 't';
+	list_sequences() if $thing =~ /seq/i   or $thing eq 'q';
+	list_syncs()     if $thing =~ /sy/i    or $thing eq 's';
+	list_herds()     if $thing =~ /he/i    or $thing eq 'h';
 
 	die $msg;
 
@@ -1769,14 +1806,9 @@ sub list_dbs {
 
 	## Show information about all or some subset of the 'db' table
 
-	## If any nouns left, treat as wildcards
-	my $WHERE = '';
-	for my $term (@nouns) {
-		$WHERE .= sprintf q{%s lower(name) ~ %s },
-			$WHERE ? ' OR' : 'WHERE',
-			$dbh->quote(lc $term);
-	}
-
+	## Any nouns are filters against the whole list
+	my $clause = generate_clause({col => 'name', items => \@nouns});
+	my $WHERE = $clause ? "WHERE $clause" : '';
 	$SQL = "SELECT * FROM db $WHERE ORDER BY name";
 	$sth = $dbh->prepare($SQL);
 	$count = $sth->execute();
@@ -1799,8 +1831,9 @@ sub list_dbs {
 	}
 
 	for my $row (@$info) {
+		my $name = $row->{name};
 		printf 'Database: %-*s  Status: %-*s  ',
-			$maxdb, $row->{name},
+			$maxdb, $name,
 			$maxstat, $row->{status};
 		if ($showlim) {
 			printf 'Limits: %-*s/%-*s  ',
@@ -1812,6 +1845,45 @@ sub list_dbs {
 			print ' (SSP is off)';
 		}
 		print "\n";
+
+
+		if ($VERBOSE) {
+			load_bucardo_info();
+			my $db = $global{db};
+
+			## Which database groups is this a member of?
+			if (exists $db->{$name}{group}) {
+				print "  Belongs to database groups: ";
+				print join ', ' => sort keys %{$db->{$name}{group}};
+				print "\n";
+			}
+
+			## Which syncs are using it (and how?)
+			if (exists $db->{$name}{sourcesync}) {
+				print "  Used as source in syncs: ";
+				print join ', ' => sort keys %{$db->{$name}{sourcesync}};
+				print "\n";
+			}
+
+			if (exists $db->{$name}{targetsync}) {
+				print "  Used as target in syncs: ";
+				print join ', ' => sort keys %{$db->{$name}{targetsync}};
+				print "\n";
+			}
+
+			## How many tables are in it?
+
+			if ($VERBOSE >= 2) {
+				my $maxkey = 1;
+				for my $key (keys %$row) {
+					$maxkey = length $key if length $key > $maxkey;
+				}
+				for my $key (sort keys %$row) {
+					printf "    %-*s = %s\n", $maxkey, $key,
+						defined $row->{$key} ? $row->{$key} : 'NULL';
+				}
+			}
+		}
 	}
 
 	exit 0;
@@ -2648,7 +2720,6 @@ sub generate_clause {
 			push @itemlist => qquote($name);
 		}
 	}
-
 	if (@itemlist) {
 		my $list = sprintf "$col ${NOT}IN (" . (join ',' => @itemlist) . ')';
 		push @oneitem => $list;
