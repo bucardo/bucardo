@@ -1697,6 +1697,8 @@ sub load_bucardo_info {
 
 	## One-time load of all information from the database
 
+	return if exists $global{db};
+
 	## Grab all database information
 	$SQL = 'SELECT * FROM db';
 	$sth = $dbh->prepare($SQL);
@@ -1782,6 +1784,94 @@ sub load_bucardo_info {
 } ## end of load_bucardo_info
 
 
+sub process_simple_args {
+
+	## Process args to an inner function in the style of a=b
+
+	my $arg = shift;
+	my $validcols = $arg->{cols} or die "Need a list of valid cols!";
+	my $list = $arg->{list}      or die "Need a list of arguments!";
+	my $usage = $arg->{usage}    or die "Need a usage!";
+
+	my %item;
+	my %dbcol;
+	## Parse the validcols string, and setup any non-null defaults
+	for my $row (split /\n/ => $validcols) {
+		next if $row !~ /\w/ or $row =~ /^#/;
+		$row =~ /^\s*(\S+)\s+(\S+)\s+(\S+)\s+(.+)/ or die "Invalid valid cols ($row)";
+		my ($args,$dbcol,$flag,$default) = ([split /\|/ => $1],$2,$3,$4);
+		for my $name (@$args) {
+			$item{$name} = [$dbcol,$flag,$default];
+		}
+		if ($default ne 'null') {
+			$dbcol{$dbcol} = $default;
+		}
+	}
+
+	## Transform array of x=y into a hashref
+	my $args = process_args(join ' ' => @$list);
+
+	for my $arg (sort keys %$args) {
+		next if $arg eq 'extraargs';
+		if (! exists $item{$arg}) {
+			die "Unknown option '$arg'\n$usage\n";
+		}
+		(my $val = $args->{$arg}) =~ s/^\s*(\S+)\s*$/$1/;
+		my ($dbcol,$flag,$default) = @{$item{$arg}};
+		if ($flag eq '0') {
+			## noop
+		}
+		elsif ($flag eq 'TF') {
+			$val =~ s/^\s*t(?:rue)*\s*$/1/i;
+			$val =~ s/^\s*f(?:alse)*\s*$/0/i;
+			if ($val !~ /^[01]$/) {
+				die "Invalid value for '$arg': must be true of false\n";
+			}
+		}
+		elsif ($flag eq 'numeric') {
+			if ($val !~ /^(\d+)$/) {
+				die "Invalid value for '$arg': must be numeric\n";
+			}
+		}
+		elsif ($flag =~ /^=(.+)/) {
+			my $ok = 0;
+			for my $okval (split /\|/ => $1) {
+				if (lc $val eq lc $okval) {
+					$ok = 1;
+					last;
+				}
+			}
+			if (!$ok) {
+				(my $arglist = $flag) =~ s/\|/ or /g;
+				$arglist =~ s/^=//;
+				die "Invalid value for '$arg': must be one of $arglist\n";
+			}
+		}
+		else {
+			die "Unknown flag '$flag' for $arg";
+		}
+
+		## Value has survived our minimal checking. Store it and clobber any default
+		$dbcol{$dbcol} = $val;
+
+	}
+
+	## Build the lists of columns and placeholders for the SQL statement
+	my ($cols,$phs,$vals) = ('','',[]);
+	for my $col (sort keys %dbcol) {
+		next if $item{$col}[2] eq 'skip';
+		$cols .= "$col,";
+		$phs .= '?,';
+		push @$vals => $dbcol{$col};
+	}
+	$cols =~ s/,$//;
+	$phs =~ s/,$//;
+
+	return \%dbcol, $cols, $phs, $vals;
+
+} ## end of process_simple_args
+
+
 sub list {
 
 	my $msg = "Need to specify what to list: db, dbgroup, table, sequence, sync, or herd\n";
@@ -1840,7 +1930,8 @@ sub list_dbs {
 				$maxlim1, $row->{sourcelimit},
 				$maxlim2, $row->{targetlimit},
 		}
-		print "Conn: psql -h $row->{dbhost} -p $row->{dbport} -U $row->{dbuser} -d $row->{dbname}";
+		my $showhost = length $row->{dbhost} ? " -h $row->{dbhost}" : '';
+		print "Conn: psql -p $row->{dbport} -U $row->{dbuser} -d $row->{dbname}$showhost";
 		if (! $row->{server_side_prepares}) {
 			print ' (SSP is off)';
 		}
@@ -2429,7 +2520,7 @@ sub remove_item {
 	my $self = shift;
 
 	if (!@nouns) {
-		warn "Usage: remove <item_type> <item_name>\n";
+		warn "Usage: $verb <item_type> <item_name>\n";
 		exit 1;
 	}
 
@@ -2437,7 +2528,7 @@ sub remove_item {
 	my $type = shift @nouns;
 	$type = lc $type;
 
-	if ($type eq 'db' or $type eq 'database') {
+	if ($type eq 'd' or $type eq 'db' or $type eq 'database') {
 		remove_database();
 	}
 	elsif ($type eq 'table') {
@@ -2462,15 +2553,63 @@ sub remove_item {
 
 } ## end of remove_item
 
-sub remove_database {
-	die "Not implemented yet\n";
-}
+
 sub remove_table {
 	die "Not implemented yet\n";
 }
 sub remove_sequence {
 	die "Not implemented yet\n";
 }
+
+
+sub remove_database {
+
+	## Usage: remove db dbname [dbname2 dbname3 ...]
+
+	my $usage = usage('remove_database');
+
+	if (!@nouns) {
+		warn "$usage\n";
+		exit 1;
+	}
+
+	load_bucardo_info();
+
+	my $db = $global{db};
+
+	for my $name (@nouns) {
+		if (! exists $db->{$name}) {
+			die qq{No such database: $name\n};
+		}
+	}
+
+	$SQL = 'DELETE FROM bucardo.db WHERE name = ?';
+	$sth = $dbh->prepare($SQL);
+	for my $name (@nouns) {
+		eval {
+			$sth->execute($name);
+		};
+		if ($@) {
+			if ($@ =~ /"goat_db_fk"/) {
+				die qq{Cannot delete database "$name": must remove all tables that reference it first\n};
+			}
+			if ($@ =~ /"sync_targetdb_fk"/) {
+				die qq{Cannot delete database "$name": must remove all syncs that reference it first\n};
+			}
+			die "Could not delete database\n$@\n";
+		}
+	}
+
+	for my $name (@nouns) {
+		print qq{Removed database "$name"\n};
+	}
+
+	$dbh->commit();
+
+	exit 0;
+
+
+} ## end of remove_database
 
 
 sub clog {
@@ -3265,7 +3404,7 @@ sub usage {
 
 	my $name = shift or die;
 
-	if ($name eq 'add_database') {
+	if ('add_database' eq $name) {
 		return qq{
 Usage: add db <name> [optional information]
 Optional information:
@@ -3273,11 +3412,16 @@ Optional information:
  host=hostname      (defaults to none: Unix socket)
  user=username      (defaults to 'bucardo')
  port=#             (defaults to system default, usually 5432)
+ group=groupname    (database group, will be created if needed)
  conn=string        (extra connection parameters, e.g. "sslmode=require")
  status=status      (active or inactive, defaults to 'active')
  sourcelimit=#      (maximum concurrent reads from this database. Default is 0 (no limit))
  targetlimit=#      (maximum concurrent writes from this database. Default is 0 (no limit))
  ssp=#              (if server-side prepares are used, defaults to 1 (on))};
+	}
+
+	if ('remove_database' eq $name) {
+		return qq{Usage: $verb db <name> [name2 name3 ...]};
 	}
 
 	return '';
@@ -3297,62 +3441,82 @@ sub add_database {
 		exit 1;
 	}
 
-	## The rest is the options. If not there, we fill in the defaults
-	my $info = join ' ' => @nouns;
 	## Command line name, default value, database column name
-	my %arg = (
-			   name        => [$item_name, ''],
-			   user        => ['bucardo',  'dbuser'],
-			   port        => ['',         'dbport'],
-			   host        => ['',         'dbhost'],
-			   pass        => ['',         'dbpass'],
-			   status      => ['',         ''],
-			   conn        => ['',         'dbconn'],
-			   service     => ['',         'dbservice'],
-			   sourcelimit => ['',         ''],
-			   targetlimit => ['',         ''],
-			   server_side_prepares => ['1', ''],
-			   );
-	my $args = process_args($info);
-	for my $name (sort keys %$args) {
-		next if $name eq 'extraargs';
-		my $value = $args->{$name};
-		$name = 'server_side_prepares' if $name eq 'ssp';
-		if (!exists $arg{$name}) {
-			die "Unknown option '$name'\n$usage\n";
-		}
-		$arg{$name}[0] = $value;
-	}
-	$arg{dbname} = [$item_name,''];
+	## Inputs and aliases, database column name, flags, default
+	my $validcols = qq{
+        name                     name                 0                $item_name
+        dbname                   dbname               0                $item_name
+        user|dbuser              dbuser               0                bucardo
+        host|dbhost              dbhost               0                null
+        port|dbport              dbport               numeric          null
+        pass|dbpass              dbpass               0                null
+        group|dbgroup            group                0                skip
+        conn|dbconn              dbconn               0                null
+        stat|status              status               =active|inactive null
+        service|dbservice        dbservice            0                null
+        pgpass                   pgpass               0                null
+        sourcelimit              sourcelimit          numeric          null
+        targetlimit              targetlimit          numeric          null
+        server_side_prepares|ssp server_side_prepares TF               null
+    };
 
-	my ($cols,$phs) = ('','');
-	my @vals;
-	for my $col (sort keys %arg) {
-		$col = 'server_side_prepares' if $col eq 'ssp';
-		next if ! length $arg{$col}[0];
-		my $name = $arg{$col}[1] || $col;
-		$cols .= "$name,";
-		$phs .= '?,';
-		push @vals, $arg{$col}[0];
-	}
-	$cols =~ s/,$//;
-	$phs =~ s/,$//;
+	my ($dbcols,$cols,$phs,$vals)
+		= process_simple_args({cols => $validcols, list => \@nouns, usage => $usage});
 
-	## Add this to the database
+	my $newname = $dbcols->{name};
+
+	## Attempt to insert this into the database
 	$SQL = "INSERT INTO bucardo.db ($cols) VALUES ($phs)";
 	$DEBUG and warn "SQL: $SQL\n";
-	$DEBUG and warn Dumper \@vals;
+	$DEBUG and warn Dumper $vals;
 	$sth = $dbh->prepare($SQL);
 	eval {
-		$count = $sth->execute(@vals);
+		$count = $sth->execute(@$vals);
 	};
 	if ($@) {
+		if ($@ =~ /"db_name_pk"/) {
+			die qq{Cannot add database: the database name "$newname" already exists\n};
+		}
+		if ($@ =~ /"db_dsn_unique"/) {
+			die qq{Cannot add database: already have a connection with the same parameters\n};
+		}
 		die "Failed to add database: $@\n";
+	}
+
+	my $finalmsg = '';
+
+	## If we got a group, process that as well
+	if (exists $dbcols->{group}) {
+		load_bucardo_info();
+		my $gname = $dbcols->{group};
+		if (! exists $global{dbgroup}{$gname}) {
+			$SQL = 'INSERT INTO dbgroup(name) VALUES (?)';
+			$sth = $dbh->prepare($SQL);
+			eval {
+				$sth->execute($gname);
+			};
+			if ($@) {
+				die qq{Failed to create new database group "$gname"\n$@\n};
+			}
+			$finalmsg .= qq{Added new database group "$gname"\n};
+		}
+		$SQL = 'INSERT INTO dbmap(db,dbgroup) VALUES (?,?)';
+		$sth = $dbh->prepare($SQL);
+		eval {
+			$sth->execute($newname,$gname);
+		};
+		if ($@) {
+			die qq{Failed to add database "$newname" to group "$gname"\n$@\n};
+		}
+		$finalmsg .= qq{Added database "$newname" to group "$gname"\n};
 	}
 
 	$dbh->commit();
 
-	$QUIET or print "Database added: $arg{name}[0]\n";
+	if (!$QUIET) {
+		print qq{Added database "$newname"\n};
+		$finalmsg and print $finalmsg;
+	}
 
 	exit 0;
 
