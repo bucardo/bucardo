@@ -220,6 +220,11 @@ config()        if $verb eq 'set' or $verb eq 'show';
 validate()      if $verb eq 'validate';
 update()        if $verb eq 'update';
 inspect()       if $verb eq 'inspect';
+superhelp()     if $verb eq 'help';
+
+if ($verb ne 'kick' and $verb ne 'activate' and $verb ne 'deactivate') {
+	help();
+}
 
 ## For the rest, we expect a list of syncs with an optional decimal "timeout"
 my $adverb;
@@ -310,9 +315,6 @@ if ($gotall) {
 	push @syncs => map { $_->[0] } @$tmp;
 }
 
-vate_sync() if $verb eq 'activate' or $verb eq 'deactivate';
-kick() if $verb eq 'kick';
-
 help();
 
 sub help {
@@ -325,9 +327,10 @@ sub help {
 
   list <type>     ** View short info about dbs, tables, sequences, syncs, or herds
 
+  add db <dbname> name=internal_name. For complete usage, run: $progname help add db
+
   add <item_type> <item_name>
                   ** Add a new database, table, sync, herd, or database group
-    add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx ssp=1/0
     add dbgroup name db1 db2 db3 ...
     add table [schema].table db=internal_db_name [ping=bool] [standard_conflict=xxx] [makedelta=bool]
     add all tables [db=internal_db_name] [herd=herd_name] [-n=schema] [-t=table]
@@ -367,6 +370,48 @@ For more details, try 'man bucardo_ctl'
 } unless $QUIET; ## Mostly for the test suite
 	exit 0;
 }
+
+
+sub superhelp {
+
+	## See if we can get more specific by looking at the nouns
+
+	help() if ! @nouns;
+
+	my $word1 = lc $nouns[0];
+	my $word2 = lc $nouns[1];
+	## Because usage() sometimes relies on the verb
+	$verb = $word1;
+
+	if ('add' eq $word1) {
+		if ('db' eq $word2 or 'database' eq $word2) {
+			warn usage('add_database') . "\n";
+			exit 0;
+		}
+	}
+
+	if ('delete' eq $word1 or 'remove' eq $word1) {
+		if ('db' eq $word2 or 'database' eq $word2) {
+			warn usage('remove_database') . "\n";
+			exit 0;
+		}
+	}
+
+	if ('list' eq $word1 or 'l' eq $word1) {
+		if ('db' eq $word2 or 'database' eq $word2) {
+			warn usage('list_database') . "\n";
+			exit 0;
+		}
+	}
+
+	## Generic fallthrough
+	help();
+
+
+	exit 0;
+
+} ## end of superhelp
+
 
 sub restart {
 	stop();
@@ -3422,6 +3467,14 @@ Optional information:
 
 	if ('remove_database' eq $name) {
 		return qq{Usage: $verb db <name> [name2 name3 ...]};
+	}
+
+	if ('list_database' eq $name) {
+		return qq{Usage: list db [name] [--verbose] [--verbose]
+Without a name, all databases are listed.
+The name can have wildcards with a '*' at the start and/or end.
+If '--verbose' is added, information is shown about which groups and syncs are involved.
+If a second '--verbose' is added, the database columns are also shown.};
 	}
 
 	return '';
