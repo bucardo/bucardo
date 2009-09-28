@@ -1846,7 +1846,6 @@ sub list_dbs {
 		}
 		print "\n";
 
-
 		if ($VERBOSE) {
 			load_bucardo_info();
 			my $db = $global{db};
@@ -1858,20 +1857,17 @@ sub list_dbs {
 				print "\n";
 			}
 
-			## Which syncs are using it (and how?)
+			## Which syncs are using it (source vs. target)
 			if (exists $db->{$name}{sourcesync}) {
 				print "  Used as source in syncs: ";
 				print join ', ' => sort keys %{$db->{$name}{sourcesync}};
 				print "\n";
 			}
-
 			if (exists $db->{$name}{targetsync}) {
 				print "  Used as target in syncs: ";
 				print join ', ' => sort keys %{$db->{$name}{targetsync}};
 				print "\n";
 			}
-
-			## How many tables are in it?
 
 			if ($VERBOSE >= 2) {
 				my $maxkey = 1;
@@ -3265,15 +3261,39 @@ sub upgrade_and_log {
 } ## end of upgrade_and_log
 
 
-sub add_database {
+sub usage {
 
-	## Usage: add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass=xxx
-	## service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx ssp=xxx
+	my $name = shift or die;
+
+	if ($name eq 'add_database') {
+		return qq{
+Usage: add db <name> [optional information]
+Optional information:
+ name=internal_name (defaults to the database name)
+ host=hostname      (defaults to none: Unix socket)
+ user=username      (defaults to 'bucardo')
+ port=#             (defaults to system default, usually 5432)
+ conn=string        (extra connection parameters, e.g. "sslmode=require")
+ status=status      (active or inactive, defaults to 'active')
+ sourcelimit=#      (maximum concurrent reads from this database. Default is 0 (no limit))
+ targetlimit=#      (maximum concurrent writes from this database. Default is 0 (no limit))
+ ssp=#              (if server-side prepares are used, defaults to 1 (on))};
+	}
+
+	return '';
+
+} ## end of usage
+
+
+sub add_database {
 
 	## The first word is the name of the database we connect to (column dbname)
 	my $item_name = shift @nouns || '';
+
+	my $usage = usage('add_database');
+
 	if (!length $item_name) {
-		warn "Usage: add db <name>\n";
+		warn "$usage\n";
 		exit 1;
 	}
 
@@ -3299,7 +3319,7 @@ sub add_database {
 		my $value = $args->{$name};
 		$name = 'server_side_prepares' if $name eq 'ssp';
 		if (!exists $arg{$name}) {
-			die "Unknown option '$name'\n";
+			die "Unknown option '$name'\n$usage\n";
 		}
 		$arg{$name}[0] = $value;
 	}
@@ -3327,13 +3347,13 @@ sub add_database {
 		$count = $sth->execute(@vals);
 	};
 	if ($@) {
-		die "Fail: $@\n";
+		die "Failed to add database: $@\n";
 	}
-	## Prompt for final go-ahead
 
 	$dbh->commit();
 
 	$QUIET or print "Database added: $arg{name}[0]\n";
+
 	exit 0;
 
 } ## end of add_database
