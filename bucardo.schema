@@ -22,6 +22,15 @@ SET client_min_messages = 'ERROR';
 
 \set ON_ERROR_STOP on
 
+SET CLIENT_MIN_MESSAGES = 'FATAL';
+CREATE SCHEMA bucardo;
+CREATE SCHEMA freezer;
+SET CLIENT_MIN_MESSAGES = 'WARNING';
+SET search_path TO bucardo;
+
+SET client_min_messages   = 'WARNING';
+SET escape_string_warning = 'OFF';
+
 -- Try and create a plperlu function, then call it
 CREATE OR REPLACE FUNCTION plperlu_test()
 RETURNS TEXT
@@ -31,15 +40,6 @@ return 'Pl/PerlU was successfully installed';
 $bc$;
 
 SELECT plperlu_test();
-
-SET CLIENT_MIN_MESSAGES = 'FATAL';
-CREATE SCHEMA bucardo;
-CREATE SCHEMA freezer;
-SET CLIENT_MIN_MESSAGES = 'WARNING';
-SET search_path TO bucardo;
-
-SET client_min_messages   = 'WARNING';
-SET escape_string_warning = 'OFF';
 
 --
 -- Main bucardo configuration information
