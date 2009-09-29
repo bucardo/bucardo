@@ -249,25 +249,25 @@ SYNCMATCH: for my $sync (@nouns) {
 	}
 
 	if ($sync =~ /%/) {
-		$SQL = qq{SELECT name FROM sync WHERE name LIKE '$sync'};
+		$SQL = qq{SELECT name FROM bucardo.sync WHERE name LIKE '$sync'};
 		my $tmp = $dbh->selectall_arrayref($SQL);
 		push @syncs, (map { $_->[0] } @$tmp);
 		next SYNCMATCH;
 	}
 	if ($sync =~ /^\*(\w+)\*$/) {
-		$SQL = qq{SELECT name FROM sync WHERE name ~ '$1'};
+		$SQL = qq{SELECT name FROM bucardo.sync WHERE name ~ '$1'};
 		my $tmp = $dbh->selectall_arrayref($SQL);
 		push @syncs => map { $_->[0] } @$tmp;
 		next SYNCMATCH;
 	}
 	if ($sync =~ /^\*(\w+)$/) {
-		$SQL = qq{SELECT name FROM sync WHERE name ~ '$1\$'};
+		$SQL = qq{SELECT name FROM bucardo.sync WHERE name ~ '$1\$'};
 		my $tmp = $dbh->selectall_arrayref($SQL);
 		push @syncs => map { $_->[0] } @$tmp;
 		next SYNCMATCH;
 	}
 	if ($sync =~ /^(\w+)\*$/) {
-		$SQL = qq{SELECT name FROM sync WHERE name ~ '^$1'};
+		$SQL = qq{SELECT name FROM bucardo.sync WHERE name ~ '^$1'};
 		my $tmp = $dbh->selectall_arrayref($SQL);
 		push @syncs => map { $_->[0] } @$tmp;
 		next SYNCMATCH;
@@ -392,6 +392,10 @@ sub superhelp {
 			warn usage('add_dbgroup') . "\n";
 			exit 0;
 		}
+		if ('herd' eq $word2) {
+			warn usage('add_herd') . "\n";
+			exit 0;
+		}
 		warn usage('add') . "\n";
 		exit 0;
 	}
@@ -403,6 +407,10 @@ sub superhelp {
 		}
 		if ('dbg' eq $word2 or 'dbgroup' eq $word2) {
 			warn usage('remove_dbgroup') . "\n";
+			exit 0;
+		}
+		if ('herd' eq $word2) {
+			warn usage('remove_herd') . "\n";
 			exit 0;
 		}
 		warn usage('remove') . "\n";
@@ -418,6 +426,12 @@ sub superhelp {
 			warn usage('list_dbgroup') . "\n";
 			exit 0;
 		}
+		if ('herd' eq $word2) {
+			warn usage('list_herd') . "\n";
+			exit 0;
+		}
+		warn usage('list') . "\n";
+		exit 0;
 	}
 
 	## Generic fallthrough
@@ -558,7 +572,7 @@ sub reload {
 		next if $syncname eq 'sync'; ## Allows $0 reload sync foobar
 
 		## Make sure this sync exists
-		$SQL = 'SELECT status FROM sync WHERE name = ?';
+		$SQL = 'SELECT status FROM bucardo.sync WHERE name = ?';
 		$sth = $dbh->prepare($SQL);
 		$count = $sth->execute($syncname);
 		if ($count != 1) {
@@ -609,7 +623,7 @@ sub validate {
 
 	my $syncsvalid = 0;
 	if ($nouns[0] eq 'all' and ! defined $nouns[1]) {
-		$SQL = q{SELECT name FROM sync};
+		$SQL = q{SELECT name FROM bucardo.sync};
 		$sth = $dbh->prepare($SQL);
 		$count = $sth->execute();
 		if ($count < 1) {
@@ -633,7 +647,7 @@ sub validate {
 
 		## Make sure this sync exists if needed
 		if (! $syncsvalid) {
-			$SQL = 'SELECT status FROM sync WHERE name = ?';
+			$SQL = 'SELECT status FROM bucardo.sync WHERE name = ?';
 			$sth = $dbh->prepare($SQL);
 			$count = $sth->execute($syncname);
 			if ($count != 1) {
@@ -705,7 +719,7 @@ sub update {
 	$SQL = "SELECT * FROM $tabname WHERE $lookupcol = ?";
 	if ($tabname eq 'goat' and $name =~ /(.+)\.(.+)/) {
 		my ($sname,$tname) = ($1,$2);
-		$SQL = 'SELECT * FROM goat WHERE schemaname=? AND tablename=?';
+		$SQL = 'SELECT * FROM bucardo.goat WHERE schemaname=? AND tablename=?';
 		if ($sname =~ s/\*//) {
 			$SQL =~ s/=/~/;
 		}
@@ -745,8 +759,8 @@ sub update {
 
 		## Grab all goats in the source herd for this sync
 		my $sourceherd = $info->{source};
-		$SQL = 'SELECT id, schemaname, tablename FROM goat g'
-			. ' JOIN herdmap h ON (h.goat = g.id) AND h.herd = ?';
+		$SQL = 'SELECT id, schemaname, tablename FROM bucardo.goat g'
+			. ' JOIN bucardo.herdmap h ON (h.goat = g.id) AND h.herd = ?';
 		$sth = $dbh->prepare($SQL);
 		$sth->execute($sourceherd);
 		my $herdlist = $sth->fetchall_hashref('id');
@@ -758,13 +772,13 @@ sub update {
 			my $find;
 			if ($t =~ s/(\w+)\.//) {
 				my $schema = $1;
-				$SQL = 'SELECT * FROM goat WHERE tablename = ? AND schemaname = ? AND reltype = ?';
+				$SQL = 'SELECT * FROM bucardo.goat WHERE tablename = ? AND schemaname = ? AND reltype = ?';
 				$wild and $SQL =~ s/=/~/;
 				$find = $dbh->prepare_cached($SQL);
 				$count = $find->execute($wild ? "^$t" : $t, $schema, $thing);
 			}
 			else {
-				$SQL = 'SELECT * FROM goat WHERE tablename = ? AND reltype = ?';
+				$SQL = 'SELECT * FROM bucardo.goat WHERE tablename = ? AND reltype = ?';
 				$wild and $SQL =~ s/=/~/;
 				$find = $dbh->prepare($SQL);
 				$count = $find->execute($wild ? "^$t" : $t, $thing);
@@ -790,7 +804,7 @@ sub update {
 					next;
 				}
 				if ($v eq 'add') {
-					$SQL = 'INSERT INTO herdmap(herd,goat) VALUES (?,?)';
+					$SQL = 'INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,?)';
 					my $add = $dbh->prepare($SQL);
 					$add->execute($sourceherd,$tabid);
 					warn "Added $type $tablename to herd $sourceherd\n";
@@ -799,7 +813,7 @@ sub update {
 					}
 				}
 				else {
-					$SQL = 'DELETE FROM herdmap WHERE herd = ? AND goat = ?';
+					$SQL = 'DELETE FROM bucardo.herdmap WHERE herd = ? AND goat = ?';
 					my $delete = $dbh->prepare($SQL);
 					$delete->execute($sourceherd,$tabid);
 					warn "Removed $type $tablename from herd $sourceherd\n";
@@ -823,7 +837,7 @@ sub update {
 		@nouns or die $miniusage;
 
 		## Grab all databases in this group
-		$SQL = 'SELECT db, priority FROM dbmap WHERE dbgroup = ?';
+		$SQL = 'SELECT db, priority FROM bucardo.dbmap WHERE dbgroup = ?';
 		$sth = $dbh->prepare($SQL);
 		$sth->execute($name);
 		my $dblist = $sth->fetchall_hashref('db');
@@ -833,7 +847,7 @@ sub update {
 			my $d = $db;
 			my $wild = ($d =~ s/\*//) ? 1 : 0;
 			my $find;
-			$SQL = 'SELECT * FROM db WHERE name = ?';
+			$SQL = 'SELECT * FROM bucardo.db WHERE name = ?';
 			$wild and $SQL =~ s/=/~/;
 			$find = $dbh->prepare($SQL);
 			$count = $find->execute($wild ? "^$d" : $d);
@@ -856,13 +870,13 @@ sub update {
 			for my $db2 (@$dbinfo) {
 				my $dbname = $db2->{name};
 				if ($v eq 'add') {
-					$SQL = 'INSERT INTO dbmap(db,dbgroup) VALUES (?,?)';
+					$SQL = 'INSERT INTO bucardo.dbmap(db,dbgroup) VALUES (?,?)';
 					my $add = $dbh->prepare($SQL);
 					$add->execute($dbname,$name);
 					warn "Added database $dbname to database group $name\n";
 				}
 				else {
-					$SQL = 'DELETE FROM dbmap WHERE db = ? AND dbgroup = ?';
+					$SQL = 'DELETE FROM bucardo.dbmap WHERE db = ? AND dbgroup = ?';
 					my $delete = $dbh->prepare($SQL);
 					$delete->execute($dbname,$name);
 					warn "Removed database $dbname from database group $name\n";
@@ -890,13 +904,13 @@ sub update {
 				die qq{Sorry, cannot change "$n" for $item "$localname"\n};
 			}
 			if ($tabname eq 'db' and $n eq 'dbhost' and $v eq 'none') {
-				$SQL = "UPDATE db SET dbhost = '' WHERE $pkcol = ?";
+				$SQL = "UPDATE bucardo.db SET dbhost = '' WHERE $pkcol = ?";
 				$sth = $dbh->prepare($SQL);
 				$sth->execute($localid);
 				push @{$change{$localname}} => [$n, $row->{$n}, 'NULL'];
 				next;
 			}
-			$SQL = "UPDATE $tabname SET $n = ? WHERE $pkcol = ?";
+			$SQL = "UPDATE bucardo.$tabname SET $n = ? WHERE $pkcol = ?";
 
 			## Only one of targetdb and targetgroup can be set, no NULL the other one
 			if ($n eq 'targetgroup') {
@@ -1306,12 +1320,12 @@ sub status_detail {
 
 	## Grab the mappings from herd to database
 	## We only need one from each herd!
-	$SQL = 'SELECT name FROM herd';
+	$SQL = 'SELECT name FROM bucardo.herd';
 	$sth = $dbh->prepare($SQL);
 	$sth->execute();
 	my $herdmap = $sth->fetchall_hashref('name');
 	for my $herdname (keys %$herdmap) {
-		$SQL = 'SELECT db FROM goat WHERE id = (SELECT goat FROM herdmap WHERE herd = ? LIMIT 1)';
+		$SQL = 'SELECT db FROM bucardo.goat WHERE id = (SELECT bucardo.goat FROM bucardo.herdmap WHERE herd = ? LIMIT 1)';
 		$sth = $dbh->prepare($SQL);
 		$sth->execute($herdname);
 		my $goatinfo = $sth->fetchall_arrayref({})->[0];
@@ -1378,7 +1392,7 @@ sub status_detail {
 
 		my $sourcedb = $herdmap->{$s->{source}}{database} || '?';
 
-		$SQL = 'SELECT count(*) FROM herdmap WHERE herd = ?';
+		$SQL = 'SELECT count(*) FROM bucardo.herdmap WHERE herd = ?';
 		$sth = $dbh->prepare($SQL);
 		$sth->execute($s->{source});
 		my $numtables = $sth->fetch()->[0];
@@ -1420,7 +1434,7 @@ sub get_config {
 
 	my $name = shift;
 
-	$SQL = 'SELECT value FROM bucardo_config WHERE lower(setting) = ?';
+	$SQL = 'SELECT value FROM bucardo.bucardo_config WHERE lower(setting) = ?';
 	$sth = $dbh->prepare_cached($SQL);
 	$count = $sth->execute(lc $name);
 	if ($count < 1) {
@@ -1483,7 +1497,7 @@ round(extract(epoch FROM aborted-started)) AS total_time_aborted,
 round(extract(epoch FROM now()-ended)) AS last_ended_secs,
 round(extract(epoch FROM now()-aborted)) AS last_aborted_secs
 FROM
-(SELECT * FROM q WHERE sync = \$1 AND cdate >= '$oldtime'
+(SELECT * FROM bucardo.q WHERE sync = \$1 AND cdate >= '$oldtime'
 UNION ALL
 SELECT * FROM freezer.master_q WHERE sync = \$1 AND cdate >= '$oldtime') AS foo
 WHERE ended is NOT NULL AND aborted IS NULL
@@ -1501,7 +1515,7 @@ ORDER BY ended DESC LIMIT 1;
 SELECT *,
 round(extract(epoch FROM now()-cdate)) AS q1,
 round(extract(epoch FROM now()-started)) AS q2
-FROM q
+FROM bucardo.q
 WHERE sync = \$1
 AND ended IS NULL
 AND aborted IS NULL
@@ -1645,9 +1659,9 @@ sub inspect_table {
 	## Must be given a name
 	@nouns or die "Usage: bucardo_ctl inspect table <tablename>\n";
 
-	$SQL = q{SELECT * FROM goat WHERE tablename=?};
+	$SQL = q{SELECT * FROM bucardo.goat WHERE tablename=?};
 	my $sth_goat = $dbh->prepare($SQL);
-	$SQL = q{SELECT * FROM goat WHERE schemaname = ? AND tablename=?};
+	$SQL = q{SELECT * FROM bucardo.goat WHERE schemaname = ? AND tablename=?};
 	my $sth_goat_schema = $dbh->prepare($SQL);
 	my @tables;
 	for my $name (@nouns) {
@@ -1739,7 +1753,7 @@ SELECT CASE WHEN conrelid=x.toid THEN 1 ELSE 2 END,
  conrelid::regclass::text,
  conname,
  pg_get_constraintdef(oid, true)
-FROM pg_constraint, 
+FROM pg_constraint,
 (SELECT c.oid AS toid FROM pg_class c JOIN pg_namespace n
    ON (n.oid=c.relnamespace) WHERE nspname=? AND relname=?
 ) x
@@ -1763,19 +1777,19 @@ sub load_bucardo_info {
 	return if exists $global{db} and ! $force;
 
 	## Grab all database information
-	$SQL = 'SELECT * FROM db';
+	$SQL = 'SELECT * FROM bucardo.db';
 	$sth = $dbh->prepare($SQL);
 	$sth->execute();
 	my $db = $sth->fetchall_hashref('name');
 
 	## Grab all database information
-	$SQL = 'SELECT * FROM dbgroup';
+	$SQL = 'SELECT * FROM bucardo.dbgroup';
 	$sth = $dbh->prepare($SQL);
 	$sth->execute();
 	my $dbgroup = $sth->fetchall_hashref('name');
 
 	## Map databases to their groups
-	$SQL = 'SELECT * FROM dbmap';
+	$SQL = 'SELECT * FROM bucardo.dbmap';
 	$sth = $dbh->prepare($SQL);
 	$sth->execute();
 	for my $row (@{$sth->fetchall_arrayref({})}) {
@@ -1784,19 +1798,19 @@ sub load_bucardo_info {
 	}
 
 	## Grab all goat information
-	$SQL = 'SELECT * FROM goat';
+	$SQL = 'SELECT * FROM bucardo.goat';
 	$sth = $dbh->prepare($SQL);
 	$sth->execute();
 	my $goat = $sth->fetchall_hashref('id');
 
 	## Grab all herd information
-	$SQL = 'SELECT * FROM herd';
+	$SQL = 'SELECT * FROM bucardo.herd';
 	$sth = $dbh->prepare($SQL);
 	$sth->execute();
 	my $herd = $sth->fetchall_hashref('name');
 
 	## Grab all herdmap information, stick into previous hashes
-	$SQL = 'SELECT * FROM herdmap ORDER BY priority DESC, goat ASC';
+	$SQL = 'SELECT * FROM bucardo.herdmap ORDER BY priority DESC, goat ASC';
 	$sth = $dbh->prepare($SQL);
 	$sth->execute();
 	for my $row (@{$sth->fetchall_arrayref({})}) {
@@ -1810,7 +1824,7 @@ sub load_bucardo_info {
 	}
 
 	## Grab all sync information
-	$SQL = 'SELECT * FROM sync';
+	$SQL = 'SELECT * FROM bucardo.sync';
 	$sth = $dbh->prepare($SQL);
 	$sth->execute();
 	my $sync;
@@ -1965,55 +1979,11 @@ sub list {
 	list_tables()    if $thing =~ /ta/i    or $thing eq 't';
 	list_sequences() if $thing =~ /seq/i   or $thing eq 'q';
 	list_syncs()     if $thing =~ /sy/i    or $thing eq 's';
-	list_herds()     if $thing =~ /he/i    or $thing eq 'h';
+	list_herds()     if $thing =~ /^h/i;
 
 	die $msg;
 
 } ## end of list
-
-
-sub list_dbgroups {
-
-	## Show information about all or some subset of the 'dbgroup' table
-
-	## Any nouns are filters against the whole list
-	my $clause = generate_clause({col => 'name', items => \@nouns});
-	my $WHERE = $clause ? "WHERE $clause" : '';
-	$SQL = "SELECT * FROM dbgroup $WHERE ORDER BY name";
-	$sth = $dbh->prepare($SQL);
-	$count = $sth->execute();
-	if ($count < 1) {
-		$sth->finish();
-		printf "There are no%s entries in the 'dbgroup' table.\n",
-			$WHERE ? ' matching' : '';
-		exit 1;
-	}
-	$info = $sth->fetchall_arrayref({});
-
-	## Get sizing information
-	my $maxlen = 1;
-	for my $row (@$info) {
-		$maxlen = length $row->{name} if length $row->{name} > $maxlen;
-	}
-
-	load_bucardo_info();
-
-	for my $row (@$info) {
-		my $dbs = '';
-		if (exists $global{dbgroup}{$row->{name}}{db}) {
-			$dbs = '  Members: ';
-			$dbs .= join ', ' => sort keys %{$global{dbgroup}{$row->{name}}{db}};
-		}
-		printf "Database group: %-*s%s\n",
-			$maxlen, $row->{name}, $dbs;
-		$VERBOSE >= 2 and show_all_columns($row);
-	}
-
-	exit 0;
-
-} ## end of list_dbgroups
-
-
 
 
 sub list_dbs {
@@ -2023,7 +1993,7 @@ sub list_dbs {
 	## Any nouns are filters against the whole list
 	my $clause = generate_clause({col => 'name', items => \@nouns});
 	my $WHERE = $clause ? "WHERE $clause" : '';
-	$SQL = "SELECT * FROM db $WHERE ORDER BY name";
+	$SQL = "SELECT * FROM bucardo.db $WHERE ORDER BY name";
 	$sth = $dbh->prepare($SQL);
 	$count = $sth->execute();
 	if ($count < 1) {
@@ -2093,13 +2063,127 @@ sub list_dbs {
 } ## end of list_dbs
 
 
+sub list_dbgroups {
+
+	## Show information about all or some subset of the 'dbgroup' table
+
+	## Any nouns are filters against the whole list
+	my $clause = generate_clause({col => 'name', items => \@nouns});
+	my $WHERE = $clause ? "WHERE $clause" : '';
+	$SQL = "SELECT * FROM bucardo.dbgroup $WHERE ORDER BY name";
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute();
+	if ($count < 1) {
+		$sth->finish();
+		printf "There are no%s entries in the 'dbgroup' table.\n",
+			$WHERE ? ' matching' : '';
+		exit 1;
+	}
+	$info = $sth->fetchall_arrayref({});
+
+	## Get sizing information
+	my $maxlen = 1;
+	for my $row (@$info) {
+		$maxlen = length $row->{name} if length $row->{name} > $maxlen;
+	}
+
+	load_bucardo_info();
+
+	for my $row (@$info) {
+		my $dbs = '';
+		if (exists $global{dbgroup}{$row->{name}}{db}) {
+			$dbs = '  Members: ';
+			$dbs .= join ', ' => sort keys %{$global{dbgroup}{$row->{name}}{db}};
+		}
+		printf "Database group: %-*s%s\n",
+			$maxlen, $row->{name}, $dbs;
+		$VERBOSE >= 2 and show_all_columns($row);
+	}
+
+	exit 0;
+
+} ## end of list_dbgroups
+
+
+sub list_herds {
+
+	## Show information about all or some subset of the 'herd' table
+
+	## Any nouns are filters against the whole list
+	my $clause = generate_clause({col => 'name', items => \@nouns});
+	my $WHERE = $clause ? "WHERE $clause" : '';
+	$SQL = "SELECT * FROM bucardo.herd $WHERE";
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	my $map = $sth->fetchall_arrayref({});
+	my $herdmap;
+	for my $row (@$map) {
+		push @{$herdmap->{$row->{herd}}}, $row;
+	}
+
+	## If any nouns left, treat as wildcards
+	my $WHERE = '';
+	for my $term (@nouns) {
+		$WHERE .= sprintf q{%s lower(name) ~ %s },
+			$WHERE ? 'OR' : 'WHERE',
+			$dbh->quote(lc $term);
+	}
+
+	## Grab the herds
+	$SQL = "SELECT * FROM bucardo.herd $WHERE ORDER BY name";
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute();
+	if ($count < 1) {
+		$sth->finish();
+		printf "There are no%s entries in the 'herd' table.\n",
+			$WHERE ? ' matching' : '';
+		exit 1;
+	}
+	my $herdinfo = $sth->fetchall_arrayref({});
+
+	## Figure out the spacing
+	my ($namelen,$goatlen) = (5,1);
+	for my $row (@$herdinfo) {
+		$namelen = length $row->{name} if length $row->{name} > $namelen;
+		next if ! exists $herdmap->{$row->{name}};
+		my $num = @{$herdmap->{$row->{name}}};
+		$goatlen = length $num if length $num > $goatlen;
+	}
+
+	## See which syncs are used by which herds
+	$SQL = 'SELECT name FROM bucardo.sync WHERE source = ?';
+	my $synclist = $dbh->prepare($SQL);
+
+	## Print out the results
+	for my $row (@$herdinfo) {
+		my $hname = $row->{name};
+		my $showsyncs = '';
+		$count = $synclist->execute($hname);
+		if ($count) {
+			$showsyncs = join ' ' => map { $_->[0] } @{$synclist->fetchall_arrayref()};
+		}
+		printf "Herd: %-*s   Goats: %*d%s\n",
+			$namelen, $hname,
+			$goatlen, exists $herdmap->{$hname} ? scalar @{$herdmap->{$hname}} : 0,
+			$showsyncs ? "  Syncs: $showsyncs" : '';
+		if ($VERBOSE >= 1) {
+			for my $name (@{$herdmap->{$hname}}) {
+				my $type = ucfirst($name->{reltype});
+				print "  $type $name->{schemaname}.$name->{tablename}\n";
+			}
+		}
+	}
+
+	exit 0;
+
+} ## end of list_herds
 
 
 sub get_dbs {
 
 	## Grab information about all entries in the 'db' table
 
-	$SQL = 'SELECT * FROM db ORDER BY name';
+	$SQL = 'SELECT * FROM bucardo.db ORDER BY name';
 	$sth = $dbh->prepare($SQL);
 	$sth->execute();
 	my $info = $sth->fetchall_hashref('name');
@@ -2128,7 +2212,7 @@ sub list_tables {
 		}
 	}
 
-	$SQL = "SELECT * FROM goat WHERE reltype = 'table' $AND ORDER BY schemaname, tablename";
+	$SQL = "SELECT * FROM bucardo.goat WHERE reltype = 'table' $AND ORDER BY schemaname, tablename";
 	$sth = $dbh->prepare($SQL);
 	$count = $sth->execute();
 	if ($count < 1) {
@@ -2197,7 +2281,7 @@ sub list_sequences {
 				$dbh->quote(lc $term);
 	}
 
-	$SQL = "SELECT * FROM goat WHERE reltype = 'sequence' $AND ORDER BY schemaname, tablename";
+	$SQL = "SELECT * FROM bucardo.goat WHERE reltype = 'sequence' $AND ORDER BY schemaname, tablename";
 	$sth = $dbh->prepare($SQL);
 	$count = $sth->execute();
 	if ($count < 1) {
@@ -2216,76 +2300,6 @@ sub list_sequences {
 
 } ## end of list_sequences
 
-
-sub list_herds {
-
-	## Show information about all or some subset of the 'herd' table
-
-	$SQL = 'SELECT herd, g.* FROM herdmap h JOIN goat g ON (g.id = h.goat)';
-	$sth = $dbh->prepare($SQL);
-	$sth->execute();
-	my $map = $sth->fetchall_arrayref({});
-	my $herdmap;
-	for my $row (@$map) {
-		push @{$herdmap->{$row->{herd}}}, $row;
-	}
-
-	## If any nouns left, treat as wildcards
-	my $WHERE = '';
-	for my $term (@nouns) {
-		$WHERE .= sprintf q{%s lower(name) ~ %s },
-			$WHERE ? 'OR' : 'WHERE',
-			$dbh->quote(lc $term);
-	}
-
-	## Grab the herds
-	$SQL = "SELECT * FROM herd $WHERE ORDER BY name";
-	$sth = $dbh->prepare($SQL);
-	$count = $sth->execute();
-	if ($count < 1) {
-		$sth->finish();
-		printf "There are no%s entries in the 'herd' table.\n",
-			$WHERE ? ' matching' : '';
-		exit 1;
-	}
-	my $herdinfo = $sth->fetchall_arrayref({});
-
-	## Figure out the spacing
-	my ($namelen,$goatlen) = (5,1);
-	for my $row (@$herdinfo) {
-		$namelen = length $row->{name} if length $row->{name} > $namelen;
-		next if ! exists $herdmap->{$row->{name}};
-		my $num = @{$herdmap->{$row->{name}}};
-		$goatlen = length $num if length $num > $goatlen;
-	}
-
-	## See which syncs are used by which herds
-	$SQL = 'SELECT name FROM sync WHERE source = ?';
-	my $synclist = $dbh->prepare($SQL);
-
-	## Print out the results
-	for my $row (@$herdinfo) {
-		my $hname = $row->{name};
-		my $showsyncs = '';
-		$count = $synclist->execute($hname);
-		if ($count) {
-			$showsyncs = join ' ' => map { $_->[0] } @{$synclist->fetchall_arrayref()};
-		}
-		printf "Herd: %-*s   Goats: %*d%s\n",
-			$namelen, $hname,
-			$goatlen, exists $herdmap->{$hname} ? scalar @{$herdmap->{$hname}} : 0,
-			$showsyncs ? "  Syncs: $showsyncs" : '';
-		if ($VERBOSE >= 1) {
-			for my $name (@{$herdmap->{$hname}}) {
-				my $type = ucfirst($name->{reltype});
-				print "  $type $name->{schemaname}.$name->{tablename}\n";
-			}
-		}
-	}
-
-	exit 0;
-
-} ## end of list_herds
 
 
 sub list_syncs {
@@ -2308,7 +2322,7 @@ sub list_syncs {
 			$dbh->quote(lc $term);
 	}
 
-	$SQL = "SELECT * FROM sync $WHERE ORDER BY name";
+	$SQL = "SELECT * FROM bucardo.sync $WHERE ORDER BY name";
 	my $mod = join ' OR ' => map { "synctype = '$_'" } @mod;
 	if ($mod) {
 		if ($SQL =~ /WHERE /) {
@@ -2341,8 +2355,8 @@ sub list_syncs {
 	## If in verbose mode, grab all the tables as well
 	my $tabinfo;
 	if ($VERBOSE >= 1) {
-		$SQL = 'SELECT reltype,schemaname,tablename FROM goat g JOIN herdmap h ON (h.goat = g.id) '
-			. ' JOIN sync s ON (s.source = h.herd AND s.name = ?) ORDER BY h.priority DESC, h.goat ASC';
+		$SQL = 'SELECT reltype,schemaname,tablename FROM bucardo.goat g JOIN bucardo.herdmap h ON (h.goat = g.id) '
+			. ' JOIN bucardo.sync s ON (s.source = h.herd AND s.name = ?) ORDER BY h.priority DESC, h.goat ASC';
 		$sth = $dbh->prepare($SQL);
 		for my $row (@$info) {
 			$sth->execute($row->{name});
@@ -2407,7 +2421,7 @@ sub pretty_time {
 sub get_syncs {
 
 	my %dbgroup;
-	$SQL = 'SELECT dbgroup, db FROM dbmap ORDER BY priority, db';
+	$SQL = 'SELECT dbgroup, db FROM bucardo.dbmap ORDER BY priority, db';
 	for my $row (@{$dbh->selectall_arrayref($SQL)}) {
 		push @{$dbgroup{$row->[0]}}, $row->[1];
 	}
@@ -3066,7 +3080,7 @@ sub upgrade {
 			warn "Could not find table $schema.$table to check!\n";
 			next;
 		}
-		$SQL = 'SELECT rulename FROM pg_rewrite WHERE ev_class = ? ORDER BY rulename';
+		$SQL = 'SELECT rulename FROM pg_catalog.pg_rewrite WHERE ev_class = ? ORDER BY rulename';
 		$sth = $dbh->prepare($SQL);
 		$count = $sth->execute($oid);
 		if ($count < 1) {
@@ -3183,9 +3197,9 @@ sub upgrade {
 	}
 
 	## Check for any new config items
-	$SQL = 'SELECT value FROM bucardo_config WHERE lower(setting) = ?';
+	$SQL = 'SELECT value FROM bucardo.bucardo_config WHERE lower(setting) = ?';
 	my $cfgsth = $dbh->prepare($SQL);
-	$SQL = 'INSERT INTO bucardo_config(setting,value,about) VALUES (?,?,?)';
+	$SQL = 'INSERT INTO bucardo.bucardo_config(setting,value,about) VALUES (?,?,?)';
 	my $newcfg = $dbh->prepare($SQL);
 	my %config;
 	my $inside = 0;
@@ -3317,7 +3331,7 @@ sub upgrade {
 	}
 	close $fh or die qq{Could not close file "$file": $!\n};
 
-	$SQL = 'SELECT md5(?)';
+	$SQL = 'SELECT pg_catalog.md5(?)';
 	my $md5sth = $dbh->prepare($SQL);
 	for my $row (@flist) {
 		my ($name,$arg,$body) = @$row;
@@ -3467,7 +3481,7 @@ sub upgrade_and_log {
 		die "From line $line, action $action\n$@\n";
 	}
 
-	$SQL = 'INSERT INTO upgrade_log(action,version,summary) VALUES (?,?,?)';
+	$SQL = 'INSERT INTO bucardo.upgrade_log(action,version,summary) VALUES (?,?,?)';
 	$sth = $dbh->prepare($SQL);
 	$sth->execute($action,$VERSION,$short);
 
@@ -3525,17 +3539,24 @@ For more information, run: $progname help remove <type>};
 
 	if ('remove_database' eq $name) {
 		return qq{Usage: $verb db <name> [name2 name3 ...]
-Removes one or more databases};
+Removes one or more databases.};
 	}
 
 	if ('remove_dbgroup' eq $name) {
 		return qq{Usage: $verb dbgroup <name> [name2 name3 ...]
-Removes one or more database groups};
+Removes one or more database groups.};
 	}
 
 	if ('remove_herd' eq $name) {
 		return qq{Usage: $verb herd <name> [name2 name3 ...]
-Removes one or more herds};
+Removes one or more herds.};
+	}
+
+	if ('list' eq $name) {
+		return qq{Usage: list <type> [options]
+Shows information about items in the internal Bucardo database.
+The type is one of: db, dbgroup, table, sequence, herd, sync
+For more information, run: $progname help list <type>};
 	}
 
 	if ('list_database' eq $name) {
@@ -3633,7 +3654,7 @@ sub add_database {
 		load_bucardo_info();
 		my $gname = $dbcols->{group};
 		if (! exists $global{dbgroup}{$gname}) {
-			$SQL = 'INSERT INTO dbgroup(name) VALUES (?)';
+			$SQL = 'INSERT INTO bucardo.dbgroup(name) VALUES (?)';
 			$sth = $dbh->prepare($SQL);
 			eval {
 				$sth->execute($gname);
@@ -3643,7 +3664,7 @@ sub add_database {
 			}
 			$finalmsg .= qq{Added new database group "$gname"\n};
 		}
-		$SQL = 'INSERT INTO dbmap(db,dbgroup) VALUES (?,?)';
+		$SQL = 'INSERT INTO bucardo.dbmap(db,dbgroup) VALUES (?,?)';
 		$sth = $dbh->prepare($SQL);
 		eval {
 			$sth->execute($newname,$gname);
@@ -3735,8 +3756,8 @@ sub add_all_goats {
 
 	## Query to pull all tables we may possibly need
 	my $kind = $type eq 'table' ? 'r' : 'S';
-	$SQL = q{SELECT nspname, relname FROM pg_class c }
-		. q{JOIN pg_namespace n ON (n.oid = c.relnamespace) }
+	$SQL = q{SELECT nspname, relname FROM pg_catalog.pg_class c }
+		. q{JOIN pg_catalog.pg_namespace n ON (n.oid = c.relnamespace) }
 		. qq{WHERE relkind = '$kind' };
 
 	## We always exclude information_schema, system, and bucardo schemas
@@ -3770,7 +3791,7 @@ sub add_all_goats {
 	}
 
 	## Grab all current tables or sequences from the goat table.
-	$SQL = qq{SELECT schemaname, tablename FROM goat WHERE reltype= '$type' AND db = '$db->{name}'};
+	$SQL = qq{SELECT schemaname, tablename FROM bucardo.goat WHERE reltype= '$type' AND db = '$db->{name}'};
 	my %hastable;
 	for my $row (@{$dbh->selectall_arrayref($SQL)}) {
 		$hastable{$row->[0]}{$row->[1]}++;
@@ -3781,17 +3802,17 @@ sub add_all_goats {
 	my $addtoherd;
 	if (exists $bcargs->{herd}) {
 		$herd = $bcargs->{herd};
-		$SQL = 'SELECT 1 FROM herd WHERE name = ?';
+		$SQL = 'SELECT 1 FROM bucardo.herd WHERE name = ?';
 		my $herdcheck = $dbh->prepare($SQL);
 		$count = $herdcheck->execute($herd);
 		$herdcheck->finish();
 		if ($count < 1) {
 			print "Creating herd: $herd\n";
-			$SQL = 'INSERT INTO herd(name) VALUES (?)';
+			$SQL = 'INSERT INTO bucardo.herd(name) VALUES (?)';
 			$herdcheck = $dbh->prepare($SQL);
 			$herdcheck->execute($herd);
 		}
-		$SQL = 'INSERT INTO herdmap(herd,goat) VALUES (?,?)';
+		$SQL = 'INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,?)';
 		$addtoherd = $dbh->prepare($SQL);
 	}
 
@@ -3824,7 +3845,7 @@ sub add_all_goats {
 		$VERBOSE >= 2 and warn "ID of new table $S.$T is $id\n";
 
 		## Pull the information back out about this item
-		$SQL = 'SELECT * FROM goat WHERE id = ?';
+		$SQL = 'SELECT * FROM bucardo.goat WHERE id = ?';
 		$sth = $dbh->prepare($SQL);
 		$sth->execute($id);
 		my $info = $sth->fetchall_arrayref({});
@@ -3879,7 +3900,7 @@ sub connect_database {
 	my $opt = shift || {};
 
 	if (exists $opt->{name}) {
-		$SQL = qq{SELECT db_getconn('$opt->{name}')};
+		$SQL = qq{SELECT bucardo.db_getconn('$opt->{name}')};
 		my $conn = $dbh->selectall_arrayref($SQL)->[0][0];
 		my ($dsn,$user,$pass) = split /\n/ => $conn;
 		$dbh2 = DBI->connect_cached($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
@@ -3951,12 +3972,12 @@ sub add_table {
 		$herd = $arg{herd}->[0];
 		delete $arg{herd};
 		## Does this herd exist?
-		$SQL = 'SELECT 1 FROM herd WHERE name = ?';
+		$SQL = 'SELECT 1 FROM bucardo.herd WHERE name = ?';
 		$sth = $dbh->prepare($SQL);
 		$count = $sth->execute($herd);
 		$sth->finish();
 		if ($count != 1) {
-			$SQL = 'INSERT INTO herd(name) VALUES(?)';
+			$SQL = 'INSERT INTO bucardo.herd(name) VALUES(?)';
 			$sth = $dbh->prepare($SQL);
 			$sth->execute($herd);
 			print qq{Created herd "$herd"\n};
@@ -4004,7 +4025,7 @@ sub add_table {
 
 	## Add them to the herd if it was specificed
 	if (defined $herd) {
-		$SQL = 'INSERT INTO herdmap (goat,herd,priority) VALUES (?,?,?)';
+		$SQL = 'INSERT INTO bucardo.herdmap (goat,herd,priority) VALUES (?,?,?)';
 		$sth = $dbh->prepare($SQL);
 		for (@id) {
 			if ($DEBUG) {
@@ -4089,12 +4110,12 @@ sub add_sequence {
 		$herd = $arg{herd}->[0];
 		delete $arg{herd};
 		## Does this herd exist?
-		$SQL = 'SELECT 1 FROM herd WHERE name = ?';
+		$SQL = 'SELECT 1 FROM bucardo.herd WHERE name = ?';
 		$sth = $dbh->prepare($SQL);
 		$count = $sth->execute($herd);
 		$sth->finish();
 		if ($count != 1) {
-			$SQL = 'INSERT INTO herd(name) VALUES(?)';
+			$SQL = 'INSERT INTO bucardo.herd(name) VALUES(?)';
 			$sth = $dbh->prepare($SQL);
 			$sth->execute($herd);
 			print qq{Created herd "$herd"\n};
@@ -4129,7 +4150,7 @@ sub add_sequence {
 
 	## Add them to the herd if it was specificed
 	if (defined $herd) {
-		$SQL = 'INSERT INTO herdmap (goat,herd,priority) VALUES (?,?,?)';
+		$SQL = 'INSERT INTO bucardo.herdmap (goat,herd,priority) VALUES (?,?,?)';
 		$sth = $dbh->prepare($SQL);
 		for (@id) {
 			if ($DEBUG) {
@@ -4233,7 +4254,7 @@ sub add_sync {
  		if ($@) {
  			die $@ unless $@ =~ /"herd_name_pk"/;
  			$dbh->rollback();
- 			$SQL = 'SELECT * FROM herdmap WHERE herd = ?';
+ 			$SQL = 'SELECT * FROM bucardo.herdmap WHERE herd = ?';
  			$sth = $dbh->prepare($SQL);
  			$count = $sth->execute($item_name);
  			$sth->finish();
@@ -4244,11 +4265,11 @@ sub add_sync {
 
 		## Add all tables given to the new herd
 		## May be the same table in more than one schema, in which case we add them all!
-		$SQL = q{SELECT id FROM goat WHERE tablename=? AND db =?};
+		$SQL = q{SELECT id FROM bucardo.goat WHERE tablename=? AND db =?};
 		my $sth_goat = $dbh->prepare($SQL);
-		$SQL = q{SELECT id FROM goat WHERE schemaname = ? AND tablename=? AND db =?};
+		$SQL = q{SELECT id FROM bucardo.goat WHERE schemaname = ? AND tablename=? AND db =?};
 		my $sth_goat_schema = $dbh->prepare($SQL);
-		$SQL = q{INSERT INTO herdmap(herd,goat) VALUES (?,?)};
+		$SQL = q{INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,?)};
 		my $sth_i = $dbh->prepare($SQL);
 		for my $table (split /,/ => $arg{tables}[0]) {
 			my $sthg;
@@ -4331,7 +4352,7 @@ sub remove_sync {
 	my $name = shift @nouns;
 
 	## Does the sync exist?
-	$SQL = 'SELECT * FROM sync WHERE name = ?';
+	$SQL = 'SELECT * FROM bucardo.sync WHERE name = ?';
 	$sth = $dbh->prepare($SQL);
 	$count = $sth->execute($name);
 	if (1 != $count) {
@@ -4343,7 +4364,7 @@ sub remove_sync {
 
 	## Is this sync currently running?
 	my $dname = "bucardo_deactivate_sync_$name";
-	$SQL = q{SELECT 1 FROM pg_listener WHERE relname = ?};
+	$SQL = q{SELECT 1 FROM pg_catalog.pg_listener WHERE relname = ?};
 	$sth = $dbh->prepare($SQL);
 	$count = $sth->execute($dname);
 	$sth->finish();
@@ -4358,7 +4379,7 @@ sub remove_sync {
 	my $ans = <STDIN>;
 	exit 0 unless $ans =~ /^Y/i;
 
-	$SQL = 'DELETE FROM sync WHERE name = ?';
+	$SQL = 'DELETE FROM bucardo.sync WHERE name = ?';
 	$sth = $dbh->prepare($SQL);
 	$count = $sth->execute($name);
 	if (1 != $count) {
@@ -4381,7 +4402,7 @@ sub remove_herd {
 
 	my $name = shift @nouns;
 
-	$SQL = q{DELETE FROM herd WHERE name = ?};
+	$SQL = q{DELETE FROM bucardo.herd WHERE name = ?};
 	$sth = $dbh->prepare($SQL);
 	$count = $sth->execute($name);
 	if (1 != $count) {
@@ -4529,7 +4550,7 @@ sub alter_sync {
 		exit 0;
 	}
 
-	$SQL = 'UPDATE sync SET ';
+	$SQL = 'UPDATE bucardo.sync SET ';
 	my @args;
 	for my $c (sort keys %setting) {
 		$SQL .= "$c = ?, ";
@@ -4651,7 +4672,7 @@ sub add_dbgroup {
 	## (If it does exist, we keep going in case there are new dbs to add)
 	my $newgroup = '';
 	if (! exists $global{dbgroup}{$name}) {
-		$SQL = 'INSERT INTO dbgroup(name) VALUES (?)';
+		$SQL = 'INSERT INTO bucardo.dbgroup(name) VALUES (?)';
 		$sth = $dbh->prepare($SQL);
 		$sth->execute($name);
 		load_bucardo_info(1);
@@ -4669,9 +4690,9 @@ sub add_dbgroup {
 
 	my $clause = generate_clause({col => 'name', items => \@nouns});
 	if ($clause) {
-		$SQL = 'INSERT INTO dbmap(db,dbgroup,priority) VALUES (?,?,?)';
+		$SQL = 'INSERT INTO bucardo.dbmap(db,dbgroup,priority) VALUES (?,?,?)';
 		my $addrow = $dbh->prepare($SQL);
-		$SQL = "SELECT * FROM db WHERE $clause";
+		$SQL = "SELECT * FROM bucardo.db WHERE $clause";
 		$sth = $dbh->prepare($SQL);
 		$count = $sth->execute();
 		if ($count < 1) {
@@ -4760,7 +4781,7 @@ sub message {
 		die qq{Usage: bucardo_ctl message "Some message to send to the logs"\n};
 	}
 
-	$SQL = 'INSERT INTO bucardo_log_message(msg) VALUES (?)';
+	$SQL = 'INSERT INTO bucardo.bucardo_log_message(msg) VALUES (?)';
 	$sth = $dbh->prepare($SQL);
 	$sth->execute($nouns);
 	$dbh->commit();
@@ -4962,7 +4983,7 @@ sub install {
 	$dbh = DBI->connect($BDSN, 'bucardo', $default_bucardo_password, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
 	$dbh->do('SET search_path = bucardo');
 
-	$SQL = 'UPDATE bucardo_config SET value = ? WHERE setting = ?';
+	$SQL = 'UPDATE bucardo.bucardo_config SET value = ? WHERE setting = ?';
 	$sth = $dbh->prepare($SQL);
 	$confvar{piddir} = $piddir;
 	for my $key (sort keys %confvar) {
