@@ -426,7 +426,7 @@ sub superhelp {
 			warn usage('list_dbgroup') . "\n";
 			exit 0;
 		}
-		if ('herd' eq $word2) {
+		if ($word2 =~ /^herd/i) {
 			warn usage('list_herd') . "\n";
 			exit 0;
 		}
@@ -1816,7 +1816,7 @@ sub load_bucardo_info {
 	for my $row (@{$sth->fetchall_arrayref({})}) {
 		my ($g,$h,$p) = @$row{qw/goat herd priority/};
 		$goat->{$g}{herd}{$h} = $p;
-		push @{$herd->{$h}{goat}} => [$g,$p];
+		push @{$herd->{$h}{goat}} => [$g,$p,$goat->{$g}{reltype},$goat->{$g}{schemaname},$goat->{$g}{tablename}];
 		my ($s,$t) = @{$goat->{$g}}{qw/schemaname tablename/};
 		$herd->{$h}{hasgoat}{$s}{$t} = $p;
 		## Assign each herd to a datbase via its included goats
@@ -2112,24 +2112,6 @@ sub list_herds {
 	## Any nouns are filters against the whole list
 	my $clause = generate_clause({col => 'name', items => \@nouns});
 	my $WHERE = $clause ? "WHERE $clause" : '';
-	$SQL = "SELECT * FROM bucardo.herd $WHERE";
-	$sth = $dbh->prepare($SQL);
-	$sth->execute();
-	my $map = $sth->fetchall_arrayref({});
-	my $herdmap;
-	for my $row (@$map) {
-		push @{$herdmap->{$row->{herd}}}, $row;
-	}
-
-	## If any nouns left, treat as wildcards
-	my $WHERE = '';
-	for my $term (@nouns) {
-		$WHERE .= sprintf q{%s lower(name) ~ %s },
-			$WHERE ? 'OR' : 'WHERE',
-			$dbh->quote(lc $term);
-	}
-
-	## Grab the herds
 	$SQL = "SELECT * FROM bucardo.herd $WHERE ORDER BY name";
 	$sth = $dbh->prepare($SQL);
 	$count = $sth->execute();
@@ -2139,40 +2121,38 @@ sub list_herds {
 			$WHERE ? ' matching' : '';
 		exit 1;
 	}
-	my $herdinfo = $sth->fetchall_arrayref({});
+	$info = $sth->fetchall_arrayref({});
 
-	## Figure out the spacing
-	my ($namelen,$goatlen) = (5,1);
-	for my $row (@$herdinfo) {
-		$namelen = length $row->{name} if length $row->{name} > $namelen;
-		next if ! exists $herdmap->{$row->{name}};
-		my $num = @{$herdmap->{$row->{name}}};
-		$goatlen = length $num if length $num > $goatlen;
+	## Get sizing information
+	my $maxlen = 1;
+	for my $row (@$info) {
+		$maxlen = length $row->{name} if length $row->{name} > $maxlen;
 	}
 
-	## See which syncs are used by which herds
-	$SQL = 'SELECT name FROM bucardo.sync WHERE source = ?';
-	my $synclist = $dbh->prepare($SQL);
+	load_bucardo_info();
 
-	## Print out the results
-	for my $row (@$herdinfo) {
-		my $hname = $row->{name};
-		my $showsyncs = '';
-		$count = $synclist->execute($hname);
-		if ($count) {
-			$showsyncs = join ' ' => map { $_->[0] } @{$synclist->fetchall_arrayref()};
+	## Figure out which goats are in each of these herds
+
+
+	for my $row (@$info) {
+		my $name = $row->{name};
+		my $h = $global{herd}{$name};
+		printf "Herd: %-*s",
+			$maxlen, $name;
+		## Got goats?
+		if (exists $h->{goat}) {
+			print " Members: ";
+			print join ', ' => map { "$_->[3].$_->[4]" } @{$h->{goat}};
 		}
-		printf "Herd: %-*s   Goats: %*d%s\n",
-			$namelen, $hname,
-			$goatlen, exists $herdmap->{$hname} ? scalar @{$herdmap->{$hname}} : 0,
-			$showsyncs ? "  Syncs: $showsyncs" : '';
-		if ($VERBOSE >= 1) {
-			for my $name (@{$herdmap->{$hname}}) {
-				my $type = ucfirst($name->{reltype});
-				print "  $type $name->{schemaname}.$name->{tablename}\n";
-			}
+		## Got syncs?
+		if (exists $h->{sync}) {
+			print "\n  Used in syncs: ";
+			print join ', ' => sort keys %{$h->{sync}};
 		}
+		print "\n";
+		$VERBOSE >= 2 and show_all_columns($row);
 	}
+
 
 	exit 0;
 
