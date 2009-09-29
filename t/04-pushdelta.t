@@ -35,7 +35,7 @@ $bct->add_test_tables_to_herd('A', 'testherd1');
 ## Create a new sync to pushdelta from A to B
 $t=q{Add sync works};
 $i = $bct->ctl("add sync pushdeltatest source=testherd1 type=pushdelta targetdb=B");
-like($i, qr{Sync added:}, $t);
+like($i, qr{Added sync}, $t);
 
 $dbhX->do('LISTEN bucardo_syncdone_pushdeltatest');
 $dbhX->commit();
