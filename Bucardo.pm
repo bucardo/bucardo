@@ -4357,19 +4357,17 @@ sub start_kid {
 					}
 				}
 
-				my ($srccmd,$tgtcmd);
-				if ($sync->{usecustomselect} and $g->{customselect}) {
-					## TODO: Use COPY () format if 8.2 or greater
-					$cs_temptable = "bucardo_temp_$g->{tablename}_$$"; ## Raw version, not "safetable"
-					$self->glog("Creating temp table $cs_temptable for custom select on $S.$T");
-					$sourcedbh->do("CREATE TEMP TABLE $cs_temptable AS $g->{customselect}");
-					#$sourcedbh->do("CREATE TEMP TABLE $cs_temptable ON COMMIT DROP AS $g->{customselect}");
-					$srccmd = "COPY $cs_temptable TO STDOUT $sync->{copyextra}";
-					$tgtcmd = "COPY $S.$T($g->{safecolumnlist}) FROM STDIN $sync->{copyextra}";
-				}
-				else {
-					$srccmd = "COPY $S.$T TO STDOUT $sync->{copyextra}";
-					$tgtcmd = "COPY $S.$T FROM STDIN $sync->{copyextra}";
+				my $hasindex = 0;
+				if ($g->{rebuild_index}) {
+					## TODO: Cache this information earlier if feasible
+					$SQL = "SELECT relhasindex FROM pg_class WHERE oid = $g->{targetoid}{$targetdb}";
+					$hasindex = $targetdbh->selectall_arrayref($SQL)->[0][0];
+					if ($hasindex) {
+						$self->glog("Turning off indexes for $S.$T on $targetdb");
+						## TODO: Do this without pg_class manipulation if possible
+						$SQL = "UPDATE pg_class SET relhasindex = 'f' WHERE oid = $g->{targetoid}{$targetdb}";
+						$targetdbh->do($SQL);
+					}
 				}
 
 				$self->glog("Emptying out target table $S.$T using $sync->{deletemethod}");
@@ -4392,23 +4390,26 @@ sub start_kid {
 						$empty_by_delete = 0;
 					}
 				}
+
 				if ($empty_by_delete) {
 					($dmlcount{D}{target}{$S}{$T} = $targetdbh->do("DELETE FROM $S.$T")) =~ s/0E0/0/o;
 					$dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
 					$self->glog("Rows deleted from $S.$T: $dmlcount{D}{target}{$S}{$T}");
 				}
 
-				my $hasindex = 0;
-				if ($g->{rebuild_index}) {
-					## TODO: Cache this information earlier if feasible
-					$SQL = "SELECT relhasindex FROM pg_class WHERE oid = $g->{targetoid}{$targetdb}";
-					$hasindex = $targetdbh->selectall_arrayref($SQL)->[0][0];
-					if ($hasindex) {
-						$self->glog("Turning off indexes for $S.$T on $targetdb");
-						## TODO: Do this without pg_class manipulation if possible
-						$SQL = "UPDATE pg_class SET relhasindex = 'f' WHERE oid = $g->{targetoid}{$targetdb}";
-						$targetdbh->do($SQL);
-					}
+				my ($srccmd,$tgtcmd);
+				if ($sync->{usecustomselect} and $g->{customselect}) {
+					## TODO: Use COPY () format if 8.2 or greater
+					$cs_temptable = "bucardo_temp_$g->{tablename}_$$"; ## Raw version, not "safetable"
+					$self->glog("Creating temp table $cs_temptable for custom select on $S.$T");
+					$sourcedbh->do("CREATE TEMP TABLE $cs_temptable AS $g->{customselect}");
+					#$sourcedbh->do("CREATE TEMP TABLE $cs_temptable ON COMMIT DROP AS $g->{customselect}");
+					$srccmd = "COPY $cs_temptable TO STDOUT $sync->{copyextra}";
+					$tgtcmd = "COPY $S.$T($g->{safecolumnlist}) FROM STDIN $sync->{copyextra}";
+				}
+				else {
+					$srccmd = "COPY $S.$T TO STDOUT $sync->{copyextra}";
+					$tgtcmd = "COPY $S.$T FROM STDIN $sync->{copyextra}";
 				}
 
 				$self->glog("Running on $sourcedb: $srccmd");
