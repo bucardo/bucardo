@@ -328,14 +328,14 @@ sub help {
   list <type>     ** View short info about dbs, tables, sequences, syncs, or herds
 
   add db <dbname> name=internal_name. For complete usage, run: $progname help add db
+  add dbgroup <name>. For complete usage, run: $progname help add dbgroup
+  add herd <name>/ For complete usage, run: $progname help add herd
 
   add <item_type> <item_name>
                   ** Add a new database, table, sync, herd, or database group
-    add dbgroup name db1 db2 db3 ...
     add table [schema].table db=internal_db_name [ping=bool] [standard_conflict=xxx] [makedelta=bool]
     add all tables [db=internal_db_name] [herd=herd_name] [-n=schema] [-t=table]
     add sequence [schema].name [herd=name]
-    add herd name goat1 goat2 goat3...
     add sync syncname source=xxx targetdb=xxx targetgroup=xxx type=xxx tables=x,y,z
 
   kick <syncname(s)> [timeout]
@@ -375,11 +375,11 @@ For more details, try 'man bucardo_ctl'
 sub superhelp {
 
 	## See if we can get more specific by looking at the nouns
-
 	help() if ! @nouns;
 
 	my $word1 = lc $nouns[0];
 	my $word2 = lc $nouns[1];
+
 	## Because usage() sometimes relies on the verb
 	$verb = $word1;
 
@@ -388,6 +388,12 @@ sub superhelp {
 			warn usage('add_database') . "\n";
 			exit 0;
 		}
+		if ('dbg' eq $word2 or 'dbgroup' eq $word2) {
+			warn usage('add_dbgroup') . "\n";
+			exit 0;
+		}
+		warn usage('add') . "\n";
+		exit 0;
 	}
 
 	if ('delete' eq $word1 or 'remove' eq $word1) {
@@ -395,11 +401,21 @@ sub superhelp {
 			warn usage('remove_database') . "\n";
 			exit 0;
 		}
+		if ('dbg' eq $word2 or 'dbgroup' eq $word2) {
+			warn usage('remove_dbgroup') . "\n";
+			exit 0;
+		}
+		warn usage('remove') . "\n";
+		exit 0;
 	}
 
 	if ('list' eq $word1 or 'l' eq $word1) {
 		if ('db' eq $word2 or 'database' eq $word2) {
 			warn usage('list_database') . "\n";
+			exit 0;
+		}
+		if ('dbg' eq $word2 or 'dbgroup' eq $word2) {
+			warn usage('list_dbgroup') . "\n";
 			exit 0;
 		}
 	}
@@ -1742,7 +1758,9 @@ sub load_bucardo_info {
 
 	## One-time load of all information from the database
 
-	return if exists $global{db};
+	my $force = shift || 0;
+
+	return if exists $global{db} and ! $force;
 
 	## Grab all database information
 	$SQL = 'SELECT * FROM db';
@@ -1827,6 +1845,23 @@ sub load_bucardo_info {
 	return;
 
 } ## end of load_bucardo_info
+
+
+sub show_all_columns {
+
+	my $row = shift or die;
+
+	my $maxkey = 1;
+	for my $key (keys %$row) {
+		$maxkey = length $key if length $key > $maxkey;
+	}
+	for my $key (sort keys %$row) {
+		printf "    %-*s = %s\n", $maxkey, $key,
+			defined $row->{$key} ? $row->{$key} : 'NULL';
+	}
+
+} ## end of show_all_columns
+
 
 
 sub process_simple_args {
@@ -1937,6 +1972,50 @@ sub list {
 } ## end of list
 
 
+sub list_dbgroups {
+
+	## Show information about all or some subset of the 'dbgroup' table
+
+	## Any nouns are filters against the whole list
+	my $clause = generate_clause({col => 'name', items => \@nouns});
+	my $WHERE = $clause ? "WHERE $clause" : '';
+	$SQL = "SELECT * FROM dbgroup $WHERE ORDER BY name";
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute();
+	if ($count < 1) {
+		$sth->finish();
+		printf "There are no%s entries in the 'dbgroup' table.\n",
+			$WHERE ? ' matching' : '';
+		exit 1;
+	}
+	$info = $sth->fetchall_arrayref({});
+
+	## Get sizing information
+	my $maxlen = 1;
+	for my $row (@$info) {
+		$maxlen = length $row->{name} if length $row->{name} > $maxlen;
+	}
+
+	load_bucardo_info();
+
+	for my $row (@$info) {
+		my $dbs = '';
+		if (exists $global{dbgroup}{$row->{name}}{db}) {
+			$dbs = '  Members: ';
+			$dbs .= join ', ' => sort keys %{$global{dbgroup}{$row->{name}}{db}};
+		}
+		printf "Database group: %-*s%s\n",
+			$maxlen, $row->{name}, $dbs;
+		$VERBOSE >= 2 and show_all_columns($row);
+	}
+
+	exit 0;
+
+} ## end of list_dbgroups
+
+
+
+
 sub list_dbs {
 
 	## Show information about all or some subset of the 'db' table
@@ -2005,16 +2084,7 @@ sub list_dbs {
 				print "\n";
 			}
 
-			if ($VERBOSE >= 2) {
-				my $maxkey = 1;
-				for my $key (keys %$row) {
-					$maxkey = length $key if length $key > $maxkey;
-				}
-				for my $key (sort keys %$row) {
-					printf "    %-*s = %s\n", $maxkey, $key,
-						defined $row->{$key} ? $row->{$key} : 'NULL';
-				}
-			}
+			$VERBOSE >= 2 and show_all_columns($row);
 		}
 	}
 
@@ -2023,45 +2093,6 @@ sub list_dbs {
 } ## end of list_dbs
 
 
-sub list_dbgroups {
-
-	## Show information about all or some subset of the 'dbgroup' table
-
-	## If any nouns left, treat as wildcards
-	my $WHERE = '';
-	for my $term (@nouns) {
-		$WHERE .= sprintf q{%s lower(name) ~ %s},
-			$WHERE ? ' OR' : 'WHERE',
-			$dbh->quote(lc $term);
-	}
-
-	$SQL = "SELECT * FROM dbgroup $WHERE ORDER BY name";
-	$sth = $dbh->prepare($SQL);
-	$count = $sth->execute();
-	if ($count < 1) {
-		$sth->finish();
-		printf "There are no%s entries in the 'dbgroup' table.\n",
-			$WHERE ? ' matching' : '';
-		exit 1;
-	}
-	$info = $sth->fetchall_arrayref({});
-
-	## We want to list all members of this group
-	$SQL = 'SELECT * FROM dbmap WHERE dbgroup = ?';
-	$sth = $dbh->prepare($SQL);
-	for my $row (@$info) {
-		my $dbs = '';
-		$count = $sth->execute($row->{name});
-		if ($count >= 1) {
-			$dbs = '  Members: ';
-			$dbs .= join ',' => map { $_->[0] } @{$sth->fetchall_arrayref()};
-		}
-		print "Database group: $row->{name}$dbs\n";
-	}
-
-	exit 0;
-
-} ## end of list_dbgroups
 
 
 sub get_dbs {
@@ -2487,7 +2518,7 @@ sub add_item {
 	my $self = shift;
 
 	if (!@nouns) {
-		warn "Usage: add <item_type> <item_name>\n";
+		warn usage('add') . "\n";
 		exit 1;
 	}
 
@@ -2497,6 +2528,9 @@ sub add_item {
 
 	if ($type eq 'db' or $type eq 'database') {
 		add_database();
+	}
+	elsif ($type eq 'dbgroup' or $type eq 'dbg') {
+		add_dbgroup();
 	}
 	elsif ($type eq 'table') {
 		add_table();
@@ -2512,9 +2546,6 @@ sub add_item {
 	elsif ($type eq 'herd') {
 		add_herd();
 	}
-	elsif ($type eq 'dbgroup') {
-		add_dbgroup();
-	}
 	elsif ($type eq 'all') {
 		my $type2 = shift @nouns || '';
 		if ($type2 =~ /table/i) {
@@ -2524,12 +2555,12 @@ sub add_item {
 			add_all_sequences();
 		}
 		else {
-			warn "Must provide a valid type\n";
+			warn qq{The 'all' option can only be used with 'table' and 'sequence'\n};
 			exit 1;
 		}
 	}
 	else {
-		warn "Cannot add: unknown type\n";
+		warn usage('add') . "\n";
 	}
 	exit 1;
 
@@ -2588,7 +2619,7 @@ sub remove_item {
 	elsif ($type eq 'herd') {
 		remove_herd();
 	}
-	elsif ($type eq 'dbgroup') {
+	elsif ($type eq 'dbgroup' or $type eq 'dbg') {
 		remove_dbgroup();
 	}
 	else {
@@ -2641,7 +2672,7 @@ sub remove_database {
 			if ($@ =~ /"sync_targetdb_fk"/) {
 				die qq{Cannot delete database "$name": must remove all syncs that reference it first\n};
 			}
-			die "Could not delete database\n$@\n";
+			die qq{Could not delete database "$name"\n$@\n};
 		}
 	}
 
@@ -3449,9 +3480,17 @@ sub usage {
 
 	my $name = shift or die;
 
+	if ('add' eq $name) {
+		return qq{Usage: add <type> <name> [options]
+Adds an item to the internal Bucardo database.
+The type is one of: db, dbgroup, table, sequence, herd, sync
+For more information, run: $progname help add <type>};
+	}
+
 	if ('add_database' eq $name) {
-		return qq{
-Usage: add db <name> [optional information]
+		return qq{Usage: add db <name> [optional information]
+Adds a database
+
 Optional information:
  name=internal_name (defaults to the database name)
  host=hostname      (defaults to none: Unix socket)
@@ -3465,17 +3504,68 @@ Optional information:
  ssp=#              (if server-side prepares are used, defaults to 1 (on))};
 	}
 
+	if ('add_dbgroup' eq $name) {
+		return qq{Usage: add dbgroup <name> [database1 database2 ...]
+Adds a database group, and optionally which databases are members of it.
+This can also be used to assign databases to an existing group.};
+	}
+
+	if ('add_herd' eq $name) {
+		return qq{Usage: add herd <name> [table1 table2 ...]
+Adds a herd, and optionally which tables are members of it.
+This can also be used to assign tables to an existing herd.};
+	}
+
+	if ('remove' eq $name or 'delete' eq $name) {
+		return qq{Usage: remove <type> <name> [options]
+Removes an item from the internal Bucardo database.
+The type is one of: db, dbgroup, table, sequence, herd, sync
+For more information, run: $progname help remove <type>};
+	}
+
 	if ('remove_database' eq $name) {
-		return qq{Usage: $verb db <name> [name2 name3 ...]};
+		return qq{Usage: $verb db <name> [name2 name3 ...]
+Removes one or more databases};
+	}
+
+	if ('remove_dbgroup' eq $name) {
+		return qq{Usage: $verb dbgroup <name> [name2 name3 ...]
+Removes one or more database groups};
+	}
+
+	if ('remove_herd' eq $name) {
+		return qq{Usage: $verb herd <name> [name2 name3 ...]
+Removes one or more herds};
 	}
 
 	if ('list_database' eq $name) {
 		return qq{Usage: list db [name] [--verbose] [--verbose]
+Lists information about each database Bucardo knows about.
+
 Without a name, all databases are listed.
 The name can have wildcards with a '*' at the start and/or end.
 If '--verbose' is added, information is shown about which groups and syncs are involved.
-If a second '--verbose' is added, the database columns are also shown.};
+If a second '--verbose' is added, the internal database columns for the 'db' table are shown.};
 	}
+
+	if ('list_dbgroup' eq $name) {
+		return qq{Usage: list dbgroup [name] [--verbose --verbose]
+Lists database groups, and which databases (if any) are members.
+
+Without a name, all database groups are listed.
+The name can have wildcards with a '*' at the start and/or end.
+If '--verbose --verbose' is added, the internal database columns for the 'dbgroup' table are shown.};
+	}
+
+	if ('list_herd' eq $name) {
+		return qq{Usage: list herd [name] [--verbose --verbose]
+Lists herds, and which tables (if any) are members.
+
+Without a name, all herds are listed.
+The name can have wildcards with a '*' at the start and/or end.
+If '--verbose --verbose' is added, the internal database columns for the 'herd' table are shown.};
+	}
+
 
 	return '';
 
@@ -4316,27 +4406,45 @@ sub remove_herd {
 
 sub remove_dbgroup {
 
-	## Usage: remove dbgroup name
+	## Usage: remove dbgroup name name2 name3
 
-	my $name = shift @nouns;
+	my $usage = usage('remove_dbgroup');
 
-	$SQL = q{DELETE FROM dbgroup WHERE name = ?};
-	$sth = $dbh->prepare($SQL);
-	$count = $sth->execute($name);
-	if (1 != $count) {
-		$sth->finish();
-		die qq{Failed to find a dbgroup named "$name"\n};
+	if (!@nouns) {
+		warn "$usage\n";
+		exit 1;
 	}
 
-	## We want to confirm this
-	print qq{Are you sure you want to remove the database group "$name"?\n};
-	print qq{This action cannot be undone\n};
-	print q{Proceed? };
-	my $ans = <STDIN>;
-	exit 0 unless $ans =~ /^Y/i;
+	load_bucardo_info();
+
+	my $dbg = $global{dbgroup};
+
+	## Do all the nouns exist?
+	for my $name (@nouns) {
+		if (! exists $dbg->{$name}) {
+			die qq{No such database group: $name\n};
+		}
+	}
+
+	$SQL = q{DELETE FROM bucardo.dbgroup WHERE name = ?};
+	$sth = $dbh->prepare($SQL);
+	for my $name (@nouns) {
+		eval {
+			$sth->execute($name);
+		};
+		if ($@) {
+			if ($@ =~ /"sync_targetgroup_fk"/) {
+				die qq{Cannot remove database group "$name": it is being used by one or more syncs\n};
+			}
+			die qq{Could not delete database group "$name"\n$@\n};
+		}
+	}
+
+	for my $name (@nouns) {
+		print qq{Removed database group "$name"\n};
+	}
 
 	$dbh->commit();
-	print "Database group removed: $name\n";
 
 	exit 0;
 
@@ -4529,57 +4637,63 @@ sub add_dbgroup {
 	## Usage: add dbgroup name db1 db2 db3 ...
 
 	my $name = shift @nouns || '';
+
+	my $usage = usage('add_dbgroup');
+
 	if (!length $name) {
-		warn "Usage: add dbgroup <name>\n";
+		warn "$usage\n";
 		exit 1;
 	}
 
+	load_bucardo_info();
+
 	## Create the group if it does not exist
-	$SQL = 'SELECT 1 FROM bucardo.dbgroup WHERE name = ?';
-	$sth = $dbh->prepare($SQL);
-	$count = $sth->execute($name);
-	$sth->finish();
-	if ($count != 1) {
+	## (If it does exist, we keep going in case there are new dbs to add)
+	my $newgroup = '';
+	if (! exists $global{dbgroup}{$name}) {
 		$SQL = 'INSERT INTO dbgroup(name) VALUES (?)';
 		$sth = $dbh->prepare($SQL);
 		$sth->execute($name);
+		load_bucardo_info(1);
+		$newgroup = 1;
 	}
 
-	## Add any dbs to this group, if they are not already there
-	if (@nouns) {
-		$SQL = 'SELECT 1 FROM bucardo.db WHERE name = ?';
-		my $gotdb = $dbh->prepare($SQL);
-		$SQL = 'SELECT priority FROM dbmap WHERE db=? AND dbgroup=?';
-		my $getpri = $dbh->prepare($SQL);
+	my $dbg = $global{dbgroup}{$name};
+
+	## Make sure any leftover nouns are valid databases
+	## Allow wildcards?
+	my @db;
+	my $dblist = $global{db};
+
+	my $finalmsg = '';
+
+	my $clause = generate_clause({col => 'name', items => \@nouns});
+	if ($clause) {
 		$SQL = 'INSERT INTO dbmap(db,dbgroup,priority) VALUES (?,?,?)';
 		my $addrow = $dbh->prepare($SQL);
-		$SQL = 'UPDATE dbmap SET priority = ? WHERE db=? AND dbgroup=?';
-		my $changepri = $dbh->prepare($SQL);
-		for my $db (@nouns) {
-			my $newpri = 1;
-			if ($db =~ s/=(\d+)//) { $newpri = $1; }
-			$count = $gotdb->execute($db);
-			$gotdb->finish();
-			if ($count != 1) {
-				warn "No such database: $db\n";
-				exit 1;
-			}
-			$count = $getpri->execute($db,$name);
-			if ($count == 1) {
-				my $oldpri = $getpri->fetchall_arrayref()->[0][0];
-				if ($oldpri != $newpri) {
-					$changepri->execute($newpri,$db,$name);
-				}
-			}
-			else {
-				## Does not exist
-				$addrow->execute($db,$name,$newpri);
+		$SQL = "SELECT * FROM db WHERE $clause";
+		$sth = $dbh->prepare($SQL);
+		$count = $sth->execute();
+		if ($count < 1) {
+			die "No matching databases found\n";
+		}
+		for my $db (@{$sth->fetchall_arrayref({})}) {
+			my $dbname = $db->{name};
+			if (! exists $dblist->{$dbname}{group}{$name}) {
+				$addrow->execute($dbname,$name,1);
+				$finalmsg .= qq{Added database "$dbname" to group "$name"\n};
+				$dblist->{$dbname}{group}{$name} = 1;
 			}
 		}
 	}
+
 	$dbh->commit();
 
-	$QUIET or print "Database group added: $name\n";
+	if (!$QUIET) {
+		$finalmsg and print $finalmsg;
+		$newgroup and print qq{Added database group "$name"\n};
+	}
+
 	exit 0;
 
 } ## end of add_dbgroup
