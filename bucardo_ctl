@@ -3020,7 +3020,7 @@ sub add_sync {
 
 sub add_table {
 
-	## Usage: add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool herd=herd_name
+	## Usage: add table [schema].table [options]
 
 	my $type = shift || 'table';
 
@@ -3044,6 +3044,11 @@ sub add_table {
         rebuild_index            rebuild_index        numeric          null
         standard_conflict        standard_conflict    0                null
         analyze_after_copy       analyze_after_copy   TF               null
+        delta_bypass             delta_bypass         TF               null
+        delta_bypass_min         delta_bypass_min     numeric          null
+        delta_bypass_count       delta_bypass_count   numeric          null
+        delta_bypass_percent     delta_bypass_percent numeric          null
+        delta_bypass             delta_bypass         TF               null
         herd                     herd                 0                skip
     };
 
@@ -4036,6 +4041,10 @@ sub upgrade {
 		['bucardo', 'audit_pid', 'target_backend',       q{INT         NULL}],
 		['bucardo', 'db',        'dbservice',            q{TEXT        NULL}],
 		['bucardo', 'db',        'server_side_prepares', q{BOOLEAN NOT NULL DEFAULT 'true'}],
+		['bucardo', 'goat',      'delta_bypass',         q{BOOLEAN NOT NULL DEFAULT 'false'}],
+		['bucardo', 'goat',      'delta_bypass_min',     q{BIGINT      NULL}],
+		['bucardo', 'goat',      'delta_bypass_count',   q{BIGINT      NULL}],
+		['bucardo', 'goat',      'delta_bypass_percent', q{SMALLINT    NULL}],
 		['bucardo', 'goat',      'qpkey',                q{TEXT        NULL}],
 		['bucardo', 'sync',      'lifetime',             q{INTERVAL NULL}],
 		['bucardo', 'sync',      'maxkicks',             q{INTEGER NOT NULL DEFAULT 0}],
@@ -5044,7 +5053,7 @@ sub install {
 	$res= qx{$COM};
 
 	if ($res !~ m{Pl/PerlU was successfully installed}) {
-		warn "\nINSTALLATION FAILED!\n\n";
+		warn "\nINSTALLATION FAILED! ($res)\n\n";
 		warn "Installation cannot proceed unless the Pl/PerlU language is available\n";
 		warn "This is usually available as a separate package\n";
 		warn "For example, you might try: yum install postgresql-plperl\n";

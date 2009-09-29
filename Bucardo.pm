@@ -4470,7 +4470,7 @@ sub start_kid {
 		if ($synctype eq 'pushdelta') {
 
 			## Do each goat in turn, ordered by descending priority and ascending id
-			for my $g (@$goatlist) {
+		  PUSHDELTA_GOAT: for my $g (@$goatlist) {
 
 				($S,$T) = ($g->{safeschema},$g->{safetable});
 
@@ -4513,6 +4513,89 @@ sub start_kid {
 					## Example: id
 					## Example MCPK: (id,"space bar",cdate)
 				}
+
+				## Figure out if we have enough rows to trigger a delta_bypass
+				$g->{does_delta_bypass} = 0;
+				if ($g->{delta_bypass} and ! $g->{does_makedelta} and ! $g->{customselect}) {
+					if ($g->{delta_bypass_count}
+							and $deltacount{source}{$S}{$T} >= $g->{delta_bypass_count}) {
+						$g->{does_delta_bypass} = 'count';
+						$self->glog("Activating delta_bypass for $S.$T. Count of $deltacount{source}{$S}{$T} >= $g->{delta_bypass_count}");
+					}
+					elsif ($g->{delta_bypass_percent} and $deltacount{source}{$S}{$T} >= $g->{delta_bypass_min}) {
+						## Depends on a recent analyze, of course...
+						$SQL = "SELECT reltuples::bigint FROM pg_class WHERE oid = $g->{oid}";
+						my $total_rows = $sourcedbh->selectall_arrayref($SQL)->[0][0];
+						my $percent = $deltacount{source}{$S}{$T}*100/$total_rows;
+						if ($percent > $g->{delta_bypass_percent}) {
+							$g->{does_delta_bypass} = 'percent';
+							$self->glog("Activating delta_bypass for $S.$T. Count of $deltacount{source}{$S}{$T} for $total_rows total rows is $percent percent, which is >= $g->{delta_bypass_percent}%");
+						}
+					}
+				}
+
+				if ($g->{does_delta_bypass}) {
+					$self->glog("Forcing a onetimecopy due to delta_bypass");
+					my $srccmd = "COPY $S.$T TO STDOUT $sync->{copyextra}";
+					my $tgtcmd = "COPY $S.$T FROM STDIN $sync->{copyextra}";
+					## Attempt to truncate the target table. If it fails, delete
+					my $empty_by_delete = 1;
+					## Temporarily override our kid-level handler due to the eval
+					local $SIG{__DIE__} = sub {};
+					$targetdbh->do('SAVEPOINT truncate_attempt');
+					eval {
+						$targetdbh->do("TRUNCATE TABLE $S.$T");
+					};
+					if ($@) {
+						$self->glog("Truncation of $S.$T failed, so we will try a delete");
+						$targetdbh->do('ROLLBACK TO truncate_attempt');
+						$empty_by_delete = 2;
+					}
+					else {
+						$targetdbh->do('RELEASE truncate_attempt');
+						$empty_by_delete = 0;
+					}
+					if ($empty_by_delete) {
+						($dmlcount{D}{target}{$S}{$T} = $targetdbh->do("DELETE FROM $S.$T")) =~ s/0E0/0/o;
+						$dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
+						$self->glog("Rows deleted from $S.$T: $dmlcount{D}{target}{$S}{$T}");
+					}
+
+					$self->glog("Running on $sourcedb: $srccmd");
+					$sourcedbh->do($srccmd);
+
+					$self->glog("Running on $targetdb: $tgtcmd");
+					$targetdbh->do($tgtcmd);
+					my $buffer='';
+					$dmlcount{I}{target}{$S}{$T} = 0;
+					while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
+						$targetdbh->pg_putcopydata($buffer);
+						$dmlcount{I}{target}{$S}{$T}++;
+					}
+					$targetdbh->pg_putcopyend();
+					$self->glog(qq{End delta_bypass COPY of $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
+					$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
+
+					## If we disabled the indexes earlier, flip them on and run a REINDEX
+					if ($hasindex) {
+						$self->glog("Re-enabling indexes for table $S.$T on $targetdb");
+						$SQL = "UPDATE pg_class SET relhasindex = 't' WHERE oid = $toid";
+						$targetdbh->do($SQL);
+						$self->glog("Reindexing table $S.$T on $targetdb");
+						$targetdbh->do("REINDEX TABLE $S.$T");
+					}
+
+					## Remove older bucardo_delta entries that are now irrelevant
+					$SQL = "DELETE FROM bucardo.bucardo_delta WHERE txntime <= now() AND tablename = $g->{oid}";
+					$sth = $sourcedbh->prepare($SQL);
+					$count = $sth->execute();
+					$sth->finish();
+					$count =~ s/0E0/0/o;
+					$self->glog("Rows removed from bucardo_delta on source for $S.$T: $count");
+
+					next PUSHDELTA_GOAT;
+
+				} ## end of delta_bypass
 
 				## This is where we want to 'rewind' to on a handled exception
 				## We choose this point as its possible the custom code has a different getdelta result

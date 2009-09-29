@@ -241,6 +241,10 @@ CREATE TABLE bucardo.goat (
   standard_conflict  TEXT            NULL,
   analyze_after_copy BOOLEAN     NOT NULL DEFAULT 'true',
   strict_checking    BOOLEAN     NOT NULL DEFAULT 'true',
+  delta_bypass       BOOLEAN     NOT NULL DEFAULT 'false',
+  delta_bypass_min   BIGINT          NULL,
+  delta_bypass_count BIGINT          NULL,
+  delta_bypass_percent   SMALLINT    NULL,
   cdate              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE bucardo.goat ADD CONSTRAINT has_schemaname CHECK (length(schemaname) > 1);
@@ -2376,3 +2380,4 @@ CREATE TRIGGER bucardo_log_message_trigger
 --
 -- END OF THE SCHEMA
 --
+<
