@@ -2320,8 +2320,6 @@ sub list_tables {
 
 	my $usage = usage('list_tables');
 
-	## Keep to three lines or less if possible
-
 	## If any nouns left, treat as wildcards
 	my $AND = '';
 	for my $term (@nouns) {
@@ -2386,6 +2384,9 @@ sub list_tables {
 				}
 			}
 		}
+
+		$VERBOSE >= 2 and show_all_columns($row);
+
 	}
 
 	exit 0;
@@ -2422,7 +2423,9 @@ sub list_sequences {
 	$info = $sth->fetchall_arrayref({});
 	for my $row (@$info) {
 		print "Sequence $row->{id}: $row->{schemaname}.$row->{tablename}\n";
+		$VERBOSE >= 2 and show_all_columns($row);
 	}
+
 
 	exit 0;
 
@@ -2593,11 +2596,11 @@ sub add_item {
 		add_herd();
 	}
 	elsif ($type eq 'table') {
-		add_table();
+		add_table('table');
 		exit 0;
 	}
 	elsif ($type eq 'sequence') {
-		add_sequence();
+		add_table('sequence');
 		exit 0;
 	}
 	elsif ($type eq 'sync') {
@@ -3019,273 +3022,145 @@ sub add_table {
 
 	## Usage: add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool herd=herd_name
 
-	## TODO: Make this smarter
+	my $type = shift || 'table';
+
+	my $usage = usage("add_$type");
+
+	if (! @nouns) {
+		warn "$usage\n";
+		exit 1;
+	}
+
 	my $DEFAULT_SCHEMA = 'public';
+
+	## Command line name, default value, database column name
+	## Inputs and aliases, database column name, flags, default
+	my $validcols = qq{
+        db                       db                   0                null
+        has_delta                has_delta            TF               null
+        ping                     ping                 TF               null
+        customselect             customselect         0                null
+        makedelta                makedelta            TF               null
+        rebuild_index            rebuild_index        numeric          null
+        standard_conflict        standard_conflict    0                null
+        analyze_after_copy       analyze_after_copy   TF               null
+        herd                     herd                 0                skip
+    };
+
+	my ($dbcols,$cols,$phs,$vals)
+		= process_simple_args({cols => $validcols, list => \@nouns, usage => $usage});
 
 	## Any single words are table names.
-	my (@newnouns,@tables);
+	my @tables;
 	for (@nouns) {
-		if (/=/) {
-			push @newnouns => $_;
+		next if /=/;
+		if (/^(\w*?)?\.?(\w+)$/) {
+			push @tables => length $1 ? [$1,$2] : [$DEFAULT_SCHEMA,$2];
 		}
 		else {
-			if (/^(\w*?)?\.?(\w+)$/) {
-				push @tables => length $1 ? [$1,$2] : [$DEFAULT_SCHEMA,$2];
-			}
-			else {
-				warn "Invalid table name: $_\n";
-				exit 1;
-			}
+			warn "Invalid $type name: $_\n";
+			exit 1;
 		}
 	}
-	@nouns = @newnouns;
 
 	if (! @tables) {
-		warn "Usage: add table <name>\n";
+		warn "$usage\n";
 		exit 1;
 	}
 
-	## The rest is the options. If not there, we fill in the defaults
-	my $info = join ' ' => @nouns;
-	## Command line name, default value, database column name
-	my %arg = (
-			   db                => ['',      ''],
-			   ping              => ['',      ''],
-			   standard_conflict => ['',      ''],
-			   herd              => ['',      ''],
-			   makedelta         => ['',      ''],
-			   );
-	my $args = process_args($info);
-	for my $name (sort keys %$args) {
-		next if $name eq 'extraargs';
-		my $value = $args->{$name};
-		if (!exists $arg{$name}) {
-			die "Unknown option '$name'\n";
+	load_bucardo_info();
+
+	if (! exists $dbcols->{db}) {
+		## If we only have one database, we can use that
+		my $count = keys %{$global{db}};
+		$count == 1 or die "Please specify a database with db=<name>\n";
+		for (keys %{$global{db}}) {
+			$dbcols->{db} = $global{db}{name};
+			(my $testcols = $cols) =~ s/(.*db).*/$1/;
+			my $offset = $testcols =~ tr/,/,/;
+			$vals->[$offset] = $dbcols->{db};
 		}
-		$arg{$name}[0] = $value;
+	}
+	my $db = $dbcols->{db};
+
+	if (! exists $global{db}{$db}) {
+		die qq{Invalid database: "$db"\n};
 	}
 
-	if (! length $arg{db}[0]) {
-		die "Please specify a database with db=<name>\n";
-	}
+	my $finalmsg = '';
 
-	## Lots of checks go here...
-
-	my $herd;
-	if ($arg{herd}->[0]) {
-		$herd = $arg{herd}->[0];
-		delete $arg{herd};
-		## Does this herd exist?
-		$SQL = 'SELECT 1 FROM bucardo.herd WHERE name = ?';
-		$sth = $dbh->prepare($SQL);
-		$count = $sth->execute($herd);
-		$sth->finish();
-		if ($count != 1) {
+	## If they requested a herd and it does not exist, create it
+	if (exists $dbcols->{herd}) {
+		my $herd = $dbcols->{herd};
+		if (! exists $global{herd}{$herd}) {
 			$SQL = 'INSERT INTO bucardo.herd(name) VALUES(?)';
 			$sth = $dbh->prepare($SQL);
 			$sth->execute($herd);
-			print qq{Created herd "$herd"\n};
+			load_bucardo_info(1);
+			$finalmsg .= qq{Created herd "$herd"\n};
 		}
 	}
 
-	my ($cols,$phs) = ('','');
-	my @vals;
-	for my $col (sort keys %arg) {
-		next if ! length $arg{$col}[0];
-		my $name = $arg{$col}[1] || $col;
-		$cols .= "$name,";
-		$phs .= '?,';
-		push @vals, $arg{$col}[0] if $arg{$col}[0];
-	}
-	$cols =~ s/,$//;
-	$phs =~ s/,$//;
-
-	## Add these to the database
-	$SQL = "INSERT INTO bucardo.goat ($cols,schemaname,tablename) VALUES ($phs,?,?)";
-	if ($DEBUG) {
-		warn "SQL: $SQL\n";
-		warn Dumper \@tables;
-	}
+	## Attempt to insert these tables into the database if they don't already exist
+	$SQL = 'SELECT id FROM bucardo.goat WHERE schemaname=? AND tablename=? AND db=?';
+	my $sthf = $dbh->prepare($SQL);
+	$SQL = "INSERT INTO bucardo.goat (schemaname,tablename,reltype,$cols) VALUES (?,?,?,$phs)";
+	$DEBUG and warn "SQL: $SQL\n";
+	$DEBUG and warn Dumper $vals;
 	$sth = $dbh->prepare($SQL);
-	my @id;
-	for (@tables) {
-		my ($schema,$table) = @$_;
+	my $additions = '';
+	my %oldtable;
+	for my $row (@tables) {
+		my ($s,$t) = @$row;
+		$count = $sthf->execute($s,$t,$db);
+		if ($count >= 1) {
+			$oldtable{"$s.$t"}++;
+			next;
+		}
 		eval {
-			if ($DEBUG >= 2) {
-				warn "SQL: $SQL\n";
-				my $localargs = join ',' => @vals;
-				my $ss = defined $schema ? $schema : '<undef>';
-				warn "Args: $localargs, $ss, $table\n";
-			}
-			$count = $sth->execute(@vals,$schema,$table);
-			$SQL = q{SELECT currval('bucardo.goat_id_seq')};
-			push @id, $dbh->selectall_arrayref($SQL)->[0][0];
+			$sth->execute($s,$t,$type,@$vals);
 		};
 		if ($@) {
-			die "Table add failed: $@\n";
+			die qq{Failed to add $type "$s.$t": $@\n};
 		}
-		$DEBUG and warn "Insert count: $count\n";
+		$additions .= qq{Added $type "$s.$t"\n};
 	}
 
-	## Add them to the herd if it was specificed
-	if (defined $herd) {
-		$SQL = 'INSERT INTO bucardo.herdmap (goat,herd,priority) VALUES (?,?,?)';
+	## Add them to the herd if it was specificed and they are new tables
+	if (exists $dbcols->{herd}) {
+		my $herd = $dbcols->{herd};
+		$SQL = 'INSERT INTO bucardo.herdmap (herd,priority,goat) VALUES (?,?,'
+            . ' (SELECT id FROM goat WHERE schemaname=? AND tablename=? AND db=?))';
 		$sth = $dbh->prepare($SQL);
-		for (@id) {
-			if ($DEBUG) {
-				warn "SQL: $SQL\n";
-				warn Dumper [$_, $herd, 0];
+		for my $row (@tables) {
+			my ($s,$t) = @$row;
+			next if exists $oldtable{"$s.$t"};
+			eval {
+				$sth->execute($herd,0,$s,$t,$db);
+			};
+			if ($@) {
+				die qq{Failed to add $type "$s.$t" to herd "$herd": $@\n};
 			}
-			$sth->execute($_,$herd,0);
 		}
 	}
-
-	## Prompt for final go-ahead
 
 	$dbh->commit();
 
-	return if $QUIET;
-
-	my $tablelist = sprintf '%s added: ', @tables > 1 ? 'Tables' : 'Table';
-	for (@tables) {
-		$tablelist .= sprintf '%s%s, ', $_->[0] ? "$_->[0]." : '', $_->[1];
+	if (!$QUIET) {
+		$finalmsg and print "$finalmsg";
+		print "$additions";
 	}
-	$tablelist =~ s/, $//;
-	print "$tablelist\n";
 
-	return;
+	exit 0;
+
 
 } ## end of add_table
-
-
-sub add_sequence {
-
-	## Usage: add sequence [schema].table db=internal_db_name herd=herd_name
-
-	my $DEFAULT_SCHEMA = 'public';
-
-	## Any single words are sequence names.
-	my (@newnouns,@tables);
-	for (@nouns) {
-		if (/=/) {
-			push @newnouns => $_;
-		}
-		else {
-			if (/^(\w*?)?\.?(\w+)$/) {
-				push @tables => length $1 ? [$1,$2] : [$DEFAULT_SCHEMA,$2];
-			}
-			else {
-				warn "Invalid sequence name: $_\n";
-				exit 1;
-			}
-		}
-	}
-	@nouns = @newnouns;
-
-	if (! @tables) {
-		warn "Usage: add sequence <name>\n";
-		exit 1;
-	}
-
-	## The rest is the options. If not there, we fill in the defaults
-	my $info = join ' ' => @nouns;
-	## Command line name, default value, database column name
-	my %arg = (
-			   db                => ['',      ''],
-			   herd              => ['',      ''],
-			   );
-	my $args = process_args($info);
-	for my $name (sort keys %$args) {
-		next if $name eq 'extraargs';
-		my $value = $args->{$name};
-		if (!exists $arg{$name}) {
-			die "Unknown option '$name'\n";
-		}
-		$arg{$name}[0] = $value;
-	}
-
-	if (! length $arg{db}[0]) {
-		die "Please specify a database with db=<name>\n";
-	}
-	my $db = $arg{db}[0];
-
-	my $herd;
-	if ($arg{herd}->[0]) {
-		$herd = $arg{herd}->[0];
-		delete $arg{herd};
-		## Does this herd exist?
-		$SQL = 'SELECT 1 FROM bucardo.herd WHERE name = ?';
-		$sth = $dbh->prepare($SQL);
-		$count = $sth->execute($herd);
-		$sth->finish();
-		if ($count != 1) {
-			$SQL = 'INSERT INTO bucardo.herd(name) VALUES(?)';
-			$sth = $dbh->prepare($SQL);
-			$sth->execute($herd);
-			print qq{Created herd "$herd"\n};
-		}
-	}
-
-	## Add these to the database
-	$SQL = 'INSERT INTO bucardo.goat (db,schemaname,tablename,reltype) VALUES (?,?,?,?)';
-	if ($DEBUG) {
-		warn "SQL: $SQL\n";
-		warn Dumper \@tables;
-	}
-	$sth = $dbh->prepare($SQL);
-	my @id;
-	for (@tables) {
-		my ($schema,$table) = @$_;
-		eval {
-			if ($DEBUG >= 2) {
-				warn "SQL: $SQL\n";
-				my $ss = defined $schema ? $schema : '<undef>';
-				warn "Args: $db, $ss, $table, sequence\n";
-			}
-			$count = $sth->execute($db,$schema,$table,'sequence');
-			$SQL = q{SELECT currval('bucardo.goat_id_seq')};
-			push @id, $dbh->selectall_arrayref($SQL)->[0][0];
-		};
-		if ($@) {
-			die "Sequence add failed: $@\n";
-		}
-		$DEBUG and warn "Insert count: $count\n";
-	}
-
-	## Add them to the herd if it was specificed
-	if (defined $herd) {
-		$SQL = 'INSERT INTO bucardo.herdmap (goat,herd,priority) VALUES (?,?,?)';
-		$sth = $dbh->prepare($SQL);
-		for (@id) {
-			if ($DEBUG) {
-				warn "SQL: $SQL\n";
-				warn Dumper [$_, $herd, 0];
-			}
-			$sth->execute($_,$herd,0);
-		}
-	}
-
-	$dbh->commit();
-
-	return if $QUIET;
-
-	my $tablelist = sprintf '%s added: ', @tables > 1 ? 'Sequences' : 'Sequence';
-	for (@tables) {
-		$tablelist .= sprintf '%s%s, ', $_->[0] ? "$_->[0]." : '', $_->[1];
-	}
-	$tablelist =~ s/, $//;
-	print "$tablelist\n";
-
-	return;
-
-} ## end of add_sequence
 
 
 sub add_all_tables {
 	add_all_goats('table');
 	return;
 }
-
 
 sub add_all_sequences {
 	add_all_goats('sequence');
@@ -3534,7 +3409,7 @@ sub remove_item {
 		remove_table();
 	}
 	elsif ($type eq 'sequence') {
-		remove_sequence();
+		remove_table('sequence');
 	}
 	elsif ($type eq 'sync') {
 		remove_sync();
@@ -3563,7 +3438,7 @@ sub remove_database {
 
 	load_bucardo_info();
 
-	## Make sure all names databases exist
+	## Make sure all named databases exist
 	my $db = $global{db};
 	for my $name (@nouns) {
 		if (! exists $db->{$name}) {
@@ -3707,7 +3582,7 @@ sub remove_sync {
 
 	load_bucardo_info();
 
-	## Make sure all names syncs exist
+	## Make sure all named syncs exist
 	my $s = $global{sync};
 	for my $name (@nouns) {
 		if (! exists $s->{$name}) {
@@ -3756,16 +3631,62 @@ sub remove_sync {
 
 sub remove_table {
 
-	die "Not implemented yet\n";
+	## Usage: remove table name [name2 name3 ...]
+
+	my $type = shift || 'table';
+
+	my $usage = usage("remove_$type");
+
+	if (!@nouns) {
+		warn "$usage\n";
+		exit 1;
+	}
+
+	load_bucardo_info();
+
+	## Make sure all named tables exist
+	my $goat = $global{goat};
+	my @id;
+	my %seenit;
+	for my $name (@nouns) {
+		if (! exists $goat->{$name}) {
+			die qq{No such $type: $name\n};
+		}
+		my $g = $goat->{$name};
+		if (ref $g eq 'ARRAY') { ## More than one match, remove them all
+			for my $row (@{$goat->{$name}}) {
+				next if $seenit{$row->{id}}++;
+				push @id => [$row->{id}, "$row->{schemaname}.$row->{tablename}", $row->{reltype}];
+			}
+		}
+		else {
+			next if $seenit{$g->{id}}++;
+			push @id => [$g->{id}, "$g->{schemaname}.$g->{tablename}", $g->{reltype}];
+		}
+	}
+
+	$SQL = 'DELETE FROM bucardo.goat WHERE id = ?';
+	$sth = $dbh->prepare($SQL);
+	for my $i (@id) {
+		my ($id,$name,$typ) = @$i;
+		eval {
+			$sth->execute($id);
+		};
+		if ($@) {
+			die qq{Could not delete $typ "$name"\n$@\n};
+		}
+	}
+
+	for my $i (@id) {
+		my ($id,$name,$typ) = @$i;
+		print qq{Removed $typ "$name"\n};
+	}
+
+	$dbh->commit();
+
+	exit 0;
 
 } ## end of remove_table
-
-
-sub remove_sequence {
-
-	die "Not implemented yet\n";
-
-} ## end of remove_sequence
 
 
 sub clog {
