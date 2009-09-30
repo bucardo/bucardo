@@ -6,6 +6,8 @@ Bucardo version 4.2.0, released September 29, 2009
     to 'fullcopy' mode on the fly, depending on the number of rows that 
     have changed. [GSM]
 
+  - Fixed an error preventing customselect from working in certain situations. [GSM]
+
   - Have 'bucardo_ctl install' check for successful plperlu installaion [GSM]
 
   - Clean up and standardize all the bucardo_ctl list/add/remove actions. [GSM]

@@ -4305,8 +4305,6 @@ sub start_kid {
 			$sourcedbh->do($SQL{disable_trigrules});
 		}
 
-		my $cs_temptable;
-
 		## FULLCOPY
 		if ($synctype eq 'fullcopy' or $deltacount{truncates}) {
 
@@ -4400,11 +4398,10 @@ sub start_kid {
 				my ($srccmd,$tgtcmd);
 				if ($sync->{usecustomselect} and $g->{customselect}) {
 					## TODO: Use COPY () format if 8.2 or greater
-					$cs_temptable = "bucardo_temp_$g->{tablename}_$$"; ## Raw version, not "safetable"
-					$self->glog("Creating temp table $cs_temptable for custom select on $S.$T");
-					$sourcedbh->do("CREATE TEMP TABLE $cs_temptable AS $g->{customselect}");
-					#$sourcedbh->do("CREATE TEMP TABLE $cs_temptable ON COMMIT DROP AS $g->{customselect}");
-					$srccmd = "COPY $cs_temptable TO STDOUT $sync->{copyextra}";
+					$g->{cs_temptable} = "bucardo_temp_$g->{tablename}_$$"; ## Raw version, not "safetable"
+					$self->glog("Creating temp table $g->{cs_temptable} for custom select on $S.$T");
+					$sourcedbh->do("CREATE TEMP TABLE $g->{cs_temptable} AS $g->{customselect}");
+					$srccmd = "COPY $g->{cs_temptable} TO STDOUT $sync->{copyextra}";
 					$tgtcmd = "COPY $S.$T($g->{safecolumnlist}) FROM STDIN $sync->{copyextra}";
 				}
 				else {
@@ -5786,9 +5783,13 @@ sub start_kid {
 			$self->glog('Issuing final commit for source and target');
 			$sourcedbh->commit();
 			$targetdbh->commit();
-			if (defined($cs_temptable)) {
-				$self->glog("Dropping temp table $cs_temptable created for customselect");
-				$sourcedbh->do("DROP TABLE $cs_temptable");
+			if ($sync->{usecustomselect}) {
+				for my $g (@$goatlist) {
+					next if ! $g->{cs_temptable};
+					$self->glog("Dropping temp table $g->{cs_temptable} created for customselect");
+					$sourcedbh->do("DROP TABLE $g->{cs_temptable}");
+					$g->{cs_temptable} = '';
+				}
 			}
 		}
 
