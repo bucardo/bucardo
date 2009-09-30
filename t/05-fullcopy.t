@@ -290,7 +290,7 @@ $info = $dbhX->prepare($SQL);
 $info->execute();
 $info = $info->fetchall_arrayref({})->[0];
 $t = 'Kid was resurrected by the controller after untimely death';
-like ($info->{death}, qr{abnormally}, $t);
+like ($info->{birth}, qr{Life: 2}, $t);
 
 END {
 	$bct->stop_bucardo($dbhX);
