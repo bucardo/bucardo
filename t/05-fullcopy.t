@@ -35,7 +35,7 @@ $bct->add_test_tables_to_herd('A', 'testherd1');
 ## Create a new sync to fullcopy from A to B
 $t=q{Add sync works};
 $i = $bct->ctl("add sync fullcopytest source=testherd1 type=fullcopy targetdb=B");
-like($i, qr{Sync added:}, $t);
+like($i, qr{Added sync}, $t);
 
 ## Tell sync kids to stay alive
 $dbhX->do(q{UPDATE bucardo.sync SET kidsalive = 't'});
@@ -183,7 +183,7 @@ bc_deeply($result, $dbhB, $SQL, $t);
 ## Add another slave
 $t=q{Add dbgroup works};
 $i = $bct->ctl("add dbgroup tgroup B C");
-like($i, qr{Database group added|already exists}, $t);
+like($i, qr{Added database group}, $t);
 
 $t=q{Alter sync works};
 $dbhB->commit();

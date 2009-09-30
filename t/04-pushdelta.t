@@ -229,7 +229,7 @@ for my $table (sort keys %tabletype) {
 ## Add a new target database
 $t=q{Add dbgroup works};
 $i = $bct->ctl("add dbgroup tgroup B C");
-like($i, qr{Database group added|already exists}, $t);
+like($i, qr{Added database group}, $t);
 
 $t=q{Alter sync works};
 $dbhB->commit();
