@@ -315,6 +315,9 @@ if ($gotall) {
 	push @syncs => map { $_->[0] } @$tmp;
 }
 
+vate_sync() if $verb eq 'activate' or $verb eq 'deactivate';
+kick() if $verb eq 'kick';
+
 help();
 
 
