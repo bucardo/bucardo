@@ -43,7 +43,7 @@ $bct->add_test_tables_to_herd('A', 'testherd1');
 ## Create a new sync to fullcopy from A to B
 $t=q{Add sync works};
 $i = $bct->ctl("add sync multicoltest source=testherd1 type=pushdelta targetdb=B");
-like($i, qr{Sync added:}, $t);
+like($i, qr{Added sync}, $t);
 
 $SQL = "SELECT * FROM sync";
 my $info = $dbhX->selectall_arrayref($SQL);

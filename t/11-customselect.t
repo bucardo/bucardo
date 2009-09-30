@@ -57,13 +57,13 @@ for my $dbh (($dbhA, $dbhB)) {
 $bct->ctl('add herd herd1');
 $bct->ctl('add table customselect db=A herd=herd1');
 $i = $bct->ctl('add sync customselectsync source=herd1 type=fullcopy targetdb=B usecustomselect=true');
-like($i, qr{Sync added:}, 'Added customselect sync');
+like($i, qr{Added sync}, 'Added customselect sync');
 $dbhX->do(q{update goat set customselect = $$select id, 'aaa'::text as field1, field2, field3 from customselect$$ where tablename = 'customselect'});
 $bct->ctl('add herd herd2');
 $bct->ctl('add table csmulti db=A herd=herd2');
 $dbhX->do(q{update goat set customselect = $$select id1, id2, 'aaa'::text as field1, field2, field3 from csmulti$$ where tablename = 'csmulti'});
 $i = $bct->ctl('add sync csmulti source=herd2 type=fullcopy targetdb=B usecustomselect=true');
-like($i, qr{Sync added:}, 'Added multi-column primary key customselect sync');
+like($i, qr{Added sync}, 'Added multi-column primary key customselect sync');
 $dbhX->commit();
 
 # Test that sync works

@@ -90,17 +90,17 @@ for my $db (qw/A B C/) {
 pass('Adding syncs');
 $res = $bct->ctl('add sync star_a_b source=herdA type=pushdelta targetdb=B');
 chomp $res;
-like($res, qr/Sync added/, $res);
+like($res, qr/Added sync/, $res);
 $res = $bct->ctl('add sync star_a_c source=herdA type=pushdelta targetdb=C');
 chomp $res;
-like($res, qr/Sync added/, $res);
+like($res, qr/Added sync/, $res);
 
 $res = $bct->ctl('add sync star_b_a source=herdB type=pushdelta targetdb=A makedelta=true');
 chomp $res;
-like($res, qr/Sync added/, $res);
+like($res, qr/Added sync/, $res);
 $res = $bct->ctl('add sync star_c_a source=herdC type=pushdelta targetdb=A makedelta=true');
 chomp $res;
-like($res, qr/Sync added/, $res);
+like($res, qr/Added sync/, $res);
 
 $dbhX->commit();
 

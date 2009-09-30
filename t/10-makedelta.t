@@ -78,9 +78,9 @@ like($res, qr/Table added/, $res);
 ($res, @dummy) = split "\n", $bct->ctl('add table makedelta_mcpk db=B herd=herdB');
 like($res, qr/Table added/, $res);
 $res = $bct->ctl('add sync makedeltasync_b source=herdB type=pushdelta targetdb=C');
-like($res, qr/Sync added/, $res);
+like($res, qr/Added sync/, $res);
 $res = $bct->ctl('add sync makedeltasync_a source=herdA type=pushdelta targetdb=B makedelta=true');
-like($res, qr/Sync added/, $res);
+like($res, qr/Added sync/, $res);
 $dbhX->commit();
 
 # Test that sync works
