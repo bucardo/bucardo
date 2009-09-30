@@ -259,11 +259,13 @@ debugname
 debugsyslog
 notimer
 piddir
+qquote
 retrysleep
 rootdb
 sendmail
 showdays
 startup
+superhelp
 sync's
 syncname
 syncnames
