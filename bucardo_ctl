@@ -1928,6 +1928,8 @@ sub show_all_columns {
 			defined $row->{$key} ? $row->{$key} : 'NULL';
 	}
 
+	return;
+
 } ## end of show_all_columns
 
 
@@ -1936,9 +1938,9 @@ sub process_simple_args {
 	## Process args to an inner function in the style of a=b
 
 	my $arg = shift;
-	my $validcols = $arg->{cols} or die "Need a list of valid cols!";
-	my $list = $arg->{list}      or die "Need a list of arguments!";
-	my $usage = $arg->{usage}    or die "Need a usage!";
+	my $validcols = $arg->{cols} or die 'Need a list of valid cols!';
+	my $list = $arg->{list}      or die 'Need a list of arguments!';
+	my $usage = $arg->{usage}    or die 'Need a usage!';
 
 	my %item;
 	my %dbcol;
@@ -1976,7 +1978,7 @@ sub process_simple_args {
 			}
 		}
 		elsif ($flag eq 'numeric') {
-			if ($val !~ /^(\d+)$/) {
+			if ($val !~ /^\d+$/) {
 				die "Invalid value for '$arg': must be numeric\n";
 			}
 		}
@@ -2109,19 +2111,19 @@ sub list_dbs {
 
 			## Which database groups is this a member of?
 			if (exists $db->{$name}{group}) {
-				print "  Belongs to database groups: ";
+				print '  Belongs to database groups: ';
 				print join ', ' => sort keys %{$db->{$name}{group}};
 				print "\n";
 			}
 
 			## Which syncs are using it (source vs. target)
 			if (exists $db->{$name}{sourcesync}) {
-				print "  Used as source in syncs: ";
+				print '  Used as source in syncs: ';
 				print join ', ' => sort keys %{$db->{$name}{sourcesync}};
 				print "\n";
 			}
 			if (exists $db->{$name}{targetsync}) {
-				print "  Used as target in syncs: ";
+				print '  Used as target in syncs: ';
 				print join ', ' => sort keys %{$db->{$name}{targetsync}};
 				print "\n";
 			}
@@ -2213,11 +2215,11 @@ sub list_herds {
 	for my $row (@$info) {
 		my $name = $row->{name};
 		my $h = $global{herd}{$name};
-		printf "Herd: %-*s",
+		printf 'Herd: %-*s',
 			$maxlen, $name;
 		## Got goats?
 		if (exists $h->{goat}) {
-			print " Members: ";
+			print ' Members: ';
 			print join ', ' => map { "$_->[3].$_->[4]" } @{$h->{goat}};
 		}
 		## Got syncs?
@@ -2756,7 +2758,6 @@ sub add_dbgroup {
 	my $dbg = $global{dbgroup}{$name};
 
 	## Make sure any leftover nouns are valid databases
-	my @db;
 	my $dblist = $global{db};
 
 	my $finalmsg = '';
@@ -3041,7 +3042,7 @@ sub add_table {
 
 	## Command line name, default value, database column name
 	## Inputs and aliases, database column name, flags, default
-	my $validcols = qq{
+	my $validcols = q{
         db                       db                   0                null
         has_delta                has_delta            TF               null
         ping                     ping                 TF               null
@@ -4419,10 +4420,10 @@ sub upgrade {
 
 	## Check for any added constraints
 	for my $row (@clist) {
-		my ($tname,$cname,$cdef,$body) = @$row;
-		if (! constraint_exists('bucardo', $tname, $cname)) {
+		my ($tcname,$cname,$cdef,$body) = @$row;
+		if (! constraint_exists('bucardo', $tcname, $cname)) {
 			upgrade_and_log($body);
-			clog "Created constraint $cname on $tname";
+			clog "Created constraint $cname on $tcname";
 			$changes++;
 			next;
 		}
@@ -4435,21 +4436,21 @@ sub upgrade {
 		}
 		my $condef = constraint_definition($cname);
 		if ($condef ne $cdef) {
-			upgrade_and_log("ALTER TABLE $tname DROP CONSTRAINT $cname");
-			upgrade_and_log("ALTER TABLE $tname ADD CONSTRAINT $cname $cdef");
-			clog "Altered constraint $cname on $tname";
+			upgrade_and_log("ALTER TABLE $tcname DROP CONSTRAINT $cname");
+			upgrade_and_log("ALTER TABLE $tcname ADD CONSTRAINT $cname $cdef");
+			clog "Altered constraint $cname on $tcname";
 			$changes++;
 		}
 	}
 
 	## Check that any bare constraints (e.g. foreign keys) are unchanged
 	for my $row (@clist2) {
-		my ($tname,$cname,$cdef) = @$row;
+		my ($tcname,$cname,$cdef) = @$row;
 		my $condef = constraint_definition($cname);
 		if ($condef ne $cdef) {
-			upgrade_and_log("ALTER TABLE $tname DROP CONSTRAINT $cname");
-			upgrade_and_log("ALTER TABLE $tname ADD CONSTRAINT $cname $cdef");
-			clog "Altered constraint $cname on $tname";
+			upgrade_and_log("ALTER TABLE $tcname DROP CONSTRAINT $cname");
+			upgrade_and_log("ALTER TABLE $tcname ADD CONSTRAINT $cname $cdef");
+			clog "Altered constraint $cname on $tcname";
 			$changes++;
 		}
 	}
@@ -4506,15 +4507,16 @@ sub usage {
 
 	my $name = shift or die;
 
+	## no critic (RequireInterpolationOfMetachars)
 	if ('add' eq $name) {
-		return qq{Usage: add <type> <name> [options]
+		return q{Usage: add <type> <name> [options]
 Adds an item to the internal Bucardo database.
 The type is one of: db, dbgroup, herd, sync, table, or sequence
 For more information, run: $progname help add <type>};
 	}
 
 	if ('add_database' eq $name) {
-		return qq{Usage: add db <name> [optional information]
+		return q{Usage: add db <name> [optional information]
 Adds a database
 
 Optional information:
@@ -4531,19 +4533,19 @@ Optional information:
 	}
 
 	if ('add_dbgroup' eq $name) {
-		return qq{Usage: add dbgroup <name> [database1 database2 ...]
+		return q{Usage: add dbgroup <name> [database1 database2 ...]
 Adds a database group, and optionally which databases are members of it.
 This can also be used to assign databases to an existing group.};
 	}
 
 	if ('add_herd' eq $name) {
-		return qq{Usage: add herd <name> [table1 table2 ...]
+		return q{Usage: add herd <name> [table1 table2 ...]
 Adds a herd, and optionally which tables are members of it.
 This can also be used to assign tables to an existing herd.};
 	}
 
 	if ('add_sync' eq $name) {
-		return qq{Usage: add sync <name> type=x source=x targetdb=x or targetgroup=x [options]
+		return q{Usage: add sync <name> type=x source=x targetdb=x or targetgroup=x [options]
 Adds a sync. Required args:
   type=name          (type of sync, must be one of pushdelta, fullcopy, or swap)
   source=name        (the source herd)
@@ -4562,63 +4564,63 @@ Optional information:
 	}
 
 	if ('add_table' eq $name) {
-		return qq{Usage: add table <name> [name2 name3 ...]
+		return q{Usage: add table <name> [name2 name3 ...]
 Adds one or more tables to the internal Bucardo database.};
 	}
 
 	if ('add_sequence' eq $name) {
-		return qq{Usage: add sequence <name> [name2 name3 ...]
+		return q{Usage: add sequence <name> [name2 name3 ...]
 Adds one or more sequences to the internal Bucardo database.};
 	}
 
 
 	if ('remove' eq $name or 'delete' eq $name) {
-		return qq{Usage: remove <type> <name> [options]
+		return q{Usage: remove <type> <name> [options]
 Removes an item from the internal Bucardo database.
 The type is one of: db, dbgroup, table, sequence, herd, sync
 For more information, run: $progname help remove <type>};
 	}
 
 	if ('remove_database' eq $name) {
-		return qq{Usage: $verb db <name> [name2 name3 ...]
+		return q{Usage: $verb db <name> [name2 name3 ...]
 Removes one or more databases.};
 	}
 
 	if ('remove_dbgroup' eq $name) {
-		return qq{Usage: $verb dbgroup <name> [name2 name3 ...]
+		return q{Usage: $verb dbgroup <name> [name2 name3 ...]
 Removes one or more database groups.};
 	}
 
 	if ('remove_herd' eq $name) {
-		return qq{Usage: $verb herd <name> [name2 name3 ...]
+		return q{Usage: $verb herd <name> [name2 name3 ...]
 Removes one or more herds.};
 	}
 
 	if ('remove_sync' eq $name) {
-		return qq{Usage: $verb sync <name> [name2 name3 ...]
+		return q{Usage: $verb sync <name> [name2 name3 ...]
 Removes one or more syncs.};
 	}
 
 	if ('remove_table' eq $name) {
-		return qq{Usage: $verb table <name> [name2 name3 ...]
+		return q{Usage: $verb table <name> [name2 name3 ...]
 Removes one or more tables.};
 	}
 
 	if ('remove_sequence' eq $name) {
-		return qq{Usage: $verb sequence <name> [name2 name3 ...]
+		return q{Usage: $verb sequence <name> [name2 name3 ...]
 Removes one or more sequences.};
 	}
 
 
 	if ('list' eq $name) {
-		return qq{Usage: list <type> [options]
+		return q{Usage: list <type> [options]
 Shows information about items in the internal Bucardo database.
 The type is one of: db, dbgroup, table, sequence, herd, sync
 For more information, run: $progname help list <type>};
 	}
 
 	if ('list_databases' eq $name) {
-		return qq{Usage: list db [name] [--verbose] [--verbose]
+		return q{Usage: list db [name] [--verbose] [--verbose]
 Lists information about each database Bucardo knows about.
 
 Without a name, all databases are listed.
@@ -4628,7 +4630,7 @@ If a second '--verbose' is added, the internal database columns for the 'db' tab
 	}
 
 	if ('list_dbgroups' eq $name) {
-		return qq{Usage: list dbgroup [name] [--verbose --verbose]
+		return q{Usage: list dbgroup [name] [--verbose --verbose]
 Lists database groups, and which databases (if any) are members.
 
 Without a name, all database groups are listed.
@@ -4637,7 +4639,7 @@ If '--verbose --verbose' is added, the internal database columns for the 'dbgrou
 	}
 
 	if ('list_herds' eq $name) {
-		return qq{Usage: list herd [name] [--verbose --verbose]
+		return q{Usage: list herd [name] [--verbose --verbose]
 Lists herds, and which tables (if any) are members.
 
 Without a name, all herds are listed.
@@ -4646,7 +4648,7 @@ If '--verbose --verbose' is added, the internal database columns for the 'herd' 
 	}
 
 	if ('list_syncs' eq $name) {
-		return qq{Usage: list sync [name] [--verbose --verbose]
+		return q{Usage: list sync [name] [--verbose --verbose]
 Lists syncs
 
 Without a name, all syncs are listed.
@@ -4655,7 +4657,7 @@ If '--verbose --verbose' is added, the internal database columns for the 'sync' 
 	}
 
 	if ('list_tables' eq $name) {
-		return qq{Usage: list table [name] [--verbose --verbose]
+		return q{Usage: list table [name] [--verbose --verbose]
 Lists tables
 
 Without a name, all tables are listed.
@@ -4664,7 +4666,7 @@ If '--verbose --verbose' is added, the internal database columns for the 'goat' 
 	}
 
 	if ('list_sequences' eq $name) {
-		return qq{Usage: list sequence [name] [--verbose --verbose]
+		return q{Usage: list sequence [name] [--verbose --verbose]
 Lists sequences
 
 Without a name, all sequences are listed.
@@ -4672,6 +4674,7 @@ The name can have wildcards with a '*' at the start and/or end.
 If '--verbose --verbose' is added, the internal database columns for the 'goat' table are shown.};
 	}
 
+	## use critic
 
 	return '';
 

@@ -4533,7 +4533,7 @@ sub start_kid {
 				}
 
 				if ($g->{does_delta_bypass}) {
-					$self->glog("Forcing a onetimecopy due to delta_bypass");
+					$self->glog('Forcing a onetimecopy due to delta_bypass');
 					my $srccmd = "COPY $S.$T TO STDOUT $sync->{copyextra}";
 					my $tgtcmd = "COPY $S.$T FROM STDIN $sync->{copyextra}";
 					## Attempt to truncate the target table. If it fails, delete
