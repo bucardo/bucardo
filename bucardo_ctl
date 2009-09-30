@@ -1991,7 +1991,10 @@ sub process_simple_args {
 							last;
 						}
 					}
-					$ok and $val = $alias[0];
+					if ($ok) {
+						$val = $alias[0];
+						last;
+					}
 				}
 				elsif (lc $val eq lc $okval) {
 					$ok = 1;
