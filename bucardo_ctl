@@ -2899,14 +2899,12 @@ sub add_sync {
         type|synctype            synctype             =pushdelta~delta|fullcopy~copy|swap null
         stayalive                stayalive            TF               null
         kidsalive                kidsalive            TF               null
-        customselect             usecustomselect      TF               null
         limitdbs                 limitdbs             numeric          null
         ping                     ping                 TF               null
         do_listen                do_listen            TF               null
         checktime                checktime            interval         null
         status                   status               =active|inactive null
         makedelta                makedelta            TF               null
-        rebuild_index|rebuildindex rebuild_index      numeric          null
         priority                 priority             numeric          null
         analyze_after_copy       analyze_after_copy   TF               null
         overdue                  overdue              interval         null
@@ -2915,6 +2913,8 @@ sub add_sync {
         onetimecopy              onetimecopy          =0|1|2           null
         lifetime                 lifetime             interval         null
         maxkicks                 maxkicks             numeric          null
+        rebuild_index|rebuildindex   rebuild_index    numeric          null
+        customselect|usecustomselect usecustomselect  TF               null
         tables                   tables               0                skip
     };
 
