@@ -44,7 +44,7 @@ for my $i (1..5) {
     # Add herds for each table and add the tables to the herd
     $bct->ctl('add herd herd'.$i);
     my $result = $bct->ctl(qq{add table swap$i db=A herd=herd$i});
-    like($result, qr{Table added:}, "Added test table $i");
+    like($result, qr{Added table}, "Added test table $i");
 
     # Add syncs
     $bct->ctl(qq{add sync test$i source=herd$i type=pushdelta targetdb=B});

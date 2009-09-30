@@ -55,7 +55,7 @@ for my $db ($dbhA, $dbhB) {
 }
 
 $i = $bct->ctl("add table addtable db=A standard_conflict=source herd=testherd1");
-like($i, qr{Table added:}, 'Table added successfully');
+like($i, qr{Added table}, 'Table added successfully');
 
 ## This line adds the triggers
 $bct->ctl('validate sync simpletest2');

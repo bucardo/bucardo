@@ -30,7 +30,7 @@ like($i, qr{Usage: add herd <name>}, $t);
 
 $t=q{Running add herd works as expeceted};
 $i = $bct->ctl("add herd testherd1");
-like($i, qr{Herd added: testherd1}, $t);
+like($i, qr{Added herd "testherd1"}, $t);
 
 pass("done");
 

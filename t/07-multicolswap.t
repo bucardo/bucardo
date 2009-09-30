@@ -48,7 +48,7 @@ my $t=q{Add sync works};
 print "Adding sync\n";
 my $i = $bct->ctl("add sync multicolswaptest source=testherd1 type=swap targetdb=B");
 print "Added sync: $i\n";
-like($i, qr{Sync added:}, $t);
+like($i, qr{Added sync}, $t);
 
 $bct->restart_bucardo($dbhX);
 

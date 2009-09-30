@@ -34,16 +34,16 @@ like($i, qr{Usage: add sync <name>}, $t);
 $t=q{Add database works};
 my $ctlargs = $bct->add_db_args('A');
 $i = $bct->ctl("add database bucardo_test $ctlargs");
-like($i, qr{Database added}, $t);
+like($i, qr{Added database}, $t);
 
 $ctlargs = $bct->add_db_args('B');
 $i = $bct->ctl("add database bucardo_test $ctlargs");
-like($i, qr{Database added}, $t);
+like($i, qr{Added database}, $t);
 
 ## Add a herd
 $t=q{Add herd works};
 $i = $bct->ctl("add herd testherd1");
-like($i, qr{Herd added}, $t);
+like($i, qr{Added herd}, $t);
 
 $t=q{Running add sync gives an error if no herd members};
 $i = $bct->ctl("add sync testsync1 source=testherd1 type=swap targetdb=B");
@@ -52,11 +52,11 @@ like($i, qr{Herd has no members}, $t);
 ## Add a table to the herd
 $t=q{Add table works};
 $i = $bct->ctl("add table bucardo_test1 db=A herd=testherd1");
-like($i, qr{Table added:}, $t);
+like($i, qr{Added table}, $t);
 
 $t=q{Add sync works};
 $i = $bct->ctl("add sync testsync2 source=testherd1 type=pushdelta targetdb=B");
-like($i, qr{Sync added:}, $t);
+like($i, qr{Added sync}, $t);
 
 $dbhA->disconnect();
 $dbhB->disconnect();

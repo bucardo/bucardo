@@ -27,11 +27,11 @@ like($i, qr{ping}, $t);
 
 $t = q{Calling bucardo_ctl with 'add' gives expected message};
 $i = $bct->ctl('add');
-like($i, qr{Usage: add <item_type>}, $t);
+like($i, qr{Usage: add <type>}, $t);
 
 $t = q{Calling bucardo_ctl with 'add xxx' gives expected message};
 $i = $bct->ctl('add xxx');
-like($i, qr{Cannot add: unknown type}, $t);
+like($i, qr{Usage: add <type>}, $t);
 
 $t = q{Calling bucardo_ctl with 'add db' gives expected message};
 $i = $bct->ctl('add db');
@@ -49,12 +49,12 @@ my $ctlargs = $bct->add_db_args('A');
 #$com = qq{add database A 'user=$user port=1234 | fff=123 | host="two names"'};
 #warn "ctlargs: $ctlargs\n";
 $i = $bct->ctl("add database bucardo_test $ctlargs"); ## Default to user bucardo?
-like($i, qr{Database added: A}, $t);
+like($i, qr{Added database "A"}, $t);
 
 ## Note: this cannot be tested exhaustively unless we initdb and control port and host ourselves
 $ctlargs = $bct->add_db_args('B');
 $i = $bct->ctl("add database bucardo_test $ctlargs");
-like($i, qr{Database added: B}, $t);
+like($i, qr{Added database "B"}, $t);
 
 $dbh->disconnect();
 $dbhA->disconnect();

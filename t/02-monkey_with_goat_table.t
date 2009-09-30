@@ -28,8 +28,5 @@ $t = q{Calling bucardo_ctl with 'add table' gives expected message};
 $i = $bct->ctl('add table');
 like($i, qr{Usage: add table <name>}, $t);
 
-#$i = $bct->ctl("add table bucardo_test1 db=A");
-#like($i, qr{Table added: bucardo_test1}, $t);
-
 pass("done");
 

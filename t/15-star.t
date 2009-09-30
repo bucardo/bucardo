@@ -72,18 +72,18 @@ my @dummy;
 pass('Adding goats and herds');
 for my $db (qw/A B C/) {
     ($res, @dummy) = split"\n", $bct->ctl("add herd herd$db");
-    like($res, qr/Herd added/, $res);
+    like($res, qr/Added herd/, $res);
     if ($db eq 'A') {
         ($res, @dummy) = split "\n", $bct->ctl("add table star_test db=$db herd=herd$db makedelta=true");
-        like($res, qr/Table added/, $res);
+        like($res, qr/Added table/, $res);
         ($res, @dummy) = split "\n", $bct->ctl("add table star_test_mcpk db=$db herd=herd$db makedelta=true");
-        like($res, qr/Table added/, $res);
+        like($res, qr/Added table/, $res);
     }
     else {
         ($res, @dummy) = split "\n", $bct->ctl("add table star_test db=$db herd=herd$db");
-        like($res, qr/Table added/, $res);
+        like($res, qr/Added table/, $res);
         ($res, @dummy) = split "\n", $bct->ctl("add table star_test_mcpk db=$db herd=herd$db");
-        like($res, qr/Table added/, $res);
+        like($res, qr/Added table/, $res);
     }
 }
 
