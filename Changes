@@ -1,6 +1,6 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-Bucardo version 4.2.0, released September 29, 2009
+Bucardo version 4.2.0, released September 30, 2009
 
   - Add the "delta_bypass" feature, which allows a pushdelta sync to switch 
     to 'fullcopy' mode on the fly, depending on the number of rows that 
