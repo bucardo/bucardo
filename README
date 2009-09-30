@@ -43,25 +43,8 @@ EXAMPLES:
 
 See the test suite in the t/ subdirectory for some examples.
 
+WEBSITE:
+-------
 
-TESTING:
---------
-
-Because Test::Harness does not play well with forking, the Makefile will attempt to 
-start a small helper daemon for controlling Bucardo from within the tests. You will 
-need to tell the test script where it can find some databases to test with by 
-editing this file:
-
-	t/bucardo.test.data
-
-Once that is set, simply do the usual:
-
-	make test
-
-Or better still:
-
-	make test TEST_VERBOSE=1
-
-
-
+Please visit http://bucardo.org for complete documentation.
 

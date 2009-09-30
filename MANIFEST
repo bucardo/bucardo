@@ -29,7 +29,6 @@ bucardo_ctl.html
 ## Testing-related stuff
 .perlcriticrc
 t/bucardo.test.helper
-t/bucardo.test.data
 t/01-basic.t
 t/02-simple.t
 t/02-monkey_with_db_table.t

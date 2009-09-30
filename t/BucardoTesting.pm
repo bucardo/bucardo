@@ -109,9 +109,6 @@ my $TIMEOUT_NOTICE = 2;
 ## Default test schema name.
 my $TEST_SCHEMA = 'bucardo_schema';
 
-## File to store connectin information.
-my $TEST_INFO_FILE = 'bucardo.test.data';
-
 ## Bail if the bucardo_ctl file does not exist / does not compile
 for my $file (qw/bucardo_ctl Bucardo.pm/) {
 	if (! -e $file) {
@@ -169,12 +166,7 @@ sub new {
 	## Name of the test schema. Should rarely need to be set
 	$self->{schema} = $arg->{schema} || $TEST_SCHEMA;
 
-	## Where to find the connection data. Rarely changed.
-	$self->{info_file} = $arg->{info_file} || $TEST_INFO_FILE;
-
 	bless $self, $class;
-
-	#$self->read_test_info();
 
 	## Let's find out where bucardo_ctl is. Prefer the blib ones, which are shebang adjusted
 	if (-e 'blib/script/bucardo_ctl') {
@@ -196,49 +188,6 @@ sub new {
 	return $self;
 }
 
-
-sub read_test_info {
-
-	## Read connection information from a file
-	## Populates the hashref $self->{bcinfo}
-
-	my $self = shift;
-
-	my $file = $self->{info_file};
-
-	## Check for a 't' dir first, then current dir
-	my $fh;
-	if (-e "t/$file") {
-		open $fh, '<', "t/$file" or die qq{Could not open "t/$file": $!\n};
-	}
-	elsif (-e $file) {
-		open $fh, '<', "$file" or die qq{Could not open "$file": $!\n};
-	}
-	else {
-		die qq{Could not find file "$file": $!\n};
-	}
-
-	my %bc;
-	while (<$fh>) {
-		next unless /^\s*(\w\S+?):?\s+(.*?)\s*$/;
-		$bc{$1} = $2; ## no critic
-		$DEBUG >= 3 and warn "Read $1: $2\n";
-	}
-
-	## Quick sanity check
-	for my $req (qw(DBNAME DBUSER TESTDB TESTBC)) {
-		for my $suffix ('bucardo', @dbs) {
-			my $name = "${req}_$suffix";
-			exists $bc{$name} or die qq{Required test arg "$name" not found in config file};
-		}
-	}
-	close $fh;
-
-	$self->{bcinfo} = \%bc;
-
-	return;
-
-} ## end of read_test_info
 
 sub blank_database {
 

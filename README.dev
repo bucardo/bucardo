@@ -90,8 +90,6 @@ t/BucardoTesting.pm - Shared routines for setup and teardown.
 
 t/bucardo.test.helper - Helper script for bucardo_ctl calling.
 
-t/bucardo.test.data - Connection information for the tests.
-
 t/00setup.t - Shared code for the Bucardo tests.
 
 t/01basic.t - Test of very basic things.
