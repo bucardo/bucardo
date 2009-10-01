@@ -3903,6 +3903,8 @@ sub constraint_definition {
 	my $SQL = qq{SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = '$name'};
 	my $def = $dbh->selectall_arrayref($SQL)->[0][0];
 
+	return '' if ! defined $def;
+
 	$def =~ s/\((\(.+\))\)/$1/;
 	$def =~ s/(\w+) = ANY \(ARRAY\[(.+)\]\)/$1 IN ($2)/;
 	$def =~ s/<> ALL \(ARRAY\[(.+)\]\)/NOT IN ($1)/;
@@ -4400,11 +4402,11 @@ sub upgrade {
 	my $md5sth = $dbh->prepare($SQL);
 	for my $row (@flist) {
 		my ($name,$arg,$body) = @$row;
+		next if $name =~ /plperlu_test/;
 		my $oldbody = function_exists('bucardo',$name,$arg);
 		if (!$oldbody) {
-			$body =~ s/FUNCTION /FUNCTION bucardo./;
-			upgrade_and_log($body,"CREATE FUNCTION bucardo.$name($arg)");
-			clog "Added function bucardo.$name($arg)";
+			upgrade_and_log($body,"CREATE FUNCTION $name($arg)");
+			clog "Added function $name($arg)";
 			$changes++;
 			next;
 		}
@@ -4414,9 +4416,6 @@ sub upgrade {
 		my $newbody = $md5sth->fetchall_arrayref()->[0][0];
 		next if $oldbody eq $newbody;
 		$body =~ s/^CREATE FUNCTION/CREATE OR REPLACE FUNCTION/;
-		if ($body !~ /FUNCTION bucardo/) {
-			$body =~ s/FUNCTION /FUNCTION bucardo./;
-		}
 		(my $short = $body) =~ s/^(.+?)\n.*/$1/s;
 		$dbh->do('SAVEPOINT bucardo_upgrade');
 		eval { upgrade_and_log($body,$short); };
@@ -4430,7 +4429,7 @@ sub upgrade {
 		else {
 			$dbh->do('RELEASE bucardo_upgrade');
 		}
-		clog "Updated function: bucardo.$name($arg)";
+		clog "Updated function: $name($arg)";
 		$changes++;
 	}
 
@@ -4499,12 +4498,14 @@ sub upgrade {
 	for my $row (@clist2) {
 		my ($tcname,$cname,$cdef) = @$row;
 		my $condef = constraint_definition($cname);
-		if ($condef ne $cdef) {
+		next if ! $condef or $condef eq $cdef;
+		if ($condef and $condef ne $cdef) {
 			upgrade_and_log("ALTER TABLE $tcname DROP CONSTRAINT $cname");
-			upgrade_and_log("ALTER TABLE $tcname ADD CONSTRAINT $cname $cdef");
-			clog "Altered constraint $cname on $tcname";
-			$changes++;
 		}
+		upgrade_and_log("ALTER TABLE $tcname ADD CONSTRAINT $cname $cdef");
+		my $action = $condef ? 'Altered' : 'Added';
+		clog "$action constraint $cname on $tcname";
+		$changes++;
 	}
 
 	## The freezer.q_staging table is no longer needed, but we must empty it before dropping
