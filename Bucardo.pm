@@ -5997,25 +5997,6 @@ Bucardo - Postgres multi-master replication system
 
 This document describes version 4.2.1 of Bucardo
 
-=head1 SYNOPSIS
-
-  ## Import the schema into the main Bucardo database:
-  $ psql -U bucardo bucardo -f bucardo.schema
-
-  ## Populate the tables within
-
-  ## Start Bucardo up
-  $ ./bucardo_ctl start "Initial startup - Jean"
-
-  ## Kick off a sync manually
-  $ ./bucardo_ctl kick prices
-
-  ## Check on the status of all syncs
-  $ ./bucardo_ctl status
-
-  ## Shut Bucardo down
-  $ ./bucardo_ctl stop "Bringing new server online - Adele"
-
 =head1 WEBSITE
 
 The latest news and documentation can always be found at:
@@ -6030,7 +6011,7 @@ of Perl, a custom database schema, Pl/Perlu, and Pl/Pgsql.
 Bucardo is unapologetically extremely verbose in its logging.
 
 Full documentation can be found on the website, or in the files that came with 
-this distribution.
+this distribution. See also the documentation for the bucardo_ctl program.
 
 =head1 DEPENDENCIES
 
@@ -6040,7 +6021,6 @@ this distribution.
 * Sys::Syslog
 * DBIx::Safe    ## Try 'yum install perl-DBIx-Safe' or visit bucardo.org
 
-
 =head1 BUGS
 
 Bugs should be reported to bucardo-general@bucardo.org. A list of bugs can be found at 
@@ -6049,7 +6029,7 @@ http://bucardo.org/bugs.html
 =head1 CREDITS
 
 Bucardo was originally developed and funded by Backcountry.com, who have been using versions 
-of it in production since 2002.
+of it in production since 2002. Jon Jensen <jon@endpoint.com> wrote the original version.
 
 =head1 AUTHOR
 

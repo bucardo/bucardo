@@ -5279,11 +5279,12 @@ Tells Bucardo about new objects it should know about. These commands can
 replace direct manipulation of the tables in the bucardo schema for the
 supported object types (you'll still need to add things like the mappings between objects on your own).
 
-=item B<alter>
+=item B<remove>
 
-Usage:  alter sync syncname [targetgroup=foo | targetdb=foo]
+Usage:  remove <item_type> <item_name>
 
-Alters an existing sync, allowing modification to the target database or target database group
+Removes one or more items from the Bucardo database. Valid item types are database, 
+dbgroup, herd, sync, table, and sequence.
 
 =item B<kick>
 

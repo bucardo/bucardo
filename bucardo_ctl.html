@@ -187,11 +187,12 @@ after the type will look up all matching entries.</p>
 replace direct manipulation of the tables in the bucardo schema for the
 supported object types (you'll still need to add things like the mappings between objects on your own).</p>
 </dd>
-<dt><strong><a name="alter" class="item"><strong>alter</strong></a></strong></dt>
+<dt><strong><a name="remove" class="item"><strong>remove</strong></a></strong></dt>
 
 <dd>
-<p>Usage:  alter sync syncname [targetgroup=foo | targetdb=foo]</p>
-<p>Alters an existing sync, allowing modification to the target database or target database group</p>
+<p>Usage:  remove &lt;item_type&gt; &lt;item_name&gt;</p>
+<p>Removes one or more items from the Bucardo database. Valid item types are database, 
+dbgroup, herd, sync, table, and sequence.</p>
 </dd>
 <dt><strong><a name="kick" class="item"><strong>kick</strong></a></strong></dt>
 
