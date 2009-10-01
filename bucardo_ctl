@@ -346,7 +346,7 @@ sub help {
                   ** List detailed information about one or more syncs
 
   reload syncname[s]
-                 ** Reload a sync 
+                 ** Reload a sync
 
   validate syncname[s]
                  ** Validate a sync
@@ -407,8 +407,76 @@ sub superhelp {
 		warn usage('add') . "\n";
 		exit 0;
 	}
+	if ('config' eq $word1) {
+		warn usage('config') . "\n";
+		exit 0;
+	}
+	if ('inspect' eq $word1) {
+		if ('table' eq $word2) {
+			warn usage('inspect_table') . "\n";
+			exit 0;
+		}
+		if ('herd' eq $word2) {
+			warn usage('inspect_herd') . "\n";
+			exit 0;
+		}
+		if ('sync' eq $word2) {
+			warn usage('inspect_sync') . "\n";
+			exit 0;
+		}
 
-	if ('delete' eq $word1 or 'remove' eq $word1) {
+		warn usage('inspect') . "\n";
+		exit 0;
+	}
+	if ('kick' eq $word1) {
+		warn usage('kick') . "\n";
+		exit 0;
+	}
+	if ('list' eq $word1 or 'l' eq $word1) {
+		if ('db' eq $word2 or 'database' eq $word2) {
+			warn usage('list_databases') . "\n";
+			exit 0;
+		}
+		if ('dbg' eq $word2 or 'dbgroup' eq $word2) {
+			warn usage('list_dbgroups') . "\n";
+			exit 0;
+		}
+		if ('herd' eq $word2) {
+			warn usage('list_herds') . "\n";
+			exit 0;
+		}
+		if ('sync' eq $word2) {
+			warn usage('list_syncs') . "\n";
+			exit 0;
+		}
+		if ('table' eq $word2 or 'tab' eq $word2) {
+			warn usage('list_tables') . "\n";
+			exit 0;
+		}
+		if ('sequence' eq $word2 or 'seq' eq $word2) {
+			warn usage('list_sequences') . "\n";
+			exit 0;
+		}
+		warn usage('list') . "\n";
+		exit 0;
+	}
+	if ('message' eq $word1) {
+		warn usage('message') . "\n";
+		exit 0;
+	}
+	if ('ping' eq $word1) {
+		warn usage('ping') . "\n";
+		exit 0;
+	}
+	if ('reload' eq $word1) {
+		warn usage('reload') . "\n";
+		exit 0;
+	}
+	if ('reload_config' eq $word1) {
+		warn usage('reload_config') . "\n";
+		exit 0;
+	}
+	if ('remove' eq $word1 or 'delete' eq $word1) {
 		if ('db' eq $word2 or 'database' eq $word2) {
 			warn usage('remove_database') . "\n";
 			exit 0;
@@ -436,33 +504,28 @@ sub superhelp {
 		warn usage('remove') . "\n";
 		exit 0;
 	}
-
-	if ('list' eq $word1 or 'l' eq $word1) {
-		if ('db' eq $word2 or 'database' eq $word2) {
-			warn usage('list_databases') . "\n";
-			exit 0;
-		}
-		if ('dbg' eq $word2 or 'dbgroup' eq $word2) {
-			warn usage('list_dbgroups') . "\n";
-			exit 0;
-		}
-		if ('herd' eq $word2) {
-			warn usage('list_herds') . "\n";
-			exit 0;
-		}
-		if ('sync' eq $word2) {
-			warn usage('list_syncs') . "\n";
-			exit 0;
-		}
-		if ('table' eq $word2 or 'tab' eq $word2) {
-			warn usage('list_tables') . "\n";
-			exit 0;
-		}
-		if ('sequence' eq $word2 or 'seq' eq $word2) {
-			warn usage('list_sequences') . "\n";
-			exit 0;
-		}
-		warn usage('list') . "\n";
+	if ('restart' eq $word1) {
+		warn usage('restart') . "\n";
+		exit 0;
+	}
+	if ('start' eq $word1) {
+		warn usage('start') . "\n";
+		exit 0;
+	}
+	if ('status' eq $word1) {
+		warn usage('status') . "\n";
+		exit 0;
+	}
+	if ('stop' eq $word1) {
+		warn usage('stop') . "\n";
+		exit 0;
+	}
+	if ('upgrade' eq $word1) {
+		warn usage('upgrade') . "\n";
+		exit 0;
+	}
+	if ('validate' eq $word1) {
+		warn usage('validate') . "\n";
 		exit 0;
 	}
 
@@ -600,7 +663,12 @@ sub reload {
 
 	## Ask for one or more syncs to be reloaded
 
-	@nouns or die "Usage: reload <syncname>\n";
+	my $usage = usage('reload');
+
+	if (!@nouns) {
+		warn "$usage\n";
+		exit 1;
+	}
 
 	for my $syncname (@nouns) {
 		next if $syncname eq 'sync'; ## Allows $0 reload sync foobar
@@ -717,11 +785,15 @@ sub update {
 	## e.g. bucardo_ctl update sync foobar onetimecopy=2
 	## e.g. bucardo_ctl update sync add tab1
 
-	my $usage = "Usage: update <item> <name> <name=value>...\n";
+	my $usage = usage('update');
 
-	my $item = shift @nouns or die $usage;
-	my $name = shift @nouns or die $usage;
-	@nouns or die $usage;
+	my $item = shift @nouns;
+	my $name = shift @nouns;
+
+	if (! @nouns or ! defined $item or ! defined $name) {
+		warn "$usage\n";
+		exit 1;
+	}
 
 	my $info;
 	my $lookupcol = 'name';
@@ -1022,43 +1094,14 @@ sub ping {
 } ## end of ping
 
 
-sub process_args {
-
-	## Break apart a string of args, return a clean hashref
-
-	my $string = shift or return {};
-	$string .= ' ';
-
-	my %arg;
-
-	while ($string =~ m/(\w+)\s*=\s*"(.+?)" /g) {
-		$arg{$1} = $2;
-	}
-	$string =~ s/\w+\s*=\s*".+?" / /g;
-
-	while ($string =~ m/(\w+)\s*=\s*'(.+?)' /g) {
-		$arg{$1} = $2;
-	}
-	$string =~ s/\w+\s*=\s*'.+?' / /g;
-
-	while ($string =~ m/(\w+)\s*=\s*(\S+)/g) {
-		$arg{$1} = $2;
-	}
-	$string =~ s/\w+\s*=\s*\S+/ /g;
-
-	if ($string =~ /\S/) {
-		$string =~ s/^\s+//;
-		$arg{extraargs} = [split /\s+/ => $string];
-	}
-
-	return \%arg;
-
-} ## end of process_args
-
-
 sub kick {
 
-	@nouns or die qq{kick requires at least one sync name\n};
+	my $usage = usage('kick');
+
+	if (!@nouns) {
+		warn "$usage\n";
+		exit 1;
+	}
 
 	my ($exitstatus, $retries, $do_retry) = (0,0,0);
 
@@ -1672,9 +1715,11 @@ ORDER BY started DESC LIMIT 1
 
 sub inspect {
 
-	my $msg = "Need to specify what to inspect: table, sync, or herd\n";
+	my $usage = usage('inspect');
+
 	if (!@nouns) {
-		die $msg;
+		warn "$usage\n";
+		exit 1;
 	}
 	my $thing = shift @nouns;
 
@@ -1682,15 +1727,20 @@ sub inspect {
 	inspect_sync()  if $thing =~ /sync/i or $thing eq 's';
 	inspect_herd()  if $thing =~ /herd/i or $thing eq 'h';
 
-	die $msg;
+	warn "$usage\n";
+	exit 1;
 
 } ## end of inspect
 
 
 sub inspect_table {
 
-	## Must be given a name
-	@nouns or die "Usage: bucardo_ctl inspect table <tablename>\n";
+	my $usage = usage('inspect_table');
+
+	if (! @nouns) {
+		warn "$usage\n";
+		exit 1;
+	}
 
 	$SQL = q{SELECT * FROM bucardo.goat WHERE tablename=?};
 	my $sth_goat = $dbh->prepare($SQL);
@@ -1765,12 +1815,26 @@ sub inspect_herd {
 
 	die "Not implemented yet\n";
 
+	my $usage = usage('inspect_herd');
+
+	if (! @nouns) {
+		warn "$usage\n";
+		exit 1;
+	}
+
 } ## end of inspect_herd
 
 
 sub inspect_sync {
 
 	die "Not implemented yet\n";
+
+	my $usage = usage('inspect_sync');
+
+	if (! @nouns) {
+		warn "$usage\n";
+		exit 1;
+	}
 
 } ## end of inspect_sync
 
@@ -1925,6 +1989,40 @@ sub show_all_columns {
 } ## end of show_all_columns
 
 
+sub process_args {
+
+	## Break apart a string of args, return a clean hashref
+
+	my $string = shift or return {};
+	$string .= ' ';
+
+	my %arg;
+
+	while ($string =~ m/(\w+)\s*=\s*"(.+?)" /g) {
+		$arg{$1} = $2;
+	}
+	$string =~ s/\w+\s*=\s*".+?" / /g;
+
+	while ($string =~ m/(\w+)\s*=\s*'(.+?)' /g) {
+		$arg{$1} = $2;
+	}
+	$string =~ s/\w+\s*=\s*'.+?' / /g;
+
+	while ($string =~ m/(\w+)\s*=\s*(\S+)/g) {
+		$arg{$1} = $2;
+	}
+	$string =~ s/\w+\s*=\s*\S+/ /g;
+
+	if ($string =~ /\S/) {
+		$string =~ s/^\s+//;
+		$arg{extraargs} = [split /\s+/ => $string];
+	}
+
+	return \%arg;
+
+} ## end of process_args
+
+
 sub process_simple_args {
 
 	## Process args to an inner function in the style of a=b
@@ -2032,9 +2130,11 @@ sub process_simple_args {
 
 sub list {
 
-	my $msg = "Need to specify what to list: db, dbgroup, table, sequence, sync, or herd\n";
+	my $usage = usage('list');
+
 	if (!@nouns) {
-		die $msg;
+		warn "$usage\n";
+		exit 1;
 	}
 	my $thing = shift @nouns;
 
@@ -2045,7 +2145,8 @@ sub list {
 	list_tables()    if $thing =~ /^t/i;
 	list_sequences() if $thing =~ /^seq/i;
 
-	die $msg;
+	warn "$usage\n";
+	exit 1;
 
 } ## end of list
 
@@ -2556,8 +2657,10 @@ sub add_item {
 
 	my $self = shift;
 
+	my $usage = usage('add');
+
 	if (!@nouns) {
-		warn usage('add') . "\n";
+		warn "$usage\n";
 		exit 1;
 	}
 
@@ -3349,8 +3452,10 @@ sub remove_item {
 
 	my $self = shift;
 
+	my $usage = usage('remove');
+
 	if (!@nouns) {
-		warn "Usage: $verb <item_type> <item_name>\n";
+		warn "$usage\n";
 		exit 1;
 	}
 
@@ -4461,7 +4566,6 @@ Adds an item to the internal Bucardo database.
 The type is one of: db, dbgroup, herd, sync, table, or sequence
 For more information, run: $progname help add <type>};
 	}
-
 	if ('add_database' eq $name) {
 		return q{Usage: add db <name> [optional information]
 Adds a database
@@ -4478,19 +4582,16 @@ Optional information:
  targetlimit=#      (maximum concurrent writes from this database. Default is 0 (no limit))
  ssp=#              (if server-side prepares are used, defaults to 1 (on))};
 	}
-
 	if ('add_dbgroup' eq $name) {
 		return q{Usage: add dbgroup <name> [database1 database2 ...]
 Adds a database group, and optionally which databases are members of it.
 This can also be used to assign databases to an existing group.};
 	}
-
 	if ('add_herd' eq $name) {
 		return q{Usage: add herd <name> [table1 table2 ...]
 Adds a herd, and optionally which tables are members of it.
 This can also be used to assign tables to an existing herd.};
 	}
-
 	if ('add_sync' eq $name) {
 		return q{Usage: add sync <name> type=x source=x targetdb=x or targetgroup=x [options]
 Adds a sync. Required args:
@@ -4509,63 +4610,51 @@ Optional information:
   tables=list        (list of tables to add to this new sync,
                       will create a herd with the same name as the sync)};
 	}
-
-	if ('add_table' eq $name) {
-		return q{Usage: add table <name> [name2 name3 ...]
-Adds one or more tables to the internal Bucardo database.};
-	}
-
 	if ('add_sequence' eq $name) {
 		return q{Usage: add sequence <name> [name2 name3 ...]
 Adds one or more sequences to the internal Bucardo database.};
 	}
-
-
-	if ('remove' eq $name or 'delete' eq $name) {
-		return q{Usage: remove <type> <name> [options]
-Removes an item from the internal Bucardo database.
-The type is one of: db, dbgroup, table, sequence, herd, sync
-For more information, run: $progname help remove <type>};
+	if ('add_table' eq $name) {
+		return q{Usage: add table <name> [name2 name3 ...]
+Adds one or more tables to the internal Bucardo database.};
 	}
-
-	if ('remove_database' eq $name) {
-		return q{Usage: $verb db <name> [name2 name3 ...]
-Removes one or more databases.};
+	if ('config' eq $name) {
+		return qq{Usage: config show [all | name]
+Usage: config set foo=bar [foo2=bar2]
+Displays or sets settings from the bucardo_config table.
+Using 'show' will display all settings or a subset based on the given name.
+Using 'set' will change one or more settings.};
 	}
-
-	if ('remove_dbgroup' eq $name) {
-		return q{Usage: $verb dbgroup <name> [name2 name3 ...]
-Removes one or more database groups.};
+	if ('inspect' eq $name) {
+		return qq{Usage: inspect <type> <name>
+Inspects an object to see if it has dependency issues.
+The only supported type is currently 'table'.};
 	}
-
-	if ('remove_herd' eq $name) {
-		return q{Usage: $verb herd <name> [name2 name3 ...]
-Removes one or more herds.};
+	if ('inspect_herd' eq $name) {
+		return qq{Usage: inspect herd <name>
+Inspects a herd to see if it has dependency issues.};
 	}
-
-	if ('remove_sync' eq $name) {
-		return q{Usage: $verb sync <name> [name2 name3 ...]
-Removes one or more syncs.};
+	if ('inspect_sync' eq $name) {
+		return qq{Usage: inspect sync <name>
+Inspects a sync to see if it has dependency issues.};
 	}
-
-	if ('remove_table' eq $name) {
-		return q{Usage: $verb table <name> [name2 name3 ...]
-Removes one or more tables.};
+	if ('inspect_table' eq $name) {
+		return qq{Usage: inspect table <name>
+Inspects a table to see if it has dependency issues.};
 	}
-
-	if ('remove_sequence' eq $name) {
-		return q{Usage: $verb sequence <name> [name2 name3 ...]
-Removes one or more sequences.};
+	if ('kick' eq $name) {
+		return qq{Usage: kick <name> [# of seconds] [name2 name3...] [--notimer]
+Kicks one or more named syncs.
+If a number is given, that is how long to wait for the sync to signal that it is finished.
+If the number 0 is given, we wait as long as it takes.
+By default a graphical timer is given: this can be turned off with the --notimer option.};
 	}
-
-
 	if ('list' eq $name) {
 		return q{Usage: list <type> [options]
 Shows information about items in the internal Bucardo database.
 The type is one of: db, dbgroup, table, sequence, herd, sync
 For more information, run: $progname help list <type>};
 	}
-
 	if ('list_databases' eq $name) {
 		return q{Usage: list db [name] [--verbose] [--verbose]
 Lists information about each database Bucardo knows about.
@@ -4575,7 +4664,6 @@ The name can have wildcards with a '*' at the start and/or end.
 If '--verbose' is added, information is shown about which groups and syncs are involved.
 If a second '--verbose' is added, the internal database columns for the 'db' table are shown.};
 	}
-
 	if ('list_dbgroups' eq $name) {
 		return q{Usage: list dbgroup [name] [--verbose --verbose]
 Lists database groups, and which databases (if any) are members.
@@ -4584,7 +4672,6 @@ Without a name, all database groups are listed.
 The name can have wildcards with a '*' at the start and/or end.
 If '--verbose --verbose' is added, the internal database columns for the 'dbgroup' table are shown.};
 	}
-
 	if ('list_herds' eq $name) {
 		return q{Usage: list herd [name] [--verbose --verbose]
 Lists herds, and which tables (if any) are members.
@@ -4593,7 +4680,6 @@ Without a name, all herds are listed.
 The name can have wildcards with a '*' at the start and/or end.
 If '--verbose --verbose' is added, the internal database columns for the 'herd' table are shown.};
 	}
-
 	if ('list_syncs' eq $name) {
 		return q{Usage: list sync [name] [--verbose --verbose]
 Lists syncs
@@ -4602,16 +4688,6 @@ Without a name, all syncs are listed.
 The name can have wildcards with a '*' at the start and/or end.
 If '--verbose --verbose' is added, the internal database columns for the 'sync' table are shown.};
 	}
-
-	if ('list_tables' eq $name) {
-		return q{Usage: list table [name] [--verbose --verbose]
-Lists tables
-
-Without a name, all tables are listed.
-The name can have wildcards with a '*' at the start and/or end.
-If '--verbose --verbose' is added, the internal database columns for the 'goat' table are shown.};
-	}
-
 	if ('list_sequences' eq $name) {
 		return q{Usage: list sequence [name] [--verbose --verbose]
 Lists sequences
@@ -4620,7 +4696,94 @@ Without a name, all sequences are listed.
 The name can have wildcards with a '*' at the start and/or end.
 If '--verbose --verbose' is added, the internal database columns for the 'goat' table are shown.};
 	}
+	if ('list_tables' eq $name) {
+		return q{Usage: list table [name] [--verbose --verbose]
+Lists tables
 
+Without a name, all tables are listed.
+The name can have wildcards with a '*' at the start and/or end.
+If '--verbose --verbose' is added, the internal database columns for the 'goat' table are shown.};
+	}
+	if ('message' eq $name) {
+		return qq{Usage: message "text"
+Asks a running Bucardo daemon to insert the given text into the Bucardo log files.};
+	}
+	if ('ping' eq $name) {
+		return qq{Usage: ping [# of seconds]
+Sends a ping notice to the main Bucardo process (MCP) to see if it will respond.
+By default, it will wait 15 seconds for a response.
+If a number is given, it will wait that number of seconds instead.
+Returns a Nagios like message starting with "OK" or "CRITICAL" for success or failure.\n};
+	}
+	if ('reload' eq $name) {
+		return qq{Usage: reload sync [sync2 sync3 ...]
+Reloads one or more syncs.
+This sends a message to Bucardo to stop the named syncs, reload their 
+information from the database, and start them up again.
+Useful if you have changed a setting for an active syncs and need 
+to put the change in place right away.};
+	}
+	if ('reload_config' eq $name) {
+		return qq{Usage: reload_config
+Instructs the Bucardo daemon to reload its configuration file and restart.};
+	}
+	if ('remove' eq $name or 'delete' eq $name) {
+		return q{Usage: remove <type> <name> [options]
+Removes an item from the internal Bucardo database.
+The type is one of: db, dbgroup, table, sequence, herd, sync
+For more information, run: $progname help remove <type>};
+	}
+	if ('remove_database' eq $name) {
+		return q{Usage: $verb db <name> [name2 name3 ...]
+Removes one or more databases.};
+	}
+	if ('remove_dbgroup' eq $name) {
+		return q{Usage: $verb dbgroup <name> [name2 name3 ...]
+Removes one or more database groups.};
+	}
+	if ('remove_herd' eq $name) {
+		return q{Usage: $verb herd <name> [name2 name3 ...]
+Removes one or more herds.};
+	}
+	if ('remove_sync' eq $name) {
+		return q{Usage: $verb sync <name> [name2 name3 ...]
+Removes one or more syncs.};
+	}
+	if ('remove_sequence' eq $name) {
+		return q{Usage: $verb sequence <name> [name2 name3 ...]
+Removes one or more sequences.};
+	}
+	if ('remove_table' eq $name) {
+		return q{Usage: $verb table <name> [name2 name3 ...]
+Removes one or more tables.};
+	}
+	if ('restart' eq $name) {
+		return qq{Usage: restart ["reason"]
+Restarts Bucardo by stopping, then starting it up again.
+An optional reason can be given.};
+	}
+	if ('start' eq $name) {
+		return qq{Usage: start ["reason"]
+Starts Bucardo.
+An optional reason can be given.};
+	}
+	if ('status' eq $name) {
+		return qq{Usage: status [sync1 sync2]
+Displays information about the status of syncs.
+With no arguments, shows a summary of all syncs.
+If one or more named syncs are given, detailed information 
+about each sync is given.}
+	}
+	if ('stop' eq $name) {
+		return qq{Usage: stop ["reason"]
+Stops Bucardo and all of its child processes.
+An optional reason can be given.
+Active children will not stop until they have finished their current task.};
+	}
+	if ('upgrade' eq $name) {
+		return qq{Usage: upgrade
+Upgrades an existing Bucardo database to the current version.};
+	}
 	if ('validate' eq $name) {
 		return qq{Usage: validate [all] [sync1 sync2]
 Validates one or more named syncs.
