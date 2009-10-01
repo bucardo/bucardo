@@ -4514,7 +4514,7 @@ sub start_kid {
 
 				## Figure out if we have enough rows to trigger a delta_bypass
 				$g->{does_delta_bypass} = 0;
-				if ($g->{delta_bypass} and ! $g->{does_makedelta} and ! $g->{customselect}) {
+				if ($g->{delta_bypass} and ! $g->{does_makedelta}) {
 					if ($g->{delta_bypass_count}
 							and $deltacount{source}{$S}{$T} >= $g->{delta_bypass_count}) {
 						$g->{does_delta_bypass} = 'count';
