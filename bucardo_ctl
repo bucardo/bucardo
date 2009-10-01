@@ -1361,7 +1361,7 @@ sub status_detail {
 	$sth->execute();
 	my $herdmap = $sth->fetchall_hashref('name');
 	for my $herdname (keys %$herdmap) {
-		$SQL = 'SELECT db FROM bucardo.goat WHERE id = (SELECT bucardo.goat FROM bucardo.herdmap WHERE herd = ? LIMIT 1)';
+		$SQL = 'SELECT db FROM bucardo.goat WHERE id = (SELECT goat FROM bucardo.herdmap WHERE herd = ? LIMIT 1)';
 		$sth = $dbh->prepare($SQL);
 		$sth->execute($herdname);
 		my $goatinfo = $sth->fetchall_arrayref({})->[0];
@@ -1451,14 +1451,14 @@ Checktime:            $s->{checktime}
 Overdue time:         $s->{overdue}
 Expired time:         $s->{expired}
 Stayalive:            $s->{stayalive}      Kidsalive: $s->{kidsalive}
-Rebuild index:        $s->{rebuild_index}      Do_listen: $s->{do_listen}
+Rebuild index:        $s->{rebuild_index}        Do_listen: $s->{do_listen}
 Ping:                 $s->{ping}      Makedelta: $s->{makedelta}
 Onetimecopy:          $s->{onetimecopy}
 };
 		if ($s->{synctype} eq 'fullcopy'){
-			print qq{Custom select:     $s->{usecustomselect} $s->{copyextra}\n};
-			print qq{Post-copy analyze: $s->{analyze_after_copy}\n};
-			print qq{Delete method:     $s->{deletemethod}\n};
+			print qq{Custom select:        $s->{usecustomselect} $s->{copyextra}\n};
+			print qq{Post-copy analyze:    $s->{analyze_after_copy}\n};
+			print qq{Delete method:        $s->{deletemethod}\n};
 		}
 
 	}
