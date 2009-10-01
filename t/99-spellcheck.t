@@ -181,6 +181,7 @@ Yan
 attnums
 boolean
 bytea
+chunking
 config
 ctl
 customcode
