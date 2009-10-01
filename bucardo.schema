@@ -32,7 +32,7 @@ SET client_min_messages   = 'WARNING';
 SET escape_string_warning = 'OFF';
 
 -- Try and create a plperlu function, then call it
-CREATE OR REPLACE FUNCTION plperlu_test()
+CREATE OR REPLACE FUNCTION bucardo.plperlu_test()
 RETURNS TEXT
 LANGUAGE plperlu
 AS $bc$
@@ -564,7 +564,7 @@ END;
 $bc$;
 
 -- Called on update to master_q. Creates and populates child tables, empties master_q.
-CREATE OR REPLACE FUNCTION populate_child_q_table()
+CREATE OR REPLACE FUNCTION bucardo.populate_child_q_table()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 VOLATILE
@@ -630,7 +630,7 @@ CREATE TRIGGER populate_child_q_table
 --
 -- Return a created connection string from the db table
 --
-CREATE OR REPLACE FUNCTION db_getconn(text)
+CREATE OR REPLACE FUNCTION bucardo.db_getconn(text)
 RETURNS TEXT
 LANGUAGE plperlu
 SECURITY DEFINER
