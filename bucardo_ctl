@@ -211,7 +211,6 @@ reload_config() if $verb eq 'reload_config';
 reload()        if $verb eq 'reload';
 ping()          if $verb eq 'ping';
 add_item()      if $verb eq 'add';
-alter_item()    if $verb eq 'alter';
 remove_item()   if $verb eq 'remove' or $verb eq 'delete';
 upgrade()       if $verb eq 'upgrade';
 message()       if $verb eq 'message';
@@ -3353,30 +3352,6 @@ sub add_all_goats {
 } ## end of add_all_goats
 
 
-sub alter_item {
-
-	my $self = shift;
-
-	if (!@nouns) {
-		warn "Usage: alter <item_type> <item_name>\n";
-		exit 1;
-	}
-
-	## First word must be a type we know about
-	my $type = shift @nouns;
-	$type = lc $type;
-
-	if ($type eq 'sync') {
-		alter_sync();
-	}
-	else {
-		warn "Cannot alter: unknown type\n";
-	}
-	exit 1;
-
-} ## end of alter_item
-
-
 sub remove_item {
 
 	my $self = shift;
@@ -4695,109 +4670,6 @@ sub connect_database {
 } ## end of connect_database
 
 
-sub alter_sync {
-
-	## Modify an existing sync
-	## Usage: alter sync syncname options
-	## targetgroup=foo - add/change the targetgroup
-	## targetdb=foo    - add/change the targetdb
-	## If a target already exists of other type, it is set to null
-
-	## The first word is the sync name
-	my $item_name = shift @nouns || '';
-	if (!length $item_name) {
-		warn "Usage: alter sync <name>\n";
-		exit 1;
-	}
-
-	## The rest is the options.
-	my $info = join ' ' => @nouns;
-	## Command line name, value
-	my %arg = (
-			   targetdb    => '',
-			   targetgroup => '',
-			   );
-	my $args = process_args($info);
-	for my $name (sort keys %$args) {
-		next if $name eq 'extraargs';
-		my $value = $args->{$name};
-		if (!exists $arg{$name}) {
-			die "Unknown option '$name'\n";
-		}
-		$arg{$name} = $value;
-	}
-	$arg{name} = $item_name;
-
-	## Make sure this sync exists and gather current information from it
-	$SQL = 'SELECT * FROM bucardo.sync WHERE name = ?';
-	$sth = $dbh->prepare($SQL);
-	$count = $sth->execute($item_name);
-	if ($count != 1) {
-		warn "No such sync: $item_name\n";
-		exit 1;
-	}
-	my $sync = $sth->fetchall_arrayref({})->[0];
-
-	my %setting;
-
-	## Do we have a targetgroup?
-	if (length $arg{targetgroup}) {
-		my $group = $arg{targetgroup};
-		if (defined $sync->{targetgroup} and $group eq $sync->{targetgroup}) {
-			warn qq{targetgroup "$group" already exists: no change made\n};
-		}
-		else {
-			$setting{'targetgroup'} = $group;
-			if (defined $sync->{targetdb}) {
-				warn qq{Removing targetdb "$sync->{targetdb}"\n};
-				$setting{'targetdb'} = undef;
-			}
-		}
-	}
-	elsif (length $arg{targetdb}) {
-		my $db = $arg{targetdb};
-		if (defined $sync->{targetdb} and $db eq $sync->{targetdb}) {
-			warn qq{targetdb "$db" already exists: no change made\n};
-		}
-		else {
-			$setting{'targetdb'} = $db;
-			if (defined $sync->{targetgroup}) {
-				warn qq{Removing targetgroup "$sync->{targetgroup}"\n};
-				$setting{'targetgroup'} = undef;
-			}
-		}
-	}
-
-	if (! keys %setting) {
-		warn "No change made\n";
-		exit 0;
-	}
-
-	$SQL = 'UPDATE bucardo.sync SET ';
-	my @args;
-	for my $c (sort keys %setting) {
-		$SQL .= "$c = ?, ";
-		push @args, $setting{$c};
-	}
-	$SQL =~ s/, $//;
-	$SQL .= ' WHERE name = ?';
-
-	$sth = $dbh->prepare($SQL);
-	eval {
-		$count = $sth->execute(@args,$item_name);
-	};
-
-	## Prompt for final go-ahead
-
-	$dbh->commit();
-
-	$QUIET or print "Sync updated: $item_name ($SQL)\n";
-
-	exit 0;
-
-} ## end of alter_sync
-
-
 sub config {
 
 	## View or change a value inside the bucardo_config table
@@ -5116,8 +4988,6 @@ This document describes version 4.2.0 of bucardo_ctl
   ./bucardo_ctl add herd newherd table1 table2 table3 ...
 
   ./bucardo_ctl add dbgroup name db1 db2 db3 ...
-
-  ./bucardo_ctl alter sync syncname targetgroup=foo targetdb=foo onetimecopy=2
 
   ./bucardo_ctl start "Starting up - Greg"
 
