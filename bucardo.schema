@@ -1231,7 +1231,7 @@ $bc$
             $ssp or $dbh->{pg_server_prepare}=0;
         }
 
-		$dbh->do('SET TRANSACTION READ WRITE');
+        $dbh->do('SET TRANSACTION READ WRITE');
         if ($info->{synctype} =~ /swap|delta/ and $info->{reltype} eq 'table') {
             if (! $pkey) {
                 if (!$force) {
@@ -2175,8 +2175,8 @@ AS $bc$
         AND    h.herd = '$herd'
     };
     $rv = spi_exec_query($SQL);
-	if (!$rv->{processed}) {
-	  elog(DEBUG, 'Herd has no members, so no further work needed');
+    if (!$rv->{processed}) {
+      elog(DEBUG, 'Herd has no members, so no further work needed');
       return;
     }
     my $sourcedb = $rv->{rows}[0]{db};
