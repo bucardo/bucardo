@@ -2328,28 +2328,15 @@ sub list_tables {
 
 	my $usage = usage('list_tables');
 
-	## If any nouns left, treat as wildcards
-	my $AND = '';
-	for my $term (@nouns) {
-		if ($term =~ s/\*?(.+)\*?/$1/) {
-			$AND .= sprintf q{%s lower(tablename) = %s},
-				$AND ? 'OR' : 'AND',
-					$dbh->quote(lc $term);
-		}
-		else {
-			$AND .= sprintf q{%s lower(tablename) ~ %s},
-				$AND ? 'OR' : 'AND',
-					$dbh->quote(lc $term);
-		}
-	}
-
-	$SQL = "SELECT * FROM bucardo.goat WHERE reltype = 'table' $AND ORDER BY schemaname, tablename";
+	my $clause = generate_clause({col => 'tablename', items => \@nouns});
+	my $WHERE = $clause ? "AND $clause" : '';
+	$SQL = "SELECT * FROM bucardo.goat WHERE reltype='table' $WHERE ORDER BY schemaname, tablename";
 	$sth = $dbh->prepare($SQL);
 	$count = $sth->execute();
 	if ($count < 1) {
 		$sth->finish();
 		printf "There are no%s entries in the 'goat' table.\n",
-			$AND ? ' matching' : '';
+			$WHERE ? ' matching' : '';
 		exit 1;
 	}
 
@@ -2408,23 +2395,15 @@ sub list_sequences {
 
 	my $usage = usage('list_sequences');
 
-	## Keep to three lines or less if possible
-
-	## If any nouns left, treat as wildcards
-	my $AND = '';
-	for my $term (@nouns) {
-		$AND .= sprintf q{%s lower(tablename) ~ %s},
-			$AND ? 'OR' : 'AND',
-				$dbh->quote(lc $term);
-	}
-
-	$SQL = "SELECT * FROM bucardo.goat WHERE reltype = 'sequence' $AND ORDER BY schemaname, tablename";
+	my $clause = generate_clause({col => 'tablename', items => \@nouns});
+	my $WHERE = $clause ? "AND $clause" : '';
+	$SQL = "SELECT * FROM bucardo.goat WHERE reltype = 'sequence' $WHERE ORDER BY schemaname, tablename";
 	$sth = $dbh->prepare($SQL);
 	$count = $sth->execute();
 	if ($count < 1) {
 		$sth->finish();
 		printf "There are no%s entries in the 'goat' table.\n",
-			$AND ? ' matching' : '';
+			$WHERE ? ' matching' : '';
 		exit 1;
 	}
 
