@@ -1,6 +1,6 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-Bucardo version 4.2.1
+Bucardo version 4.2.1, released October 1, 2009
 
   - Improve ability of 'bucardo_ctl upgrade' to work against older
     versions of Bucardo [GSM]
