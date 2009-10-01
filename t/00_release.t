@@ -1,6 +1,7 @@
 #!perl
 
 ## Make sure the version number is consistent in all places
+## Ensure the bucardo.schema file has no tabs in it
 
 use 5.006;
 use strict;
@@ -13,7 +14,7 @@ if (! $ENV{RELEASE_TESTING}) {
 	plan (skip_all =>  'Test skipped unless environment variable RELEASE_TESTING is set');
 }
 
-plan tests => 1;
+plan tests => 2;
 
 my %v;
 my $vre = qr{(\d+\.\d+\.\d+\_?\d*)};
@@ -110,6 +111,28 @@ else {
 			diag "File: $filename. Line: $line. Version: $ver\n";
 		}
 	}
+}
+
+$file = 'bucardo.schema';
+open $fh, '<', $file or die qq{Could not open "$file": $!\n};
+$good = 1;
+while (<$fh>) {
+	if (/\t/) {
+		diag "Found a tab at line $. of bucardo.schema\n";
+		$good = 0;
+	}
+	if (! /^[\S ]*/) {
+		diag "Invalid character at line $. of bucardo.schema: $_\n";
+		$good = 0; die;
+	}
+}
+close $fh or warn qq{Could not close "$file": $!\n};
+
+if ($good) {
+	pass 'The bucardo.schema file has no tabs or unusual characters';
+}
+else {
+	fail 'The bucardo.schema file did not pass inspection!';
 }
 
 exit;
