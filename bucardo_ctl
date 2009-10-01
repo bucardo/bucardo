@@ -648,56 +648,49 @@ sub validate {
 
 	## Ask for one or more syncs to be validated
 
-	my @synclist;
+	my $usage = usage('validate');
 
 	if (!@nouns) {
-		print "Must specify 'all' or a list of syncs\n";
+		warn "$usage\n";
 		exit 0;
 	}
 
-	my $syncsvalid = 0;
+	load_bucardo_info();
+	my $synclist = $global{sync};
+
+	my @synclist;
 	if ($nouns[0] eq 'all' and ! defined $nouns[1]) {
-		$SQL = q{SELECT name FROM bucardo.sync};
-		$sth = $dbh->prepare($SQL);
-		$count = $sth->execute();
-		if ($count < 1) {
-			$sth->finish();
+		@synclist = keys %$synclist;
+		if (! @synclist) {
 			print "Sorry, there are no syncs to validate!\n";
 			exit 0;
 		}
-		for my $row (@{$sth->fetchall_arrayref()}) {
-			push @synclist => $row->[0];
-		}
-		$syncsvalid = 1;
 	}
 	else {
 		for my $name (@nouns) {
 			next if $name eq 'sync'; ## Allows $0 validate sync foobar
+			if (! exists $synclist->{$name}) {
+				die qq{Sorry, there is no sync named "$name"\n};
+			}
 			push @synclist => $name;
 		}
 	}
 
-	for my $syncname (@synclist) {
+	## Get the largest size to we can line up the dots all pretty
+	my $maxsize = 1;
+	for my $name (@synclist) {
+		$maxsize = length $name if length $name > $maxsize;
+	}
+	$maxsize += 3;
 
-		## Make sure this sync exists if needed
-		if (! $syncsvalid) {
-			$SQL = 'SELECT status FROM bucardo.sync WHERE name = ?';
-			$sth = $dbh->prepare($SQL);
-			$count = $sth->execute($syncname);
-			if ($count != 1) {
-				warn "Invalid sync: $syncname\n";
-				$sth->finish();
-				next;
-			}
-			my $status = $sth->fetch()->[0]; ## not used yet
-		}
-
-		my $done = "bucardo_validated_sync_$syncname";
-		print "Validating sync $syncname...";
+	for my $name (@synclist) {
+		my $done = "bucardo_validated_sync_$name";
+		printf "Validating sync $name%s",
+			'.' x ($maxsize - length $name);
 		$dbh->do(qq{LISTEN "$done"});
 		$SQL = 'SELECT validate_sync(?)';
 		$sth = $dbh->prepare($SQL);
-		$sth->execute($syncname);
+		$sth->execute($name);
 		$dbh->commit();
 
 		sleep 0.1;
@@ -4626,6 +4619,12 @@ Lists sequences
 Without a name, all sequences are listed.
 The name can have wildcards with a '*' at the start and/or end.
 If '--verbose --verbose' is added, the internal database columns for the 'goat' table are shown.};
+	}
+
+	if ('validate' eq $name) {
+		return qq{Usage: validate [all] [sync1 sync2]
+Validates one or more named syncs.
+Use 'all' to validate all known syncs at once};
 	}
 
 	## use critic
