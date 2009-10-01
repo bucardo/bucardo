@@ -4664,9 +4664,9 @@ sub start_kid {
 
 							## If we've got a very large number of values, break the DELETEs into multiples
 							my @delchunks;
-							if (length $pkvals > 10_000) {
+							if (length $pkvals > 100_000) {
 								## How many items in the IN () clause
-								my $deletebatch = 1_000;
+								my $deletebatch = 10_000;
 								my $dcount = 0;
 								my $delcount = 0;
 								for my $row (@$info) {
