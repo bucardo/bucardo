@@ -185,10 +185,10 @@ $t=q{Add dbgroup works};
 $i = $bct->ctl("add dbgroup tgroup B C");
 like($i, qr{Added database group}, $t);
 
-$t=q{Alter sync works};
+$t=q{Update sync works};
 $dbhB->commit();
-$i = $bct->ctl("alter sync fullcopytest targetgroup=tgroup");
-like($i, qr{Sync updated}, $t);
+$i = $bct->ctl("update sync fullcopytest targetgroup=tgroup");
+like($i, qr{targetgroup : }, $t);
 
 $dbhX->do("NOTIFY bucardo_reload_sync_fullcopytest");
 $dbhX->commit();

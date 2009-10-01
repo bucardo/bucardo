@@ -231,10 +231,10 @@ $t=q{Add dbgroup works};
 $i = $bct->ctl("add dbgroup tgroup B C");
 like($i, qr{Added database group}, $t);
 
-$t=q{Alter sync works};
+$t=q{Update sync works};
 $dbhB->commit();
-$i = $bct->ctl("alter sync pushdeltatest targetgroup=tgroup");
-like($i, qr{Sync updated}, $t);
+$i = $bct->ctl("update sync pushdeltatest targetgroup=tgroup");
+like($i, qr{targetgroup : }, $t);
 
 ## Turn off the ping
 $SQL = "UPDATE sync SET ping = FALSE";
