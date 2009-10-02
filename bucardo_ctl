@@ -4562,7 +4562,7 @@ sub usage {
 
 	## no critic (RequireInterpolationOfMetachars)
 	if ('add' eq $name) {
-		return q{Usage: add <type> <name> [options]
+		return qq{Usage: add <type> <name> [options]
 Adds an item to the internal Bucardo database.
 The type is one of: db, dbgroup, herd, sync, table, or sequence
 For more information, run: $progname help add <type>};
@@ -4651,7 +4651,7 @@ If the number 0 is given, we wait as long as it takes.
 By default a graphical timer is given: this can be turned off with the --notimer option.};
 	}
 	if ('list' eq $name) {
-		return q{Usage: list <type> [options]
+		return qq{Usage: list <type> [options]
 Shows information about items in the internal Bucardo database.
 The type is one of: db, dbgroup, table, sequence, herd, sync
 For more information, run: $progname help list <type>};
@@ -4729,7 +4729,7 @@ to put the change in place right away.};
 Instructs the Bucardo daemon to reload its configuration file and restart.};
 	}
 	if ('remove' eq $name or 'delete' eq $name) {
-		return q{Usage: remove <type> <name> [options]
+		return qq{Usage: remove <type> <name> [options]
 Removes an item from the internal Bucardo database.
 The type is one of: db, dbgroup, table, sequence, herd, sync
 For more information, run: $progname help remove <type>};
