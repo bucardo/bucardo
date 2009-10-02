@@ -1,5 +1,9 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
+Bucardo version 4.2.2
+
+  - Fix so that warning_file works properly again. [GSM]
+
 Bucardo version 4.2.1, released October 1, 2009
 
   - Improve ability of 'bucardo_ctl upgrade' to work against older
