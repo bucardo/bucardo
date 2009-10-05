@@ -2255,15 +2255,16 @@ CREATE TRIGGER bucardo_delete_sync
 
 CREATE SEQUENCE bucardo.customcode_id_seq;
 CREATE TABLE bucardo.customcode (
-  id       INTEGER     NOT NULL DEFAULT nextval('customcode_id_seq'),
-             CONSTRAINT customcode_id_pk PRIMARY KEY (id),
-  name     TEXT        NOT NULL UNIQUE,
-  about    TEXT            NULL,
-  whenrun  TEXT        NOT NULL,
-  getdbh   BOOLEAN     NOT NULL DEFAULT 'true',
-  getrows  BOOLEAN     NOT NULL DEFAULT 'false',
-  src_code TEXT        NOT NULL,
-  cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
+  id        INTEGER     NOT NULL DEFAULT nextval('customcode_id_seq'),
+              CONSTRAINT customcode_id_pk PRIMARY KEY (id),
+  name      TEXT        NOT NULL UNIQUE,
+  about     TEXT            NULL,
+  whenrun   TEXT        NOT NULL,
+  getdbh    BOOLEAN     NOT NULL DEFAULT 'true',
+  getrows   BOOLEAN     NOT NULL DEFAULT 'false',
+  trigrules BOOLEAN     NOT NULL DEFAULT 'false',
+  src_code  TEXT        NOT NULL,
+  cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE bucardo.customcode ADD CONSTRAINT customcode_whenrun
   CHECK (whenrun IN ('before_txn',

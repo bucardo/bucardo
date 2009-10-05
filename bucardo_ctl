@@ -4100,6 +4100,7 @@ sub upgrade {
 		['bucardo', 'audit_pid', 'master_backend',       q{INT     NOT NULL DEFAULT pg_backend_pid()}],
 		['bucardo', 'audit_pid', 'source_backend',       q{INT         NULL}],
 		['bucardo', 'audit_pid', 'target_backend',       q{INT         NULL}],
+		['bucardo', 'customcode','trigrules',            q{BOOLEAN NOT NULL DEFAULT 'false'}],
 		['bucardo', 'db',        'dbservice',            q{TEXT        NULL}],
 		['bucardo', 'db',        'server_side_prepares', q{BOOLEAN NOT NULL DEFAULT 'true'}],
 		['bucardo', 'goat',      'delta_bypass',         q{BOOLEAN NOT NULL DEFAULT 'false'}],

@@ -1559,7 +1559,7 @@ sub start_mcp {
 
 		$SQL = qq{
             SELECT c.src_code, c.id, c.whenrun, c.getdbh, c.name, c.getrows, COALESCE(c.about,'?') AS about,
-                   m.active, m.priority, COALESCE(m.goat,0) AS goat
+                   c.trigrules, m.active, m.priority, COALESCE(m.goat,0) AS goat
             FROM customcode c, customcode_map m
             WHERE c.id=m.code AND m.active IS TRUE
             AND (m.sync = ? OR m.goat IN ($goatlistcodes))
@@ -3003,7 +3003,6 @@ sub start_controller {
 				$input->{rows} = $rows_for_custom_code;
 			}
 
-			## TODO: Think about wrapping in an eval?
 			$maindbh->{InactiveDestroy} = 1;
 			$cc_sourcedbh->{InactiveDestroy} = 1;
 			&{$c->{coderef}}($input);
@@ -3812,11 +3811,12 @@ sub start_kid {
 	## which is completely safe, and faster (thanks Jan!)
 	## Note that the source and target may have different methods
 
-	my $source_disable_trigrules = $sourcedbh->{pg_server_version} >= 80300 ? 'replica' : 'pg_class';
-	my $target_disable_trigrules = $targetdbh->{pg_server_version} >= 80300 ? 'replica' : 'pg_class';
+	our $source_disable_trigrules = $sourcedbh->{pg_server_version} >= 80300 ? 'replica' : 'pg_class';
+	our $target_disable_trigrules = $targetdbh->{pg_server_version} >= 80300 ? 'replica' : 'pg_class';
 	my $source_modern_copy = $sourcedbh->{pg_server_version} >= 80200 ? 1 : 0;
 
 	$SQL{disable_trigrules} = $SQL{enable_trigrules} = '';
+
 	if (($synctype eq 'swap' and $source_disable_trigrules eq 'pg_class')
 			or $target_disable_trigrules eq 'pg_class') {
 		$SQL = q{
@@ -3871,7 +3871,7 @@ sub start_kid {
 	$sourcedbh->do('SET statement_timeout = 0');
 	$targetdbh->do('SET statement_timeout = 0');
 
-	## Note: no need to turn these back to 'origin', we always want to stay in replica mode
+	## Note: no need to turn these back to what they were: we always want to stay in replica mode
 	if ($target_disable_trigrules eq 'replica') {
 		$targetdbh->do(q{SET session_replication_role = 'replica'});
 	}
@@ -3973,7 +3973,16 @@ sub start_kid {
 			$input->{sourcedbh} = $strictness eq 'nostrict' ? $safe_sourcedbh : $safe_sourcedbh_strict;
 			$input->{targetdbh} = $strictness eq 'nostrict' ? $safe_targetdbh : $safe_targetdbh_strict;
 		}
-		## TODO: Use eval?
+		## In case the custom code wants to use other table's rules or triggers:
+		if ($c->{trigrules}) {
+			## We assume the default is something other than replica, naturally
+			if ($source_disable_trigrules eq 'replica') {
+				$sourcedbh->do(q{SET session_replication_role = DEFAULT});
+			}
+			if ($target_disable_trigrules eq 'replica') {
+				$targetdbh->do(q{SET session_replication_role = DEFAULT});
+			}
+		}
 		$maindbh->{InactiveDestroy} = 1;
 		$sourcedbh->{InactiveDestroy} = 1;
 		$targetdbh->{InactiveDestroy} = 1;
@@ -3981,6 +3990,14 @@ sub start_kid {
 		$maindbh->{InactiveDestroy} = 0;
 		$sourcedbh->{InactiveDestroy} = 0;
 		$targetdbh->{InactiveDestroy} = 0;
+		if ($c->{trigrules}) {
+			if ($source_disable_trigrules eq 'replica') {
+				$sourcedbh->do(q{SET session_replication_role = 'replica'});
+			}
+			if ($target_disable_trigrules eq 'replica') {
+				$targetdbh->do(q{SET session_replication_role = 'replica'});
+			}
+		}
 		$self->glog("Finished custom code $c->{id}");
 		if (length $input->{message}) {
 			$self->glog("Message from $c->{whenrun} code $c->{id}: $input->{message}");
