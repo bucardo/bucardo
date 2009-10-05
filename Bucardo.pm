@@ -5632,8 +5632,7 @@ sub start_kid {
 									pkeytype     => $g->{pkeytype},
 									pkey         => $pkval,
 									action       => 0,
-									dbi_error    => $DBI::errstr,
-									exception    => $err,
+									dbi_error    => $err,
 									source_error => $sourcedbh->err ? 1 : 0,
 									target_error => $targetdbh->err ? 1 : 0,
 								);
