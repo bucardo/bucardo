@@ -1,5 +1,10 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
+Bucardo version 4.3.0
+
+  - Add new column to customcode: trigrules. Defaults to false: if true, 
+    we turn on triggers and rules for the duration of the custom code. [GSM]
+
 Bucardo version 4.2.2, released October 2, 2009
 
   - Fix so that warning_file works properly again. [GSM]
