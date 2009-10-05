@@ -3817,7 +3817,8 @@ sub start_kid {
 	my $source_modern_copy = $sourcedbh->{pg_server_version} >= 80200 ? 1 : 0;
 
 	$SQL{disable_trigrules} = $SQL{enable_trigrules} = '';
-	if ($source_disable_trigrules eq 'pg_class' or $target_disable_trigrules eq 'pg_class') {
+	if (($synctype eq 'swap' and $source_disable_trigrules eq 'pg_class')
+			or $target_disable_trigrules eq 'pg_class') {
 		$SQL = q{
             UPDATE pg_catalog.pg_class
             SET    reltriggers = 0, relhasrules = false
