@@ -4839,7 +4839,7 @@ sub start_kid {
 
 						## Time to let the exception handling custom code do its work
 						## First, we rollback any changes we've made on the target
-						$self->glog("Rolling back to target savepoint, due to database error: $DBI::errstr");
+						$self->glog("Rolling back to target savepoint, due to database error: $err");
 						$targetdbh->pg_rollback_to("bucardo_$$");
 						if (! $source_modern_copy) {
 							# Also roll back to source savepoint, so we can try
@@ -5676,7 +5676,7 @@ sub start_kid {
 									target_error => $targetdbh->err ? 1 : 0,
 								);
 
-						$self->glog("Rolling back to savepoints, due to database error: $DBI::errstr");
+						$self->glog("Rolling back to savepoints, due to database error: $err");
 						$sourcedbh->pg_rollback_to("bucardo_$$");
 						$targetdbh->pg_rollback_to("bucardo_$$");
 
