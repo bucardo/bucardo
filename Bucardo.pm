@@ -5413,7 +5413,7 @@ sub start_kid {
 					}
 					chop $list;
 					if (length $list) {
-						$self->glog("Deleting from source: ($list)");
+						$self->glog("Deleting from source: $SQL ($list)");
 						$dmlcount{D}{source}{$S}{$T} += $sourcedbh->do("$SQL ($list)");
 					}
 				}
