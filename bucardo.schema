@@ -147,6 +147,7 @@ default_email_from|nobody@example.com|Who the alert emails are sent as
 default_email_to|nobody@example.com|Who to send alert emails to
 default_email_host|localhost|Which host to send email through
 email_debug_file||File to save a copy of all outgoing emails to
+host_safety_check||Regex to make sure we don't accidentally run where we should not
 kid_abort_limit|3|How many times we will restore an aborted kid before giving up?
 max_delete_clause|200|Maximum number of items to delete inside of IN() clauses
 max_select_clause|500|Maximum number of items to select inside of IN() clauses

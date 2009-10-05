@@ -5,6 +5,10 @@ Bucardo version 4.3.0
   - Add new column to customcode: trigrules. Defaults to false: if true, 
     we turn on triggers and rules for the duration of the custom code. [GSM]
 
+  - Add a new configuration value 'host_safety_check', to help prevent 
+    Bucardo from being copied from one host to another and then run 
+    without modifying at least bucardo.db.dbhost first. [GSM]
+
   - For custom code exception handlers, make the 'dbi_error' hash key return 
     a flattened string of the actual exception thrown. [GSM]
 

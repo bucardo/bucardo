@@ -183,6 +183,45 @@ sub new {
 	## Send all log lines starting with "Warning" to a separate file
 	$self->{warning_file} ||= $config{warning_file};
 
+	## Make sure we are running where we are supposed to be
+	## This prevents things in bucardo.db from getting run on QA
+	## Or at least makes sure people have to work a little harder
+	## to shoot themselves in the foot.
+	if (length $config{host_safety_check}) {
+		my $safe = $config{host_safety_check};
+		my $osafe = $safe;
+		my $ok = 0;
+		## Regular expression
+		if ($safe =~ s/^~//) {
+			$ok = 1 if $hostname =~ qr{$safe};
+		}
+		## Set of choices
+		elsif ($safe =~ s/^=//) {
+			for my $string (split /,/ => $safe) {
+				if ($hostname eq $string) {
+					$ok=1;
+					last;
+				}
+			}
+		}
+		## Simple string
+		elsif ($safe ne $hostname) {
+			$ok = 1;
+		}
+
+		if (! $ok) {
+			warn qq{Cannot start: configured to only run on "$osafe". This is "$hostname"\n};
+			warn qq{  This is usually done to prevent a configured Bucardo from running\n};
+			warn qq{  on the wrong host. Please verify the 'db' settings by doing:\n};
+			warn qq{bucardo_ctl list dbs\n};
+			warn qq{  Once you are sure the bucardo.db table has the correct values,\n};
+			warn qq{  you can adjust the 'host_safety_check' value\n};
+			exit 2;
+		}
+	}
+
+	die "Good to go!\n";
+
 	return $self;
 
 } ## end of new
