@@ -5633,6 +5633,7 @@ sub start_kid {
 									pkey         => $pkval,
 									action       => 0,
 									dbi_error    => $DBI::errstr,
+									exception    => $err,
 									source_error => $sourcedbh->err ? 1 : 0,
 									target_error => $targetdbh->err ? 1 : 0,
 								);
