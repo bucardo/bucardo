@@ -4058,12 +4058,16 @@ sub upgrade {
 
 	if (!relation_exists('bucardo', 'upgrade_log')) {
 		my ($seqlist, $tabledef) = table_definition('upgrade_log');
-		upgrade_and_log($tabledef,'CREATE TABLE upgrade_log');
+		upgrade_and_log($tabledef,'CREATE TABLE bucardo.upgrade_log');
 		$dbh->commit();
 	}
 
 	my @old_sequences = (
 		'dbgroup_id_seq',
+	);
+
+	my @new_sequences = (
+		'audit_pid_id_seq',
 	);
 
 	my @old_constraints = (
@@ -4175,6 +4179,14 @@ sub upgrade {
 		next if !relation_exists('bucardo', $sequence);
 		upgrade_and_log("DROP SEQUENCE bucardo.$sequence");
 		clog "Dropped sequence: $sequence";
+		$changes++;
+	}
+
+	## Add any new sequences
+	for my $sequence (@new_sequences) {
+		next if relation_exists('bucardo', $sequence);
+		upgrade_and_log("CREATE SEQUENCE bucardo.$sequence");
+		clog "Added sequence: $sequence";
 		$changes++;
 	}
 
