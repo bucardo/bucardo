@@ -220,8 +220,6 @@ sub new {
 		}
 	}
 
-	die "Good to go!\n";
-
 	return $self;
 
 } ## end of new
@@ -3010,6 +3008,7 @@ sub start_controller {
 
 			my $c = shift;
 			my $strictness = shift || '';
+			my $attempts = shift || 0;
 
 			$self->glog("Running $c->{whenrun} controller custom code $c->{id}: $c->{name}");
 
@@ -3037,6 +3036,7 @@ sub start_controller {
 				   nextcode   => '',
 				   endsync    => '',
 				   runagain   => 0, ## exception only
+                   attempts   => $attempts, ## exception only
 			};
 			if ($c->{getrows}) {
 				$input->{rows} = $rows_for_custom_code;
@@ -3982,8 +3982,10 @@ sub start_kid {
 
 
 	sub run_kid_custom_code {
+
 		my $c = shift;
 		my $strictness = shift || '';
+		my $attempts = shift || 0;
 
 		$self->glog("Running $c->{whenrun} custom code $c->{id}: $c->{name}");
 		my $send_mail_ref = sub { $self->send_mail(@_) };
@@ -4003,6 +4005,7 @@ sub start_kid {
 			endsync    => '',
 			rowinfo    => \%rowinfo,
 			runagain   => 0, ## exception only
+            attempts   => $attempts, ## exception only
 			sendmail   => $send_mail_ref,
 		};
 		if ($c->{getrows}) {
@@ -4652,9 +4655,14 @@ sub start_kid {
 
 				} ## end of delta_bypass
 
+				## How many times have we done the loop below?
+				my $pushdelta_attempts = 0;
+
 				## This is where we want to 'rewind' to on a handled exception
 				## We choose this point as its possible the custom code has a different getdelta result
 			  PUSHDELTA_SAVEPOINT: {
+
+					$pushdelta_attempts++;
 
 					## From bucardo_delta, grab all distinct pks for this table that have not been already pushed
 					my $info = $sth{source}{$g}{getdelta}->fetchall_arrayref();
@@ -4852,7 +4860,7 @@ sub start_kid {
 						my $runagain = 0;
 						for my $code (@{$g->{code_exception}}) {
 							$self->glog("Trying exception code $code->{id}: $code->{name}");
-							my $result = run_kid_custom_code($code, 'strict');
+							my $result = run_kid_custom_code($code, 'strict', $pushdelta_attempts);
 							if ($result eq 'next') {
 								$self->glog('Going to next available exception code');
 								next;
@@ -5105,9 +5113,14 @@ sub start_kid {
 				## Keep track of how many times this goat has handled an exception
 				$g->{exceptions} = 0;
 
+				## How many times have we done the loop below?
+				my $swap_attempts = 0;
+
 				## This is where we want to 'rewind' to on a handled exception
 				## We choose this point as its possible the custom code has a different getdelta result
 			  SWAP_SAVEPOINT: {
+
+				$swap_attempts++;
 
 				## Reset all IUD counters to 0
 				$dmlcount{I}{source}{$S}{$T} = $dmlcount{U}{source}{$S}{$T} = $dmlcount{D}{source}{$S}{$T} =
@@ -5684,7 +5697,7 @@ sub start_kid {
 						my $runagain = 0;
 						for my $code (@{$g->{code_exception}}) {
 							$self->glog("Trying exception code $code->{id}: $code->{name}");
-							my $result = run_kid_custom_code($code, 'strict');
+							my $result = run_kid_custom_code($code, 'strict', $swap_attempts);
 							if ($result eq 'next') {
 								$self->glog('Going to next available exception code');
 								next;
