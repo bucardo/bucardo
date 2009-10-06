@@ -14,6 +14,8 @@ Bucardo version 4.3.0
 
   - Better upgrading of very old versions of Bucardo. [GSM]
 
+  - Allow add, remove, and list customcode through bucardo_ctl [GSM]
+
 Bucardo version 4.2.2, released October 2, 2009
 
   - Fix so that warning_file works properly again. [GSM]
