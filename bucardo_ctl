@@ -380,6 +380,10 @@ sub superhelp {
 	$verb = $word1;
 
 	if ('add' eq $word1) {
+		if ('customcode' eq $word2 or 'custom_code' eq $word2) {
+			warn usage('add_customcode') . "\n";
+			exit 0;
+		}
 		if ('db' eq $word2 or 'database' eq $word2) {
 			warn usage('add_database') . "\n";
 			exit 0;
@@ -433,6 +437,10 @@ sub superhelp {
 		exit 0;
 	}
 	if ('list' eq $word1 or 'l' eq $word1) {
+		if ('customcode' eq $word2 or 'custom_code' eq $word2) {
+			warn usage('list_customcode') . "\n";
+			exit 0;
+		}
 		if ('db' eq $word2 or 'database' eq $word2) {
 			warn usage('list_databases') . "\n";
 			exit 0;
@@ -477,6 +485,10 @@ sub superhelp {
 		exit 0;
 	}
 	if ('remove' eq $word1 or 'delete' eq $word1) {
+		if ('customcode' eq $word2 or 'custom_code' eq $word2) {
+			warn usage('remove_customcode') . "\n";
+			exit 0;
+		}
 		if ('db' eq $word2 or 'database' eq $word2) {
 			warn usage('remove_database') . "\n";
 			exit 0;
@@ -518,6 +530,10 @@ sub superhelp {
 	}
 	if ('stop' eq $word1) {
 		warn usage('stop') . "\n";
+		exit 0;
+	}
+	if ('update' eq $word1) {
+		warn usage('update') . "\n";
 		exit 0;
 	}
 	if ('upgrade' eq $word1) {
@@ -798,7 +814,10 @@ sub update {
 	my $info;
 	my $lookupcol = 'name';
 	my $tabname;
-	if ($item =~ /^syn/i) {
+	if ($item =~ /^code/i or $item =~ /^custom/i) {
+		$tabname = $item = 'customcode';
+	}
+	elsif ($item =~ /^syn/i) {
 		$tabname = $item = 'sync';
 	}
 	elsif ($item =~ /^tab/i or $item =~ /^seq/i) {
@@ -812,7 +831,7 @@ sub update {
 		$tabname = $item = 'db';
 	}
 	else {
-		die "Invalid item: must be sync, table, sequence, db, or dbgroup\n";
+		die "Invalid item: must be code, db, dbgroup, sequence, sync, or table.\n";
 	}
 
 	$SQL = "SELECT * FROM $tabname WHERE $lookupcol = ?";
@@ -988,7 +1007,7 @@ sub update {
 	}
 
 	## Process each change in turn
-	## Can be sync, dbgroup, table, schema, or db
+	## Can be code, sync, dbgroup, table, schema, or db
 	my %change;
 	for my $arg (@nouns) {
 		next if $arg eq 'set';
@@ -1009,8 +1028,17 @@ sub update {
 				push @{$change{$localname}} => [$n, $row->{$n}, 'NULL'];
 				next;
 			}
-			$SQL = "UPDATE bucardo.$tabname SET $n = ? WHERE $pkcol = ?";
+			if ($tabname eq 'customcode' and $n eq 'src_code') {
+				my $file = $v;
+				if (! -e $file) {
+					die qq{The 'src_file' value must be a file\n};
+				}
+				open my $fh, '<', $file or die qq{Could not open "$file": $!\n};
+				{ local $/; $v = <$fh>; }
+				close $fh or warn qq{Could not close "$file": $!\n};
+			}
 
+			$SQL = "UPDATE bucardo.$tabname SET $n = ? WHERE $pkcol = ?";
 			## Only one of targetdb and targetgroup can be set, no NULL the other one
 			if ($n eq 'targetgroup') {
 				$SQL =~ s/SET/SET targetdb=NULL,/;
@@ -1034,11 +1062,28 @@ sub update {
 		exit 0;
 	}
 
+	my %maxcol;
+	for my $thing (keys %change) {
+		$maxcol{$thing} = 1;
+		for my $row (@{$change{$thing}}) {
+			$maxcol{$thing} = length($row->[0]) if length($row->[0]) > $maxcol{$thing};
+		}
+	}
+
 	for my $thing (sort keys %change) {
 		print qq{Changes made to $item "$thing":\n};
 		for my $row (@{$change{$thing}}) {
-			my $old = $row->[1] || '(null)';
-			print qq{ * $row->[0] : changed from "$old" to "$row->[2]"\n};
+			my $col = $row->[0];
+			my $old = $row->[1] ? qq{"$row->[1]"} : '(null)';
+			my $new = qq{"$row->[2]"};
+			if ($tabname eq 'customcode' and $col eq 'src_code') {
+				my $lines = $old =~ tr/\n/\n/;
+				$old = "old source (lines: $lines)";
+				$lines = $new =~ tr/\n/\n/;
+				$new = "contents of file 'foo' (lines: $lines)";
+			}
+			printf qq{ * %-*s : changed from %s to %s\n},
+				$maxcol{$thing}, $col, $old, $new;
 		}
 	}
 
@@ -1959,12 +2004,29 @@ sub load_bucardo_info {
 		}
 	}
 
+	## Grab all customcode information
+	$SQL = 'SELECT * FROM bucardo.customcode';
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	my $cc = $sth->fetchall_hashref('name');
+	$SQL = 'SELECT * FROM bucardo.customcode_map';
+	$sth = $dbh->prepare($SQL);
+	$sth->execute();
+	my %codename;
+	for my $row (values %$cc) {
+		$codename{$row->{id}} = $row->{name};
+	}
+	for my $row (@{$sth->fetchall_arrayref({})}) {
+		my $codename = $codename{$row->{code}};
+		push @{$cc->{$codename}{map}} => $row;
+	}
+
+	$global{cc} = $cc;
 	$global{dbgroup} = $dbgroup;
 	$global{db} = $db;
 	$global{goat} = $goat;
 	$global{herd} = $herd;
 	$global{sync} = $sync;
-
 
 	return;
 
@@ -2138,17 +2200,63 @@ sub list {
 	}
 	my $thing = shift @nouns;
 
-	list_dbgroups()  if $thing =~ /^dbg/i; ## Must come before the db check!
-	list_dbs()       if $thing =~ /^db/i;
-	list_herds()     if $thing =~ /^h/i;
-	list_syncs()     if $thing =~ /^sy/i;
-	list_tables()    if $thing =~ /^t/i;
-	list_sequences() if $thing =~ /^seq/i;
+	list_customcodes() if $thing =~ /^code/i or $thing =~ /^custom/i;
+	list_dbgroups()    if $thing =~ /^dbg/i; ## Must come before the db check!
+	list_dbs()         if $thing =~ /^db/i;
+	list_herds()       if $thing =~ /^h/i;
+	list_syncs()       if $thing =~ /^sy/i;
+	list_tables()      if $thing =~ /^t/i;
+	list_sequences()   if $thing =~ /^seq/i;
 
 	warn "$usage\n";
 	exit 1;
 
 } ## end of list
+
+
+sub list_customcodes {
+
+	## Show information about all or some subset of the 'customcode' table
+
+	my $usage = usage('list_customcodes');
+
+	## Any nouns are filters against the whole list
+	my $clause = generate_clause({col => 'name', items => \@nouns});
+	my $WHERE = $clause ? "WHERE $clause" : '';
+	$SQL = "SELECT * FROM bucardo.customcode $WHERE ORDER BY name";
+	$sth = $dbh->prepare($SQL);
+	$count = $sth->execute();
+	if ($count < 1) {
+		$sth->finish();
+		printf "There are no%s entries in the 'db' table.\n",
+			$WHERE ? ' matching' : '';
+		exit 1;
+	}
+
+	$info = $sth->fetchall_arrayref({});
+
+	my ($maxname,$maxwhen) = (1,1);
+	for my $row (@$info) {
+		$maxname = length $row->{name} if length $row->{name} > $maxname;
+		$maxwhen = length $row->{whenrun} if length $row->{whenrun} > $maxwhen;
+	}
+
+	for my $row (@$info) {
+		my $name = $row->{name};
+		printf "Code: %-*s  When run: %-*s  Get dbh: %s  Get rows: %s Trigrules: %s\n",
+			$maxname, $name,
+			$maxwhen, $row->{whenrun},
+			$row->{getdbh}, $row->{getrows}, $row->{trigrules};
+		if (defined $row->{about} and $VERBOSE) {
+			(my $about = $row->{about}) =~ s/(.)^/$1    /gsm;
+			print "  About: $about\n";
+		}
+		$VERBOSE >= 2 and show_all_columns($row);
+	}
+
+	exit 0;
+
+} ## end of list_customcodes
 
 
 sub list_dbs {
@@ -2668,7 +2776,10 @@ sub add_item {
 	my $type = shift @nouns;
 	$type = lc $type;
 
-	if ($type eq 'db' or $type eq 'database') {
+	if ($type eq 'code' or $type eq 'customcode' or $type eq 'custom_code') {
+		add_customcode();
+	}
+	elsif ($type eq 'db' or $type eq 'database') {
 		add_database();
 	}
 	elsif ($type eq 'dbgroup' or $type eq 'dbg') {
@@ -2709,6 +2820,91 @@ sub add_item {
 } ## end of add_item
 
 
+sub add_customcode {
+
+	my $item_name = shift @nouns || '';
+
+	my $usage = usage('add_customcode');
+
+	if (!length $item_name) {
+		warn "$usage\n";
+		exit 1;
+	}
+
+	## Inputs and aliases, database column name, flags, default
+	my $whenrunlist = 'before_txn before_check_rows before_trigger_drop after_trigger_drop'
+		. ' after_table_sync exception conflict before_trigger_enable after_trigger_enable'
+		. ' after_txn before_sync after_sync';
+	my $whenrun = join '|' => split /\s+/ => $whenrunlist;
+	my $validcols = qq{
+        name                     name                 0                $item_name
+        about                    about                0                null
+        whenrun|when_run         whenrun              =$whenrun        null
+        getdbh                   getdbh               TF               null
+        getrows                  getrows              TF               null
+        trigrules                trigrules            TF               null
+        src_code                 src_code             0                skip
+    };
+
+	my ($dbcols,$cols,$phs,$vals)
+		= process_simple_args({cols => $validcols, list => \@nouns, usage => $usage});
+
+	my $newname = $dbcols->{name};
+
+	load_bucardo_info();
+	## Does this already exist?
+	if (exists $global{cc}{$newname}) {
+		warn qq{Cannot create: customcode "$newname" already exists\n};
+		exit 2;
+	}
+
+	## We must have a "whenrun"
+	if (! $dbcols->{whenrun}) {
+		warn "$usage\n";
+		exit 1;
+	}
+
+	## We must have a src_code as a file
+	if (! exists $dbcols->{src_code} or ! $dbcols->{src_code}) {
+		warn "$usage\n";
+		exit 1;
+	}
+	my $file = $dbcols->{src_code};
+	if (! -e $file) {
+		warn qq{Could not find a file named "$file"\n};
+		exit 2;
+	}
+	open my $fh, '<', $file or die qq{Could not open "$file": $!\n};
+	my $src = '';
+	{ local $/; $src = <$fh>; }
+	close $fh;
+
+	## Attempt to insert this into the database
+	$SQL = "INSERT INTO bucardo.customcode ($cols,src_code) VALUES ($phs,?)";
+	$DEBUG and warn "SQL: $SQL\n";
+	$DEBUG and warn Dumper $vals;
+	$sth = $dbh->prepare($SQL);
+	eval {
+		$count = $sth->execute(@$vals, $src);
+	};
+	if ($@) {
+		die "Failed to add customcode: $@\n";
+	}
+
+	my $finalmsg = '';
+
+	$dbh->commit();
+
+	if (!$QUIET) {
+		print qq{Added customcode "$newname"\n};
+		$finalmsg and print $finalmsg;
+	}
+
+	exit 0;
+
+} ## end of add_customcode
+
+
 sub add_database {
 
 	## The first word is the name of the database we connect to (column dbname)
@@ -2721,7 +2917,6 @@ sub add_database {
 		exit 1;
 	}
 
-	## Command line name, default value, database column name
 	## Inputs and aliases, database column name, flags, default
 	my $validcols = qq{
         name                     name                 0                $item_name
@@ -2964,7 +3159,6 @@ sub add_sync {
 		exit 1;
 	}
 
-	## Command line name, default value, database column name
 	## Inputs and aliases, database column name, flags, default
 	my $validcols = qq{
         name                     name                 0                $item_name
@@ -3114,7 +3308,6 @@ sub add_table {
 
 	my $DEFAULT_SCHEMA = 'public';
 
-	## Command line name, default value, database column name
 	## Inputs and aliases, database column name, flags, default
 	my $validcols = q{
         db                       db                   0                null
@@ -3463,7 +3656,10 @@ sub remove_item {
 	my $type = shift @nouns;
 	$type = lc $type;
 
-	if ($type eq 'd' or $type eq 'db' or $type eq 'database') {
+	if ($type eq 'code' or $type eq 'customcode' or $type eq 'custom_code') {
+		remove_customcode();
+	}
+	elsif ($type eq 'd' or $type eq 'db' or $type eq 'database') {
 		remove_database();
 	}
 	elsif ($type eq 'herd') {
@@ -3487,6 +3683,51 @@ sub remove_item {
 	exit 1;
 
 } ## end of remove_item
+
+
+sub remove_customcode {
+
+	## Usage: remove customcode name [name2 name3 ...]
+
+	my $usage = usage('remove_customcode');
+
+	if (!@nouns) {
+		warn "$usage\n";
+		exit 1;
+	}
+
+	load_bucardo_info();
+
+	## Make sure all named codes exist
+	my $code = $global{cc};
+	for my $name (@nouns) {
+		if (! exists $code->{$name}) {
+			die qq{No such code: $name\n};
+		}
+	}
+
+	$SQL = 'DELETE FROM bucardo.customcode WHERE name = ?';
+	$sth = $dbh->prepare($SQL);
+
+	for my $name (@nouns) {
+		eval {
+			$sth->execute($name);
+		};
+		if ($@) {
+			die qq{Could not delete customcode "$name"\n$@\n};
+		}
+	}
+
+	for my $name (@nouns) {
+		print qq{Removed customcode "$name"\n};
+	}
+
+	$dbh->commit();
+
+	exit 0;
+
+
+} ## end of remove_customcode
 
 
 sub remove_database {
@@ -4058,16 +4299,12 @@ sub upgrade {
 
 	if (!relation_exists('bucardo', 'upgrade_log')) {
 		my ($seqlist, $tabledef) = table_definition('upgrade_log');
-		upgrade_and_log($tabledef,'CREATE TABLE bucardo.upgrade_log');
+		upgrade_and_log($tabledef,'CREATE TABLE upgrade_log');
 		$dbh->commit();
 	}
 
 	my @old_sequences = (
 		'dbgroup_id_seq',
-	);
-
-	my @new_sequences = (
-		'audit_pid_id_seq',
 	);
 
 	my @old_constraints = (
@@ -4179,14 +4416,6 @@ sub upgrade {
 		next if !relation_exists('bucardo', $sequence);
 		upgrade_and_log("DROP SEQUENCE bucardo.$sequence");
 		clog "Dropped sequence: $sequence";
-		$changes++;
-	}
-
-	## Add any new sequences
-	for my $sequence (@new_sequences) {
-		next if relation_exists('bucardo', $sequence);
-		upgrade_and_log("CREATE SEQUENCE bucardo.$sequence");
-		clog "Added sequence: $sequence";
 		$changes++;
 	}
 
@@ -4577,8 +4806,11 @@ sub usage {
 	if ('add' eq $name) {
 		return qq{Usage: add <type> <name> [options]
 Adds an item to the internal Bucardo database.
-The type is one of: db, dbgroup, herd, sync, table, or sequence
+The type is one of: code, db, dbgroup, herd, sync, table, or sequence
 For more information, run: $progname help add <type>};
+	}
+	if ('add_customcode' eq $name) {
+		return q{Usage: add customcode <name> <whenrun=value> <src_code=filename> [optional information]};
 	}
 	if ('add_database' eq $name) {
 		return q{Usage: add db <name> [optional information]
@@ -4666,8 +4898,14 @@ By default a graphical timer is given: this can be turned off with the --notimer
 	if ('list' eq $name) {
 		return qq{Usage: list <type> [options]
 Shows information about items in the internal Bucardo database.
-The type is one of: db, dbgroup, table, sequence, herd, sync
+The type is one of: code, db, dbgroup, table, sequence, herd, sync, customcode
 For more information, run: $progname help list <type>};
+	}
+	if ('list_customcode' eq $name) {
+		return qq{Usage: list customcode name [options]
+Lists information about each customcode.
+If ''verbose' is added, the 'About' for each code is shown.
+If '--verbose --verbose' is added, the internal database columns for the 'customcode' table are shown.};
 	}
 	if ('list_databases' eq $name) {
 		return q{Usage: list db [name] [--verbose] [--verbose]
@@ -4744,10 +4982,14 @@ Instructs the Bucardo daemon to reload its configuration file and restart.};
 	if ('remove' eq $name or 'delete' eq $name) {
 		return qq{Usage: remove <type> <name> [options]
 Removes an item from the internal Bucardo database.
-The type is one of: db, dbgroup, table, sequence, herd, sync
+The type is one of: code, db, dbgroup, table, sequence, herd, sync
 For more information, run: $progname help remove <type>};
 	}
-	if ('remove_database' eq $name) {
+	if ('remove_customcode' eq $name) {
+		return q{Usage: $verb customcode <name> [name2 name3 ...]
+Removes one or more customcodes.};
+	}
+if ('remove_database' eq $name) {
 		return q{Usage: $verb db <name> [name2 name3 ...]
 Removes one or more databases.};
 	}
@@ -4794,6 +5036,11 @@ Stops Bucardo and all of its child processes.
 An optional reason can be given.
 Active children will not stop until they have finished their current task.};
 	}
+	if ('update' eq $name) {
+		return qq{Usage: update <type> <name> col1=val [col2=val2 col3=val3 ...]
+Updates an item from the internal Bucardo database.
+The type is one of: code, db, dbgroup, table, sequence, herd, sync.};
+	}
 	if ('upgrade' eq $name) {
 		return qq{Usage: upgrade
 Upgrades an existing Bucardo database to the current version.};
@@ -4809,8 +5056,6 @@ Use 'all' to validate all known syncs at once};
 	return '';
 
 } ## end of usage
-
-
 
 
 sub get_dbs {
