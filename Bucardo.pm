@@ -706,8 +706,12 @@ sub start_mcp {
 	for my $pidfile (sort @pidfiles) {
 		next unless $pidfile =~ /^bucardo.*\.pid$/o;
 		next if $pidfile eq 'bucardo.mcp.pid'; ## That's us!
-		$self->glog("Removing old pid file: $piddir/$pidfile\n");
-		unlink "$piddir/$pidfile";
+		if (unlink "$piddir/$pidfile") {
+			$self->glog("Removed old pid file $piddir/$pidfile");
+		}
+		else {
+			$self->glog("Failed to remove pid file $piddir/$pidfile");
+		}
 	}
 
 	## Which syncs to activate? Default is all of them
@@ -2286,9 +2290,13 @@ sub start_mcp {
 		$finaldbh->disconnect();
 
 		## Remove our PID file
-		unlink $self->{pidfile} or $self->glog("Warning! Failed to unlink $self->{pidfile}");
+		if (unlink $self->{pidfile}) {
+			$self->glog(qq{Removed pid file "$self->{pidfile}"});
+		}
+		else {
+			$self->glog("Warning! Failed to remove pid file $self->{pidfile}");
+		}
 
-		$self->glog(qq{Removed file "$self->{pidfile}"});
 
 		return;
 
@@ -3388,7 +3396,7 @@ sub cleanup_controller {
 	closedir $dh or warn qq{Could not closedir "$piddir": $!\n};
 	for my $pidfile (sort @pidfiles) {
 		my $sname = $self->{syncname};
-		next unless $pidfile =~ /^bucardo\.kid\.$sname\..*\.pid$/;
+		next unless $pidfile =~ /^bucardo\.kid\.sync\.$sname\..*\.pid$/;
 		my $pfile = "$piddir/$pidfile";
 		if (open my $fh, '<', $pfile) {
 			my $pid = <$fh>;
@@ -3399,6 +3407,7 @@ sub cleanup_controller {
 			}
 			else {
 				kill $signumber{USR1} => $pid;
+				$self->glog("Sent USR1 signal to kid process $pid");
 			}
 		}
 		else {
@@ -3410,8 +3419,12 @@ sub cleanup_controller {
 	$self->glog("Controller exiting at cleanup_controller. Reason: $reason");
 
 	## Remove the pid file
-	unlink $self->{SYNCPIDFILE} or $self->glog("Warning! Failed to unlink $self->{SYNCPIDFILE}");
-	$self->glog(qq{Removed file "$self->{SYNCPIDFILE}"});
+	if (unlink $self->{SYNCPIDFILE}) {
+		$self->glog(qq{Removed pid file "$self->{SYNCPIDFILE}"});
+	}
+	else {
+		$self->glog("Warning! Failed to remove pid file $self->{SYNCPIDFILE}");
+	}
 
 	return;
 
@@ -5059,7 +5072,7 @@ sub start_kid {
 						elsif ('target' eq $sc) {
 							$action = 2;
 						}
-						elsif ('lowest' eq $sc or 'highest' eq $sc) {
+						elsif ('lowest' eq $sc and 'highest' eq $sc) {
 							($g->{tempschema}{s}{lastval},$g->{tempschema}{s}{iscalled}) =
 								@{$sourcedbh->selectall_arrayref($SEQUENCESQL)->[0]};
 							($g->{tempschema}{t}{lastval},$g->{tempschema}{t}{iscalled}) =
@@ -6099,8 +6112,12 @@ sub cleanup_kid {
 	$self->glog("Kid exiting at cleanup_kid. Reason: $reason");
 
 	## Remove the pid file
-	unlink $self->{KIDPIDFILE} or $self->glog("Warning! Failed to unlink $self->{KIDPIDFILE}");
-	$self->glog(qq{Removed file "$self->{KIDPIDFILE}"});
+	if (unlink $self->{KIDPIDFILE}) {
+		$self->glog(qq{Removed pid file "$self->{KIDPIDFILE}"});
+	}
+	else {
+		$self->glog("Warning! Failed to remove pid file $self->{KIDPIDFILE}");
+	}
 
 	return;
 
