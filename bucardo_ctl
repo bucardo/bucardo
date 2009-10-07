@@ -4220,6 +4220,10 @@ sub table_definition {
 		push @seq => $1;
 	}
 
+	if (! length($def)) {
+		die "Could not find the table definition for $name\n";
+	}
+
 	return \@seq, $def;
 
 } ## end of table_definition
@@ -4311,13 +4315,17 @@ sub upgrade {
 	## Make sure the upgrade_log table is in place
 
 	if (!relation_exists('bucardo', 'upgrade_log')) {
-		my ($seqlist, $tabledef) = table_definition('upgrade_log');
-		upgrade_and_log($tabledef,'CREATE TABLE upgrade_log');
+		my ($seqlist, $tabledef) = table_definition('bucardo.upgrade_log');
+		upgrade_and_log($tabledef,'CREATE TABLE bucardo.upgrade_log');
 		$dbh->commit();
 	}
 
 	my @old_sequences = (
 		'dbgroup_id_seq',
+	);
+
+	my @new_sequences = (
+		'audit_pid_id_seq',
 	);
 
 	my @old_configs = (
@@ -4442,6 +4450,14 @@ sub upgrade {
 		next if !constraint_exists($schema, $table, $constraint);
 		upgrade_and_log(qq{ALTER TABLE $schema.$table DROP CONSTRAINT "$constraint"});
 		clog "Dropped constraint $constraint ON $schema.$table";
+		$changes++;
+	}
+
+	## Add new sequences as needed
+	for my $name (@new_sequences) {
+		next if relation_exists('bucardo', $name);
+		upgrade_and_log("CREATE SEQUENCE $name");
+		clog "Created sequence $name";
 		$changes++;
 	}
 
@@ -4815,8 +4831,14 @@ sub upgrade_and_log {
 	}
 
 	$SQL = 'INSERT INTO bucardo.upgrade_log(action,version,summary) VALUES (?,?,?)';
-	$sth = $dbh->prepare($SQL);
-	$sth->execute($action,$VERSION,$short);
+	eval {
+		$sth = $dbh->prepare($SQL);
+		$sth->execute($action,$VERSION,$short);
+	};
+	if ($@) {
+		my $line = (caller)[2];
+		die "From line $line, insert to upgrade_log failed\n$@\n";
+	}
 
 	return;
 
