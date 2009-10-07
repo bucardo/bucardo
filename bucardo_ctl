@@ -2687,8 +2687,7 @@ sub get_syncs {
 		next if $syncpidfile =~ /^\.\.?$/
 			or "$PIDDIR/$syncpidfile" eq $STOPFILE
 			or "$PIDDIR/$syncpidfile" eq $PIDFILE;
-		if ($syncpidfile !~ /^bucardo_sync_(.+)\.pid$/) {
-			warn "Skipping unknown file in pid directory: $syncpidfile\n";
+		if ($syncpidfile !~ /^bucardo\.ctl\.sync\.(.+)\.pid$/) {
 			next;
 		}
 		my $syncname = $1; ## no critic (ProhibitCaptureWithoutTest)
