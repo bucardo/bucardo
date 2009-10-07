@@ -4423,7 +4423,7 @@ sub upgrade {
 	## Drop any old views
 	for my $name (@old_views) {
 		next if !relation_exists('bucardo', $name);
-		$dbh->do("DROP VIEW $name");
+		upgrade_and_log("DROP VIEW $name");
 		clog "Dropped view $name";
 		$changes++;
 	}
@@ -4450,7 +4450,7 @@ sub upgrade {
 		my ($schema,$table,$column,$def) = @$row;
 		next if column_exists($schema, $table, $column);
 		$def =~ s/\s+/ /g;
-		$dbh->do("ALTER TABLE $schema.$table ADD COLUMN $column $def");
+		upgrade_and_log("ALTER TABLE $schema.$table ADD COLUMN $column $def");
 		clog "Created column: $schema.$table.$column $def";
 		$changes++;
 	}
@@ -4499,7 +4499,7 @@ sub upgrade {
 	for my $row (@old_columns) {
 		my ($schema,$table,$column) = @$row;
 		next if !column_exists($schema, $table, $column);
-		$dbh->do("ALTER TABLE $schema.$table DROP COLUMN $column");
+		upgrade_and_log("ALTER TABLE $schema.$table DROP COLUMN $column");
 		clog "Dropped column: $schema.$table.$column";
 		$changes++;
 	}
@@ -4508,7 +4508,7 @@ sub upgrade {
 	for my $row (@old_indexes) {
 		my ($schema,$table,$name) = @$row;
 		next if !relation_exists($schema, $name);
-		$dbh->do("DROP INDEX $name");
+		upgrade_and_log("DROP INDEX $name");
 		clog "Dropped index $name";
 		$changes++;
 	}
