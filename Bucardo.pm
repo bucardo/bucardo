@@ -2258,14 +2258,14 @@ sub start_mcp {
 
 		## We know we are authoritative for all pid files in the piddir
 		## Use those to kill any open processes that we think are still bucardo related
-		my $piddir = $config{piddir};
-		opendir my $dh, $piddir or die qq{Could not opendir "$piddir" $!\n};
-		my @pidfiles = readdir $dh;
-		closedir $dh or warn qq{Could not closedir "$piddir": $!\n};
-		for my $pidfile (sort @pidfiles) {
+		my $piddir2 = $config{piddir};
+		opendir my $dh, $piddir2 or die qq{Could not opendir "$piddir2" $!\n};
+		my @pidfiles2 = readdir $dh;
+		closedir $dh or warn qq{Could not closedir "$piddir2": $!\n};
+		for my $pidfile (sort @pidfiles2) {
 			next unless $pidfile =~ /^bucardo.*\.pid$/o;
 			next if $pidfile eq 'bucardo.mcp.pid'; ## That's us!
-			my $pfile = "$piddir/$pidfile";
+			my $pfile = "$piddir2/$pidfile";
 			if (open my $fh, '<', $pfile) {
 				my $pid = <$fh>;
 				close $fh or warn qq{Could not close "$pfile": $!\n};

@@ -1029,13 +1029,13 @@ sub update {
 				next;
 			}
 			if ($tabname eq 'customcode' and $n eq 'src_code') {
-				my $file = $v;
-				if (! -e $file) {
+				my $tfile = $v;
+				if (! -e $tfile) {
 					die qq{The 'src_file' value must be a file\n};
 				}
-				open my $fh, '<', $file or die qq{Could not open "$file": $!\n};
-				{ local $/; $v = <$fh>; }
-				close $fh or warn qq{Could not close "$file": $!\n};
+				open my $fh, '<', $tfile or die qq{Could not open "$tfile": $!\n};
+				{ local $/; $v = <$fh>; } ## no critic (RequireInitializationForLocalVars)
+				close $fh or warn qq{Could not close "$tfile": $!\n};
 			}
 
 			$SQL = "UPDATE bucardo.$tabname SET $n = ? WHERE $pkcol = ?";
@@ -1858,8 +1858,6 @@ sub inspect_table {
 
 sub inspect_herd {
 
-	die "Not implemented yet\n";
-
 	my $usage = usage('inspect_herd');
 
 	if (! @nouns) {
@@ -1867,12 +1865,12 @@ sub inspect_herd {
 		exit 1;
 	}
 
+	die "Not implemented yet\n";
+
 } ## end of inspect_herd
 
 
 sub inspect_sync {
-
-	die "Not implemented yet\n";
 
 	my $usage = usage('inspect_sync');
 
@@ -1880,6 +1878,8 @@ sub inspect_sync {
 		warn "$usage\n";
 		exit 1;
 	}
+
+	die "Not implemented yet\n";
 
 } ## end of inspect_sync
 
@@ -2868,15 +2868,15 @@ sub add_customcode {
 		warn "$usage\n";
 		exit 1;
 	}
-	my $file = $dbcols->{src_code};
-	if (! -e $file) {
-		warn qq{Could not find a file named "$file"\n};
+	my $tfile = $dbcols->{src_code};
+	if (! -e $tfile) {
+		warn qq{Could not find a file named "$tfile"\n};
 		exit 2;
 	}
-	open my $fh, '<', $file or die qq{Could not open "$file": $!\n};
+	open my $fh, '<', $tfile or die qq{Could not open "$tfile": $!\n};
 	my $src = '';
-	{ local $/; $src = <$fh>; }
-	close $fh;
+	{ local $/; $src = <$fh>; } ## no critic (RequireInitializationForLocalVars)
+	close $fh or warn qq{Could not close "$tfile": $!\n};
 
 	## Attempt to insert this into the database
 	$SQL = "INSERT INTO bucardo.customcode ($cols,src_code) VALUES ($phs,?)";
@@ -4912,44 +4912,44 @@ Adds one or more sequences to the internal Bucardo database.};
 Adds one or more tables to the internal Bucardo database.};
 	}
 	if ('config' eq $name) {
-		return qq{Usage: config show [all | name]
+		return q{Usage: config show [all | name]
 Usage: config set foo=bar [foo2=bar2]
 Displays or sets settings from the bucardo_config table.
 Using 'show' will display all settings or a subset based on the given name.
 Using 'set' will change one or more settings.};
 	}
 	if ('inspect' eq $name) {
-		return qq{Usage: inspect <type> <name>
+		return q{Usage: inspect <type> <name>
 Inspects an object to see if it has dependency issues.
 The only supported type is currently 'table'.};
 	}
 	if ('inspect_herd' eq $name) {
-		return qq{Usage: inspect herd <name>
+		return q{Usage: inspect herd <name>
 Inspects a herd to see if it has dependency issues.};
 	}
 	if ('inspect_sync' eq $name) {
-		return qq{Usage: inspect sync <name>
+		return q{Usage: inspect sync <name>
 Inspects a sync to see if it has dependency issues.};
 	}
 	if ('inspect_table' eq $name) {
-		return qq{Usage: inspect table <name>
+		return q{Usage: inspect table <name>
 Inspects a table to see if it has dependency issues.};
 	}
 	if ('kick' eq $name) {
-		return qq{Usage: kick <name> [# of seconds] [name2 name3...] [--notimer]
+		return q{Usage: kick <name> [# of seconds] [name2 name3...] [--notimer]
 Kicks one or more named syncs.
 If a number is given, that is how long to wait for the sync to signal that it is finished.
 If the number 0 is given, we wait as long as it takes.
 By default a graphical timer is given: this can be turned off with the --notimer option.};
 	}
 	if ('list' eq $name) {
-		return qq{Usage: list <type> [options]
+		return q{Usage: list <type> [options]
 Shows information about items in the internal Bucardo database.
 The type is one of: code, db, dbgroup, table, sequence, herd, sync, customcode
 For more information, run: $progname help list <type>};
 	}
 	if ('list_customcode' eq $name) {
-		return qq{Usage: list customcode name [options]
+		return q{Usage: list customcode name [options]
 Lists information about each customcode.
 If ''verbose' is added, the 'About' for each code is shown.
 If '--verbose --verbose' is added, the internal database columns for the 'customcode' table are shown.};
@@ -5004,26 +5004,26 @@ The name can have wildcards with a '*' at the start and/or end.
 If '--verbose --verbose' is added, the internal database columns for the 'goat' table are shown.};
 	}
 	if ('message' eq $name) {
-		return qq{Usage: message "text"
+		return q{Usage: message "text"
 Asks a running Bucardo daemon to insert the given text into the Bucardo log files.};
 	}
 	if ('ping' eq $name) {
-		return qq{Usage: ping [# of seconds]
+		return q{Usage: ping [# of seconds]
 Sends a ping notice to the main Bucardo process (MCP) to see if it will respond.
 By default, it will wait 15 seconds for a response.
 If a number is given, it will wait that number of seconds instead.
 Returns a Nagios like message starting with "OK" or "CRITICAL" for success or failure.\n};
 	}
 	if ('reload' eq $name) {
-		return qq{Usage: reload sync [sync2 sync3 ...]
+		return q{Usage: reload sync [sync2 sync3 ...]
 Reloads one or more syncs.
-This sends a message to Bucardo to stop the named syncs, reload their 
+This sends a message to Bucardo to stop the named syncs, reload their
 information from the database, and start them up again.
-Useful if you have changed a setting for an active syncs and need 
+Useful if you have changed a setting for an active syncs and need
 to put the change in place right away.};
 	}
 	if ('reload_config' eq $name) {
-		return qq{Usage: reload_config
+		return q{Usage: reload_config
 Instructs the Bucardo daemon to reload its configuration file and restart.};
 	}
 	if ('remove' eq $name or 'delete' eq $name) {
@@ -5061,39 +5061,39 @@ Removes one or more sequences.};
 Removes one or more tables.};
 	}
 	if ('restart' eq $name) {
-		return qq{Usage: restart ["reason"]
+		return q{Usage: restart ["reason"]
 Restarts Bucardo by stopping, then starting it up again.
 An optional reason can be given.};
 	}
 	if ('start' eq $name) {
-		return qq{Usage: start ["reason"]
+		return q{Usage: start ["reason"]
 Starts Bucardo.
 An optional reason can be given.};
 	}
 	if ('status' eq $name) {
-		return qq{Usage: status [sync1 sync2]
+		return q{Usage: status [sync1 sync2]
 Displays information about the status of syncs.
 With no arguments, shows a summary of all syncs.
-If one or more named syncs are given, detailed information 
+If one or more named syncs are given, detailed information
 about each sync is given.}
 	}
 	if ('stop' eq $name) {
-		return qq{Usage: stop ["reason"]
+		return q{Usage: stop ["reason"]
 Stops Bucardo and all of its child processes.
 An optional reason can be given.
 Active children will not stop until they have finished their current task.};
 	}
 	if ('update' eq $name) {
-		return qq{Usage: update <type> <name> col1=val [col2=val2 col3=val3 ...]
+		return q{Usage: update <type> <name> col1=val [col2=val2 col3=val3 ...]
 Updates an item from the internal Bucardo database.
 The type is one of: code, db, dbgroup, table, sequence, herd, sync.};
 	}
 	if ('upgrade' eq $name) {
-		return qq{Usage: upgrade
+		return q{Usage: upgrade
 Upgrades an existing Bucardo database to the current version.};
 	}
 	if ('validate' eq $name) {
-		return qq{Usage: validate [all] [sync1 sync2]
+		return q{Usage: validate [all] [sync1 sync2]
 Validates one or more named syncs.
 Use 'all' to validate all known syncs at once};
 	}
