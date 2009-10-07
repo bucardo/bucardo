@@ -1124,8 +1124,9 @@ sub start_mcp {
 							}
 							elsif ($s->{lifetimesecs} > 0) {
 								my $thistime = time();
+								my $timediff = $thistime - $s->{start_time};
 								if ($thistime - $s->{start_time} > $s->{lifetimesecs}) {
-									$restart_reason = "Time is $thistime, limit is $s->{lifetimesecs} ($s->{lifetime})";
+									$restart_reason = "Time is $timediff, limit is $s->{lifetimesecs} ($s->{lifetime})";
 								}
 							}
 							if ($restart_reason) {
