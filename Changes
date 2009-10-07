@@ -2,6 +2,11 @@
 
 Bucardo version 4.3.0
 
+  - Allow MCP and CTL to kill based on piddir, not just audit_pid. This will prevent duplicate 
+    kids from existing if audit_pid is switched off. [GSM]
+
+  - Fix error in lowest/highest conflict handling. [Mathieu Arnold]
+
   - Add new column to customcode: trigrules. Defaults to false: if true, 
     we turn on triggers and rules for the duration of the custom code. [GSM]
 
@@ -12,9 +17,23 @@ Bucardo version 4.3.0
   - For custom code exception handlers, make the 'dbi_error' hash key return 
     a flattened string of the actual exception thrown. [GSM]
 
+  - Ensure exiting processes always remove their pidfile. [GSM]
+
+  - Have the MCP clean up old pid files from the piddir on startup. [GSM]
+
+  - Remove the 'pidfile' configuration option: now hard-coded to 'bucardo.mcp.pid' [GSM]
+
+  - Make the pid file names more consistent, add new ones for kid processes. [GSM]
+
+  - Refactor the killing of pids, make safer by checking they are bucardo-like [GSM]
+
+  - Remove the PIDCLEANUP option from Bucardo.pm [GSM]
+
   - Better upgrading of very old versions of Bucardo. [GSM]
 
   - Allow add, remove, and list customcode through bucardo_ctl [GSM]
+
+  - Allow bucardo_ctl upgrade to remove configuration settings. [GSM]
 
 Bucardo version 4.2.2, released October 2, 2009
 
