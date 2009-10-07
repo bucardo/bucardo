@@ -167,10 +167,13 @@ FreeBSD
 GSM
 Gugic
 Kebrt
+Mathieu
 NAMEDATALEN
 PgBouncer's
 PID
+PIDCLEANUP
 PIDs
+Refactor
 SMTP
 Sendmail
 Tolley
@@ -186,6 +189,7 @@ config
 ctl
 customcode
 dbhost
+dbi
 dbproblem
 dbs
 debugstderr
@@ -200,6 +204,8 @@ mcp
 multi
 onetimecopy
 pid
+pidfile
+pids
 ppid
 rc
 respawn
@@ -211,6 +217,7 @@ staylive
 tcp
 timestamp
 timestamptz
+trigrules
 wildcards
 
 ## TODO
@@ -240,16 +247,11 @@ wildcard
 ## bucardo_ctl
 
 args
-dir
-usr
-vate
-GetOptions
-CTL
-MCP
-Startup
 bucardo
 cleandebugs
 cronjob
+CTL
+customcodes
 daysback
 dbgroup
 dbport
@@ -258,6 +260,9 @@ debugfile
 debugfilesep
 debugname
 debugsyslog
+dir
+GetOptions
+MCP
 notimer
 piddir
 qquote
@@ -266,10 +271,13 @@ rootdb
 sendmail
 showdays
 startup
+Startup
 superhelp
-sync's
 syncname
 syncnames
+sync's
+usr
+vate
 
 ## README.dev
 
