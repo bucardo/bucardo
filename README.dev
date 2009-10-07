@@ -88,8 +88,6 @@ bucardo.schema - The schema for Bucardo. Contains a version number in two places
 
 t/BucardoTesting.pm - Shared routines for setup and teardown.
 
-t/bucardo.test.helper - Helper script for bucardo_ctl calling.
-
 t/00setup.t - Shared code for the Bucardo tests.
 
 t/01basic.t - Test of very basic things.

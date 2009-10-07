@@ -32,12 +32,6 @@ WriteMakefile(
 );
 
 package MY;
-sub test {
-    my $original = shift->SUPER::test(@_);
-    my $PRECOM = q{$(ABSPERLRUN) t/bucardo.test.helper};
-    $original =~ s/^(.*test_harness)/\t$PRECOM\n$1/m;
-    return $original;
-}
 
 sub clean {
 	my $string = shift->SUPER::clean(@_);
