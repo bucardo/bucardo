@@ -21,11 +21,11 @@ use Time::HiRes qw( sleep );          ## For better resolution than the built-in
 use DBI 1.51;                         ## How Perl talks to databases
 use DBD::Pg 2.0;                      ## The Postgres driver for DBI
 use Net::SMTP;                        ## Used to send out email alerts
-use Sys::Hostname 'hostname';         ## Used for debugging/mail sending
+use Sys::Hostname qw( hostname );     ## Used for debugging/mail sending
 use IO::Handle qw( autoflush );       ## Used to prevent stdout/stderr buffering
 use Sys::Syslog qw( openlog syslog ); ## In case we are logging via syslog()
 use DBIx::Safe '1.2.4';               ## Filter out what DB calls customcode may use
-use Data::Dumper 'Dumper';            ## Used to dump information in email alerts
+use Data::Dumper qw( Dumper );        ## Used to dump information in email alerts
 
 ## Formatting of Dumper() calls:
 $Data::Dumper::Varname = 'BUCARDO';
@@ -78,11 +78,6 @@ my %dbix = (
 		},
 	}
 );
-
-## Optional cleanup for any PID files created
-## The string PIDFILE will be replaced with the actual name
-## This is a direct system call, so resist the urge to put this in bucardo_config!
-my $PIDCLEANUP = ''; ## e.g. '/bin/chgrp bucardo PIDFILE';
 
 ## Grab our full and shortened host name:
 my $hostname = hostname;
@@ -175,7 +170,7 @@ sub new {
 	$self->{sendmail_file} = $ENV{BUCARDO_EMAIL_DEBUG_FILE} || $config{email_debug_file} || '';
 
 	## Where to store our PID:
-	$self->{pidfile} = "$config{piddir}/$config{pidfile}";
+	$self->{pidfile} = "$config{piddir}/bucardo.mcp.pid";
 
 	## The file to ask all processes to stop:
 	$self->{stopfile} = "$config{piddir}/$config{stopfile}";
@@ -622,12 +617,6 @@ sub start_mcp {
 	print {$pid} "$$\n$old0\n$now\n";
 	close $pid or warn qq{Could not close "$self->{pidfile}": $!\n};
 
-	## Sometimes we want to manipulate this file, e.g. to change the group ownership
-	if ($PIDCLEANUP) {
-		(my $COM = $PIDCLEANUP) =~ s/PIDFILE/$self->{pidfile}/g;
-		system($COM);
-	}
-
 	## Create a pretty version of the current $self, with the password elided
 	my $oldpass = $self->{dbpass};
 	$self->{dbpass} = '<not shown>';
@@ -708,6 +697,18 @@ sub start_mcp {
 	}
 	$self->glog($objdump);
 	$self->{dbpass} = $oldpass;
+
+	## Clean up old files in the piddir directory
+	my $piddir = $config{piddir};
+	opendir my $dh, $piddir or die qq{Could not opendir "$piddir": $!\n};
+	my @pidfiles = readdir $dh;
+	closedir $dh or warn qq{Could not closedir "$piddir" $!\n};
+	for my $pidfile (sort @pidfiles) {
+		next unless $pidfile =~ /^bucardo.*\.pid$/o;
+		next if $pidfile eq 'bucardo.mcp.pid'; ## That's us!
+		$self->glog("Removing old pid file: $piddir/$pidfile\n");
+		unlink "$piddir/$pidfile";
+	}
 
 	## Which syncs to activate? Default is all of them
 	if (exists $arg->{sync}) {
@@ -1151,7 +1152,7 @@ sub start_mcp {
 
 				## Make sure there is nothing out there already running
 				my $syncname = $s->{name};
-				my $pidfile = "$config{piddir}/bucardo_sync_$syncname.pid";
+				my $pidfile = "$config{piddir}/bucardo.ctl.sync.$syncname.pid";
 				if ($s->{mcp_changed}) {
 					$self->glog(qq{Checking for existing controllers for sync "$syncname"});
 				}
@@ -1202,7 +1203,7 @@ sub start_mcp {
 						next SYNC;
 					}
 					$self->glog("No active pid $oldpid found. Killing just in case, and removing file");
-					kill $signumber{SIGTERM} => $oldpid;
+					$self->kill_bucardo_pid($oldpid => 'normal');
 					unlink $pidfile or $self->glog("Warning! Failed to unlink $pidfile");
 					$s->{mcp_changed} = 1;
 				} ## end if pidfile found for this sync
@@ -1277,7 +1278,7 @@ sub start_mcp {
 		opendir my $dh, $config{piddir} or die qq{Could not opendir "$config{piddir}": $!\n};
 		my $name;
 		while (defined ($name = readdir($dh))) {
-			next unless $name =~ /bucardo_sync_(.+)\.pid/;
+			next unless $name =~ /bucardo\.ctl\.sync\.(.+)\.pid/;
 			my $syncname = $1; ## no critic (ProhibitCaptureWithoutTest)
 			$self->glog(qq{Attempting to kill controller process for "$syncname"});
 			next unless open my $fh, '<', "$config{piddir}/$name";
@@ -2218,7 +2219,7 @@ sub start_mcp {
             };
 			$sth = $finaldbh->prepare($SQL);
 			$count = $sth->execute($self->{mcpauditid});
-			## Another option is to simply let the controllers keep running...
+
 			for (@{$sth->fetchall_arrayref()}) {
 				my $kid = $_->[0];
 				$self->glog("Found active controller $kid");
@@ -2243,9 +2244,39 @@ sub start_mcp {
 			$exitreason =~ s/\s+$//;
 			$sth->execute($exitreason,$self->{mcpauditid});
 			$finaldbh->commit();
+
+			## Sleep a bit to let the processes clean up their own pid files
+			## Because we're going to double check that below
+			sleep 0.3;
+
 		}
 
-		## TODO: Can we add info to the PID files and get the controller list that way?
+		## We know we are authoritative for all pid files in the piddir
+		## Use those to kill any open processes that we think are still bucardo related
+		my $piddir = $config{piddir};
+		opendir my $dh, $piddir or die qq{Could not opendir "$piddir" $!\n};
+		my @pidfiles = readdir $dh;
+		closedir $dh or warn qq{Could not closedir "$piddir": $!\n};
+		for my $pidfile (sort @pidfiles) {
+			next unless $pidfile =~ /^bucardo.*\.pid$/o;
+			next if $pidfile eq 'bucardo.mcp.pid'; ## That's us!
+			my $pfile = "$piddir/$pidfile";
+			if (open my $fh, '<', $pfile) {
+				my $pid = <$fh>;
+				close $fh or warn qq{Could not close "$pfile": $!\n};
+				if ($pid !~ /^\d+$/) {
+					$self->glog("No PID found in file, so removing $pfile");
+					unlink $pfile;
+				}
+				else {
+					$self->kill_bucardo_pid($pid => 'strong');
+				}
+			}
+			else {
+				$self->glog("Could not open file, so removing $pfile\n");
+				unlink $pfile;
+			}
+		}
 
 		my $end_systemtime = scalar localtime;
 		my $end_dbtime = $finaldbh->selectall_arrayref('SELECT now()')->[0][0];
@@ -2267,6 +2298,55 @@ sub start_mcp {
 
 } ## end of start_mcp
 
+
+sub kill_bucardo_pid {
+
+	my ($self,$pid,$nice) = @_;
+
+	$self->glog("Attempting to kill PID $pid");
+
+	## We want to confirm this is still a Bucardo process
+	## The most portable way at the moment is a plain ps -p
+	## Windows users are on their own
+
+	$pid =~ /^\d+$/ or die;
+
+	my $com = "ps -p $pid";
+
+	my $info = qx{$com};
+
+	if ($info !~ /bucardo_ctl/o) {
+		chomp $info;
+		$info =~ s/\n/\\n/g;
+		$self->glog("Refusing to kill pid $pid, as it has no bucardo_ctl string (had: $info)");
+		return -1;
+	}
+
+	$self->glog("Sending signal $signumber{TERM} to pid $pid");
+	$count = kill $signumber{TERM} => $pid;
+
+	if ($count >= 1) {
+		$self->glog("Successfully signalled pid $pid");
+		return 1;
+	}
+
+	if ($nice ne 'strict') {
+		$self->glog("Failed to signal pid $pid");
+		return -2;
+	}
+
+	$self->glog("Sending signal $signumber{KILL} to pid $pid");
+	$count = kill $signumber{KILL} => $pid;
+
+	if ($count >= 1) {
+		$self->glog("Successfully signalled pid $pid");
+		return 1;
+	}
+
+	$self->glog("Failed to signal pid $pid");
+	return -3;
+
+} ## end of kill_bucardo_pid
 
 sub start_controller {
 
@@ -2308,16 +2388,10 @@ sub start_controller {
 	}
 
 	## Store our PID into a file
-	my $SYNCPIDFILE = "$config{piddir}/bucardo_sync_$syncname.pid";
+	my $SYNCPIDFILE = "$config{piddir}/bucardo.ctl.sync.$syncname.pid";
 	open my $pid, '>', $SYNCPIDFILE or die qq{Cannot write to $SYNCPIDFILE: $!\n};
 	print {$pid} "$$\n";
 	close $pid or warn qq{Could not close "$SYNCPIDFILE": $!\n};
-
-	## Sometimes we want to manipulate this file, e.g. to change the group ownership
-	if ($PIDCLEANUP) {
-		(my $COM = $PIDCLEANUP) =~ s/PIDFILE/$SYNCPIDFILE/g;
-		system($COM);
-	}
 	$self->{SYNCPIDFILE} = $SYNCPIDFILE;
 
 	my $msg = qq{Controller starting for sync "$syncname". Source herd is "$source"};
@@ -2887,7 +2961,7 @@ sub start_controller {
 
 						## If we are not a stayalive, this is a good time to leave
 						if (! $stayalive and ! $kidsalive) {
-							$self->glog('Children are done, so leaving');
+							$self->cleanup_controller('Children are done');
 							exit 0;
 						}
 
@@ -3210,6 +3284,7 @@ sub start_controller {
 			$self->{masterdbh}->{InactiveDestroy} = 1;
 			$self->{life} = ++$kid->{life};
 			$self->start_kid($kidsync,$kid->{dbname});
+			## Should never return, but just in case:
 			$self->{clean_exit} = 1;
 			exit 0;
 		}
@@ -3297,13 +3372,45 @@ sub cleanup_controller {
 		$reason =~ s/\s+$//;
 		$sth->execute($reason,$self->{ctlauditid});
 		$finaldbh->commit();
+
+		## Sleep a bit to let the processes clean up their own pid files
+		## Because we're going to double check that below
+		sleep 0.3;
+
+	}
+
+	## Kill any children who have a pid file for this sync
+	## By kill, we mean "send a friendly USR1 signal"
+
+	my $piddir = $config{piddir};
+	opendir my $dh, $piddir or die qq{Could not opendir "$piddir" $!\n};
+	my @pidfiles = readdir $dh;
+	closedir $dh or warn qq{Could not closedir "$piddir": $!\n};
+	for my $pidfile (sort @pidfiles) {
+		my $sname = $self->{syncname};
+		next unless $pidfile =~ /^bucardo\.kid\.$sname\..*\.pid$/;
+		my $pfile = "$piddir/$pidfile";
+		if (open my $fh, '<', $pfile) {
+			my $pid = <$fh>;
+			close $fh or warn qq{Could not close "$pfile": $!\n};
+			if ($pid !~ /^\d+$/) {
+				$self->glog("No PID found in file, so removing $pfile");
+				unlink $pfile;
+			}
+			else {
+				kill $signumber{USR1} => $pid;
+			}
+		}
+		else {
+			$self->glog("Could not open file, so removing $pfile\n");
+			unlink $pfile;
+		}
 	}
 
 	$self->glog("Controller exiting at cleanup_controller. Reason: $reason");
 
 	## Remove the pid file
 	unlink $self->{SYNCPIDFILE} or $self->glog("Warning! Failed to unlink $self->{SYNCPIDFILE}");
-
 	$self->glog(qq{Removed file "$self->{SYNCPIDFILE}"});
 
 	return;
@@ -3380,6 +3487,13 @@ sub start_kid {
 	$self->{logprefix} = 'KID';
 	$self->glog(qq{New kid, syncs "$sourcedb" to "$targetdb" for sync "$syncname" alive=$kidsalive Parent=$self->{parent} Type=$synctype});
 	$self->glog("PID: $$");
+
+	## Store our PID into a file
+	my $kidpidfile = "$config{piddir}/bucardo.kid.sync.$syncname.$targetdb.pid";
+	open my $pid, '>', $kidpidfile or die qq{Cannot write to $kidpidfile: $!\n};
+	print {$pid} "$$\n";
+	close $pid or warn qq{Could not close "$kidpidfile": $!\n};
+	$self->{KIDPIDFILE} = $kidpidfile;
 
 	## Establish these early so the DIE block can use them
 	our ($maindbh,$sourcedbh,$targetdbh);
@@ -3477,13 +3591,8 @@ sub start_kid {
 		## Only done from serialize at the moment
 		sleep $gotosleep if $gotosleep;
 
-		## If a clean exit was requested, exit right now
-		if ($self->{clean_exit}) {
-			exit 1;
-		}
-
-		## Send an email as needed
-		if ($self->{sendmail} or $self->{sendmail_file}) {
+		## Send an email as needed (never for clean exit)
+		if (! $self->{clean_exit} and $self->{sendmail} or $self->{sendmail_file}) {
 			my $warn = $msg =~ /CTL request/ ? '' : 'Warning! ';
 			my $line = (caller)[2];
 			$self->glog(qq{${warn}Child for sync "$syncname" ("$sourcedb" -> "$targetdb") was killed at line $line: $msg});
@@ -3529,6 +3638,8 @@ sub start_kid {
 			my $subject = qq{Bucardo kid for "$syncname" killed on $shorthost$moresub};
 			$self->send_mail({ body => "$body\n", subject => $subject });
 		}
+
+		$self->cleanup_kid($msg);
 
 		exit 1;
 
@@ -5971,13 +6082,29 @@ sub start_kid {
 	$targetdbh->rollback();
 	$targetdbh->disconnect();
 
-	$self->glog('Kid exiting');
-	$self->{clean_exit} = 1;
+	$self->cleanup_kid('Normal exit');
 
 	exit 0;
 
 } ## end of start_kid
 
+
+sub cleanup_kid {
+
+	## Kid is shutting down
+	## Remove our PID file
+
+	my ($self,$reason) = @_;
+
+	$self->glog("Kid exiting at cleanup_kid. Reason: $reason");
+
+	## Remove the pid file
+	unlink $self->{KIDPIDFILE} or $self->glog("Warning! Failed to unlink $self->{KIDPIDFILE}");
+	$self->glog(qq{Removed file "$self->{KIDPIDFILE}"});
+
+	return;
+
+} ## end of cleanup_kid
 
 sub send_mail {
 

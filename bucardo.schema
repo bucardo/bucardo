@@ -152,7 +152,6 @@ kid_abort_limit|3|How many times we will restore an aborted kid before giving up
 max_delete_clause|200|Maximum number of items to delete inside of IN() clauses
 max_select_clause|500|Maximum number of items to select inside of IN() clauses
 piddir|/var/run/bucardo|Directory holding Bucardo PID files
-pidfile|bucardo.pid|Name of the main Bucardo pid file
 reason_file|bucardo.restart.reason.log|File to hold reasons for stopping and starting
 stats_script_url|http://www.bucardo.org/|Location of the stats script
 stopfile|fullstopbucardo|Name of the semaphore file used to stop Bucardo processes

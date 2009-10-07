@@ -1,4 +1,4 @@
-#!/usr/bin/perl -- -*-cperl-*-
+#!/usr/local/bin/perl -- -*-cperl-*-
 
 ## Script to control Bucardo
 ##
@@ -194,7 +194,7 @@ $dbh->commit();
 
 my $REASONFILE = get_config('reason_file') or die "Invalid reason_file!\n";
 my $PIDDIR     = get_config('piddir') or die "Invalid piddir!\n";
-my $pidfile    = get_config('pidfile') or die "Invalid pidfile!\n";
+my $pidfile    = 'bucardo.mcp.pid';
 my $stopfile   = get_config('stopfile') or die "Invalid stopfile!\n";
 
 my $PIDFILE        = "$PIDDIR/$pidfile";
@@ -4035,6 +4035,20 @@ sub relation_exists {
 } ## end of relation_exists
 
 
+sub config_exists {
+
+	## Checks if a configuration settings exists. Returns 1 or 0
+	my $name = shift;
+
+	my $SQL = 'SELECT 1 FROM bucardo.bucardo_config WHERE setting = ?';
+	my $sth = $dbh->prepare_cached($SQL);
+	my $count = $sth->execute($name);
+	$sth->finish();
+	return $count>=1 ? 1 : 0;
+
+} ## end of config_exists
+
+
 sub constraint_exists {
 
 	my ($schema,$table,$constraint) = @_;
@@ -4307,6 +4321,10 @@ sub upgrade {
 		'dbgroup_id_seq',
 	);
 
+	my @old_configs = (
+		'pidfile',
+	);
+
 	my @old_constraints = (
 		['bucardo', 'goat', 'goat_pkeytype_check'],
 		['bucardo', 'sync', 'sync_replica_allornone'],
@@ -4502,6 +4520,14 @@ sub upgrade {
 		next if ! function_exists('bucardo', $name, $args);
 		clog "Dropped function $name($args)";
 		upgrade_and_log(qq{DROP FUNCTION bucardo."$name"($args)});
+		$changes++;
+	}
+
+	## Drop any old config items
+	for my $name (@old_configs) {
+		next if ! config_exists($name);
+		clog "Removed old bucardo_config setting: $name";
+		upgrade_and_log(qq{DELETE FROM bucardo.bucardo_config WHERE setting = '$name'});
 		$changes++;
 	}
 
