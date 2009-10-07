@@ -4160,7 +4160,7 @@ sub constraint_definition {
 	return '' if ! defined $def;
 
 	$def =~ s/\((\(.+\))\)/$1/;
-	$def =~ s/(\w+) = ANY \(ARRAY\[(.+)\]\)/$1 IN ($2)/;
+	$def =~ s/\"?(\w+)\"? = ANY \(ARRAY\[(.+)\]\)/$1 IN ($2)/;
 	$def =~ s/<> ALL \(ARRAY\[(.+)\]\)/NOT IN ($1)/;
 	$def =~ s/::text//g;
 	$def =~ s/(\w+) ~ '/$1 ~ E'/g;
