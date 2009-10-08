@@ -206,15 +206,17 @@ The major number should very, very rarely change, and is saved for the truly maj
 indicate a change in functionality, new features, etc. The revision number is used for small 
 tweaks and bug fixes, and must be completely compatible with the version before it.
 
-Version numbers are currently set in seven files:
+Version numbers are currently set in nine files:
 
 README
 Bucardo.pm (two places)
+Bucardo.pm.html
 bucardo_ctl
-bucardo.schema (two places)
+bucardo_ctl.html
+bucardo.schema (three places)
 Changes
 Makefile.PL
-META.yml (two places)
+META.yml (three places)
 
 
 ===============
@@ -241,7 +243,7 @@ please check that you have done the following items:
 
 This is a comprehensive checklist of all the steps required to release a 
 new version, whether beta or regular. It is assumed you are very familiar with the 
-other sections referenced herein (indicated with **)
+other sections referenced herein.
 
 * Test on variety of versions of Postgres
 
@@ -279,7 +281,8 @@ part of the test suite if the right modules are installed.
 
 * Run "perl Makefile.PL"
 
-* Run "make html". This will create the html docs for Bucardo.pm and bucardo_ctl.
+* Run "make html". This will create the html docs for Bucardo.pm and bucardo_ctl. Make sure you 
+git commit them if anything has changed.
 
 * Run "make dist". Double check that the tarball created has the correct version name.
 
