@@ -2250,11 +2250,10 @@ sub start_mcp {
 			$sth->execute($exitreason,$self->{mcpauditid});
 			$finaldbh->commit();
 
-			## Sleep a bit to let the processes clean up their own pid files
-			## Because we're going to double check that below
-			sleep 0.3;
-
 		}
+
+		## Sleep a bit to let the processes clean up their own pid files
+		sleep 0.3;
 
 		## We know we are authoritative for all pid files in the piddir
 		## Use those to kill any open processes that we think are still bucardo related
@@ -3382,11 +3381,10 @@ sub cleanup_controller {
 		$sth->execute($reason,$self->{ctlauditid});
 		$finaldbh->commit();
 
-		## Sleep a bit to let the processes clean up their own pid files
-		## Because we're going to double check that below
-		sleep 0.3;
-
 	}
+
+	## Sleep a bit to let the processes clean up their own pid files
+	sleep 0.3;
 
 	## Kill any children who have a pid file for this sync
 	## By kill, we mean "send a friendly USR1 signal"
