@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl -- -*-cperl-*-
+#!/usr/bin/perl -- -*-cperl-*-
 
 ## Script to control Bucardo
 ##
@@ -380,7 +380,7 @@ sub superhelp {
 	$verb = $word1;
 
 	if ('add' eq $word1) {
-		if ('customcode' eq $word2 or 'custom_code' eq $word2) {
+		if ('customcode' eq $word2 or 'custom_code' eq $word2 or 'code' eq $word2) {
 			warn usage('add_customcode') . "\n";
 			exit 0;
 		}
