@@ -2041,7 +2041,13 @@ sub show_all_columns {
 	for my $key (keys %$row) {
 		$maxkey = length $key if length $key > $maxkey;
 	}
-	for my $key (sort keys %$row) {
+	for my $key (sort {
+		($a eq 'src_code' and $b ne 'src_code' ? 1 : 0)
+		or
+		($a ne 'src_code' and $b eq 'src_code' ? -1 : 0)
+		or
+		$a cmp $b } keys %$row
+	 ) {
 		printf "    %-*s = %s\n", $maxkey, $key,
 			defined $row->{$key} ? $row->{$key} : 'NULL';
 	}
@@ -2842,6 +2848,10 @@ sub add_customcode {
         getdbh                   getdbh               TF               null
         getrows                  getrows              TF               null
         trigrules                trigrules            TF               null
+        sync                     sync                 0                skip
+        goat                     goat                 0                skip
+        active                   active               TF               skip
+        priority                 priority             number           skip
         src_code                 src_code             0                skip
     };
 
@@ -2891,6 +2901,50 @@ sub add_customcode {
 	}
 
 	my $finalmsg = '';
+
+	## See if any updates to customcode_map need to be made
+
+	## Only one of sync or goat can be specified
+	if ($dbcols->{sync} and $dbcols->{goat}) {
+		die qq{Sorry, you must specify a sync OR a goat, not both\n};
+	}
+
+	## Makes no sense to specify priority or active if no goat or sync
+	if (($dbcols->{priority} or $dbcols->{active}) and !$dbcols->{sync} and ! $dbcols->{goat}) {
+		die qq{You must specify a sync or a goat when using priority or active\n};
+	}
+
+	## Is this a valid sync?
+	if ($dbcols->{sync} and ! exists $global{sync}{$dbcols->{sync}}) {
+		die qq{Unknown sync: $dbcols->{sync}\n};
+	}
+
+	## Is this a valid gaot?
+	if ($dbcols->{goat} and ! exists $global{goat}{$dbcols->{goat}}) {
+		die qq{Unknown goat: $dbcols->{goat}\n};
+	}
+
+	## Add to the customcode_map table
+	if ($dbcols->{sync} or $dbcols->{goat}) {
+		$SQL = 'INSERT INTO customcode_map(code,';
+		my @vals;
+		for my $col (qw/sync goat priority active/) {
+			if ($dbcols->{$col}) {
+				$SQL .= "$col,";
+				push @vals => $dbcols->{$col};
+			}
+		}
+		my $phs = '?,' x @vals;
+		$SQL .= ") VALUES ((SELECT currval('customcode_id_seq')),$phs)";
+		$SQL =~ s/,\)/)/g;
+		$sth = $dbh->prepare($SQL);
+		eval {
+			$count = $sth->execute(@vals);
+		};
+		if ($@) {
+			die "Failed to add customcode_map: $@\n";
+		}
+	}
 
 	$dbh->commit();
 
