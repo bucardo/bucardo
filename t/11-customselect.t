@@ -8,7 +8,7 @@ use warnings;
 use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 10;
+use Test::More tests => 9;
 
 use BucardoTesting;
 my $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object failed\n";
@@ -31,9 +31,10 @@ $bct->add_test_tables_to_herd('A', 'testherd1');
 
 ## Create tables for this test
 for my $dbh (($dbhA, $dbhB)) {
-    # This could be DROP TABLE IF EXISTS, except that we want to support PostgreSQL 8.1
-    for my $tbl (@{ $dbh->selectall_arrayref(q{SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename in ('csmulti', 'customselect')}) } ) {
-        $dbh->do("DROP TABLE $tbl");
+	for my $t (qw/customselect csmulti/) {
+		if (BucardoTesting::table_exists($dbh, $t)) {
+			$dbh->do("DROP TABLE $t");
+		}
     }
     $dbh->do(q{
         CREATE TABLE customselect (
@@ -54,16 +55,14 @@ for my $dbh (($dbhA, $dbhB)) {
     $dbh->commit;
 }
 
-$bct->ctl('add herd herd1');
-$bct->ctl('add table customselect db=A herd=herd1');
-$i = $bct->ctl('add sync customselectsync source=herd1 type=fullcopy targetdb=B usecustomselect=true');
+$i = $bct->ctl('add sync customselectsync source=A type=fullcopy targetdb=B usecustomselect=true tables=customselect');
 like($i, qr{Added sync}, 'Added customselect sync');
 $dbhX->do(q{update goat set customselect = $$select id, 'aaa'::text as field1, field2, field3 from customselect$$ where tablename = 'customselect'});
-$bct->ctl('add herd herd2');
-$bct->ctl('add table csmulti db=A herd=herd2');
-$dbhX->do(q{update goat set customselect = $$select id1, id2, 'aaa'::text as field1, field2, field3 from csmulti$$ where tablename = 'csmulti'});
-$i = $bct->ctl('add sync csmulti source=herd2 type=fullcopy targetdb=B usecustomselect=true');
+$i = $bct->ctl('add sync csmulti source=A type=fullcopy targetdb=B usecustomselect=true tables=csmulti');
 like($i, qr{Added sync}, 'Added multi-column primary key customselect sync');
+$dbhX->do(q{update goat set customselect = $$select id1, id2, 'aaa'::text as field1, field2, field3 from csmulti$$ where tablename = 'csmulti'});
+$dbhX->do(q{LISTEN bucardo_syncdone_customselectsync});
+$dbhX->do(q{LISTEN bucardo_syncdone_csmulti});
 $dbhX->commit();
 
 # Test that sync works
@@ -75,18 +74,16 @@ $dbhA->do(q{INSERT INTO customselect (id, field1, field2, field3) VALUES (5, 'no
 $dbhA->do(q{INSERT INTO customselect (id, field1, field2, field3) VALUES (6, 'romeo',    'sierra', 'tango')});
 $dbhA->do(q{INSERT INTO customselect (id, field1, field2, field3) VALUES (7, 'uniform',  'victor', 'whiskey')});
 $dbhA->do(q{INSERT INTO customselect (id, field1, field2, field3) VALUES (8, 'xray',     'yankee', 'zulu')});
-$dbhX->do(q{LISTEN bucardo_syncdone_customselectsync});
 $dbhA->commit();
-$dbhX->commit();
+
 $bct->restart_bucardo($dbhX);
+
 $bct->ctl('kick customselectsync 0');
 wait_for_notice($dbhX, 'bucardo_syncdone_customselectsync', 5);
-my $a = $dbhA->selectall_arrayref(q{SELECT id, 'aaa', field2, field3 FROM customselect ORDER BY id});
-my $b = $dbhB->selectall_arrayref('SELECT * FROM customselect ORDER BY id');
-is_deeply($a, $b, 'Swap works on single-column primary key');
-$dbhA->rollback();
-$dbhB->rollback();
-$bct->stop_bucardo($dbhX);
+
+my $aa = $dbhA->selectall_arrayref(q{SELECT id, 'aaa', field2, field3 FROM customselect ORDER BY id});
+my $bb = $dbhB->selectall_arrayref('SELECT * FROM customselect ORDER BY id');
+is_deeply($aa, $bb, 'Swap works on single-column primary key');
 
 # Test that sync works
 $dbhA->do(q{INSERT INTO csmulti (id1, id2, field1, field2, field3) VALUES (1, 9, 'alpha',    'bravo',  'charlie')});
@@ -97,20 +94,16 @@ $dbhA->do(q{INSERT INTO csmulti (id1, id2, field1, field2, field3) VALUES (5, 9,
 $dbhA->do(q{INSERT INTO csmulti (id1, id2, field1, field2, field3) VALUES (6, 9, 'romeo',    'sierra', 'tango')});
 $dbhA->do(q{INSERT INTO csmulti (id1, id2, field1, field2, field3) VALUES (7, 9, 'uniform',  'victor', 'whiskey')});
 $dbhA->do(q{INSERT INTO csmulti (id1, id2, field1, field2, field3) VALUES (8, 9, 'xray',     'yankee', 'zulu')});
-$dbhX->do(q{LISTEN bucardo_syncdone_csmulti});
 $dbhA->commit();
-$dbhX->commit();
-pass('Inserted data into master');
+
 $bct->restart_bucardo($dbhX);
 
 $bct->ctl('kick csmulti 0');
 wait_for_notice($dbhX, 'bucardo_syncdone_csmulti', 5);
-$a = $dbhA->selectall_arrayref(q{SELECT id1, id2, 'aaa', field2, field3 FROM csmulti ORDER BY id1, id2});
-$b = $dbhB->selectall_arrayref('SELECT * FROM csmulti ORDER BY id1, id2');
-is_deeply($a, $b, 'Swap works on multi-column primary key');
-$dbhA->rollback();
-$dbhB->rollback();
-$bct->stop_bucardo($dbhX);
+
+$aa = $dbhA->selectall_arrayref(q{SELECT id1, id2, 'aaa', field2, field3 FROM csmulti ORDER BY id1, id2});
+$bb = $dbhB->selectall_arrayref('SELECT * FROM csmulti ORDER BY id1, id2');
+is_deeply($aa, $bb, 'Swap works on multi-column primary key');
 
 exit;
 
