@@ -8,11 +8,11 @@ use warnings;
 use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 9;
+use Test::More tests => 12;
 
 use BucardoTesting;
 my $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object failed\n";
-my $i;
+$location = 'customselect';
 
 pass("*** Beginning customselect tests");
 
@@ -31,13 +31,13 @@ $bct->add_test_tables_to_herd('A', 'testherd1');
 
 ## Create tables for this test
 for my $dbh (($dbhA, $dbhB)) {
-	for my $t (qw/customselect csmulti/) {
+	for my $t (qw/csone csmulti/) {
 		if (BucardoTesting::table_exists($dbh, $t)) {
 			$dbh->do("DROP TABLE $t");
 		}
     }
     $dbh->do(q{
-        CREATE TABLE customselect (
+        CREATE TABLE csone (
             id INTEGER PRIMARY KEY,
             field1 TEXT,
             field2 TEXT,
@@ -55,34 +55,34 @@ for my $dbh (($dbhA, $dbhB)) {
     $dbh->commit;
 }
 
-$i = $bct->ctl('add sync customselectsync source=A type=fullcopy targetdb=B usecustomselect=true tables=customselect');
-like($i, qr{Added sync}, 'Added customselect sync');
-$dbhX->do(q{update goat set customselect = $$select id, 'aaa'::text as field1, field2, field3 from customselect$$ where tablename = 'customselect'});
-$i = $bct->ctl('add sync csmulti source=A type=fullcopy targetdb=B usecustomselect=true tables=csmulti');
-like($i, qr{Added sync}, 'Added multi-column primary key customselect sync');
-$dbhX->do(q{update goat set customselect = $$select id1, id2, 'aaa'::text as field1, field2, field3 from csmulti$$ where tablename = 'csmulti'});
-$dbhX->do(q{LISTEN bucardo_syncdone_customselectsync});
-$dbhX->do(q{LISTEN bucardo_syncdone_csmulti});
+my $i = $bct->ctl('add sync cs1 source=A type=fullcopy targetdb=B usecustomselect=true tables=csone');
+like($i, qr{Added sync}, 'Added cs1 sync');
+$dbhX->do(q{UPDATE goat SET customselect = $$select id, 'aaa'::text as field1, field2, field3 from csone$$ WHERE tablename = 'csone'});
+$i = $bct->ctl('add sync cs2 source=A type=fullcopy targetdb=B usecustomselect=true tables=csmulti');
+like($i, qr{Added sync}, 'Added cs2 sync');
+$dbhX->do(q{UPDATE goat SET customselect = $$select id1, id2, 'aaa'::text as field1, field2, field3 from csmulti$$ WHERE tablename = 'csmulti'});
+$dbhX->do(q{LISTEN bucardo_syncdone_cs1});
+$dbhX->do(q{LISTEN bucardo_syncdone_cs2});
 $dbhX->commit();
 
 # Test that sync works
-$dbhA->do(q{INSERT INTO customselect (id, field1, field2, field3) VALUES (1, 'alpha',    'bravo',  'charlie')});
-$dbhA->do(q{INSERT INTO customselect (id, field1, field2, field3) VALUES (2, 'delta',    'echo',   'foxtrot')});
-$dbhA->do(q{INSERT INTO customselect (id, field1, field2, field3) VALUES (3, 'hotel',    'india',  'juliet')});
-$dbhA->do(q{INSERT INTO customselect (id, field1, field2, field3) VALUES (4, 'kilo',     'lima',   'mike')});
-$dbhA->do(q{INSERT INTO customselect (id, field1, field2, field3) VALUES (5, 'november', 'oscar',  'papa')});
-$dbhA->do(q{INSERT INTO customselect (id, field1, field2, field3) VALUES (6, 'romeo',    'sierra', 'tango')});
-$dbhA->do(q{INSERT INTO customselect (id, field1, field2, field3) VALUES (7, 'uniform',  'victor', 'whiskey')});
-$dbhA->do(q{INSERT INTO customselect (id, field1, field2, field3) VALUES (8, 'xray',     'yankee', 'zulu')});
+$dbhA->do(q{INSERT INTO csone (id, field1, field2, field3) VALUES (1, 'alpha',    'bravo',  'charlie')});
+$dbhA->do(q{INSERT INTO csone (id, field1, field2, field3) VALUES (2, 'delta',    'echo',   'foxtrot')});
+$dbhA->do(q{INSERT INTO csone (id, field1, field2, field3) VALUES (3, 'hotel',    'india',  'juliet')});
+$dbhA->do(q{INSERT INTO csone (id, field1, field2, field3) VALUES (4, 'kilo',     'lima',   'mike')});
+$dbhA->do(q{INSERT INTO csone (id, field1, field2, field3) VALUES (5, 'november', 'oscar',  'papa')});
+$dbhA->do(q{INSERT INTO csone (id, field1, field2, field3) VALUES (6, 'romeo',    'sierra', 'tango')});
+$dbhA->do(q{INSERT INTO csone (id, field1, field2, field3) VALUES (7, 'uniform',  'victor', 'whiskey')});
+$dbhA->do(q{INSERT INTO csone (id, field1, field2, field3) VALUES (8, 'xray',     'yankee', 'zulu')});
 $dbhA->commit();
 
 $bct->restart_bucardo($dbhX);
 
-$bct->ctl('kick customselectsync 0');
-wait_for_notice($dbhX, 'bucardo_syncdone_customselectsync', 5);
+$bct->ctl('kick cs1 0');
+wait_for_notice($dbhX, 'bucardo_syncdone_cs1', 5);
 
-my $aa = $dbhA->selectall_arrayref(q{SELECT id, 'aaa', field2, field3 FROM customselect ORDER BY id});
-my $bb = $dbhB->selectall_arrayref('SELECT * FROM customselect ORDER BY id');
+my $aa = $dbhA->selectall_arrayref(q{SELECT id, 'aaa', field2, field3 FROM csone ORDER BY id});
+my $bb = $dbhB->selectall_arrayref('SELECT * FROM csone ORDER BY id');
 is_deeply($aa, $bb, 'Swap works on single-column primary key');
 
 # Test that sync works
@@ -98,12 +98,37 @@ $dbhA->commit();
 
 $bct->restart_bucardo($dbhX);
 
-$bct->ctl('kick csmulti 0');
-wait_for_notice($dbhX, 'bucardo_syncdone_csmulti', 5);
+$bct->ctl('kick cs2 0');
+wait_for_notice($dbhX, 'bucardo_syncdone_cs2', 5);
 
 $aa = $dbhA->selectall_arrayref(q{SELECT id1, id2, 'aaa', field2, field3 FROM csmulti ORDER BY id1, id2});
 $bb = $dbhB->selectall_arrayref('SELECT * FROM csmulti ORDER BY id1, id2');
 is_deeply($aa, $bb, 'Swap works on multi-column primary key');
+
+
+## Test case where target table does not match the source
+
+$dbhB->do(q{TRUNCATE TABLE csone});
+$dbhA->do(q{DELETE FROM csone WHERE id <> 2});
+$dbhA->commit;
+for my $x (1..3) {
+	$dbhB->do(qq{ALTER TABLE csone DROP COLUMN field$x});
+}
+$dbhB->do(q{ALTER TABLE csone ADD COLUMN f1 DATE});
+$dbhB->do(q{ALTER TABLE csone ADD COLUMN f2 BIGINT});
+$dbhB->commit();
+
+$dbhX->do(q{UPDATE goat SET customselect = $$select id, '2008-01-01'::date as f1, 9999::bigint as f2 from csone$$ where tablename = 'csone'});
+$dbhX->commit();
+
+$bct->restart_bucardo($dbhX);
+
+$bct->ctl('kick cs1 0');
+wait_for_notice($dbhX, 'bucardo_syncdone_cs1', 5);
+
+$aa = [[2,'2008-01-01',9999]];
+$bb = $dbhB->selectall_arrayref('SELECT * FROM csone ORDER BY id');
+is_deeply($aa, $bb, 'customselect works for target with different columns');
 
 exit;
 
