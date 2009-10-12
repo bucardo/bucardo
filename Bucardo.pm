@@ -1279,6 +1279,9 @@ sub start_mcp {
 		## This unlistens any old syncs
 		$self->reset_mcp_listeners();
 
+		## Sleep for a small amount of time to give controllers time to exit gracefully
+		sleep 0.5;
+
 		## Kill any existing children
 		opendir my $dh, $config{piddir} or die qq{Could not opendir "$config{piddir}": $!\n};
 		my $name;
@@ -1823,6 +1826,23 @@ sub start_mcp {
 				$g->{sequenceinfo} = $sth->fetchall_arrayref({})->[0];
 			}
 
+			## Customselect may be null, so force to a false value
+			$g->{customselect} ||= '';
+			my $do_customselect = ($g->{customselect} and $s->{usecustomselect}) ? 1 : 0;
+			if ($do_customselect) {
+				if ($s->{synctype} ne 'fullcopy') {
+					my $msg = qq{ERROR: Custom select can only be used for fullcopy\n};
+					$self->glog($msg);
+					warn $msg;
+					return 0;
+				}
+				$self->glog(qq{Transforming custom select query "$g->{customselect}"});
+				$sth = $srcdbh->prepare("SELECT * FROM ($g->{customselect}) AS foo LIMIT 0");
+				$sth->execute();
+				$g->{customselectNAME} = $sth->{NAME};
+				$sth->finish();
+			}
+
 			## Verify sequences or tables+columns on remote databases
 			## TODO: Fork to speed this up? (more than one target at a time)
 			my $maindbh = $self->{masterdbh};
@@ -1909,8 +1929,44 @@ sub start_mcp {
 				## We'll state no problems until we are proved wrong
 				my $column_problems = 0;
 
+				## For customselect, the transformed output must match the slave
+				## Note: extra columns on the target are okay
+				if ($do_customselect) {
+					my $msg;
+					my $newcols = [];
+					my $info2;
+					for my $col (@{$g->{customselectNAME}}) {
+						my $ok = 0;
+						if (!exists $targetcolinfo->{$col}) {
+							$msg = qq{ERROR: Custom SELECT returned column "$col" that does not exist on target "$db"\n};
+							$self->glog($msg);
+							warn $msg;
+							return 0;
+						}
+						## Get a quoted version of this column
+						$sth{quoteident}->execute($col);
+						push @$info2, $sth{quoteident}->fetchall_arrayref()->[0][0];
+					}
+					## Replace the actual set of columns with our subset
+					my $collist = join ' | ' => @{$g->{cols}};
+					$self->glog("Old columns: $collist");
+					$collist = join ' | ' => @{$g->{customselectNAME}};
+					$self->glog("New columns: $collist");
+					$g->{cols} = $g->{customselectNAME};
+					$g->{safecols} = $info2;
+
+					## Replace the column lists
+					$g->{columnlist} = join ',' => @{$g->{customselectNAME}};
+					$g->{safecolumnlist} = join ',' => @$info2;
+
+				} ## end custom select
+
 				## Check each column in alphabetic order
 				for my $colname (sort keys %$colinfo) {
+
+					## We've already checked customselect above
+					next if $do_customselect;
+
 					## Simple var mapping to make the following code sane
 					my $fcol = $targetcolinfo->{$colname};
 					my $scol = $colinfo->{$colname};
@@ -2007,6 +2063,7 @@ sub start_mcp {
 
 				## Fatal in strict mode: extra columns on the target side
 				for my $colname (sort keys %$targetcolinfo) {
+					next if $do_customselect;
 					next if exists $colinfo->{$colname};
 					$column_problems ||= 1; ## Don't want to override a setting of "2"
 					my $msg = qq{Target database has column "$colname" on table "$t", but source database "$s->{name}" does not};
@@ -2025,71 +2082,6 @@ sub start_mcp {
 
 			## If not a table, we can skip the rest
 			next if $g->{reltype} ne 'table';
-
-			## If we have a custom query, figure out which columns to transfer
-
-			## TODO: Allow remote databases to have only a subset of columns
-
-			my $customselect = $g->{customselect} || '';
-			if ($customselect and $s->{usecustomselect}) {
-				if ($s->{synctype} ne 'fullcopy') {
-					my $msg = qq{ERROR: Custom select can only be used for fullcopy\n};
-					$self->glog($msg);
-					warn $msg;
-					return 0;
-				}
-				my $msg;
-				$self->glog(qq{Transforming custom select query "$customselect"});
-				$sth = $srcdbh->prepare("SELECT * FROM ($customselect) AS foo LIMIT 0");
-				$sth->execute();
-				$info = $sth->{NAME};
-				$sth->finish();
-				## It must contain all the primary keys
-				for my $pk (@{$g->{pkey}}) {
-					## It must contain the primary key (does not do multicol)
-					if (! grep { $_ eq $pk } @$info) {
-						$msg = qq{ERROR: Custom SELECT does not contain the primary key "$pk"\n};
-						$self->glog($msg);
-						warn $msg;
-						return 0;
-					}
-				}
-				my $scols = $g->{cols};
-				## It must all contain only columns already in the slave
-				my $newcols = [];
-				my $info2;
-			  SCOL: for my $col (@$info) {
-					my $ok = 0;
-					if (grep { $_ eq $col } @$scols) {
-						$ok = 1;
-					}
-					else {
-						for my $pk (@{$g->{pkey}}) {
-							$ok = 1 if $pk eq $col;
-						}
-					}
-					if (!$ok) {
-						$msg = qq{ERROR: Custom SELECT returned unknown column "$col"\n};
-						$self->glog($msg);
-						warn $msg;
-						return 0;
-					}
-					$sth{quoteident}->execute($col);
-					push @$info2, $sth{quoteident}->fetchall_arrayref()->[0][0];
-				}
-				## Replace the actual set of columns with our subset
-				my $collist = join ' | ' => @{$g->{cols}};
-				$self->glog("Old columns: $collist");
-				$collist = join ' | ' => @$info;
-				$self->glog("New columns: $collist");
-				$g->{cols} = $info;
-				$g->{safecols} = $info2;
-
-				## Replace the column lists
-				$g->{columnlist} = join ',' => @$info;
-				$g->{safecolumnlist} = join ',' => @$info2;
-
-			} ## end custom select
 
 		} ## end each goat
 
