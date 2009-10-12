@@ -15,6 +15,8 @@
   - Add some small sleeps before checking for stale pid files, to allow their owners 
     a chance to clean them up first. [GSM]
 
+  - Give a warning when kicking an inactive sync. [GSM]
+
 Bucardo version 4.3.0, released October 8, 2009
 
   - Allow MCP and CTL to kill based on piddir, not just audit_pid. This will prevent duplicate 
