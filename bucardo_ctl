@@ -1,4 +1,4 @@
-#!/usr/bin/perl -- -*-cperl-*-
+#!/usr/local/bin/perl -- -*-cperl-*-
 
 ## Script to control Bucardo
 ##
@@ -3299,7 +3299,7 @@ sub add_sync {
 		## Add all tables given to the new herd
 		## May be the same table in more than one schema, in which case we add them all!
 		$SQL = q{INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,?)};
-		$sth = $dbh->prepare($SQL);
+		my $stha = $dbh->prepare($SQL);
 		for my $tname (split /,/ => $dbcols->{tables}) {
 			if (! exists $global{goat}{$tname}) {
 				## Try and add this table in
@@ -3313,11 +3313,11 @@ sub add_sync {
 			my $g = $global{goat}{$tname};
 			if (ref $g eq 'ARRAY') {
 				for my $row (@$g) {
-					$sth->execute($item_name,$row->{id});
+					$stha->execute($item_name,$row->{id});
 				}
 			}
 			else {
-				$sth->execute($item_name,$global{goat}{$tname}{id});
+				$stha->execute($item_name,$global{goat}{$tname}{id});
 			}
 		}
 
@@ -3483,8 +3483,7 @@ sub add_table {
 		print "$additions";
 	}
 
-	exit 0;
-
+	return;
 
 } ## end of add_table
 
