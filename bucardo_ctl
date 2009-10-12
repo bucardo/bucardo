@@ -1148,12 +1148,26 @@ sub kick {
 		exit 1;
 	}
 
+	## Is someone listening for this sync? (We assume its the MCP)
+	$SQL = 'SELECT 1 FROM pg_listener WHERE relname = ?';
+	my $sthl = $dbh->prepare($SQL);
+
 	my ($exitstatus, $retries, $do_retry) = (0,0,0);
 
   RETRY: {
 		$dbh->rollback();
 		$exitstatus = 0;
 	  SYNC: for my $sync (@syncs) {
+			my $relname = "bucardo_kick_sync_$sync";
+
+			## If nobody is listening, our kick is not going to be very effective!
+			$count = $sthl->execute($relname);
+			$sthl->finish();
+			if ($count < 1) {
+				warn qq{Cannot kick sync "$sync" - are you sure it is active?\n};
+				next;
+			}
+
 			$dbh->do(qq{NOTIFY "bucardo_kick_sync_$sync"});
 			my $done = "bucardo_syncdone_$sync";
 			my $killed = "bucardo_synckill_$sync";
