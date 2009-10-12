@@ -3,8 +3,6 @@ TODO list for Bucardo
 
 These range the gamut from wildly speculative ideas to must-have features.
 
-- Fix problem where plperl does not exist, but 'bucardo_ctl install' 
-  happily reports everything as good.
 - Have Bucardo do the cleanups based on PG version, rather than cronjobs
   (e.g. vacuum pg_listener, purge_bucardo_delta)
 - Implement "log shipping" for pushdelta slaves. This could be done by creating 
@@ -12,7 +10,6 @@ These range the gamut from wildly speculative ideas to must-have features.
   FROM STDIN; ...
 - Death-level custom code hooks
 - Better conflict example in test suite, uses database handles
-- Allow adjustable criteria for going into lock before sync mode
 - Make timeslices for master_q adjustable
 - Allow more data types for pkey on goats
 - Handle partitioned tables
@@ -40,16 +37,10 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Put this list into a bug tracker
 - Document all LISTEN/NOTIFY strings in one area
 - Use 2PC where possible
-- Let bucardo_ctl force reload of tables (e.g. onetimecopy / truncate)
-- Think about better handling of PID files on exit
-- If only one herd, add new tables to it
-- Concept of a 'default' herd?
 - Consider intra-kid communication to copy tables one-by-one to keep things in cache
 - Use DBD::Pg async mode to reduce waiting, esp. for multi-master
-- Replicate sequences
 - Consider failover strategies
 - Log validate_sync changes somewhere, add rollback statements
-- Standardize all the bucardo_ctl arguments: some things accept foo=bar, some require --foo=bar
 - Consider keeping long-term stats for a sync/table: total rows transferred, etc.
 - Add support for manual DDL changes (in progress)
 - Add support for automatic DDL changes (in progress)
