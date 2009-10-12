@@ -1,5 +1,7 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
+Bucardo version 4.4.0
+
   - Loosen restrictions on customcode - now the derived columns must match 
     the target, but the target and source tables can be completely different. [GSM]
 
