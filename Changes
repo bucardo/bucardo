@@ -5,6 +5,10 @@ Bucardo version 4.4.0
   - Loosen restrictions on customcode - now the derived columns must match 
     the target, but the target and source tables can be completely different. [GSM]
 
+  - Add the bucardo_audit() function that runs on all master databases, ensures 
+    that everything related to the bucardo_* control tables is correct.
+    [Josh Tolley and GSM]
+
   - Fix bucardo_ctl add sync ... tables=x - now adds the sync on first pass, 
     even if the tables have not been added. [GSM]
 

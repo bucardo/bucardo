@@ -1361,35 +1361,38 @@ $bc$
             $SQL = qq{SELECT 'bucardo_add_delta_b_'::text || md5('$schema$table$noquotepkey') AS m};
             $func2 = spi_exec_query($SQL)->{rows}[0]{m};
         }
-        my $func3 = "bucardo_purge_delta";
-        my $func4 = "bucardo_compress_delta";
+        my $func3 = 'bucardo_purge_delta';
+        my $func4 = 'bucardo_compress_delta';
+        my $func5 = 'bucardo_audit';
         if ($safepkey =~ /^"/) {
            $func1 = qq{"$func1"};
            $func2 = qq{"$func2"};
         }
 
         if (!$found{bc_schema}) {
-            $found{func0} = $found{func1} = $found{func2} = $found{func3} = $found{func4} = 0;
+            $found{func0} = $found{func1} = $found{func2} = $found{func3} = 
+            $found{func4} = $found{func5} = 0;
         }
         else {
             $SQL = qq{
-                SELECT max(f0), max(f1), max(f2), max(f3)
+                SELECT max(f0), max(f1), max(f2), max(f3), max(f4), max(f5)
                 FROM (
                 SELECT
                   CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f0,
                   CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f1,
                   CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f2,
                   CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f3,
-                  CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f4
+                  CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f4,
+                  CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f5
                 FROM   pg_catalog.pg_proc p, pg_catalog.pg_namespace n
                 WHERE  p.pronamespace = n.oid
                 AND    n.nspname = ?
-                AND    p.proname IN (?,?,?,?,?)
+                AND    p.proname IN (?,?,?,?,?,?)
             ) foo
             };
             elog(DEBUG, "Preparing to check functions: $SQL");
             $sth = $dbh->prepare($SQL);
-            $sth->execute($func0,$func1,$func2,$func3,$func4,'bucardo',$func0,$func1,$func2,$func3,$func4);
+            $sth->execute($func0,$func1,$func2,$func3,$func4,$func5,'bucardo',$func0,$func1,$func2,$func3,$func4,$func5);
             my $x = 0;
             my $row = $sth->fetchall_arrayref()->[0];
             for my $val (@$row) {
@@ -1648,7 +1651,6 @@ $bc$
                     run_sql($SQL,$dbh);
                 }
             }
-
             if (! $found{'bucardo_track'}) {
                 $SQL = qq{
                     CREATE TABLE bucardo.bucardo_track (
@@ -1687,7 +1689,6 @@ $bc$
                 run_sql($SQL,$dbh);
 
             }
-
             if (! $found{bucardo_truncate_trigger_log}) {
                 $SQL = qq{
                     CREATE TABLE bucardo.bucardo_truncate_trigger_log (
@@ -1706,7 +1707,6 @@ $bc$
                      . q{bucardo.bucardo_truncate_trigger_log (sync,targetdb,replicated)};
                 run_sql($SQL,$dbh);
             }
-
             if (! $found{bucardo_sequences}) {
                 $SQL = qq{
                     CREATE TABLE bucardo.bucardo_sequences (
@@ -1721,7 +1721,6 @@ $bc$
                      . q{bucardo.bucardo_sequences (tablename)};
                 run_sql($SQL,$dbh);
             }
-
             if ($force) {
                 if ($found{index1}) {
                     elog(DEBUG, qq{Dropping index "$safeindex1"});
@@ -2032,6 +2031,485 @@ $bc$
                 run_sql($SQL,$dbh);
             }
                   
+            if (! $found{func5}) {
+                $SQL = q{
+                  CREATE OR REPLACE FUNCTION bucardo.bucardo_audit()
+RETURNS TEXT
+LANGUAGE plpgsql
+VOLATILE
+AS $clone$
+DECLARE
+  fmsg TEXT = $clone2$SET search_path = 'bucardo';$clone2$;
+  myst TEXT;
+  myrec RECORD;
+  myrec2 RECORD;
+  mycount INT;
+  myvar TEXT;
+  mytablename TEXT;
+  delcount INT;
+  delcount2 INT;
+
+BEGIN
+
+-- This function attempts to cleanup various Bucardo-related problems that may exist.
+-- Usage is to simply call it, then examine and carefully apply the output
+-- Items checked
+-- * Partial indexes on bucardo_delta for tables (oids) that no longer exist.
+-- * Indexes on bucardo_delta that refer to tables without a 'bucardo_add_delta' trigger.
+-- * Every table with a 'bucardo_add_delta' trigger has rowid and txntime triggers on bucardo_delta.
+-- * There are no other triggers on the bucardo_delta for such tables.
+-- * Check for name/oid matching on the two bucardo_delta indexes above.
+-- * Tables that have bucardo_add_delta but no entry in bucardo_delta_targets table
+-- * Index exists: bucardo_delta_txntime
+-- * Index exists: bucardo_delta_rowid_all
+-- * Unknown indexes on bucardo_delta
+-- * Rows in bucardo_delta that refer to invalid tables (oids)
+-- * Rows in bucardo_delta that refer to tables without a bucardo_add_delta trigger
+-- * Index exists: bucardo_track_target
+-- * Unknown indexes on bucardo_track
+-- * Rows in bucardo_track that refer to invalid tables (oids)
+-- * Rows in bucardo_track that refer to tables without a bucardo_add_delta trigger
+-- * Rows in bucardo_delta_targets that are invalid tablenames (oids)
+
+-- Make sure that bucardo is in our search_path
+PERFORM set_config('search_path','bucardo,'
+  || (SELECT current_setting('search_path')),'f');
+
+-- Gather important information into temp tables
+
+-- Generate a list of all indexes on bucardo_delta
+-- Identify which tables they are on, as well as which columns
+-- This is a left join as there may be stale entries
+-- If this table alredy exists in this session, drop it
+PERFORM 1 FROM information_schema.tables WHERE table_type = 'LOCAL TEMPORARY'
+  AND table_name = 'bucardo_audit_delta_index';
+IF FOUND THEN 
+  DROP TABLE bucardo_audit_delta_index;
+END IF;
+CREATE TEMP TABLE bucardo_audit_delta_index AS
+  SELECT foo.*, c.relname AS tablename FROM
+  ( SELECT c.relname AS indexname, c.oid AS indyoid,
+    pg_get_indexdef(indexrelid) AS indexdef,
+    substring(pg_get_indexdef(indexrelid) FROM E'\\\\((\\\\d+)') AS targetoid,
+    substring(pg_get_indexdef(indexrelid) FROM E'\\\\(+([^\\\\)]+)') AS targetcol
+    FROM pg_index i
+    JOIN pg_class c ON (c.oid = indexrelid)
+    WHERE indrelid = 'bucardo_delta'::regclass
+    ORDER BY c.relname
+  ) AS foo
+  LEFT JOIN pg_class c ON (c.oid = foo.targetoid::oid);
+
+-- Gather a list of indexes for bucardo_track
+PERFORM 1 FROM information_schema.tables WHERE table_type = 'LOCAL TEMPORARY'
+  AND table_name = 'bucardo_audit_track_index';
+IF FOUND THEN 
+  DROP TABLE bucardo_audit_track_index;
+END IF;
+CREATE TEMP TABLE bucardo_audit_track_index AS
+  SELECT foo.*, c.relname AS tablename FROM
+  ( SELECT c.relname AS indexname, c.oid AS indyoid,
+    pg_get_indexdef(indexrelid) AS indexdef,
+    substring(pg_get_indexdef(indexrelid) FROM E'\\\\((\\\\d+)') AS targetoid,
+    substring(pg_get_indexdef(indexrelid) FROM E'\\\\(+([^\\\\)]+)') AS targetcol
+    FROM pg_index i
+    JOIN pg_class c ON (c.oid = indexrelid)
+    WHERE indrelid = 'bucardo_track'::regclass
+    ORDER BY c.relname
+  ) AS foo
+  LEFT JOIN pg_class c ON (c.oid = foo.targetoid::oid);
+
+-- Gather a list of triggers that contain the string 'bucardo'
+PERFORM 1 FROM information_schema.tables WHERE table_type = 'LOCAL TEMPORARY'
+  AND table_name = 'bucardo_audit_table_triggers';
+IF FOUND THEN 
+  DROP TABLE bucardo_audit_table_triggers;
+END IF;
+CREATE TEMP TABLE bucardo_audit_table_triggers AS
+  SELECT tgname AS trigname, nspname AS schemaname, relname AS tablename, c.oid AS toid
+  FROM pg_trigger t
+  JOIN pg_class c ON (c.oid = t.tgrelid)
+  JOIN pg_namespace n ON (n.oid = c.relnamespace AND n.nspname <> 'bucardo')
+  WHERE tgname ~ 'bucardo';
+
+-- Drop any partial indexes on bucardo_delta that refer to invalid tables (oids)
+FOR myrec IN
+  SELECT indexname, targetoid
+  FROM bucardo_audit_delta_index
+  WHERE targetoid IS NOT NULL
+  AND tablename IS NULL
+LOOP
+  fmsg = fmsg
+    || chr(10)
+    || 'Dropping index "'
+    || myrec.indexname
+    || '": refers to non-existent table '
+    || myrec.targetoid
+    || chr(10)
+    || 'DROP INDEX '
+    || quote_ident(myrec.indexname)
+    || ';';
+END LOOP;
+
+-- Drop any indexes on bucardo_delta that refer to tables without bucardo triggers
+FOR myrec IN
+  SELECT tablename, indexname, targetoid
+  FROM bucardo_audit_delta_index
+  WHERE tablename IS NOT NULL
+LOOP
+  PERFORM 1 FROM bucardo_audit_table_triggers WHERE toid::text = myrec.targetoid
+    AND trigname = 'bucardo_add_delta';
+  IF NOT FOUND THEN
+    fmsg = fmsg
+      || chr(10)
+      || '-- bucardo_delta has index for '
+      || myrec.tablename
+      || ' ('
+      || myrec.targetoid
+      || '), but it has no bucardo_add_delta trigger'
+      || chr(10)
+      || 'DROP INDEX '
+      || quote_ident(myrec.indexname)
+      || ';';
+  END IF;
+END LOOP;
+
+-- Check for correct number of triggers on bucardo_delta for each table that has 
+--     a bucardo_add_delta trigger
+--   Check that one exists for the rowid
+--   Check that one exists for the txntime
+-- Check that each of those tables is mentioned in bucardo_delta_targets
+FOR myrec IN
+  SELECT schemaname, tablename, toid
+  FROM bucardo_audit_table_triggers
+  WHERE trigname = 'bucardo_add_delta'
+LOOP
+  SELECT INTO mycount count(*) FROM bucardo_audit_delta_index WHERE targetoid = myrec.toid::text;
+  -- Should have no more than two
+  IF mycount > 2 THEN
+    fmsg = fmsg
+      || chr(10)
+      || '-- bucardo_delta has wrong number ('
+      || mycount::text
+      || ') of indexes for table '
+      || myrec.schemaname
+      || '.'
+      || myrec.tablename
+      || ' ('
+      || myrec.toid
+      || ')';
+  END IF;
+  -- Do we have one for rowid?
+  SELECT INTO mycount count(*) FROM bucardo_audit_delta_index
+    WHERE targetoid = myrec.toid::text AND targetcol = 'rowid';
+  RAISE NOTICE 'Failed to find toid %', myrec.toid;
+FOR myrec2 IN
+  SELECT *
+  FROM bucardo_audit_delta_index
+LOOP
+  RAISE NOTICE 'Found %, %, and %', myrec2.targetoid, myrec2.targetcol, myrec2.indexname;
+END LOOP;
+  IF mycount < 1 THEN
+    fmsg = fmsg
+     || chr(10)
+     || '-- bucardo_delta is missing a partial index on rowid for table '
+     || myrec.schemaname
+     || '.'
+     || myrec.tablename
+     || ' ('
+     || myrec.toid
+     || ')'
+     || chr(10)
+     || 'CREATE INDEX bucardo_delta_'
+     || myrec.schemaname
+     || '_'
+     || myrec.tablename
+     || '_rowid ON bucardo_delta(rowid) WHERE tablename = '
+     || myrec.toid
+     || ';';
+  ELSE
+    IF mycount > 1 THEN
+      fmsg = fmsg
+        || chr(10)
+        || '-- bucardo_delta has '
+        || mycount::text
+        || ' partial indexes on rowid for table '
+        || myrec.schemaname
+        || '.'
+        || myrec.tablename
+        || ' ('
+        || myrec.toid
+        || ') Drop one of:';
+      FOR myrec2 IN SELECT indexname FROM bucardo_audit_delta_index
+        WHERE targetoid = myrec.toid::text AND targetcol = 'rowid'
+      LOOP
+        fmsg = fmsg
+          || chr(10)
+          || '-- DROP INDEX '
+          || quote_ident(myrec2.indexname)
+          || ';';
+      END LOOP;
+    ELSE
+      -- Check for the correct table oid
+      SELECT INTO myst targetoid FROM bucardo_audit_delta_index
+          WHERE targetoid = myrec.toid::text AND targetcol = 'rowid';
+      IF myst <> myrec.toid::text THEN
+        fmsg = fmsg
+          || chr(10)
+          || '-- Wrong oid on bucardo_delta rowid index for '
+          || myrec.schemaname
+          || '.'
+          || myrec.tablename
+          || ' ('
+          || myst
+          || '), but the index says'
+          || myrec.toid
+          || '!';
+      END IF;
+    END IF;
+  END IF;
+  -- Do we have one for txntime?
+  SELECT INTO mycount count(*) FROM bucardo_audit_delta_index
+    WHERE targetoid = myrec.toid::text AND targetcol = 'txntime';
+  IF mycount < 1 THEN
+    fmsg = fmsg
+      || chr(10)
+      || '-- bucardo_delta is missing a partial index on txntime for table '
+      || myrec.schemaname
+      || '.'
+      || myrec.tablename
+      || ' ('
+      || myrec.toid
+      || ')'
+      || chr(10)
+      || 'CREATE INDEX bucardo_delta_'
+      || myrec.schemaname
+      || '_'
+      || myrec.tablename
+      || '_txntime ON bucardo_delta(rowid) WHERE tablename = '
+      || myrec.toid
+      || ';';
+  ELSE
+    IF mycount > 1 THEN
+      fmsg = fmsg
+        || chr(10)
+        || '-- bucardo_delta has '
+        || mycount::text
+        || ' partial indexes on txntime for table '
+        || myrec.schemaname
+        || '.'
+        || myrec.tablename
+        || ' ('
+        || myrec.toid
+        || ') Drop one of:';
+      FOR myrec2 IN SELECT indexname FROM bucardo_audit_delta_index
+        WHERE targetoid = myrec.toid::text AND targetcol = 'txntime'
+      LOOP
+        fmsg = fmsg
+          || chr(10)
+          || '-- DROP INDEX '
+          || quote_ident(myrec2.indexname)
+          || ';';
+      END LOOP;
+    ELSE
+      -- Check for the correct table oid
+      SELECT INTO myst targetoid FROM bucardo_audit_delta_index
+        WHERE targetoid = myrec.toid::text AND targetcol = 'txnid';
+      IF myst <> myrec.toid::text THEN
+        fmsg = fmsg
+          || chr(10)
+          || '-- Wrong oid on bucardo_delta txnid index for '
+          || myrec.schemaname
+          || '.'
+          || myrec.tablename
+          || ' ('
+          || myrec.toid
+          || '), but the index says '
+          || myrec.toid
+          || '!';
+      END IF;
+    END IF;
+  END IF;
+  -- Does this table exist in bucardo_delta_targets?
+  PERFORM 1 FROM bucardo.bucardo_delta_targets WHERE tablename = myrec.toid;
+  IF NOT FOUND THEN
+    fmsg = fmsg
+      || chr(10)
+      || '--Missing entry in bucardo_delta_targets for table '
+      || myrec.tablename
+      || chr(10)
+      || '-- This may be also be caused by an old bucardo_add_delta trigger';
+  END IF;
+END LOOP;
+
+-- Make sure bucardo_delta has a non-partial index on txntime
+PERFORM 1 FROM bucardo_audit_delta_index
+WHERE targetoid IS NULL
+AND indexname = 'bucardo_delta_txntime'
+AND targetcol = 'txntime';
+IF NOT FOUND THEN
+  fmsg = fmsg
+    || chr(10)
+    || '-- Index bucardo_delta_txntime on bucardo_delta was not found!'
+    || chr(10)
+    || 'CREATE INDEX bucardo_delta_txntime ON bucardo_delta(txntime);';
+END IF;
+
+-- Make sure bucardo_delta has a non-partial index on rowid
+PERFORM 1 FROM bucardo_audit_delta_index
+WHERE targetoid IS NULL
+AND indexname = 'bucardo_delta_rowid_all'
+AND targetcol = 'rowid';
+IF NOT FOUND THEN
+  fmsg = fmsg
+    || chr(10)
+    || '-- Index bucardo_delta_rowid_all on bucardo_delta was not found!'
+    || chr(10)
+    || 'CREATE INDEX bucardo_delta_rowid_all ON bucardo_delta(rowid);';
+END IF;
+
+-- Check for any unknown indexes on bucardo_delta
+FOR myrec IN
+  SELECT *
+  FROM bucardo_audit_delta_index
+  WHERE targetoid IS NULL
+  AND indexname NOT IN ('bucardo_delta_txntime', 'bucardo_delta_rowid_all')
+LOOP
+  fmsg = fmsg
+   || chr(10)
+   || '-- Unknown index on bucardo_delta: '
+   || myrec.indexname;
+  -- Show stats about it
+  FOR myrec2 IN 
+    SELECT
+      pg_stat_get_blocks_fetched(myrec.indyoid) AS blocks_fetched,
+      pg_stat_get_blocks_hit(myrec.indyoid) AS blocks_hit,
+      pg_stat_get_numscans(myrec.indyoid) AS numscans,
+      pg_stat_get_tuples_returned(myrec.indyoid) AS tups_returned,
+      pg_stat_get_tuples_fetched(myrec.indyoid) AS tups_fetched
+  LOOP
+    fmsg = fmsg
+      || chr(10)
+      || '-- Blocks fetched/hit: '
+      || myrec2.blocks_fetched::text
+      || '/'
+      || myrec2.blocks_hit::text
+      || ' Tuples scanned/fetched/returned: '
+      || myrec2.numscans::text
+      || '/'
+      || myrec2.tups_returned::text
+      || '/'
+      || myrec2.tups_fetched::text
+      || chr(10)
+      || 'DROP INDEX '
+      || quote_ident(myrec.indexname)
+      || ';';
+  END LOOP;
+END LOOP;
+
+-- That wraps up the indexes. Now the bucardo_delta data
+
+-- Delete rows in bucardo_delta that refer to non-existent tables
+FOR myrec IN SELECT DISTINCT tablename FROM bucardo_delta ORDER BY 1 LOOP
+  SELECT relname FROM pg_class WHERE oid = myrec.tablename INTO mytablename;
+  IF NOT FOUND THEN
+    fmsg = fmsg
+      || chr(10)
+      || '-- Table in bucardo_delta does not exist: oid '
+      || myrec.tablename
+      || chr(10)
+      || 'DELETE FROM bucardo_delta WHERE tablename = '
+      || myrec.tablename
+      || ';';
+  ELSE
+    -- A.1 Check that any such tables have a bucardo_add_delta trigger
+    PERFORM 1 FROM pg_trigger WHERE tgrelid = myrec.tablename AND tgname = 'bucardo_add_delta';
+    IF NOT FOUND THEN
+     fmsg = fmsg
+       || chr(10)
+       || '-- Table '
+       || myrec.tablename
+       || ' ('
+       || mytablename
+       || ') needs a bucardo_add_delta trigger. Try running validate_sync()?';
+    END IF;
+  END IF;
+END LOOP;
+
+-- Time for bucardo_track
+
+-- Make sure bucardo_track has its lone index
+SELECT INTO mycount
+  count(*) FROM bucardo_audit_track_index
+  WHERE indexname = 'bucardo_track_target';
+IF mycount < 1 THEN
+  fmsg = fmsg
+    || chr(10)
+    || '-- Index bucardo_track_target not found!';
+  fmsg = fmsg || chr(10) || 'CREATE INDEX bucardo_track_target ON bucardo_track(tablename,txntime,targetdb);';
+END IF;
+
+-- Should only be one index on bucardo_track
+SELECT INTO mycount
+  count(*) FROM bucardo_audit_track_index;
+IF mycount <> 1 THEN
+  fmsg = fmsg
+    || chr(10)
+    || '-- The bucardo_track table has the wrong number ('
+    || mycount::text
+    || ') of indexes';
+END IF;
+
+-- Delete rows in bucardo_track that refer to invalid tables
+FOR myrec IN SELECT DISTINCT tablename FROM bucardo_track ORDER BY 1 LOOP
+  SELECT relname FROM pg_class WHERE oid = myrec.tablename INTO mytablename;
+  IF NOT FOUND THEN
+    fmsg = fmsg
+      || chr(10)
+      || '-- Table in bucardo_track does not exist: oid '
+      || myrec.tablename
+      || chr(10)
+      || 'DELETE FROM bucardo_track WHERE tablename = '
+      || myrec.tablename
+      || ';';
+  ELSE
+    -- A.1 Check that any such tables have a bucardo_add_delta trigger
+    PERFORM 1 FROM pg_trigger WHERE tgrelid = myrec.tablename AND tgname = 'bucardo_add_delta';
+    IF NOT FOUND THEN
+      fmsg = fmsg
+        || chr(10)
+        || '-- Table '
+        || myrec.tablename
+        || ' ('
+        || mytablename
+        || ') needs a bucardo_add_delta trigger. Try running validate_sync()?';
+    END IF;
+  END IF;
+END LOOP;
+
+-- Remove any stale entries from bucardo_delta_targets
+PERFORM 1 FROM bucardo_delta_targets t WHERE NOT EXISTS
+  (SELECT 1 FROM pg_class WHERE oid = t.tablename AND relkind = 'r');
+IF FOUND THEN
+  fmsg = fmsg
+    || chr(10)
+    || '-- Remove stale entries from bucardo_delta_targets: '
+    || chr(10)
+    || 'DELETE FROM bucardo_delta_targets t WHERE tablename NOT IN '
+    || chr(10)
+    || $clone2$(SELECT oid FROM pg_class WHERE relkind = 'r');$clone2$;
+END IF;
+
+fmsg = fmsg || chr(10) || '-- End of audit';
+
+RETURN fmsg;
+
+END;
+$clone$;
+};
+                run_sql($SQL,$dbh);
+
+            }
+
             if (! $found{trigger1} and $pkeytype ne 'bytea') {
                 $SQL = qq{
                     CREATE TRIGGER "$trigger1"
