@@ -312,6 +312,8 @@ very last step. Running "make signature" will do the signing for you.
 
 * Update the bucardo/latest_version.txt file on the website.
 
+* Change the topic on #bucardo on irc.feeenode.net
+
 * Announce to the bucardo-announce list.
 
 * Post to pgsql-announce if this is a major or important version.
