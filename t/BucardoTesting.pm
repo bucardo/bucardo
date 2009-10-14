@@ -14,7 +14,7 @@ use Data::Dumper;
 
 use vars qw/$SQL $sth $count $COM %dbh/;
 
-my $DEBUG = 0; ## XXX
+my $DEBUG = 0;
 
 use base 'Exporter';
 our @EXPORT = qw/%tabletype %sequences %val compare_tables bc_deeply wait_for_notice $location/;
@@ -75,21 +75,56 @@ my $DEBUGDIR = ".";
 my $PIDDIR = "/tmp/bucardo_testing_$ENV{USER}";
 mkdir $PIDDIR if ! -e $PIDDIR;
 
-my %clusterinfo = (
-				   A => {port => 58921},
-				   B => {port => 58922},
-				   C => {port => 58923},
-				   D => {port => 58924},
-);
-
 ## Location of files
 my $initdb = $ENV{PGBINDIR} ? "$ENV{PGBINDIR}/initdb" : 'initdb';
 my $pg_ctl = $ENV{PGBINDIR} ? "$ENV{PGBINDIR}/pg_ctl" : 'pg_ctl';
 
+## Get the default initdb location
 my $pgversion = qx{$initdb -V};
-my ($pg_major_version, $pg_minor_version, $pg_point_version);
+my ($pg_ver, $pg_major_version, $pg_minor_version, $pg_point_version);
 if ($pgversion =~ /initdb \(PostgreSQL\) (\d+\..*)/) {
-    ($pg_major_version, $pg_minor_version, $pg_point_version) = split /\./, $1;
+	$pg_ver = $1;
+    ($pg_major_version, $pg_minor_version, $pg_point_version) = split /\./, $pg_ver;
+}
+
+## Each database can also have a custom version
+## We do this by setting PGBINDIR[A-Z]
+## This allows us to test (for example) a 8.1 master and an 8.4 slave
+my %pgver;
+my %clusterinfo;
+my $lport = 58920;
+for my $name ('A'..'Z') {
+	$lport++;
+	$clusterinfo{$name}{port} = $lport;
+
+	my $lbindir = $ENV{PGBINDIR} || '';
+	my $linitdb = $initdb;
+	my $lpgctl  = $pg_ctl;
+	my $localver = $pg_ver;
+	my ($lmaj,$lmin,$lrev) = ($pg_major_version, $pg_minor_version, $pg_point_version);
+	if (exists $ENV{"PGBINDIR$name"}) {
+		$lbindir = $ENV{"PGBINDIR$name"};
+		-d $lbindir or die qq{Invalid ENV "PGBINDIR$name"\n};
+		$linitdb = "$lbindir/initdb";
+		$lpgctl = "$lbindir/pg_ctl";
+
+		$COM = "$linitdb -V";
+		my $answer = qx{$COM};
+		die "Cannot find version from: $COM" if $answer !~ /initdb \(PostgreSQL\) (\d+\..*)/;
+		$localver = $1;
+		($lmaj,$lmin,$lrev) = split /\./, $localver;
+	}
+	$pgver{$name} = {
+		bindir  => $lbindir,
+        initdb  => $linitdb,
+		pgctl   => $lpgctl,
+		version => $localver,
+		vmaj    => $lmaj,
+        vmin    => $lmin,
+        vrev    => $lrev,
+		dirname => "bucardo_test_database_${name}_$localver",
+		okmsg   => 'system is ready',
+	};
 }
 
 # Set a semi-unique name to make killing old tests easier
@@ -224,21 +259,24 @@ sub create_cluster {
 	my $clusterinfo = $clusterinfo{$name}
 		or die qq{I do not know how to create a cluster named "$name"};
 
-	my $dirname = "bucardo_test_database_$name";
+	my $dirname = $pgver{$name}{dirname};
 
 	return if -d $dirname;
 
-	$DEBUG and warn qq{Running initdb for cluster "$name"\n};
+	my $localinitdb = $pgver{$name}{initdb};
 
-	qx{$initdb -D $dirname $arg 2>&1};
+	$DEBUG and warn qq{Running $localinitdb for cluster "$name"\n};
+
+	qx{$localinitdb -D $dirname $arg 2>&1};
 
 	## Make some minor adjustments
 	my $file = "$dirname/postgresql.conf";
 	open my $fh, '>>', $file or die qq{Could not open "$file": $!\n};
-	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\nlog_statement = 'all'\nclient_min_messages = WARNING\nlog_line_prefix='%s[%s] '\n\n",
+	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\nlog_statement = 'all'\nclient_min_messages = WARNING\nlog_line_prefix='%s[%s] '\nlisten_addresses = ''\n\n",
 		$clusterinfo->{port}, '%m', '%p';
-    if ($pg_major_version > 8 || ($pg_major_version == 8 && int($pg_minor_version) > 2)) {
-                # the int() call above prevents errors when the version is, for instance, '8.4devel'
+
+    if ($pgver{$name}{vmaj} > 8 or ($pgver{$name}{vmaj} == 8 and int($pgver{$name}{vmin}) > 2)) {
+		# the int() call above prevents errors when the version is, for instance, '8.4devel'
         print $fh "logging_collector = off\n";
     }
     else {
@@ -260,7 +298,7 @@ sub start_cluster {
 	my $name = shift || 'A';
 	my $arg = shift || '';
 
-	my $dirname = "bucardo_test_database_$name";
+	my $dirname = $pgver{$name}{dirname};
 
 	## Just in case
 	-d $dirname or $self->create_cluster($name);
@@ -285,8 +323,16 @@ sub start_cluster {
 		my $sockdir = "$dirname/socket";
 		-e $sockdir or mkdir $sockdir;
 		$option = q{-o '-k socket'};
+		## Older versions do not assume socket is right off of data dir
+		if ($pgver{$name}{vmaj}==8 and $pgver{$name}{vmin} < 1) {
+			$option = qq{-o '-k $dirname/socket'};
+		}
 	}
-	$COM = qq{$pg_ctl $option -l $dirname/pg.log -D $dirname start};
+
+	my $localpgctl = $pgver{$name}{pgctl};
+
+	$COM = qq{$localpgctl $option -l $dirname/pg.log -D $dirname start};
+	$DEBUG and warn qq{Running: $COM\n};
 	qx{$COM};
 
 	{
@@ -295,13 +341,14 @@ sub start_cluster {
 		redo;
 	}
 
-	## Wait for "ready to accept connections"
+	## Wait for the database to be ready to accept connections
 	my $logfile = "$dirname/pg.log";
+	my $okmsg = $pgver{$name}{okmsg};
 	open my $fh, '<', $logfile or die qq{Could not open "$logfile": $!\n};
 	seek $fh, -100, 2;
 	LOOP: {
 		  while (<$fh>) {
-			  last LOOP if /system is ready/;
+			  last LOOP if /$okmsg/;
 		  }
 		  sleep 0.1;
 		  seek $fh, 0, 1;
@@ -324,7 +371,7 @@ sub fresh_database {
 	my $name = shift || 'A';
 	my $arg = shift || {};
 
-	my $dirname = "bucardo_test_database_$name";
+	my $dirname = $pgver{$name}{dirname};
 
 	## Just in case
 	-d $dirname or $self->create_cluster($name);
@@ -397,7 +444,7 @@ sub shutdown_cluster {
 	my $self = shift;
 	my $name = shift;
 
-	my $dirname = "bucardo_test_database_$name";
+	my $dirname = $pgver{$name}{dirname};
 
 	return if ! -d $dirname;
 
@@ -436,7 +483,7 @@ sub remove_cluster {
 	my $self = shift;
 	my $name = shift;
 
-	my $dirname = "bucardo_test_database_$name";
+	my $dirname = $pgver{$name}{dirname};
 
 	return if ! -d $dirname;
 
@@ -463,7 +510,8 @@ sub connect_database {
 
 	my $dbport = $clusterinfo->{port};
 	my $dbhost = getcwd;
-	$dbhost .= "/bucardo_test_database_$name/socket";
+	my $dirname = $pgver{$name}{dirname};
+	$dbhost .= "/$dirname/socket";
 
 	my $dsn = "dbi:Pg:dbname=$dbname;port=$dbport;host=$dbhost";
 
@@ -473,7 +521,24 @@ sub connect_database {
 		delete $dbh{$dsn};
 	}
 
-	my $dbh = DBI->connect($dsn, '', '', {AutoCommit=>0, RaiseError=>1, PrintError=>0});
+	my $dbh;
+	eval {
+		$dbh = DBI->connect($dsn, '', '', {AutoCommit=>0, RaiseError=>1, PrintError=>0});
+	};
+	if ($@) {
+		if ($@ =~ /database "postgres" does not exist/) {
+			## Probably an older version that uses template1
+			(my $localdsn = $dsn) =~ s/dbname=postgres/dbname=template1/;
+			die $@ if $localdsn eq $dsn;
+			$dbh = DBI->connect($localdsn, '', '', {AutoCommit=>1, RaiseError=>1, PrintError=>0});
+			$dbh->do('CREATE DATABASE postgres');
+			## Reconnect to our new database
+			$dbh = DBI->connect($dsn, '', '', {AutoCommit=>0, RaiseError=>1, PrintError=>0});
+		}
+		else {
+			die "$@\n";
+		}
+	}
 
 	$dbh->ping();
 	$dbh->do('SET search_path = public');
@@ -868,7 +933,8 @@ sub add_db_args {
 	my $port = $clusterinfo->{port};
 
 	my $host = getcwd;
-	$host .= "/bucardo_test_database_$name/socket";
+	my $dirname = $pgver{$name}{dirname};
+	$host .= "/$dirname/socket";
 
 	my $arg = "name=$name user=$user port=$port host=$host";
 
@@ -900,7 +966,8 @@ sub ctl {
 	## Just hard-code these, no sense in multiple Bucardo base dbs yet:
 	$connopts .= " --dbport=58921";
 	my $dbhost = getcwd;
-	$dbhost .= "/bucardo_test_database_A/socket";
+	my $dirname = $pgver{A}{dirname};
+	$dbhost .= "/$dirname/socket";
 	$connopts .= " --dbhost=$dbhost";
 
 	$DEBUG >=3 and warn "Connection options: $connopts Args: $args\n";
@@ -1099,6 +1166,7 @@ sub get_pgctl_options {
 }
 
 sub remove_single_dir {
+
     my $dirname = shift;
     print "Removing test database in $dirname\n";
     # Try stopping PostgreSQL
@@ -1107,6 +1175,7 @@ sub remove_single_dir {
     sleep 2;
     qx{rm -rf $dirname};
     return;
+
 }
 
 sub drop_database {

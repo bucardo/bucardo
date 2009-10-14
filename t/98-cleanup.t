@@ -7,9 +7,9 @@ use strict;
 use warnings;
 use Test::More tests => 2;
 
-for my $letter ('A'..'C') {
-	my $dir = "bucardo_test_database_$letter";
-	next if ! -d $dir;
+opendir my $dh, '.' or die qq{Could not opendir?: $!\n};
+for my $dir (readdir $dh) {
+	next if $dir !~ /^bucardo_test_database_[A-Z]/ or ! -d $dir;
 	my $pidfile = "$dir/postmaster.pid";
 	next if ! -e $pidfile;
 	open my $fh, '<', $pidfile or die qq{Could not open "$pidfile": $!\n};
