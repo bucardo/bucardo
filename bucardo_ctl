@@ -2948,8 +2948,8 @@ sub add_customcode {
 				push @vals => $dbcols->{$col};
 			}
 		}
-		my $phs = '?,' x @vals;
-		$SQL .= ") VALUES ((SELECT currval('customcode_id_seq')),$phs)";
+		my $phs2 = '?,' x @vals;
+		$SQL .= ") VALUES ((SELECT currval('customcode_id_seq')),$phs2)";
 		$SQL =~ s/,\)/)/g;
 		$sth = $dbh->prepare($SQL);
 		eval {
