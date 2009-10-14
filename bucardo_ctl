@@ -1909,8 +1909,8 @@ sub get_reffed_tables {
 
 	$SQL= q{
 SELECT CASE WHEN conrelid=x.toid THEN 1 ELSE 2 END,
- confrelid::regclass::text,
- conrelid::regclass::text,
+ confrelid::regclass,
+ conrelid::regclass,
  conname,
  pg_get_constraintdef(oid, true)
 FROM pg_constraint,
