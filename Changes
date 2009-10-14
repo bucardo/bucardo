@@ -2,6 +2,9 @@
 
 Bucardo version 4.4.0
 
+  - Allow validate_goat() to work correctly against pgbouncer databases by 
+    respecting the server_side_prepares parameter. [GSM]
+
   - Loosen restrictions on customcode - now the derived columns must match 
     the target, but the target and source tables can be completely different. [GSM]
 

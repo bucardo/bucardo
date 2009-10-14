@@ -3650,7 +3650,19 @@ sub add_all_goats {
 			next;
 		}
 		$VERBOSE >= 2 and warn "Attempting to add $S.$T to the goat table\n";
-		$count = $addtable->execute($db->{name},$S,$T,$type);
+		eval {
+			$count = $addtable->execute($db->{name},$S,$T,$type);
+		};
+		if ($@) {
+			warn "$@\n";
+			if ($@ =~ /prepared statement.+already exists/) {
+				warn "This message usually indicates you are using pgbouncer\n";
+				warn "You can probably fix this problem by running:\n";
+				warn "$progname update db $db->{name} server_side_prepares=false\n";
+				warn "Then retry your command again\n\n";
+			}
+			exit 1;
+		}
 		if ($count != 1) {
 			$addtable->finish();
 			warn "Failed to add $type $S.$T to the goat table!\n";

@@ -844,7 +844,7 @@ if (!$rv->{processed}) {
     elog(ERROR, qq{Error: Could not find a database with an name of $dbname\n});
 }
 $row = $rv->{rows}[0]{apple};
-($db{dsn},$db{user},$db{pass}) = split /\n/ => $row;
+($db{dsn},$db{user},$db{pass},$db{ssp}) = split /\n/ => $row;
 
 elog(DEBUG, "Connecting in validate_goat as $db{dsn} user=$db{user} pid=$$ for table $schema.$table");
 
@@ -852,6 +852,8 @@ $dbh = DBI->connect($db{dsn}, $db{user}, $db{pass},
     {AutoCommit=>0, RaiseError=>1, PrintError=>0});
 
 $dbh or elog(ERROR, qq{Database connection "$db{dsn}" as user $db{user} failed: $DBI::errstr\n});
+
+$db{ssp} or $dbh->{pg_server_prepare} = 0;
 
 ## Get column information for this table (and verify it exists)
 $SQL = q{
