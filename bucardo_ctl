@@ -2576,10 +2576,10 @@ sub list_tables {
    }
 
 	for my $row (@$info) {
-		printf "Table: %-*s  DB: %-*s  PK: %-*s\n",
+		printf "Table: %-*s  DB: %-*s  PK: %s\n",
 			$maxtable, "$row->{schemaname}.$row->{tablename}",
 			$maxdb, $row->{db},
-			$maxpkey, $row->{pk};
+			$row->{pk};
 		if ($VERBOSE) {
 			my $g = $global{goat}->{$row->{id}};
 			if (exists $g->{herd}) {
