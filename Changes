@@ -1,6 +1,6 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-Bucardo version 4.4.0
+Bucardo version 4.4.0, released October 14, 2009
 
   - Allow validate_goat() to work correctly against pgbouncer databases by 
     respecting the server_side_prepares parameter. [GSM]
