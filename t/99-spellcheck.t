@@ -203,6 +203,7 @@ maxkicks
 mcp
 multi
 onetimecopy
+pgbouncer
 pid
 pidfile
 pids
@@ -213,6 +214,7 @@ rowid
 schemas
 smallint
 sourcedbh
+src
 staylive
 tcp
 timestamp
