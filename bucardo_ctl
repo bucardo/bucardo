@@ -1517,7 +1517,7 @@ sub status_detail {
 			$why =~ s/^/                  /mg;
 
 			$why =~ s/^\s+//;
-			$morebad .= "\nLatest bad reason: $why";
+			$morebad .= "\nLatest bad reason:    $why";
 		}
 
 		my $sourcedb = $herdmap->{$s->{source}}{database} || '?';
