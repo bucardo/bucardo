@@ -1,5 +1,9 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
+Bucarod version 4.x.x
+
+  - Allow 'list sync' to filter by 'active' and 'inactive' [GSM]
+
 Bucardo version 4.4.0, released October 14, 2009
 
   - Allow validate_goat() to work correctly against pgbouncer databases by 
