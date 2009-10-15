@@ -2466,11 +2466,15 @@ sub list_syncs {
 	my $usage = usage('list_syncs');
 
 	## Strip out special words from the nouns list as modifiers
-	my @mod;
+	my (@tmod,@smod);;
 	my $WHERE = '';
 	for my $term (@nouns) {
 		if ($term =~ /^(?:swap|pushdelta|fullcopy)$/i) {
-			push @mod => lc $term;
+			push @tmod => lc $term;
+			next;
+		}
+		if ($term =~ /^(?:active|inactive)$/i) {
+			push @smod => lc $term;
 			next;
 		}
 		my $wild = $term =~ s/[*%]//g ? '~' : '=';
@@ -2481,13 +2485,26 @@ sub list_syncs {
 	}
 
 	$SQL = "SELECT * FROM bucardo.sync $WHERE ORDER BY name";
-	my $mod = join ' OR ' => map { "synctype = '$_'" } @mod;
-	if ($mod) {
+
+	## Filter by synctype
+	my $tmod = join ' OR ' => map { "synctype = '$_'" } @tmod;
+	if ($tmod) {
 		if ($SQL =~ /WHERE /) {
-			$SQL =~ s/WHERE (.+)\s+ORDER BY/WHERE ($mod) AND ($1) ORDER BY/;
+			$SQL =~ s/WHERE (.+)\s+ORDER BY/WHERE ($tmod) AND ($1) ORDER BY/;
 		}
 		else {
-			$SQL =~ s/sync/sync WHERE $mod/;
+			$SQL =~ s/sync/sync WHERE $tmod/;
+		}
+	}
+
+	## Filter by status?
+	my $smod = join ' OR ' => map { "status = '$_'" } @smod;
+	if ($smod) {
+		if ($SQL =~ /WHERE /) {
+			$SQL =~ s/WHERE (.+)\s+ORDER BY/WHERE ($smod) AND ($1) ORDER BY/;
+		}
+		else {
+			$SQL =~ s/sync/sync WHERE $smod/;
 		}
 	}
 
