@@ -4427,6 +4427,7 @@ sub upgrade {
 
 	my @old_configs = (
 		'pidfile',
+		'upsert_attempts',
 	);
 
 	my @old_constraints = (
