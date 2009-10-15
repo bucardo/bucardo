@@ -3204,15 +3204,15 @@ sub start_controller {
 				last Q;
 			}
 			## Got any more slots for this target db?
-			elsif ($limitperdb and $dbinuse{target}{$dbname} >= $dbinfo->{$dbname}{targetlimit}) {
+			elsif ($limitperdb and $dbinfo->{$dbname}{targetlimit} and $dbinuse{target}{$dbname} >= $dbinfo->{$dbname}{targetlimit}) {
 				$self->glog(qq{No room in queue for target db "$dbname" ($syncname) Limit: $dbinfo->{$dbname}{targetlimit} Used: $dbinuse{target}{$dbname}});
 				shift @q for (1..$offset);
 				$queueclear = 0;
 				next Q;
 			}
 			## Got any more slots for this source db?
-			elsif ($limitperdb and $dbinuse{source}{$sourcedb} >= $dbinfo->{$sourcedb}{sourcelimit}) {
-				$self->glog(qq{No room in queue for source db "$dbname" ($syncname) Limit: $dbinfo->{$dbname}{sourcelimit} Used: $dbinuse{source}{$dbname}});
+			elsif ($limitperdb and $dbinfo->{$sourcedb}{sourcelimit} and $dbinuse{source}{$sourcedb} >= $dbinfo->{$sourcedb}{sourcelimit}) {
+				$self->glog(qq{No room in queue for source db "$dbname" ($syncname) Limit: $dbinfo->{$sourcedb}{sourcelimit} Used: $dbinuse{source}{$sourcedb}});
 				shift @q for (1..$offset);
 				$queueclear = 0;
 				next Q;
