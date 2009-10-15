@@ -1737,6 +1737,7 @@ ORDER BY started DESC LIMIT 1
 
 		## Check for current activity
 		$s->{timeq1} = $s->{timeq2} = '';
+		my $targ = $s->{targetdb} || $s->{targetgroup};
 		for my $row (@{$s->{active_now}}) {
 			$s->{timeq} = $s->{timeq1} = pretty_time($row->{q1});
 			if (defined $row->{q2}) {
@@ -1744,13 +1745,13 @@ ORDER BY started DESC LIMIT 1
 			}
 			my $len = length('WAIT:') + length($s->{timeq});
 			if (length $s->{timeq2}) {
-				$len += (1 + length($s->{targetdb}));
+				$len += (1 + length($targ));
 			}
 			$max{stat} = $len if $len > $max{stat};
 			last;
 		}
 
-		$s->{state} = length($s->{timeq2}) ? "RUN:$s->{timeq}>$s->{targetdb}" :
+		$s->{state} = length($s->{timeq2}) ? "RUN:$s->{timeq}>$targ" :
 			length($s->{timeq1}) ? "WAIT:$s->{timeq}" :
 			($s->{status} eq 'active') ? 'idle' : 'off';
 
