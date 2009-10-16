@@ -1439,6 +1439,7 @@ sub status_detail {
 	my @synclist;
 	for my $sync (sort @nouns) {
 		$DEBUG and warn "Verify sync: $sync\n";
+		next if $sync eq 'sync';
 		if (!exists $synclist->{$sync}) {
 			## If a number, skip for ease of "kick name #" toggling
 			$sync !~ /^\d+$/ and die "No such sync: $sync\n";
