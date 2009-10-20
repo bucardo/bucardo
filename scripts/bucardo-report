@@ -574,6 +574,7 @@ sub showhost {
 
 	my $z=1;
 	our %row;
+	undef %row;
 	$order=1;
 	for my $s (sort keys %$sync) {
 		for my $t (sort { 
@@ -891,11 +892,9 @@ sub showhost {
 
 	}
 
-
-
-
-
 	print "</table>\n";
+
+	Footer_Summary();
 
 	return $daysback;
 
@@ -1510,15 +1509,19 @@ td.syncinfo2 { color: #cc0000; font-weight: 800; padding-left: .5em; padding-rig
 
 } ## end of Header
 
-sub Footer {
-	my $scripttime = tv_interval($scriptstart);
-	unless ($q{hidetime}) {
-		printf "<p><small>Total time: %.2f", $scripttime;
-		if (exists $info{dcount}) {
-			print " &nbsp; Rows in bucardo_delta: $info{dcount} &nbsp; Rows in bucardo_track: $info{tcount}";
-		}
-		print "</small></p>";
+sub Footer_Summary {
+
+  my $scripttime = tv_interval($scriptstart);
+  unless ($q{hidetime}) {
+	printf "<p><small>Total time: %.2f", $scripttime;
+	if (exists $info{dcount}) {
+	  print " &nbsp; Rows in bucardo_delta: $info{dcount} &nbsp; Rows in bucardo_track: $info{tcount}";
 	}
+	print "</small></p>";
+  }
+}
+
+sub Footer {
 	print "</body></html>\n";
 	exit;
 } ## end of Footer
@@ -1580,5 +1583,3 @@ DBPASS: foobar
 DAYSBACK: 5
 DAYSBACKSYNC: 30
 DAYSBACKDB: 30
-
-
