@@ -3643,7 +3643,12 @@ sub start_kid {
 			$self->send_mail({ body => "$body\n", subject => $subject });
 		}
 
-		$self->cleanup_kid($msg);
+		my $extrainfo = sprintf '%s%s%s',
+			qq{Sync "$syncname", Target "$targetdb"},
+			$S eq '?' ? '' : " $S.$T",
+			$pkval eq '?' ? '' : " pk: $pkval";
+
+		$self->cleanup_kid($msg, $extrainfo);
 
 		exit 1;
 
@@ -6086,7 +6091,7 @@ sub start_kid {
 	$targetdbh->rollback();
 	$targetdbh->disconnect();
 
-	$self->cleanup_kid('Normal exit');
+	$self->cleanup_kid('Normal exit', '');
 
 	exit 0;
 
@@ -6098,9 +6103,9 @@ sub cleanup_kid {
 	## Kid is shutting down
 	## Remove our PID file
 
-	my ($self,$reason) = @_;
+	my ($self,$reason,$extrainfo) = @_;
 
-	$self->glog("Kid exiting at cleanup_kid. Reason: $reason");
+	$self->glog("Kid exiting at cleanup_kid. $extrainfo Reason: $reason");
 
 	## Remove the pid file
 	if (unlink $self->{KIDPIDFILE}) {

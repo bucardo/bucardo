@@ -2,12 +2,13 @@
 
 Bucardo version 4.x.x
 
-
   - Fix for proper sourcelimit and targetlimit calculations. [GSM]
 
   - Allow 'list sync' to filter by 'active' and 'inactive' [GSM]
 
   - Remove unused config variable 'upsert_attempts' [GSM]
+
+  - Show detailed information on KID error exit. [GSM]
 
 Bucardo version 4.4.0, released October 14, 2009
 
