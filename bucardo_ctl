@@ -2250,7 +2250,7 @@ sub list_customcodes {
 	$count = $sth->execute();
 	if ($count < 1) {
 		$sth->finish();
-		printf "There are no%s entries in the 'db' table.\n",
+		printf "There are no%s entries in the 'customcode' table.\n",
 			$WHERE ? ' matching' : '';
 		exit 1;
 	}
