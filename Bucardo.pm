@@ -4819,7 +4819,7 @@ sub start_kid {
 					}
 
 					## If this goat is set to makedelta, add rows to bucardo_delta to simulate the
-					##   normal action of a tigger, and add rows to bucardo_track so they changed
+					##   normal action of a trigger, and add rows to bucardo_track so they changed
 					##   rows cannot flow back to us
 					## TODO: Needs testing
 					if ($g->{does_makedelta}) {
