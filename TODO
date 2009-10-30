@@ -44,3 +44,5 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Consider keeping long-term stats for a sync/table: total rows transferred, etc.
 - Add support for manual DDL changes (in progress)
 - Add support for automatic DDL changes (in progress)
+- Allow multiple item updates, e.g. bucardo_ctl update sync s1 s2 s3 ping=true
+- Allow wildcards in item updates, e.g. bucardo_ctl update sync s* ping=true
