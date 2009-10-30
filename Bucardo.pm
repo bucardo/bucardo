@@ -2378,6 +2378,11 @@ sub kill_bucardo_pid {
 
 	my $info = qx{$com};
 
+	if ($info !~ /\b$pid\b/) {
+		## PID has probably gone away, so silently return
+		return -1;
+	}
+
 	if ($info !~ /bucardo_ctl/o) {
 		chomp $info;
 		$info =~ s/\n/\\n/g;
