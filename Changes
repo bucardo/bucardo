@@ -13,6 +13,8 @@ Bucardo version 4.x.x
 
   - Show detailed information on KID error exit. [GSM]
 
+  - Fix bug in bucardo_purge_q_table in index detection logic. [Aolmezov]
+
   - Relax SELECT version() regex in bucardo_ctl, to let modified versions 
     of Postgres tell us their version. [GSM]
 

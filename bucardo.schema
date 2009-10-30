@@ -581,6 +581,7 @@ BEGIN
 
   -- Make sure we have all child tables
   FOR myrec IN SELECT DISTINCT TO_CHAR(cdate, 'YYYYMMDD') AS t FROM freezer.master_q LOOP
+    needindex = false;
     tablename = 'child_q_' || myrec.t;
     RAISE DEBUG 'Found %', tablename;
     PERFORM 1 FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace)
