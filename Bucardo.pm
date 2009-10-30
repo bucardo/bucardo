@@ -1666,34 +1666,97 @@ sub start_mcp {
 		} ## end each custom code
 
 		## Consolidate some things that are set at both sync and goat levels
-		$s->{does_makedelta} = $s->{makedelta};
-		$s->{track_rates} = 0 if $s->{synctype} eq 'fullcopy';
-		my $makedeltagoats = 0;
+
+		## The makedelta settings indicates which sides (source/target) get manual delta rows
+		## This is required if other syncs need to see the changed data
+		## Note that fullcopy is always 0, and pushdelta can only change target_makedelta
+		## The sync is authoritative, unless it is null, in which case a goat can override with 'on'
+		$s->{does_target_makedelta} = $s->{target_makedelta};
+		$s->{does_source_makedelta} = $s->{synctype} eq 'swap' ? $s->{source_makedelta} : 0;
+
+		## Go through each goat in this sync, adjusting items and possibly bubbling up info to sync
 		for my $g (@{$s->{goatlist}}) {
 			## None of this applies to non-tables
 			next if $g->{reltype} ne 'table';
 
-			if ($g->{makedelta}) {
-				$s->{does_makedelta} = 1;
-				$g->{does_makedelta} = 1;
-			}
-			elsif (! defined $g->{makedelta}) {
-				$g->{does_makedelta} = $s->{does_makedelta};
-			}
-			else {
-				$g->{does_makedelta} = 0;
-			}
-			if ($g->{does_makedelta}) {
-				$makedeltagoats++;
-			}
+			## If we didn't find exception custom code above, set it to 0 for this goat
 			$g->{has_exception_code} ||= 0;
+
+			## If goat.rebuild_index is null, use the sync's value
 			if (!defined $g->{rebuild_index}) {
 				$g->{rebuild_index} = $s->{rebuild_index};
 			}
-		}
-		if ($s->{does_makedelta} and !$makedeltagoats) {
-			$self->glog('Although sync set as makedelta, none of the goats within it are');
-			$s->{does_makedelta} = 0;
+
+			## Fullcopy never does makedelta
+			next if $s->{synctype} eq 'fullcopy';
+
+			## If goat.makedelta is null, we simply fall through to the sync's default
+			if (! defined $g->{target_makedelta}) {
+				$g->{does_target_makedelta} = $s->{does_target_makedelta};
+			}
+			elsif ($g->{target_makedelta}) {
+				## If goat.makedelta is true and the sync is null, flip it on
+				if (! defined $s->{does_target_makedelta}) {
+					$s->{does_target_makedelta} = 1;
+					$g->{does_target_makedelta} = 1;
+				}
+				## If goat is true and sync is false, give a warning but do not flip the goat on
+				elsif (! $s->{does_target_makedelta}) {
+					my ($S,$T) = ($g->{safeschema},$g->{safetable});
+					$self->glog("Warning! Table $S.$T has target_makedelta true, but it is off for this sync");
+					$g->{does_target_makedelta} = 0;
+				}
+				## Else, goat and sync are both on, which is good
+				else {
+					$g->{does_target_makedelta} = 1;
+				}
+			}
+			else { ## goat.target_makedelta is FALSE
+				## We always respect this
+				$g->{does_target_makedelta} = 0;
+			}
+
+
+			## The only sync type that does source makedeltas is swap
+			next if $s->{synctype} != 'swap';
+
+			## Same as above, but for the source
+
+			## If goat.makedelta is null, we simply fall through to the sync's default
+			if (! defined $g->{source_makedelta}) {
+				$g->{does_source_makedelta} = $s->{does_source_makedelta};
+			}
+			elsif ($g->{source_makedelta}) {
+				## If goat.makedelta is true and the sync is null, flip it on
+				if (! defined $s->{does_source_makedelta}) {
+					$s->{does_source_makedelta} = 1;
+					$g->{does_source_makedelta} = 1;
+				}
+				## If goat is true and sync is false, give a warning but do not flip the goat on
+				elsif (! $s->{does_source_makedelta}) {
+					my ($S,$T) = ($g->{safeschema},$g->{safetable});
+					$self->glog("Warning! Table $S.$T has source_makedelta true, but it is off for this sync");
+					$g->{does_source_makedelta} = 0;
+				}
+				## Else, goat and sync are both on, which is good
+				else {
+					$g->{does_souce_makedelta} = 1;
+				}
+			}
+			else { ## goat.source_makedelta is FALSE
+				## We always respect this
+				$g->{does_source_makedelta} = 0;
+			}
+
+		} ## end each goat
+
+		## Now that goat has had a chance to change things, do the final non-null settings
+		$s->{does_target_makedelta} = 0 if ! defined $s->{does_target_makedelta};
+		$s->{does_source_makedelta} = 0 if ! defined $s->{does_source_makedelta};
+
+		## There are things that a fullcopy sync does not do
+		if ($s->{synctype} eq 'fullcopy') {
+			$s->{track_rates} = 0;
 		}
 
 		## Go through each table and make sure it exists and matches everywhere
@@ -2537,7 +2600,11 @@ sub start_controller {
 			$m->{tablename},
 			$m->{ghost}          ? ' [GHOST]'     : '',
 			$m->{has_delta}      ? ' [DELTA]'     : '',
-			$m->{does_makedelta} ? ' [MAKEDELTA]' : '';
+			($m->{does_source_makedelta} or $m->{does_target_makedelta}) ? 
+				sprintf (q{ [MAKEDELTA: %s%s]},
+					$m->{does_source_makedelta} ? 'SOURCE ' : '',
+					$m->{does_target_makedelta} ? 'TARGET ' : ''
+			) :'';
 		$self->glog($msg);
 		if (defined $m->{customselect}) {
 			$self->glog("   customselect: $m->{customselect}");
@@ -3749,10 +3816,15 @@ sub start_kid {
 
 	if ($synctype eq 'pushdelta' or $synctype eq 'swap') {
 
-		if ($sync->{does_makedelta}) {
+		## We may need to inject values back into bucardo_track,
+		## in case other syncs need to know about the changed rows
+		if ($sync->{does_source_makedelta}) {
 			$SQL = q{INSERT INTO bucardo.bucardo_track(txntime,tablename,targetdb) VALUES (now(),?,?)};
-			$sth{source}{inserttrack} = $sourcedbh->prepare($SQL) if $synctype eq 'swap';
-			$sth{target}{inserttrack} = $targetdbh->prepare($SQL);
+			$sth{source}{inserttrack} = $sourcedbh->prepare($SQL);
+		}
+		if ($sync->{does_target_makedelta}) {
+			$SQL = q{INSERT INTO bucardo.bucardo_track(txntime,tablename,targetdb) VALUES (now(),?,?)};
+			$sth{target}{inserttrack} = $sourcedbh->prepare($SQL);
 		}
 
 		for my $g (@$goatlist) {
@@ -3761,7 +3833,7 @@ sub start_kid {
 
 			($S,$T) = ($g->{safeschema},$g->{safetable});
 
-			if ($g->{does_makedelta}) {
+			if ($g->{does_source_makedelta} or $g->{does_target_makedelta}) {
 				my $rowid = 'rowid';
 				my $vals = '?' . (',?' x $g->{pkcols});
 				$x=0;
@@ -3770,10 +3842,9 @@ sub start_kid {
 					next if $x < 2;
 					$rowid .= ", rowid$x";
 				}
-				## TODO: Change to COPY when possible?
 				$SQL = qq{INSERT INTO bucardo.bucardo_delta(tablename,$rowid) VALUES ($vals)};
-				$sth{source}{$g}{insertdelta} = $sourcedbh->prepare($SQL) if $synctype eq 'swap';
-				$sth{target}{$g}{insertdelta} = $targetdbh->prepare($SQL);
+				$sth{source}{$g}{insertdelta} = $sourcedbh->prepare($SQL) if $g->{does_source_makedelta};
+				$sth{target}{$g}{insertdelta} = $targetdbh->prepare($SQL) if $g->{does_target_makedelta};
 			}
 
 			if ($synctype eq 'swap') {
@@ -4694,7 +4765,7 @@ sub start_kid {
 
 				## Figure out if we have enough rows to trigger a delta_bypass
 				$g->{does_delta_bypass} = 0;
-				if ($g->{delta_bypass} and ! $g->{does_makedelta}) {
+				if ($g->{delta_bypass} and ! $g->{does_source_makedelta} and ! $g->{does_target_makedelta}) {
 					if ($g->{delta_bypass_count}
 							and $deltacount{source}{$S}{$T} >= $g->{delta_bypass_count}) {
 						$g->{does_delta_bypass} = 'count';
@@ -4821,8 +4892,7 @@ sub start_kid {
 					## If this goat is set to makedelta, add rows to bucardo_delta to simulate the
 					##   normal action of a trigger, and add rows to bucardo_track so they changed
 					##   rows cannot flow back to us
-					## TODO: Needs testing
-					if ($g->{does_makedelta}) {
+					if ($g->{does_target_makedelta}) {
 						for (@$info) {
 							$sth{target}{$g}{insertdelta}->execute($toid,@{$_}[0..($g->{pkcols}-1)]);
 						}
@@ -5490,7 +5560,8 @@ sub start_kid {
 					if (($action & 2 and ! defined $info2->{$pkval}{$namepk}) ## target to source
 					 or ($action & 4 and ! defined $info1->{$pkval}{$namepk})) { ## source to source
 						push @srcdelete, \@safepk;
-						if ($g->{does_makedelta}) {
+						## 1=source 2=target 3=both
+						if ($g->{does_source_makedelta}) {
 							if ($g->{pkcols} <= 1) {
 								push @srcdelete2, [$pkval];
 							}
@@ -5507,7 +5578,8 @@ sub start_kid {
 					if (($action & 1 and ! defined $info1->{$pkval}{$namepk}) ## source to target
 					 or ($action & 8 and ! defined $info2->{$pkval}{$namepk})) { ## target to target
 						push @tgtdelete, \@safepk;
-						if ($g->{does_makedelta}) {
+						## 1=source 2=target 3=both
+						if ($g->{does_target_makedelta}) {
 							if ($g->{pkcols} <= 1) {
 								push @tgtdelete2, [$pkval];
 							}
@@ -5537,11 +5609,13 @@ sub start_kid {
 				}
 
 				## Add in the makedelta rows as needed
-				if ($g->{does_makedelta}) {
+				if ($g->{does_source_makedelta}) {
 					for (@srcdelete2) {
 						$sth{source}{$g}{insertdelta}->execute($g->{oid},@$_);
 						$self->glog("Adding in source bucardo_delta row (delete) for $g->{oid} and $_");
 					}
+				}
+				if ($g->{does_target_makedelta}) {
 					for (@tgtdelete2) {
 						$sth{target}{$g}{insertdelta}->execute($toid,@$_);
 						$self->glog("Adding in target bucardo_delta row (delete) for $toid and $_");
@@ -5759,12 +5833,13 @@ sub start_kid {
 								}
 							}
 							## TODO: Move this elsewhere?
-							## ZZZ This will probably break for multi-col pks
-							if ($g->{does_makedelta}) {
+							if ($g->{does_source_makedelta}) {
 								if ($action & 2 or $action & 4) {
 									$sth{source}{$g}{insertdelta}->execute($g->{oid},@$srcpks);
 									$self->glog("Adding in source bucardo_delta row (upsert) for $g->{oid} and $pkval");
 								}
+							}
+							if ($g->{does_target_makedelta}) {
 								if ($action & 1 or $action & 8) {
 									$sth{target}{$g}{insertdelta}->execute($toid,@$tgtpks);
 									$self->glog("Adding in target bucardo_delta row (upsert) for $toid and $pkval");
@@ -5864,11 +5939,13 @@ sub start_kid {
 				}
 
 				## Add in makedelta rows for bucardo_track as needed
-				if ($g->{does_makedelta}) {
+				if ($g->{does_source_makedelta}) {
 					if ($dmlcount{D}{source}{$S}{$T} or $dmlcount{U}{source}{$S}{$T} or $dmlcount{I}{source}{$S}{$T}) {
 						$sth{source}{inserttrack}->execute($g->{oid},$targetdb);
 						$self->glog("Added makedelta bucardo_track row for $S.$T on $sourcedb ($g->{oid},$targetdb)");
 					}
+				}
+				if ($g->{does_target_makedelta}) {
 					if ($dmlcount{D}{target}{$S}{$T} or $dmlcount{U}{target}{$S}{$T} or $dmlcount{I}{target}{$S}{$T}) {
 						$sth{target}{inserttrack}->execute($toid,$sourcedb);
 						$self->glog("Added makedelta bucardo_track row for $S.$T on $targetdb ($toid,$sourcedb)");

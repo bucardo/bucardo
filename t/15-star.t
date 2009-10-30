@@ -74,9 +74,9 @@ for my $db (qw/A B C/) {
     ($res, @dummy) = split"\n", $bct->ctl("add herd herd$db");
     like($res, qr/Added herd/, $res);
     if ($db eq 'A') {
-        ($res, @dummy) = split "\n", $bct->ctl("add table star_test db=$db herd=herd$db makedelta=true");
+        ($res, @dummy) = split "\n", $bct->ctl("add table star_test db=$db herd=herd$db target_makedelta=1");
         like($res, qr/Added table/, $res);
-        ($res, @dummy) = split "\n", $bct->ctl("add table star_test_mcpk db=$db herd=herd$db makedelta=true");
+        ($res, @dummy) = split "\n", $bct->ctl("add table star_test_mcpk db=$db herd=herd$db target_makedelta=1");
         like($res, qr/Added table/, $res);
     }
     else {
@@ -95,10 +95,10 @@ $res = $bct->ctl('add sync star_a_c source=herdA type=pushdelta targetdb=C');
 chomp $res;
 like($res, qr/Added sync/, $res);
 
-$res = $bct->ctl('add sync star_b_a source=herdB type=pushdelta targetdb=A makedelta=true');
+$res = $bct->ctl('add sync star_b_a source=herdB type=pushdelta targetdb=A target_makedelta=1');
 chomp $res;
 like($res, qr/Added sync/, $res);
-$res = $bct->ctl('add sync star_c_a source=herdC type=pushdelta targetdb=A makedelta=true');
+$res = $bct->ctl('add sync star_c_a source=herdC type=pushdelta targetdb=A target_makedelta=1');
 chomp $res;
 like($res, qr/Added sync/, $res);
 

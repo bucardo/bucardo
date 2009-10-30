@@ -1485,7 +1485,7 @@ sub status_detail {
 		}
 
 		## Should be 'yes' or 'no'
-		for (qw/makedelta analyze_after_copy stayalive kidsalive ping do_listen usecustomselect/) {
+		for (qw/analyze_after_copy stayalive kidsalive ping do_listen usecustomselect/) {
 			$s->{$_} = (defined $s->{$_} and $s->{$_}) ? 'yes' : 'no ';
 		}
 
@@ -1547,7 +1547,7 @@ Overdue time:         $s->{overdue}
 Expired time:         $s->{expired}
 Stayalive:            $s->{stayalive}      Kidsalive: $s->{kidsalive}
 Rebuild index:        $s->{rebuild_index}        Do_listen: $s->{do_listen}
-Ping:                 $s->{ping}      Makedelta: $s->{makedelta}
+Ping:                 $s->{ping}      Makedelta: $s->{source_makedelta}/$s->{target_makedelta}
 Onetimecopy:          $s->{onetimecopy}
 };
 		if ($s->{synctype} eq 'fullcopy'){
@@ -3259,7 +3259,8 @@ sub add_sync {
         do_listen                do_listen            TF               null
         checktime                checktime            interval         null
         status                   status               =active|inactive null
-        makedelta                makedelta            TF               null
+        source_makedelta         source_makedelta     =0|1             null
+        target_makedelta         target_makedelta     =0|1             null
         priority                 priority             numeric          null
         analyze_after_copy       analyze_after_copy   TF               null
         overdue                  overdue              interval         null
@@ -3400,7 +3401,8 @@ sub add_table {
         has_delta                has_delta            TF               null
         ping                     ping                 TF               null
         customselect             customselect         0                null
-        makedelta                makedelta            TF               null
+        source_makedelta         source_makedelta     =0|1             null
+        target_makedelta         target_makedelta     =0|1             null
         rebuild_index            rebuild_index        numeric          null
         standard_conflict        standard_conflict    0                null
         analyze_after_copy       analyze_after_copy   TF               null
@@ -4490,9 +4492,9 @@ sub upgrade {
 	);
 
 	my @altered_columns = (
+		['bucardo', 'goat', 'rebuild_index', 'BOOL2SMALLINT1'],
 		['bucardo', 'goat', 'schemaname',    'NO DEFAULT'],
-		['bucardo', 'goat', 'rebuild_index', 'BOOL2SMALLINT'],
-		['bucardo', 'sync', 'rebuild_index', 'BOOL2SMALLINT'],
+		['bucardo', 'sync', 'rebuild_index', 'BOOL2SMALLINT1'],
 	);
 
 	my @row_values = (
@@ -4595,12 +4597,13 @@ sub upgrade {
 			clog("Changed DEFAULT on $schema.$table.$column to $newname");
 			$changes++;
 		}
-		elsif ($change eq 'BOOL2SMALLINT') {
+		elsif ($change =~ /BOOL2SMALLINT(\d)/) {
+			my $defval = $1;
 			my $oldtype = column_type($schema, $table, $column);
 			next if $oldtype eq 'smallint';
 			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column DROP DEFAULT");
 			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column TYPE smallint "
-							. "USING CASE WHEN $column IS NULL OR $column IS FALSE THEN 0 ELSE 1 END");
+							. "USING CASE WHEN $column IS NULL OR $column IS FALSE THEN 0 ELSE $defval END");
 			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column SET DEFAULT 0");
 			clog("Changed type of $schema.$table.$column to smallint");
 			$changes++;
@@ -4608,6 +4611,30 @@ sub upgrade {
 		else {
 			die qq{Do not know how to handle altered column spec of "$change"};
 		}
+	}
+
+	## Special cases
+	if (! column_exists('bucardo', 'goat', 'source_makedelta')) {
+		upgrade_and_log('ALTER TABLE bucardo.goat ADD COLUMN source_makedelta SMALLINT NULL');
+		upgrade_and_log('ALTER TABLE bucardo.goat ADD COLUMN target_makedelta SMALLINT NULL');
+		if (column_exists('bucardo', 'goat', 'makedelta')) {
+			upgrade_and_log('UPDATE goat SET source_makedelta=1, target_makedelta=1 WHERE makedelta IS TRUE');
+			upgrade_and_log('UPDATE goat SET source_makedelta=0, target_makedelta=0 WHERE makedelta IS FALSE');
+			upgrade_and_log('ALTER TABLE bucardo.goat DROP COLUMN makedelta');
+		}
+		clog('Added columns goat.source_makedelta and goat.target_makedelta');
+		$changes++;
+	}
+	if (! column_exists('bucardo', 'sync', 'source_makedelta')) {
+		upgrade_and_log('ALTER TABLE bucardo.sync ADD COLUMN source_makedelta SMALLINT NULL');
+		upgrade_and_log('ALTER TABLE bucardo.sync ADD COLUMN target_makedelta SMALLINT NULL');
+		if (column_exists('bucardo', 'sync', 'makedelta')) {
+			upgrade_and_log('UPDATE sync SET source_makedelta=1, target_makedelta=1 WHERE makedelta IS TRUE');
+			upgrade_and_log('UPDATE sync SET source_makedelta=0, target_makedelta=0 WHERE makedelta IS FALSE');
+			upgrade_and_log('ALTER TABLE bucardo.sync DROP COLUMN makedelta');
+		}
+		clog('Added columns sync.source_makedelta and sync.target_makedelta');
+		$changes++;
 	}
 
 	## Drop any old columns
@@ -5461,11 +5488,12 @@ sub install {
 
 	my $res = qx{$COM};
 
-	if ($res !~ /Postgre(?:SQL|s) (\d+)\.(\d+)(\S+)/) {
+	if ($res !~ /(\d+)\.(\d+)(\S+)/) {
 		die "Sorry, could not determine the version for that database\n";
 	}
 	my ($maj,$min,$rev) = ($1,$2,$3);
 	$rev =~ s/^\.//;
+	$rev =~ s/(\d+)\.\d+/$1/;
 
 	print "Postgres version is: $maj.$min\n";
 
@@ -5665,7 +5693,7 @@ Usage:  add <item_type> <item_name>
 
 Usage:  add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx ssp=1/0
 
-Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool herd=xxx
+Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx herd=xxx
 
 Usage:  add all tables herd=xxx
 

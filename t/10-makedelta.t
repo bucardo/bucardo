@@ -58,6 +58,7 @@ else {
     $dbhX->do('TRUNCATE herdmap CASCADE');
     $dbhX->do('TRUNCATE herd CASCADE');
     $dbhX->do('TRUNCATE goat CASCADE');
+	$dbhA->do('TRUNCATE bucardo.bucardo_truncate_trigger');
     $dbhX->commit();
     $dbhA->commit();
     $dbhB->commit();
@@ -67,9 +68,9 @@ my $res;
 my @dummy;
 ($res, @dummy) = split "\n", $bct->ctl('add herd herdA');
 like($res, qr/Added herd/, $res);
-($res, @dummy) = split "\n", $bct->ctl('add table makedelta      db=A herd=herdA makedelta=true');
+($res, @dummy) = split "\n", $bct->ctl('add table makedelta      db=A herd=herdA target_makedelta=1');
 like($res, qr/Added table/, $res);
-($res, @dummy) = split "\n", $bct->ctl('add table makedelta_mcpk db=A herd=herdA makedelta=true');
+($res, @dummy) = split "\n", $bct->ctl('add table makedelta_mcpk db=A herd=herdA target_makedelta=1');
 like($res, qr/Added table/, $res);
 ($res, @dummy) = split "\n", $bct->ctl('add herd herdB');
 like($res, qr/Added herd/, $res);
@@ -78,8 +79,10 @@ like($res, qr/Added table/, $res);
 ($res, @dummy) = split "\n", $bct->ctl('add table makedelta_mcpk db=B herd=herdB');
 like($res, qr/Added table/, $res);
 $res = $bct->ctl('add sync makedeltasync_b source=herdB type=pushdelta targetdb=C');
+chomp $res;
 like($res, qr/Added sync/, $res);
-$res = $bct->ctl('add sync makedeltasync_a source=herdA type=pushdelta targetdb=B makedelta=true');
+$res = $bct->ctl('add sync makedeltasync_a source=herdA type=pushdelta targetdb=B target_makedelta=1');
+chomp $res;
 like($res, qr/Added sync/, $res);
 $dbhX->commit();
 
@@ -102,8 +105,12 @@ $dbhX->commit();
 # it anyway so we can listen for its results and make *sure* it ran
 $bct->ctl('kick makedeltasync_b 0'); 
 wait_for_notice($dbhX, 'bucardo_syncdone_makedeltasync_b', 5);
-is_deeply($dbhA->selectall_arrayref('SELECT * FROM makedelta ORDER BY id'),       $dbhC->selectall_arrayref('SELECT * FROM makedelta ORDER BY id'),       'Makedelta-facilitated sync from B to C works, single-column primary key');
-is_deeply($dbhA->selectall_arrayref('SELECT * FROM makedelta_mcpk ORDER BY id1'), $dbhC->selectall_arrayref('SELECT * FROM makedelta_mcpk ORDER BY id1'), 'Makedelta-facilitated sync from B to C works, multi-column primary key');
+is_deeply($dbhA->selectall_arrayref('SELECT * FROM makedelta ORDER BY id'),
+  $dbhC->selectall_arrayref('SELECT * FROM makedelta ORDER BY id'),
+  'Makedelta-facilitated sync from B to C works, single-column primary key');
+is_deeply($dbhA->selectall_arrayref('SELECT * FROM makedelta_mcpk ORDER BY id1'),
+  $dbhC->selectall_arrayref('SELECT * FROM makedelta_mcpk ORDER BY id1'),
+  'Makedelta-facilitated sync from B to C works, multi-column primary key');
 $dbhB->rollback();
 $dbhC->rollback();
 $bct->stop_bucardo($dbhX);
