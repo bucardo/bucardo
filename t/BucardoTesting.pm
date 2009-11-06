@@ -275,7 +275,7 @@ sub create_cluster {
 	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\nlog_statement = 'all'\nclient_min_messages = WARNING\nlog_line_prefix='%s[%s] '\nlisten_addresses = ''\n\n",
 		$clusterinfo->{port}, '%m', '%p';
 
-    if ($pgver{$name}{vmaj} > 8 or ($pgver{$name}{vmaj} == 8 and int($pgver{$name}{vmin}) > 2)) {
+    if ($pgver{$name}{vmin} =~ /devel/ or $pgver{$name}{vmaj} > 8 or ($pgver{$name}{vmaj} == 8 and int($pgver{$name}{vmin}) > 2)) {
 		# the int() call above prevents errors when the version is, for instance, '8.4devel'
         print $fh "logging_collector = off\n";
     }
@@ -324,7 +324,7 @@ sub start_cluster {
 		-e $sockdir or mkdir $sockdir;
 		$option = q{-o '-k socket'};
 		## Older versions do not assume socket is right off of data dir
-		if ($pgver{$name}{vmaj}==8 and $pgver{$name}{vmin} < 1) {
+		if ($pgver{$name}{vmin} !~ /devel/ and $pgver{$name}{vmaj}==8 and $pgver{$name}{vmin} < 1) {
 			$option = qq{-o '-k $dirname/socket'};
 		}
 	}
