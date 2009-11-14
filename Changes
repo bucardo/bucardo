@@ -18,6 +18,9 @@ Bucardo version 4.x.x
   - Relax SELECT version() regex in bucardo_ctl, to let modified versions 
     of Postgres tell us their version. [GSM]
 
+  - Fix incorrect automatic population of database when using bucardo_ctl 
+    add database and only one database exists. [GSM]
+
 Bucardo version 4.4.0, released October 14, 2009
 
   - Allow validate_goat() to work correctly against pgbouncer databases by 

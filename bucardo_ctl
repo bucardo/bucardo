@@ -3441,12 +3441,20 @@ sub add_table {
 		## If we only have one database, we can use that
 		my $count = keys %{$global{db}};
 		$count == 1 or die "Please specify a database with db=<name>\n";
-		for (keys %{$global{db}}) {
-			$dbcols->{db} = $global{db}{name};
-			(my $testcols = $cols) =~ s/(.*db).*/$1/;
-			my $offset = $testcols =~ tr/,/,/;
-			$vals->[$offset] = $dbcols->{db};
+		($dbcols->{db}) = keys %{$global{db}};
+		## Replace any existing database
+		if ($cols =~ s/\bdb\b//) {
+			$phs =~ s/\?//;
+			$phs =~ s/,,/,/;
 		}
+		## Add this in to the start of the list
+		$cols = "db,$cols";
+		unshift @$vals => $dbcols->{db};
+		$phs .= ',?';
+		## Cleanups
+		$cols =~ s/,,/,/;
+		$cols =~ s/,$//;
+		$phs =~ s/^,//;
 	}
 	my $db = $dbcols->{db};
 
