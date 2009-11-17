@@ -3276,7 +3276,6 @@ sub add_sync {
 
 	my ($dbcols,$cols,$phs,$vals)
 		= process_simple_args({cols => $validcols, list => \@nouns, usage => $usage});
-
 	if (! exists $dbcols->{synctype}) {
 		die "Need to specify the type of sync: pushdelta, fullcopy, or swap\n";
 	}
@@ -3366,6 +3365,12 @@ sub add_sync {
 		$count = $sth->execute(@$vals);
 	};
 	if ($@) {
+		if ($@ =~ /sync_targetdb_fk/) {
+			die "No such target database: $dbcols->{targetdb}\n";
+		}
+		if ($@ =~ /sync_targetgroup_fk/) {
+			die "No such target database group: $dbcols->{targetgroup}\n";
+		}
 		die "Failed to add sync: $@\n";
 	}
 
