@@ -24,6 +24,9 @@ Bucardo version 4.5.0
   - New syncs of type fullcopy now default to false for ping, stayalive, 
     and kidsalive. [GSM, idea from Andrew Spencer]
 
+  - Make sure we update bucardo_config.bucardo_current_version when doing 
+    a bucardo_ctl upgrade [GSM] (Bug #5)
+
 Bucardo version 4.4.0, released October 14, 2009
 
   - Allow validate_goat() to work correctly against pgbouncer databases by 

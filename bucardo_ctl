@@ -4972,6 +4972,23 @@ sub upgrade {
 		$changes++;
 	}
 
+    ## Make sure bucardo_config has the new schema version
+    $count = $cfgsth->execute('bucardo_current_version');
+    if ($count eq '0E0') {
+		$cfgsth->finish();
+		warn "Weird: could not find bucardo_current_version in the bucardo_config table!\n";
+	}
+	else {
+		my $curval = $cfgsth->fetchall_arrayref()->[0][0];
+		if ($curval ne $schema_version) {
+			$SQL = 'UPDATE bucardo.bucardo_config SET value = ? WHERE setting = ?';
+			my $updatecfg = $dbh->prepare($SQL);
+			$updatecfg->execute($schema_version, 'bucardo_current_version');
+			clog "Set bucardo_config.bucardo_current_version to $schema_version";
+			$changes++;
+		}
+	}
+
 	if ($changes) {
 		printf "Okay to commit $changes %s? ", $changes==1 ? 'change' : 'changes';
 		exit if <STDIN> !~ /Y/i;
