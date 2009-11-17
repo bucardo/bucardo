@@ -1,6 +1,6 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-Bucardo version 4.x.x
+Bucardo version 4.5.0
 
   - Redo the makedelta system, and break into source_makedelta and target_makedelta 
     options for both syncs and goats. [GSM]
