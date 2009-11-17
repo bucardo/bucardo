@@ -3402,6 +3402,9 @@ sub add_sync {
 		if ($@ =~ /sync_targetgroup_fk/) {
 			die "No such target database group: $dbcols->{targetgroup}\n";
 		}
+		if ($@ =~ /sync_source_targetdb_type/) {
+			die "Already have a sync with same source, target, and type!\n";
+		}
 		die "Failed to add sync: $@\n";
 	}
 
