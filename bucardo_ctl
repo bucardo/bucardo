@@ -2196,6 +2196,25 @@ sub process_simple_args {
 
 	}
 
+	## Apply any magic
+	if (exists $arg->{morph}) {
+		for my $mline (@{$arg->{morph}}) {
+			if (exists $mline->{field}) {
+				next unless exists $dbcol{$mline->{field}};
+				next if $dbcol{$mline->{field}} ne $mline->{value};
+				for my $change (split /\s+/ => $mline->{new_defaults}) {
+					my ($f,$v) = split /\|/ => $change;
+					next if exists $dbcol{$f};
+					$dbcol{$f} = $v;
+				}
+			}
+			else {
+				die "Do not know how to handle that morph!\n";
+			}
+		}
+	}
+
+
 	## Build the lists of columns and placeholders for the SQL statement
 	my ($cols,$phs,$vals) = ('','',[]);
 	for my $col (sort keys %dbcol) {
@@ -3274,8 +3293,20 @@ sub add_sync {
         tables                   tables               0                skip
     };
 
+	## Fullcopy syncs get some of their defaults overriden
+	## Because who wants ping on a fullcopy sync?
+
+	my $morph = [
+		{
+			field => 'synctype',
+			value => 'fullcopy',
+			new_defaults => 'ping|F stayalive|F kidsalive|F'
+	    },
+	];
+
 	my ($dbcols,$cols,$phs,$vals)
-		= process_simple_args({cols => $validcols, list => \@nouns, usage => $usage});
+		= process_simple_args({cols => $validcols, list => \@nouns, usage => $usage, morph => $morph});
+
 	if (! exists $dbcols->{synctype}) {
 		die "Need to specify the type of sync: pushdelta, fullcopy, or swap\n";
 	}
