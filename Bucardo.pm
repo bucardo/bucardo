@@ -684,6 +684,9 @@ sub start_mcp {
 	$self->glog("Local system timezone: $systemtime  Database timezone: $dbtime->[2]");
 	$self->glog("PID: $$");
 	$self->glog("Backend PID: $mcp_backend");
+	$self->glog("bucardo_ctl: $old0");
+	$self->glog('Bucardo.pm: ' . $INC{'Bucardo.pm'});
+	$self->glog("Perl: $^X $^V");
 
 	## Again with the password trick
 	$self->{dbpass} = '<not shown>';
