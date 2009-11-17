@@ -21,6 +21,9 @@ Bucardo version 4.5.0
   - Fix incorrect automatic population of database when using bucardo_ctl 
     add database and only one database exists. [GSM]
 
+  - New syncs of type fullcopy now default to false for ping, stayalive, 
+    and kidsalive. [GSM, idea from Andrew Spencer]
+
 Bucardo version 4.4.0, released October 14, 2009
 
   - Allow validate_goat() to work correctly against pgbouncer databases by 
