@@ -3278,8 +3278,8 @@ sub add_sync {
         do_listen                do_listen            TF               null
         checktime                checktime            interval         null
         status                   status               =active|inactive null
-        source_makedelta         source_makedelta     =0|1             null
-        target_makedelta         target_makedelta     =0|1             null
+        source_makedelta         source_makedelta     =0|1|2           null
+        target_makedelta         target_makedelta     =0|1|2           null
         priority                 priority             numeric          null
         analyze_after_copy       analyze_after_copy   TF               null
         overdue                  overdue              interval         null
@@ -3440,8 +3440,8 @@ sub add_table {
         has_delta                has_delta            TF               null
         ping                     ping                 TF               null
         customselect             customselect         0                null
-        source_makedelta         source_makedelta     =0|1             null
-        target_makedelta         target_makedelta     =0|1             null
+        source_makedelta         source_makedelta     =0|1|2           null
+        target_makedelta         target_makedelta     =0|1|2           null
         rebuild_index            rebuild_index        numeric          null
         standard_conflict        standard_conflict    0                null
         analyze_after_copy       analyze_after_copy   TF               null
