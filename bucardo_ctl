@@ -1074,7 +1074,7 @@ sub update {
 		print qq{Changes made to $item "$thing":\n};
 		for my $row (@{$change{$thing}}) {
 			my $col = $row->[0];
-			my $old = $row->[1] ? qq{"$row->[1]"} : '(null)';
+			my $old = defined $row->[1] ? qq{"$row->[1]"} : '(null)';
 			my $new = qq{"$row->[2]"};
 			if ($tabname eq 'customcode' and $col eq 'src_code') {
 				my $lines = $old =~ tr/\n/\n/;
