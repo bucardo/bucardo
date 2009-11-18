@@ -4889,13 +4889,6 @@ sub start_kid {
 					## Example: 1234, 221
 					## Example MCPK: ('1234','Don''t Stop','2008-01-01'),('221','foobar','2008-11-01')
 
-					## From here on out, we're making changes on the target that may trigger an exception
-					## Thus, if we have exception handling code, we create a savepoint to rollback to
-					if ($g->{has_exception_code}) {
-						$self->glog('Creating savepoint on target for exception handler(s)');
-						$targetdbh->pg_savepoint("bucardo_$$") or die qq{Savepoint creation failed for bucardo_$$};
-					}
-
 					## If this goat is set to makedelta, add rows to bucardo_delta to simulate the
 					##   normal action of a trigger, and add rows to bucardo_track so they changed
 					##   rows cannot flow back to us
@@ -4906,6 +4899,13 @@ sub start_kid {
 						$sth{target}{inserttrack}->execute($toid,$targetdb);
 						$count = @$info;
 						$self->glog("Total makedelta rows added for $S.$T on $targetdb: $count");
+					}
+
+					## From here on out, we're making changes on the target that may trigger an exception
+					## Thus, if we have exception handling code, we create a savepoint to rollback to
+					if ($g->{has_exception_code}) {
+						$self->glog('Creating savepoint on target for exception handler(s)');
+						$targetdbh->pg_savepoint("bucardo_$$") or die qq{Savepoint creation failed for bucardo_$$};
 					}
 
 					## This label is solely to localize the DIE signal handler
