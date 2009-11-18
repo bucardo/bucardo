@@ -4893,12 +4893,20 @@ sub start_kid {
 					##   normal action of a trigger, and add rows to bucardo_track so they changed
 					##   rows cannot flow back to us
 					if ($g->{does_target_makedelta}) {
+						## If makedelta is 2, we temporarily allow triggers and rules,
+						## for cases when have them on bucardo_delta or bucardo_track
+						if (2 == $g->{does_target_makedelta} and $target_disable_trigrules eq 'replica') {
+							$targetdbh->do(q{SET session_replication_role = 'origin'});
+						}
 						for (@$info) {
 							$sth{target}{$g}{insertdelta}->execute($toid,@{$_}[0..($g->{pkcols}-1)]);
 						}
 						$sth{target}{inserttrack}->execute($toid,$targetdb);
 						$count = @$info;
 						$self->glog("Total makedelta rows added for $S.$T on $targetdb: $count");
+						if (2 == $g->{does_target_makedelta} and $target_disable_trigrules eq 'replica') {
+							$targetdbh->do(q{SET session_replication_role = 'replica'});
+						}
 					}
 
 					## From here on out, we're making changes on the target that may trigger an exception
@@ -5617,15 +5625,29 @@ sub start_kid {
 
 				## Add in the makedelta rows as needed
 				if ($g->{does_source_makedelta}) {
+					## If makedelta is 2, we temporarily allow triggers and rules,
+					## for cases when have them on bucardo_delta or bucardo_track
+					if (2 == $g->{does_source_makedelta} and $source_disable_trigrules eq 'replica') {
+						$sourcedbh->do(q{SET session_replication_role = 'origin'});
+					}
 					for (@srcdelete2) {
 						$sth{source}{$g}{insertdelta}->execute($g->{oid},@$_);
 						$self->glog("Adding in source bucardo_delta row (delete) for $g->{oid} and $_");
 					}
+					if (2 == $g->{does_source_makedelta} and $source_disable_trigrules eq 'replica') {
+						$sourcedbh->do(q{SET session_replication_role = 'replica'});
+					}
 				}
 				if ($g->{does_target_makedelta}) {
+					if (2 == $g->{does_target_makedelta} and $target_disable_trigrules eq 'replica') {
+						$targetdbh->do(q{SET session_replication_role = 'origin'});
+					}
 					for (@tgtdelete2) {
 						$sth{target}{$g}{insertdelta}->execute($toid,@$_);
 						$self->glog("Adding in target bucardo_delta row (delete) for $toid and $_");
+					}
+					if (2 == $g->{does_target_makedelta} and $target_disable_trigrules eq 'replica') {
+						$targetdbh->do(q{SET session_replication_role = 'replica'});
 					}
 				}
 
@@ -5841,15 +5863,27 @@ sub start_kid {
 							}
 							## TODO: Move this elsewhere?
 							if ($g->{does_source_makedelta}) {
+								if (2 == $g->{does_source_makedelta} and $source_disable_trigrules eq 'replica') {
+									$sourcedbh->do(q{SET session_replication_role = 'origin'});
+								}
 								if ($action & 2 or $action & 4) {
 									$sth{source}{$g}{insertdelta}->execute($g->{oid},@$srcpks);
 									$self->glog("Adding in source bucardo_delta row (upsert) for $g->{oid} and $pkval");
 								}
+								if (2 == $g->{does_source_makedelta} and $source_disable_trigrules eq 'replica') {
+									$sourcedbh->do(q{SET session_replication_role = 'replica'});
+								}
 							}
 							if ($g->{does_target_makedelta}) {
+								if (2 == $g->{does_target_makedelta} and $target_disable_trigrules eq 'replica') {
+									$targetdbh->do(q{SET session_replication_role = 'origin'});
+								}
 								if ($action & 1 or $action & 8) {
 									$sth{target}{$g}{insertdelta}->execute($toid,@$tgtpks);
 									$self->glog("Adding in target bucardo_delta row (upsert) for $toid and $pkval");
+								}
+								if (2 == $g->{does_target_makedelta} and $target_disable_trigrules eq 'replica') {
+									$targetdbh->do(q{SET session_replication_role = 'replica'});
 								}
 							}
 						}; ## end eval block
@@ -5948,14 +5982,26 @@ sub start_kid {
 				## Add in makedelta rows for bucardo_track as needed
 				if ($g->{does_source_makedelta}) {
 					if ($dmlcount{D}{source}{$S}{$T} or $dmlcount{U}{source}{$S}{$T} or $dmlcount{I}{source}{$S}{$T}) {
+						if (2 == $g->{does_source_makedelta} and $source_disable_trigrules eq 'replica') {
+							$sourcedbh->do(q{SET session_replication_role = 'origin'});
+						}
 						$sth{source}{inserttrack}->execute($g->{oid},$targetdb);
 						$self->glog("Added makedelta bucardo_track row for $S.$T on $sourcedb ($g->{oid},$targetdb)");
+						if (2 == $g->{does_source_makedelta} and $source_disable_trigrules eq 'replica') {
+							$sourcedbh->do(q{SET session_replication_role = 'replica'});
+						}
 					}
 				}
 				if ($g->{does_target_makedelta}) {
 					if ($dmlcount{D}{target}{$S}{$T} or $dmlcount{U}{target}{$S}{$T} or $dmlcount{I}{target}{$S}{$T}) {
+						if (2 == $g->{does_target_makedelta} and $target_disable_trigrules eq 'replica') {
+							$targetdbh->do(q{SET session_replication_role = 'origin'});
+						}
 						$sth{target}{inserttrack}->execute($toid,$sourcedb);
 						$self->glog("Added makedelta bucardo_track row for $S.$T on $targetdb ($toid,$sourcedb)");
+						if (2 == $g->{does_target_makedelta} and $target_disable_trigrules eq 'replica') {
+							$targetdbh->do(q{SET session_replication_role = 'replica'});
+						}
 					}
 				}
 
