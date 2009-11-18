@@ -52,6 +52,7 @@ CREATE TABLE bucardo.bucardo_config (
   name     TEXT            NULL, -- which specific sync or goat
   cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.bucardo_config IS $$Contains configuration variables for a specific Bucardo instance$$;
 
 CREATE UNIQUE INDEX bucardo_config_unique ON bucardo.bucardo_config(setting) WHERE name IS NULL;
 
@@ -179,8 +180,12 @@ CREATE TABLE bucardo.db (
   server_side_prepares BOOLEAN     NOT NULL DEFAULT 'true',
   cdate                TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE UNIQUE INDEX db_dsn_unique ON bucardo.db(dbhost,dbport,dbname,dbuser) WHERE NOT name ~ '^bctest';
+COMMENT ON TABLE bucardo.db IS $$Holds information about each database used in replication$$;
+
 ALTER TABLE bucardo.db ADD CONSTRAINT db_status CHECK (status IN ('active','inactive'));
+
+CREATE UNIQUE INDEX db_dsn_unique ON bucardo.db(dbhost,dbport,dbname,dbuser) WHERE NOT name ~ '^bctest';
+
 
 --
 -- Databases can belong to zero or more named groups
@@ -190,6 +195,7 @@ CREATE TABLE bucardo.dbgroup (
               CONSTRAINT dbgroup_name_pk PRIMARY KEY (name),
   cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.dbgroup IS $$Named groups of databases: used as 'targetgroup' for syncs$$;
 
 CREATE TABLE bucardo.dbmap (
   db       TEXT        NOT NULL,
@@ -199,6 +205,8 @@ CREATE TABLE bucardo.dbmap (
   priority SMALLINT    NOT NULL DEFAULT 0,
   cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.dbmap IS $$Associates a database with one or more groups$$;
+
 CREATE UNIQUE INDEX dbmap_unique ON bucardo.dbmap(db,dbgroup);
 
 
@@ -214,7 +222,7 @@ CREATE TABLE bucardo.db_connlog (
                 CONSTRAINT db_connlog_status CHECK (status IN ('unknown', 'good', 'down', 'unreachable')),
   version     TEXT            NULL
 );
-
+COMMENT ON TABLE bucardo.db_connlog IS $$Tracks connection attempts to each database when its information changes$$;
 
 --
 -- We need to track each item we want to replicate from or replicate to
@@ -247,6 +255,8 @@ CREATE TABLE bucardo.goat (
   delta_bypass_percent   SMALLINT    NULL,
   cdate              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.goat IS $$Holds information on each table or sequence that may be replicated$$;
+
 ALTER TABLE bucardo.goat ADD CONSTRAINT has_schemaname CHECK (length(schemaname) > 1);
 
 ALTER TABLE bucardo.goat ADD CONSTRAINT valid_reltype CHECK (reltype IN ('table','sequence'));
@@ -280,6 +290,7 @@ CREATE TABLE bucardo.bucardo_custom_trigger (
   status            TEXT        NOT NULL DEFAULT 'active',
   cdate             TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.bucardo_custom_trigger IS $$Used to override the default bucardo_add_delta trigger on a per-table basis$$;
 
 ALTER TABLE bucardo.bucardo_custom_trigger ADD CONSTRAINT type_is_delta_or_trigger CHECK (trigger_type IN ('delta', 'triggerkick'));
 
@@ -295,6 +306,7 @@ CREATE TABLE bucardo.herd (
                CONSTRAINT herd_name_pk PRIMARY KEY (name),
   cdate      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.herd IS $$Named group of tables or sequences from the goat table: used as the 'source' for syncs$$;
 
 --
 -- Goats belong to zero or more herds. In most cases, they will 
@@ -308,6 +320,8 @@ CREATE TABLE bucardo.herdmap (
   priority  SMALLINT    NOT NULL DEFAULT 0,
   cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.herdmap IS $$Associates a goat with one or more herds$$;
+
 CREATE UNIQUE INDEX bucardo_herdmap_unique ON bucardo.herdmap(herd,goat);
 
 CREATE FUNCTION bucardo.herdcheck()
@@ -396,6 +410,7 @@ CREATE TABLE bucardo.sync (
   maxkicks           INTEGER     NOT NULL DEFAULT 0,         -- force controller and kids to restart
   cdate              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.sync IS $$Defines a single replication event from a herd to one or more target databases$$;
 
 ALTER TABLE bucardo.sync ADD CONSTRAINT sync_type CHECK (synctype IN ('pushdelta','fullcopy','swap'));
 
@@ -446,11 +461,12 @@ CREATE TABLE bucardo.audit_pid (
   birth          TEXT            NULL,
   death          TEXT            NULL
 );
-
+COMMENT ON TABLE bucardo.audit_pid IS $$Keeps track of current PIDs if audit_pid is on: somewhat deprecated$$;
 
 CREATE UNIQUE INDEX audit_pid_id ON bucardo.audit_pid(id);
 
 CREATE TABLE freezer.old_audit_pid AS SELECT * FROM audit_pid LIMIT 0;
+COMMENT ON TABLE freezer.old_audit_pid IS $$Contains old entries from the 'audit_pid' table$$;
 
 --
 -- Traffic control for children
@@ -474,6 +490,8 @@ CREATE TABLE bucardo.q (
   ended     TIMESTAMPTZ     NULL,
   cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.q IS $$A queue of individual replication events$$;
+
 -- insert constraint - db and sync not null
 -- Can only be one unstarted source->target per sync
 CREATE UNIQUE INDEX q_unique ON bucardo.q (sync,sourcedb,targetdb) WHERE started IS NULL;
@@ -502,6 +520,7 @@ CREATE TRIGGER bucardo_q
   FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_q();
 
 CREATE TABLE freezer.master_q AS SELECT * FROM q LIMIT 0;
+COMMENT ON TABLE freezer.master_q IS $$Holds old entries from the 'q' table: paritioned by date$$;
 GRANT SELECT ON freezer.master_q TO PUBLIC;
 
 CREATE FUNCTION bucardo.bucardo_purge_q_table(interval)
@@ -2744,6 +2763,8 @@ CREATE TABLE bucardo.customcode (
   src_code  TEXT        NOT NULL,
   cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.customcode IS $$Holds Perl subroutines that run via hooks in the replication process$$;
+
 ALTER TABLE bucardo.customcode ADD CONSTRAINT customcode_whenrun
   CHECK (whenrun IN ('before_txn',
   'before_check_rows',
@@ -2769,6 +2790,8 @@ CREATE TABLE bucardo.customcode_map (
   priority SMALLINT    NOT NULL DEFAULT 0,
   cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.customcode_map IS $$Associates a custom code with one or more syncs or goats$$;
+
 ALTER TABLE bucardo.customcode_map ADD CONSTRAINT customcode_map_syncgoat
   CHECK (sync IS NULL OR goat IS NULL);
 
@@ -2825,6 +2848,8 @@ CREATE TABLE bucardo.bucardo_rate (
   slavecommit  TIMESTAMPTZ NOT NULL,
   total        INTEGER     NOT NULL
 );
+COMMENT ON TABLE bucardo.bucardo_rate IS $$If track_rates is on, measure how fast replication occurs$$;
+
 CREATE INDEX bucardo_rate_sync ON bucardo.bucardo_rate(sync);
 
 -- Keep track of any upgrades as we go along
@@ -2834,6 +2859,7 @@ CREATE TABLE bucardo.upgrade_log (
   version  TEXT        NOT NULL,
   cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.upgrade_log IS $$Historical record of upgrade actions$$;
 
 -- Allow users to insert messages in the Bucardo logs
 
@@ -2851,6 +2877,8 @@ CREATE TABLE bucardo.bucardo_log_message (
   msg TEXT NOT NULL,
   cdate TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.bucardo_log_message IS $$Helper table for sending messages to the Bucardo logging system$$;
+
 CREATE TRIGGER bucardo_log_message_trigger
   AFTER INSERT ON bucardo.bucardo_log_message
   FOR EACH STATEMENT EXECUTE PROCEDURE bucardo.bucardo_log_message_notify();
