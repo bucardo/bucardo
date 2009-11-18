@@ -1704,7 +1704,7 @@ sub start_mcp {
 				}
 				## If goat is true and sync is false, give a warning but do not flip the goat on
 				elsif (! $s->{does_target_makedelta}) {
-					my ($S,$T) = ($g->{safeschema},$g->{safetable});
+					my ($S,$T) = ($g->{schemaname},$g->{tablename});
 					$self->glog("Warning! Table $S.$T has target_makedelta true, but it is off for this sync");
 					$g->{does_target_makedelta} = 0;
 				}
@@ -1736,7 +1736,7 @@ sub start_mcp {
 				}
 				## If goat is true and sync is false, give a warning but do not flip the goat on
 				elsif (! $s->{does_source_makedelta}) {
-					my ($S,$T) = ($g->{safeschema},$g->{safetable});
+					my ($S,$T) = ($g->{schemaname},$g->{tablename});
 					$self->glog("Warning! Table $S.$T has source_makedelta true, but it is off for this sync");
 					$g->{does_source_makedelta} = 0;
 				}
