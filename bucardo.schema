@@ -866,7 +866,7 @@ if ($old
     and $old->{tablename} eq $new->{tablename}
     and (defined $new->{pkey} and $new->{pkey} eq $old->{pkey})
     ) {
-    #return;
+    return;
 }
 
 (my $safedbname = $dbname) =~ s/'/''/go;
