@@ -3,10 +3,11 @@
 Bucardo version 4.5.0
 
   - Redo the makedelta system, and break into source_makedelta and target_makedelta 
-    options for both syncs and goats. [GSM]
+    options for both syncs and goats, which inherit from the higher level (goat 
+    inherits from sync inherits from db). Add makedelta as on/off for db. [GSM]
 
   - Allow triggers and rules to work on bucardo_delta and bucardo_track by 
-    setting *_makedelta to "2" [GSM]
+    setting new column bucardo.db.makedelta_triggers to true. [GSM]
 
   - Fix for proper sourcelimit and targetlimit calculations. [GSM]
 
@@ -29,6 +30,8 @@ Bucardo version 4.5.0
 
   - Make sure we update bucardo_config.bucardo_current_version when doing 
     a bucardo_ctl upgrade [GSM] (Bug #5)
+
+  - Better formatting of bucardo.reason.log, and log startup failures. [GSM]
 
 Bucardo version 4.4.0, released October 14, 2009
 
