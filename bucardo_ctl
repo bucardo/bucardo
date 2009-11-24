@@ -567,14 +567,16 @@ sub start {
 
 	## Attempt to start Bucardo
 
-	set_reason(0);
+	append_reason_file('start');
 
 	## Refuse to go on if we get a ping response within 5 seconds
 	$QUIET or print "Checking for existing processes\n";
 
 	my $oldpid = 0;
 	if ($oldpid) {
-		$QUIET or print "Cannot start, process $oldpid is already running\n";
+		$nouns = "Cannot start, process $oldpid is already running\n";
+		$QUIET or print $nouns;
+		append_reason_file('fail');
 		exit 1;
 	}
 
@@ -584,7 +586,9 @@ sub start {
 
 	my $pm_version = $bc->{version} || 'unknown';
 	if ($VERSION ne $pm_version) {
-		die "Version mismatch: bucardo_ctl is $VERSION, but Bucardo.pm is $pm_version\n";
+		$nouns = "Version mismatch: bucardo_ctl is $VERSION, but Bucardo.pm is $pm_version\n";
+		append_reason_file('fail');
+		die $nouns;
 	}
 
 	stop_bucardo();
@@ -621,7 +625,7 @@ sub stop {
 
 	## Attempt to stop Bucardo
 
-	set_reason(0);
+	append_reason_file('stop');
 
 	print "Creating $STOPFILE ... " unless $QUIET;
 	stop_bucardo();
@@ -1578,25 +1582,21 @@ sub get_config {
 } ## end of get_config
 
 
-sub set_reason {
+sub append_reason_file {
 
-	my $required = shift || 0;
+	my $event = shift or die;
 
-	if (! length $nouns) {
-		return 1 if ! $required;
-		warn qq{Please provide a reason. For example:\n$progname $verb "Adding new table -Greg"\n};
-		exit 1;
-	}
+	my $string = sprintf "%s | %-5s | %s\n", (scalar localtime), $event, $nouns;
 
 	open my $fh, '>', $REASONFILE or die qq{Could not open "$REASONFILE": $!\n};
-	print {$fh} (scalar localtime) . " | $nouns\n";
+	print {$fh} $string;
 	close $fh or warn qq{Could not close $REASONFILE: $!\n};
 	open $fh, '>>', $REASONFILE_LOG or die qq{Could not open "$REASONFILE_LOG": $!\n};
-	print {$fh} (scalar localtime) . " | $verb | $nouns\n";
+	print {$fh} $string;
 	close $fh or warn qq{Could not close $REASONFILE_LOG: $!\n};
 	return 1;
 
-} ## end of set_reason
+} ## end of append_reason_file
 
 
 sub stop_bucardo {
