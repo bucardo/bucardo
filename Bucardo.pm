@@ -1670,11 +1670,52 @@ sub start_mcp {
 		## Consolidate some things that are set at both sync and goat levels
 
 		## The makedelta settings indicates which sides (source/target) get manual delta rows
-		## This is required if other syncs need to see the changed data
+		## This is required if other syncs going to other targets need to see the changed data
 		## Note that fullcopy is always 0, and pushdelta can only change target_makedelta
-		## The sync is authoritative, unless it is null, in which case a goat can override with 'on'
-		$s->{does_target_makedelta} = $s->{target_makedelta};
-		$s->{does_source_makedelta} = $s->{synctype} eq 'swap' ? $s->{source_makedelta} : 0;
+		## The db is on or off, and the sync then inherits, forces it on, or forces it off
+		## Each goat then does the same: inherits, forces on, forces off
+
+		## Get information on all databases, unless we are a fullcopy sync
+		my $dbinfo;
+		if ($s->{synctype} ne 'fullcopy') {
+			$dbinfo = $self->get_dbs();
+		}
+
+		## Sometimes we want to enable triggers and rules on bucardo_delta and bucardo_track
+		$s->{does_source_makdelta_triggers} = $dbinfo->{$s->{sourcedb}}{makedelta_triggers};
+
+		## The source database can only be changed on a swap sync
+		$s->{does_source_makedelta} = 0;
+		if ($s->{synctype} eq 'swap') {
+			## This gets enabled if the database has it on, or we override it on at the sync level
+			$s->{does_source_makedelta} = 1
+				if $dbinfo->{$s->{sourcedb}}{makedelta} eq 'on'
+					or $s->{source_makdelta} eq 'on';
+		}
+
+		## The target database can only be changed by pushdelta and swap syncs
+		$s->{does_target_makedelta} = 0;
+		if ($s->{synctype} ne 'fullcopy') {
+			## We assume that all target databases are equal
+			my $oldval = '';
+			for my $name (sort keys %targetdbh) {
+				## Unlike source, this is a hash to allow for differences
+				$s->{does_target_makedelta_triggers}{$name} = $dbinfo->{$name}{makedelta_triggers};
+				my $md = $dbinfo->{$name}{makedelta};
+				$s->{does_target_makedelta} = 1 if $md eq 'on';
+				if ($oldval ne $md and $oldval) {
+					$self->glog(qq{Warning! Not all target databases have the same makedelta});
+				}
+				$oldval = $md;
+			}
+			## TODO: See if its worth it to allow some databases but not others to be makedelta
+			## Allow the sync to override the database default
+			$s->{does_target_makedelta} = 1 if $s->{target_makedelta} eq 'on';
+		}
+
+		## We want to catch the case where the sync is on but all goats are off
+		my $source_makedelta_goats_on = 0;
+		my $target_makedelta_goats_on = 0;
 
 		## Go through each goat in this sync, adjusting items and possibly bubbling up info to sync
 		for my $g (@{$s->{goatlist}}) {
@@ -1692,69 +1733,42 @@ sub start_mcp {
 			## Fullcopy never does makedelta
 			next if $s->{synctype} eq 'fullcopy';
 
-			## If goat.makedelta is null, we simply fall through to the sync's default
-			if (! defined $g->{target_makedelta}) {
-				$g->{does_target_makedelta} = $s->{does_target_makedelta};
-			}
-			elsif ($g->{target_makedelta}) {
-				## If goat.makedelta is true and the sync is null, flip it on
-				if (! defined $s->{does_target_makedelta}) {
-					$s->{does_target_makedelta} = 1;
-					$g->{does_target_makedelta} = 1;
-				}
-				## If goat is true and sync is false, give a warning but do not flip the goat on
-				elsif (! $s->{does_target_makedelta}) {
-					my ($S,$T) = ($g->{schemaname},$g->{tablename});
-					$self->glog("Warning! Table $S.$T has target_makedelta true, but it is off for this sync");
-					$g->{does_target_makedelta} = 0;
-				}
-				## Else, goat and sync are both on, which is good
-				else {
-					$g->{does_target_makedelta} = 1;
-				}
-			}
-			else { ## goat.target_makedelta is FALSE
-				## We always respect this
-				$g->{does_target_makedelta} = 0;
-			}
-
-
-			## The only sync type that does source makedeltas is swap
-			next if $s->{synctype} != 'swap';
-
-			## Same as above, but for the source
-
-			## If goat.makedelta is null, we simply fall through to the sync's default
-			if (! defined $g->{source_makedelta}) {
-				$g->{does_source_makedelta} = $s->{does_source_makedelta};
-			}
-			elsif ($g->{source_makedelta}) {
-				## If goat.makedelta is true and the sync is null, flip it on
-				if (! defined $s->{does_source_makedelta}) {
+			## If a swap sync, allow the goat to override the source
+			$g->{does_source_makedelta} = $s->{does_source_makedelta};
+			if ($s->{synctype} eq 'swap' and $g->{source_makedelta} ne 'inherits') {
+				$g->{does_source_makedelta} = $g->{source_makedelta} eq 'on' ? 1: 0;
+				## If this goat is on and the sync is not, upgrade it
+				if ($g->{does_source_makedelta} and !$s->{does_source_makedelta}) {
 					$s->{does_source_makedelta} = 1;
-					$g->{does_source_makedelta} = 1;
 				}
-				## If goat is true and sync is false, give a warning but do not flip the goat on
-				elsif (! $s->{does_source_makedelta}) {
-					my ($S,$T) = ($g->{schemaname},$g->{tablename});
-					$self->glog("Warning! Table $S.$T has source_makedelta true, but it is off for this sync");
-					$g->{does_source_makedelta} = 0;
-				}
-				## Else, goat and sync are both on, which is good
-				else {
-					$g->{does_souce_makedelta} = 1;
+				if ($g->{does_source_makedelta}) {
+					$source_makedelta_goats_on++;
 				}
 			}
-			else { ## goat.source_makedelta is FALSE
-				## We always respect this
-				$g->{does_source_makedelta} = 0;
+
+			## If not fullcopy, allow the goat to override the target
+			$g->{does_target_makedelta} = $s->{does_target_makedelta};
+			if ($s->{synctype} ne 'fullcopy' and $g->{target_makedelta} ne 'inherits') {
+				$g->{does_target_makedelta} = $g->{target_makedelta} eq 'on' ? 1 : 0;
+				## If this goat is on and the sync is not, upgrade it
+				if ($g->{does_target_makedelta} and ! $s->{does_target_makedelta}) {
+					$s->{does_target_makedelta} = 1;
+				}
+				if ($g->{does_target_makedelta}) {
+					$target_makedelta_goats_on++;
+				}
 			}
+
 
 		} ## end each goat
 
-		## Now that goat has had a chance to change things, do the final non-null settings
-		$s->{does_target_makedelta} = 0 if ! defined $s->{does_target_makedelta};
-		$s->{does_source_makedelta} = 0 if ! defined $s->{does_source_makedelta};
+		## If the sync is on but all goats were forced off, switch the sync off
+		if ($s->{does_source_makedelta} and !$source_makedelta_goats_on) {
+			$s->{does_source_makedelta} = 0;
+		}
+		if ($s->{does_target_makedelta} and !$target_makedelta_goats_on) {
+			$s->{does_target_makedelta} = 0;
+		}
 
 		## There are things that a fullcopy sync does not do
 		if ($s->{synctype} eq 'fullcopy') {
@@ -2607,10 +2621,9 @@ sub start_controller {
 			$m->{tablename},
 			$m->{ghost}          ? ' [GHOST]'     : '',
 			$m->{has_delta}      ? ' [DELTA]'     : '',
-			($m->{does_source_makedelta} or $m->{does_target_makedelta}) ? 
-				sprintf (q{ [MAKEDELTA: %s%s]},
-					$m->{does_source_makedelta} ? 'SOURCE ' : '',
-					$m->{does_target_makedelta} ? 'TARGET ' : ''
+			($m->{does_source_makedelta} or $m->{does_target_makedelta}) ?
+				sprintf (q{ [MAKEDELTA: source=%s target=%s]},
+					$m->{does_source_makedelta}, $m->{does_target_makedelta}
 			) :'';
 		$self->glog($msg);
 		if (defined $m->{customselect}) {
@@ -4893,9 +4906,9 @@ sub start_kid {
 					##   normal action of a trigger, and add rows to bucardo_track so they changed
 					##   rows cannot flow back to us
 					if ($g->{does_target_makedelta}) {
-						## If makedelta is 2, we temporarily allow triggers and rules,
-						## for cases when have them on bucardo_delta or bucardo_track
-						if (2 == $g->{does_target_makedelta} and $target_disable_trigrules eq 'replica') {
+						## In rare cases, we want triggers and rules on bucardo_delta and bucardo_track to fire
+						## Check it for this database only
+						if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
 							$targetdbh->do(q{SET session_replication_role = 'origin'});
 						}
 						for (@$info) {
@@ -4904,7 +4917,7 @@ sub start_kid {
 						$sth{target}{inserttrack}->execute($toid,$targetdb);
 						$count = @$info;
 						$self->glog("Total makedelta rows added for $S.$T on $targetdb: $count");
-						if (2 == $g->{does_target_makedelta} and $target_disable_trigrules eq 'replica') {
+						if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
 							$targetdbh->do(q{SET session_replication_role = 'replica'});
 						}
 					}
@@ -5627,26 +5640,26 @@ sub start_kid {
 				if ($g->{does_source_makedelta}) {
 					## If makedelta is 2, we temporarily allow triggers and rules,
 					## for cases when have them on bucardo_delta or bucardo_track
-					if (2 == $g->{does_source_makedelta} and $source_disable_trigrules eq 'replica') {
+					if ($sync->{does_source_makedelta_triggers}) {
 						$sourcedbh->do(q{SET session_replication_role = 'origin'});
 					}
 					for (@srcdelete2) {
 						$sth{source}{$g}{insertdelta}->execute($g->{oid},@$_);
 						$self->glog("Adding in source bucardo_delta row (delete) for $g->{oid} and $_");
 					}
-					if (2 == $g->{does_source_makedelta} and $source_disable_trigrules eq 'replica') {
+					if ($sync->{does_source_makedelta_triggers}) {
 						$sourcedbh->do(q{SET session_replication_role = 'replica'});
 					}
 				}
 				if ($g->{does_target_makedelta}) {
-					if (2 == $g->{does_target_makedelta} and $target_disable_trigrules eq 'replica') {
+					if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
 						$targetdbh->do(q{SET session_replication_role = 'origin'});
 					}
 					for (@tgtdelete2) {
 						$sth{target}{$g}{insertdelta}->execute($toid,@$_);
 						$self->glog("Adding in target bucardo_delta row (delete) for $toid and $_");
 					}
-					if (2 == $g->{does_target_makedelta} and $target_disable_trigrules eq 'replica') {
+					if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
 						$targetdbh->do(q{SET session_replication_role = 'replica'});
 					}
 				}
@@ -5863,26 +5876,26 @@ sub start_kid {
 							}
 							## TODO: Move this elsewhere?
 							if ($g->{does_source_makedelta}) {
-								if (2 == $g->{does_source_makedelta} and $source_disable_trigrules eq 'replica') {
+								if ($sync->{does_source_makedelta_triggers}) {
 									$sourcedbh->do(q{SET session_replication_role = 'origin'});
 								}
 								if ($action & 2 or $action & 4) {
 									$sth{source}{$g}{insertdelta}->execute($g->{oid},@$srcpks);
 									$self->glog("Adding in source bucardo_delta row (upsert) for $g->{oid} and $pkval");
 								}
-								if (2 == $g->{does_source_makedelta} and $source_disable_trigrules eq 'replica') {
+								if ($sync->{does_source_makedelta_triggers}) {
 									$sourcedbh->do(q{SET session_replication_role = 'replica'});
 								}
 							}
 							if ($g->{does_target_makedelta}) {
-								if (2 == $g->{does_target_makedelta} and $target_disable_trigrules eq 'replica') {
+								if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
 									$targetdbh->do(q{SET session_replication_role = 'origin'});
 								}
 								if ($action & 1 or $action & 8) {
 									$sth{target}{$g}{insertdelta}->execute($toid,@$tgtpks);
 									$self->glog("Adding in target bucardo_delta row (upsert) for $toid and $pkval");
 								}
-								if (2 == $g->{does_target_makedelta} and $target_disable_trigrules eq 'replica') {
+								if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
 									$targetdbh->do(q{SET session_replication_role = 'replica'});
 								}
 							}
@@ -5982,24 +5995,24 @@ sub start_kid {
 				## Add in makedelta rows for bucardo_track as needed
 				if ($g->{does_source_makedelta}) {
 					if ($dmlcount{D}{source}{$S}{$T} or $dmlcount{U}{source}{$S}{$T} or $dmlcount{I}{source}{$S}{$T}) {
-						if (2 == $g->{does_source_makedelta} and $source_disable_trigrules eq 'replica') {
+						if ($sync->{does_source_makedelta_triggers}) {
 							$sourcedbh->do(q{SET session_replication_role = 'origin'});
 						}
 						$sth{source}{inserttrack}->execute($g->{oid},$targetdb);
 						$self->glog("Added makedelta bucardo_track row for $S.$T on $sourcedb ($g->{oid},$targetdb)");
-						if (2 == $g->{does_source_makedelta} and $source_disable_trigrules eq 'replica') {
+						if ($sync->{does_source_makedelta_triggers}) {
 							$sourcedbh->do(q{SET session_replication_role = 'replica'});
 						}
 					}
 				}
 				if ($g->{does_target_makedelta}) {
 					if ($dmlcount{D}{target}{$S}{$T} or $dmlcount{U}{target}{$S}{$T} or $dmlcount{I}{target}{$S}{$T}) {
-						if (2 == $g->{does_target_makedelta} and $target_disable_trigrules eq 'replica') {
+						if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
 							$targetdbh->do(q{SET session_replication_role = 'origin'});
 						}
 						$sth{target}{inserttrack}->execute($toid,$sourcedb);
 						$self->glog("Added makedelta bucardo_track row for $S.$T on $targetdb ($toid,$sourcedb)");
-						if (2 == $g->{does_target_makedelta} and $target_disable_trigrules eq 'replica') {
+						if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
 							$targetdbh->do(q{SET session_replication_role = 'replica'});
 						}
 					}

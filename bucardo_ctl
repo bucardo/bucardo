@@ -3037,6 +3037,8 @@ sub add_database {
         pgpass                   pgpass               0                null
         sourcelimit              sourcelimit          numeric          null
         targetlimit              targetlimit          numeric          null
+        makedelta                makedelta            =on|off          null
+        makedelta_triggers       makedelta_triggers   TF               null
         server_side_prepares|ssp server_side_prepares TF               null
     };
 
@@ -3278,8 +3280,8 @@ sub add_sync {
         do_listen                do_listen            TF               null
         checktime                checktime            interval         null
         status                   status               =active|inactive null
-        source_makedelta         source_makedelta     =0|1|2           null
-        target_makedelta         target_makedelta     =0|1|2           null
+        source_makedelta         source_makedelta     =inherits|on|off null
+        target_makedelta         target_makedelta     =inherits|on|off null
         priority                 priority             numeric          null
         analyze_after_copy       analyze_after_copy   TF               null
         overdue                  overdue              interval         null
@@ -3440,8 +3442,8 @@ sub add_table {
         has_delta                has_delta            TF               null
         ping                     ping                 TF               null
         customselect             customselect         0                null
-        source_makedelta         source_makedelta     =0|1|2           null
-        target_makedelta         target_makedelta     =0|1|2           null
+        source_makedelta         source_makedelta     =inherits|on|off null
+        target_makedelta         target_makedelta     =inherits|on|off null
         rebuild_index            rebuild_index        numeric          null
         standard_conflict        standard_conflict    0                null
         analyze_after_copy       analyze_after_copy   TF               null
@@ -4181,6 +4183,21 @@ sub relation_exists {
 } ## end of relation_exists
 
 
+sub domain_exists {
+
+	## Checks if a domain exists. Returns 0 or 1
+	my ($schema,$name) = @_;
+	my $SQL = 
+		  q{SELECT count(*) FROM pg_catalog.pg_type t }
+		. q{JOIN pg_namespace n ON (n.oid = t.typnamespace) }
+		. q{WHERE t.typtype = 'd' AND n.nspname = ? AND t.typname = ?};
+	my $sth = $dbh->prepare_cached($SQL);
+	$count = $sth->execute($schema,$name);
+	return $sth->fetchall_arrayref()->[0][0];
+
+} ## end of relation_exists
+
+
 sub config_exists {
 
 	## Checks if a configuration settings exists. Returns 1 or 0
@@ -4311,13 +4328,14 @@ sub constraint_definition {
 	$def =~ s/<> ALL \(ARRAY\[(.+)\]\)/NOT IN ($1)/;
 	$def =~ s/::text//g;
 	$def =~ s/(\w+) ~ '/$1 ~ E'/g;
+	$def =~ s/CHECK \(\((\w+)\) <>/CHECK ($1 <>/;
 
 	return $def;
 
 } ## end of constraint_definition
 
 
-sub object_comment {
+sub table_comment {
 
 	my ($schema,$relation) = @_;
 
@@ -4333,7 +4351,26 @@ sub object_comment {
 	}
 	return $sth->fetchall_arrayref()->[0][0];
 
-} ## end of object_comment
+} ## end of table_comment
+
+
+sub domain_comment {
+
+	my ($schema,$relation) = @_;
+
+	my $SQL = q{SELECT description FROM pg_description WHERE objoid = (}
+		. q{ SELECT t.oid FROM pg_type t JOIN pg_namespace n ON (n.oid = t.typnamespace)}
+		. q{ WHERE t.typtype = 'd' AND n.nspname = ? AND t.typname = ?)};
+
+	my $sth = $dbh->prepare($SQL);
+	$count = $sth->execute($schema,$relation);
+	if ($count < 1) {
+		$sth->finish();
+		return '';
+	}
+	return $sth->fetchall_arrayref()->[0][0];
+
+} ## end of domain_comment
 
 
 sub find_bucardo_schema {
@@ -4490,10 +4527,6 @@ sub upgrade {
 		'dbgroup_id_seq',
 	);
 
-	my @new_sequences = (
-		'audit_pid_id_seq',
-	);
-
 	my @old_configs = (
 		'pidfile',
 		'upsert_attempts',
@@ -4535,6 +4568,8 @@ sub upgrade {
 		['bucardo', 'audit_pid', 'target_backend',       q{INT         NULL}],
 		['bucardo', 'customcode','trigrules',            q{BOOLEAN NOT NULL DEFAULT 'false'}],
 		['bucardo', 'db',        'dbservice',            q{TEXT        NULL}],
+		['bucardo', 'db',        'makedelta',            q{ONOFF   NOT NULL DEFAULT 'off'}],
+		['bucardo', 'db',        'makedelta_triggers',   q{BOOLEAN NOT NULL DEFAULT 'false'}],
 		['bucardo', 'db',        'server_side_prepares', q{BOOLEAN NOT NULL DEFAULT 'true'}],
 		['bucardo', 'goat',      'delta_bypass',         q{BOOLEAN NOT NULL DEFAULT 'false'}],
 		['bucardo', 'goat',      'delta_bypass_min',     q{BIGINT      NULL}],
@@ -4620,173 +4655,9 @@ sub upgrade {
 		$changes++;
 	}
 
-	## Add new sequences as needed
-	for my $name (@new_sequences) {
-		next if relation_exists('bucardo', $name);
-		upgrade_and_log("CREATE SEQUENCE $name");
-		clog "Created sequence $name";
-		$changes++;
-	}
-
-	## Add new columns as needed
-	for my $row (@new_columns) {
-		my ($schema,$table,$column,$def) = @$row;
-		next if column_exists($schema, $table, $column);
-		$def =~ s/\s+/ /g;
-		upgrade_and_log("ALTER TABLE $schema.$table ADD COLUMN $column $def");
-		clog "Created column: $schema.$table.$column $def";
-		$changes++;
-	}
-
-	## Change any altered columns
-	for my $row (@altered_columns) {
-		my ($schema,$table,$column,$change) = @$row;
-		next if ! column_exists($schema, $table, $column);
-		if ($change eq 'NO DEFAULT') {
-			my $def = column_default($schema, $table, $column);
-			next if !$def;
-			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column DROP DEFAULT");
-			clog "Removed DEFAULT ($def) from $schema.$table.$column";
-			$changes++;
-		}
-		elsif ($change =~ /^RENAME\s+(\w+)/) {
-			my $newname = $1;
-			upgrade_and_log("ALTER TABLE $schema.$table RENAME COLUMN $column TO $newname");
-			clog("Renamed $schema.$table.$column to $newname");
-			$changes++;
-		}
-		elsif ($change =~ /^DEFAULT\s+(.+)/) {
-			my $newname = $1;
-			my $oldname = column_default($schema, $table, $column);
-			next if $newname eq $oldname;
-			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column SET DEFAULT $newname");
-			clog("Changed DEFAULT on $schema.$table.$column to $newname");
-			$changes++;
-		}
-		elsif ($change =~ /BOOL2SMALLINT(\d)/) {
-			my $defval = $1;
-			my $oldtype = column_type($schema, $table, $column);
-			next if $oldtype eq 'smallint';
-			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column DROP DEFAULT");
-			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column TYPE smallint "
-							. "USING CASE WHEN $column IS NULL OR $column IS FALSE THEN 0 ELSE $defval END");
-			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column SET DEFAULT 0");
-			clog("Changed type of $schema.$table.$column to smallint");
-			$changes++;
-		}
-		else {
-			die qq{Do not know how to handle altered column spec of "$change"};
-		}
-	}
-
-	## Special cases
-	if (! column_exists('bucardo', 'goat', 'source_makedelta')) {
-		upgrade_and_log('ALTER TABLE bucardo.goat ADD COLUMN source_makedelta SMALLINT NULL');
-		upgrade_and_log('ALTER TABLE bucardo.goat ADD COLUMN target_makedelta SMALLINT NULL');
-		if (column_exists('bucardo', 'goat', 'makedelta')) {
-			upgrade_and_log('UPDATE goat SET source_makedelta=1, target_makedelta=1 WHERE makedelta IS TRUE');
-			upgrade_and_log('UPDATE goat SET source_makedelta=0, target_makedelta=0 WHERE makedelta IS FALSE');
-			upgrade_and_log('ALTER TABLE bucardo.goat DROP COLUMN makedelta');
-		}
-		clog('Added columns goat.source_makedelta and goat.target_makedelta');
-		$changes++;
-	}
-	if (! column_exists('bucardo', 'sync', 'source_makedelta')) {
-		upgrade_and_log('ALTER TABLE bucardo.sync ADD COLUMN source_makedelta SMALLINT NULL');
-		upgrade_and_log('ALTER TABLE bucardo.sync ADD COLUMN target_makedelta SMALLINT NULL');
-		if (column_exists('bucardo', 'sync', 'makedelta')) {
-			upgrade_and_log('UPDATE sync SET source_makedelta=1, target_makedelta=1 WHERE makedelta IS TRUE');
-			upgrade_and_log('UPDATE sync SET source_makedelta=0, target_makedelta=0 WHERE makedelta IS FALSE');
-			upgrade_and_log('ALTER TABLE bucardo.sync DROP COLUMN makedelta');
-		}
-		clog('Added columns sync.source_makedelta and sync.target_makedelta');
-		$changes++;
-	}
-
-	## Drop any old columns
-	for my $row (@old_columns) {
-		my ($schema,$table,$column) = @$row;
-		next if !column_exists($schema, $table, $column);
-		upgrade_and_log("ALTER TABLE $schema.$table DROP COLUMN $column");
-		clog "Dropped column: $schema.$table.$column";
-		$changes++;
-	}
-
-	## Drop any old indexes
-	for my $row (@old_indexes) {
-		my ($schema,$table,$name) = @$row;
-		next if !relation_exists($schema, $name);
-		upgrade_and_log("DROP INDEX $name");
-		clog "Dropped index $name";
-		$changes++;
-	}
-
-	## Drop any old functions
-	for my $row (@old_functions) {
-		my ($name, $args) = @$row;
-		next if ! function_exists('bucardo', $name, $args);
-		clog "Dropped function $name($args)";
-		upgrade_and_log(qq{DROP FUNCTION bucardo."$name"($args)});
-		$changes++;
-	}
-
-	## Drop any old config items
-	for my $name (@old_configs) {
-		next if ! config_exists($name);
-		clog "Removed old bucardo_config setting: $name";
-		upgrade_and_log(qq{DELETE FROM bucardo.bucardo_config WHERE setting = '$name'});
-		$changes++;
-	}
-
-	## Check for any new config items
-	$SQL = 'SELECT value FROM bucardo.bucardo_config WHERE lower(setting) = ?';
-	my $cfgsth = $dbh->prepare($SQL);
-	$SQL = 'INSERT INTO bucardo.bucardo_config(setting,value,about) VALUES (?,?,?)';
-	my $newcfg = $dbh->prepare($SQL);
-	my %config;
-	my $inside = 0;
-	seek $fh, 0, 0;
-	while (<$fh>) {
-		if (!$inside) {
-			if (/^WITH DELIMITER/) {
-				$inside = 1;
-			}
-			next;
-		}
-		if (/^\\/) {
-			$inside = 0;
-			next;
-		}
-		## Scoop
-		my ($setting,$value,$about) = split /\|/ => $_;
-		$config{$setting} = [$value,$about];
-		$count = $cfgsth->execute($setting);
-		$cfgsth->finish();
-		if ($count eq '0E0') {
-			clog "Added new bucardo_config setting: $setting";
-			$changes++;
-			$newcfg->execute($setting,$value,$about);
-		}
-	}
-
-	## Apply any specific row changes
-	for my $row (@row_values) {
-		my ($table,$column,$where,$force,$value) = @$row;
-		my $val = column_value('bucardo',$table,$column,$where);
-		if (!defined $val) {
-			die "Failed to find $table.$column where $where!\n";
-		}
-		next if $val eq $value;
-		$SQL = sprintf "UPDATE bucardo.$table SET $column=%s WHERE $where",
-			$dbh->quote($value);
-		upgrade_and_log($SQL);
-		clog "New value set for bucardo.$table.$column WHERE $where";
-		$changes++;
-	}
-
 	## Parse the bucardo.schema file and verify the following types of objects exist:
-	## Functions, triggers, constraints, sequences, indexes, and comments
-	my (@flist, @tlist, @ilist, @clist, @clist2, @slist, @tablelist, @comlist);
+	## Functions, triggers, constraints, sequences, indexes, comments, and domains
+	my (@flist, @tlist, @ilist, @clist, @clist2, @slist, @tablelist, @comlist, @domlist);
 	my ($fname,$args,$fbody) = ('','','');
 	my ($tname,$tbody) = ('','');
 	my ($tablename,$tablebody) = ('','');
@@ -4874,8 +4745,178 @@ sub upgrade {
 			push @comlist, [lc $1, $2, $3, $4, $_];
 			next;
 		}
+		if (/^CREATE DOMAIN bucardo\.(\w+) (.+)/) {
+			push @domlist, [$1, $2];
+			next;
+		}
+	}
+
+	## Add any new domains, verify existing ones
+	for my $row (@domlist) {
+		my ($name,$def) = @$row;
+		next if domain_exists('bucardo', $name);
+		upgrade_and_log("CREATE DOMAIN bucardo.$name $def");
+		clog("Created domain: $name");
+		$changes++;
+	}
+
+	## Add new columns as needed
+	for my $row (@new_columns) {
+		my ($schema,$table,$column,$def) = @$row;
+		next if column_exists($schema, $table, $column);
+		$def =~ s/\s+/ /g;
+		upgrade_and_log("ALTER TABLE $schema.$table ADD COLUMN $column $def");
+		clog "Created column: $schema.$table.$column $def";
+		$changes++;
+	}
+
+	## Change any altered columns
+	for my $row (@altered_columns) {
+		my ($schema,$table,$column,$change) = @$row;
+		next if ! column_exists($schema, $table, $column);
+		if ($change eq 'NO DEFAULT') {
+			my $def = column_default($schema, $table, $column);
+			next if !$def;
+			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column DROP DEFAULT");
+			clog "Removed DEFAULT ($def) from $schema.$table.$column";
+			$changes++;
+		}
+		elsif ($change =~ /^RENAME\s+(\w+)/) {
+			my $newname = $1;
+			upgrade_and_log("ALTER TABLE $schema.$table RENAME COLUMN $column TO $newname");
+			clog("Renamed $schema.$table.$column to $newname");
+			$changes++;
+		}
+		elsif ($change =~ /^DEFAULT\s+(.+)/) {
+			my $newname = $1;
+			my $oldname = column_default($schema, $table, $column);
+			next if $newname eq $oldname;
+			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column SET DEFAULT $newname");
+			clog("Changed DEFAULT on $schema.$table.$column to $newname");
+			$changes++;
+		}
+		elsif ($change =~ /BOOL2SMALLINT(\d)/) {
+			my $defval = $1;
+			my $oldtype = column_type($schema, $table, $column);
+			next if $oldtype eq 'smallint';
+			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column DROP DEFAULT");
+			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column TYPE smallint "
+							. "USING CASE WHEN $column IS NULL OR $column IS FALSE THEN 0 ELSE $defval END");
+			upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column SET DEFAULT 0");
+			clog("Changed type of $schema.$table.$column to smallint");
+			$changes++;
+		}
+		else {
+			die qq{Do not know how to handle altered column spec of "$change"};
+		}
+	}
+
+	## Special cases
+	if (! column_exists('bucardo', 'goat', 'source_makedelta')) {
+		upgrade_and_log(q{ALTER TABLE bucardo.goat ADD COLUMN source_makedelta ONOFF NOT NULL DEFAULT 'inherits'});
+		upgrade_and_log(q{ALTER TABLE bucardo.goat ADD COLUMN target_makedelta ONOFF NOT NULL DEFAULT 'inherits'});
+		if (column_exists('bucardo', 'goat', 'makedelta')) {
+			upgrade_and_log(q{UPDATE goat SET source_makedelta='on', target_makedelta='on' WHERE makedelta IS TRUE});
+			upgrade_and_log(q{UPDATE goat SET source_makedelta='off', target_makedelta='off' WHERE makedelta IS FALSE});
+			upgrade_and_log('ALTER TABLE bucardo.goat DROP COLUMN makedelta');
+		}
+		clog('Added columns goat.source_makedelta and goat.target_makedelta');
+		$changes++;
+	}
+	if (! column_exists('bucardo', 'sync', 'source_makedelta')) {
+		upgrade_and_log(q{ALTER TABLE bucardo.sync ADD COLUMN source_makedelta ONOFF NOT NULL DEFAULT 'inherits'});
+		upgrade_and_log(q{ALTER TABLE bucardo.sync ADD COLUMN target_makedelta ONOFF NOT NULL DEFAULT 'inherits'});
+		if (column_exists('bucardo', 'sync', 'makedelta')) {
+			upgrade_and_log(q{UPDATE sync SET source_makedelta='on', target_makedelta='on' WHERE makedelta IS TRUE});
+			upgrade_and_log(q{UPDATE sync SET source_makedelta='off', target_makedelta='off' WHERE makedelta IS FALSE});
+			upgrade_and_log('ALTER TABLE bucardo.sync DROP COLUMN makedelta');
+		}
+		clog('Added columns sync.source_makedelta and sync.target_makedelta');
+		$changes++;
+	}
+
+	## Drop any old columns
+	for my $row (@old_columns) {
+		my ($schema,$table,$column) = @$row;
+		next if !column_exists($schema, $table, $column);
+		upgrade_and_log("ALTER TABLE $schema.$table DROP COLUMN $column");
+		clog "Dropped column: $schema.$table.$column";
+		$changes++;
+	}
+
+	## Drop any old indexes
+	for my $row (@old_indexes) {
+		my ($schema,$table,$name) = @$row;
+		next if !relation_exists($schema, $name);
+		upgrade_and_log("DROP INDEX $name");
+		clog "Dropped index $name";
+		$changes++;
+	}
+
+	## Drop any old functions
+	for my $row (@old_functions) {
+		my ($name, $args) = @$row;
+		next if ! function_exists('bucardo', $name, $args);
+		clog "Dropped function $name($args)";
+		upgrade_and_log(qq{DROP FUNCTION bucardo."$name"($args)});
+		$changes++;
+	}
+
+	## Drop any old config items
+	for my $name (@old_configs) {
+		next if ! config_exists($name);
+		clog "Removed old bucardo_config setting: $name";
+		upgrade_and_log(qq{DELETE FROM bucardo.bucardo_config WHERE setting = '$name'});
+		$changes++;
+	}
+
+	## Check for any new config items
+	$SQL = 'SELECT value FROM bucardo.bucardo_config WHERE lower(setting) = ?';
+	my $cfgsth = $dbh->prepare($SQL);
+	$SQL = 'INSERT INTO bucardo.bucardo_config(setting,value,about) VALUES (?,?,?)';
+	my $newcfg = $dbh->prepare($SQL);
+	my %config;
+	my $inside = 0;
+	seek $fh, 0, 0;
+	while (<$fh>) {
+		if (!$inside) {
+			if (/^WITH DELIMITER/) {
+				$inside = 1;
+			}
+			next;
+		}
+		if (/^\\/) {
+			$inside = 0;
+			next;
+		}
+		## Scoop
+		my ($setting,$value,$about) = split /\|/ => $_;
+		$config{$setting} = [$value,$about];
+		$count = $cfgsth->execute($setting);
+		$cfgsth->finish();
+		if ($count eq '0E0') {
+			clog "Added new bucardo_config setting: $setting";
+			$changes++;
+			$newcfg->execute($setting,$value,$about);
+		}
 	}
 	close $fh or die qq{Could not close file "$file": $!\n};
+
+	## Apply any specific row changes
+	for my $row (@row_values) {
+		my ($table,$column,$where,$force,$value) = @$row;
+		my $val = column_value('bucardo',$table,$column,$where);
+		if (!defined $val) {
+			die "Failed to find $table.$column where $where!\n";
+		}
+		next if $val eq $value;
+		$SQL = sprintf "UPDATE bucardo.$table SET $column=%s WHERE $where",
+			$dbh->quote($value);
+		upgrade_and_log($SQL);
+		clog "New value set for bucardo.$table.$column WHERE $where";
+		$changes++;
+	}
+
 
 	$SQL = 'SELECT pg_catalog.md5(?)';
 	my $md5sth = $dbh->prepare($SQL);
@@ -4989,13 +5030,16 @@ sub upgrade {
 
 	## Check that object comments exist and match
 	for my $row (@comlist) {
-		my ($type,$schema,$table,$comment,$full) = @$row;
-		my $current_comment = object_comment($schema,$table);
+		my ($type,$schema,$relation,$comment,$full) = @$row;
+		my $current_comment = 
+			$type eq 'table' ? table_comment($schema,$relation)
+			: $type eq 'domain' ? domain_comment($schema,$relation)
+			: 'Unkonwn type';
 		if ($current_comment ne $comment) {
 			upgrade_and_log($full);
 			clog (length $current_comment
-				? "Changed comment on $type $schema.$table"
-				: "Added comment for $type $schema.$table");
+				? "Changed comment on $type $schema.$relation"
+				: "Added comment for $type $schema.$relation");
 			$changes++;
 		}
 	}

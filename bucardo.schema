@@ -161,6 +161,13 @@ autosync_ddl|newcol|Which DDL changing conditions do we try to remedy automatica
 \.
 
 --
+-- This is used for our three levels of makedelta
+--
+CREATE DOMAIN bucardo.onoff AS TEXT CHECK (VALUE IN ('inherits', 'on', 'off')) NOT NULL;
+
+COMMENT ON DOMAIN bucardo.onoff IS $$Used for makedelta, source_makedelta, and target_makedelta columns$$;
+
+--
 -- Keep track of every database we need to connect to
 --
 CREATE TABLE bucardo.db (
@@ -178,11 +185,15 @@ CREATE TABLE bucardo.db (
   sourcelimit          SMALLINT    NOT NULL DEFAULT 0, -- maximum concurrent read connections to this database
   targetlimit          SMALLINT    NOT NULL DEFAULT 0, -- maximum concurrent write connections to this database
   server_side_prepares BOOLEAN     NOT NULL DEFAULT 'true',
+  makedelta            ONOFF       NOT NULL DEFAULT 'off',
+  makedelta_triggers   BOOLEAN     NOT NULL DEFAULT 'false',
   cdate                TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE bucardo.db IS $$Holds information about each database used in replication$$;
 
 ALTER TABLE bucardo.db ADD CONSTRAINT db_status CHECK (status IN ('active','inactive'));
+
+ALTER TABLE bucardo.db ADD CONSTRAINT db_makedelta CHECK (makedelta <> 'inherit');
 
 CREATE UNIQUE INDEX db_dsn_unique ON bucardo.db(dbhost,dbport,dbname,dbuser) WHERE NOT name ~ '^bctest';
 
@@ -242,8 +253,8 @@ CREATE TABLE bucardo.goat (
   has_delta          BOOLEAN     NOT NULL DEFAULT 'false',
   ping               BOOLEAN         NULL,                 -- overrides sync-level ping
   customselect       TEXT            NULL,
-  source_makedelta   SMALLINT        NULL,
-  target_makedelta   SMALLINT        NULL,
+  source_makedelta   ONOFF       NOT NULL DEFAULT 'inherits',
+  target_makedelta   ONOFF       NOT NULL DEFAULT 'inherits',
   rebuild_index      SMALLINT        NULL DEFAULT 0,       -- overrides sync-level rebuild_index
   ghost              BOOLEAN     NOT NULL DEFAULT 'false', -- only drop triggers, do not replicate
   standard_conflict  TEXT            NULL,
@@ -395,8 +406,8 @@ CREATE TABLE bucardo.sync (
   do_listen          BOOLEAN     NOT NULL DEFAULT false,     -- LISTEN for kicks on source/target database if ! ping
   checktime          INTERVAL        NULL,                   -- How often to check if we've not heard anything?
   status             TEXT        NOT NULL DEFAULT 'active',  -- Possibly CHECK / FK ('stopped','paused','b0rken')
-  source_makedelta   SMALLINT        NULL,
-  target_makedelta   SMALLINT        NULL,
+  source_makedelta   ONOFF       NOT NULL DEFAULT 'inherits',
+  target_makedelta   ONOFF       NOT NULL DEFAULT 'inherits',
   rebuild_index      SMALLINT    NOT NULL DEFAULT 0,     -- Load without indexes and then REINDEX table
   priority           SMALLINT    NOT NULL DEFAULT 0,     -- Higher is better
   txnmode            TEXT        NOT NULL DEFAULT 'SERIALIZABLE',
