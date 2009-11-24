@@ -757,7 +757,7 @@ sub validate {
 
 	my @synclist;
 	if ($nouns[0] eq 'all' and ! defined $nouns[1]) {
-		@synclist = keys %$synclist;
+		@synclist = sort keys %$synclist;
 		if (! @synclist) {
 			print "Sorry, there are no syncs to validate!\n";
 			exit 0;
