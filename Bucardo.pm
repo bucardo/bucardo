@@ -1682,7 +1682,7 @@ sub start_mcp {
 		}
 
 		## Sometimes we want to enable triggers and rules on bucardo_delta and bucardo_track
-		$s->{does_source_makdelta_triggers} = $dbinfo->{$s->{sourcedb}}{makedelta_triggers};
+		$s->{does_source_makedelta_triggers} = $dbinfo->{$s->{sourcedb}}{makedelta_triggers};
 
 		## The source database can only be changed on a swap sync
 		$s->{does_source_makedelta} = 0;
@@ -1690,7 +1690,7 @@ sub start_mcp {
 			## This gets enabled if the database has it on, or we override it on at the sync level
 			$s->{does_source_makedelta} = 1
 				if $dbinfo->{$s->{sourcedb}}{makedelta} eq 'on'
-					or $s->{source_makdelta} eq 'on';
+					or $s->{source_makedelta} eq 'on';
 		}
 
 		## The target database can only be changed by pushdelta and swap syncs
@@ -4064,6 +4064,10 @@ sub start_kid {
 	our $source_disable_trigrules = $sourcedbh->{pg_server_version} >= 80300 ? 'replica' : 'pg_class';
 	our $target_disable_trigrules = $targetdbh->{pg_server_version} >= 80300 ? 'replica' : 'pg_class';
 	my $source_modern_copy = $sourcedbh->{pg_server_version} >= 80200 ? 1 : 0;
+
+	## We only have to worry about makedelta_triggers in replica mode
+	$sync->{does_source_makedelta_triggers} = 0 if $source_disable_trigrules ne 'replica';
+	$sync->{does_target_makedelta_triggers} = 0 if $target_disable_trigrules ne 'replica';
 
 	$SQL{disable_trigrules} = $SQL{enable_trigrules} = '';
 
