@@ -580,6 +580,15 @@ sub start {
 		exit 1;
 	}
 
+	my $dbversion = get_config('bucardo_current_version') or die "Could not find Bucardo version!\n";
+	if ($dbversion ne $VERSION) {
+		$nouns = "Version mismatch: bucardo_ctl is $VERSION, but bucardo database is $dbversion\n";
+		append_reason_file('fail');
+		warn $nouns;
+		warn "Perhaps you need to run 'bucardo_ctl upgrade' ?\n";
+		exit 1;
+	}
+
 	## Create a new Bucardo instance and connect to its database
 	require Bucardo;
 	my $bc = Bucardo->new($bcargs);

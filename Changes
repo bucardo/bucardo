@@ -33,6 +33,9 @@ Bucardo version 4.5.0
 
   - Better formatting of bucardo.reason.log, and log startup failures. [GSM]
 
+  - Refuse to start if the bucardo database version does not match that of 
+    bucardo_ctl (the former is set by 'bucardo_ctl upgrade') [GSM]
+
 Bucardo version 4.4.0, released October 14, 2009
 
   - Allow validate_goat() to work correctly against pgbouncer databases by 
