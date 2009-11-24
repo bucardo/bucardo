@@ -1493,7 +1493,7 @@ sub status_detail {
 		}
 
 		my $morepid = '';
-		if ($s->{stayalive} or $s->{kidsalive}) {
+		if ($s->{state} !~ /off/ and ($s->{stayalive} or $s->{kidsalive})) {
 			$morepid = " (PID = $s->{PID})";
 		}
 
