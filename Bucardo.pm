@@ -1737,28 +1737,15 @@ sub start_mcp {
 			$g->{does_source_makedelta} = $s->{does_source_makedelta};
 			if ($s->{synctype} eq 'swap' and $g->{source_makedelta} ne 'inherits') {
 				$g->{does_source_makedelta} = $g->{source_makedelta} eq 'on' ? 1: 0;
-				## If this goat is on and the sync is not, upgrade it
-				if ($g->{does_source_makedelta} and !$s->{does_source_makedelta}) {
-					$s->{does_source_makedelta} = 1;
-				}
-				if ($g->{does_source_makedelta}) {
-					$source_makedelta_goats_on++;
-				}
 			}
+			$source_makedelta_goats_on++ if $g->{does_source_makedelta};
 
 			## If not fullcopy, allow the goat to override the target
 			$g->{does_target_makedelta} = $s->{does_target_makedelta};
 			if ($s->{synctype} ne 'fullcopy' and $g->{target_makedelta} ne 'inherits') {
 				$g->{does_target_makedelta} = $g->{target_makedelta} eq 'on' ? 1 : 0;
-				## If this goat is on and the sync is not, upgrade it
-				if ($g->{does_target_makedelta} and ! $s->{does_target_makedelta}) {
-					$s->{does_target_makedelta} = 1;
-				}
-				if ($g->{does_target_makedelta}) {
-					$target_makedelta_goats_on++;
-				}
 			}
-
+			$target_makedelta_goats_on++ if $g->{does_target_makedelta};
 
 		} ## end each goat
 
@@ -1768,6 +1755,14 @@ sub start_mcp {
 		}
 		if ($s->{does_target_makedelta} and !$target_makedelta_goats_on) {
 			$s->{does_target_makedelta} = 0;
+		}
+
+		## If at least one goat is on but the sync is off, turn the sync on
+		if (!$s->{does_source_makedelta} and $source_makedelta_goats_on) {
+			$s->{does_source_makedelta} = 1;
+		}
+		if (!$s->{does_target_makedelta} and $target_makedelta_goats_on) {
+			$s->{does_target_makedelta} = 1;
 		}
 
 		## There are things that a fullcopy sync does not do
@@ -5885,7 +5880,7 @@ sub start_kid {
 								}
 								if ($action & 2 or $action & 4) {
 									$sth{source}{$g}{insertdelta}->execute($g->{oid},@$srcpks);
-									$self->glog("Adding in source bucardo_delta row (upsert) for $g->{oid} and $pkval");
+									$self->glog("Added source makedelta bucardo_delta row (upsert) for $g->{oid} and $pkval");
 								}
 								if ($sync->{does_source_makedelta_triggers}) {
 									$sourcedbh->do(q{SET session_replication_role = 'replica'});
@@ -5897,7 +5892,7 @@ sub start_kid {
 								}
 								if ($action & 1 or $action & 8) {
 									$sth{target}{$g}{insertdelta}->execute($toid,@$tgtpks);
-									$self->glog("Adding in target bucardo_delta row (upsert) for $toid and $pkval");
+									$self->glog("Added target makedelta bucardo_delta row (upsert) for $toid and $pkval");
 								}
 								if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
 									$targetdbh->do(q{SET session_replication_role = 'replica'});
