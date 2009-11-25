@@ -1681,7 +1681,7 @@ sub start_mcp {
 			$dbinfo = $self->get_dbs();
 		}
 
-		## Sometimes we want to enable triggers and rules on bucardo_delta and bucardo_track
+		## Sometimes we want to enable triggers and rules on bucardo_delta
 		$s->{does_source_makedelta_triggers} = $dbinfo->{$s->{sourcedb}}{makedelta_triggers};
 
 		## The source database can only be changed on a swap sync
@@ -3831,17 +3831,6 @@ sub start_kid {
 
 	if ($synctype eq 'pushdelta' or $synctype eq 'swap') {
 
-		## We may need to inject values back into bucardo_track,
-		## in case other syncs need to know about the changed rows
-		if ($sync->{does_source_makedelta}) {
-			$SQL = q{INSERT INTO bucardo.bucardo_track(txntime,tablename,targetdb) VALUES (now(),?,?)};
-			$sth{source}{inserttrack} = $sourcedbh->prepare($SQL);
-		}
-		if ($sync->{does_target_makedelta}) {
-			$SQL = q{INSERT INTO bucardo.bucardo_track(txntime,tablename,targetdb) VALUES (now(),?,?)};
-			$sth{target}{inserttrack} = $sourcedbh->prepare($SQL);
-		}
-
 		for my $g (@$goatlist) {
 
 			next if $g->{reltype} ne 'table';
@@ -3858,8 +3847,14 @@ sub start_kid {
 					$rowid .= ", rowid$x";
 				}
 				$SQL = qq{INSERT INTO bucardo.bucardo_delta(tablename,$rowid) VALUES ($vals)};
-				$sth{source}{$g}{insertdelta} = $sourcedbh->prepare($SQL) if $g->{does_source_makedelta};
-				$sth{target}{$g}{insertdelta} = $targetdbh->prepare($SQL) if $g->{does_target_makedelta};
+				if ($g->{does_source_makedelta}) {
+					$sth{source}{$g}{insertdelta} = $sourcedbh->prepare($SQL);
+					$g->{source_makedelta_inserts} = 0;
+				}
+				if ($g->{does_target_makedelta}) {
+					$sth{target}{$g}{insertdelta} = $targetdbh->prepare($SQL);
+					$g->{target_makedelta_inserts} = 0;
+				}
 			}
 
 			if ($synctype eq 'swap') {
@@ -4783,6 +4778,7 @@ sub start_kid {
 				}
 
 				## Figure out if we have enough rows to trigger a delta_bypass
+				## We cannot do a delta_bypass in makedelta mode
 				$g->{does_delta_bypass} = 0;
 				if ($g->{delta_bypass} and ! $g->{does_source_makedelta} and ! $g->{does_target_makedelta}) {
 					if ($g->{delta_bypass_count}
@@ -4902,23 +4898,23 @@ sub start_kid {
 					## Example MCPK: ('1234','Don''t Stop','2008-01-01'),('221','foobar','2008-11-01')
 
 					## If this goat is set to makedelta, add rows to bucardo_delta to simulate the
-					##   normal action of a trigger, and add rows to bucardo_track so they changed
-					##   rows cannot flow back to us
+					##   normal action of a trigger.
 					if ($g->{does_target_makedelta}) {
-						## In rare cases, we want triggers and rules on bucardo_delta and bucardo_track to fire
+						## In rare cases, we want triggers and rules on bucardo_delta to fire
 						## Check it for this database only
 						if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
 							$targetdbh->do(q{SET session_replication_role = 'origin'});
 						}
 						for (@$info) {
 							$sth{target}{$g}{insertdelta}->execute($toid,@{$_}[0..($g->{pkcols}-1)]);
+							$g->{target_makedelta_inserts}++;
 						}
-						$sth{target}{inserttrack}->execute($toid,$targetdb);
-						$count = @$info;
-						$self->glog("Total makedelta rows added for $S.$T on $targetdb: $count");
+						## The bucardo_track table will be inserted to later on
+
 						if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
 							$targetdbh->do(q{SET session_replication_role = 'replica'});
 						}
+						$self->glog("Total makedelta rows added for $S.$T on $targetdb: $count");
 					}
 
 					## From here on out, we're making changes on the target that may trigger an exception
@@ -5141,6 +5137,7 @@ sub start_kid {
 
 		## SWAP
 		if ($synctype eq 'swap') {
+
 
 			## Do each table in turn, ordered by descending priority and ascending id
 			for my $g (@$goatlist) {
@@ -5644,7 +5641,7 @@ sub start_kid {
 					}
 					for (@srcdelete2) {
 						$sth{source}{$g}{insertdelta}->execute($g->{oid},@$_);
-						$self->glog("Adding in source bucardo_delta row (delete) for $g->{oid} and $_");
+						$g->{source_makedelta_inserts}++;
 					}
 					if ($sync->{does_source_makedelta_triggers}) {
 						$sourcedbh->do(q{SET session_replication_role = 'replica'});
@@ -5656,6 +5653,7 @@ sub start_kid {
 					}
 					for (@tgtdelete2) {
 						$sth{target}{$g}{insertdelta}->execute($toid,@$_);
+						$g->{target_makedelta_inserts}++;
 						$self->glog("Adding in target bucardo_delta row (delete) for $toid and $_");
 					}
 					if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
@@ -5873,14 +5871,13 @@ sub start_kid {
 									$dmlcount{I}{target}{$S}{$T}++;
 								}
 							}
-							## TODO: Move this elsewhere?
 							if ($g->{does_source_makedelta}) {
 								if ($sync->{does_source_makedelta_triggers}) {
 									$sourcedbh->do(q{SET session_replication_role = 'origin'});
 								}
 								if ($action & 2 or $action & 4) {
 									$sth{source}{$g}{insertdelta}->execute($g->{oid},@$srcpks);
-									$self->glog("Added source makedelta bucardo_delta row (upsert) for $g->{oid} and $pkval");
+									$g->{source_makedelta_inserts}++
 								}
 								if ($sync->{does_source_makedelta_triggers}) {
 									$sourcedbh->do(q{SET session_replication_role = 'replica'});
@@ -5892,7 +5889,7 @@ sub start_kid {
 								}
 								if ($action & 1 or $action & 8) {
 									$sth{target}{$g}{insertdelta}->execute($toid,@$tgtpks);
-									$self->glog("Added target makedelta bucardo_delta row (upsert) for $toid and $pkval");
+									$g->{target_makedelta_inserts}++
 								}
 								if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
 									$targetdbh->do(q{SET session_replication_role = 'replica'});
@@ -5991,32 +5988,6 @@ sub start_kid {
 					$targetdbh->pg_release("bucardo_$$");
 				}
 
-				## Add in makedelta rows for bucardo_track as needed
-				if ($g->{does_source_makedelta}) {
-					if ($dmlcount{D}{source}{$S}{$T} or $dmlcount{U}{source}{$S}{$T} or $dmlcount{I}{source}{$S}{$T}) {
-						if ($sync->{does_source_makedelta_triggers}) {
-							$sourcedbh->do(q{SET session_replication_role = 'origin'});
-						}
-						$sth{source}{inserttrack}->execute($g->{oid},$targetdb);
-						$self->glog("Added makedelta bucardo_track row for $S.$T on $sourcedb ($g->{oid},$targetdb)");
-						if ($sync->{does_source_makedelta_triggers}) {
-							$sourcedbh->do(q{SET session_replication_role = 'replica'});
-						}
-					}
-				}
-				if ($g->{does_target_makedelta}) {
-					if ($dmlcount{D}{target}{$S}{$T} or $dmlcount{U}{target}{$S}{$T} or $dmlcount{I}{target}{$S}{$T}) {
-						if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
-							$targetdbh->do(q{SET session_replication_role = 'origin'});
-						}
-						$sth{target}{inserttrack}->execute($toid,$sourcedb);
-						$self->glog("Added makedelta bucardo_track row for $S.$T on $targetdb ($toid,$sourcedb)");
-						if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
-							$targetdbh->do(q{SET session_replication_role = 'replica'});
-						}
-					}
-				}
-
 				$dmlcount{allinserts}{source} += $dmlcount{I}{source}{$S}{$T};
 				$dmlcount{allupdates}{source} += $dmlcount{U}{source}{$S}{$T};
 				$dmlcount{alldeletes}{source} += $dmlcount{D}{source}{$S}{$T};
@@ -6045,33 +6016,30 @@ sub start_kid {
 
 		## Update bucardo_track table so that the bucardo_delta rows we just processed
 		##  are marked as "done" and ignored by subsequent runs
+		## We also rely on this section to do makedelta related bucardo_track inserts
 		if ($synctype eq 'pushdelta' or $synctype eq 'swap') {
 			for my $g (@$goatlist) {
 				next if $g->{reltype} ne 'table';
 				($S,$T) = ($g->{safeschema},$g->{safetable});
 				delete $g->{rateinfo};
-				if ($deltacount{source}{$S}{$T}) {
-
-					## Gather up our rate information - just store for now, we can write it after the commits
-					if ($sync->{track_rates}) {
-						$self->glog('Gathering source rate information');
-						my $sth = $sth{source}{$g}{deltarate};
-						$count = $sth->execute();
-						$g->{rateinfo}{source} = $sth->fetchall_arrayref();
-					}
-
+				## Gather up our rate information - just store for now, we can write it after the commits
+				if ($deltacount{source}{$S}{$T} and $sync->{track_rates}) {
+					$self->glog('Gathering source rate information');
+					my $sth = $sth{source}{$g}{deltarate};
+					$count = $sth->execute();
+					$g->{rateinfo}{source} = $sth->fetchall_arrayref();
+				}
+				if ($deltacount{source}{$S}{$T} or $g->{source_makedelta_inserts}) {
 					$self->glog("Updating bucardo_track for $S.$T on $sourcedb");
 					$sth{source}{$g}{track}->execute();
 				}
-				if ($deltacount{target}{$S}{$T}) {
-
-					if ($sync->{track_rates}) {
-						$self->glog('Gathering target rate information');
-						my $sth = $sth{target}{$g}{deltarate};
-						$count = $sth->execute();
-						$g->{rateinfo}{target} = $sth->fetchall_arrayref();
-					}
-
+				if ($deltacount{target}{$S}{$T} and $sync->{track_rates}) {
+					$self->glog('Gathering target rate information');
+					my $sth = $sth{target}{$g}{deltarate};
+					$count = $sth->execute();
+					$g->{rateinfo}{target} = $sth->fetchall_arrayref();
+				}
+				if ($deltacount{target}{$S}{$T} or $g->{target_makedelta_inserts}) {
 					$self->glog("Updating bucardo_track for $S.$T on $targetdb");
 					$sth{target}{$g}{track}->execute();
 				}
