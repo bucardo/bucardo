@@ -1,4 +1,4 @@
-[GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
+[ GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
 Bucardo version 4.5.0
 
@@ -30,6 +30,9 @@ Bucardo version 4.5.0
 
   - Refuse to start if the bucardo database version does not match that of 
     bucardo_ctl (the former is set by 'bucardo_ctl upgrade') [GSM]
+
+  - Set the search_path to prevent bogus warnings on startup about sequence 
+    mismatches based on schema names. [GSM] (Bug #17)
 
   - Make sure we update bucardo_config.bucardo_current_version when doing 
     a bucardo_ctl upgrade [GSM] (Bug #5)

@@ -1855,6 +1855,9 @@ sub start_mcp {
 					push @{$g->{binarypkey}} => 0;
 				}
 
+				## Turn off the search path, to help the checks below match up
+				$srcdbh->do('SET LOCAL search_path = pg_catalog');
+
 				## Check the source columns, and save them
 				$sth = $sth{checkcols};
 				$sth->execute($g->{oid});
@@ -1900,6 +1903,8 @@ sub start_mcp {
 					## This is used to bind_param these as binary during inserts and updates
 					push @{$g->{binarycols}}, $colinfo->{$colname}{order};
 				}
+
+				$srcdbh->do('RESET search_path');
 
 			} ## end if reltype is table
 
@@ -1999,6 +2004,9 @@ sub start_mcp {
 				## Store away our oid, as we may need it later to access bucardo_delta
 				$g->{targetoid}{$db} = $oid;
 
+				## Turn off the search path, to help the checks below match up
+				$dbh->do('SET LOCAL search_path = pg_catalog');
+
 				## Grab column information about this table
 				$sth = $dbh->prepare($SQL{checkcols});
 				$sth->execute($oid);
@@ -2009,6 +2017,8 @@ sub start_mcp {
 				for (sort { $colinfo->{$a}{attnum} <=> $colinfo->{$b}{attnum} } keys %$targetcolinfo) {
 					$targetcolinfo->{$_}{realattnum} = $x++;
 				}
+
+				$dbh->do('RESET search_path');
 
 				my $t = "$g->{schemaname}.$g->{tablename}";
 
