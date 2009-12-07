@@ -28,13 +28,16 @@ Bucardo version 4.5.0
   - New syncs of type fullcopy now default to false for ping, stayalive, 
     and kidsalive. [GSM, idea from Andrew Spencer]
 
+  - Refuse to start if the bucardo database version does not match that of 
+    bucardo_ctl (the former is set by 'bucardo_ctl upgrade') [GSM]
+
   - Make sure we update bucardo_config.bucardo_current_version when doing 
     a bucardo_ctl upgrade [GSM] (Bug #5)
 
   - Better formatting of bucardo.reason.log, and log startup failures. [GSM]
 
-  - Refuse to start if the bucardo database version does not match that of 
-    bucardo_ctl (the former is set by 'bucardo_ctl upgrade') [GSM]
+  - Log the current configuration settings on startup. [GSM]
+
 
 Bucardo version 4.4.0, released October 14, 2009
 

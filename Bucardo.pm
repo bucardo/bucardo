@@ -700,6 +700,18 @@ sub start_mcp {
 	$self->glog($objdump);
 	$self->{dbpass} = $oldpass;
 
+	## Dump all configuration variables to the log
+	$objdump = "Bucardo config:\n";
+	$maxlen = 5;
+	for (keys %config) {
+		$maxlen = length($_) if length($_) > $maxlen;
+	}
+	for (sort keys %config) {
+		$objdump .= sprintf " %-*s => %s\n", $maxlen, $_, (defined $config{$_}) ? qq{'$config{$_}'} : 'undef';
+	}
+	$self->glog($objdump);
+
+
 	## Clean up old files in the piddir directory
 	my $piddir = $config{piddir};
 	opendir my $dh, $piddir or die qq{Could not opendir "$piddir": $!\n};
