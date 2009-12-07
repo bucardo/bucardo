@@ -22,8 +22,8 @@ my $dbhA = $bct->blank_database('A');
 
 ## Bail out if the version if not high enough
 my $ver = $dbhA->{pg_server_version};
-if ($dbhA->{pg_server_version} < 80400) {
-	plan (skip_all =>  'Cannot test truncate triggers unless version 8.4 or greater');
+if ($ver < 80400) {
+	plan (skip_all =>  "Cannot test truncate triggers unless version 8.4 or greater - this is $ver");
 }
 plan tests => 13;
 
