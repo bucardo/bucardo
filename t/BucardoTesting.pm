@@ -272,7 +272,7 @@ sub create_cluster {
 	## Make some minor adjustments
 	my $file = "$dirname/postgresql.conf";
 	open my $fh, '>>', $file or die qq{Could not open "$file": $!\n};
-	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\nlog_statement = 'all'\nclient_min_messages = WARNING\nlog_line_prefix='%s[%s] '\nlisten_addresses = ''\n\n",
+	printf $fh "\n\nport = %d\nmax_connections = 20\nrandom_page_cost = 2.5\nlog_statement = 'all'\nclient_min_messages = WARNING\nlog_line_prefix='%s[%s] '\nlisten_addresses = ''\nlog_duration = on\n\n",
 		$clusterinfo->{port}, '%m', '%p';
 
     if ($pgver{$name}{vmin} =~ /devel/ or $pgver{$name}{vmaj} > 8 or ($pgver{$name}{vmaj} == 8 and int($pgver{$name}{vmin}) > 2)) {
