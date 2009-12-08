@@ -5147,7 +5147,8 @@ Optional information:
  status=status      (active or inactive, defaults to 'active')
  sourcelimit=#      (maximum concurrent reads from this database. Default is 0 (no limit))
  targetlimit=#      (maximum concurrent writes from this database. Default is 0 (no limit))
- ssp=#              (if server-side prepares are used, defaults to 1 (on))};
+ ssp=#              (if server-side prepares are used, defaults to 1 (on))
+ makedelta=onoff    (whether this database needs makedelta magic)};
 	}
 	if ('add_dbgroup' eq $name) {
 		return q{Usage: add dbgroup <name> [database1 database2 ...]
