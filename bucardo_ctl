@@ -4567,30 +4567,6 @@ sub upgrade {
 	);
 
 	my @new_columns = (
-		['bucardo', 'audit_pid', 'id',                   q{INTEGER NOT NULL DEFAULT nextval('audit_pid_id_seq')}],
-		['bucardo', 'audit_pid', 'parentid',             q{INTEGER     NULL}],
-		['bucardo', 'audit_pid', 'familyid',             q{INTEGER     NULL}],
-		['bucardo', 'audit_pid', 'source',               q{TEXT        NULL}],
-		['bucardo', 'audit_pid', 'target',               q{TEXT        NULL}],
-		['bucardo', 'audit_pid', 'master_backend',       q{INT     NOT NULL DEFAULT pg_backend_pid()}],
-		['bucardo', 'audit_pid', 'source_backend',       q{INT         NULL}],
-		['bucardo', 'audit_pid', 'target_backend',       q{INT         NULL}],
-		['bucardo', 'customcode','trigrules',            q{BOOLEAN NOT NULL DEFAULT 'false'}],
-		['bucardo', 'db',        'dbservice',            q{TEXT        NULL}],
-		['bucardo', 'db',        'makedelta',            q{ONOFF   NOT NULL DEFAULT 'off'}],
-		['bucardo', 'db',        'makedelta_triggers',   q{BOOLEAN NOT NULL DEFAULT 'false'}],
-		['bucardo', 'db',        'server_side_prepares', q{BOOLEAN NOT NULL DEFAULT 'true'}],
-		['bucardo', 'goat',      'delta_bypass',         q{BOOLEAN NOT NULL DEFAULT 'false'}],
-		['bucardo', 'goat',      'delta_bypass_min',     q{BIGINT      NULL}],
-		['bucardo', 'goat',      'delta_bypass_count',   q{BIGINT      NULL}],
-		['bucardo', 'goat',      'delta_bypass_percent', q{SMALLINT    NULL}],
-		['bucardo', 'goat',      'qpkey',                q{TEXT        NULL}],
-		['bucardo', 'sync',      'lifetime',             q{INTERVAL NULL}],
-		['bucardo', 'sync',      'maxkicks',             q{INTEGER NOT NULL DEFAULT 0}],
-		['bucardo', 'sync',      'onetimecopy',          q{SMALLINT NOT NULL DEFAULT 0}],
-		['bucardo', 'sync',      'strict_checking',      q{BOOLEAN NOT NULL DEFAULT 'true'}],
-		['bucardo', 'sync',      'track_rates',          q{BOOLEAN NOT NULL DEFAULT 'false'}],
-
 		['freezer', 'old_audit_pid', 'id',              q{INTEGER}],
 		['freezer', 'old_audit_pid', 'parentid',        q{INTEGER}],
 		['freezer', 'old_audit_pid', 'familyid',        q{INTEGER}],
@@ -4666,7 +4642,7 @@ sub upgrade {
 
 	## Parse the bucardo.schema file and verify the following types of objects exist:
 	## Functions, triggers, constraints, sequences, indexes, comments, and domains
-	my (@flist, @tlist, @ilist, @clist, @clist2, @slist, @tablelist, @comlist, @domlist);
+	my (@flist, @tlist, @ilist, @clist, @clist2, @slist, @tablelist, @comlist, @domlist, @collist);
 	my ($fname,$args,$fbody) = ('','','');
 	my ($tname,$tbody) = ('','');
 	my ($tablename,$tablebody) = ('','');
@@ -4700,9 +4676,16 @@ sub upgrade {
 				$def =~ s/\bbucardo\.//;
 				push @clist2, [$tablename, $cname, $def];
 			}
-			if (/;/) {
+			elsif (/^\s+([a-z_]+)\s+([A-Z]+)\s*(NOT)? NULL/) {
+				my ($colname,$coltype,$isnull) = ($1, $2, $3 ? 1 : 0);
+				push @collist, ['bucardo', $tablename, $colname, $_];
+			}
+			elsif (/;/) {
 				push @tablelist, [$tablename, $tablebody];
 				$tablebody = $tablename = '';
+			}
+			else {
+				die qq{Could not parse table definition: invalid column at line $. ($_)\n};
 			}
 			next;
 		}
@@ -4769,15 +4752,27 @@ sub upgrade {
 		$changes++;
 	}
 
-	## Add new columns as needed
-	for my $row (@new_columns) {
+	## Add new columns as needed from the schema
+	for my $row (@collist) {
 		my ($schema,$table,$column,$def) = @$row;
 		next if column_exists($schema, $table, $column);
+		$def =~ s/\-\-.+$//;
+		$def =~ s/,\s*$//;
 		$def =~ s/\s+/ /g;
-		upgrade_and_log("ALTER TABLE $schema.$table ADD COLUMN $column $def");
-		clog "Created column: $schema.$table.$column $def";
+		upgrade_and_log("ALTER TABLE $schema.$table ADD COLUMN $def");
+		clog "Created column: $schema.$table.$column";
 		$changes++;
 	}
+
+    ## Add specific new columns as needed
+	for my $row (@new_columns) {
+        my ($schema,$table,$column,$def) = @$row;
+        next if column_exists($schema, $table, $column);
+        $def =~ s/\s+/ /g;
+		upgrade_and_log("ALTER TABLE $schema.$table ADD COLUMN $def");
+		clog "Created column: $schema.$table.$column";
+        $changes++;
+    }
 
 	## Change any altered columns
 	for my $row (@altered_columns) {
