@@ -4073,14 +4073,14 @@ sub remove_sync {
 		};
 		if ($@) {
 			if ($@ =~ /"goat_db_fk"/) {
-				die qq{Cannot delete database "$name": must remove all tables that reference it first\n};
+				die qq{Cannot delete sync "$name": must remove all tables that reference it first\n};
 			}
-			die qq{Could not delete database "$name"\n$@\n};
+			die qq{Could not delete sync "$name"\n$@\n};
 		}
 	}
 
 	for my $name (@nouns) {
-		print qq{Removed database "$name"\n};
+		print qq{Removed sync "$name"\n};
 		print "Note: table triggers (if any) are not automatically removed!\n";
 	}
 
