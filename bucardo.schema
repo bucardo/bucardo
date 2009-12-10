@@ -818,7 +818,8 @@ return;
 
 $bc$;
 
-CREATE TRIGGER db_change AFTER INSERT OR UPDATE ON bucardo.db
+CREATE TRIGGER db_change
+  AFTER INSERT OR UPDATE ON bucardo.db
   FOR EACH ROW EXECUTE PROCEDURE bucardo.db_change();
 
 --
