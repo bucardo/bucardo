@@ -4492,8 +4492,6 @@ sub start_kid {
 				## We'll handle sequence changes here and now (pushdelta only)
 				if ($synctype eq 'pushdelta' and $g->{reltype} eq 'sequence') {
 
-					$self->glog("Checking sequence $S.$T");
-
 					$SQL = "SELECT last_value, is_called FROM $S.$T";
 					my ($lastval, $iscalled) = @{$sourcedbh->selectall_arrayref($SQL)->[0]};
 
