@@ -44,6 +44,7 @@ if (!BucardoTesting::table_exists($dbhA => 'makedelta')) {
                 field1 INTEGER,
                 PRIMARY KEY (id1, id2, id3)
             )});
+        $dbh->do(q{ CREATE SEQUENCE makedelta_seq });
         $dbh->commit;
     }
 }
@@ -72,12 +73,16 @@ like($res, qr/Added herd/, $res);
 like($res, qr/Added table/, $res);
 ($res, @dummy) = split "\n", $bct->ctl('add table makedelta_mcpk db=A herd=herdA target_makedelta=on');
 like($res, qr/Added table/, $res);
+($res, @dummy) = split "\n", $bct->ctl('add sequence makedelta_seq db=A herd=herdA target_makedelta=1');
+like($res, qr/Added sequence/, $res);
 ($res, @dummy) = split "\n", $bct->ctl('add herd herdB');
 like($res, qr/Added herd/, $res);
 ($res, @dummy) = split "\n", $bct->ctl('add table makedelta      db=B herd=herdB');
 like($res, qr/Added table/, $res);
 ($res, @dummy) = split "\n", $bct->ctl('add table makedelta_mcpk db=B herd=herdB');
 like($res, qr/Added table/, $res);
+($res, @dummy) = split "\n", $bct->ctl('add sequence makedelta_seq db=B herd=herdB');
+like($res, qr/Added sequence/, $res);
 $res = $bct->ctl('add sync makedeltasync_b source=herdB type=pushdelta targetdb=C');
 chomp $res;
 like($res, qr/Added sync/, $res);
@@ -89,6 +94,7 @@ $dbhX->commit();
 # Test that sync works
 $dbhA->do(q{INSERT INTO makedelta (id, field1) VALUES (1, 10)});
 $dbhA->do(q{INSERT INTO makedelta_mcpk (id1, id2, id3, field1) VALUES (1, 2, 3, 10)});
+$dbhA->do(q{SELECT nextval('makedelta_seq')});
 $dbhX->do(q{LISTEN bucardo_syncdone_makedeltasync_a});
 $dbhA->commit();
 $dbhX->commit();
@@ -111,6 +117,9 @@ is_deeply($dbhA->selectall_arrayref('SELECT * FROM makedelta ORDER BY id'),
 is_deeply($dbhA->selectall_arrayref('SELECT * FROM makedelta_mcpk ORDER BY id1'),
   $dbhC->selectall_arrayref('SELECT * FROM makedelta_mcpk ORDER BY id1'),
   'Makedelta-facilitated sync from B to C works, multi-column primary key');
+is_deeply($dbhA->selectall_arrayref('SELECT * FROM makedelta_seq'),
+  $dbhC->selectall_arrayref('SELECT * FROM makedelta_seq'),
+  'Makedelta-facilitated sync from B to C works, sequence');
 $dbhB->rollback();
 $dbhC->rollback();
 $bct->stop_bucardo($dbhX);
