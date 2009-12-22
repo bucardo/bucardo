@@ -1748,6 +1748,7 @@ $bc$
                 $SQL = qq{
                     CREATE TABLE bucardo.bucardo_sequences (
                         tablename   OID         NOT NULL,
+                        syncname    TEXT        NOT NULL,
                         value       BIGINT      NOT NULL,
                         iscalled    BOOL        NOT NULL
                     );
@@ -1755,7 +1756,7 @@ $bc$
                 run_sql($SQL,$dbh);
 
                 $SQL = q{CREATE UNIQUE INDEX bucardo_sequences_tablename ON }
-                     . q{bucardo.bucardo_sequences (tablename)};
+                     . q{bucardo.bucardo_sequences (tablename, syncname)};
                 run_sql($SQL,$dbh);
             }
             if ($force) {

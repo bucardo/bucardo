@@ -1130,7 +1130,11 @@ sub wait_for_notice {
 		alarm $timeout;
 	  N: {
 			while ($n = $dbh->func('pg_notifies')) {
-				last N if $n->[0] eq $text;
+				if ($n->[0] eq $text) {
+                    last N;
+                } else {
+                    print "$n->[0]\n" if $DEBUG;
+                }
 			}
 			sleep $sleep;
 			redo;
