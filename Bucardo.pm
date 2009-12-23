@@ -3859,7 +3859,8 @@ sub start_kid {
 
 			($S,$T) = ($g->{safeschema},$g->{safetable});
 
-			if ($g->{does_source_makedelta} or $g->{does_target_makedelta}) {
+			if ($g->{does_source_makedelta} or $g->{does_target_makedelta} or
+                $sync->{does_source_makedelta} or $sync->{does_target_makedelta}) {
 				my $rowid = 'rowid';
 				my $vals = '?' . (',?' x $g->{pkcols});
 				$x=0;
@@ -3869,11 +3870,11 @@ sub start_kid {
 					$rowid .= ", rowid$x";
 				}
 				$SQL = qq{INSERT INTO bucardo.bucardo_delta(tablename,$rowid) VALUES ($vals)};
-				if ($g->{does_source_makedelta}) {
+				if ($g->{does_source_makedelta} or $sync->{does_source_makedelta}) {
 					$sth{source}{$g}{insertdelta} = $sourcedbh->prepare($SQL);
 					$g->{source_makedelta_inserts} = 0;
 				}
-				if ($g->{does_target_makedelta}) {
+				if ($g->{does_target_makedelta} or $sync->{does_target_makedelta}) {
 					$sth{target}{$g}{insertdelta} = $targetdbh->prepare($SQL);
 					$g->{target_makedelta_inserts} = 0;
 				}
@@ -4013,6 +4014,7 @@ sub start_kid {
 			$SQL =~ s/\$2/$safedbname/o;
 			$sth{source}{$g}{getdelta} = $sourcedbh->prepare($SQL);
 			my $safesourcedb;
+            ($safesourcedb = $sourcedb) =~ s/\'/''/go;
 
 			## Plug in for rate measuring
 			if ($sync->{track_rates}) {
@@ -4023,7 +4025,6 @@ sub start_kid {
 
 			## Plug in again for the source database when doing a swap sync
 			if ($synctype eq 'swap') {
-				($safesourcedb = $sourcedb) =~ s/\'/''/go;
 				($SQL = $SQL{delta}) =~ s/\$1/$g->{targetoid}{$targetdb}/g;
 				$SQL =~ s/\$2/$safesourcedb/o;
 				$sth{target}{$g}{getdelta} = $targetdbh->prepare($SQL);
@@ -4055,7 +4056,7 @@ sub start_kid {
 			($SQL = $SQL{track}) =~ s/\$1/$safedbname/go;
 			$SQL =~ s/\$2/$g->{oid}/go;
 			$sth{source}{$g}{track} = $sourcedbh->prepare($SQL);
-			if ($synctype eq 'swap') {
+			if ($synctype eq 'swap' or $sync->{does_target_makedelta}) {
 				($SQL = $SQL{track}) =~ s/\$1/$safesourcedb/go;
 				$SQL =~ s/\$2/$g->{targetoid}{$targetdb}/go;
 				$sth{target}{$g}{track} = $targetdbh->prepare($SQL);
