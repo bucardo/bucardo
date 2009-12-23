@@ -8,7 +8,7 @@ use warnings;
 use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 15;
+use Test::More tests => 18;
 
 use BucardoTesting;
 my $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object failed\n";
@@ -73,7 +73,7 @@ like($res, qr/Added herd/, $res);
 like($res, qr/Added table/, $res);
 ($res, @dummy) = split "\n", $bct->ctl('add table makedelta_mcpk db=A herd=herdA target_makedelta=on');
 like($res, qr/Added table/, $res);
-($res, @dummy) = split "\n", $bct->ctl('add sequence makedelta_seq db=A herd=herdA target_makedelta=1');
+($res, @dummy) = split "\n", $bct->ctl('add sequence makedelta_seq db=A herd=herdA target_makedelta=on');
 like($res, qr/Added sequence/, $res);
 ($res, @dummy) = split "\n", $bct->ctl('add herd herdB');
 like($res, qr/Added herd/, $res);

@@ -41,6 +41,9 @@ like($i, qr{Added sync}, $t);
 $dbhX->do(q{UPDATE bucardo.sync SET kidsalive = 't'});
 $dbhX->commit();
 
+# Speed up checking for dead kids, so the resurrection test, at the end, works properly
+print $bct->ctl('set ctl_checkonkids_time=2 ctl_checkabortedkids_time=2') . "\n";
+
 $bct->restart_bucardo($dbhX);
 
 $dbhX->do('LISTEN bucardo_syncdone_fullcopytest');
@@ -283,7 +286,7 @@ $info = $info->fetchall_arrayref({})->[0];
 $t = 'Kid death was detected and entered in audit_pid table';
 like ($info->{death}, qr{target error: 7}, $t);
 
-sleep 2;
+sleep 15;
 ## Latest kid should have a life of 2
 $SQL = "SELECT * FROM bucardo.audit_pid WHERE target='B' ORDER BY id DESC LIMIT 1";
 $info = $dbhX->prepare($SQL);
