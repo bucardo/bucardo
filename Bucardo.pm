@@ -5259,7 +5259,7 @@ sub start_kid {
 						$sth->execute($g->{targetoid}{$targetdb}, $sync->{name});
 						$SQL = 'INSERT INTO bucardo.bucardo_sequences (tablename, syncname, value, iscalled) VALUES (?,?,?,?)';
 						$sth = $sourcedbh->prepare($SQL);
-						$sth->execute($g->{targetoid}{$targetdb},$lastval,$iscalled, $sync->{name});
+						$sth->execute($g->{targetoid}{$targetdb},$sync->{name},$lastval,$iscalled);
 
 						## Internal note so we know things have changed
 						$deltacount{sequences}++;
