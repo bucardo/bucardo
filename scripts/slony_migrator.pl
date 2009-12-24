@@ -1247,15 +1247,15 @@ Access to a working version of psql, and the following very standard Perl module
 
 Development happens using the git system. You can clone the latest version by doing:
 
- git-clone http://bucardo.org/bucardo.git/
+ git clone http://bucardo.org/bucardo.git/
 
 =head1 MAILING LIST
 
 =head1 HISTORY
 
-=item B<Version 0.0.3
+=over 4
 
- First release
+=item B<Version 0.0.3>, first release
 
 =back
 
@@ -1268,9 +1268,9 @@ Please report any problems to josh@endpoint.com.
 
 =head1 AUTHORS
 
-Greg Sabino Mullane <greg@endpoint.com>
-Selena Decklemann <selena@endpoint.com>
-Joshua Tolley <josh@endpoint.com>
+ Greg Sabino Mullane <greg@endpoint.com>
+ Selena Decklemann <selena@endpoint.com>
+ Joshua Tolley <josh@endpoint.com>
 
 =head1 LICENSE AND COPYRIGHT
 
