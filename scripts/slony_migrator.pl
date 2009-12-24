@@ -1227,29 +1227,15 @@ your psql location into the C<$PSQL> variable, also near the top of the script.
 
 =head1 DEPENDENCIES
 
-Access to a working version of psql, and the following very standard Perl modules:
-
-=over 4
-
-=item B<Cwd>
-
-=item B<Getopt::Long>
-
-=item B<File::Basename>
-
-=item B<File::Temp>
-
-=item B<Time::HiRes> (if C<$opt{showtime}> is set to true, which is the default)
-
-=back
+Access to a working version of psql, and Perl v5.6.1 or later. Also the
+Time::HiRes Perl module if C<$opt{showtime}> is set to true, which is the
+default.
 
 =head1 DEVELOPMENT
 
 Development happens using the git system. You can clone the latest version by doing:
 
  git clone http://bucardo.org/bucardo.git/
-
-=head1 MAILING LIST
 
 =head1 HISTORY
 
