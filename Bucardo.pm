@@ -148,7 +148,7 @@ sub new {
 		$self->{dryrun} = 1;
 	}
 	if ($self->{dryrun}) {
-		$self->glog("'** DRYRUN - Syncs will not be commited! **\n");
+		$self->glog("'** DRYRUN - Syncs will not be committed! **\n");
 	}
 
 	## This gets appended to the process description ($0)
@@ -329,12 +329,15 @@ sub glog { ## no critic (RequireArgUnpacking)
 
 	## Reformat and log internal messages to the correct place
 	## First argument is the message
+	## Second argument is the log level - defaults to 0 (normal)
 
 	## Quick shortcut if verbose is 'off' (which is not recommended!)
 	return if ! $_[0]->{verbose};
 
-	my ($self,$msg) = @_;
+	my $self = shift;
+	my $msg = shift;
 	chomp $msg;
+	my $loglevel = shift || 0;
 
 	## We should always have a prefix, either BC!, MCP, CTL, or KID
 	my $prefix = $self->{logprefix} || '???';
