@@ -329,18 +329,12 @@ sub glog { ## no critic (RequireArgUnpacking)
 
 	## Reformat and log internal messages to the correct place
 	## First argument is the message
-	## Other arguments are used if $msg is a printf-style string
 
 	## Quick shortcut if verbose is 'off' (which is not recommended!)
 	return if ! $_[0]->{verbose};
 
-	my ($self,$msg,@extra) = @_;
+	my ($self,$msg) = @_;
 	chomp $msg;
-
-	## Apply any extra arguments to $msg as if it was a printf-style string
-	if (@extra) {
-		$msg = sprintf $msg, @extra;
-	}
 
 	## We should always have a prefix, either BC!, MCP, CTL, or KID
 	my $prefix = $self->{logprefix} || '???';
@@ -1315,7 +1309,7 @@ sub start_mcp {
 		}
 		closedir $dh or warn qq{Warning! Could not closedir "$config{piddir}": $!\n};
 
-		$self->glog('LOADING TABLE sync. Rows=%d', scalar (keys %{$self->{sync}}));
+		$self->glog('LOADING TABLE sync. Rows=' . (scalar (keys %{$self->{sync}})));
 
 		## At this point, we are authoritative, so we can safely clean out the q table
 		$SQL = q{
@@ -4719,7 +4713,7 @@ sub start_kid {
 					$self->glog("Reindexing table $S.$T on $targetdb");
 					$targetdbh->do("REINDEX TABLE $S.$T");
 					if ($otc) {
-						$self->glog(sprintf qq{(OTC: %ds) REINDEX TABLE $S.$T}, time-$startotc);
+						$self->glog(sprintf(qq{(OTC: %ds) REINDEX TABLE $S.$T}, time-$startotc));
 					}
 				}
 
