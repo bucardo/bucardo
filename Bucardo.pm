@@ -923,7 +923,7 @@ sub start_mcp {
 			## Handle each notice one by one
 			for (@notice) {
 				my ($name,$pid,$db) = @$_;
-				$self->glog(qq{Got notice "$name" from $pid on $db});
+				$self->glog(qq{Got notice "$name" from $pid on $db}, 'INFO');
 
 				## Request to stop everything
 				if ('bucardo_mcp_fullstop' eq $name) {
@@ -981,14 +981,14 @@ sub start_mcp {
 
 				## Request for a ping via listen/notify
 				elsif ('bucardo_mcp_ping' eq $name) {
-					$self->glog("Got a ping from PID $pid, issuing pong");
+					$self->glog("Got a ping from PID $pid, issuing pong", 'INFO');
 					$maindbh->do('NOTIFY bucardo_mcp_pong') or warn 'NOTIFY failed';
 					$maindbh->commit();
 				}
 
 				## Request that we parse and empty the log message table
 				elsif ('bucardo_log_message' eq $name) {
-					$self->glog('Checking for log messages');
+					$self->glog('Checking for log messages', 'INFO');
 					$SQL = 'SELECT msg,cdate FROM bucardo_log_message ORDER BY cdate';
 					$sth = $maindbh->prepare_cached($SQL);
 					$count = $sth->execute();
@@ -1153,7 +1153,7 @@ sub start_mcp {
 							my $notify = "bucardo_ctl_kick_$syncname";
 							$maindbh->do(qq{NOTIFY "$notify"}) or die "NOTIFY $notify failed";
 							$maindbh->commit();
-							$self->glog(qq{Sent a kick request to controller $s->{controller} for sync "$syncname"});
+							$self->glog(qq{Sent a kick request to controller $s->{controller} for sync "$syncname"},'INFO');
 							$s->{mcp_kicked} = 0;
 							$s->{ctl_kick_counts}++;
 						}
@@ -6376,7 +6376,7 @@ Greg Sabino Mullane <greg@endpoint.com>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2005-2009 Greg Sabino Mullane <greg@endpoint.com>.
+Copyright (c) 2005-2010 Greg Sabino Mullane <greg@endpoint.com>.
 
 This software is free to use: see the LICENSE file for details.
 
