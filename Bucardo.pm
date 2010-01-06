@@ -4,7 +4,7 @@
 ##
 ## This script should only be called via the 'bucardo_ctl' program
 ##
-## Copyright 2006-2009 Greg Sabino Mullane <greg@endpoint.com>
+## Copyright 2006-2010 Greg Sabino Mullane <greg@endpoint.com>
 ##
 ## Please visit http://bucardo.org for more information
 

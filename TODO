@@ -46,3 +46,4 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Add support for automatic DDL changes (in progress)
 - Allow multiple item updates, e.g. bucardo_ctl update sync s1 s2 s3 ping=true
 - Allow wildcards in item updates, e.g. bucardo_ctl update sync s* ping=true
+- Cacading slaves: makedelta should create infrastructure as necessary
