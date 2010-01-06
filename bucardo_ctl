@@ -868,9 +868,12 @@ sub update {
 		$count = $sth->execute($name);
 	}
 
+	## Because both 'table' and 'tables' are valid, but we want good output:
+	(my $single_item = $item) =~ s/s$//;
+
 	if ($count < 1) {
 		$sth->finish();
-		die qq{No matches found for $item "$name"\n};
+		die qq{No matches found for $single_item "$name"\n};
 	}
 
 	my $pkcol = $tabname eq 'goat' ? 'id' : 'name';
@@ -1032,7 +1035,7 @@ sub update {
 			my $localname = $tabname eq 'goat' ? "$row->{schemaname}.$row->{tablename}" : $row->{name};
 			my $localid = $tabname eq 'goat' ? $row->{id} : $row->{name};
 			if (! exists $row->{$n}) {
-				die qq{Sorry, cannot change "$n" for $item "$localname"\n};
+				die qq{Sorry, cannot change "$n" for $single_item "$localname"\n};
 			}
 			if ($tabname eq 'db' and $n eq 'dbhost' and $v eq 'none') {
 				$SQL = "UPDATE bucardo.db SET dbhost = '' WHERE $pkcol = ?";
@@ -1084,7 +1087,7 @@ sub update {
 	}
 
 	for my $thing (sort keys %change) {
-		print qq{Changes made to $item "$thing":\n};
+		print qq{Changes made to $single_item "$thing":\n};
 		for my $row (@{$change{$thing}}) {
 			my $col = $row->[0];
 			my $old = defined $row->[1] ? qq{"$row->[1]"} : '(null)';
@@ -5635,10 +5638,19 @@ sub install {
 
 	my $COM = "$PSQL -c 'SELECT version()'";
 
-	my $res = qx{$COM};
+	my $res = qx{$COM 2>&1};
+
+	if ($res =~ /FATAL|ERROR/ or $res =~ /psql:/) {
+		warn $res;
+	}
+
+	## Check for some common errors
+	if ($res =~ /role ".+" does not exist/) {
+		die "Sorry, please try using a different user\n";
+	}
 
 	if ($res !~ /(\d+)\.(\d+)(\S+)/) {
-		die "Sorry, could not determine the version for that database\n";
+		die "Sorry, unable to connect to the database\n";
 	}
 	my ($maj,$min,$rev) = ($1,$2,$3);
 	$rev =~ s/^\.//;
