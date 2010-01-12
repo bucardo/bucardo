@@ -2465,13 +2465,11 @@ sub list_herds {
 	load_bucardo_info();
 
 	## Figure out which goats are in each of these herds
-
-
 	for my $row (@$info) {
 		my $name = $row->{name};
 		my $h = $global{herd}{$name};
-		printf 'Herd: %-*s',
-			$maxlen, $name;
+		printf 'Herd: %-*s  DB: %s ',
+			$maxlen, $name, $h->{db};
 		## Got goats?
 		if (exists $h->{goat}) {
 			print ' Members: ';
