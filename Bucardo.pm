@@ -356,7 +356,7 @@ sub glog { ## no critic (RequireArgUnpacking)
 	$self->{debugsyslog} and syslog 'info', $msg;
 
 	## Warning messages may also get written to a separate file
-	if ($self->{warning_file} and $_[1] =~ /^Warning|ERROR|FATAL/o) {
+	if ($self->{warning_file} and $msg =~ /^Warning|ERROR|FATAL/o) {
 		my $file = $self->{warning_file};
 		open $self->{warningfilehandle}, '>>', $file or die qq{Could not append to "$file": $!\n};
 		print {$self->{warningfilehandle}} "$header $msg\n";
