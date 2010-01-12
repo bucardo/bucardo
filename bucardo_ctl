@@ -136,6 +136,7 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
 	 'debugdir=s',
 	 'debugfile=i',
 	 'cleandebugs=i',
+	 'force',
 
 	 ## Used internally
 	 'schema|n=s@',
@@ -3928,13 +3929,23 @@ sub remove_database {
 			$sth->execute($name);
 		};
 		if ($@) {
+			if ($bcargs->{force} and $@ =~ /"goat_db_fk"|"sync_targetdb_fk"/) {
+				warn "Dropping all tables and syncs that reference this database\n";
+				$dbh->rollback();
+				$dbh->do('DELETE FROM bucardo.goat WHERE db = ' . $dbh->quote($name));
+				$dbh->do('DELETE FROM bucardo.sync WHERE targetdb = ' . $dbh->quote($name));
+				eval {
+					$sth->execute($name);
+				};
+			}
+
 			if ($@ =~ /"goat_db_fk"/) {
 				die qq{Cannot delete database "$name": must remove all tables that reference it first\n};
 			}
 			if ($@ =~ /"sync_targetdb_fk"/) {
 				die qq{Cannot delete database "$name": must remove all syncs that reference it first\n};
 			}
-			die qq{Could not delete database "$name"\n$@\n};
+			$@ and die qq{Could not delete database "$name"\n$@\n};
 		}
 	}
 
@@ -5160,7 +5171,9 @@ Optional information:
  sourcelimit=#      (maximum concurrent reads from this database. Default is 0 (no limit))
  targetlimit=#      (maximum concurrent writes from this database. Default is 0 (no limit))
  ssp=#              (if server-side prepares are used, defaults to 1 (on))
- makedelta=onoff    (whether this database needs makedelta magic)};
+ makedelta=onoff    (whether this database needs makedelta magic)
+ addalltables       (automatically adds all tables in the database)
+ addallsequences    (automatically adds all sequences in the database)};
 	}
 	if ('add_dbgroup' eq $name) {
 		return q{Usage: add dbgroup <name> [database1 database2 ...]
