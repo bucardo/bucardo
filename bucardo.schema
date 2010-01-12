@@ -1147,7 +1147,8 @@ $bc$
                  ($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
         };
         if ($@) {
-            if ($@ =~ /"bucardo"/) { ## User may not exist yet. Try to create it as postgres!
+            ## User may not exist yet. Try to create it as postgres!
+            if ($@ =~ /"bucardo"/ and $user eq 'bucardo') {
                 my $tempdbh = DBI->connect($dsn, 'postgres', $pass, {AutoCommit=>1, RaiseError=>1, PrintError=>0});
                 $tempdbh->do('CREATE USER bucardo SUPERUSER');
                 $tempdbh->disconnect();
@@ -1291,7 +1292,8 @@ $bc$
                     ($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
             };
             if ($@) {
-                if ($@ =~ /"bucardo"/) { ## User may not exist yet. Try to create it as postgres!
+            ## User may not exist yet. Try to create it as postgres!
+            if ($@ =~ /"bucardo"/ and $user eq 'bucardo') {
                     my $tempdbh = DBI->connect($dsn, 'postgres', $pass, {AutoCommit=>1, RaiseError=>1, PrintError=>0});
                     $tempdbh->do('CREATE USER bucardo SUPERUSER');
                     $tempdbh->disconnect();
