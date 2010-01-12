@@ -844,6 +844,9 @@ sub update {
 	elsif ($item =~ /^db/i) {
 		$tabname = $item = 'db';
 	}
+	elsif ($item =~ /^herd/i) {
+		$tabname = $item = 'herd';
+	}
 	else {
 		die "Invalid item: must be code, db, dbgroup, sequence, sync, or table.\n";
 	}
