@@ -3112,6 +3112,8 @@ sub add_database {
 		$finalmsg .= qq{Added database "$newname" to group "$gname"\n};
 	}
 
+	$bcargs->{db} = $newname;
+
 	add_all_tables() if grep /addalltab/i, @nouns;
 
 	add_all_sequences() if grep /addallseq/i, @nouns;
