@@ -34,6 +34,11 @@ Bucardo version 4.5.0
   - Set the search_path to prevent bogus warnings on startup about sequence 
     mismatches based on schema names. [GSM] (Bug #17)
 
+  - Add a --force option so we can remove databases via 'bucardo_ctl remove db'
+    along with all related goats and syncs. [GSM]
+
+  - Add new options for 'bucardo_ctl add db': addalltables and addallsequences [GSM]
+
   - Make sure we update bucardo_config.bucardo_current_version when doing 
     a bucardo_ctl upgrade [GSM] (Bug #5)
 
