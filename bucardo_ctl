@@ -1027,7 +1027,7 @@ sub update {
 	}
 
 	## Process each change in turn
-	## Can be code, sync, dbgroup, table, schema, or db
+	## Can be code, sync, dbgroup, table, schema, herd, or db
 	my %change;
 	for my $arg (@nouns) {
 		next if $arg eq 'set';
@@ -1035,6 +1035,19 @@ sub update {
 		my ($n,$v) = (lc $1,$2);
 		$n =~ /^\w+$/ or die "Invalid name\n";
 		$n = 'server_side_prepares' if $n eq 'ssp';
+
+		## Special herd handling
+		if ('herd' eq $item and 'notable' eq $n) {
+			$SQL = 'DELETE FROM bucardo.herdmap WHERE herd = ? AND goat IN '
+				. '(SELECT id FROM bucardo.goat WHERE tablename ~ ?)';
+			$sth = $dbh->prepare($SQL);
+			$count = $sth->execute($name, $v);
+			if ($count >= 1) {
+				push @{$change{$name}} => ['DIRECT', "Tables removed from herd: $count"];
+			}
+			next;
+		}
+
 		for my $row (@$info) {
 			my $localname = $tabname eq 'goat' ? "$row->{schemaname}.$row->{tablename}" : $row->{name};
 			my $localid = $tabname eq 'goat' ? $row->{id} : $row->{name};
@@ -1094,6 +1107,10 @@ sub update {
 		print qq{Changes made to $single_item "$thing":\n};
 		for my $row (@{$change{$thing}}) {
 			my $col = $row->[0];
+			if ($col eq 'DIRECT') {
+				print "$row->[1]\n";
+				next;
+			}
 			my $old = defined $row->[1] ? qq{"$row->[1]"} : '(null)';
 			my $new = qq{"$row->[2]"};
 			if ($tabname eq 'customcode' and $col eq 'src_code') {
@@ -1109,6 +1126,7 @@ sub update {
 
 	$dbh->commit();
 	$dbh->disconnect();
+
 	exit 0;
 
 } ## end of update
