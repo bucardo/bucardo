@@ -42,10 +42,17 @@ Bucardo version 4.5.0
   - Make sure we update bucardo_config.bucardo_current_version when doing 
     a bucardo_ctl upgrade [GSM] (Bug #5)
 
+  - Automatically create the bucardo (superuser) if we can connect as 'postgres'. [GSM]
+
+  - Allow removal of tables from herds via bucardo_ctl. [GSM]
+
   - Better formatting of bucardo.reason.log, and log startup failures. [GSM]
 
   - Log the current configuration settings on startup. [GSM]
 
+  - Remove unused 'kick_sleep' config variable. [GSM]
+
+  - Show the database name when lissting herds via bucardo_ctl. [GSM]
 
 Bucardo version 4.4.0, released October 14, 2009
 
