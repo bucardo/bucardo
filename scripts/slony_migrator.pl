@@ -498,7 +498,7 @@ sub run_command {
         my $start = $opt{showtime} ? [gettimeofday()] : 0;
         eval {
             alarm $timeout;
-            print "$PSQL " . (join ' ', @args);
+#            print "$PSQL " . (join ' ', @args);
             $res = system $PSQL => @args;
         };
         my $err = $@;
