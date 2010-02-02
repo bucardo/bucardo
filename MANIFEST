@@ -22,6 +22,7 @@ scripts/bucardo_rrd
 scripts/bucardo-report
 scripts/check_bucardo_sync
 scripts/bucardo_ctl.rc
+scripts/slony_migrator.pl
 
 Bucardo.pm.html
 bucardo_ctl.html

@@ -11,6 +11,8 @@ Bucardo version 4.5.0, released February 2, 2010
 
   - Fix for proper sourcelimit and targetlimit calculations. [GSM]
 
+  - Add slony_migrator.pl script [Josh Tolley]
+
   - Allow 'list sync' to filter by 'active' and 'inactive' [GSM]
 
   - Remove unused config variable 'upsert_attempts' [GSM]
