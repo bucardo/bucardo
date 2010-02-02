@@ -5689,7 +5689,7 @@ sub install {
 
 	}
 
-	my $PSQL = "psql -p $port -U $user -d $dbname -c 'SELECT version()'";
+	my $PSQL = "psql -p $port -U $user -d $dbname";
 	$host !~ /</ and $PSQL .= " --host=$host";
 
 	my $COM = "$PSQL -c 'SELECT version()'";
@@ -5719,6 +5719,7 @@ sub install {
 	}
 
 	$COM = "$PSQL -AX -qt -f $schema_file 2>&1";
+print "COM=$COM\n";
 
 	print "Attempting to create and populate the bucardo database and schema\n";
 
