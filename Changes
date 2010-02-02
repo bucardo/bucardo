@@ -1,6 +1,6 @@
 [ GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-Bucardo version 4.5.0
+Bucardo version 4.5.0, released February 2, 2010
 
   - Redo the makedelta system, and break into source_makedelta and target_makedelta 
     options for both syncs and goats, which inherit from the higher level (goat 
