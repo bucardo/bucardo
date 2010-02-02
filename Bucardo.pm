@@ -339,6 +339,9 @@ sub glog { ## no critic (RequireArgUnpacking)
 	chomp $msg;
 	my $loglevel = shift || 0;
 
+	## Return if we have not met the minimum log level
+	return if $loglevel > $config{log_level};
+
 	## We should always have a prefix, either BC!, MCP, CTL, or KID
 	my $prefix = $self->{logprefix} || '???';
 	$msg = "$prefix $msg";
@@ -683,6 +686,7 @@ sub start_mcp {
 	$self->glog("bucardo_ctl: $old0");
 	$self->glog('Bucardo.pm: ' . $INC{'Bucardo.pm'});
 	$self->glog("Perl: $^X $^V");
+	$self->glog("Log level: $config{log_level}");
 
 	## Again with the password trick
 	$self->{dbpass} = '<not shown>';
@@ -923,7 +927,7 @@ sub start_mcp {
 			## Handle each notice one by one
 			for (@notice) {
 				my ($name,$pid,$db) = @$_;
-				$self->glog(qq{Got notice "$name" from $pid on $db}, 'INFO');
+				$self->glog(qq{Got notice "$name" from $pid on $db}, 7);
 
 				## Request to stop everything
 				if ('bucardo_mcp_fullstop' eq $name) {
@@ -2918,7 +2922,7 @@ sub start_controller {
 					$name,
 					$pid,
 					exists $self->{kidpid}{$pid-1} ? (' (kid on database '.$self->{kidpid}{$pid-1}{dbname} .')') : '';
-				$self->glog($nmsg);
+				$self->glog($nmsg, 7);
 				## Kick request from the MCP?
 				if ($name eq $kicklisten) {
 					$kicked = 1;
@@ -2943,7 +2947,7 @@ sub start_controller {
 					if (! grep { ! $_->{finished} } values %$targetdb) {
 						my $notifymsg = "bucardo_syncdone_$syncname";
 						$maindbh->do(qq{NOTIFY "$notifymsg"}) or die "NOTIFY $notifymsg failed";
-						$self->glog(qq{Sent notice "bucardo_syncdone_$syncname"});
+						$self->glog(qq{Sent notice "bucardo_syncdone_$syncname"}, 6);
 						$maindbh->commit();
 
 						## Reset the one-time-copy flag, so we only do it one time!
@@ -3086,7 +3090,7 @@ sub start_controller {
 
 			## Has it been long enough to force a sync?
 			if ($checksecs and time() - $lastheardfrom >= $checksecs) {
-				$self->glog(qq{Timed out - force a sync for "$syncname"});
+				$self->glog(qq{Timed out - force a sync for "$syncname"}, 6);
 				$lastheardfrom = time();
 				$kicked = 1;
 			}
@@ -3334,7 +3338,7 @@ sub start_controller {
 					$count = $sth{qinsert}->execute($syncname,$self->{ppid},$sourcedb,$dbname,$synctype);
 				}
 				else {
-					$self->glog("Could not add to q sync=$syncname,source=$sourcedb,target=$dbname,count=$count. Sending manual notification");
+					$self->glog("Could not add to q sync=$syncname,source=$sourcedb,target=$dbname,count=$count. Sending manual notification", 7);
 				}
 				my $notifymsg = "bucardo_q_${syncname}_$dbname";
 				$maindbh->do(qq{NOTIFY "$notifymsg"}) or die "NOTIFY $notifymsg failed";
@@ -4313,7 +4317,7 @@ sub start_kid {
 			while (my $notify = $maindbh->func('pg_notifies')) {
 				my ($name, $pid) = @$notify;
 				if ($name eq $listenq) {
-					$self->glog("Got a notice for $syncname: $sourcedb -> $targetdb");
+					$self->glog("Got a notice for $syncname: $sourcedb -> $targetdb", 7);
 					$checkq = 1;
 				}
 				## Got a ping?
@@ -4351,7 +4355,7 @@ sub start_kid {
 		$count = $sth{qsetstart}->execute($$,$syncname,$targetdb);
 		if ($count != 1) {
 			## We can say != 1 here because of the unique constraint on q
-			$self->glog('Nothing to do: no entry found in the q table for this sync');
+			$self->glog('Nothing to do: no entry found in the q table for this sync', 7);
 			$maindbh->rollback();
 			redo KID if $kidsalive;
 			last KID;
@@ -4447,7 +4451,7 @@ sub start_kid {
 			if ($synctype eq 'pushdelta') {
 				$deltacount{sourcetruncate} = $sth{source}{checktruncate}->execute($syncname);
 				$sth{source}{checktruncate}->finish() if $deltacount{sourcetruncate} =~ s/0E0/0/o;
-				$self->glog(qq{Source truncate count: $deltacount{sourcetruncate}});
+				$self->glog(qq{Source truncate count: $deltacount{sourcetruncate}}, 6);
 				if ($deltacount{sourcetruncate}) {
 					## For each table that was truncated, see if this target has already handled it
 					for my $row (@{$sth{source}{checktruncate}->fetchall_arrayref()}) {
@@ -4541,12 +4545,12 @@ sub start_kid {
 
 				$deltacount{allsource} += $deltacount{source}{$S}{$T} = $sth{source}{$g}{getdelta}->execute();
 				$sth{source}{$g}{getdelta}->finish() if $deltacount{source}{$S}{$T} =~ s/0E0/0/o;
-				$self->glog(qq{Source delta count for $S.$T: $deltacount{source}{$S}{$T}});
+				$self->glog(qq{Source delta count for $S.$T: $deltacount{source}{$S}{$T}}, 6);
 
 				if ($synctype eq 'swap') {
 					$deltacount{alltarget} += $deltacount{target}{$S}{$T} = $sth{target}{$g}{getdelta}->execute();
 					$sth{target}{$g}{getdelta}->finish() if $deltacount{target}{$S}{$T} =~ s/0E0/0/o;
-					$self->glog(qq{Target delta count for $S.$T: $deltacount{target}{$S}{$T}});
+					$self->glog(qq{Target delta count for $S.$T: $deltacount{target}{$S}{$T}}, 6);
 				}
 			}
 			if ($synctype eq 'swap') {
@@ -4554,7 +4558,7 @@ sub start_kid {
 				$self->glog("Total target delta count: $deltacount{alltarget}");
 			}
 			$deltacount{all} = $deltacount{allsource} + $deltacount{alltarget};
-			$self->glog("Total delta count: $deltacount{all}");
+			$self->glog("Total delta count: $deltacount{all}", 6);
 
 			## If no changes, rollback dbs, close out q, notify listeners, and leave or reloop
 			if (! $deltacount{all} and ! $deltacount{truncates}) {
@@ -6049,7 +6053,7 @@ sub start_kid {
 					$g->{rateinfo}{source} = $sth->fetchall_arrayref();
 				}
 				if ($deltacount{source}{$S}{$T} or $g->{source_makedelta_inserts}) {
-					$self->glog("Updating bucardo_track for $S.$T on $sourcedb");
+					$self->glog("Updating bucardo_track for $S.$T on $sourcedb", 6);
 					$sth{source}{$g}{track}->execute();
 				}
 				if ($deltacount{target}{$S}{$T} and $sync->{track_rates}) {
@@ -6099,7 +6103,7 @@ sub start_kid {
 			$maindbh->rollback();
 		}
 		else {
-			$self->glog('Issuing final commit for source and target');
+			$self->glog('Issuing final commit for source and target',6);
 			$sourcedbh->commit();
 			$targetdbh->commit();
 			if ($sync->{usecustomselect}) {
@@ -6119,7 +6123,7 @@ sub start_kid {
 		$targetdbh->commit();
 
 		## Mark as done in the q table, and notify the parent directly
-		$self->glog('Marking as done in the q table, notifying controller');
+		$self->glog('Marking as done in the q table, notifying controller', 6);
 		$sth{qend}->execute($dmlcount{allupdates}{source}+$dmlcount{allupdates}{target},
 							$dmlcount{allinserts}{source}+$dmlcount{allinserts}{target},
 							$dmlcount{alldeletes}{source}+$dmlcount{alldeletes}{target},
