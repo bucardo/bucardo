@@ -20,14 +20,15 @@ CREATE LANGUAGE plpgsql;
 CREATE LANGUAGE plperlu;
 SET client_min_messages = 'ERROR';
 
-\set ON_ERROR_STOP on
-
 SET CLIENT_MIN_MESSAGES = 'FATAL';
 CREATE SCHEMA bucardo;
+DROP SCHEMA freezer;
 CREATE SCHEMA freezer;
+
+\set ON_ERROR_STOP on
+
 SET CLIENT_MIN_MESSAGES = 'WARNING';
 SET search_path TO bucardo;
-
 SET client_min_messages   = 'WARNING';
 SET escape_string_warning = 'OFF';
 
@@ -128,6 +129,7 @@ log_showtime|3|Show timestamp in the log output?  0=off  1=seconds since epoch  
 log_showline|0|Show line number in the log output?
 log_conflict_details|0|Log detailed conflict data?
 log_conflict_file|bucardo_conflict.log|Name of the conflict detail log file
+log_level|5|How verbose to make the logging. Higher is more verbose.
 warning_file|bucardo.warning.log|File containing all log lines starting with "Warning"
 \.
 
