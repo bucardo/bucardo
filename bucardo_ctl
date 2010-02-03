@@ -3697,16 +3697,16 @@ sub add_all_goats {
 	my @clause;
 
 	## If they gave a schema option, restrict the query by namespace
-	push @clause => generate_clause({col => 'nspname', items => $bcargs->{schema}});
+	push @clause => generate_clause({col => 'nspname', items => [$bcargs->{schema}]});
 
 	## If they have asked to exclude schemas, append that to the namespace clause
-	push @clause => generate_clause({col => 'nspname', items => $bcargs->{'exclude-schema'}, not => 1});
+	push @clause => generate_clause({col => 'nspname', items => [$bcargs->{'exclude-schema'}], not => 1});
 
 	## If they gave a table option, restrict the query by relname
-	push @clause => generate_clause({col => 'relname', items => $bcargs->{table}});
+	push @clause => generate_clause({col => 'relname', items => [$bcargs->{table}]});
 
 	## If they have asked to exclude tables, append that to the relname clause
-	push @clause => generate_clause({col => 'relname', items => $bcargs->{'exclude-table'}, not => 1});
+	push @clause => generate_clause({col => 'relname', items => [$bcargs->{'exclude-table'}], not => 1});
 
 	for my $c (@clause) {
 		next if ! $c;
@@ -4490,7 +4490,7 @@ sub generate_clause {
 	## Generate a snippet of SQL for a WHERE clause
 
 	my $arg = shift or die;
-	return '' if ! $arg->{items};
+	return '' if ! $arg->{items} or ! defined $arg->{items}[0];
 
 	my $col = $arg->{col} or die;
 	my $items = $arg->{items};
