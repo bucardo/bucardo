@@ -109,6 +109,7 @@ if (defined $file) {
 GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
 	($bcargs,
 	 'verbose+',
+	 'vv',
 	 'quiet+',
 	 'notimer',
 	 'help',
@@ -161,6 +162,7 @@ if ($bcargs->{version}) {
 	exit 0;
 }
 
+$bcargs->{vv} and $bcargs->{verbose} = 2;
 my $VERBOSE    = delete $bcargs->{verbose};
 my $DEBUG      = delete $bcargs->{debug} || 0;
 my $DAYSBACK   = delete $bcargs->{daysback} || $DEFAULT_DAYSBACK;
