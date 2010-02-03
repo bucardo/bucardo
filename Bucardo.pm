@@ -2994,8 +2994,7 @@ sub start_controller {
 										$x++;
 									}
 
-									$x=0;
-									my $aliaslist = join ',' => map { "$_ AS $g->{cols}[$x++]" } @{$g->{safecols}};
+									my $aliaslist = join ',' => @{$g->{safecols}};
 									if (length $aliaslist) {
 										$aliaslist = ",$aliaslist";
 									}
@@ -3928,8 +3927,7 @@ sub start_kid {
 					}
 				}
 
-				$x=0;
-				my $aliaslist = join ',' => map { "$_ AS $g->{cols}[$x++]" } @{$g->{safecols}};
+				my $aliaslist = join ',' => @{$g->{safecols}};
 				if (length $aliaslist) {
 					$aliaslist = ",$aliaslist";
 				}

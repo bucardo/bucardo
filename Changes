@@ -9,6 +9,8 @@ Bucardo version 4.5.0, released ??, 2010
   - Allow triggers and rules to work on bucardo_delta and bucardo_track by 
     setting new column bucardo.db.makedelta_triggers to true. [GSM]
 
+  - Fix for failing swap syncs when column is not all lowercase. [GSM]
+
   - Fix for proper sourcelimit and targetlimit calculations. [GSM]
 
   - Add slony_migrator.pl script [Josh Tolley]
