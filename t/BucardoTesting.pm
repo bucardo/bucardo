@@ -898,6 +898,9 @@ sub add_bucardo_schema_to_database {
 	$dbh->{pg_server_prepare} = 0;
 
 	unless ($ENV{BUCARDO_TEST_NOCREATEDB}) {
+		$dbh->do('CREATE schema bucardo');
+		$dbh->do('CREATE schema freezer');
+
 		$dbh->do($sql);
 
 		$count = 1;
