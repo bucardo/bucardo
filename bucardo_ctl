@@ -3248,6 +3248,7 @@ sub add_herd {
 
 	my %goat2add;
 	for my $rel (@nouns) {
+		$rel =~ s/(?:sequence|table)=(\w.*)/$1/;
 		if (! exists $goatlist->{$rel}) {
 			die qq{Could not find a table or sequence named "$rel"\n};
 		}
