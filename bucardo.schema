@@ -1807,7 +1807,9 @@ $bc$
                  $sth->finish();
                  my $dbname = $dbh->selectall_arrayref('SELECT current_database()')->[0][0];
                  if ($count < 1) {
-                     $dbh->do('ALTER TABLE bucardo.bucardo_sequences ADD syncname TEXT NOT NULL');
+                     $dbh->do('ALTER TABLE bucardo.bucardo_sequences ADD syncname TEXT');
+                     $dbh->do('UPDATE bucardo.bucardo_sequences SET syncname = ' . $dbh->quote($syncname));
+                     $dbh->do('ALTER TABLE bucardo.bucardo_sequences ALTER syncname SET NOT NULL');
                  }
             }
 
