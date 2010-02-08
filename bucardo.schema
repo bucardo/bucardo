@@ -1797,6 +1797,20 @@ $bc$
                      . q{bucardo.bucardo_sequences (tablename, syncname)};
                 run_sql($SQL,$dbh);
             }
+            else {
+                 ## Make sure we upgrade any old version
+                 my $SQL = 'SELECT 1 FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n, '.
+                 'pg_catalog.pg_attribute a WHERE n.oid=c.relnamespace AND n.nspname = ? AND c.relname = ? '.
+                 'AND a.attname = ? AND a.attrelid = c.oid';
+                 my $sth = $dbh->prepare_cached($SQL);
+                 my $count = $sth->execute('bucardo','bucardo_sequences','syncname');
+                 $sth->finish();
+                 my $dbname = $dbh->selectall_arrayref('SELECT current_database()')->[0][0];
+                 if ($count < 1) {
+                     $dbh->do('ALTER TABLE bucardo.bucardo_sequences ADD syncname TEXT NOT NULL');
+                 }
+            }
+
             if ($force) {
                 if ($found{index1}) {
                     elog(DEBUG, qq{Dropping index "$safeindex1"});
