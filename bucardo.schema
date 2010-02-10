@@ -2131,7 +2131,7 @@ LANGUAGE plpgsql
 VOLATILE
 AS $clone$
 DECLARE
-  fmsg TEXT = $clone2$SET search_path = 'bucardo';$clone2$;
+  fmsg TEXT = $clone2$SET LOCAL search_path = 'bucardo';$clone2$;
   myst TEXT;
   myrec RECORD;
   myrec2 RECORD;
