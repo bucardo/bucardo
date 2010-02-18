@@ -617,7 +617,7 @@ DECLARE
 BEGIN
 
   -- Make sure we have all child tables
-  FOR myrec IN SELECT DISTINCT TO_CHAR(cdate, 'YYYYMMDD') AS t FROM freezer.master_q LOOP
+  FOR myrec IN SELECT DISTINCT TO_CHAR(cdate, 'YYYYMMDD') AS t FROM ONLY freezer.master_q LOOP
     needindex = false;
     tablename = 'child_q_' || myrec.t;
     RAISE DEBUG 'Found %', tablename;
