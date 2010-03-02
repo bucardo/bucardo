@@ -61,9 +61,9 @@ sub blibdirs {
 
 sub install {
 	my $string = shift->SUPER::install(@_);
-	my $vars = qq{DESTINSTALLSHARE = \$(DESTDIR)/usr/local/share/bucardo\n};
-	$vars .= qq{DESTINSTALLSITESHARE = \$(DESTDIR)/usr/local/share/bucardo\n};
-	$vars .= qq{DESTINSTALLVENDORSHARE = \$(DESTDIR)/usr/share/bucardo\n};
+	my $vars = qq{DESTINSTALLSHARE = \$(INSTALL_BASE)/usr/local/share/bucardo\n};
+	$vars .= qq{DESTINSTALLSITESHARE = \$(INSTALL_BASE)/usr/local/share/bucardo\n};
+	$vars .= qq{DESTINSTALLVENDORSHARE = \$(INSTALL_BASE)/usr/share/bucardo\n};
 
 	if ($ENV{INSTALL_BUCARDODIR}) {
 		for my $dir (qw{SCRIPT LIB MAN1DIR MAN3DIR}) {
