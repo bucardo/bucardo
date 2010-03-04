@@ -5183,7 +5183,7 @@ sub start_kid {
 						elsif ('target' eq $sc) {
 							$action = 2;
 						}
-						elsif ('lowest' eq $sc and 'highest' eq $sc) {
+						elsif ('lowest' eq $sc or 'highest' eq $sc) {
 							($g->{tempschema}{s}{lastval},$g->{tempschema}{s}{iscalled}) =
 								@{$sourcedbh->selectall_arrayref($SEQUENCESQL)->[0]};
 							($g->{tempschema}{t}{lastval},$g->{tempschema}{t}{iscalled}) =
