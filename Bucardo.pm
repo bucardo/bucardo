@@ -4525,7 +4525,6 @@ sub start_kid {
                             $sth->execute($g->{oid},$sync->{name},$lastval,$iscalled);
 						}
 						else {
-                            $self->glog('block 2');
 							$SQL = 'UPDATE bucardo.bucardo_sequences SET value=?, iscalled=? WHERE tablename=? AND syncname=?';
 							$sth = $sourcedbh->prepare($SQL);
 							$sth->execute($lastval,$iscalled,$g->{oid}, $sync->{name});
