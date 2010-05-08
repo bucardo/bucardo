@@ -172,6 +172,8 @@ my $RETRY      = delete $bcargs->{retry} || 0;
 my $RETRYSLEEP = delete $bcargs->{retrysleep} || 0;
 my $NOTIMER    = delete $bcargs->{notimer} || 0;
 
+my $NO_PG_LISTENER = 0;
+
 my $DBCONN = "User: $bcargs->{dbuser}  Database: $bcargs->{dbname}";
 $bcargs->{dbhost} and length $bcargs->{dbhost} and $DBCONN .= "  Host: $bcargs->{dbhost}";
 $bcargs->{dbport} and length $bcargs->{dbport} and $DBCONN .= "  Port: $bcargs->{dbport}";
@@ -193,6 +195,7 @@ $bcargs->{dbhost} and length $bcargs->{dbhost} and $DSN .= ";host=$bcargs->{dbho
 $bcargs->{dbport} and length $bcargs->{dbport} and $DSN .= ";port=$bcargs->{dbport}";
 $dbh = DBI->connect($DSN, $bcargs->{dbuser}, $bcargs->{dbpass}, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
 $dbh->do('SET search_path = bucardo');
+check_version($dbh);
 $dbh->commit();
 
 my $REASONFILE = get_config('reason_file') or die "Invalid reason_file!\n";
@@ -322,6 +325,20 @@ kick() if $verb eq 'kick';
 
 help();
 
+sub check_version {
+	my $dbh = shift;
+	my $res = $dbh->selectall_arrayref('SELECT version()')->[0][0];
+	if ($res !~ /(\d+)\.(\d+)(\S+)/) {
+		die "Sorry, unable to determine the database version\n";
+	}
+	my ($maj,$min,$rev) = ($1,$2,$3);
+	$rev =~ s/^\.//;
+	$rev =~ s/(\d+)\.\d+/$1/;
+	if ($maj < 8 or (8 == $maj and $min < 1)) {
+		die "Sorry, Bucardo requires Postgres version 8.1 or higher. This is only $maj.$min\n";
+	}
+	$NO_PG_LISTENER = 1 if $maj >= 9;
+}
 
 sub help {
 	warn qq{Usage: $progname args
@@ -1188,9 +1205,10 @@ sub kick {
 		exit 1;
 	}
 
-	## Is someone listening for this sync? (We assume its the MCP)
-	$SQL = 'SELECT 1 FROM pg_listener WHERE relname = ?';
-	my $sthl = $dbh->prepare($SQL);
+	## Is someone listening for this sync? (We assume its the MCP) Note that we
+	## can't find this out in pgsql 9.0 or greater, because there's no longer a
+	## way to know what's being listened for.
+	my $sthl = $NO_PG_LISTENER ? undef : $dbh->prepare('SELECT 1 FROM pg_listener WHERE relname = ?');
 
 	my ($exitstatus, $retries, $do_retry) = (0,0,0);
 
@@ -1200,12 +1218,15 @@ sub kick {
 	  SYNC: for my $sync (@syncs) {
 			my $relname = "bucardo_kick_sync_$sync";
 
-			## If nobody is listening, our kick is not going to be very effective!
-			$count = $sthl->execute($relname);
-			$sthl->finish();
-			if ($count < 1) {
-				warn qq{Cannot kick sync "$sync" - are you sure it is active?\n};
-				next;
+			if (defined $sthl) {
+				## If nobody is listening, our kick is not going to be very effective!
+				$count = $sthl->execute($relname);
+				$sthl->finish();
+				if ($count < 1) {
+					warn qq{Cannot kick sync "$sync" - are you sure it is active?\n};
+					die "Available syncs: " . Dumper($dbh->selectall_arrayref('SELECT * FROM pg_listening_channels()'));
+					next;
+				}
 			}
 
 			$dbh->do(qq{NOTIFY "bucardo_kick_sync_$sync"});
@@ -4100,14 +4121,20 @@ sub remove_sync {
 	}
 
 	## Make sure none of the syncs are currently running
-	$SQL = q{SELECT 1 FROM pg_catalog.pg_listener WHERE relname = ?};
-	for my $name (@nouns) {
-		my $dname = "bucardo_deactivate_sync_$name";
-		$sth = $dbh->prepare($SQL);
-		$count = $sth->execute($dname);
-		$sth->finish();
-		if (1 == $count) {
-			die qq{Cannot remove active sync "$name": please deactivate it first\n};
+	if ($NO_PG_LISTENER) {
+		## XXX Is there anything we can do to check that the sync is active?
+		0;
+	}
+	else {
+		$SQL = q{SELECT 1 FROM pg_catalog.pg_listener WHERE relname = ?};
+		for my $name (@nouns) {
+			my $dname = "bucardo_deactivate_sync_$name";
+			$sth = $dbh->prepare($SQL);
+			$count = $sth->execute($dname);
+			$sth->finish();
+			if (1 == $count) {
+				die qq{Cannot remove active sync "$name": please deactivate it first\n};
+			}
 		}
 	}
 
@@ -5720,9 +5747,10 @@ sub install {
 	if ($maj < 8 or (8 == $maj and $min < 1)) {
 		die "Sorry, Bucardo requires Postgres version 8.1 or higher. This is only $maj.$min\n";
 	}
+	$maj >= 9 and $NO_PG_LISTENER = 1;
 
 	$COM = "$PSQL -AX -qt -f $schema_file 2>&1";
-print "COM=$COM\n";
+	print "COM=$COM\n";
 
 	print "Attempting to create and populate the bucardo database and schema\n";
 
