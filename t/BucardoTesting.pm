@@ -17,7 +17,7 @@ use vars qw/$SQL $sth $count $COM %dbh/;
 my $DEBUG = 0;
 
 use base 'Exporter';
-our @EXPORT = qw/%tabletype %sequences %val compare_tables bc_deeply wait_for_notice $location/;
+our @EXPORT = qw/%tabletype %sequences %val compare_tables bc_deeply clear_notices wait_for_notice $location/;
 
 our $location = 'setup';
 my $testmsg  = ' ?';
@@ -1118,6 +1118,12 @@ sub bc_deeply {
 
 } ## end of bc_deeply
 
+sub clear_notices {
+    my $dbh = shift;
+    my $timeout = shift || $TIMEOUT_NOTICE;
+    sleep $timeout;
+    0 while (my $n = $dbh->func('pg_notifies'));
+}
 
 sub wait_for_notice {
 
