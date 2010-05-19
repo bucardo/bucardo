@@ -1967,6 +1967,7 @@ sub start_mcp {
 					$sth->execute();
 					$info = $sth->fetchall_arrayref({})->[0];
 					for my $key (sort keys %$info) {
+						next if $key eq 'log_cnt';
 						if (! exists $g->{sequenceinfo}{$key}) {
 							$self->glog(qq{Warning! Sequence on target has item $key, but source does not!});
 							next;
