@@ -45,6 +45,8 @@ Bucardo version 4.5.0, released ??, 2010
 
   - Add new options for 'bucardo_ctl add db': addalltables and addallsequences [GSM]
 
+  - Don't bother comparing the 'log_cnt' field of sequences. [Rosser Schwarz]
+
   - Make sure we update bucardo_config.bucardo_current_version when doing 
     a bucardo_ctl upgrade [GSM] (Bug #5)
 
