@@ -60,7 +60,9 @@ Bucardo version 4.5.0, released ??, 2010
 
   - Remove unused 'kick_sleep' config variable. [GSM]
 
-  - Show the database name when listing herds or sequences via bucardo_ctl. [GSM]
+  - Show the database name when listing herds via bucardo_ctl. [GSM]
+
+  - Show the database name when listing sequences via bucardo_ctl. [Douglas Tan]
 
 Bucardo version 4.4.0, released October 14, 2009
 
