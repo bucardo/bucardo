@@ -2722,8 +2722,16 @@ sub list_sequences {
 	}
 
 	$info = $sth->fetchall_arrayref({});
+	my $maxq = 1;
 	for my $row (@$info) {
-		print "Sequence $row->{id}: $row->{schemaname}.$row->{tablename}\n";
+		my $len = length "$row->{schemaname}.$row->{tablename}";
+		$maxq = $len if $len > $maxq;
+	}
+
+	for my $row (@$info) {
+		printf "Sequence: %-*s  DB: %s\n",
+			$maxq, "$row->{schemaname}.$row->{tablename}",
+  		    $row->{db};
 		$VERBOSE >= 2 and show_all_columns($row);
 	}
 
