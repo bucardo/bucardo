@@ -1,4 +1,5 @@
-#!perl -- -*-cperl-*-
+#!/usr/bin/env perl
+# -*-mode:cperl; indent-tabs-mode: nil-*-
 
 ## The main Bucardo program
 ##
