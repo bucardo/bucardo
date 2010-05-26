@@ -833,7 +833,7 @@ sub update {
 
     ## Update some object in the database
     ## e.g. bucardo_ctl update sync foobar onetimecopy=2
-    ## e.g. bucardo_ctl update sync add tab1
+    ## e.g. bucardo_ctl update sync foobar add tab1
 
     my $usage = usage('update');
 
