@@ -149,7 +149,7 @@ sub new {
         $self->{dryrun} = 1;
     }
     if ($self->{dryrun}) {
-        $self->glog("'** DRYRUN - Syncs will not be committed! **\n");
+        $self->glog("'** DRYRUN - Syncs will not be committed! **", 0);
     }
 
     ## This gets appended to the process description ($0)
@@ -276,7 +276,7 @@ sub connect_database {
     ## use server-side prepared statements, as they will not span commits/rollbacks.
     if (! $ssp) {
         $dbh->{pg_server_prepare} = 0;
-        $self->glog('Turning off server-side prepares for this database connection');
+        $self->glog('Turning off server-side prepares for this database connection', 1);
     }
 
     ## Grab the backend PID for this Postgres process
@@ -590,7 +590,7 @@ sub start_mcp {
             close $fh or warn qq{Could not close "$self->{pidfile}": $!\n};
         }
         my $msg = qq{File "$self->{pidfile}" already exists$extra: cannot run until it is removed};
-        $self->glog($msg);
+        $self->glog($msg, 0);
         warn $msg;
         exit 1;
     }
@@ -598,13 +598,13 @@ sub start_mcp {
     ## We'll also refuse if the global stop file exists
     if (-e $self->{stopfile}) {
         my $msg = qq{Cannot run while this file exists: "$self->{stopfile}"};
-        $self->glog($msg);
+        $self->glog($msg, 0);
         warn $msg;
         ## Show the first few lines
         if (open my $fh, '<', $self->{stopfile}) {
             while (<$fh>) {
                 $msg = "Line $.: $_";
-                $self->glog($msg);
+                $self->glog($msg, 0);
                 warn $msg;
                 last if $. > 10;
             }
@@ -649,7 +649,7 @@ sub start_mcp {
     eval {
         $self->{masterdbh}->disconnect();
     };
-    $@ and $self->glog("Warning! Disconnect failed $@");
+    $@ and $self->glog("Warning! Disconnect failed $@", 0);
 
     my $seeya = fork;
     if (! defined $seeya) {
@@ -673,21 +673,21 @@ sub start_mcp {
     close $pid or warn qq{Could not close "$self->{pidfile}": $!\n};
 
     ## Start outputting some interesting things to the log
-    $self->glog("Starting Bucardo version $VERSION");
+    $self->glog("Starting Bucardo version $VERSION", 0);
     my $systemtime = time;
     $SQL = q{SELECT extract(epoch FROM now()), now(), current_setting('timezone')};
     my $dbtime = $self->{masterdbh}->selectall_arrayref($SQL)->[0];
-    $self->glog("Local system epoch: $systemtime  Database epoch: $dbtime->[0]");
+    $self->glog("Local system epoch: $systemtime  Database epoch: $dbtime->[0]", 0);
     $systemtime = scalar localtime ($systemtime);
-    $self->glog("Local system time: $systemtime  Database time: $dbtime->[1]");
+    $self->glog("Local system time: $systemtime  Database time: $dbtime->[1]", 0);
     $systemtime = strftime('%Z (%z)', localtime());
-    $self->glog("Local system timezone: $systemtime  Database timezone: $dbtime->[2]");
-    $self->glog("PID: $$");
-    $self->glog("Backend PID: $mcp_backend");
-    $self->glog("bucardo_ctl: $old0");
-    $self->glog('Bucardo.pm: ' . $INC{'Bucardo.pm'});
-    $self->glog("Perl: $^X $^V");
-    $self->glog("Log level: $config{log_level}");
+    $self->glog("Local system timezone: $systemtime  Database timezone: $dbtime->[2]", 0);
+    $self->glog("PID: $$", 0);
+    $self->glog("Backend PID: $mcp_backend", 0);
+    $self->glog("bucardo_ctl: $old0", 0);
+    $self->glog('Bucardo.pm: ' . $INC{'Bucardo.pm'}, 0);
+    $self->glog("Perl: $^X $^V", 0);
+    $self->glog("Log level: $config{log_level}", 0);
 
     ## Again with the password trick
     $self->{dbpass} = '<not shown>';
@@ -699,7 +699,7 @@ sub start_mcp {
     for (sort keys %$self) {
         $objdump .= sprintf " %-*s => %s\n", $maxlen, $_, (defined $self->{$_}) ? qq{'$self->{$_}'} : 'undef';
     }
-    $self->glog($objdump);
+    $self->glog($objdump, 1);
     $self->{dbpass} = $oldpass;
 
     ## Dump all configuration variables to the log
@@ -711,7 +711,7 @@ sub start_mcp {
     for (sort keys %config) {
         $objdump .= sprintf " %-*s => %s\n", $maxlen, $_, (defined $config{$_}) ? qq{'$config{$_}'} : 'undef';
     }
-    $self->glog($objdump);
+    $self->glog($objdump, 0);
 
 
     ## Clean up old files in the piddir directory
@@ -723,10 +723,10 @@ sub start_mcp {
         next unless $pidfile =~ /^bucardo.*\.pid$/o;
         next if $pidfile eq 'bucardo.mcp.pid'; ## That's us!
         if (unlink "$piddir/$pidfile") {
-            $self->glog("Removed old pid file $piddir/$pidfile");
+            $self->glog("Removed old pid file $piddir/$pidfile", 2);
         }
         else {
-            $self->glog("Failed to remove pid file $piddir/$pidfile");
+            $self->glog("Failed to remove pid file $piddir/$pidfile", 1);
         }
     }
 
@@ -743,7 +743,7 @@ sub start_mcp {
         }
     }
     if (keys %{$self->{dosyncs}}) {
-        $self->glog('Only doing these syncs: ' . join ' ' => sort keys %{$self->{dosyncs}});
+        $self->glog(('Only doing these syncs: ' . join ' ' => sort keys %{$self->{dosyncs}}), 2);
         $0 .= ' Requested syncs: ' . join ' ' => sort keys %{$self->{dosyncs}};
     }
 
@@ -753,7 +753,7 @@ sub start_mcp {
     $SIG{__DIE__} = sub {
         my $msg = shift;
         my $line = (caller)[2];
-        $self->glog("Warning: Killed (line $line): $msg");
+        $self->glog("Warning: Killed (line $line): $msg", 0);
 
         my $diebody = "MCP $$ was killed: $msg";
         my $diesubject = "Bucardo MCP $$ was killed";
@@ -766,13 +766,13 @@ sub start_mcp {
 
         ## Sometimes we don't want to respawn at all (e.g. during some tests)
         if (! $config{mcp_dbproblem_sleep}) {
-            $self->glog('Database problem, but will not attempt a respawn due to mcp_dbproblem_sleep=0');
+            $self->glog('Database problem, but will not attempt a respawn due to mcp_dbproblem_sleep=0', 1);
             $respawn = 0;
         }
 
         ## Most times we do want to respawn
         if ($respawn) {
-            $self->glog("Database problem, will respawn after a short sleep: $config{mcp_dbproblem_sleep}");
+            $self->glog("Database problem, will respawn after a short sleep: $config{mcp_dbproblem_sleep}", 1);
             $diebody .= " (will attempt respawn in $config{mcp_dbproblem_sleep} seconds)";
             $diesubject .= ' (respawning)';
         }
@@ -795,7 +795,7 @@ sub start_mcp {
                 $RUNME = "./$RUNME" if index ($RUNME,'.') != 0;
             }
             $RUNME .= q{ start "Attempting automatic respawn after MCP death"};
-            $self->glog("Respawn attempt: $RUNME");
+            $self->glog("Respawn attempt: $RUNME", 1);
             exec $RUNME;
         }
 
@@ -806,10 +806,10 @@ sub start_mcp {
 
     ## Resets listeners, kills children, loads and activate syncs
     my $active_syncs = $self->reload_mcp();
-    $self->glog("Active syncs: $active_syncs");
+    $self->glog("Active syncs: $active_syncs", 1);
     if (!$active_syncs) {
         ## Should we allow an option to hang around anyway?
-        $self->glog('No active syncs were found, so we are exiting');
+        $self->glog('No active syncs were found, so we are exiting', 0);
         $self->{masterdbh}->do('NOTIFY bucardo_nosyncs');
         $self->{masterdbh}->commit();
         exit 1;
@@ -869,7 +869,7 @@ sub start_mcp {
 
         my $self = shift;
 
-        $self->glog('Entering main loop');
+        $self->glog('Entering main loop', 1);
 
         my $maindbh = $self->{masterdbh};
         my $sync = $self->{sync};
@@ -884,7 +884,7 @@ sub start_mcp {
 
             ## Bail if the stopfile exists
             if (-e $self->{stopfile}) {
-                $self->glog(qq{Found stopfile "$self->{stopfile}": exiting});
+                $self->glog(qq{Found stopfile "$self->{stopfile}": exiting}, 0);
                 my $msg = 'Found stopfile';
 
                 ## Grab the reason if it exists so we can propogate it onward
@@ -932,7 +932,7 @@ sub start_mcp {
 
                 ## Request to stop everything
                 if ('bucardo_mcp_fullstop' eq $name) {
-                    $self->glog("Received full stop notice from PID $pid, leaving");
+                    $self->glog("Received full stop notice from PID $pid, leaving", 1);
                     $self->cleanup_mcp("Received stop NOTICE from PID $pid");
                     exit 0;
                 }
@@ -952,7 +952,7 @@ sub start_mcp {
                     }
 
                     if ($msg) {
-                        $self->glog($msg);
+                        $self->glog($msg, 3);
                         ## As we don't want people to wait around for a syncdone...
                         $maindbh->do(qq{NOTIFY "bucardo_syncerror_$syncname"}) or warn 'NOTIFY failed';
                         $maindbh->commit();
@@ -961,7 +961,7 @@ sub start_mcp {
 
                 ## Request to reload the configuration file
                 elsif ('bucardo_reload_config' eq $name) {
-                    $self->glog('Reloading configuration table');
+                    $self->glog('Reloading configuration table', 1);
                     $self->reload_config_database();
 
                     ## We need to reload ourself as well
@@ -970,36 +970,36 @@ sub start_mcp {
                     ## Let anyone listening know we are done
                     $maindbh->do('NOTIFY bucardo_reload_config_finished') or warn 'NOTIFY failed';
                     $maindbh->commit();
-                    $self->glog('Sent notice bucardo_reload_config_finished');
+                    $self->glog('Sent notice bucardo_reload_config_finished', 6);
                 }
 
                 ## Request to reload the MCP
                 elsif ('bucardo_mcp_reload' eq $name) {
-                    $self->glog('Reloading MCP');
+                    $self->glog('Reloading MCP', 1);
                     $self->reload_mcp();
 
                     ## Let anyone listening know we are done
                     $maindbh->do('NOTIFY bucardo_reloaded_mcp') or warn 'NOTIFY failed';
                     $maindbh->commit();
-                    $self->glog('Sent notice bucardo_reloaded_mcp');
+                    $self->glog('Sent notice bucardo_reloaded_mcp', 6);
                 }
 
                 ## Request for a ping via listen/notify
                 elsif ('bucardo_mcp_ping' eq $name) {
-                    $self->glog("Got a ping from PID $pid, issuing pong", 'INFO');
+                    $self->glog("Got a ping from PID $pid, issuing pong", 5);
                     $maindbh->do('NOTIFY bucardo_mcp_pong') or warn 'NOTIFY failed';
                     $maindbh->commit();
                 }
 
                 ## Request that we parse and empty the log message table
                 elsif ('bucardo_log_message' eq $name) {
-                    $self->glog('Checking for log messages', 'INFO');
+                    $self->glog('Checking for log messages', 5);
                     $SQL = 'SELECT msg,cdate FROM bucardo_log_message ORDER BY cdate';
                     $sth = $maindbh->prepare_cached($SQL);
                     $count = $sth->execute();
                     if ($count ne '0E0') {
                         for my $row (@{$sth->fetchall_arrayref()}) {
-                            $self->glog("MESSAGE ($row->[1]): $row->[0]");
+                            $self->glog("MESSAGE ($row->[1]): $row->[0]", 5);
                         }
                         $maindbh->do('TRUNCATE TABLE bucardo_log_message');
                         $maindbh->commit();
@@ -1010,13 +1010,13 @@ sub start_mcp {
                 elsif ($name =~ /^bucardo_reload_sync_(.+)/o) {
                     my $syncname = $1;
                     if (! exists $sync->{$syncname}) {
-                        $self->glog(qq{Invalid sync reload: "$syncname"});
+                        $self->glog(qq{Invalid sync reload: "$syncname"}, 1);
                     }
                     elsif (!$sync->{$syncname}{mcp_active}) {
-                        $self->glog(qq{Cannot reload: sync "$syncname" is not active});
+                        $self->glog(qq{Cannot reload: sync "$syncname" is not active}, 3);
                     }
                     else {
-                        $self->glog("Deactivating sync $syncname");
+                        $self->glog("Deactivating sync $syncname", 3);
                         $self->deactivate_sync($sync->{$syncname});
 
                         ## Reread from the database
@@ -1028,7 +1028,7 @@ sub start_mcp {
                         $count = $sth->execute($syncname);
                         if ($count eq '0E0') {
                             $sth->finish();
-                            $self->glog(qq{Warning! Cannot reload sync "$syncname": no longer in the database!\n});
+                            $self->glog(qq{Warning! Cannot reload sync "$syncname": no longer in the database!}, 0);
                             $maindbh->commit();
                             next; ## Handle the next notice
                         }
@@ -1056,15 +1056,15 @@ sub start_mcp {
 
                         sleep 2; ## TODO: Actually wait somehow, perhaps fork
 
-                        $self->glog("Reactivating sync $syncname");
+                        $self->glog("Reactivating sync $syncname", 1);
                         $sync->{$syncname}{mcp_active} = 0;
                         if (! $self->activate_sync($sync->{$syncname})) {
-                            $self->glog(qq{Warning! Reactivation of sync "$syncname" failed});
+                            $self->glog(qq{Warning! Reactivation of sync "$syncname" failed}, 0);
                         }
                         else {
                             ## Let anyone listening know the sync is now ready
                             $maindbh->do(qq{NOTIFY "bucardo_reloaded_sync_$syncname"}) or warn 'NOTIFY failed';
-                            $self->glog("Sent notice bucardo_reloaded_sync_$syncname");
+                            $self->glog("Sent notice bucardo_reloaded_sync_$syncname", 6);
                         }
                         $maindbh->commit();
                     }
@@ -1074,10 +1074,10 @@ sub start_mcp {
                 elsif ($name =~ /^bucardo_activate_sync_(.+)/o) {
                     my $syncname = $1;
                     if (! exists $sync->{$syncname}) {
-                        $self->glog(qq{Invalid sync activation: "$syncname"});
+                        $self->glog(qq{Invalid sync activation: "$syncname"}, 1);
                     }
                     elsif ($sync->{$syncname}{mcp_active}) {
-                        $self->glog(qq{Sync "$syncname" is already activated});
+                        $self->glog(qq{Sync "$syncname" is already activated}, 3);
                         $maindbh->do(qq{NOTIFY "bucardo_activated_sync_$syncname"}) or warn 'NOTIFY failed';
                         $maindbh->commit();
                     }
@@ -1092,10 +1092,10 @@ sub start_mcp {
                 elsif ($name =~ /^bucardo_deactivate_sync_(.+)/o) {
                     my $syncname = $1;
                     if (! exists $sync->{$syncname}) {
-                        $self->glog(qq{Invalid sync "$syncname"});
+                        $self->glog(qq{Invalid sync "$syncname"}, 1);
                     }
                     elsif (! $sync->{$syncname}{mcp_active}) {
-                        $self->glog(qq{Sync "$syncname" is already deactivated});
+                        $self->glog(qq{Sync "$syncname" is already deactivated}, 3);
                         $maindbh->do(qq{NOTIFY "bucardo_deactivated_sync_$syncname"}) or warn 'NOTIFY failed';
                         $maindbh->commit();
                     }
@@ -1128,7 +1128,7 @@ sub start_mcp {
                 if ($s->{stayalive} and $s->{controller}) {
                     $count = kill 0 => $s->{controller};
                     if (! $count) {
-                        $self->glog("Could not find controller $s->{controller}, will create a new one. Kicked is $s->{mcp_kicked}");
+                        $self->glog("Could not find controller $s->{controller}, will create a new one. Kicked is $s->{mcp_kicked}", 1);
                         $s->{controller} = 0;
                     }
                     else { ## Presume it is alive and listening to us, restart and kick as needed
@@ -1147,7 +1147,7 @@ sub start_mcp {
                             }
                             if ($restart_reason) {
                                 ## Kill and restart controller
-                                $self->glog("Restarting controller for sync $syncname. $restart_reason");
+                                $self->glog("Restarting controller for sync $syncname. $restart_reason", 1);
                                 kill $signumber{USR1} => $s->{controller};
                                 $self->fork_controller($s, $syncname);
                                 ## Extra little sleep to ensure the new controller gets the upcoming kick
@@ -1158,7 +1158,7 @@ sub start_mcp {
                             my $notify = "bucardo_ctl_kick_$syncname";
                             $maindbh->do(qq{NOTIFY "$notify"}) or die "NOTIFY $notify failed";
                             $maindbh->commit();
-                            $self->glog(qq{Sent a kick request to controller $s->{controller} for sync "$syncname"},'INFO');
+                            $self->glog(qq{Sent a kick request to controller $s->{controller} for sync "$syncname"}, 6);
                             $s->{mcp_kicked} = 0;
                             $s->{ctl_kick_counts}++;
                         }
@@ -1175,14 +1175,14 @@ sub start_mcp {
                 my $syncname = $s->{name};
                 my $pidfile = "$config{piddir}/bucardo.ctl.sync.$syncname.pid";
                 if ($s->{mcp_changed}) {
-                    $self->glog(qq{Checking for existing controllers for sync "$syncname"});
+                    $self->glog(qq{Checking for existing controllers for sync "$syncname"}, 3);
                 }
 
                 if (-e $pidfile and ! $s->{mcp_problemchild}) {
-                    $self->glog("File exists staylive=$s->{stayalive} controller=$s->{controller}");
+                    $self->glog("File exists staylive=$s->{stayalive} controller=$s->{controller}", 1);
                     my $pid;
                     if (!open $pid, '<', $pidfile) {
-                        $self->glog(qq{ERROR: Could not open file "$pidfile": $!});
+                        $self->glog(qq{ERROR: Could not open file "$pidfile": $!}, 0);
                         $s->{mcp_problemchild} = 1;
                         next SYNC;
                     }
@@ -1191,10 +1191,10 @@ sub start_mcp {
                     close $pid or warn qq{Could not close "$pidfile": $!\n};
                     ## We don't need to know about this every time
                     if ($s->{mcp_changed}) {
-                        $self->glog(qq{Found previous controller $oldpid from "$pidfile"});
+                        $self->glog(qq{Found previous controller $oldpid from "$pidfile"}, 1);
                     }
                     if ($oldpid !~ /^\d+$/) {
-                        $self->glog(qq{ERROR: Invalid pid found inside of file "$pidfile" ($oldpid)});
+                        $self->glog(qq{ERROR: Invalid pid found inside of file "$pidfile" ($oldpid)}, 0);
                         $s->{mcp_changed} = 0;
                         $s->{mcp_problemchild} = 2;
                         next SYNC;
@@ -1203,19 +1203,19 @@ sub start_mcp {
                     $count = kill 0 => $oldpid;
                     if ($count==1) {
                         if ($s->{mcp_changed}) {
-                            $self->glog(qq{Skipping sync "$syncname", seems to be already handled by $oldpid});
+                            $self->glog(qq{Skipping sync "$syncname", seems to be already handled by $oldpid}, 5);
                             ## Make sure this kid is still running
                             $count = kill 0 => $oldpid;
                             if (!$count) {
-                                $self->glog(qq{Warning! PID $oldpid was not found. Removing PID file});
-                                unlink $pidfile or $self->glog("Warning! Failed to unlink $pidfile");
+                                $self->glog(qq{Warning! PID $oldpid was not found. Removing PID file}, 3);
+                                unlink $pidfile or $self->glog("Warning! Failed to unlink $pidfile", 0);
                                 $s->{mcp_problemchild} = 3;
                                 next SYNC;
                             }
                             $s->{mcp_changed} = 0;
                         }
                         if (! $s->{stayalive}) {
-                            $self->glog(qq{Non stayalive sync "$syncname" still active - sending it a notify});
+                            $self->glog(qq{Non stayalive sync "$syncname" still active - sending it a notify}, 5);
                         }
                         my $notify = "bucardo_ctl_kick_$syncname";
                         $maindbh->do(qq{NOTIFY "$notify"}) or die "NOTIFY $notify failed";
@@ -1223,9 +1223,9 @@ sub start_mcp {
                         $s->{mcp_kicked} = 0;
                         next SYNC;
                     }
-                    $self->glog("No active pid $oldpid found. Killing just in case, and removing file");
+                    $self->glog("No active pid $oldpid found. Killing just in case, and removing file", 3);
                     $self->kill_bucardo_pid($oldpid => 'normal');
-                    unlink $pidfile or $self->glog("Warning! Failed to unlink $pidfile");
+                    unlink $pidfile or $self->glog("Warning! Failed to unlink $pidfile", 0);
                     $s->{mcp_changed} = 1;
                 } ## end if pidfile found for this sync
 
@@ -1272,7 +1272,7 @@ sub start_mcp {
             exit 0;
         }
 
-        $self->glog(qq{Created controller $controller for sync "$syncname". Kick is $s->{mcp_kicked}});
+        $self->glog(qq{Created controller $controller for sync "$syncname". Kick is $s->{mcp_kicked}}, 5);
         $s->{controller} = $controller;
 
         ## Reset counters for ctl restart via maxkicks and lifetime settings
@@ -1304,20 +1304,20 @@ sub start_mcp {
         while (defined ($name = readdir($dh))) {
             next unless $name =~ /bucardo\.ctl\.sync\.(.+)\.pid/;
             my $syncname = $1; ## no critic (ProhibitCaptureWithoutTest)
-            $self->glog(qq{Attempting to kill controller process for "$syncname"});
+            $self->glog(qq{Attempting to kill controller process for "$syncname"}, 1);
             next unless open my $fh, '<', "$config{piddir}/$name";
             if (<$fh> !~ /(\d+)/) {
-                $self->glog(qq{Warning! File "$config{piddir}/$name" did not contain a PID!\n});
+                $self->glog(qq{Warning! File "$config{piddir}/$name" did not contain a PID!}, 0);
                 next;
             }
             my $pid = $1; ## no critic (ProhibitCaptureWithoutTest)
-            $self->glog(qq{Asking process $pid to terminate for reload_mcp});
+            $self->glog(qq{Asking process $pid to terminate for reload_mcp}, 1);
             kill $signumber{USR1} => $pid;
             close $fh or warn qq{Could not close "$config{piddir}/$name": $!\n};
         }
         closedir $dh or warn qq{Warning! Could not closedir "$config{piddir}": $!\n};
 
-        $self->glog('LOADING TABLE sync. Rows=' . (scalar (keys %{$self->{sync}})));
+        $self->glog(('LOADING TABLE sync. Rows=' . (scalar (keys %{$self->{sync}}))), 1);
 
         ## At this point, we are authoritative, so we can safely clean out the q table
         $SQL = q{
@@ -1333,7 +1333,7 @@ sub start_mcp {
         $count = $sth->execute($cleanmsg);
         $maindbh->commit();
         if ($count >= 1) {
-            $self->glog("Entries cleaned from the q table: $count");
+            $self->glog("Entries cleaned from the q table: $count", 3);
         }
 
         ## Load each sync in alphabetical order
@@ -1350,20 +1350,20 @@ sub start_mcp {
 
             ## If this sync is active, don't bother going any further
             if ($s->{status} ne 'active') {
-                $self->glog(qq{Skipping sync "$syncname": status is "$s->{status}"});
+                $self->glog(qq{Skipping sync "$syncname": status is "$s->{status}"}, 3);
                 next;
             }
 
             ## If we are doing specific syncs, check the name
             if (keys %{$self->{dosyncs}}) {
                 if (! exists $self->{dosyncs}{$syncname}) {
-                    $self->glog(qq{Skipping sync "$syncname": not explicitly named});
+                    $self->glog(qq{Skipping sync "$syncname": not explicitly named}, 3);
                     next;
                 }
-                $self->glog(qq{Activating sync "$syncname": explicitly named});
+                $self->glog(qq{Activating sync "$syncname": explicitly named}, 3);
             }
             else {
-                $self->glog(qq{Activating sync "$syncname"});
+                $self->glog(qq{Activating sync "$syncname"}, 3);
             }
 
             ## Activate this sync!
@@ -1408,7 +1408,7 @@ sub start_mcp {
              'log_message',
              'mcp_ping',
          ) {
-            $self->glog(qq{Listening for "bucardo_$l"});
+            $self->glog(qq{Listening for "bucardo_$l"}, 5);
             $maindbh->do("LISTEN bucardo_$l") or die "LISTEN bucardo_$l failed";
         }
 
@@ -1433,7 +1433,7 @@ sub start_mcp {
 
                 my $listen = "bucardo_${l}_$syncname";
                 $maindbh->do(qq{LISTEN "$listen"}) or die "LISTEN $listen failed";
-                $self->glog(qq{Listening for "$listen"});
+                $self->glog(qq{Listening for "$listen"}, 5);
             }
         }
 
@@ -1456,7 +1456,7 @@ sub start_mcp {
 
         ## Connect to each database used by this sync and validate tables
         if (! $self->validate_sync($s)) {
-            $self->glog("Validation of sync $s->{name} FAILED");
+            $self->glog("Validation of sync $s->{name} FAILED", 0);
             $s->{mcp_active} = 0;
             return 0;
         }
@@ -1464,7 +1464,7 @@ sub start_mcp {
         ## If the kids stay alive, the controller must too
         if ($s->{kidsalive} and !$s->{stayalive}) {
             $s->{stayalive} = 1;
-            $self->glog('Warning! Setting stayalive to true because kidsalive is true');
+            $self->glog('Warning! Setting stayalive to true because kidsalive is true', 0);
         }
 
         $self->{sync}{$syncname}{mcp_active} = 1;
@@ -1502,7 +1502,7 @@ sub start_mcp {
 
         my $syncname = $s->{name};
 
-        $self->glog(qq{Running validate_sync on "$s->{name}"});
+        $self->glog(qq{Running validate_sync on "$s->{name}"}, 1);
 
         ## Get a list of all dbgroups in case targetgroups is set
         my $dbgroups = $self->get_dbgroups;
@@ -1518,12 +1518,12 @@ sub start_mcp {
             my $backend;
             ($backend, $self->{pingdbh}{$s->{sourcedb}}) = $self->connect_database($s->{sourcedb});
             if (defined $backend) {
-                $self->glog("Source database backend PID is $backend");
+                $self->glog("Source database backend PID is $backend", 5);
             }
         }
         my $srcdbh = $self->{pingdbh}{$s->{sourcedb}};
          if ($srcdbh eq 'inactive') {
-            $self->glog('Source database is inactive, cannot proceed. Consider making the sync inactive instead');
+            $self->glog('Source database is inactive, cannot proceed. Consider making the sync inactive instead', 0);
             die 'Source database is not active';
          }
 
@@ -1563,17 +1563,17 @@ sub start_mcp {
         my $pdbh = $self->{pingdbh};
         if (defined $s->{targetdb}) {
             my $tdb = $s->{targetdb};
-            $self->glog(qq{Connecting to target database "$tdb"});
+            $self->glog(qq{Connecting to target database "$tdb"}, 1);
             if (! $pdbh->{$tdb}) {
                 my $backend;
                 ($backend, $pdbh->{$tdb}) = $self->connect_database($tdb);
                 if (defined $backend) {
-                    $self->glog("Target database backend PID is $backend");
+                    $self->glog("Target database backend PID is $backend", 5);
                 }
             }
             ## If the database is marked as inactive, we'll remove it from this syncs list
             if ($pdbh->{$tdb} eq 'inactive') {
-                $self->glog(qq{Deleting inactive target database "$tdb"});
+                $self->glog(qq{Deleting inactive target database "$tdb"}, 1);
                 delete $pdbh->{$tdb};
             }
             else {
@@ -1583,16 +1583,16 @@ sub start_mcp {
         }
         elsif (defined $s->{targetgroup}) {
             for my $tdb (@{$dbgroups->{$s->{targetgroup}}{members}}) {
-                $self->glog(qq{Connecting to target database "$tdb"});
+                $self->glog(qq{Connecting to target database "$tdb"}, 1);
                 if (! $pdbh->{$tdb}) {
                     my $backend;
                     ($backend, $pdbh->{$tdb}) = $self->connect_database($tdb);
                     if (defined $backend) {
-                        $self->glog("Target database backend PID is $backend");
+                        $self->glog("Target database backend PID is $backend", 5);
                     }
                 }
                 if ($pdbh->{$tdb} eq 'inactive') {
-                    $self->glog(qq{Deleting inactive target database "$tdb"});
+                    $self->glog(qq{Deleting inactive target database "$tdb"}, 1);
                     delete $pdbh->{$tdb};
                 }
                 else {
@@ -1603,7 +1603,7 @@ sub start_mcp {
         }
         else {
             my $msg = qq{ERROR: Could not figure out a target for sync "$syncname"};
-            $self->glog($msg);
+            $self->glog($msg, 0);
             warn $msg;
             return 0;
         }
@@ -1631,21 +1631,21 @@ sub start_mcp {
         $sth->execute($syncname);
 
         for my $c (@{$sth->fetchall_arrayref({})}) {
-            $self->glog(qq{  Validating custom code $c->{id} ($c->{whenrun}) (goat=$c->{goat}): $c->{name}});
+            $self->glog(qq{  Validating custom code $c->{id} ($c->{whenrun}) (goat=$c->{goat}): $c->{name}}, 0);
             my $dummy = q{->{dummy}};
             if ($c->{src_code} !~ /$dummy/) {
-                $self->glog(qq{Warning! Code $c->{id} ("$c->{name}") does not contain the string $dummy\n});
+                $self->glog(qq{Warning! Code $c->{id} ("$c->{name}") does not contain the string $dummy}, 0);
                 return 0;
             }
             else {
-                $self->glog(q{    OK: code contains a dummy string});
+                $self->glog(q{    OK: code contains a dummy string}, 5);
             }
 
             ## Carefully compile the code and see what falls out
             $c->{coderef} = sub { local $SIG{__DIE__} = sub {}; eval $c->{src_code}; }; ## no critic (ProhibitStringyEval)
             &{$c->{coderef}}({ dummy => 1 });
             if ($@) {
-                $self->glog(qq{Warning! Custom code $c->{id} for sync "$syncname" did not compile: $@});
+                $self->glog(qq{Warning! Custom code $c->{id} for sync "$syncname" did not compile: $@}, 0);
                 return 0;
             }
 
@@ -1718,7 +1718,7 @@ sub start_mcp {
                 my $md = $dbinfo->{$name}{makedelta};
                 $s->{does_target_makedelta} = 1 if $md eq 'on';
                 if ($oldval ne $md and $oldval) {
-                    $self->glog(qq{Warning! Not all target databases have the same makedelta});
+                    $self->glog(qq{Warning! Not all target databases have the same makedelta}, 1);
                 }
                 $oldval = $md;
             }
@@ -1786,14 +1786,14 @@ sub start_mcp {
 
         ## Go through each table and make sure it exists and matches everywhere
         for my $g (@{$s->{goatlist}}) {
-            $self->glog(qq{  Inspecting source $g->{reltype} $g->{schemaname}.$g->{tablename} on database "$s->{sourcedb}"});
+            $self->glog(qq{  Inspecting source $g->{reltype} $g->{schemaname}.$g->{tablename} on database "$s->{sourcedb}"}, 1);
 
             ## Check the source table, save escaped versions of the names
             $sth = $sth{checktable};
             $count = $sth->execute($g->{schemaname},$g->{tablename});
             if ($count != 1) {
                 my $msg = qq{Could not find $g->{reltype} $g->{schemaname}.$g->{tablename}\n};
-                $self->glog($msg);
+                $self->glog($msg, 0);
                 warn $msg;
                 return 0;
             }
@@ -1827,12 +1827,12 @@ sub start_mcp {
                 else {
                     die q{Invalid reltype!};
                 }
-                $self->glog(qq{    Standard conflict method "$sc" chosen});
+                $self->glog(qq{    Standard conflict method "$sc" chosen}, 5);
             } ## end standard conflict
 
             ## Swap syncs must have some way of resolving conflicts
             if ($s->{synctype} eq 'swap' and !$g->{standard_conflict} and !exists $g->{code_conflict}) {
-                $self->glog(qq{Warning! Tables used in swaps must specify a conflict handler. $g->{schemaname}.$g->{tablename} appears to have neither standard or custom handler.});
+                $self->glog(qq{Warning! Tables used in swaps must specify a conflict handler. $g->{schemaname}.$g->{tablename} appears to have neither standard or custom handler.}, 0);
                 return 0;
             }
 
@@ -1925,11 +1925,11 @@ sub start_mcp {
             if ($do_customselect) {
                 if ($s->{synctype} ne 'fullcopy') {
                     my $msg = qq{ERROR: Custom select can only be used for fullcopy\n};
-                    $self->glog($msg);
+                    $self->glog($msg, 0);
                     warn $msg;
                     return 0;
                 }
-                $self->glog(qq{Transforming custom select query "$g->{customselect}"});
+                $self->glog(qq{Transforming custom select query "$g->{customselect}"}, 5);
                 $sth = $srcdbh->prepare("SELECT * FROM ($g->{customselect}) AS foo LIMIT 0");
                 $sth->execute();
                 $g->{customselectNAME} = $sth->{NAME};
@@ -1947,12 +1947,12 @@ sub start_mcp {
                 while ($notice = $maindbh->func('pg_notifies')) {
                     my ($name, $pid) = @$notice;
                     if ($name eq 'bucardo_mcp_fullstop') {
-                        $self->glog("Received full stop notice from PID $pid, leaving");
+                        $self->glog("Received full stop notice from PID $pid, leaving", 0);
                         $self->cleanup_mcp("Received stop NOTICE from PID $pid");
                         exit 0;
                     }
                     if ($name eq 'bucardo_mcp_ping') {
-                        $self->glog("Got a ping from PID $pid, issuing pong");
+                        $self->glog("Got a ping from PID $pid, issuing pong", 6);
                         $maindbh->do('NOTIFY bucardo_mcp_pong') or warn 'NOTIFY failed';
                         $maindbh->commit();
                     }
@@ -1970,12 +1970,12 @@ sub start_mcp {
                     for my $key (sort keys %$info) {
                         next if $key eq 'log_cnt';
                         if (! exists $g->{sequenceinfo}{$key}) {
-                            $self->glog(qq{Warning! Sequence on target has item $key, but source does not!});
+                            $self->glog(qq{Warning! Sequence on target has item $key, but source does not!}, 1);
                             next;
                         }
                         my $sseq = $g->{sequenceinfo}{$key};
                         if ($info->{$key} ne $sseq) {
-                            $self->glog("Warning! Sequence mismatch. Source $key=$sseq, target is $info->{$key}");
+                            $self->glog("Warning! Sequence mismatch. Source $key=$sseq, target is $info->{$key}", 1);
                             next;
                         }
                     }
@@ -1985,7 +1985,7 @@ sub start_mcp {
                     $count = $sth->execute($g->{schemaname},$g->{tablename});
                     if ($count != 1) {
                         my $msg = qq{Could not find remote sequence $g->{schemaname}.$g->{tablename} on $db\n};
-                        $self->glog($msg);
+                        $self->glog($msg, 1);
                         warn $msg;
                         return 0;
                     }
@@ -1999,7 +1999,7 @@ sub start_mcp {
                 $count = $sth->execute($g->{schemaname},$g->{tablename});
                 if ($count != 1) {
                     my $msg = qq{Could not find remote table $g->{schemaname}.$g->{tablename} on $db\n};
-                    $self->glog($msg);
+                    $self->glog($msg, 1);
                     warn $msg;
                     return 0;
                 }
@@ -2038,7 +2038,7 @@ sub start_mcp {
                         my $ok = 0;
                         if (!exists $targetcolinfo->{$col}) {
                             $msg = qq{ERROR: Custom SELECT returned column "$col" that does not exist on target "$db"\n};
-                            $self->glog($msg);
+                            $self->glog($msg, 0);
                             warn $msg;
                             return 0;
                         }
@@ -2048,9 +2048,9 @@ sub start_mcp {
                     }
                     ## Replace the actual set of columns with our subset
                     my $collist = join ' | ' => @{$g->{cols}};
-                    $self->glog("Old columns: $collist");
+                    $self->glog("Old columns: $collist", 5);
                     $collist = join ' | ' => @{$g->{customselectNAME}};
-                    $self->glog("New columns: $collist");
+                    $self->glog("New columns: $collist", 5);
                     $g->{cols} = $g->{customselectNAME};
                     $g->{safecols} = $info2;
 
@@ -2070,13 +2070,13 @@ sub start_mcp {
                     my $fcol = $targetcolinfo->{$colname};
                     my $scol = $colinfo->{$colname};
 
-                    $self->glog(qq{    Checking column on target database "$db": "$colname" ($scol->{ftype})});
+                    $self->glog(qq{    Checking column on target database "$db": "$colname" ($scol->{ftype})}, 5);
 
                     ## Always fatal: column on source but not target
                     if (! exists $targetcolinfo->{$colname}) {
                         $column_problems = 2;
                         my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t", but target database "$db" does not};
-                        $self->glog("FATAL: $msg");
+                        $self->glog("FATAL: $msg", 0);
                         warn $msg;
                         next;
                     }
@@ -2088,12 +2088,12 @@ sub start_mcp {
                         if (($scol->{ftype} eq 'character varying' and $fcol->{ftype} eq 'text') or
                             ($fcol->{ftype} eq 'character varying' and $scol->{ftype} eq 'text')) {
                             my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" as type "$scol->{ftype}", but target database "$db" has a type of "$fcol->{ftype}". You should really fix that.};
-                            $self->glog("Warning: $msg");
+                            $self->glog("Warning: $msg", 0);
                         }
                         else {
                             $column_problems = 2;
                             my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" as type "$scol->{ftype}", but target database "$db" has a type of "$fcol->{ftype}"};
-                            $self->glog("FATAL: $msg");
+                            $self->glog("FATAL: $msg", 0);
                             warn $msg;
                             next;
                         }
@@ -2109,7 +2109,7 @@ sub start_mcp {
                             $scol->{attnotnull} ? 'NOT NULL' : 'NULL',
                             $db,
                             $scol->{attnotnull} ? 'NULL'     : 'NOT NULL';
-                        $self->glog("Warning: $msg");
+                        $self->glog("Warning: $msg", 0);
                         warn $msg;
                     }
 
@@ -2123,7 +2123,7 @@ sub start_mcp {
                             $scol->{atthasdef} ? 'with a DEFAULT value' : 'has no DEFAULT value',
                             $db,
                             $scol->{atthasdef} ? 'has none'             : 'does';
-                        $self->glog("Warning: $msg");
+                        $self->glog("Warning: $msg", 0);
                         warn $msg;
                     }
 
@@ -2146,7 +2146,7 @@ sub start_mcp {
                             $msg = '';
                         }
                         $msg .= qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" with a DEFAULT of "$scol->{def}", but target database "$db" has a DEFAULT of "$fcol->{def}"};
-                        $self->glog("Warning: $msg");
+                        $self->glog("Warning: $msg", 0);
                         warn $msg;
                     }
 
@@ -2154,7 +2154,7 @@ sub start_mcp {
                     if ($scol->{realattnum} != $fcol->{realattnum}) {
                         $column_problems ||= 1; ## Don't want to override a setting of "2"
                         my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" at position $scol->{realattnum} ($scol->{attnum}), but target database "$db" has it in position $fcol->{realattnum} ($fcol->{attnum})};
-                        $self->glog("Warning: $msg");
+                        $self->glog("Warning: $msg", 0);
                         warn $msg;
                     }
 
@@ -2166,7 +2166,7 @@ sub start_mcp {
                     next if exists $colinfo->{$colname};
                     $column_problems ||= 1; ## Don't want to override a setting of "2"
                     my $msg = qq{Target database has column "$colname" on table "$t", but source database "$s->{name}" does not};
-                    $self->glog("Warning: $msg");
+                    $self->glog("Warning: $msg", 0);
                     warn $msg;
                 }
 
@@ -2188,7 +2188,7 @@ sub start_mcp {
         $srcdbh->commit();
         if ($s->{ping} or $s->{do_listen}) {
             my $l = "bucardo_kick_sync_$syncname";
-            $self->glog(qq{Listening on source server "$s->{sourcedb}" for "$l"});
+            $self->glog(qq{Listening on source server "$s->{sourcedb}" for "$l"}, 5);
             $srcdbh->do(qq{LISTEN "$l"}) or die "LISTEN $l failed";
             $srcdbh->commit();
         }
@@ -2200,7 +2200,7 @@ sub start_mcp {
             $dbh->commit();
             next if (! $s->{ping} and ! $s->{do_listen}) or $s->{synctype} ne 'swap';
             my $l = "bucardo_kick_sync_$syncname";
-            $self->glog(qq{Listening on remote server $db for "$l"});
+            $self->glog(qq{Listening on remote server $db for "$l"}, 5);
             $dbh->do(qq{LISTEN "$l"}) or die "LISTEN $l failed";
             $dbh->commit();
         }
@@ -2224,11 +2224,11 @@ sub start_mcp {
         ## Kill the controller
         my $ctl = $s->{controller};
         if (!$ctl) {
-            $self->glog('Warning! Controller not found');
+            $self->glog('Warning! Controller not found', 0);
         }
         else {
             $count = kill $signumber{USR1} => $ctl;
-            $self->glog("Sent kill USR1 to CTL process $ctl. Result: $count");
+            $self->glog("Sent kill USR1 to CTL process $ctl. Result: $count", 1);
         }
         $s->{controller} = 0;
 
@@ -2249,7 +2249,7 @@ sub start_mcp {
         $srcdbh->commit();
         if ($s->{ping} or $s->{do_listen}) {
             my $l = "bucardo_kick_sync_$syncname";
-            $self->glog(qq{Unlistening on source server "$s->{sourcedb}" for "$l"});
+            $self->glog(qq{Unlistening on source server "$s->{sourcedb}" for "$l"}, 6);
             $srcdbh->do(qq{UNLISTEN "$l"}) or warn "UNLISTEN $l failed";
             $srcdbh->commit();
             ## Same for the targets, but only if synctype is also "swap"
@@ -2258,7 +2258,7 @@ sub start_mcp {
                 for my $db (sort keys %$pdbh) {
                     my $dbh = $pdbh->{$db};
                     my $lname = "bucardo_kick_sync_$syncname";
-                    $self->glog(qq{Unlistening on remote server $db for "$lname"});
+                    $self->glog(qq{Unlistening on remote server $db for "$lname"}, 6);
                     $dbh->do(qq{UNLISTEN "$lname"}) or warn "UNLISTEN $lname failed";
                     $dbh->commit();
                 }
@@ -2302,7 +2302,7 @@ sub start_mcp {
 
         ## Reconnect to the master database for some final cleanups
         my ($finalbackend,$finaldbh) = $self->connect_database();
-        $self->glog("Final database backend PID is $finalbackend");
+        $self->glog("Final database backend PID is $finalbackend", 5);
 
         ## Kill all children controllers belonging to us
         if ($config{audit_pid}) {
@@ -2318,13 +2318,13 @@ sub start_mcp {
 
             for (@{$sth->fetchall_arrayref()}) {
                 my $kid = $_->[0];
-                $self->glog("Found active controller $kid");
+                $self->glog("Found active controller $kid", 1);
                 if (kill 0 => $kid) {
                     $count = kill $signumber{USR1} => $kid;
-                    $self->glog("Kill results: $count");
+                    $self->glog("Kill results: $count", 1);
                 }
                 else {
-                    $self->glog("Controller $$ not found!");
+                    $self->glog("Controller $$ not found!", 1);
                 }
             }
 
@@ -2360,7 +2360,7 @@ sub start_mcp {
                 my $pid = <$fh>;
                 close $fh or warn qq{Could not close "$pfile": $!\n};
                 if ($pid !~ /^\d+$/) {
-                    $self->glog("No PID found in file, so removing $pfile");
+                    $self->glog("No PID found in file, so removing $pfile", 1);
                     unlink $pfile;
                 }
                 else {
@@ -2368,24 +2368,24 @@ sub start_mcp {
                 }
             }
             else {
-                $self->glog("Could not open file, so removing $pfile\n");
+                $self->glog("Could not open file, so removing $pfile", 1);
                 unlink $pfile;
             }
         }
 
         my $end_systemtime = scalar localtime;
         my $end_dbtime = $finaldbh->selectall_arrayref('SELECT now()')->[0][0];
-        $self->glog(qq{End of cleanup_mcp. Sys time: $end_systemtime. Database time: $end_dbtime});
+        $self->glog(qq{End of cleanup_mcp. Sys time: $end_systemtime. Database time: $end_dbtime}, 1);
         $finaldbh->do('NOTIFY bucardo_stopped')  or warn 'NOTIFY failed';
         $finaldbh->commit();
         $finaldbh->disconnect();
 
         ## Remove our PID file
         if (unlink $self->{pidfile}) {
-            $self->glog(qq{Removed pid file "$self->{pidfile}"});
+            $self->glog(qq{Removed pid file "$self->{pidfile}"}, 1);
         }
         else {
-            $self->glog("Warning! Failed to remove pid file $self->{pidfile}");
+            $self->glog("Warning! Failed to remove pid file $self->{pidfile}", 0);
         }
 
 
@@ -2402,7 +2402,7 @@ sub kill_bucardo_pid {
 
     my ($self,$pid,$nice) = @_;
 
-    $self->glog("Attempting to kill PID $pid");
+    $self->glog("Attempting to kill PID $pid", 1);
 
     ## We want to confirm this is still a Bucardo process
     ## The most portable way at the moment is a plain ps -p
@@ -2422,32 +2422,32 @@ sub kill_bucardo_pid {
     if ($info !~ /bucardo_ctl/o) {
         chomp $info;
         $info =~ s/\n/\\n/g;
-        $self->glog("Refusing to kill pid $pid, as it has no bucardo_ctl string (had: $info)");
+        $self->glog("Refusing to kill pid $pid, as it has no bucardo_ctl string (had: $info)", 1);
         return -1;
     }
 
-    $self->glog("Sending signal $signumber{TERM} to pid $pid");
+    $self->glog("Sending signal $signumber{TERM} to pid $pid", 6);
     $count = kill $signumber{TERM} => $pid;
 
     if ($count >= 1) {
-        $self->glog("Successfully signalled pid $pid");
+        $self->glog("Successfully signalled pid $pid", 6);
         return 1;
     }
 
     if ($nice ne 'strict') {
-        $self->glog("Failed to signal pid $pid");
+        $self->glog("Failed to TERM signal pid $pid", 1);
         return -2;
     }
 
-    $self->glog("Sending signal $signumber{KILL} to pid $pid");
+    $self->glog("Sending signal $signumber{KILL} to pid $pid", 6);
     $count = kill $signumber{KILL} => $pid;
 
     if ($count >= 1) {
-        $self->glog("Successfully signalled pid $pid");
+        $self->glog("Successfully signalled pid $pid", 6);
         return 1;
     }
 
-    $self->glog("Failed to signal pid $pid");
+    $self->glog("Failed to KILL signal pid $pid", 1);
     return -3;
 
 } ## end of kill_bucardo_pid
@@ -2487,7 +2487,7 @@ sub start_controller {
     if (exists $config{sync}{$syncname}) {
         while (my ($setting, $value) = each %{$config{sync}{$syncname}}) {
             $config{$setting} = $value;
-            $self->glog("Set sync-level config setting $setting: $value");
+            $self->glog("Set sync-level config setting $setting: $value", 1);
         }
     }
 
@@ -2499,8 +2499,8 @@ sub start_controller {
     $self->{SYNCPIDFILE} = $SYNCPIDFILE;
 
     my $msg = qq{Controller starting for sync "$syncname". Source herd is "$source"};
-    $self->glog($msg);
-    $self->glog("PID: $$");
+    $self->glog($msg, 1);
+    $self->glog("PID: $$", 5);
 
     ## Log some startup information, and squirrel some away for later emailing
     my $showtarget = sprintf '%s: %s',
@@ -2508,19 +2508,19 @@ sub start_controller {
         $sync->{targetdb} ||= $sync->{targetgroup};
     my $mailmsg = "$msg\n";
     $msg = qq{  $showtarget synctype: $synctype stayalive: $stayalive checksecs: $checksecs };
-    $self->glog($msg);
+    $self->glog($msg, 1);
     $mailmsg .= "$msg\n";
 
     my $otc = $sync->{onetimecopy} || 0;
     $msg = qq{  limitdbs: $limitdbs kicked: $kicked kidsalive: $kidsalive onetimecopy: $otc};
-    $self->glog($msg);
+    $self->glog($msg, 1);
     $mailmsg .= "$msg\n";
 
     my $lts = $sync->{lifetimesecs};
     my $lti = $sync->{lifetime} || '<NULL>';
     my $mks = $sync->{maxkicks};
     $msg = qq{  lifetimesecs: $lts ($lti) maxkicks: $mks};
-    $self->glog($msg);
+    $self->glog($msg, 1);
     $mailmsg .= "$msg\n";
 
     ## Allow the MCP to signal us in a friendly manner
@@ -2537,7 +2537,7 @@ sub start_controller {
         ## Callers can prevent an email being sent by setting this before they die
         if (! $self->{clean_exit} and ($self->{sendmail} or $self->{sendmail_file})) {
             my $warn = $diemsg =~ /MCP request/ ? '' : 'Warning! ';
-            $self->glog(qq{${warn}Controller for "$syncname" was killed at line $line: $diemsg});
+            $self->glog(qq{${warn}Controller for "$syncname" was killed at line $line: $diemsg}, 0);
             for (values %{$self->{dbs}}) {
                 $_->{dbpass} = '???' if defined $_->{dbpass};
             }
@@ -2592,11 +2592,11 @@ sub start_controller {
     my $ctl_backend;
     ($ctl_backend, $self->{masterdbh}) = $self->connect_database();
     our $maindbh = $self->{masterdbh};
-    $self->glog("Bucardo database backend PID is $ctl_backend");
+    $self->glog("Bucardo database backend PID is $ctl_backend", 5);
 
     ## Listen for kick requests from the MCP
     my $kicklisten = "bucardo_ctl_kick_$syncname";
-    $self->glog(qq{Listening for "$kicklisten"});
+    $self->glog(qq{Listening for "$kicklisten"}, 6);
     $maindbh->do(qq{LISTEN "$kicklisten"}) or die "LISTEN $kicklisten failed";
 
     ## Listen for a ping request
@@ -2645,12 +2645,12 @@ sub start_controller {
                 sprintf (q{ [MAKEDELTA: source=%s target=%s]},
                     $m->{does_source_makedelta}, $m->{does_target_makedelta}
             ) :'';
-        $self->glog($msg);
+        $self->glog($msg, 3);
         if (defined $m->{customselect}) {
-            $self->glog("   customselect: $m->{customselect}");
+            $self->glog("   customselect: $m->{customselect}", 3);
         }
         if ($m->{reltype} eq 'table') {
-            $self->glog('    Target oids: ' . join ' ' => map { "$_:$m->{targetoid}{$_}" } sort keys %{$m->{targetoid}});
+            $self->glog(('    Target oids: ' . join ' ' => map { "$_:$m->{targetoid}{$_}" } sort keys %{$m->{targetoid}}), 3);
         }
     }
 
@@ -2660,7 +2660,7 @@ sub start_controller {
     for (keys %$targetdb) {
         $sync->{targetdbs}{$_} = $dbinfo->{$_};
         if ($dbinfo->{$_}{status} ne 'active') {
-            $self->glog("Database $_ is not active, so removing from list (status=$dbinfo->{$_}{status}");
+            $self->glog("Database $_ is not active, so removing from list (status=$dbinfo->{$_}{status}", 1);
             delete $targetdb->{$_};
         }
     }
@@ -2772,7 +2772,7 @@ sub start_controller {
         };
         my $lhf = $maindbh->selectall_arrayref($SQL)->[0][0];
         if ($lhf != $lastheardfrom) {
-            $self->glog("Changed lastheardfrom $lastheardfrom to $lhf");
+            $self->glog("Changed lastheardfrom $lastheardfrom to $lhf", 1);
             $lastheardfrom = $lhf;
         }
         $maindbh->commit();
@@ -2802,7 +2802,7 @@ sub start_controller {
     }
     else {
         for my $q (@{$sth{cleanq}->fetchall_arrayref({})}) {
-            $self->glog("Cleaning out old q entry. sync=$safesyncname pid=$q->{pid} ppid=$q->{ppid} targetdb=$q->{targetdb} started:$q->{was_started} ended:$q->{was_ended} aborted:$q->{was_aborted} cdate=$q->{cdate}");
+            $self->glog("Cleaning out old q entry. sync=$safesyncname pid=$q->{pid} ppid=$q->{ppid} targetdb=$q->{targetdb} started:$q->{was_started} ended:$q->{was_ended} aborted:$q->{was_aborted} cdate=$q->{cdate}", 5);
             ## Make sure we kick this off again
             if (exists $targetdb->{$q->{targetdb}}) {
                 $targetdb->{$q->{targetdb}}{kicked} = 1;
@@ -2810,8 +2810,8 @@ sub start_controller {
             }
             else {
                 $q->{targetdb} ||= 'NONE';
-                $self->glog("Warning! Invalid targetdb found for $safesyncname: $q->{targetdb} pid=$q->{pid} cdate=$q->{cdate}");
-                $self->glog("Warning! SQL was $SQL. Count was $count");
+                $self->glog("Warning! Invalid targetdb found for $safesyncname: $q->{targetdb} pid=$q->{pid} cdate=$q->{cdate}", 0);
+                $self->glog("Warning! SQL was $SQL. Count was $count", 0);
             }
         }
 
@@ -2863,7 +2863,7 @@ sub start_controller {
                 my $pid = $kid->{pid};
                 $count = kill 0 => $pid;
                 if ($count) {
-                    $self->glog(qq{A kid is already handling database "$dbname": not starting});
+                    $self->glog(qq{A kid is already handling database "$dbname": not starting}, 5);
                     next;
                 }
             }
@@ -2892,7 +2892,7 @@ sub start_controller {
 
         ## Bail if the stopfile exists
         if (-e $self->{stopfile}) {
-            $self->glog(qq{Found stopfile "$self->{stopfile}": exiting});
+            $self->glog(qq{Found stopfile "$self->{stopfile}": exiting}, 1);
             my $stopmsg = 'Found stopfile';
 
             ## Grab the reason if it exists so we can propogate it onward
@@ -2933,7 +2933,7 @@ sub start_controller {
 
                 ## Request for a ping via listen/notify
                 elsif ($name eq 'bucardo_ctl_'.$$.'_ping') {
-                    $self->glog('Got a ping, issuing pong');
+                    $self->glog('Got a ping, issuing pong', 6);
                     $maindbh->do('NOTIFY bucardo_ctl_'.$$.'_pong') or warn 'NOTIFY failed';
                     $maindbh->commit();
                 }
@@ -3061,7 +3061,7 @@ sub start_controller {
                             } ## end populate rowinfo
 
                             my $result = run_ctl_custom_code($code, 'nostrict');
-                            $self->glog("End of after_sync $code->{id}");
+                            $self->glog("End of after_sync $code->{id}", 6);
 
                         } ## end each custom code
 
@@ -3091,7 +3091,7 @@ sub start_controller {
 
             ## Has it been long enough to force a sync?
             if ($checksecs and time() - $lastheardfrom >= $checksecs) {
-                $self->glog(qq{Timed out - force a sync for "$syncname"}, 6);
+                $self->glog(qq{Timed out - force a sync for "$syncname"}, 5);
                 $lastheardfrom = time();
                 $kicked = 1;
             }
@@ -3106,23 +3106,23 @@ sub start_controller {
                     if ($seenit >= $config{kid_abort_limit}) {
                         if ($seenit == $config{kid_abort_limit}) {
                             $self->glog("Too many kids have been killed for $atarget ($seenit).".
-                                        'Will not create this until a kick.');
+                                        'Will not create this until a kick.', 1);
                         }
                         next;
                     }
-                    $self->glog(qq{Cleaning up aborted sync from q table for "$atarget". PID was $apid});
+                    $self->glog(qq{Cleaning up aborted sync from q table for "$atarget". PID was $apid}, 1);
                     ## Recreate this entry, unless it is already there
                     $count = $sth{qcheck}->execute($syncname,$sourcedb,$atarget);
                     $sth{qcheck}->finish();
                     if ($count >= 1) {
-                        $self->glog('Already an empty slot, so not re-adding');
+                        $self->glog('Already an empty slot, so not re-adding', 1);
                     }
                     else {
-                        $self->glog(qq{Re-adding sync to q table for database "$atarget"});
+                        $self->glog(qq{Re-adding sync to q table for database "$atarget"}, 1);
                         $count = $sth{qinsert}->execute($syncname,$self->{ppid},$sourcedb,$atarget,$synctype);
                         $maindbh->commit();
                         sleep $config{kid_abort_sleep};
-                        $self->glog('Creating kid to handle resurrected q row');
+                        $self->glog('Creating kid to handle resurrected q row', 1);
                         my $kid = $targetdb->{$atarget};
                         $kid->{dbname} = $atarget;
                         $self->{kidcheckq} = 1;
@@ -3146,17 +3146,17 @@ sub start_controller {
                     ## Make sure this kid has cleaned up after themselves in the q table
                     $count = $sth{qupdateabortedpid}->execute('?',$syncname,$pid,$self->{ppid},$dbname);
                     if ($count >= 1) {
-                        $self->glog("Rows updated child $pid to aborted in q: $count");
+                        $self->glog("Rows updated child $pid to aborted in q: $count", 1);
                     }
                     ## If they are finished, and kidsalive is false, then all is good.
                     $kid->{pid} = 0; ## No need to check it again
 
                     ## Also make a special exception for one-time-copy kids
                     if ($kid->{onetimecopy} or ($kid->{finished} and !$kidsalive)) {
-                        $self->glog(qq{Kid $pid has died a natural death. Removing from list});
+                        $self->glog(qq{Kid $pid has died a natural death. Removing from list}, 1);
                         next;
                     }
-                    $self->glog(qq{Warning! Kid $pid seems to have died. Sync "$syncname"});
+                    $self->glog(qq{Warning! Kid $pid seems to have died. Sync "$syncname"}, 0);
                 }
             } ## end each database / kid
 
@@ -3190,7 +3190,7 @@ sub start_controller {
             my $strictness = shift || '';
             my $attempts = shift || 0;
 
-            $self->glog("Running $c->{whenrun} controller custom code $c->{id}: $c->{name}");
+            $self->glog("Running $c->{whenrun} controller custom code $c->{id}: $c->{name}", 5);
 
             if (!defined $safe_sourcedbh) {
                 $cc_sourcedbh = $self->connect_database($sync->{sourcedb});
@@ -3227,22 +3227,22 @@ sub start_controller {
             &{$c->{coderef}}($input);
             $maindbh->{InactiveDestroy} = 0;
             $cc_sourcedbh->{InactiveDestroy} = 0;
-            $self->glog("Finished custom code $c->{id}");
+            $self->glog("Finished custom code $c->{id}", 5);
             if (length $input->{message}) {
-                $self->glog("Message from $c->{whenrun} code $c->{id}: $input->{message}");
+                $self->glog("Message from $c->{whenrun} code $c->{id}: $input->{message}", 1);
             }
             if (length $input->{warning}) {
-                $self->glog("Warning! Code $c->{whenrun} $c->{id}: $input->{warning}");
+                $self->glog("Warning! Code $c->{whenrun} $c->{id}: $input->{warning}", 0);
             }
             if (length $input->{error}) {
-                $self->glog("Warning! Code $c->{whenrun} $c->{id}: $input->{error}");
+                $self->glog("Warning! Code $c->{whenrun} $c->{id}: $input->{error}", 0);
                 die "Code $c->{whenrun} $c->{id} error: $input->{error}";
             }
             if (length $input->{nextcode}) { ## Mostly for conflict handlers
                 return 'next';
             }
             if (length $input->{endsync}) {
-                $self->glog("Code $c->{whenrun} requests a cancellation of the rest of the sync");
+                $self->glog("Code $c->{whenrun} requests a cancellation of the rest of the sync", 1);
                 ## before_txn and after_txn only should commit themselves
                 $cc_sourcedbh->rollback();
                 $maindbh->commit();
@@ -3303,7 +3303,7 @@ sub start_controller {
             }
             ## Got any more slots for this sync?
             elsif ($limitdbs and $activecount >= $limitdbs) {
-                $self->glog("No room in queue for $dbname ($syncname). Limit: $limitdbs. Used: $activecount Offset:$offset");
+                $self->glog("No room in queue for $dbname ($syncname). Limit: $limitdbs. Used: $activecount Offset:$offset", 5);
                 shift @q for (1..$offset);
                 ## Create a new queue!
                 $queueclear = 0;
@@ -3311,14 +3311,14 @@ sub start_controller {
             }
             ## Got any more slots for this target db?
             elsif ($limitperdb and $dbinfo->{$dbname}{targetlimit} and $dbinuse{target}{$dbname} >= $dbinfo->{$dbname}{targetlimit}) {
-                $self->glog(qq{No room in queue for target db "$dbname" ($syncname) Limit: $dbinfo->{$dbname}{targetlimit} Used: $dbinuse{target}{$dbname}});
+                $self->glog(qq{No room in queue for target db "$dbname" ($syncname) Limit: $dbinfo->{$dbname}{targetlimit} Used: $dbinuse{target}{$dbname}}, 5);
                 shift @q for (1..$offset);
                 $queueclear = 0;
                 next Q;
             }
             ## Got any more slots for this source db?
             elsif ($limitperdb and $dbinfo->{$sourcedb}{sourcelimit} and $dbinuse{source}{$sourcedb} >= $dbinfo->{$sourcedb}{sourcelimit}) {
-                $self->glog(qq{No room in queue for source db "$dbname" ($syncname) Limit: $dbinfo->{$sourcedb}{sourcelimit} Used: $dbinuse{source}{$sourcedb}});
+                $self->glog(qq{No room in queue for source db "$dbname" ($syncname) Limit: $dbinfo->{$sourcedb}{sourcelimit} Used: $dbinuse{source}{$sourcedb}}, 5);
                 shift @q for (1..$offset);
                 $queueclear = 0;
                 next Q;
@@ -3326,7 +3326,7 @@ sub start_controller {
             else {
                 $ok2add = 1;
                 $activecount++;
-                $self->glog(qq{Added "$dbname" to queue for sync $syncname, because we had free slots});
+                $self->glog(qq{Added "$dbname" to queue for sync $syncname, because we had free slots}, 5);
                 $offset++;
             }
 
@@ -3339,7 +3339,7 @@ sub start_controller {
                     $count = $sth{qinsert}->execute($syncname,$self->{ppid},$sourcedb,$dbname,$synctype);
                 }
                 else {
-                    $self->glog("Could not add to q sync=$syncname,source=$sourcedb,target=$dbname,count=$count. Sending manual notification", 7);
+                    $self->glog("Could not add to q sync=$syncname,source=$sourcedb,target=$dbname,count=$count. Sending manual notification", 6);
                 }
                 my $notifymsg = "bucardo_q_${syncname}_$dbname";
                 $maindbh->do(qq{NOTIFY "$notifymsg"}) or die "NOTIFY $notifymsg failed";
@@ -3348,7 +3348,7 @@ sub start_controller {
                 ## Check if there is a kid alive for this database: spawn if needed
                 if (! $kid->{pid} or ! (kill 0 => $kid->{pid})) {
                     $kid->{dbname} = $dbname;
-                    $self->glog('Creating a kid');
+                    $self->glog('Creating a kid', 1);
                     $self->{kidcheckq} = 1; ## Since this kid will not get the above notice
                     $self->create_newkid($sync,$kid);
                 }
@@ -3395,7 +3395,7 @@ sub start_controller {
             exit 0;
         }
 
-        $self->glog(qq{Created new kid $newkid for sync "$self->{syncname}" to database "$kid->{dbname}"});
+        $self->glog(qq{Created new kid $newkid for sync "$self->{syncname}" to database "$kid->{dbname}"}, 1);
         $kid->{pid} = $newkid;
         $self->{kidpid}{$newkid} = $kid;
         $kid->{cdate} = time;
@@ -3436,7 +3436,7 @@ sub cleanup_controller {
     ## Kill all Bucardo children mentioned in the audit table for this sync
     if ($config{audit_pid}) {
         my ($finalbackend, $finaldbh) = $self->connect_database();
-        $self->glog("Final database backend PID is $finalbackend");
+        $self->glog("Final database backend PID is $finalbackend", 5);
 
         $SQL = q{
             SELECT pid
@@ -3451,7 +3451,7 @@ sub cleanup_controller {
         for my $pid (@{$sth->fetchall_arrayref()}) {
             my $kidpid = $pid->[0];
             ## TODO: Make sure these are Bucardo processes! - check for "Bucardo" string?
-            $self->glog("Asking kid process $kidpid to terminate");
+            $self->glog("Asking kid process $kidpid to terminate", 5);
             kill $signumber{USR1} => $kidpid;
         }
         ## Asking them more than once is not going to do any good
@@ -3499,28 +3499,28 @@ sub cleanup_controller {
             my $pid = <$fh>;
             close $fh or warn qq{Could not close "$pfile": $!\n};
             if ($pid !~ /^\d+$/) {
-                $self->glog("No PID found in file, so removing $pfile");
+                $self->glog("No PID found in file, so removing $pfile", 1);
                 unlink $pfile;
             }
             else {
                 kill $signumber{USR1} => $pid;
-                $self->glog("Sent USR1 signal to kid process $pid");
+                $self->glog("Sent USR1 signal to kid process $pid", 5);
             }
         }
         else {
-            $self->glog("Could not open file, so removing $pfile\n");
+            $self->glog("Could not open file, so removing $pfile", 1);
             unlink $pfile;
         }
     }
 
-    $self->glog("Controller exiting at cleanup_controller. Reason: $reason");
+    $self->glog("Controller exiting at cleanup_controller. Reason: $reason", 1);
 
     ## Remove the pid file
     if (unlink $self->{SYNCPIDFILE}) {
-        $self->glog(qq{Removed pid file "$self->{SYNCPIDFILE}"});
+        $self->glog(qq{Removed pid file "$self->{SYNCPIDFILE}"}, 6);
     }
     else {
-        $self->glog("Warning! Failed to remove pid file $self->{SYNCPIDFILE}");
+        $self->glog("Warning! Failed to remove pid file $self->{SYNCPIDFILE}", 0);
     }
 
     return;
@@ -3595,8 +3595,8 @@ sub start_kid {
     ## Adjust the process name, start logging
     $0 = qq{Bucardo Kid.$self->{extraname} Sync "$syncname": ($synctype) "$sourcedb" -> "$targetdb"};
     $self->{logprefix} = 'KID';
-    $self->glog(qq{New kid, syncs "$sourcedb" to "$targetdb" for sync "$syncname" alive=$kidsalive Parent=$self->{parent} Type=$synctype});
-    $self->glog("PID: $$");
+    $self->glog(qq{New kid, syncs "$sourcedb" to "$targetdb" for sync "$syncname" alive=$kidsalive Parent=$self->{parent} Type=$synctype}, 1);
+    $self->glog("PID: $$", 3);
 
     ## Store our PID into a file
     my $kidpidfile = "$config{piddir}/bucardo.kid.sync.$syncname.$targetdb.pid";
@@ -3640,7 +3640,7 @@ sub start_kid {
         my $gotosleep = 0;
         if (($tstate eq '40001' or $sstate eq '40001') and $config{kid_serial_sleep}) {
             $gotosleep = $config{kid_serial_sleep};
-            $self->glog("Could not serialize, sleeping for $gotosleep seconds");
+            $self->glog("Could not serialize, sleeping for $gotosleep seconds", 3);
         }
 
         ## If this was a deadlock problem, try and gather more information
@@ -3659,7 +3659,7 @@ sub start_kid {
         defined $targetdbh and $targetdbh and ($targetdbh->rollback, $targetdbh->disconnect);
         defined $maindbh   and $maindbh   and ($maindbh->rollback,   $maindbh->disconnect  );
         my ($finalbackend, $finaldbh) = $self->connect_database();
-        $self->glog("Final database backend PID is $finalbackend");
+        $self->glog("Final database backend PID is $finalbackend", 5);
 
         ## Let anyone listening know that this target and sync aborted
         $finaldbh->do(qq{NOTIFY "bucardo_synckill_${syncname}_$targetdb"}) or warn 'NOTIFY failed';
@@ -3705,7 +3705,7 @@ sub start_kid {
         if (! $self->{clean_exit} and $self->{sendmail} or $self->{sendmail_file}) {
             my $warn = $msg =~ /CTL request/ ? '' : 'Warning! ';
             my $line = (caller)[2];
-            $self->glog(qq{${warn}Child for sync "$syncname" ("$sourcedb" -> "$targetdb") was killed at line $line: $msg});
+            $self->glog(qq{${warn}Child for sync "$syncname" ("$sourcedb" -> "$targetdb") was killed at line $line: $msg}, 0);
 
             ## Never display the database password
             for (values %{$self->{dbs}}) {
@@ -3764,7 +3764,7 @@ sub start_kid {
     my $kid_backend;
     ($kid_backend, $self->{masterdbh}) = $self->connect_database();
     $maindbh = $self->{masterdbh};
-    $self->glog("Bucardo database backend PID is $kid_backend");
+    $self->glog("Bucardo database backend PID is $kid_backend", 5);
 
     ## Add ourself to the audit table
     if ($config{audit_pid}) {
@@ -3813,18 +3813,18 @@ sub start_kid {
 
     ## Connect to the source database
     ($backend, $sourcedbh) = $self->connect_database($sourcedb);
-    $self->glog("Source database backend PID is $backend");
+    $self->glog("Source database backend PID is $backend", 5);
 
 
     ## Connect to the target database
     ($backend, $targetdbh) = $self->connect_database($targetdb);
-    $self->glog("Target database backend PID is $backend");
+    $self->glog("Target database backend PID is $backend", 5);
 
     ## Put our backend PIDs into the log
     $SQL = 'SELECT pg_backend_pid()';
     my $source_backend = $sourcedbh->selectall_arrayref($SQL)->[0][0];
     my $target_backend = $targetdbh->selectall_arrayref($SQL)->[0][0];
-    $self->glog("Source backend PID: $source_backend. Target backend PID: $target_backend");
+    $self->glog("Source backend PID: $source_backend. Target backend PID: $target_backend", 5);
 
     ## Put the backend PIDs in place in the audit_pid table
     if ($config{audit_pid}) {
@@ -4216,7 +4216,7 @@ sub start_kid {
         my $strictness = shift || '';
         my $attempts = shift || 0;
 
-        $self->glog("Running $c->{whenrun} custom code $c->{id}: $c->{name}");
+        $self->glog("Running $c->{whenrun} custom code $c->{id}: $c->{name}", 5);
         my $send_mail_ref = sub { $self->send_mail(@_) };
         $input = {
             synctype   => $synctype,
@@ -4269,27 +4269,27 @@ sub start_kid {
                 $targetdbh->do(q{SET session_replication_role = 'replica'});
             }
         }
-        $self->glog("Finished custom code $c->{id}");
+        $self->glog("Finished custom code $c->{id}", 5);
         if (length $input->{message}) {
-            $self->glog("Message from $c->{whenrun} code $c->{id}: $input->{message}");
+            $self->glog("Message from $c->{whenrun} code $c->{id}: $input->{message}", 1);
         }
         if (length $input->{warning}) {
-            $self->glog("Warning! Code $c->{whenrun} $c->{id}: $input->{warning}");
+            $self->glog("Warning! Code $c->{whenrun} $c->{id}: $input->{warning}", 0);
         }
         if (length $input->{error}) {
-            $self->glog("Warning! Code $c->{whenrun} $c->{id}: $input->{error}");
+            $self->glog("Warning! Code $c->{whenrun} $c->{id}: $input->{error}", 0);
             die "Code $c->{whenrun} $c->{id} error: $input->{error}";
         }
         if (length $input->{nextcode}) { ## Mostly for conflict handlers
             return 'next'; ## try the next customcode
         }
         if (length $input->{endsync}) {
-            $self->glog("Code $c->{whenrun} requests a cancellation of the rest of the sync");
+            $self->glog("Code $c->{whenrun} requests a cancellation of the rest of the sync", 1);
             ## before_txn and after_txn should commit themselves
             $targetdbh->rollback();
             $sourcedbh->rollback();
             $sth{qend}->execute(0,0,0,$syncname,$targetdb,$$);
-            $self->glog( "Called qend with $syncname and $targetdb and $$!\n");
+            $self->glog( "Called qend with $syncname and $targetdb and $$!", 1);
             my $notify = "bucardo_syncdone_${syncname}_$targetdb";
             $maindbh->do(qq{NOTIFY "$notify"}) or warn "NOTIFY $notify failed";
             $maindbh->commit();
@@ -4308,7 +4308,7 @@ sub start_kid {
         $checkq = 0;
 
         if (-e $self->{stopfile}) {
-            $self->glog(qq{Found stopfile "$self->{stopfile}": exiting\n});
+            $self->glog(qq{Found stopfile "$self->{stopfile}": exiting}, 0);
             last KID;
         }
 
@@ -4322,7 +4322,7 @@ sub start_kid {
                 }
                 ## Got a ping?
                 elsif ($name eq 'bucardo_kid_'.$$.'_ping') {
-                    $self->glog('Got a ping, issuing pong');
+                    $self->glog('Got a ping, issuing pong', 6);
                     $maindbh->do('NOTIFY bucardo_kid_'.$$.'_pong') or warn 'NOTIFY failed';
                     $maindbh->commit();
                 }
@@ -4416,17 +4416,17 @@ sub start_kid {
                     $lock_table_mode = $newmode if $newmode =~ /^\s*\w[ \w]+\s*$/o;
                 }
             }
-            $self->glog(qq{Found lock control file "$force_lock_file". Mode: $lock_table_mode});
+            $self->glog(qq{Found lock control file "$force_lock_file". Mode: $lock_table_mode}, 3);
         }
 
         if ($lock_table_mode) {
-            $self->glog("Locking all table in $lock_table_mode MODE");
+            $self->glog("Locking all table in $lock_table_mode MODE", 3);
             for my $g (@$goatlist) {
                 next if $g->{reltype} ne 'table';
                 my $com = "$g->{safeschema}.$g->{safetable} IN $lock_table_mode MODE";
-                $self->glog("$sourcedb: Locking table $com");
+                $self->glog("$sourcedb: Locking table $com", 3);
                 $sourcedbh->do("LOCK TABLE $com");
-                $self->glog("$targetdb: Locking table $com");
+                $self->glog("$targetdb: Locking table $com", 3);
                 $targetdbh->do("LOCK TABLE $com");
             }
         }
@@ -4476,7 +4476,7 @@ sub start_kid {
                             $sth->execute($g->{oid},$g->{safeschema},$g->{safetable},$syncname,$targetdb,
                                         $deltacount{source}{truncatelog}{$g->{oid}});
                             $deltacount{truncates}++;
-                            $self->glog('Marking this truncate as done in bucardo_truncate_trigger_log');
+                            $self->glog('Marking this truncate as done in bucardo_truncate_trigger_log', 7);
                         }
                     }
                 }
@@ -4516,7 +4516,7 @@ sub start_kid {
                         }
                     }
                     if ($newval) {
-                        $self->glog("Setting sequence $S.$T to value of $lastval, is_called is $iscalled");
+                        $self->glog("Setting sequence $S.$T to value of $lastval, is_called is $iscalled", 5);
                         $SQL = "SELECT setval('$S.$T', $lastval, '$iscalled')";
                         $targetdbh->do($SQL);
 
@@ -4553,8 +4553,8 @@ sub start_kid {
                 }
             }
             if ($synctype eq 'swap') {
-                $self->glog("Total source delta count: $deltacount{allsource}");
-                $self->glog("Total target delta count: $deltacount{alltarget}");
+                $self->glog("Total source delta count: $deltacount{allsource}", 6);
+                $self->glog("Total target delta count: $deltacount{alltarget}", 6);
             }
             $deltacount{all} = $deltacount{allsource} + $deltacount{alltarget};
             $self->glog("Total delta count: $deltacount{all}", 6);
@@ -4584,11 +4584,11 @@ sub start_kid {
 
         ## Disable rules and triggers on target (all) and source (swap sync)
         if ($target_disable_trigrules ne 'replica') {
-            $self->glog(qq{Disabling triggers and rules on $targetdb via pg_class});
+            $self->glog(qq{Disabling triggers and rules on $targetdb via pg_class}, 7);
             $targetdbh->do($SQL{disable_trigrules});
         }
         if ($synctype eq 'swap' and $source_disable_trigrules ne 'replica') {
-            $self->glog(qq{Disabling triggers and rules on $sourcedb via pg_class});
+            $self->glog(qq{Disabling triggers and rules on $sourcedb via pg_class}, 7);
             $sourcedbh->do($SQL{disable_trigrules});
         }
 
@@ -4602,7 +4602,7 @@ sub start_kid {
                 next if $deltacount{truncates} and ! $g->{source}{needstruncation};
 
                 if ($g->{ghost}) {
-                    $self->glog("Skipping ghost table $S.$T");
+                    $self->glog("Skipping ghost table $S.$T", 5);
                     next;
                 }
 
@@ -4611,7 +4611,7 @@ sub start_kid {
                     $SQL = "SELECT last_value, is_called FROM $S.$T";
                     my ($lastval, $iscalled) = @{$sourcedbh->selectall_arrayref($SQL)->[0]};
 
-                    $self->glog("Setting sequence $S.$T to value of $lastval, is_called is $iscalled");
+                    $self->glog("Setting sequence $S.$T to value of $lastval, is_called is $iscalled", 5);
                     $SQL = "SELECT setval('$S.$T', $lastval, '$iscalled')";
                     $targetdbh->do($SQL);
 
@@ -4627,7 +4627,7 @@ sub start_kid {
                     $sth->finish();
                     if ($count >= 1) {
                         $g->{onetimecopy_ifempty} = 1;
-                        $self->glog(qq{Target table "$S.$T" has rows and we are in onetimecopy if empty mode, so we will not COPY});
+                        $self->glog(qq{Target table "$S.$T" has rows and we are in onetimecopy if empty mode, so we will not COPY}, 5);
                         next;
                     }
 
@@ -4637,7 +4637,7 @@ sub start_kid {
                     $sth->finish();
                     if ($count < 1) {
                         $g->{onetimecopy_ifempty} = 1;
-                        $self->glog(qq{Source table "$S.$T" has no rows and we are in onetimecopy if empty mode, so we will not COPY});
+                        $self->glog(qq{Source table "$S.$T" has no rows and we are in onetimecopy if empty mode, so we will not COPY}, 5);
                         next;
                     }
                 }
@@ -4648,14 +4648,14 @@ sub start_kid {
                     $SQL = "SELECT relhasindex FROM pg_class WHERE oid = $g->{targetoid}{$targetdb}";
                     $hasindex = $targetdbh->selectall_arrayref($SQL)->[0][0];
                     if ($hasindex) {
-                        $self->glog("Turning off indexes for $S.$T on $targetdb");
+                        $self->glog("Turning off indexes for $S.$T on $targetdb", 6);
                         ## TODO: Do this without pg_class manipulation if possible
                         $SQL = "UPDATE pg_class SET relhasindex = 'f' WHERE oid = $g->{targetoid}{$targetdb}";
                         $targetdbh->do($SQL);
                     }
                 }
 
-                $self->glog("Emptying out target table $S.$T using $sync->{deletemethod}");
+                $self->glog("Emptying out target table $S.$T using $sync->{deletemethod}", 5);
                 my $empty_by_delete = 1;
                 if ($sync->{deletemethod} =~ /^truncate/o) {
                     ## Temporarily override our kid-level handler due to the eval
@@ -4666,7 +4666,7 @@ sub start_kid {
                         $targetdbh->do("TRUNCATE TABLE $S.$T $cascade");
                     };
                     if ($@) {
-                        $self->glog("Truncation of $S.$T failed, so we will try a delete");
+                        $self->glog("Truncation of $S.$T failed, so we will try a delete", 5);
                         $targetdbh->do('ROLLBACK TO truncate_attempt');
                         $empty_by_delete = 2;
                     }
@@ -4679,14 +4679,14 @@ sub start_kid {
                 if ($empty_by_delete) {
                     ($dmlcount{D}{target}{$S}{$T} = $targetdbh->do("DELETE FROM $S.$T")) =~ s/0E0/0/o;
                     $dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
-                    $self->glog("Rows deleted from $S.$T: $dmlcount{D}{target}{$S}{$T}");
+                    $self->glog("Rows deleted from $S.$T: $dmlcount{D}{target}{$S}{$T}", 6);
                 }
 
                 my ($srccmd,$tgtcmd);
                 if ($sync->{usecustomselect} and $g->{customselect}) {
                     ## TODO: Use COPY () format if 8.2 or greater
                     $g->{cs_temptable} = "bucardo_temp_$g->{tablename}_$$"; ## Raw version, not "safetable"
-                    $self->glog("Creating temp table $g->{cs_temptable} for custom select on $S.$T");
+                    $self->glog("Creating temp table $g->{cs_temptable} for custom select on $S.$T", 5);
                     $sourcedbh->do("CREATE TEMP TABLE $g->{cs_temptable} AS $g->{customselect}");
                     $srccmd = "COPY $g->{cs_temptable} TO STDOUT $sync->{copyextra}";
                     $tgtcmd = "COPY $S.$T($g->{safecolumnlist}) FROM STDIN $sync->{copyextra}";
@@ -4696,10 +4696,10 @@ sub start_kid {
                     $tgtcmd = "COPY $S.$T FROM STDIN $sync->{copyextra}";
                 }
 
-                $self->glog("Running on $sourcedb: $srccmd");
+                $self->glog("Running on $sourcedb: $srccmd", 6);
                 $sourcedbh->do($srccmd);
 
-                $self->glog("Running on $targetdb: $tgtcmd");
+                $self->glog("Running on $targetdb: $tgtcmd", 6);
                 my $startotc = $sync->{onetimecopy} ? time : 0;
                 $targetdbh->do($tgtcmd);
                 my $buffer='';
@@ -4710,16 +4710,16 @@ sub start_kid {
                 }
                 $targetdbh->pg_putcopyend();
                 my $otc = $startotc ? (sprintf '(OTC: %ds) ', time-$startotc) : '';
-                $self->glog(qq{${otc}End COPY of $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
+                $self->glog(qq{${otc}End COPY of $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}}, 6);
                 $dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
 
                 if ($hasindex) {
                     $SQL = "UPDATE pg_class SET relhasindex = 't' WHERE oid = $g->{targetoid}{$targetdb}";
                     $targetdbh->do($SQL);
-                    $self->glog("Reindexing table $S.$T on $targetdb");
+                    $self->glog("Reindexing table $S.$T on $targetdb", 6);
                     $targetdbh->do("REINDEX TABLE $S.$T");
                     if ($otc) {
-                        $self->glog(sprintf(qq{(OTC: %ds) REINDEX TABLE $S.$T}, time-$startotc));
+                        $self->glog((sprintf(qq{(OTC: %ds) REINDEX TABLE $S.$T}, time-$startotc)), 5);
                     }
                 }
 
@@ -4731,7 +4731,7 @@ sub start_kid {
                     $count = $sth->execute();
                     $sth->finish();
                     $count =~ s/0E0/0/o;
-                    $self->glog("Rows removed from bucardo_delta on source for $S.$T: $count");
+                    $self->glog("Rows removed from bucardo_delta on source for $S.$T: $count", 5);
                     ## Swap? Other side(s) as well
                     if ($synctype eq 'swap') {
                         $SQL = "DELETE FROM bucardo.bucardo_delta WHERE txntime <= now() AND tablename = $g->{targetoid}{$targetdb}";
@@ -4739,15 +4739,15 @@ sub start_kid {
                         $count = $sth->execute();
                         $sth->finish();
                         $count =~ s/0E0/0/o;
-                        $self->glog("Rows removed from bucardo_delta on target for $S.$T: $count");
+                        $self->glog("Rows removed from bucardo_delta on target for $S.$T: $count", 5);
                     }
                 }
             } ## end each goat
 
             if ($sync->{deletemethod} ne 'truncate') {
-                $self->glog("Total target rows deleted: $dmlcount{alldeletes}{target}");
+                $self->glog("Total target rows deleted: $dmlcount{alldeletes}{target}", 5);
             }
-            $self->glog("Total target rows copied: $dmlcount{allinserts}{target}");
+            $self->glog("Total target rows copied: $dmlcount{allinserts}{target}", 5);
 
         } ## end of synctype fullcopy
 
@@ -4777,7 +4777,7 @@ sub start_kid {
                     $SQL = "SELECT relhasindex FROM pg_class WHERE oid = $toid";
                     $hasindex = $targetdbh->selectall_arrayref($SQL)->[0][0];
                     if ($hasindex) {
-                        $self->glog("Turning off indexes for $S.$T on $targetdb");
+                        $self->glog("Turning off indexes for $S.$T on $targetdb", 6);
                         $SQL = "UPDATE pg_class SET relhasindex = 'f' WHERE oid = $toid";
                         $targetdbh->do($SQL);
                     }
@@ -4806,7 +4806,7 @@ sub start_kid {
                     if ($g->{delta_bypass_count}
                             and $deltacount{source}{$S}{$T} >= $g->{delta_bypass_count}) {
                         $g->{does_delta_bypass} = 'count';
-                        $self->glog("Activating delta_bypass for $S.$T. Count of $deltacount{source}{$S}{$T} >= $g->{delta_bypass_count}");
+                        $self->glog("Activating delta_bypass for $S.$T. Count of $deltacount{source}{$S}{$T} >= $g->{delta_bypass_count}", 6);
                     }
                     elsif ($g->{delta_bypass_percent} and $deltacount{source}{$S}{$T} >= $g->{delta_bypass_min}) {
                         ## Depends on a recent analyze, of course...
@@ -4815,13 +4815,13 @@ sub start_kid {
                         my $percent = $deltacount{source}{$S}{$T}*100/$total_rows;
                         if ($percent > $g->{delta_bypass_percent}) {
                             $g->{does_delta_bypass} = 'percent';
-                            $self->glog("Activating delta_bypass for $S.$T. Count of $deltacount{source}{$S}{$T} for $total_rows total rows is $percent percent, which is >= $g->{delta_bypass_percent}%");
+                            $self->glog("Activating delta_bypass for $S.$T. Count of $deltacount{source}{$S}{$T} for $total_rows total rows is $percent percent, which is >= $g->{delta_bypass_percent}%", 6);
                         }
                     }
                 }
 
                 if ($g->{does_delta_bypass}) {
-                    $self->glog('Forcing a onetimecopy due to delta_bypass');
+                    $self->glog('Forcing a onetimecopy due to delta_bypass', 5);
                     my $srccmd = "COPY $S.$T TO STDOUT $sync->{copyextra}";
                     my $tgtcmd = "COPY $S.$T FROM STDIN $sync->{copyextra}";
                     ## Attempt to truncate the target table. If it fails, delete
@@ -4833,7 +4833,7 @@ sub start_kid {
                         $targetdbh->do("TRUNCATE TABLE $S.$T");
                     };
                     if ($@) {
-                        $self->glog("Truncation of $S.$T failed, so we will try a delete");
+                        $self->glog("Truncation of $S.$T failed, so we will try a delete", 6);
                         $targetdbh->do('ROLLBACK TO truncate_attempt');
                         $empty_by_delete = 2;
                     }
@@ -4844,13 +4844,13 @@ sub start_kid {
                     if ($empty_by_delete) {
                         ($dmlcount{D}{target}{$S}{$T} = $targetdbh->do("DELETE FROM $S.$T")) =~ s/0E0/0/o;
                         $dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
-                        $self->glog("Rows deleted from $S.$T: $dmlcount{D}{target}{$S}{$T}");
+                        $self->glog("Rows deleted from $S.$T: $dmlcount{D}{target}{$S}{$T}", 5);
                     }
 
-                    $self->glog("Running on $sourcedb: $srccmd");
+                    $self->glog("Running on $sourcedb: $srccmd", 6);
                     $sourcedbh->do($srccmd);
 
-                    $self->glog("Running on $targetdb: $tgtcmd");
+                    $self->glog("Running on $targetdb: $tgtcmd", 6);
                     $targetdbh->do($tgtcmd);
                     my $buffer='';
                     $dmlcount{I}{target}{$S}{$T} = 0;
@@ -4859,15 +4859,15 @@ sub start_kid {
                         $dmlcount{I}{target}{$S}{$T}++;
                     }
                     $targetdbh->pg_putcopyend();
-                    $self->glog(qq{End delta_bypass COPY of $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
+                    $self->glog(qq{End delta_bypass COPY of $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}}, 6);
                     $dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
 
                     ## If we disabled the indexes earlier, flip them on and run a REINDEX
                     if ($hasindex) {
-                        $self->glog("Re-enabling indexes for table $S.$T on $targetdb");
+                        $self->glog("Re-enabling indexes for table $S.$T on $targetdb", 7);
                         $SQL = "UPDATE pg_class SET relhasindex = 't' WHERE oid = $toid";
                         $targetdbh->do($SQL);
-                        $self->glog("Reindexing table $S.$T on $targetdb");
+                        $self->glog("Reindexing table $S.$T on $targetdb", 7);
                         $targetdbh->do("REINDEX TABLE $S.$T");
                     }
 
@@ -4877,7 +4877,7 @@ sub start_kid {
                     $count = $sth->execute();
                     $sth->finish();
                     $count =~ s/0E0/0/o;
-                    $self->glog("Rows removed from bucardo_delta on source for $S.$T: $count");
+                    $self->glog("Rows removed from bucardo_delta on source for $S.$T: $count", 6);
 
                     next PUSHDELTA_GOAT;
 
@@ -4936,13 +4936,13 @@ sub start_kid {
                         if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
                             $targetdbh->do(q{SET session_replication_role = 'replica'});
                         }
-                        $self->glog("Total makedelta rows added for $S.$T on $targetdb: $count");
+                        $self->glog("Total makedelta rows added for $S.$T on $targetdb: $count", 5);
                     }
 
                     ## From here on out, we're making changes on the target that may trigger an exception
                     ## Thus, if we have exception handling code, we create a savepoint to rollback to
                     if ($g->{has_exception_code}) {
-                        $self->glog('Creating savepoint on target for exception handler(s)');
+                        $self->glog('Creating savepoint on target for exception handler(s)', 6);
                         $targetdbh->pg_savepoint("bucardo_$$") or die qq{Savepoint creation failed for bucardo_$$};
                     }
 
@@ -4960,7 +4960,7 @@ sub start_kid {
                             ## If rows were deleted from source, we are also deleting from target
                             ## If rows were inserted to source, they won't be on the target anyway
                             ## If rows were updated on source, we'll insert later (update = delete + insert)
-                            $self->glog(qq{Deleting rows from $S.$T});
+                            $self->glog(qq{Deleting rows from $S.$T}, 6);
 
                             ## If we've got a very large number of values, break the DELETEs into multiples
                             my @delchunks;
@@ -4984,7 +4984,7 @@ sub start_kid {
                                     ## Remove the trailing comma
                                     chop $chunk;
                                     $SQL = "DELETE /* chunk $dcount */ FROM $S.$T WHERE $g->{pkeycols} IN ($chunk)";
-                                    $self->glog("Deleting chunk $dcount");
+                                    $self->glog("Deleting chunk $dcount", 6);
                                     ($count = $targetdbh->do($SQL)) =~ s/0E0/0/o;
                                     $dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T} = $count;
                                     $dcount++;
@@ -5002,7 +5002,7 @@ sub start_kid {
                             my ($srccmd,$temptable);
                             if (! $source_modern_copy) {
                                 $temptable = "bucardo_tempcopy_$$";
-                                $self->glog("Creating temporary table $temptable for copy on $S.$T, and savepoint bucardo_$$ along with it");
+                                $self->glog("Creating temporary table $temptable for copy on $S.$T, and savepoint bucardo_$$ along with it", 6);
                                 $sourcedbh->pg_savepoint("bucardo_$$");
                                 $srccmd = "CREATE TEMP TABLE $temptable AS SELECT * FROM $S.$T WHERE $g->{pkeycols} IN ($pkvals)";
 
@@ -5016,14 +5016,14 @@ sub start_kid {
                             my $tgtcmd = "COPY $S.$T FROM STDIN";
                             $targetdbh->do($tgtcmd);
                             my $buffer = '';
-                            $self->glog(qq{Begin COPY to $S.$T});
+                            $self->glog(qq{Begin COPY to $S.$T}, 6);
 
                             if ($source_modern_copy and @delchunks) {
                                 my $dcount = 1;
                                 for my $chunk (@delchunks) {
                                     $srccmd = "COPY /* chunk $dcount */ (SELECT * FROM $S.$T WHERE $g->{pkeycols} IN ($chunk)) TO STDOUT";
                                     $sourcedbh->do($srccmd);
-                                    $self->glog("Copying chunk $dcount");
+                                    $self->glog("Copying chunk $dcount", 6);
                                     $dcount++;
                                     while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
                                         $targetdbh->pg_putcopydata($buffer);
@@ -5038,20 +5038,20 @@ sub start_kid {
                             }
 
                             $targetdbh->pg_putcopyend();
-                            $self->glog(qq{End COPY to $S.$T});
+                            $self->glog(qq{End COPY to $S.$T}, 6);
                             $dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T} = @$info;
 
                             if (! $source_modern_copy) {
-                                $self->glog("Dropping temporary table $temptable");
+                                $self->glog("Dropping temporary table $temptable", 6);
                                 $sourcedbh->do("DROP TABLE $temptable");
                             }
 
                             ## If we disabled the indexes earlier, flip them on and run a REINDEX
                             if ($hasindex) {
-                                $self->glog("Re-enabling indexes for table $S.$T on $targetdb");
+                                $self->glog("Re-enabling indexes for table $S.$T on $targetdb", 7);
                                 $SQL = "UPDATE pg_class SET relhasindex = 't' WHERE oid = $toid";
                                 $targetdbh->do($SQL);
-                                $self->glog("Reindexing table $S.$T on $targetdb");
+                                $self->glog("Reindexing table $S.$T on $targetdb", 7);
                                 $targetdbh->do("REINDEX TABLE $S.$T");
                             }
 
@@ -5065,39 +5065,39 @@ sub start_kid {
                         if ($@) {
                             chomp $@;
                             (my $err = $@) =~ s/\n/\\n/g;
-                            $self->glog("Warning! Aborting due to exception for $S.$T:$pkval Error was $err");
+                            $self->glog("Warning! Aborting due to exception for $S.$T:$pkval Error was $err", 0);
                             die $@;
                         }
                     }
                     elsif ($@) {
                         chomp $@;
                         (my $err = $@) =~ s/\n/\\n/g;
-                        $self->glog("Exception caught: $err");
+                        $self->glog("Exception caught: $err", 0);
 
                         ## Bail if we've already tried to handle this goat via an exception
                         if ($g->{exceptions} > 1) {
-                            $self->glog("Warning! Exception custom code did not work for $S.$T:$pkval");
+                            $self->glog("Warning! Exception custom code did not work for $S.$T:$pkval", 0);
                             die qq{Error: too many exceptions to handle for $S.$T:$pkval};
                         }
 
                         ## Time to let the exception handling custom code do its work
                         ## First, we rollback any changes we've made on the target
-                        $self->glog("Rolling back to target savepoint, due to database error: $err");
+                        $self->glog("Rolling back to target savepoint, due to database error: $err", 1);
                         $targetdbh->pg_rollback_to("bucardo_$$");
                         if (! $source_modern_copy) {
                             # Also roll back to source savepoint, so we can try
                             # creating the temp table again
-                            $self->glog('Rolling back to source savepoint as well, to remove temp table');
+                            $self->glog('Rolling back to source savepoint as well, to remove temp table', 1);
                             $sourcedbh->pg_rollback_to("bucardo_$$");
                         }
 
                         ## Now run one or more exception handlers
                         my $runagain = 0;
                         for my $code (@{$g->{code_exception}}) {
-                            $self->glog("Trying exception code $code->{id}: $code->{name}");
+                            $self->glog("Trying exception code $code->{id}: $code->{name}", 1);
                             my $result = run_kid_custom_code($code, 'strict', $pushdelta_attempts);
                             if ($result eq 'next') {
-                                $self->glog('Going to next available exception code');
+                                $self->glog('Going to next available exception code', 5);
                                 next;
                             }
 
@@ -5105,13 +5105,13 @@ sub start_kid {
                             ## Note that 'redo' always rolls back both source and target, so we don't have to do it here
                             ## It also cleans up the q table and sends a sync done NOTIFY
                             if ($result eq 'redo') {
-                                $self->glog('Exception handler requested redoing the entire sync');
+                                $self->glog('Exception handler requested redoing the entire sync', 1);
                                 redo KID;
                             }
 
                             ## A request to run the same goat again.
                             if ($input->{runagain}) {
-                                $self->glog('Exception handler thinks we can try again');
+                                $self->glog('Exception handler thinks we can try again', 1);
                                 $runagain = 1;
                                 last;
                             }
@@ -5119,7 +5119,7 @@ sub start_kid {
 
                         ## If not running again, we simply give up and throw an exception to the kid
                         if (!$runagain) {
-                            $self->glog('No exception handlers were able to help, so we are bailing out');
+                            $self->glog('No exception handlers were able to help, so we are bailing out', 0);
                             die qq{No exception handlers were able to help, so we are bailing out\n};
                         }
 
@@ -5128,11 +5128,11 @@ sub start_kid {
                         ## Make sure the database connections are still clean
                         my $sourceping = $sourcedbh->ping();
                         if ($sourceping !~ /^[13]$/o) {
-                            $self->glog("Warning! Source ping after exception handler was $sourceping");
+                            $self->glog("Warning! Source ping after exception handler was $sourceping", 0);
                         }
                         my $targetping = $targetdbh->ping();
                         if ($targetping !~ /^[13]$/o) {
-                            $self->glog("Warning! Target ping after exception handler was $targetping");
+                            $self->glog("Warning! Target ping after exception handler was $targetping", 0);
                         }
 
                         ## As the bucardo_delta and source rows may have changed, we need to reset the counts
@@ -5153,7 +5153,7 @@ sub start_kid {
 
             } ## end each goat
 
-            $self->glog("Pushdelta counts: deletes=$dmlcount{alldeletes}{target} inserts=$dmlcount{allinserts}{target}");
+            $self->glog("Pushdelta counts: deletes=$dmlcount{alldeletes}{target} inserts=$dmlcount{allinserts}{target}", 5);
 
         } ## end pushdelta
 
@@ -5171,7 +5171,7 @@ sub start_kid {
                     $g->{tempschema} = {};
                     my $SEQUENCESQL = "SELECT last_value, is_called FROM $S.$T";
                     if (exists $g->{code_conflict}) {
-                        $self->glog('No support for custom conflict handlers for sequences yet!');
+                        $self->glog('No support for custom conflict handlers for sequences yet!', 0);
                     }
                     else {
                         my $sc = $g->{standard_conflict};
@@ -5205,7 +5205,7 @@ sub start_kid {
                     }
 
                     if (0 == $action) {
-                        $self->glog("No action taken for sequence $S.$T");
+                        $self->glog("No action taken for sequence $S.$T", 6);
                         next;
                     }
 
@@ -5217,7 +5217,7 @@ sub start_kid {
 
                     ## Source wins - copy its value to the target
                     if (1 == $action) {
-                        $self->glog("Copying value of $S.$T from source to target");
+                        $self->glog("Copying value of $S.$T from source to target", 6);
 
                         if (! exists $g->{tempschema}{s}) {
                             ($g->{tempschema}{s}{lastval},$g->{tempschema}{s}{iscalled}) =
@@ -5248,7 +5248,7 @@ sub start_kid {
                         next if ! $newval;
 
                         ## Apply to the target
-                        $self->glog("Setting sequence $S.$T on target to value of $lastval, is_called is $iscalled");
+                        $self->glog("Setting sequence $S.$T on target to value of $lastval, is_called is $iscalled", 6);
                         $SQL = "SELECT setval('$S.$T', $lastval, '$iscalled')";
                         $targetdbh->do($SQL);
 
@@ -5269,7 +5269,7 @@ sub start_kid {
                     }
 
                     ## Target wins - copy its value to the source
-                    $self->glog("Copying value of $S.$T from target to source");
+                    $self->glog("Copying value of $S.$T from target to source", 6);
 
                     if (! exists $g->{tempschema}{t}) {
                         ($g->{tempschema}{t}{lastval},$g->{tempschema}{t}{iscalled}) =
@@ -5300,7 +5300,7 @@ sub start_kid {
                     next if ! $newval;
 
                     ## Apply to the source
-                    $self->glog("Setting sequence $S.$T on source to value of $lastval, is_called is $iscalled");
+                    $self->glog("Setting sequence $S.$T on source to value of $lastval, is_called is $iscalled", 6);
                     $SQL = "SELECT setval('$S.$T', $lastval, '$iscalled')";
                     $sourcedbh->do($SQL);
 
@@ -5333,14 +5333,14 @@ sub start_kid {
                     $SQL = "SELECT relhasindex FROM pg_class WHERE oid = $g->{oid}";
                     $hasindex_src = $sourcedbh->selectall_arrayref($SQL)->[0][0];
                     if ($hasindex_src) {
-                        $self->glog("Turning off indexes for $S.$T on $sourcedb");
+                        $self->glog("Turning off indexes for $S.$T on $sourcedb", 7);
                         $SQL = "UPDATE pg_class SET relhasindex = 'f' WHERE oid = $toid";
                         $sourcedbh->do($SQL);
                     }
                     $SQL = "SELECT relhasindex FROM pg_class WHERE oid = $toid";
                     $hasindex_tgt = $targetdbh->selectall_arrayref($SQL)->[0][0];
                     if ($hasindex_tgt) {
-                        $self->glog("Turning off indexes for $S.$T on $targetdb");
+                        $self->glog("Turning off indexes for $S.$T on $targetdb", 7);
                         $SQL = "UPDATE pg_class SET relhasindex = 'f' WHERE oid = $toid";
                         $targetdbh->do($SQL);
                     }
@@ -5423,7 +5423,7 @@ sub start_kid {
                     $pkval = $temp_pkval;
                     ## No problem if it only changed on the source
                     if (! exists $info2->{$pkval}) {
-                        $self->glog("No conflict, source only for $S.$T.$qnamepk: $pkval");
+                        $self->glog("No conflict, source only for $S.$T.$qnamepk: $pkval", 6);
                         $info1->{$pkval}{BUCARDO_ACTION} = 1; ## copy source to target
                         next;
                     }
@@ -5444,13 +5444,13 @@ sub start_kid {
                         $self->clog('header,' . substr($header, 0, -1));
                         $self->clog('source,' . substr($srcrow, 0, -1));
                         $self->clog('target,' . substr($tgtrow, 0, -1));
-                        $self->glog("Logged details of conflict to $config{log_conflict_file}");
+                        $self->glog("Logged details of conflict to $config{log_conflict_file}", 6);
                     }
 
                     ## Standard conflict handlers don't need info to make a decision
                     if (!exists $g->{code_conflict}) {
                         my $sc = $g->{standard_conflict};
-                        $self->glog(qq{Conflict detected for $S.$T:$pkval. Using standard conflict "$sc"});
+                        $self->glog(qq{Conflict detected for $S.$T:$pkval. Using standard conflict "$sc"}, 5);
                         if ('source' eq $sc) {
                             $info1->{$pkval}{BUCARDO_ACTION} = 1; ## copy source to target
                         }
@@ -5487,7 +5487,7 @@ sub start_kid {
                                 $sth{sc_latest_tgt}{$g->{pkcols}}->execute($toid,$pkval);
                             }
                             my $tgttime = $sth{sc_latest_tgt}{$g->{pkcols}}->fetchall_arrayref()->[0][0];
-                            $self->glog(qq{Delta source time: $srctime Target time: $tgttime});
+                            $self->glog(qq{Delta source time: $srctime Target time: $tgttime}, 6);
                             $info1->{$pkval}{BUCARDO_ACTION} = $srctime >= $tgttime ? 1 : 2;
                         } ## end 'latest'
                         else {
@@ -5512,24 +5512,24 @@ sub start_kid {
                     for my $code (@{$g->{code_conflict}}) {
                         my $result = run_kid_custom_code($code, 'strict');
                         if ($result eq 'next') {
-                            $self->glog('Going to next available conflict code');
+                            $self->glog('Going to next available conflict code', 6);
                             next;
                         }
                         if ($result eq 'redo') { ## ## redo rollsback source and target
-                            $self->glog('Custom conflict handler has requested we redo this sync');
+                            $self->glog('Custom conflict handler has requested we redo this sync', 6);
                             redo KID if $kidsalive;
                             last KID;
                         }
 
-                        $self->glog("Conflict handler action: $rowinfo{action}");
+                        $self->glog("Conflict handler action: $rowinfo{action}", 6);
 
                         ## Check for conflicting actions
                         if ($rowinfo{action} & 2 and $rowinfo{action} & 4) {
-                            $self->glog('Warning! Conflict handler cannot return 2 and 4. Ignoring 4');
+                            $self->glog('Warning! Conflict handler cannot return 2 and 4. Ignoring 4', 0);
                             $rowinfo{action} -= 4;
                         }
                         if ($rowinfo{action} & 1 and $rowinfo{action} & 8) {
-                            $self->glog('Warning! Conflict handler cannot return 1 and 8. Ignoring 8');
+                            $self->glog('Warning! Conflict handler cannot return 1 and 8. Ignoring 8', 0);
                             $rowinfo{action} -= 8;
                         }
 
@@ -5544,7 +5544,7 @@ sub start_kid {
                 ## Since we've already handled conflicts, simply mark "target only" rows
                 for my $tpkval (keys %$info2) {
                     next if exists $info1->{$tpkval};
-                    $self->glog("No conflict, target only for $S.$T.$qnamepk: $tpkval");
+                    $self->glog("No conflict, target only for $S.$T.$qnamepk: $tpkval", 6);
                     $info1->{$tpkval}{BUCARDO_ACTION} = 2; ## copy target to source
                     $info1->{$tpkval}{BUCARDO_PKVALS} ||= $info2->{$tpkval}{BUCARDO_PKVALS};
                 }
@@ -5554,7 +5554,7 @@ sub start_kid {
                 for (values %$info1) {
                     $actionstat{$_->{BUCARDO_ACTION}}++ if exists $_->{BUCARDO_ACTION};
                 }
-                $self->glog('Action summary: ' . join ' ' => map { "$_:$actionstat{$_}" } sort keys %actionstat);
+                $self->glog(('Action summary: ' . join ' ' => map { "$_:$actionstat{$_}" } sort keys %actionstat), 6);
 
                 ## For each key, either mark as deleted, or mark as needing to be checked
                 my (@srcdelete,@tgtdelete,@srccheck,@tgtcheck);
@@ -5574,7 +5574,7 @@ sub start_kid {
                     if (! $action) {
                         $dmlcount{N}{source}{$S}{$T}++;
                         $dmlcount{N}{target}{$S}{$T}++;
-                        $self->glog("No action for $S.$T:$pkval");
+                        $self->glog("No action for $S.$T:$pkval", 6);
                         next;
                     }
 
@@ -5676,7 +5676,7 @@ sub start_kid {
                     for (@tgtdelete2) {
                         $sth{target}{$g}{insertdelta}->execute($toid,@$_);
                         $g->{target_makedelta_inserts}++;
-                        $self->glog("Adding in target bucardo_delta row (delete) for $toid and $_");
+                        $self->glog("Adding in target bucardo_delta row (delete) for $toid and $_", 6);
                     }
                     if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
                         $targetdbh->do(q{SET session_replication_role = 'replica'});
@@ -5685,7 +5685,7 @@ sub start_kid {
 
                 ## If we have exception handling code, create a savepoint to rollback to
                 if ($g->{has_exception_code}) {
-                    $self->glog('Creating savepoints on source and target for exception handler(s)');
+                    $self->glog('Creating savepoints on source and target for exception handler(s)', 7);
                     $sourcedbh->pg_savepoint("bucardo_$$") or die qq{Savepoint creation failed for bucardo_$$};
                     $targetdbh->pg_savepoint("bucardo_$$") or die qq{Savepoint creation failed for bucardo_$$};
                 }
@@ -5720,12 +5720,12 @@ sub start_kid {
                     }
                     chop $list;
                     if (length $list) {
-                        $self->glog("Deleting from source: $SQL ($list)");
+                        $self->glog("Deleting from source: $SQL ($list)", 6);
                         $dmlcount{D}{source}{$S}{$T} += $sourcedbh->do("$SQL ($list)");
                     }
                 }
                 if ($dmlcount{D}{source}{$S}{$T}) {
-                    $self->glog(qq{Rows deleted from source "$S.$T": $dmlcount{D}{source}{$S}{$T}/$count});
+                    $self->glog(qq{Rows deleted from source "$S.$T": $dmlcount{D}{source}{$S}{$T}/$count}, 6);
                 }
 
                 while (@tgtdelete) {
@@ -5745,12 +5745,12 @@ sub start_kid {
                     }
                     chop $list;
                     if (length $list) {
-                        $self->glog("Deleting from target: $SQL ($list)");
+                        $self->glog("Deleting from target: $SQL ($list)", 6);
                         $dmlcount{D}{target}{$S}{$T} += $targetdbh->do("$SQL ($list)");
                     }
                 }
                 if ($dmlcount{D}{target}{$S}{$T}) {
-                    $self->glog(qq{Rows deleted from target "$S.$T": $dmlcount{D}{target}{$S}{$T}/$count});
+                    $self->glog(qq{Rows deleted from target "$S.$T": $dmlcount{D}{target}{$S}{$T}/$count}, 6);
                 }
                 ## Get authoritative existence information for all undefined keys
                 ## Before this point, the lack of a matching record from the left join
@@ -5816,7 +5816,7 @@ sub start_kid {
                     my $action = $info1->{$pkval}{BUCARDO_ACTION};
 
                     if (! $action) {
-                        $self->glog("No action for $S.$T:$pkval\n");
+                        $self->glog("No action for $S.$T:$pkval", 6);
                         next;
                     }
 
@@ -5847,48 +5847,48 @@ sub start_kid {
                             my $tgtpks = $g->{pkcols} <= 1 ? [$pkval] : $info2->{$pkval}{BUCARDO_PKVALS};
                             if ($action & 1) { ## Source to target
                                 if (defined $info2->{$pkval}{$namepk}) {
-                                    $self->glog("$prefix UPDATE source to target pk $pkval");
+                                    $self->glog("$prefix UPDATE source to target pk $pkval", 6);
                                     $count = $sth{target}{$g}{updaterow}->execute(@srcrow,@$srcpks);
                                     $dmlcount{U}{target}{$S}{$T}++;
                                 }
                                 else {
-                                    $self->glog("$prefix INSERT source to target pk $pkval");
+                                    $self->glog("$prefix INSERT source to target pk $pkval", 6);
                                     $count = $sth{target}{$g}{insertrow}->execute(@$srcpks,@srcrow);
                                     $dmlcount{I}{target}{$S}{$T}++;
                                 }
                             }
                             if ($action & 2) { ## Target to source
                                 if (defined $info1->{$pkval}{$namepk}) {
-                                    $self->glog("$prefix UPDATE target to source pk $pkval");
+                                    $self->glog("$prefix UPDATE target to source pk $pkval", 6);
                                     $count = $sth{source}{$g}{updaterow}->execute(@tgtrow,@$tgtpks);
                                     $dmlcount{U}{source}{$S}{$T}++;
                                 }
                                 else {
-                                    $self->glog("$prefix INSERT target to source pk $pkval");
+                                    $self->glog("$prefix INSERT target to source pk $pkval", 6);
                                     $count = $sth{source}{$g}{insertrow}->execute(@$tgtpks,@tgtrow);
                                     $dmlcount{I}{source}{$S}{$T}++;
                                 }
                             }
                             if ($action & 4) { ## Source to source
                                 if (defined $info1->{$pkval}{$namepk}) {
-                                    $self->glog("$prefix UPDATE source to source pk $pkval");
+                                    $self->glog("$prefix UPDATE source to source pk $pkval", 6);
                                     $count = $sth{source}{$g}{updaterow}->execute(@srcrow,@$srcpks);
                                     $dmlcount{U}{source}{$S}{$T}++;
                                 }
                                 else {
-                                    $self->glog("$prefix INSERT source to source pk $pkval");
+                                    $self->glog("$prefix INSERT source to source pk $pkval", 6);
                                     $count = $sth{source}{$g}{insertrow}->execute(@$srcpks,@srcrow);
                                     $dmlcount{I}{source}{$S}{$T}++;
                                 }
                             }
                             if ($action & 8) { ## Target to target
                                 if (defined $info2->{$pkval}{$namepk}) {
-                                    $self->glog("$prefix UPDATE target to target pk $pkval");
+                                    $self->glog("$prefix UPDATE target to target pk $pkval", 6);
                                     $count = $sth{target}{$g}{updaterow}->execute(@tgtrow,@$tgtpks);
                                     $dmlcount{U}{target}{$S}{$T}++;
                                 }
                                 else {
-                                    $self->glog("$prefix INSERT target to target pk $pkval");
+                                    $self->glog("$prefix INSERT target to target pk $pkval", 6);
                                     $count = $sth{target}{$g}{insertrow}->execute(@$tgtpks,@tgtrow);
                                     $dmlcount{I}{target}{$S}{$T}++;
                                 }
@@ -5924,19 +5924,19 @@ sub start_kid {
                         if ($@) {
                             chomp $@;
                             (my $err = $@) =~ s/\n/\\n/g;
-                            $self->glog("Warning! Aborting due to exception for $S.$T.$qnamepk: $pkval Error was $err");
+                            $self->glog("Warning! Aborting due to exception for $S.$T.$qnamepk: $pkval Error was $err", 0);
                             die $@;
                         }
                     }
                     elsif ($@) {
                         chomp $@;
                         (my $err = $@) =~ s/\n/\\n/g;
-                        $self->glog("Exception caught: $err");
+                        $self->glog("Exception caught: $err", 0);
 
                         ## Bail if we've called one exception for every (original) row
                         ## TODO: Develop better metrics here
                         if ($g->{exceptions} > $deltacount{source}{$S}{$T} and $g->{exceptions} > $deltacount{target}{$S}{$T}) {
-                            $self->glog("Warning! Exception count=$g->{exceptions}, source=$deltacount{source}{$S}{$T}, target=$deltacount{target}{$S}{$T}");
+                            $self->glog("Warning! Exception count=$g->{exceptions}, source=$deltacount{source}{$S}{$T}, target=$deltacount{target}{$S}{$T}", 0);
                             die qq{Error: too many exceptions to handle for $S.$T:$pkval};
                         }
 
@@ -5956,43 +5956,43 @@ sub start_kid {
                                     target_error => $targetdbh->err ? 1 : 0,
                                 );
 
-                        $self->glog("Rolling back to savepoints, due to database error: $err");
+                        $self->glog("Rolling back to savepoints, due to database error: $err", 1);
                         $sourcedbh->pg_rollback_to("bucardo_$$");
                         $targetdbh->pg_rollback_to("bucardo_$$");
 
                         ## Run the exception handler(s)
                         my $runagain = 0;
                         for my $code (@{$g->{code_exception}}) {
-                            $self->glog("Trying exception code $code->{id}: $code->{name}");
+                            $self->glog("Trying exception code $code->{id}: $code->{name}", 5);
                             my $result = run_kid_custom_code($code, 'strict', $swap_attempts);
                             if ($result eq 'next') {
-                                $self->glog('Going to next available exception code');
+                                $self->glog('Going to next available exception code', 6);
                                 next;
                             }
                             if ($result eq 'redo') { ## redo rollsback source and target
-                                $self->glog('Exception handler requested redoing the sync');
+                                $self->glog('Exception handler requested redoing the sync', 6);
                                 redo KID;
                             }
                             if ($input->{runagain}) {
-                                $self->glog('Exception handler thinks we can try again');
+                                $self->glog('Exception handler thinks we can try again', 6);
                                 $runagain = 1;
                                 last;
                             }
                         }
 
                         if (!$runagain) {
-                            $self->glog('No exception handlers were able to help, so we are bailing out');
+                            $self->glog('No exception handlers were able to help, so we are bailing out', 0);
                             die qq{No exception handlers were able to help, so we are bailing out\n};
                         }
 
                         ## Make sure the database connections are still clean
                         my $sourceping = $sourcedbh->ping();
                         if ($sourceping !~ /^[13]$/o) {
-                            $self->glog("Warning! Source ping after exception handler was $sourceping");
+                            $self->glog("Warning! Source ping after exception handler was $sourceping", 0);
                         }
                         my $targetping = $targetdbh->ping();
                         if ($targetping !~ /^[13]$/o) {
-                            $self->glog("Warning! Target ping after exception handler was $targetping");
+                            $self->glog("Warning! Target ping after exception handler was $targetping", 0);
                         }
 
                         ## This table gets another chance
@@ -6022,13 +6022,13 @@ sub start_kid {
                 if ($hasindex_src) {
                     $SQL = "UPDATE pg_class SET relhasindex = 't' WHERE oid = $g->{oid}";
                     $sourcedbh->do($SQL);
-                    $self->glog("Reindexing table $S.$T on $sourcedb");
+                    $self->glog("Reindexing table $S.$T on $sourcedb", 7);
                     $sourcedbh->do("REINDEX TABLE $S.$T");
                 }
                 if ($hasindex_tgt) {
                     $SQL = "UPDATE pg_class SET relhasindex = 't' WHERE oid = $toid";
                     $targetdbh->do($SQL);
-                    $self->glog("Reindexing table $S.$T on $targetdb");
+                    $self->glog("Reindexing table $S.$T on $targetdb", 7);
                     $targetdbh->do("REINDEX TABLE $S.$T");
                 }
 
@@ -6046,7 +6046,7 @@ sub start_kid {
                 delete $g->{rateinfo};
                 ## Gather up our rate information - just store for now, we can write it after the commits
                 if ($deltacount{source}{$S}{$T} and $sync->{track_rates}) {
-                    $self->glog('Gathering source rate information');
+                    $self->glog('Gathering source rate information', 6);
                     my $sth = $sth{source}{$g}{deltarate};
                     $count = $sth->execute();
                     $g->{rateinfo}{source} = $sth->fetchall_arrayref();
@@ -6056,13 +6056,13 @@ sub start_kid {
                     $sth{source}{$g}{track}->execute();
                 }
                 if ($deltacount{target}{$S}{$T} and $sync->{track_rates}) {
-                    $self->glog('Gathering target rate information');
+                    $self->glog('Gathering target rate information', 6);
                     my $sth = $sth{target}{$g}{deltarate};
                     $count = $sth->execute();
                     $g->{rateinfo}{target} = $sth->fetchall_arrayref();
                 }
                 if ($deltacount{target}{$S}{$T} or $g->{target_makedelta_inserts}) {
-                    $self->glog("Updating bucardo_track for $S.$T on $targetdb");
+                    $self->glog("Updating bucardo_track for $S.$T on $targetdb", 6);
                     $sth{target}{$g}{track}->execute();
                 }
             }
@@ -6078,11 +6078,11 @@ sub start_kid {
         }
 
         if ($target_disable_trigrules ne 'replica') {
-            $self->glog(q{Enabling triggers and rules on target via pg_class});
+            $self->glog(q{Enabling triggers and rules on target via pg_class}, 7);
             $targetdbh->do($SQL{enable_trigrules});
         }
         if ($synctype eq 'swap' and $source_disable_trigrules ne 'replica') {
-            $self->glog(q{Enabling triggers and rules on source via pg_class});
+            $self->glog(q{Enabling triggers and rules on source via pg_class}, 7);
             $sourcedbh->do($SQL{enable_trigrules});
         }
 
@@ -6096,7 +6096,7 @@ sub start_kid {
         }
 
         if ($self->{dryrun}) {
-            $self->glog('Dryrun, rolling back...');
+            $self->glog('Dryrun, rolling back...', 3);
             $targetdbh->rollback();
             $sourcedbh->rollback();
             $maindbh->rollback();
@@ -6108,7 +6108,7 @@ sub start_kid {
             if ($sync->{usecustomselect}) {
                 for my $g (@$goatlist) {
                     next if ! $g->{cs_temptable};
-                    $self->glog("Dropping temp table $g->{cs_temptable} created for customselect");
+                    $self->glog("Dropping temp table $g->{cs_temptable} created for customselect", 5);
                     $sourcedbh->do("DROP TABLE $g->{cs_temptable}");
                     $g->{cs_temptable} = '';
                 }
@@ -6163,7 +6163,7 @@ sub start_kid {
                 }
                 ($S,$T) = ($g->{safeschema},$g->{safetable});
                 my $total_time = time() - $kid_start_time;
-                $self->glog("Analyzing $S.$T on $targetdb. Time: $total_time");
+                $self->glog("Analyzing $S.$T on $targetdb. Time: $total_time", 5);
                 $targetdbh->do("ANALYZE $S.$T");
                 $targetdbh->commit();
             }
@@ -6171,16 +6171,16 @@ sub start_kid {
 
         my $total_time = time() - $kid_start_time;
         if ($synctype eq 'swap') {
-            $self->glog("Finished syncing. Time: $total_time. Updates: $dmlcount{allupdates}{source}+$dmlcount{allupdates}{target} Inserts: $dmlcount{allinserts}{source}+$dmlcount{allinserts}{target} Deletes: $dmlcount{alldeletes}{source}+$dmlcount{alldeletes}{target} Sync: $syncname. Keepalive: $kidsalive");
+            $self->glog("Finished syncing. Time: $total_time. Updates: $dmlcount{allupdates}{source}+$dmlcount{allupdates}{target} Inserts: $dmlcount{allinserts}{source}+$dmlcount{allinserts}{target} Deletes: $dmlcount{alldeletes}{source}+$dmlcount{alldeletes}{target} Sync: $syncname. Keepalive: $kidsalive", 5);
         }
         else {
-            $self->glog("Finished syncing. Time: $total_time. Updates: $dmlcount{allupdates}{target} Inserts: $dmlcount{allinserts}{target} Deletes: $dmlcount{alldeletes}{target} Sync: $syncname. Keepalive: $kidsalive");
+            $self->glog("Finished syncing. Time: $total_time. Updates: $dmlcount{allupdates}{target} Inserts: $dmlcount{allinserts}{target} Deletes: $dmlcount{alldeletes}{target} Sync: $syncname. Keepalive: $kidsalive", 5);
         }
 
         ## Remove lock file if we used it
         if ($lock_table_mode and -e $force_lock_file) {
-            $self->glog("Removing lock control file $force_lock_file");
-            unlink $force_lock_file or $self->glog("Warning! Failed to unlink $force_lock_file");
+            $self->glog("Removing lock control file $force_lock_file", 5);
+            unlink $force_lock_file or $self->glog("Warning! Failed to unlink $force_lock_file", 0);
         }
 
         # Run all 'after_txn' code
@@ -6237,14 +6237,14 @@ sub cleanup_kid {
 
     my ($self,$reason,$extrainfo) = @_;
 
-    $self->glog("Kid exiting at cleanup_kid. $extrainfo Reason: $reason");
+    $self->glog("Kid exiting at cleanup_kid. $extrainfo Reason: $reason", 5);
 
     ## Remove the pid file
     if (unlink $self->{KIDPIDFILE}) {
-        $self->glog(qq{Removed pid file "$self->{KIDPIDFILE}"});
+        $self->glog(qq{Removed pid file "$self->{KIDPIDFILE}"}, 6);
     }
     else {
-        $self->glog("Warning! Failed to remove pid file $self->{KIDPIDFILE}");
+        $self->glog("Warning! Failed to remove pid file $self->{KIDPIDFILE}", 0);
     }
 
     return;
@@ -6267,7 +6267,7 @@ sub send_mail {
     $arg->{to} ||= $config{default_email_to};
     $arg->{subject} ||= 'Bucardo Mail!';
     if (! $arg->{body}) {
-        $self->glog('ERROR: Cannot send mail, no body message');
+        $self->glog('ERROR: Cannot send mail, no body message', 0);
         return;
     }
 
@@ -6293,10 +6293,10 @@ sub send_mail {
         };
         if ($@) {
             my $error = $@ || '???';
-            $self->glog("Warning: Error sending email to $arg->{to}: $error");
+            $self->glog("Warning: Error sending email to $arg->{to}: $error", 0);
         }
         else {
-            $self->glog("Sent an email to $arg->{to} from $from: $arg->{subject}");
+            $self->glog("Sent an email to $arg->{to} from $from: $arg->{subject}", 5);
         }
     }
 
@@ -6304,7 +6304,7 @@ sub send_mail {
         my $fh;
         ## This happens rare enough to not worry about caching the file handle
         if (! open $fh, '>>', $self->{sendmail_file}) {
-            $self->glog(qq{Warning: Could not open sendmail file "$self->{sendmail_file}": $!\n});
+            $self->glog(qq{Warning: Could not open sendmail file "$self->{sendmail_file}": $!}, 0);
             return;
         }
         my $now = scalar localtime;

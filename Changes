@@ -25,6 +25,9 @@ Bucardo version 4.5.0, released ??, 2010
 
   - Fix bug in bucardo_purge_q_table in index detection logic. [Aolmezov]
 
+  - Add a log_level parameter, and classify all messages inside Bucardo.pm
+    with a number from 1-10 to indicate the severity [GSM]
+
   - Relax SELECT version() regex in bucardo_ctl, to let modified versions 
     of Postgres tell us their version. [GSM]
 
