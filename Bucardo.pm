@@ -4704,7 +4704,7 @@ sub start_kid {
                 }
                 $targetdbh->pg_putcopyend();
                 my $otc = $startotc ? (sprintf '(OTC: %ds) ', time-$startotc) : '';
-                $self->glog(qq{${otc}End COPY of $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}}, 6);
+                $self->glog(qq{${otc}End COPY of $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}}, 5);
                 $dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
 
                 if ($hasindex) {
@@ -4725,7 +4725,7 @@ sub start_kid {
                     $count = $sth->execute();
                     $sth->finish();
                     $count =~ s/0E0/0/o;
-                    $self->glog("Rows removed from bucardo_delta on source for $S.$T: $count", 5);
+                    $self->glog("Rows removed from bucardo_delta on source for $S.$T: $count", 6);
                     ## Swap? Other side(s) as well
                     if ($synctype eq 'swap') {
                         $SQL = "DELETE FROM bucardo.bucardo_delta WHERE txntime <= now() AND tablename = $g->{targetoid}{$targetdb}";
@@ -4733,7 +4733,7 @@ sub start_kid {
                         $count = $sth->execute();
                         $sth->finish();
                         $count =~ s/0E0/0/o;
-                        $self->glog("Rows removed from bucardo_delta on target for $S.$T: $count", 5);
+                        $self->glog("Rows removed from bucardo_delta on target for $S.$T: $count", 6);
                     }
                 }
             } ## end each goat
