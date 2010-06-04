@@ -2646,7 +2646,7 @@ sub start_controller {
                     $m->{does_source_makedelta}, $m->{does_target_makedelta}
             ) :'';
         $self->glog($msg, 3);
-        if (defined $m->{customselect}) {
+        if (defined $m->{customselect} and length $m->{customselect}) {
             $self->glog("   customselect: $m->{customselect}", 3);
         }
         if ($m->{reltype} eq 'table') {
