@@ -27,3 +27,6 @@ tmp/
 *.tmp
 *.asc
 *.tar
+
+## Local notes:
+notes.*

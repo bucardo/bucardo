@@ -21,3 +21,4 @@ t/00_release.t
 t/99-yaml.t
 t/99-perlcritic.t
 t/99-spellcheck.t
+notes.*
