@@ -3809,22 +3809,16 @@ sub start_kid {
     };
     $sth{qend} = $maindbh->prepare($SQL);
 
-    my $backend;
+    my ($source_backend, $target_backend);
 
     ## Connect to the source database
-    ($backend, $sourcedbh) = $self->connect_database($sourcedb);
-    $self->glog("Source database backend PID is $backend", 6);
+    ($source_backend, $sourcedbh) = $self->connect_database($sourcedb);
+    $self->glog("Source database backend PID is $source_backend", 6);
 
 
     ## Connect to the target database
-    ($backend, $targetdbh) = $self->connect_database($targetdb);
-    $self->glog("Target database backend PID is $backend", 6);
-
-    ## Put our backend PIDs into the log
-    $SQL = 'SELECT pg_backend_pid()';
-    my $source_backend = $sourcedbh->selectall_arrayref($SQL)->[0][0];
-    my $target_backend = $targetdbh->selectall_arrayref($SQL)->[0][0];
-    $self->glog("Source backend PID: $source_backend. Target backend PID: $target_backend", 6);
+    ($target_backend, $targetdbh) = $self->connect_database($targetdb);
+    $self->glog("Target database backend PID is $target_backend", 6);
 
     ## Put the backend PIDs in place in the audit_pid table
     if ($config{audit_pid}) {
