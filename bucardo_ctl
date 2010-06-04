@@ -5393,31 +5393,31 @@ The type is one of: code, db, dbgroup, table, sequence, herd, sync
 For more information, run: $progname help remove <type>};
     }
     if ('remove_customcode' eq $name) {
-        return q{Usage: $verb customcode <name> [name2 name3 ...]
+        return qq{Usage: $verb customcode <name> [name2 name3 ...]
 Removes one or more customcodes.};
     }
 if ('remove_database' eq $name) {
-        return q{Usage: $verb db <name> [name2 name3 ...]
+        return qq{Usage: $verb db <name> [name2 name3 ...]
 Removes one or more databases.};
     }
     if ('remove_dbgroup' eq $name) {
-        return q{Usage: $verb dbgroup <name> [name2 name3 ...]
+        return qq{Usage: $verb dbgroup <name> [name2 name3 ...]
 Removes one or more database groups.};
     }
     if ('remove_herd' eq $name) {
-        return q{Usage: $verb herd <name> [name2 name3 ...]
+        return qq{Usage: $verb herd <name> [name2 name3 ...]
 Removes one or more herds.};
     }
     if ('remove_sync' eq $name) {
-        return q{Usage: $verb sync <name> [name2 name3 ...]
+        return qq{Usage: $verb sync <name> [name2 name3 ...]
 Removes one or more syncs.};
     }
     if ('remove_sequence' eq $name) {
-        return q{Usage: $verb sequence <name> [name2 name3 ...]
+        return qq{Usage: $verb sequence <name> [name2 name3 ...]
 Removes one or more sequences.};
     }
     if ('remove_table' eq $name) {
-        return q{Usage: $verb table <name> [name2 name3 ...]
+        return qq{Usage: $verb table <name> [name2 name3 ...]
 Removes one or more tables.};
     }
     if ('restart' eq $name) {
