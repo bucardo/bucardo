@@ -5147,7 +5147,7 @@ sub start_kid {
 
             } ## end each goat
 
-            $self->glog("Pushdelta counts: deletes=$dmlcount{alldeletes}{target} inserts=$dmlcount{allinserts}{target}", 5);
+            $self->glog("Pushdelta counts: deletes=$dmlcount{alldeletes}{target} inserts=$dmlcount{allinserts}{target}", 6);
 
         } ## end pushdelta
 
