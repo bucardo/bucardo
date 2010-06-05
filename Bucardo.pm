@@ -684,6 +684,8 @@ sub start_mcp {
     $self->glog("Local system timezone: $systemtime  Database timezone: $dbtime->[2]", 0);
     $self->glog("PID: $$", 0);
     $self->glog("Backend PID: $mcp_backend", 0);
+    $self->glog("Postgres version: " . $self->{masterdbh}{pg_server_version}, 0);
+    $self->glog("Postgres library version: " . $self->{masterdbh}{pg_lib_version}, 0);
     $self->glog("bucardo_ctl: $old0", 0);
     $self->glog('Bucardo.pm: ' . $INC{'Bucardo.pm'}, 0);
     $self->glog("Perl: $^X $^V", 0);
