@@ -4512,7 +4512,7 @@ sub start_kid {
                         }
                     }
                     if ($newval) {
-                        $self->glog("Setting sequence $S.$T to value of $lastval, is_called is $iscalled", 5);
+                        $self->glog("Setting sequence $S.$T to value of $lastval, is_called is $iscalled", 6);
                         $SQL = "SELECT setval('$S.$T', $lastval, '$iscalled')";
                         $targetdbh->do($SQL);
 
@@ -4607,7 +4607,7 @@ sub start_kid {
                     $SQL = "SELECT last_value, is_called FROM $S.$T";
                     my ($lastval, $iscalled) = @{$sourcedbh->selectall_arrayref($SQL)->[0]};
 
-                    $self->glog("Setting sequence $S.$T to value of $lastval, is_called is $iscalled", 5);
+                    $self->glog("Setting sequence $S.$T to value of $lastval, is_called is $iscalled", 6);
                     $SQL = "SELECT setval('$S.$T', $lastval, '$iscalled')";
                     $targetdbh->do($SQL);
 
