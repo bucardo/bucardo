@@ -2498,7 +2498,7 @@ sub start_controller {
     open my $pid, '>', $SYNCPIDFILE or die qq{Cannot write to $SYNCPIDFILE: $!\n};
     print {$pid} "$$\n";
     close $pid or warn qq{Could not close "$SYNCPIDFILE": $!\n};
-    $self->{SYNCPIDFILE} = $SYNCPIDILE;
+    $self->{SYNCPIDFILE} = $SYNCPIDFILE;
 
     my $msg = qq{Controller starting for sync "$syncname". Source herd is "$source". PID:$$};
     $self->glog($msg, 1);
@@ -4538,12 +4538,13 @@ sub start_kid {
 
                 $deltacount{allsource} += $deltacount{source}{$S}{$T} = $sth{source}{$g}{getdelta}->execute();
                 $sth{source}{$g}{getdelta}->finish() if $deltacount{source}{$S}{$T} =~ s/0E0/0/o;
-                $self->glog(qq{Source delta count for $S.$T: $deltacount{source}{$S}{$T}}, 6);
-
+                $self->glog(qq{Source delta count for $S.$T: $deltacount{source}{$S}{$T}},
+                            $deltacount{source}{$S}{$T} ? 5 : 6);
                 if ($synctype eq 'swap') {
                     $deltacount{alltarget} += $deltacount{target}{$S}{$T} = $sth{target}{$g}{getdelta}->execute();
                     $sth{target}{$g}{getdelta}->finish() if $deltacount{target}{$S}{$T} =~ s/0E0/0/o;
-                    $self->glog(qq{Target delta count for $S.$T: $deltacount{target}{$S}{$T}}, 6);
+                    $self->glog(qq{Target delta count for $S.$T: $deltacount{target}{$S}{$T}},
+                                $deltacount{target}{$S}{$T} ? 5 : 6);
                 }
             }
             if ($synctype eq 'swap') {
