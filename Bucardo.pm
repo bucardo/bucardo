@@ -3092,7 +3092,7 @@ sub start_controller {
 
             ## Has it been long enough to force a sync?
             if ($checksecs and time() - $lastheardfrom >= $checksecs) {
-                $self->glog(qq{Timed out - force a sync for "$syncname"}, 5);
+                $self->glog(qq{Timed out - force a sync for "$syncname"}, 6);
                 $lastheardfrom = time();
                 $kicked = 1;
             }
