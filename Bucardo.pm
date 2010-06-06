@@ -2498,11 +2498,10 @@ sub start_controller {
     open my $pid, '>', $SYNCPIDFILE or die qq{Cannot write to $SYNCPIDFILE: $!\n};
     print {$pid} "$$\n";
     close $pid or warn qq{Could not close "$SYNCPIDFILE": $!\n};
-    $self->{SYNCPIDFILE} = $SYNCPIDFILE;
+    $self->{SYNCPIDFILE} = $SYNCPIDILE;
 
-    my $msg = qq{Controller starting for sync "$syncname". Source herd is "$source"};
+    my $msg = qq{Controller starting for sync "$syncname". Source herd is "$source". PID:$$};
     $self->glog($msg, 1);
-    $self->glog("PID: $$", 5);
 
     ## Log some startup information, and squirrel some away for later emailing
     my $showtarget = sprintf '%s: %s',
@@ -3597,8 +3596,7 @@ sub start_kid {
     ## Adjust the process name, start logging
     $0 = qq{Bucardo Kid.$self->{extraname} Sync "$syncname": ($synctype) "$sourcedb" -> "$targetdb"};
     $self->{logprefix} = 'KID';
-    $self->glog(qq{New kid, syncs "$sourcedb" to "$targetdb" for sync "$syncname" alive=$kidsalive Parent=$self->{parent} Type=$synctype}, 1);
-    $self->glog("PID: $$", 3);
+    $self->glog(qq{New kid, syncs "$sourcedb" to "$targetdb" for sync "$syncname" alive=$kidsalive Parent=$self->{parent} Type=$synctype PID=$$}, 1);
 
     ## Store our PID into a file
     my $kidpidfile = "$config{piddir}/bucardo.kid.sync.$syncname.$targetdb.pid";
