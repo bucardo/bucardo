@@ -222,7 +222,7 @@ remove_item()   if $verb eq 'remove' or $verb eq 'delete';
 upgrade()       if $verb eq 'upgrade';
 message()       if $verb eq 'message';
 list()          if $verb eq 'list' or $verb eq 'l';
-config()        if $verb eq 'set' or $verb eq 'show';
+config()        if $verb eq 'set' or $verb eq 'show' or $verb eq 'config';
 validate()      if $verb eq 'validate';
 update()        if $verb eq 'update';
 inspect()       if $verb eq 'inspect';
@@ -378,7 +378,8 @@ sub help {
   message
                  ** Write a message to the Bucardo logs
 
-  config [set|show]
+  show [all|item]
+  set [item=value]
                  ** View or set configuration parameters
 
   reload_config   ** Force a running Bucardo to reload the bucardo_config table
@@ -5516,6 +5517,12 @@ sub config {
     ## View or change a value inside the bucardo_config table
 
     my $setusage = "Usage: $progname set setting=value [setting=value ...]\n";
+
+    ## Allow for old syntax
+    if ($verb eq 'config') {
+        @nouns or die "Usage: $progname config [set|show]\n";
+        $verb = shift @nouns;
+    }
 
     if (!@nouns) {
         $verb eq 'set' and die $setusage;
