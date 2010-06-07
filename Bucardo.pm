@@ -3092,9 +3092,14 @@ sub start_controller {
 
             ## Has it been long enough to force a sync?
             if ($checksecs and time() - $lastheardfrom >= $checksecs) {
-                $self->glog(qq{Timed out - force a sync for "$syncname"}, 6);
-                $lastheardfrom = time();
-                $kicked = 1;
+                if ($otc) {
+                    $self->glog(qq{Timed out, but in onetimecopy mode, so not kicking, for "$syncname"}, 8);
+                }
+                else {
+                    $self->glog(qq{Timed out - force a sync for "$syncname"}, 6);
+                    $lastheardfrom = time();
+                    $kicked = 1;
+                }
             }
 
             ## Clean up any aborted children and create new jobs for them as needed
