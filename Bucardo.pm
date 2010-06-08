@@ -895,7 +895,7 @@ sub start_mcp {
                     $msg .= ": $mcpreason";
                 }
                 $self->cleanup_mcp("$msg\n");
-                $self->glog('Exiting');
+                $self->glog('Exiting', 0);
                 exit 1;
             }
 
