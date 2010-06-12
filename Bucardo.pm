@@ -363,7 +363,7 @@ sub glog { ## no critic (RequireArgUnpacking)
     if ($self->{warning_file} and $msg =~ /^Warning|ERROR|FATAL/o) {
         my $file = $self->{warning_file};
         open $self->{warningfilehandle}, '>>', $file or die qq{Could not append to "$file": $!\n};
-        print {$self->{warningfilehandle}} "$header $msg\n";
+        print {$self->{warningfilehandle}} "$header$msg\n";
         close $self->{warningfilehandle} or warn qq{Could not close "$file": $!\n};
     }
 
@@ -388,7 +388,7 @@ sub glog { ## no critic (RequireArgUnpacking)
         }
 
         ## Write the message.
-        printf {$self->{debugfilehandle}{$$}{$file}} "%s %s\n",
+        printf {$self->{debugfilehandle}{$$}{$file}} "%s%s\n",
             $header,
             $msg;
     }
