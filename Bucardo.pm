@@ -2215,7 +2215,7 @@ sub start_mcp {
             $dbh->commit();
             next if (! $s->{ping} and ! $s->{do_listen}) or $s->{synctype} ne 'swap';
             my $l = "bucardo_kick_sync_$syncname";
-            $self->glog(qq{Listening on remote server $db for "$l"}, 5);
+            $self->glog(qq{Listening on remote server "$db" for "$l"}, 5);
             $dbh->do(qq{LISTEN "$l"}) or die "LISTEN $l failed";
             $dbh->commit();
         }
@@ -2513,7 +2513,7 @@ sub start_controller {
     close $pid or warn qq{Could not close "$SYNCPIDFILE": $!\n};
     $self->{SYNCPIDFILE} = $SYNCPIDFILE;
 
-    my $msg = qq{Controller starting for sync "$syncname". Source herd is "$source". PID:$$};
+    my $msg = qq{New controller for sync "$syncname". Source herd is "$source". PID:$$};
     $self->glog($msg, 1);
 
     ## Log some startup information, and squirrel some away for later emailing
