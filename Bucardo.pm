@@ -425,6 +425,26 @@ sub clog {
 } ## end of clog
 
 
+sub show_db_version_and_time {
+
+    ## Output the time, timezone, and version information for a given db handle
+
+    my ($self,$ldbh,$prefix) = @_;
+
+    my $systemtime = time;
+    $SQL = q{SELECT extract(epoch FROM now()), now(), current_setting('timezone')};
+    my $dbtime = $ldbh->selectall_arrayref($SQL)->[0];
+    $self->glog("${prefix}Local system epoch: $systemtime  Database epoch: $dbtime->[0]", 0);
+    $systemtime = scalar localtime ($systemtime);
+    $self->glog("${prefix}Local system time: $systemtime  Database time: $dbtime->[1]", 0);
+    $systemtime = strftime('%Z (%z)', localtime());
+    $self->glog("${prefix}Local system timezone: $systemtime  Database timezone: $dbtime->[2]", 0);
+    $self->glog("${prefix}Postgres version: " . $ldbh->{pg_server_version}, 0);
+
+    return;
+
+} ## end of show_db_version_and_time
+
 sub get_dbs {
 
     ## Return a hashref of everything in the db table
@@ -674,17 +694,9 @@ sub start_mcp {
 
     ## Start outputting some interesting things to the log
     $self->glog("Starting Bucardo version $VERSION", 0);
-    my $systemtime = time;
-    $SQL = q{SELECT extract(epoch FROM now()), now(), current_setting('timezone')};
-    my $dbtime = $self->{masterdbh}->selectall_arrayref($SQL)->[0];
-    $self->glog("Local system epoch: $systemtime  Database epoch: $dbtime->[0]", 0);
-    $systemtime = scalar localtime ($systemtime);
-    $self->glog("Local system time: $systemtime  Database time: $dbtime->[1]", 0);
-    $systemtime = strftime('%Z (%z)', localtime());
-    $self->glog("Local system timezone: $systemtime  Database timezone: $dbtime->[2]", 0);
+    $self->show_db_version_and_time($self->{masterdbh}, 'Master DB ');
     $self->glog("PID: $$", 0);
     $self->glog("Backend PID: $mcp_backend", 0);
-    $self->glog("Postgres version: " . $self->{masterdbh}{pg_server_version}, 0);
     $self->glog("Postgres library version: " . $self->{masterdbh}{pg_lib_version}, 0);
     $self->glog("bucardo_ctl: $old0", 0);
     $self->glog('Bucardo.pm: ' . $INC{'Bucardo.pm'}, 0);
@@ -1572,6 +1584,7 @@ sub start_mcp {
                 if (defined $backend) {
                     $self->glog("Target database backend PID is $backend", 6);
                 }
+                $self->show_db_version_and_time($pdbh->{$tdb}, "Target DB $tdb ");
             }
             ## If the database is marked as inactive, we'll remove it from this syncs list
             if ($pdbh->{$tdb} eq 'inactive') {
