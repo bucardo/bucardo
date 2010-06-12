@@ -1331,7 +1331,7 @@ sub start_mcp {
         }
         closedir $dh or warn qq{Warning! Could not closedir "$config{piddir}": $!\n};
 
-        $self->glog(('LOADING TABLE sync. Rows=' . (scalar (keys %{$self->{sync}}))), 1);
+        $self->glog(('Loading sync table. Rows=' . (scalar (keys %{$self->{sync}}))), 1);
 
         ## At this point, we are authoritative, so we can safely clean out the q table
         $SQL = q{
