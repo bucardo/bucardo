@@ -688,7 +688,7 @@ sub start_mcp {
     $self->glog("Postgres library version: " . $self->{masterdbh}{pg_lib_version}, 0);
     $self->glog("bucardo_ctl: $old0", 0);
     $self->glog('Bucardo.pm: ' . $INC{'Bucardo.pm'}, 0);
-    $self->glog((sprintf 'Perl: %s %vd', $^X, $^V), 0);
+    $self->glog((sprintf 'OS: %s Perl: %s %vd', $^O, $^X, $^V), 0);
     $self->glog("Log level: $config{log_level}", 0);
 
     ## Again with the password trick
