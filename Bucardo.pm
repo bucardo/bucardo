@@ -2883,9 +2883,10 @@ sub start_controller {
             }
             $kid->{dbname} = $dbname;
             $self->{kidcheckq} = 1;
-            if ($otc and $sync->{synctype} eq 'pushdelta') {
+            if ($otc) {
                 $sth{qinsert}->execute($syncname,$self->{ppid},$sourcedb,$dbname,'fullcopy');
                 $maindbh->commit();
+                ## These changes are for the newly created kid, but also stick in the controller.
                 $sync->{synctype} = 'fullcopy';
                 $sync->{kidsalive} = 0;
                 $sync->{track_rates} = 0;
