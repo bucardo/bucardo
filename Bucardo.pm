@@ -2085,7 +2085,7 @@ sub start_mcp {
                     my $fcol = $targetcolinfo->{$colname};
                     my $scol = $colinfo->{$colname};
 
-                    $self->glog(qq{    Checking column on target database "$db": "$colname" ($scol->{ftype})}, 5);
+                    $self->glog(qq{    Checking column on target database "$db": "$colname" ($scol->{ftype})}, 4);
 
                     ## Always fatal: column on source but not target
                     if (! exists $targetcolinfo->{$colname}) {
