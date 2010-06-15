@@ -173,7 +173,7 @@ my $RETRY      = delete $bcargs->{retry} || 0;
 my $RETRYSLEEP = delete $bcargs->{retrysleep} || 0;
 my $NOTIMER    = delete $bcargs->{notimer} || 0;
 
-my $NO_PG_LISTENER = 0;
+my $NO_PG_LISTENER = 1;
 
 my $DBCONN = "User: $bcargs->{dbuser}  Database: $bcargs->{dbname}";
 $bcargs->{dbhost} and length $bcargs->{dbhost} and $DBCONN .= "  Host: $bcargs->{dbhost}";
@@ -1295,7 +1295,7 @@ sub kick {
                             $printstring .= $new;
                         }
                         elsif ($name =~ /^bucardo_synckill_${sync}_(.+)$/) {
-                            my $new = sprintf "$1 KILLED (%ds) ", ceil(time-$time);
+                            my $new = sprintf "%s KILLED (%ds) ", $1, ceil(time-$time);
                             print $new unless $QUIET;
                             $printstring .= $new;
                             $exitstatus = 2;
@@ -1314,26 +1314,34 @@ sub kick {
                     }
                     sleep($WAITSLEEP);
                     redo WAITIN;
-                }
+
+                } ## end of WAITIN
+
                 alarm 0 if $timeout;
             };
+
             alarm 0 if $timeout;
             if ($do_retry) {
                 $do_retry = 0;
                 redo RETRY;
             }
+
+            if (2 == $exitstatus) {
+                my $reason = show_why_sync_killed($sync);
+                $reason and print "\n$reason\n";
+            }
+
             if ($@) {
                 if ($@ =~ /Timed out/o) {
                     $exitstatus = 1;
                     warn "Timed out!\n";
                 }
                 else {
-                    $exitstatus = 2;
+                    $exitstatus = 3;
                     warn "Error: $@\n";
                 }
                 next SYNC;
             }
-
             next SYNC if $QUIET;
 
             if ($PROGRESS) {
@@ -1349,6 +1357,40 @@ sub kick {
     exit $exitstatus;
 
 } ## end of kick
+
+
+sub show_why_sync_killed {
+
+    ## If a kick results in a "KILLED!" try and show why
+
+    my $sync = shift;
+
+    $SQL = q{
+SELECT * FROM bucardo.q
+WHERE sync = ?
+AND aborted IS NOT NULL
+AND LENGTH(whydie) > 2
+AND aborted >= now() - '30 seconds'::interval
+ORDER BY aborted DESC LIMIT 1
+};
+    $sth = $dbh->prepare($SQL);
+    $count = $sth->execute($sync);
+    if ($count != 1) {
+        $sth->finish();
+        return '';
+    }
+
+    my $result = $sth->fetchall_arrayref({})->[0];
+    (my $whydie = $result->{whydie}) =~ s/\\n */\n    /g;
+    $whydie =~ s/: ERROR:/:\n    ERROR:/;
+    $whydie =~ s/ (at .+ line \d+\.)/\n      $1/g;
+    $whydie =~ s/\t/<tab>/g;
+    my $msg = sprintf "  PID: %s\n  Started: %s\n  Ended: %s\n    %s",
+        $result->{pid}, $result->{started}, $result->{aborted}, $whydie;
+
+    return $msg;
+
+} ## end of show_why_sync_killed
 
 
 sub status_all {
