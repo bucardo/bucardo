@@ -2884,7 +2884,7 @@ sub start_controller {
             $kid->{dbname} = $dbname;
             $self->{kidcheckq} = 1;
             if ($otc) {
-                $sth{qinsert}->execute($syncname,$self->{ppid},$sourcedb,$dbname,'fullcopy');
+                $sth{qinsert}->execute($syncname,$$,$sourcedb,$dbname,'fullcopy');
                 $maindbh->commit();
                 ## These changes are for the newly created kid, but also stick in the controller.
                 $sync->{synctype} = 'fullcopy';
@@ -3139,7 +3139,7 @@ sub start_controller {
                     }
                     else {
                         $self->glog(qq{Re-adding sync to q table for database "$atarget"}, 1);
-                        $count = $sth{qinsert}->execute($syncname,$self->{ppid},$sourcedb,$atarget,$synctype);
+                        $count = $sth{qinsert}->execute($syncname,$$,$sourcedb,$atarget,$synctype);
                         $maindbh->commit();
                         sleep $config{kid_abort_sleep};
                         $self->glog('Creating kid to handle resurrected q row', 1);
@@ -3164,7 +3164,7 @@ sub start_controller {
                 $count = kill 0 => $pid;
                 if ($count != 1) {
                     ## Make sure this kid has cleaned up after themselves in the q table
-                    $count = $sth{qupdateabortedpid}->execute('?',$syncname,$pid,$self->{ppid},$dbname);
+                    $count = $sth{qupdateabortedpid}->execute('?',$syncname,$pid,$$,$dbname);
                     if ($count >= 1) {
                         $self->glog("Rows updated child $pid to aborted in q: $count", 1);
                     }
@@ -3356,7 +3356,7 @@ sub start_controller {
                 $count = $sth{qcheck}->execute($syncname,$sourcedb,$dbname);
                 $sth{qcheck}->finish();
                 if ($count < 1) {
-                    $count = $sth{qinsert}->execute($syncname,$self->{ppid},$sourcedb,$dbname,$synctype);
+                    $count = $sth{qinsert}->execute($syncname,$$,$sourcedb,$dbname,$synctype);
                 }
                 else {
                     $self->glog("Could not add to q sync=$syncname,source=$sourcedb,target=$dbname,count=$count. Sending manual notification", 6);
@@ -3649,10 +3649,10 @@ sub start_kid {
             $merr = $maindbh->err || 'none';
             $serr = $sourcedbh->err || 'none';
             $terr = $targetdbh->err || 'none';
-            $mstate = $maindbh->state;
-            $sstate = $sourcedbh->state;
-            $tstate = $targetdbh->state;
-            $msg .= "\n main error: $merr source error: $serr target error: $terr States:$mstate/$sstate/$tstate\n";
+            $mstate = $maindbh->state || '?';
+            $sstate = $sourcedbh->state || '?';
+            $tstate = $targetdbh->state || '?';
+            $msg .= "\n main error: $merr\nsource error: $serr\ntarget error: $terr\nStates: $mstate/$sstate/$tstate\n";
         }
 
         ## If the error was because we could not serialize, maybe add a sleep time
@@ -3700,7 +3700,8 @@ sub start_kid {
         };
         ## Note: we don't check for non-null started because it is never set without a pid
         $sth = $finaldbh->prepare($SQL);
-        $sth->execute($msg,$syncname,$sourcedb,$targetdb,$self->{parent},$$);
+        (my $flatmsg = $msg) =~ s/\n/\\n/g;
+        my $count = $sth->execute($flatmsg,$syncname,$sourcedb,$targetdb,$self->{parent},$$);
 
         ## Clean up the audit_pid table
         if ($config{audit_pid}) {
@@ -5080,7 +5081,7 @@ sub start_kid {
                             chomp $@;
                             (my $err = $@) =~ s/\n/\\n/g;
                             $self->glog("Warning! Aborting due to exception for $S.$T:$pkval Error was $err", 0);
-                            die $@;
+                            die "$err\n";
                         }
                     }
                     elsif ($@) {
