@@ -25,6 +25,8 @@ Bucardo version 4.5.0, released ??, 2010
 
   - Fix bug in bucardo_purge_q_table in index detection logic. [Aolmezov]
 
+  - Show the reason why a sync failed on a failed bucardo_ctl kick. [GSM]
+
   - Add a log_level parameter, and classify all messages inside Bucardo.pm
     with a number from 1-10 to indicate the severity [GSM]
 
@@ -63,11 +65,15 @@ Bucardo version 4.5.0, released ??, 2010
 
   - Log the current configuration settings on startup. [GSM]
 
+  - Fix incorrect assignement of ppid in the bucardo.q table. [GSM]
+
   - Remove unused 'kick_sleep' config variable. [GSM]
 
   - Show the database name when listing herds via bucardo_ctl. [GSM]
 
   - Show the database name when listing sequences via bucardo_ctl. [Douglas Tan]
+
+  - Show each target's Postgres version, time, and timezone on first connect. [GSM]
 
 Bucardo version 4.4.0, released October 14, 2009
 
