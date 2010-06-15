@@ -6251,7 +6251,7 @@ sub cleanup_kid {
 
     my ($self,$reason,$extrainfo) = @_;
 
-    $self->glog("Kid $$ exiting< at cleanup_kid. $extrainfo Reason: $reason", 5);
+    $self->glog("Kid $$ exiting at cleanup_kid. $extrainfo Reason: $reason", 5);
 
     ## Remove the pid file
     if (unlink $self->{KIDPIDFILE}) {
