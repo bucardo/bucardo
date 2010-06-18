@@ -1557,7 +1557,7 @@ sub start_mcp {
             my $backend;
             ($backend, $self->{pingdbh}{$s->{sourcedb}}) = $self->connect_database($s->{sourcedb});
             if (defined $backend) {
-                $self->glog("Source database backend PID is $backend", LOG_NORMAL);
+                $self->glog("Source database backend PID is $backend", LOG_VERBOSE);
             }
         }
         my $srcdbh = $self->{pingdbh}{$s->{sourcedb}};
@@ -1607,7 +1607,7 @@ sub start_mcp {
                 my $backend;
                 ($backend, $pdbh->{$tdb}) = $self->connect_database($tdb);
                 if (defined $backend) {
-                    $self->glog("Target database backend PID is $backend", LOG_NORMAL);
+                    $self->glog("Target database backend PID is $backend", LOG_VERBOSE);
                 }
                 $self->show_db_version_and_time($pdbh->{$tdb}, "Target DB $tdb ");
             }
@@ -1628,7 +1628,7 @@ sub start_mcp {
                     my $backend;
                     ($backend, $pdbh->{$tdb}) = $self->connect_database($tdb);
                     if (defined $backend) {
-                        $self->glog("Target database backend PID is $backend", LOG_NORMAL);
+                        $self->glog("Target database backend PID is $backend", LOG_VERBOSE);
                     }
                 }
                 if ($pdbh->{$tdb} eq 'inactive') {
@@ -2342,7 +2342,7 @@ sub start_mcp {
 
         ## Reconnect to the master database for some final cleanups
         my ($finalbackend,$finaldbh) = $self->connect_database();
-        $self->glog("Final database backend PID is $finalbackend", LOG_NORMAL);
+        $self->glog("Final database backend PID is $finalbackend", LOG_VERBOSE);
 
         ## Kill all children controllers belonging to us
         if ($config{audit_pid}) {
@@ -2631,7 +2631,7 @@ sub start_controller {
     my $ctl_backend;
     ($ctl_backend, $self->{masterdbh}) = $self->connect_database();
     our $maindbh = $self->{masterdbh};
-    $self->glog("Bucardo database backend PID is $ctl_backend", LOG_NORMAL);
+    $self->glog("Bucardo database backend PID is $ctl_backend", LOG_VERBOSE);
 
     ## Listen for kick requests from the MCP
     my $kicklisten = "bucardo_ctl_kick_$syncname";
@@ -3481,7 +3481,7 @@ sub cleanup_controller {
     ## Kill all Bucardo children mentioned in the audit table for this sync
     if ($config{audit_pid}) {
         my ($finalbackend, $finaldbh) = $self->connect_database();
-        $self->glog("Final database backend PID is $finalbackend", LOG_NORMAL);
+        $self->glog("Final database backend PID is $finalbackend", LOG_VERBOSE);
 
         $SQL = q{
             SELECT pid
@@ -3703,7 +3703,7 @@ sub start_kid {
         defined $targetdbh and $targetdbh and ($targetdbh->rollback, $targetdbh->disconnect);
         defined $maindbh   and $maindbh   and ($maindbh->rollback,   $maindbh->disconnect  );
         my ($finalbackend, $finaldbh) = $self->connect_database();
-        $self->glog("Final database backend PID is $finalbackend", LOG_NORMAL);
+        $self->glog("Final database backend PID is $finalbackend", LOG_VERBOSE);
 
         ## Let anyone listening know that this target and sync aborted
         $finaldbh->do(qq{NOTIFY "bucardo_synckill_${syncname}_$targetdb"}) or warn 'NOTIFY failed';
@@ -3809,7 +3809,7 @@ sub start_kid {
     my $kid_backend;
     ($kid_backend, $self->{masterdbh}) = $self->connect_database();
     $maindbh = $self->{masterdbh};
-    $self->glog("Bucardo database backend PID is $kid_backend", LOG_NORMAL);
+    $self->glog("Bucardo database backend PID is $kid_backend", LOG_VERBOSE);
 
     ## Add ourself to the audit table
     if ($config{audit_pid}) {
@@ -3858,12 +3858,12 @@ sub start_kid {
 
     ## Connect to the source database
     ($source_backend, $sourcedbh) = $self->connect_database($sourcedb);
-    $self->glog("Source database backend PID is $source_backend", LOG_NORMAL);
+    $self->glog("Source database backend PID is $source_backend", LOG_VERBOSE);
 
 
     ## Connect to the target database
     ($target_backend, $targetdbh) = $self->connect_database($targetdb);
-    $self->glog("Target database backend PID is $target_backend", LOG_NORMAL);
+    $self->glog("Target database backend PID is $target_backend", LOG_VERBOSE);
 
     ## Put the backend PIDs in place in the audit_pid table
     if ($config{audit_pid}) {
