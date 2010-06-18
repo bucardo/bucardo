@@ -38,11 +38,11 @@ use vars qw($SQL %SQL $sth %sth $count $info);
 
 ## Logging verbosity control
 use constant {
-    LOG_WARN    => 0,
-    LOG_TERSE   => 1,
-    LOG_NORMAL  => 2,
-    LOG_VERBOSE => 3,
-    LOG_DEBUG   => 4,
+    LOG_WARN    => 0,  ## Always shown
+    LOG_TERSE   => 1,  ## Bare minimum
+    LOG_NORMAL  => 2,  ## Normal messages
+    LOG_VERBOSE => 3,  ## Many more details
+    LOG_DEBUG   => 4,  ## Rarely needed
 };
 
 ## Map system signal numbers to standard names
@@ -158,7 +158,7 @@ sub new {
         $self->{dryrun} = 1;
     }
     if ($self->{dryrun}) {
-        $self->glog("'** DRYRUN - Syncs will not be committed! **", 0);
+        $self->glog("'** DRYRUN - Syncs will not be committed! **", LOG_WARN);
     }
 
     ## This gets appended to the process description ($0)
@@ -443,12 +443,12 @@ sub show_db_version_and_time {
     my $systemtime = time;
     $SQL = q{SELECT extract(epoch FROM now()), now(), current_setting('timezone')};
     my $dbtime = $ldbh->selectall_arrayref($SQL)->[0];
-    $self->glog("${prefix}Local system epoch: $systemtime  Database epoch: $dbtime->[0]", 0);
+    $self->glog("${prefix}Local system epoch: $systemtime  Database epoch: $dbtime->[0]", LOG_WARN);
     $systemtime = scalar localtime ($systemtime);
-    $self->glog("${prefix}Local system time: $systemtime  Database time: $dbtime->[1]", 0);
+    $self->glog("${prefix}Local system time: $systemtime  Database time: $dbtime->[1]", LOG_WARN);
     $systemtime = strftime('%Z (%z)', localtime());
-    $self->glog("${prefix}Local system timezone: $systemtime  Database timezone: $dbtime->[2]", 0);
-    $self->glog("${prefix}Postgres version: " . $ldbh->{pg_server_version}, 0);
+    $self->glog("${prefix}Local system timezone: $systemtime  Database timezone: $dbtime->[2]", LOG_WARN);
+    $self->glog("${prefix}Postgres version: " . $ldbh->{pg_server_version}, LOG_WARN);
 
     return;
 
@@ -619,7 +619,7 @@ sub start_mcp {
             close $fh or warn qq{Could not close "$self->{pidfile}": $!\n};
         }
         my $msg = qq{File "$self->{pidfile}" already exists$extra: cannot run until it is removed};
-        $self->glog($msg, 0);
+        $self->glog($msg, LOG_WARN);
         warn $msg;
         exit 1;
     }
@@ -627,13 +627,13 @@ sub start_mcp {
     ## We'll also refuse if the global stop file exists
     if (-e $self->{stopfile}) {
         my $msg = qq{Cannot run while this file exists: "$self->{stopfile}"};
-        $self->glog($msg, 0);
+        $self->glog($msg, LOG_WARN);
         warn $msg;
         ## Show the first few lines
         if (open my $fh, '<', $self->{stopfile}) {
             while (<$fh>) {
                 $msg = "Line $.: $_";
-                $self->glog($msg, 0);
+                $self->glog($msg, LOG_WARN);
                 warn $msg;
                 last if $. > 10;
             }
@@ -678,7 +678,7 @@ sub start_mcp {
     eval {
         $self->{masterdbh}->disconnect();
     };
-    $@ and $self->glog("Warning! Disconnect failed $@", 0);
+    $@ and $self->glog("Warning! Disconnect failed $@", LOG_WARN);
 
     my $seeya = fork;
     if (! defined $seeya) {
@@ -702,15 +702,15 @@ sub start_mcp {
     close $pid or warn qq{Could not close "$self->{pidfile}": $!\n};
 
     ## Start outputting some interesting things to the log
-    $self->glog("Starting Bucardo version $VERSION", 0);
+    $self->glog("Starting Bucardo version $VERSION", LOG_WARN);
     $self->show_db_version_and_time($self->{masterdbh}, 'Master DB ');
-    $self->glog("PID: $$", 0);
-    $self->glog("Backend PID: $mcp_backend", 0);
-    $self->glog("Postgres library version: " . $self->{masterdbh}{pg_lib_version}, 0);
-    $self->glog("bucardo_ctl: $old0", 0);
-    $self->glog('Bucardo.pm: ' . $INC{'Bucardo.pm'}, 0);
-    $self->glog((sprintf 'OS: %s Perl: %s %vd', $^O, $^X, $^V), 0);
-    $self->glog("Log level: $config{log_level}", 0);
+    $self->glog("PID: $$", LOG_WARN);
+    $self->glog("Backend PID: $mcp_backend", LOG_WARN);
+    $self->glog("Postgres library version: " . $self->{masterdbh}{pg_lib_version}, LOG_WARN);
+    $self->glog("bucardo_ctl: $old0", LOG_WARN);
+    $self->glog('Bucardo.pm: ' . $INC{'Bucardo.pm'}, LOG_WARN);
+    $self->glog((sprintf 'OS: %s Perl: %s %vd', $^O, $^X, $^V), LOG_WARN);
+    $self->glog("Log level: $config{log_level}", LOG_WARN);
 
     ## Again with the password trick
     $self->{dbpass} = '<not shown>';
@@ -734,7 +734,7 @@ sub start_mcp {
     for (sort keys %config) {
         $objdump .= sprintf " %-*s => %s\n", $maxlen, $_, (defined $config{$_}) ? qq{'$config{$_}'} : 'undef';
     }
-    $self->glog($objdump, 0);
+    $self->glog($objdump, LOG_WARN);
 
 
     ## Clean up old files in the piddir directory
@@ -776,7 +776,7 @@ sub start_mcp {
     $SIG{__DIE__} = sub {
         my $msg = shift;
         my $line = (caller)[2];
-        $self->glog("Warning: Killed (line $line): $msg", 0);
+        $self->glog("Warning: Killed (line $line): $msg", LOG_WARN);
 
         my $diebody = "MCP $$ was killed: $msg";
         my $diesubject = "Bucardo MCP $$ was killed";
@@ -832,7 +832,7 @@ sub start_mcp {
     $self->glog("Active syncs: $active_syncs", LOG_TERSE);
     if (!$active_syncs) {
         ## Should we allow an option to hang around anyway?
-        $self->glog('No active syncs were found, so we are exiting', 0);
+        $self->glog('No active syncs were found, so we are exiting', LOG_WARN);
         $self->{masterdbh}->do('NOTIFY bucardo_nosyncs');
         $self->{masterdbh}->commit();
         exit 1;
@@ -907,7 +907,7 @@ sub start_mcp {
 
             ## Bail if the stopfile exists
             if (-e $self->{stopfile}) {
-                $self->glog(qq{Found stopfile "$self->{stopfile}": exiting}, 0);
+                $self->glog(qq{Found stopfile "$self->{stopfile}": exiting}, LOG_WARN);
                 my $msg = 'Found stopfile';
 
                 ## Grab the reason if it exists so we can propogate it onward
@@ -916,7 +916,7 @@ sub start_mcp {
                     $msg .= ": $mcpreason";
                 }
                 $self->cleanup_mcp("$msg\n");
-                $self->glog('Exiting', 0);
+                $self->glog('Exiting', LOG_WARN);
                 exit 1;
             }
 
@@ -1051,7 +1051,7 @@ sub start_mcp {
                         $count = $sth->execute($syncname);
                         if ($count eq '0E0') {
                             $sth->finish();
-                            $self->glog(qq{Warning! Cannot reload sync "$syncname": no longer in the database!}, 0);
+                            $self->glog(qq{Warning! Cannot reload sync "$syncname": no longer in the database!}, LOG_WARN);
                             $maindbh->commit();
                             next; ## Handle the next notice
                         }
@@ -1082,7 +1082,7 @@ sub start_mcp {
                         $self->glog("Reactivating sync $syncname", LOG_TERSE);
                         $sync->{$syncname}{mcp_active} = 0;
                         if (! $self->activate_sync($sync->{$syncname})) {
-                            $self->glog(qq{Warning! Reactivation of sync "$syncname" failed}, 0);
+                            $self->glog(qq{Warning! Reactivation of sync "$syncname" failed}, LOG_WARN);
                         }
                         else {
                             ## Let anyone listening know the sync is now ready
@@ -1205,7 +1205,7 @@ sub start_mcp {
                     $self->glog("File exists staylive=$s->{stayalive} controller=$s->{controller}", LOG_TERSE);
                     my $pid;
                     if (!open $pid, '<', $pidfile) {
-                        $self->glog(qq{ERROR: Could not open file "$pidfile": $!}, 0);
+                        $self->glog(qq{ERROR: Could not open file "$pidfile": $!}, LOG_WARN);
                         $s->{mcp_problemchild} = 1;
                         next SYNC;
                     }
@@ -1217,7 +1217,7 @@ sub start_mcp {
                         $self->glog(qq{Found previous controller $oldpid from "$pidfile"}, LOG_TERSE);
                     }
                     if ($oldpid !~ /^\d+$/) {
-                        $self->glog(qq{ERROR: Invalid pid found inside of file "$pidfile" ($oldpid)}, 0);
+                        $self->glog(qq{ERROR: Invalid pid found inside of file "$pidfile" ($oldpid)}, LOG_WARN);
                         $s->{mcp_changed} = 0;
                         $s->{mcp_problemchild} = 2;
                         next SYNC;
@@ -1231,7 +1231,7 @@ sub start_mcp {
                             $count = kill 0 => $oldpid;
                             if (!$count) {
                                 $self->glog(qq{Warning! PID $oldpid was not found. Removing PID file}, LOG_WARN);
-                                unlink $pidfile or $self->glog("Warning! Failed to unlink $pidfile", 0);
+                                unlink $pidfile or $self->glog("Warning! Failed to unlink $pidfile", LOG_WARN);
                                 $s->{mcp_problemchild} = 3;
                                 next SYNC;
                             }
@@ -1248,7 +1248,7 @@ sub start_mcp {
                     }
                     $self->glog("No active pid $oldpid found. Killing just in case, and removing file", LOG_TERSE);
                     $self->kill_bucardo_pid($oldpid => 'normal');
-                    unlink $pidfile or $self->glog("Warning! Failed to unlink $pidfile", 0);
+                    unlink $pidfile or $self->glog("Warning! Failed to unlink $pidfile", LOG_WARN);
                     $s->{mcp_changed} = 1;
                 } ## end if pidfile found for this sync
 
@@ -1330,7 +1330,7 @@ sub start_mcp {
             $self->glog(qq{Attempting to kill controller process for "$syncname"}, LOG_TERSE);
             next unless open my $fh, '<', "$config{piddir}/$name";
             if (<$fh> !~ /(\d+)/) {
-                $self->glog(qq{Warning! File "$config{piddir}/$name" did not contain a PID!}, 0);
+                $self->glog(qq{Warning! File "$config{piddir}/$name" did not contain a PID!}, LOG_WARN);
                 next;
             }
             my $pid = $1; ## no critic (ProhibitCaptureWithoutTest)
@@ -1479,7 +1479,7 @@ sub start_mcp {
 
         ## Connect to each database used by this sync and validate tables
         if (! $self->validate_sync($s)) {
-            $self->glog("Validation of sync $s->{name} FAILED", 0);
+            $self->glog("Validation of sync $s->{name} FAILED", LOG_WARN);
             $s->{mcp_active} = 0;
             return 0;
         }
@@ -1487,7 +1487,7 @@ sub start_mcp {
         ## If the kids stay alive, the controller must too
         if ($s->{kidsalive} and !$s->{stayalive}) {
             $s->{stayalive} = 1;
-            $self->glog('Warning! Setting stayalive to true because kidsalive is true', 0);
+            $self->glog('Warning! Setting stayalive to true because kidsalive is true', LOG_WARN);
         }
 
         $self->{sync}{$syncname}{mcp_active} = 1;
@@ -1546,7 +1546,7 @@ sub start_mcp {
         }
         my $srcdbh = $self->{pingdbh}{$s->{sourcedb}};
          if ($srcdbh eq 'inactive') {
-            $self->glog('Source database is inactive, cannot proceed. Consider making the sync inactive instead', 0);
+            $self->glog('Source database is inactive, cannot proceed. Consider making the sync inactive instead', LOG_WARN);
             die 'Source database is not active';
          }
 
@@ -1627,7 +1627,7 @@ sub start_mcp {
         }
         else {
             my $msg = qq{ERROR: Could not figure out a target for sync "$syncname"};
-            $self->glog($msg, 0);
+            $self->glog($msg, LOG_WARN);
             warn $msg;
             return 0;
         }
@@ -1655,10 +1655,10 @@ sub start_mcp {
         $sth->execute($syncname);
 
         for my $c (@{$sth->fetchall_arrayref({})}) {
-            $self->glog(qq{  Validating custom code $c->{id} ($c->{whenrun}) (goat=$c->{goat}): $c->{name}}, 0);
+            $self->glog(qq{  Validating custom code $c->{id} ($c->{whenrun}) (goat=$c->{goat}): $c->{name}}, LOG_WARN);
             my $dummy = q{->{dummy}};
             if ($c->{src_code} !~ /$dummy/) {
-                $self->glog(qq{Warning! Code $c->{id} ("$c->{name}") does not contain the string $dummy}, 0);
+                $self->glog(qq{Warning! Code $c->{id} ("$c->{name}") does not contain the string $dummy}, LOG_WARN);
                 return 0;
             }
             else {
@@ -1669,7 +1669,7 @@ sub start_mcp {
             $c->{coderef} = sub { local $SIG{__DIE__} = sub {}; eval $c->{src_code}; }; ## no critic (ProhibitStringyEval)
             &{$c->{coderef}}({ dummy => 1 });
             if ($@) {
-                $self->glog(qq{Warning! Custom code $c->{id} for sync "$syncname" did not compile: $@}, 0);
+                $self->glog(qq{Warning! Custom code $c->{id} for sync "$syncname" did not compile: $@}, LOG_WARN);
                 return 0;
             }
 
@@ -1817,7 +1817,7 @@ sub start_mcp {
             $count = $sth->execute($g->{schemaname},$g->{tablename});
             if ($count != 1) {
                 my $msg = qq{Could not find $g->{reltype} $g->{schemaname}.$g->{tablename}\n};
-                $self->glog($msg, 0);
+                $self->glog($msg, LOG_WARN);
                 warn $msg;
                 return 0;
             }
@@ -1856,7 +1856,7 @@ sub start_mcp {
 
             ## Swap syncs must have some way of resolving conflicts
             if ($s->{synctype} eq 'swap' and !$g->{standard_conflict} and !exists $g->{code_conflict}) {
-                $self->glog(qq{Warning! Tables used in swaps must specify a conflict handler. $g->{schemaname}.$g->{tablename} appears to have neither standard or custom handler.}, 0);
+                $self->glog(qq{Warning! Tables used in swaps must specify a conflict handler. $g->{schemaname}.$g->{tablename} appears to have neither standard or custom handler.}, LOG_WARN);
                 return 0;
             }
 
@@ -1949,7 +1949,7 @@ sub start_mcp {
             if ($do_customselect) {
                 if ($s->{synctype} ne 'fullcopy') {
                     my $msg = qq{ERROR: Custom select can only be used for fullcopy\n};
-                    $self->glog($msg, 0);
+                    $self->glog($msg, LOG_WARN);
                     warn $msg;
                     return 0;
                 }
@@ -1971,7 +1971,7 @@ sub start_mcp {
                 while ($notice = $maindbh->func('pg_notifies')) {
                     my ($name, $pid) = @$notice;
                     if ($name eq 'bucardo_mcp_fullstop') {
-                        $self->glog("Received full stop notice from PID $pid, leaving", 0);
+                        $self->glog("Received full stop notice from PID $pid, leaving", LOG_WARN);
                         $self->cleanup_mcp("Received stop NOTICE from PID $pid");
                         exit 0;
                     }
@@ -2062,7 +2062,7 @@ sub start_mcp {
                         my $ok = 0;
                         if (!exists $targetcolinfo->{$col}) {
                             $msg = qq{ERROR: Custom SELECT returned column "$col" that does not exist on target "$db"\n};
-                            $self->glog($msg, 0);
+                            $self->glog($msg, LOG_WARN);
                             warn $msg;
                             return 0;
                         }
@@ -2100,7 +2100,7 @@ sub start_mcp {
                     if (! exists $targetcolinfo->{$colname}) {
                         $column_problems = 2;
                         my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t", but target database "$db" does not};
-                        $self->glog("FATAL: $msg", 0);
+                        $self->glog("FATAL: $msg", LOG_WARN);
                         warn $msg;
                         next;
                     }
@@ -2112,12 +2112,12 @@ sub start_mcp {
                         if (($scol->{ftype} eq 'character varying' and $fcol->{ftype} eq 'text') or
                             ($fcol->{ftype} eq 'character varying' and $scol->{ftype} eq 'text')) {
                             my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" as type "$scol->{ftype}", but target database "$db" has a type of "$fcol->{ftype}". You should really fix that.};
-                            $self->glog("Warning: $msg", 0);
+                            $self->glog("Warning: $msg", LOG_WARN);
                         }
                         else {
                             $column_problems = 2;
                             my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" as type "$scol->{ftype}", but target database "$db" has a type of "$fcol->{ftype}"};
-                            $self->glog("FATAL: $msg", 0);
+                            $self->glog("FATAL: $msg", LOG_WARN);
                             warn $msg;
                             next;
                         }
@@ -2133,7 +2133,7 @@ sub start_mcp {
                             $scol->{attnotnull} ? 'NOT NULL' : 'NULL',
                             $db,
                             $scol->{attnotnull} ? 'NULL'     : 'NOT NULL';
-                        $self->glog("Warning: $msg", 0);
+                        $self->glog("Warning: $msg", LOG_WARN);
                         warn $msg;
                     }
 
@@ -2147,7 +2147,7 @@ sub start_mcp {
                             $scol->{atthasdef} ? 'with a DEFAULT value' : 'has no DEFAULT value',
                             $db,
                             $scol->{atthasdef} ? 'has none'             : 'does';
-                        $self->glog("Warning: $msg", 0);
+                        $self->glog("Warning: $msg", LOG_WARN);
                         warn $msg;
                     }
 
@@ -2170,7 +2170,7 @@ sub start_mcp {
                             $msg = '';
                         }
                         $msg .= qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" with a DEFAULT of "$scol->{def}", but target database "$db" has a DEFAULT of "$fcol->{def}"};
-                        $self->glog("Warning: $msg", 0);
+                        $self->glog("Warning: $msg", LOG_WARN);
                         warn $msg;
                     }
 
@@ -2178,7 +2178,7 @@ sub start_mcp {
                     if ($scol->{realattnum} != $fcol->{realattnum}) {
                         $column_problems ||= 1; ## Don't want to override a setting of "2"
                         my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" at position $scol->{realattnum} ($scol->{attnum}), but target database "$db" has it in position $fcol->{realattnum} ($fcol->{attnum})};
-                        $self->glog("Warning: $msg", 0);
+                        $self->glog("Warning: $msg", LOG_WARN);
                         warn $msg;
                     }
 
@@ -2190,7 +2190,7 @@ sub start_mcp {
                     next if exists $colinfo->{$colname};
                     $column_problems ||= 1; ## Don't want to override a setting of "2"
                     my $msg = qq{Target database has column "$colname" on table "$t", but source database "$s->{name}" does not};
-                    $self->glog("Warning: $msg", 0);
+                    $self->glog("Warning: $msg", LOG_WARN);
                     warn $msg;
                 }
 
@@ -2248,7 +2248,7 @@ sub start_mcp {
         ## Kill the controller
         my $ctl = $s->{controller};
         if (!$ctl) {
-            $self->glog('Warning! Controller not found', 0);
+            $self->glog('Warning! Controller not found', LOG_WARN);
         }
         else {
             $count = kill $signumber{USR1} => $ctl;
@@ -2409,7 +2409,7 @@ sub start_mcp {
             $self->glog(qq{Removed pid file "$self->{pidfile}"}, LOG_DEBUG);
         }
         else {
-            $self->glog("Warning! Failed to remove pid file $self->{pidfile}", 0);
+            $self->glog("Warning! Failed to remove pid file $self->{pidfile}", LOG_WARN);
         }
 
 
@@ -2560,7 +2560,7 @@ sub start_controller {
         ## Callers can prevent an email being sent by setting this before they die
         if (! $self->{clean_exit} and ($self->{sendmail} or $self->{sendmail_file})) {
             my $warn = $diemsg =~ /MCP request/ ? '' : 'Warning! ';
-            $self->glog(qq{${warn}Controller for "$syncname" was killed at line $line: $diemsg}, 0);
+            $self->glog(qq{${warn}Controller for "$syncname" was killed at line $line: $diemsg}, LOG_WARN);
             for (values %{$self->{dbs}}) {
                 $_->{dbpass} = '???' if defined $_->{dbpass};
             }
@@ -2833,8 +2833,8 @@ sub start_controller {
             }
             else {
                 $q->{targetdb} ||= 'NONE';
-                $self->glog("Warning! Invalid targetdb found for $safesyncname: $q->{targetdb} pid=$q->{pid} cdate=$q->{cdate}", 0);
-                $self->glog("Warning! SQL was $SQL. Count was $count", 0);
+                $self->glog("Warning! Invalid targetdb found for $safesyncname: $q->{targetdb} pid=$q->{pid} cdate=$q->{cdate}", LOG_WARN);
+                $self->glog("Warning! SQL was $SQL. Count was $count", LOG_WARN);
             }
         }
 
@@ -3185,7 +3185,7 @@ sub start_controller {
                         $self->glog(qq{Kid $pid has died a natural death. Removing from list}, LOG_VERBOSE);
                         next;
                     }
-                    $self->glog(qq{Warning! Kid $pid seems to have died. Sync "$syncname"}, 0);
+                    $self->glog(qq{Warning! Kid $pid seems to have died. Sync "$syncname"}, LOG_WARN);
                 }
             } ## end each database / kid
 
@@ -3261,10 +3261,10 @@ sub start_controller {
                 $self->glog("Message from $c->{whenrun} code $c->{id}: $input->{message}", LOG_TERSE);
             }
             if (length $input->{warning}) {
-                $self->glog("Warning! Code $c->{whenrun} $c->{id}: $input->{warning}", 0);
+                $self->glog("Warning! Code $c->{whenrun} $c->{id}: $input->{warning}", LOG_WARN);
             }
             if (length $input->{error}) {
-                $self->glog("Warning! Code $c->{whenrun} $c->{id}: $input->{error}", 0);
+                $self->glog("Warning! Code $c->{whenrun} $c->{id}: $input->{error}", LOG_WARN);
                 die "Code $c->{whenrun} $c->{id} error: $input->{error}";
             }
             if (length $input->{nextcode}) { ## Mostly for conflict handlers
@@ -3549,7 +3549,7 @@ sub cleanup_controller {
         $self->glog(qq{Removed pid file "$self->{SYNCPIDFILE}"}, LOG_DEBUG);
     }
     else {
-        $self->glog("Warning! Failed to remove pid file $self->{SYNCPIDFILE}", 0);
+        $self->glog("Warning! Failed to remove pid file $self->{SYNCPIDFILE}", LOG_WARN);
     }
 
     return;
@@ -3734,7 +3734,7 @@ sub start_kid {
         if (! $self->{clean_exit} and $self->{sendmail} or $self->{sendmail_file}) {
             my $warn = $msg =~ /CTL request/ ? '' : 'Warning! ';
             my $line = (caller)[2];
-            $self->glog(qq{${warn}Child for sync "$syncname" ("$sourcedb" -> "$targetdb") was killed at line $line: $msg}, 0);
+            $self->glog(qq{${warn}Child for sync "$syncname" ("$sourcedb" -> "$targetdb") was killed at line $line: $msg}, LOG_WARN);
 
             ## Never display the database password
             for (values %{$self->{dbs}}) {
@@ -4297,10 +4297,10 @@ sub start_kid {
             $self->glog("Message from $c->{whenrun} code $c->{id}: $input->{message}", LOG_TERSE);
         }
         if (length $input->{warning}) {
-            $self->glog("Warning! Code $c->{whenrun} $c->{id}: $input->{warning}", 0);
+            $self->glog("Warning! Code $c->{whenrun} $c->{id}: $input->{warning}", LOG_WARN);
         }
         if (length $input->{error}) {
-            $self->glog("Warning! Code $c->{whenrun} $c->{id}: $input->{error}", 0);
+            $self->glog("Warning! Code $c->{whenrun} $c->{id}: $input->{error}", LOG_WARN);
             die "Code $c->{whenrun} $c->{id} error: $input->{error}";
         }
         if (length $input->{nextcode}) { ## Mostly for conflict handlers
@@ -4330,7 +4330,7 @@ sub start_kid {
         $checkq = 0;
 
         if (-e $self->{stopfile}) {
-            $self->glog(qq{Found stopfile "$self->{stopfile}": exiting}, 0);
+            $self->glog(qq{Found stopfile "$self->{stopfile}": exiting}, LOG_WARN);
             last KID;
         }
 
@@ -5089,18 +5089,18 @@ sub start_kid {
                         if ($@) {
                             chomp $@;
                             (my $err = $@) =~ s/\n/\\n/g;
-                            $self->glog("Warning! Aborting due to exception for $S.$T:$pkval Error was $err", 0);
+                            $self->glog("Warning! Aborting due to exception for $S.$T:$pkval Error was $err", LOG_WARN);
                             die "$err\n";
                         }
                     }
                     elsif ($@) {
                         chomp $@;
                         (my $err = $@) =~ s/\n/\\n/g;
-                        $self->glog("Exception caught: $err", 0);
+                        $self->glog("Exception caught: $err", LOG_WARN);
 
                         ## Bail if we've already tried to handle this goat via an exception
                         if ($g->{exceptions} > 1) {
-                            $self->glog("Warning! Exception custom code did not work for $S.$T:$pkval", 0);
+                            $self->glog("Warning! Exception custom code did not work for $S.$T:$pkval", LOG_WARN);
                             die qq{Error: too many exceptions to handle for $S.$T:$pkval};
                         }
 
@@ -5143,7 +5143,7 @@ sub start_kid {
 
                         ## If not running again, we simply give up and throw an exception to the kid
                         if (!$runagain) {
-                            $self->glog('No exception handlers were able to help, so we are bailing out', 0);
+                            $self->glog('No exception handlers were able to help, so we are bailing out', LOG_WARN);
                             die qq{No exception handlers were able to help, so we are bailing out\n};
                         }
 
@@ -5152,11 +5152,11 @@ sub start_kid {
                         ## Make sure the database connections are still clean
                         my $sourceping = $sourcedbh->ping();
                         if ($sourceping !~ /^[13]$/o) {
-                            $self->glog("Warning! Source ping after exception handler was $sourceping", 0);
+                            $self->glog("Warning! Source ping after exception handler was $sourceping", LOG_WARN);
                         }
                         my $targetping = $targetdbh->ping();
                         if ($targetping !~ /^[13]$/o) {
-                            $self->glog("Warning! Target ping after exception handler was $targetping", 0);
+                            $self->glog("Warning! Target ping after exception handler was $targetping", LOG_WARN);
                         }
 
                         ## As the bucardo_delta and source rows may have changed, we need to reset the counts
@@ -5195,7 +5195,7 @@ sub start_kid {
                     $g->{tempschema} = {};
                     my $SEQUENCESQL = "SELECT last_value, is_called FROM $S.$T";
                     if (exists $g->{code_conflict}) {
-                        $self->glog('No support for custom conflict handlers for sequences yet!', 0);
+                        $self->glog('No support for custom conflict handlers for sequences yet!', LOG_WARN);
                     }
                     else {
                         my $sc = $g->{standard_conflict};
@@ -5549,11 +5549,11 @@ sub start_kid {
 
                         ## Check for conflicting actions
                         if ($rowinfo{action} & 2 and $rowinfo{action} & 4) {
-                            $self->glog('Warning! Conflict handler cannot return 2 and 4. Ignoring 4', 0);
+                            $self->glog('Warning! Conflict handler cannot return 2 and 4. Ignoring 4', LOG_WARN);
                             $rowinfo{action} -= 4;
                         }
                         if ($rowinfo{action} & 1 and $rowinfo{action} & 8) {
-                            $self->glog('Warning! Conflict handler cannot return 1 and 8. Ignoring 8', 0);
+                            $self->glog('Warning! Conflict handler cannot return 1 and 8. Ignoring 8', LOG_WARN);
                             $rowinfo{action} -= 8;
                         }
 
@@ -5948,19 +5948,19 @@ sub start_kid {
                         if ($@) {
                             chomp $@;
                             (my $err = $@) =~ s/\n/\\n/g;
-                            $self->glog("Warning! Aborting due to exception for $S.$T.$qnamepk: $pkval Error was $err", 0);
+                            $self->glog("Warning! Aborting due to exception for $S.$T.$qnamepk: $pkval Error was $err", LOG_WARN);
                             die $@;
                         }
                     }
                     elsif ($@) {
                         chomp $@;
                         (my $err = $@) =~ s/\n/\\n/g;
-                        $self->glog("Exception caught: $err", 0);
+                        $self->glog("Exception caught: $err", LOG_WARN);
 
                         ## Bail if we've called one exception for every (original) row
                         ## TODO: Develop better metrics here
                         if ($g->{exceptions} > $deltacount{source}{$S}{$T} and $g->{exceptions} > $deltacount{target}{$S}{$T}) {
-                            $self->glog("Warning! Exception count=$g->{exceptions}, source=$deltacount{source}{$S}{$T}, target=$deltacount{target}{$S}{$T}", 0);
+                            $self->glog("Warning! Exception count=$g->{exceptions}, source=$deltacount{source}{$S}{$T}, target=$deltacount{target}{$S}{$T}", LOG_WARN);
                             die qq{Error: too many exceptions to handle for $S.$T:$pkval};
                         }
 
@@ -6005,18 +6005,18 @@ sub start_kid {
                         }
 
                         if (!$runagain) {
-                            $self->glog('No exception handlers were able to help, so we are bailing out', 0);
+                            $self->glog('No exception handlers were able to help, so we are bailing out', LOG_WARN);
                             die qq{No exception handlers were able to help, so we are bailing out\n};
                         }
 
                         ## Make sure the database connections are still clean
                         my $sourceping = $sourcedbh->ping();
                         if ($sourceping !~ /^[13]$/o) {
-                            $self->glog("Warning! Source ping after exception handler was $sourceping", 0);
+                            $self->glog("Warning! Source ping after exception handler was $sourceping", LOG_WARN);
                         }
                         my $targetping = $targetdbh->ping();
                         if ($targetping !~ /^[13]$/o) {
-                            $self->glog("Warning! Target ping after exception handler was $targetping", 0);
+                            $self->glog("Warning! Target ping after exception handler was $targetping", LOG_WARN);
                         }
 
                         ## This table gets another chance
@@ -6204,7 +6204,7 @@ sub start_kid {
         ## Remove lock file if we used it
         if ($lock_table_mode and -e $force_lock_file) {
             $self->glog("Removing lock control file $force_lock_file", LOG_VERBOSE);
-            unlink $force_lock_file or $self->glog("Warning! Failed to unlink $force_lock_file", 0);
+            unlink $force_lock_file or $self->glog("Warning! Failed to unlink $force_lock_file", LOG_WARN);
         }
 
         # Run all 'after_txn' code
@@ -6268,7 +6268,7 @@ sub cleanup_kid {
         $self->glog(qq{Removed pid file "$self->{KIDPIDFILE}"}, LOG_DEBUG);
     }
     else {
-        $self->glog("Warning! Failed to remove pid file $self->{KIDPIDFILE}", 0);
+        $self->glog("Warning! Failed to remove pid file $self->{KIDPIDFILE}", LOG_WARN);
     }
 
     return;
@@ -6291,7 +6291,7 @@ sub send_mail {
     $arg->{to} ||= $config{default_email_to};
     $arg->{subject} ||= 'Bucardo Mail!';
     if (! $arg->{body}) {
-        $self->glog('ERROR: Cannot send mail, no body message', 0);
+        $self->glog('ERROR: Cannot send mail, no body message', LOG_WARN);
         return;
     }
 
@@ -6317,7 +6317,7 @@ sub send_mail {
         };
         if ($@) {
             my $error = $@ || '???';
-            $self->glog("Warning: Error sending email to $arg->{to}: $error", 0);
+            $self->glog("Warning: Error sending email to $arg->{to}: $error", LOG_WARN);
         }
         else {
             $self->glog("Sent an email to $arg->{to} from $from: $arg->{subject}", LOG_NORMAL);
@@ -6328,7 +6328,7 @@ sub send_mail {
         my $fh;
         ## This happens rare enough to not worry about caching the file handle
         if (! open $fh, '>>', $self->{sendmail_file}) {
-            $self->glog(qq{Warning: Could not open sendmail file "$self->{sendmail_file}": $!}, 0);
+            $self->glog(qq{Warning: Could not open sendmail file "$self->{sendmail_file}": $!}, LOG_WARN);
             return;
         }
         my $now = scalar localtime;
