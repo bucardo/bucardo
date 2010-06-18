@@ -28,7 +28,7 @@ Bucardo version 4.5.0, released ??, 2010
   - Show the reason why a sync failed on a failed bucardo_ctl kick. [GSM]
 
   - Add a log_level parameter, and classify all messages inside Bucardo.pm
-    with a number from 1-10 to indicate the severity [GSM]
+    with a log_level of TERSE, NORMAL, VERBOSE, or DEBUG. [Rosser Schwarz and GSM]
 
   - Relax SELECT version() regex in bucardo_ctl, to let modified versions 
     of Postgres tell us their version. [GSM]
