@@ -2454,7 +2454,7 @@ sub kill_bucardo_pid {
     $count = kill $signumber{TERM} => $pid;
 
     if ($count >= 1) {
-        $self->glog("Successfully signalled pid $pid", LOG_DEBUG);
+        $self->glog("Successfully signalled pid $pid with kill TERM", LOG_DEBUG);
         return 1;
     }
 
@@ -2467,7 +2467,7 @@ sub kill_bucardo_pid {
     $count = kill $signumber{KILL} => $pid;
 
     if ($count >= 1) {
-        $self->glog("Successfully signalled pid $pid", LOG_DEBUG);
+        $self->glog("Successfully signalled pid $pid with kill KILL", LOG_DEBUG);
         return 1;
     }
 
