@@ -3116,7 +3116,7 @@ sub start_controller {
             ## Has it been long enough to force a sync?
             if ($checksecs and time() - $lastheardfrom >= $checksecs) {
                 if ($otc) {
-                    $self->glog(qq{Timed out, but in onetimecopy mode, so not kicking, for "$syncname"}, 8);
+                    $self->glog(qq{Timed out, but in onetimecopy mode, so not kicking, for "$syncname"}, LOG_DEBUG);
                 }
                 else {
                     $self->glog(qq{Timed out - force a sync for "$syncname"}, LOG_VERBOSE);
