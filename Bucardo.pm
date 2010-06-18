@@ -329,7 +329,7 @@ sub reload_config_database {
     for my $row (@{$sth->fetchall_arrayref({})}) {
         my $value = $row->{value};
         if ($row->{setting} eq 'log_level') {
-            my $newvalue = $log_level_number{$value};
+            my $newvalue = $log_level_number{uc $value};
             if (! defined $newvalue) {
                 die "Invalid log_level!\n";
             }
@@ -742,16 +742,7 @@ sub start_mcp {
     $self->{dbpass} = $oldpass;
 
     ## Dump all configuration variables to the log
-    $objdump = "Bucardo config:\n";
-    $maxlen = 5;
-    for (keys %config) {
-        $maxlen = length($_) if length($_) > $maxlen;
-    }
-    for (sort keys %config) {
-        $objdump .= sprintf " %-*s => %s\n", $maxlen, $_, (defined $config{$_}) ? qq{'$config{$_}'} : 'undef';
-    }
-    $self->glog($objdump, LOG_WARN);
-
+    $self->log_config();
 
     ## Clean up old files in the piddir directory
     my $piddir = $config{piddir};
@@ -1002,6 +993,7 @@ sub start_mcp {
                 elsif ('bucardo_reload_config' eq $name) {
                     $self->glog('Reloading configuration table', LOG_TERSE);
                     $self->reload_config_database();
+                    $self->log_config();
 
                     ## We need to reload ourself as well
                     $self->reload_mcp();
@@ -1311,7 +1303,7 @@ sub start_mcp {
             exit 0;
         }
 
-        $self->glog(qq{Created controller $controller for sync "$syncname". Kick is $s->{mcp_kicked}}, LOG_TERSE);
+        $self->glog(qq{Created controller $controller for sync "$syncname". Kick is $s->{mcp_kicked}}, LOG_NORMAL);
         $s->{controller} = $controller;
 
         ## Reset counters for ctl restart via maxkicks and lifetime settings
@@ -2438,6 +2430,27 @@ sub start_mcp {
 } ## end of start_mcp
 
 
+sub log_config {
+
+    ## Write the current contents of the config hash to the log
+
+    my $self = shift;
+
+    my $msg = "Bucardo config:\n";
+    my $maxlen = 5;
+    for (keys %config) {
+        $maxlen = length($_) if length($_) > $maxlen;
+    }
+    for (sort keys %config) {
+        $msg .= sprintf " %-*s => %s\n", $maxlen, $_, (defined $config{$_}) ? qq{'$config{$_}'} : 'undef';
+    }
+    $self->glog($msg, LOG_WARN);
+
+    return;
+
+} ## end of log_config
+
+
 sub kill_bucardo_pid {
 
     my ($self,$pid,$nice) = @_;
@@ -2547,19 +2560,19 @@ sub start_controller {
         $sync->{targetdb} ||= $sync->{targetgroup};
     my $mailmsg = "$msg\n";
     $msg = qq{  $showtarget synctype: $synctype stayalive: $stayalive checksecs: $checksecs };
-    $self->glog($msg, LOG_TERSE);
+    $self->glog($msg, LOG_NORMAL);
     $mailmsg .= "$msg\n";
 
     my $otc = $sync->{onetimecopy} || 0;
     $msg = qq{  limitdbs: $limitdbs kicked: $kicked kidsalive: $kidsalive onetimecopy: $otc};
-    $self->glog($msg, LOG_TERSE);
+    $self->glog($msg, LOG_NORMAL);
     $mailmsg .= "$msg\n";
 
     my $lts = $sync->{lifetimesecs};
     my $lti = $sync->{lifetime} || '<NULL>';
     my $mks = $sync->{maxkicks};
     $msg = qq{  lifetimesecs: $lts ($lti) maxkicks: $mks};
-    $self->glog($msg, LOG_TERSE);
+    $self->glog($msg, LOG_NORMAL);
     $mailmsg .= "$msg\n";
 
     ## Allow the MCP to signal us in a friendly manner
@@ -2684,12 +2697,12 @@ sub start_controller {
                 sprintf (q{ [MAKEDELTA: source=%s target=%s]},
                     $m->{does_source_makedelta}, $m->{does_target_makedelta}
             ) :'';
-        $self->glog($msg, LOG_TERSE);
+        $self->glog($msg, LOG_NORMAL);
         if (defined $m->{customselect} and length $m->{customselect}) {
-            $self->glog("   customselect: $m->{customselect}", LOG_TERSE);
+            $self->glog("   customselect: $m->{customselect}", LOG_NORMAL);
         }
         if ($m->{reltype} eq 'table') {
-            $self->glog(('    Target oids: ' . join ' ' => map { "$_:$m->{targetoid}{$_}" } sort keys %{$m->{targetoid}}), LOG_TERSE);
+            $self->glog(('    Target oids: ' . join ' ' => map { "$_:$m->{targetoid}{$_}" } sort keys %{$m->{targetoid}}), LOG_NORMAL);
         }
     }
 
@@ -3393,7 +3406,7 @@ sub start_controller {
                 ## Check if there is a kid alive for this database: spawn if needed
                 if (! $kid->{pid} or ! (kill 0 => $kid->{pid})) {
                     $kid->{dbname} = $dbname;
-                    $self->glog('Creating a kid', LOG_NORMAL);
+                    $self->glog('Creating a kid', LOG_VERBOSE);
                     $self->{kidcheckq} = 1; ## Since this kid will not get the above notice
                     $self->create_newkid($sync,$kid);
                 }
@@ -3440,7 +3453,7 @@ sub start_controller {
             exit 0;
         }
 
-        $self->glog(qq{Created new kid $newkid for sync "$self->{syncname}" to database "$kid->{dbname}"}, LOG_TERSE);
+        $self->glog(qq{Created new kid $newkid for sync "$self->{syncname}" to database "$kid->{dbname}"}, LOG_NORMAL);
         $kid->{pid} = $newkid;
         $self->{kidpid}{$newkid} = $kid;
         $kid->{cdate} = time;
@@ -4597,7 +4610,7 @@ sub start_kid {
                 $self->glog("Total target delta count: $deltacount{alltarget}", LOG_VERBOSE);
             }
             $deltacount{all} = $deltacount{allsource} + $deltacount{alltarget};
-            $self->glog("Total delta count: $deltacount{all}", LOG_VERBOSE);
+            $self->glog("Total delta count: $deltacount{all}", LOG_NORMAL);
 
             ## If no changes, rollback dbs, close out q, notify listeners, and leave or reloop
             if (! $deltacount{all} and ! $deltacount{truncates}) {
@@ -6211,10 +6224,10 @@ sub start_kid {
 
         my $total_time = time() - $kid_start_time;
         if ($synctype eq 'swap') {
-            $self->glog("Finished syncing. Time: $total_time. Updates: $dmlcount{allupdates}{source}+$dmlcount{allupdates}{target} Inserts: $dmlcount{allinserts}{source}+$dmlcount{allinserts}{target} Deletes: $dmlcount{alldeletes}{source}+$dmlcount{alldeletes}{target} Sync: $syncname. Keepalive: $kidsalive", LOG_NORMAL);
+            $self->glog("Finished syncing. Time: $total_time. Updates: $dmlcount{allupdates}{source}+$dmlcount{allupdates}{target} Inserts: $dmlcount{allinserts}{source}+$dmlcount{allinserts}{target} Deletes: $dmlcount{alldeletes}{source}+$dmlcount{alldeletes}{target} Sync: $syncname", LOG_TERSE);
         }
         else {
-            $self->glog("Finished syncing. Time: $total_time. Updates: $dmlcount{allupdates}{target} Inserts: $dmlcount{allinserts}{target} Deletes: $dmlcount{alldeletes}{target} Sync: $syncname. Keepalive: $kidsalive", LOG_NORMAL);
+            $self->glog("Finished syncing. Time: $total_time. Updates: $dmlcount{allupdates}{target} Inserts: $dmlcount{allinserts}{target} Deletes: $dmlcount{alldeletes}{target} Sync: $syncname", LOG_TERSE);
         }
 
         ## Remove lock file if we used it
