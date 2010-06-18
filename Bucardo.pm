@@ -315,16 +315,32 @@ sub reload_config_database {
     undef %config;
     undef %config_about;
 
+    my %log_level_number = (
+        WARN    => 1, ## Yes, this is correct. Should not be able to set lower than 1
+        TERSE   => 1,
+        NORMAL  => 2,
+        VERBOSE => 3,
+        DEBUG   => 4,
+    );
+
     $SQL = 'SELECT setting,value,about,type,name FROM bucardo_config';
     $sth = $self->{masterdbh}->prepare($SQL);
     $sth->execute();
     for my $row (@{$sth->fetchall_arrayref({})}) {
+        my $value = $row->{value};
+        if ($row->{setting} eq 'log_level') {
+            my $newvalue = $log_level_number{$value};
+            if (! defined $newvalue) {
+                die "Invalid log_level!\n";
+            }
+            $config{log_level_number} = $newvalue;
+        }
         if (defined $row->{type}) {
-            $config{$row->{type}}{$row->{name}}{$row->{setting}} = $row->{value};
+            $config{$row->{type}}{$row->{name}}{$row->{setting}} = $value;
             $config_about{$row->{type}}{$row->{name}}{$row->{setting}} = $row->{about};
         }
         else {
-            $config{$row->{setting}} = $row->{value};
+            $config{$row->{setting}} = $value;
             $config_about{$row->{setting}} = $row->{about};
         }
     }
@@ -350,7 +366,7 @@ sub glog { ## no critic (RequireArgUnpacking)
     my $loglevel = shift || 0;
 
     ## Return if we have not met the minimum log level
-    return if $loglevel > $config{log_level};
+    return if $loglevel > $config{log_level_number};
 
     ## We should always have a prefix, either BC!, MCP, CTL, or KID
     my $prefix = $self->{logprefix} || '???';
