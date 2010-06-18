@@ -5586,6 +5586,13 @@ sub config {
             die qq{Unknown setting "$setting"\n};
         }
 
+        ## Sanity checks
+        if ($setting eq 'log_level') {
+            if ($val !~ /^(?:terse|normal|verbose|debug)$/oi) {
+                die "Invalid log_level, must be terse, normal, verbose, or debug\n";
+            }
+        }
+
         $sth->execute($val,$setting);
         print qq{Set "$setting" to "$val"\n};
 
