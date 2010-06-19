@@ -3164,7 +3164,7 @@ sub start_controller {
                     if ($seenit >= $config{kid_abort_limit}) {
                         if ($seenit == $config{kid_abort_limit}) {
                             $self->glog("Too many kids have been killed for $atarget ($seenit).".
-                                        'Will not create this until a kick.', 1);
+                                        'Will not create this until a kick.', LOG_TERSE);
                         }
                         next;
                     }
@@ -4597,12 +4597,12 @@ sub start_kid {
                 $deltacount{allsource} += $deltacount{source}{$S}{$T} = $sth{source}{$g}{getdelta}->execute();
                 $sth{source}{$g}{getdelta}->finish() if $deltacount{source}{$S}{$T} =~ s/0E0/0/o;
                 $self->glog(qq{Source delta count for $S.$T: $deltacount{source}{$S}{$T}},
-                            $deltacount{source}{$S}{$T} ? 5 : 6);
+                            $deltacount{source}{$S}{$T} ? LOG_NORMAL : LOG_VERBOSE);
                 if ($synctype eq 'swap') {
                     $deltacount{alltarget} += $deltacount{target}{$S}{$T} = $sth{target}{$g}{getdelta}->execute();
                     $sth{target}{$g}{getdelta}->finish() if $deltacount{target}{$S}{$T} =~ s/0E0/0/o;
                     $self->glog(qq{Target delta count for $S.$T: $deltacount{target}{$S}{$T}},
-                                $deltacount{target}{$S}{$T} ? 5 : 6);
+                                $deltacount{target}{$S}{$T} ? LOG_NORMAL : LOG_VERBOSE);
                 }
             }
             if ($synctype eq 'swap') {
@@ -6155,7 +6155,7 @@ sub start_kid {
             $maindbh->rollback();
         }
         else {
-            $self->glog('Issuing final commit for source and target', LOG_NORMAL);
+            $self->glog('Issuing final commit for source and target', LOG_VERBOSE);
             $sourcedbh->commit();
             $targetdbh->commit();
             if ($sync->{usecustomselect}) {
