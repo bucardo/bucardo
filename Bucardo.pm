@@ -3741,7 +3741,7 @@ sub start_kid {
         };
         ## Note: we don't check for non-null started because it is never set without a pid
         $sth = $finaldbh->prepare($SQL);
-        (my $flatmsg = $msg) =~ s/\n/\\n/g;
+        (my $flatmsg = $msg) =~ s/\n/ /g;
         my $count = $sth->execute($flatmsg,$syncname,$sourcedb,$targetdb,$self->{parent},$$);
 
         ## Clean up the audit_pid table
@@ -3815,7 +3815,7 @@ sub start_kid {
             $S eq '?' ? '' : " $S.$T",
             $pkval eq '?' ? '' : " pk: $pkval";
 
-        $self->cleanup_kid($msg, $extrainfo);
+        $self->cleanup_kid($flatmsg, $extrainfo);
 
         exit 1;
 
