@@ -18,7 +18,8 @@ our $VERSION = '4.5.0';
 
 use sigtrap qw( die normal-signals ); ## Call die() on HUP, INT, PIPE, or TERM
 use Config;                           ## Used to map signal names
-use Time::HiRes qw( sleep );          ## For better resolution than the built-in sleep
+use Time::HiRes
+  qw(sleep gettimeofday tv_interval); ## For better resolution than the built-in sleep
 use DBI 1.51;                         ## How Perl talks to databases
 use DBD::Pg 2.0;                      ## The Postgres driver for DBI
 use POSIX qw( strftime );             ## For grabbing the local timezone
@@ -456,9 +457,11 @@ sub show_db_version_and_time {
 
     my ($self,$ldbh,$prefix) = @_;
 
-    my $systemtime = time;
     $SQL = q{SELECT extract(epoch FROM now()), now(), current_setting('timezone')};
-    my $dbtime = $ldbh->selectall_arrayref($SQL)->[0];
+    my $sth = $ldbh->prepare($SQL);
+    my $systemtime = Time::HiRes::time();
+    $sth->execute();
+    my $dbtime = $sth->fetchall_arrayref()->[0];
     $self->glog("${prefix}Local system epoch: $systemtime  Database epoch: $dbtime->[0]", LOG_WARN);
     $systemtime = scalar localtime ($systemtime);
     $self->glog("${prefix}Local system time: $systemtime  Database time: $dbtime->[1]", LOG_WARN);
@@ -4416,7 +4419,7 @@ sub start_kid {
 
         $kidloop++;
 
-        my $kid_start_time = time();
+        my $kid_start_time = [gettimeofday];
 
         ## Reset stuff that may be used by custom code
         undef %deltacount;
@@ -6215,14 +6218,16 @@ sub start_kid {
                     next;
                 }
                 ($S,$T) = ($g->{safeschema},$g->{safetable});
-                my $total_time = time() - $kid_start_time;
+                my $total_time = sprintf '%.2f', tv_interval($kid_start_time);
                 $self->glog("Analyzing $S.$T on $targetdb. Time: $total_time", LOG_VERBOSE);
                 $targetdbh->do("ANALYZE $S.$T");
                 $targetdbh->commit();
             }
         }
 
-        my $total_time = time() - $kid_start_time;
+
+        my $total_time = sprintf '%.2f', tv_interval($kid_start_time);
+
         if ($synctype eq 'swap') {
             $self->glog("Finished syncing. Time: $total_time. Updates: $dmlcount{allupdates}{source}+$dmlcount{allupdates}{target} Inserts: $dmlcount{allinserts}{source}+$dmlcount{allinserts}{target} Deletes: $dmlcount{alldeletes}{source}+$dmlcount{alldeletes}{target} Sync: $syncname", LOG_TERSE);
         }
