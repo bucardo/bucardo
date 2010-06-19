@@ -4610,7 +4610,7 @@ sub start_kid {
                 $self->glog("Total target delta count: $deltacount{alltarget}", LOG_VERBOSE);
             }
             $deltacount{all} = $deltacount{allsource} + $deltacount{alltarget};
-            $self->glog("Total delta count: $deltacount{all}", LOG_NORMAL);
+            $self->glog("Total delta count: $deltacount{all}", LOG_VERBOSE);
 
             ## If no changes, rollback dbs, close out q, notify listeners, and leave or reloop
             if (! $deltacount{all} and ! $deltacount{truncates}) {
