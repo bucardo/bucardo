@@ -107,6 +107,10 @@ Bucardo version 4.4.0, released October 14, 2009
   - Allow testing of multiple versions of Postgres at the same time by setting the 
     environment variables PGBINDIR[A-Z]. [GSM]
 
+  - Don't look for hard-coded string to determine if cluster is up [GSM, thanks 
+    to Andre Felipe Machado for suggesting]
+
+
 Bucardo version 4.3.0, released October 8, 2009
 
   - Allow MCP and CTL to kill based on piddir, not just audit_pid. This will prevent duplicate 
