@@ -341,20 +341,29 @@ sub start_cluster {
 		redo;
 	}
 
-	## Wait for the database to be ready to accept connections
-	my $logfile = "$dirname/pg.log";
-	my $okmsg = $pgver{$name}{okmsg};
-	open my $fh, '<', $logfile or die qq{Could not open "$logfile": $!\n};
-	seek $fh, -100, 2;
-	LOOP: {
-		  while (<$fh>) {
-			  last LOOP if /$okmsg/;
-		  }
-		  sleep 0.1;
-		  seek $fh, 0, 1;
-		  redo;
-	  }
-	close $fh or die qq{Could not close "$logfile": $!\n};
+	## Wait for the database to come up and accept connections
+	my $clusterinfo = $clusterinfo{$name}
+		or die qq{I do not know how to find a port for a cluster named "$name"};
+	my $port = $clusterinfo->{port};
+
+	my $dbhost = getcwd;
+	$dbhost .= "/$dirname/socket";
+
+	my $dsn = "dbi:Pg:dbname=invalidname;port=$port;host=$dbhost";
+	my $dbh;
+
+	my $loops = 0;
+  LOOP: {
+		eval {
+			$dbh = DBI->connect($dsn, '', '', {PrintError=>0,RaiseError=>1});
+		};
+		last if $@ =~ /"invalidname"/;
+		sleep 0.1;
+		if ($loops++ > 50) {
+			die "Database did not come up: dsn was $dsn\n";
+		}
+		redo;
+    }
 
 	return;
 
@@ -1192,6 +1201,7 @@ sub remove_single_dir {
 }
 
 sub drop_database {
+
     my ($self, $dir) = @_;
     if ($dir eq 'all') {
         ok(opendir(my $dh, '.'), 'Open current directory to clean up');
