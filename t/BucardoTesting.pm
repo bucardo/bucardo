@@ -123,7 +123,6 @@ for my $name ('A'..'Z') {
         vmin    => $lmin,
         vrev    => $lrev,
 		dirname => "bucardo_test_database_${name}_$localver",
-		okmsg   => 'system is ready',
 	};
 }
 
