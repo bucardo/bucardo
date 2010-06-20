@@ -4602,6 +4602,7 @@ sub start_kid {
                 $self->glog(qq{Source delta count for $S.$T: $deltacount{source}{$S}{$T}},
                             $deltacount{source}{$S}{$T} ? LOG_NORMAL : LOG_VERBOSE);
                 if ($synctype eq 'swap') {
+                    ## This would be a good place to pg_async
                     $deltacount{alltarget} += $deltacount{target}{$S}{$T} = $sth{target}{$g}{getdelta}->execute();
                     $sth{target}{$g}{getdelta}->finish() if $deltacount{target}{$S}{$T} =~ s/0E0/0/o;
                     $self->glog(qq{Target delta count for $S.$T: $deltacount{target}{$S}{$T}},
