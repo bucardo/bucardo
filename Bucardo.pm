@@ -5721,6 +5721,8 @@ sub start_kid {
                     for (@srcdelete2) {
                         $sth{source}{$g}{insertdelta}->execute($g->{oid},@$_);
                         $g->{source_makedelta_inserts}++;
+                        $self->glog(("Adding in source bucardo_delta row (delete) for $g->{oid} and "
+                                    . join ',' => @$_), LOG_VERBOSE);
                     }
                     if ($sync->{does_source_makedelta_triggers}) {
                         $sourcedbh->do(q{SET session_replication_role = 'replica'});
@@ -5733,7 +5735,8 @@ sub start_kid {
                     for (@tgtdelete2) {
                         $sth{target}{$g}{insertdelta}->execute($toid,@$_);
                         $g->{target_makedelta_inserts}++;
-                        $self->glog("Adding in target bucardo_delta row (delete) for $toid and $_", LOG_VERBOSE);
+                        $self->glog(("Adding in target bucardo_delta row (delete) for $toid and "
+                                    . join ',' => @$_), LOG_VERBOSE);
                     }
                     if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
                         $targetdbh->do(q{SET session_replication_role = 'replica'});
