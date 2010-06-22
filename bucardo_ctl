@@ -63,6 +63,7 @@ my $bcargs = {
               debugsyslog  => 1,
               debugfile    => 1,
               cleandebugs  => 0,
+              batch        => 0,
           };
 
 ## These options must come before the GetOptions call
@@ -122,6 +123,7 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'compress',
      'retry=i',
      'retrysleep=i',
+     'batch',
 
      ## These are sent to the constructor:
      'bcverbose',
@@ -4813,7 +4815,7 @@ sub upgrade {
             }
             next;
         }
-        if (/^CREATE (?:OR REPLACE )?FUNCTION\s+bucardo\.(\S+)/) {
+        if (/^CREATE (?:OR REPLACE )?FUNCTION\s+bucardo\.(.+?\))/) {
             $fname = $1;
             $fbody .= $_;
             $fname =~ s/\((.*)\)// or die "No args found for function: $_\n";
@@ -5667,6 +5669,8 @@ sub install {
         print "3. User:          $user\n";
         print "4. Database:      $dbname\n";
         print "5. PID directory: $piddir\n";
+
+        last GOOEY if $bcargs->{batch};
 
         print 'Enter a number to change it, P to proceed, or Q to quit: ';
 
