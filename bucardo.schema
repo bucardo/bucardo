@@ -601,7 +601,9 @@ BEGIN
 END;
 $bc$;
 
+--
 -- Called on update to master_q. Creates and populates child tables, empties master_q.
+--
 CREATE OR REPLACE FUNCTION bucardo.populate_child_q_table()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -610,8 +612,8 @@ SECURITY DEFINER
 AS
 $bc$
 DECLARE
-  myrec RECORD;
-  myst  TEXT;
+  myrec     RECORD;
+  myst      TEXT;
   needindex BOOL = false;
   tablename TEXT;
 BEGIN
@@ -665,6 +667,75 @@ $bc$;
 CREATE TRIGGER populate_child_q_table
   AFTER INSERT OR UPDATE ON freezer.master_q
   FOR EACH STATEMENT EXECUTE PROCEDURE bucardo.populate_child_q_table();
+
+
+--
+-- Allows for manual creation of child_q tables, e.g. via cronjob
+--
+-- Example: psql -c "SELECT bucardo.create_child_q(now()+'1 day')"
+--
+CREATE OR REPLACE FUNCTION bucardo.create_child_q_table(text)
+RETURNS TEXT
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+AS
+$bc$
+DECLARE
+  tablename TEXT;
+  myst      TEXT;
+  needindex BOOL = false;
+  msg       TEXT = '';
+BEGIN
+  -- Figure out the date
+  SELECT INTO tablename 'child_q_' || TO_CHAR(($1::date), 'YYYYMMDD');
+
+  -- Create the table if it does not exist
+  PERFORM 1 FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace)
+  WHERE n.nspname = 'freezer' AND c.relname = tablename;
+    IF NOT FOUND THEN
+      myst = 'CREATE TABLE freezer.' || tablename ||'() INHERITS (freezer.master_q)';
+      EXECUTE myst;
+      myst = 'GRANT SELECT ON freezer.' || tablename ||' TO public';
+      EXECUTE myst;
+      needindex = TRUE;
+      msg = 'Created table ' || tablename;
+    END IF;
+
+    -- Create the index if it does not exist
+    IF needindex IS FALSE THEN
+      PERFORM 1 FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace)
+      WHERE n.nspname = 'freezer' AND c.relname = tablename||'_daterange';
+      IF NOT FOUND THEN
+        needindex = TRUE;
+      END IF;
+    END IF;
+    IF needindex IS TRUE THEN
+      myst = 'CREATE INDEX '
+             || tablename
+             || '_daterange ON freezer.'
+             || tablename
+             || '(cdate)';
+      EXECUTE myst;
+      msg = msg || ' Created index ' || tablename || '_daterange';
+    END IF;
+
+  RETURN msg;
+
+END;
+$bc$;
+
+--
+-- Other polymophisms of the above:
+--
+CREATE OR REPLACE FUNCTION bucardo.create_child_q_table(timestamp with time zone)
+RETURNS TEXT
+LANGUAGE SQL
+VOLATILE
+SECURITY DEFINER
+AS $bc$
+SELECT bucardo.create_child_q_table($1::text);
+$bc$;
 
 --
 -- Return a created connection string from the db table
