@@ -5669,7 +5669,7 @@ sub start_kid {
                                 push @srcdelete2, [$pkval];
                             }
                             else {
-                                push @srcdelete2, $info1->{$pkval}{BUCARDO_PKEYS};
+                                push @srcdelete2, $info1->{$pkval}{BUCARDO_PKVALS};
                             }
                         }
                         ## Strip out this action as done (2 and 4 are mutually exclusive)
@@ -5687,7 +5687,7 @@ sub start_kid {
                                 push @tgtdelete2, [$pkval];
                             }
                             else {
-                                push @tgtdelete2, $info1->{$pkval}{BUCARDO_PKEYS};
+                                push @tgtdelete2, $info1->{$pkval}{BUCARDO_PKVALS};
                             }
                         }
                         ## Strip out this action as done (1 and 8 are mutually exclusive)
@@ -5957,8 +5957,12 @@ sub start_kid {
                                 if ($sync->{does_source_makedelta_triggers}) {
                                     $sourcedbh->do(q{SET session_replication_role = 'origin'});
                                 }
-                                if ($action & 2 or $action & 4) {
-                                    $sth{source}{$g}{insertdelta}->execute($g->{oid},@$srcpks);
+                                if ($action & 2) { ## target to source
+                                    $sth{source}{$g}{insertdelta}->execute($g->{oid}, @$tgtpks);
+                                    $g->{source_makedelta_inserts}++
+                                }
+                                if ($action & 4) { ## source to source
+                                    $sth{source}{$g}{insertdelta}->execute($g->{oid}, @$srcpks);
                                     $g->{source_makedelta_inserts}++
                                 }
                                 if ($sync->{does_source_makedelta_triggers}) {
@@ -5969,8 +5973,12 @@ sub start_kid {
                                 if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
                                     $targetdbh->do(q{SET session_replication_role = 'origin'});
                                 }
-                                if ($action & 1 or $action & 8) {
-                                    $sth{target}{$g}{insertdelta}->execute($toid,@$tgtpks);
+                                if ($action & 1) { ## source to target
+                                    $sth{target}{$g}{insertdelta}->execute($toid, @$srcpks);
+                                    $g->{target_makedelta_inserts}++
+                                }
+                                if ($action & 8) { ## target to target
+                                    $sth{target}{$g}{insertdelta}->execute($toid, @$tgtpks);
                                     $g->{target_makedelta_inserts}++
                                 }
                                 if ($sync->{does_target_makedelta_triggers}{$targetdb}) {
