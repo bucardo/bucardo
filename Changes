@@ -61,6 +61,8 @@ Bucardo version 4.5.0, released ??, 2010
 
   - Allow removal of tables from herds via bucardo_ctl. [GSM]
 
+  - Add create_child_q_table() function. [GSM]
+
   - Better formatting of bucardo.reason.log, and log startup failures. [GSM]
 
   - Log the current configuration settings on startup. [GSM]
