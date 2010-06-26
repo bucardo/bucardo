@@ -282,11 +282,17 @@ sub connect_database {
          {AutoCommit=>0, RaiseError=>1, PrintError=>0}
     );
 
+    ## Set the application name if we can
+    if ($dbh->{pg_server_version} >= 90000) {
+        $dbh->do(q{SET application_name='bucardo'});
+		$dbh->commit();
+	}
+
     ## If we are using something like pgbouncer, we need to tell Bucardo not to
     ## use server-side prepared statements, as they will not span commits/rollbacks.
     if (! $ssp) {
-        $dbh->{pg_server_prepare} = 0;
         $self->glog('Turning off server-side prepares for this database connection', LOG_TERSE);
+        $dbh->{pg_server_prepare} = 0;
     }
 
     ## Grab the backend PID for this Postgres process
