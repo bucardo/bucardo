@@ -5430,12 +5430,19 @@ sub start_kid {
 
                 ## Single PK cols are easy, we can just use _hashref
                 if ($g->{pkcols} == 1) {
-                     $deltacount{src2}{$S}{$T} >= 1 and $info1 = $sth{source}{$g}{getdelta}->fetchall_hashref('BUCARDO_ID');
-                     $deltacount{tgt2}{$S}{$T} >= 1 and $info2 = $sth{target}{$g}{getdelta}->fetchall_hashref('BUCARDO_ID');
+                    if ($deltacount{src2}{$S}{$T} >= 1) {
+                        $self->glog("Retreiving data for source table $S.$T", LOG_DEBUG);
+                        $info1 = $sth{source}{$g}{getdelta}->fetchall_hashref('BUCARDO_ID');
+                    }
+                    if ($deltacount{tgt2}{$S}{$T} >= 1) {
+                        $self->glog("Retreiving data for target table $S.$T", LOG_DEBUG);
+                        $info2 = $sth{target}{$g}{getdelta}->fetchall_hashref('BUCARDO_ID');
+                    }
                 }
                 else {
                     ## For multi-col PKs, we join all pk values together into a single scalar
                     if ($deltacount{src2}{$S}{$T} >= 1) {
+                        $self->glog("Retreiving data for source table $S.$T", LOG_DEBUG);
                         for my $row (@{$sth{source}{$g}{getdelta}->fetchall_arrayref({})}) {
                             my $key = $row->{BUCARDO_ID};
                             push @{$row->{BUCARDO_PKVALS}} => $row->{BUCARDO_ID};
@@ -5447,6 +5454,7 @@ sub start_kid {
                         }
                     }
                     if ($deltacount{tgt2}{$S}{$T} >= 1) {
+                        $self->glog("Retreiving data for target table $S.$T", LOG_DEBUG);
                         for my $row (@{$sth{target}{$g}{getdelta}->fetchall_arrayref({})}) {
                             my $key = $row->{BUCARDO_ID};
                             push @{$row->{BUCARDO_PKVALS}} => $row->{BUCARDO_ID};
@@ -5458,6 +5466,8 @@ sub start_kid {
                         }
                     }
                 }
+
+                $self->glog('Finished retrieving data', LOG_DEBUG);
 
                 ## Store this info away for use by a custom code hook
                 if ($sync->{need_rows}) {
