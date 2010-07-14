@@ -716,6 +716,10 @@ sub start_mcp {
     my $mcp_backend;
     ($mcp_backend, $self->{masterdbh}) = $self->connect_database();
 
+    ## Store the function to use to generate clock timestamps
+    $self->{mcp_clock_timestamp} = $self->{masterdbh}{pg_server_version} >= 80200
+        ? 'clock_timestamp()' : 'timeofday()::timestamptz';
+
     ## Let any listeners know we have gotten this far
     $self->{masterdbh}->do('NOTIFY bucardo_boot') or die 'NOTIFY bucardo_boot failed!';
     $self->{masterdbh}->commit();
@@ -2370,9 +2374,9 @@ sub start_mcp {
             }
 
             ## Update the audit_pid table
-            $SQL = q{
+            $SQL = qq{
                 UPDATE bucardo.audit_pid
-                SET    killdate = timeofday()::timestamptz, death = ?
+                SET    killdate = $self->{mcp_clock_timestamp}, death = ?
                 WHERE  type='MCP'
                 AND    id = ?
                 AND    killdate IS NULL
@@ -2771,9 +2775,9 @@ sub start_controller {
     $sth{qcheckaborted} = $maindbh->prepare($SQL);
 
     ## Ends an aborted entry in the q for a sync/target combo (by PID)
-    $SQL = q{
+    $SQL = qq{
         UPDATE bucardo.q
-        SET    ended = timeofday()::timestamptz
+        SET    ended = $self->{mcp_clock_timestamp}
         WHERE  sync=?
         AND    targetdb = ?
         AND    pid = ?
@@ -2784,9 +2788,9 @@ sub start_controller {
     $sth{qfixaborted} = $maindbh->prepare($SQL);
 
     ## Ends all aborted entried in the queue for a sync/target combo (not by PID)
-    $SQL = q{
+    $SQL = qq{
         UPDATE bucardo.q
-        SET    ended = timeofday()::timestamptz
+        SET    ended = $self->{mcp_clock_timestamp}
         WHERE  sync=?
         AND    targetdb = ?
         AND    started IS NOT NULL
@@ -2796,9 +2800,9 @@ sub start_controller {
     $sth{qclearaborted} = $maindbh->prepare($SQL);
 
     ## Aborts a specific entry in the queue, given sync, pid, ppid, and target
-    $SQL = q{
+    $SQL = qq{
         UPDATE bucardo.q
-        SET    aborted=timeofday()::timestamptz, whydie=?
+        SET    aborted=$self->{mcp_clock_timestamp}, whydie=?
         WHERE  sync = ?
         AND    pid = ?
         AND    ppid = ?
@@ -2879,7 +2883,7 @@ sub start_controller {
         ## Mark all unstarted entries as aborted
         $SQL = qq{
             UPDATE bucardo.q
-            SET started=timeofday()::timestamptz, ended=timeofday()::timestamptz, aborted=timeofday()::timestamptz, whydie='Controller cleaning out unstarted q entry'
+            SET started=$self->{mcp_clock_timestamp}, ended=$self->{mcp_clock_timestamp}, aborted=$self->{mcp_clock_timestamp}, whydie='Controller cleaning out unstarted q entry'
             WHERE sync = $safesyncname
             AND started IS NULL
         };
@@ -2889,7 +2893,7 @@ sub start_controller {
         ## The whydie has already been set by the kid
         $SQL = qq{
             UPDATE bucardo.q
-            SET ended=timeofday()::timestamptz
+            SET ended=$self->{mcp_clock_timestamp}
             WHERE sync = $safesyncname
             AND ended IS NULL AND aborted IS NOT NULL
         };
@@ -2898,7 +2902,7 @@ sub start_controller {
         ## Clear out any lingering entries which have not ended
         $SQL = qq{
             UPDATE bucardo.q
-            SET ended=timeofday()::timestamp, aborted=timeofday()::timestamp, whydie='Controller cleaning out unended q entry'
+            SET ended=$self->{mcp_clock_timestamp}, aborted=$self->{mcp_clock_timestamp}, whydie='Controller cleaning out unended q entry'
             WHERE sync = $safesyncname
             AND ended IS NULL
         };
@@ -3136,7 +3140,7 @@ sub start_controller {
                         ## If we ran an after_sync and grabbed rows, reset some things
                         if (exists $rows_for_custom_code->{source}) {
                             $rows_for_custom_code = {};
-                            $SQL = 'SELECT timeofday()::timestamp';
+                            $SQL = "SELECT $self->{mcp_clock_timestamp}";
                             $sync->{starttime} = $maindbh->selectall_arrayref($SQL)->[0][0];
                         }
 
@@ -3535,9 +3539,9 @@ sub cleanup_controller {
         $sth->execute("Sent kill request by $$ at $now", $self->{syncname});
 
         ## Update the audit_pid table
-        $SQL = q{
+        $SQL = qq{
             UPDATE bucardo.audit_pid
-            SET    killdate = timeofday()::timestamp, death = ?
+            SET    killdate = $self->{mcp_clock_timestamp}, death = ?
             WHERE  id = ?
             AND    killdate IS NULL
         };
@@ -3614,18 +3618,21 @@ sub get_deadlock_details {
         $getname->execute($relation);
         my $relname = $getname->fetchall_arrayref()->[0][0];
 
+        my $clock_timestamp = $dldbh->{pg_server_version} >= 80200
+            ? 'clock_timestamp()' : 'timeofday()::timestamptz';
+
         ## Fetch information about the conflicting process
-        my $queryinfo =$dldbh->prepare(q{
+        my $queryinfo =$dldbh->prepare(qq{
 SELECT
   current_query AS query,
   datname AS database,
-  TO_CHAR(timeofday()::timestamptz, 'HH24:MI:SS (YYYY-MM-DD)') AS current_time,
+  TO_CHAR($clock_timestamp, 'HH24:MI:SS (YYYY-MM-DD)') AS current_time,
   TO_CHAR(backend_start, 'HH24:MI:SS (YYYY-MM-DD)') AS backend_started,
-  TO_CHAR(timeofday()::timestamptz - backend_start, 'HH24:MI:SS') AS backend_age,
+  TO_CHAR($clock_timestamp - backend_start, 'HH24:MI:SS') AS backend_age,
   CASE WHEN query_start IS NULL THEN '?' ELSE
     TO_CHAR(query_start, 'HH24:MI:SS (YYYY-MM-DD)') END AS query_started,
   CASE WHEN query_start IS NULL THEN '?' ELSE
-    TO_CHAR(timeofday()::timestamptz - query_start, 'HH24:MI:SS') END AS query_age
+    TO_CHAR($clock_timestamp - query_start, 'HH24:MI:SS') END AS query_age
   COALESCE(host(client_addr)::text,''::text) AS ip,
   CASE WHEN client_port <= 0 THEN 0 ELSE client_port END AS port,
   usename AS user
@@ -3734,9 +3741,9 @@ sub start_kid {
 
         ## Mark ourself as aborted if we've started but not completed a job
         ## The controller is responsible for marking aborted entries as ended
-        $SQL = q{
+        $SQL = qq{
             UPDATE bucardo.q
-            SET    aborted=timeofday()::timestamp, whydie=?
+            SET    aborted=$self->{mcp_clock_timestamp}, whydie=?
             WHERE  sync=?
             AND    sourcedb=?
             AND    targetdb=?
@@ -3752,9 +3759,9 @@ sub start_kid {
 
         ## Clean up the audit_pid table
         if ($config{audit_pid}) {
-            $SQL = q{
+            $SQL = qq{
                 UPDATE bucardo.audit_pid
-                SET    killdate=timeofday()::timestamp, death=?
+                SET    killdate=$self->{mcp_clock_timestamp}, death=?
                 WHERE  id = ?
             };
             $sth = $finaldbh->prepare($SQL);
@@ -3854,9 +3861,9 @@ sub start_kid {
     $maindbh->commit();
 
     ## Prepare to update the q table when we start...
-    $SQL = q{
+    $SQL = qq{
         UPDATE bucardo.q
-        SET    started=timeofday()::timestamptz, pid = ?
+        SET    started=$self->{mcp_clock_timestamp}, pid = ?
         WHERE  sync=?
         AND    targetdb=?
         AND    started IS NULL
@@ -3864,9 +3871,9 @@ sub start_kid {
     $sth{qsetstart} = $maindbh->prepare($SQL);
 
     ## .. and when we finish.
-    $SQL = q{
+    $SQL = qq{
         UPDATE bucardo.q
-        SET    ended=timeofday()::timestamptz, updates=?, inserts=?, deletes=?
+        SET    ended=$self->{mcp_clock_timestamp}, updates=?, inserts=?, deletes=?
         WHERE  sync=?
         AND    targetdb=?
         AND    pid=?
@@ -6292,9 +6299,9 @@ sub start_kid {
 
     ## Cleanup and exit
     if ($config{audit_pid}) {
-        $SQL = q{
+        $SQL = qq{
             UPDATE bucardo.audit_pid
-            SET    killdate = timeofday()::timestamp, death = 'END'
+            SET    killdate = $self->{mcp_clock_timestamp}, death = 'END'
             WHERE  id = ?
             AND    killdate IS NULL
         };
