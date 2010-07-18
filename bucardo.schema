@@ -9,7 +9,8 @@
 SET CLIENT_MIN_MESSAGES = 'FATAL';
 CREATE USER bucardo SUPERUSER;
 CREATE DATABASE bucardo OWNER bucardo;
-ALTER USER bucardo SET search_path = bucardo;
+ALTER DATABASE bucardo SET search_path = bucardo, public;
+ALTER USER bucardo SET search_path = bucardo, public;
 SET CLIENT_MIN_MESSAGES = 'WARNING';
 
 \c bucardo bucardo
@@ -3004,6 +3005,11 @@ CREATE TABLE bucardo.upgrade_log (
   cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE bucardo.upgrade_log IS $$Historical record of upgrade actions$$;
+
+INSERT INTO bucardo.upgrade_log(action,summary,version)
+  SELECT 'Initial install', '', value
+  FROM bucardo.bucardo_config
+  WHERE setting = 'bucardo_version';
 
 -- Allow users to insert messages in the Bucardo logs
 
