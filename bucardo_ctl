@@ -2966,6 +2966,7 @@ sub add_item {
     }
     elsif ($type eq 'table') {
         if ($type2 eq 'all') {
+            shift @nouns;
             add_all_tables();
             $dbh->commit();
         }
@@ -2976,6 +2977,7 @@ sub add_item {
     }
     elsif ($type eq 'sequence') {
         if ($type2 eq 'all') {
+            shift @nouns;
             add_all_sequences();
             $dbh->commit();
         }
@@ -2989,11 +2991,13 @@ sub add_item {
     }
     elsif ($type eq 'all') {
         if ($type2 =~ /table/i) {
+            shift @nouns;
             add_all_tables();
             $dbh->commit();
             exit 0;
         }
         elsif ($type2 =~ /sequence/i) {
+            shift @nouns;
             add_all_sequences();
             $dbh->commit();
             exit 0;
@@ -3627,7 +3631,7 @@ sub add_table {
         if ($count != 1) {
             warn "Please specify a database with db=<name>\n";
             _list_databases();
-            exit;
+            exit 1;
         }
         ($dbcols->{db}) = keys %{$global{db}};
         ## Replace any existing database
@@ -3649,7 +3653,7 @@ sub add_table {
     if (! exists $global{db}{$db}) {
         warn qq{Invalid database: "$db"\n};
         _list_databases();
-        exit;
+        exit 1;
     }
 
     my $finalmsg = '';
@@ -3756,12 +3760,17 @@ sub add_all_goats {
     ## --table or -t: limit to the given tables
     ## --exclude-table or -t: exclude these tables
     ## --herd: name of the herd to add new tables to
+    ## pkonly: exclude tables with no pkey
 
     ## Transform command-line args to traditional format
     ## e.g. db=foo becomes the equivalent of --db=foo
+    ## foo becomes foo=1
     for my $noun (@nouns) {
         if ($noun =~ /(\w+)=(\w+)/) {
             $bcargs->{$1} = $2;
+        }
+        else {
+            $bcargs->{$noun} = 1;
         }
     }
 
@@ -3792,10 +3801,7 @@ sub add_all_goats {
     }
 
     if ($showdbs) {
-        warn "Database choices:\n";
-        for my $row (sort keys %$dbs) {
-            warn "  db=$row\n";
-        }
+        _list_databases();
         exit 1;
     }
 
@@ -3860,6 +3866,9 @@ sub add_all_goats {
             $herdcheck = $dbh->prepare($SQL);
             $herdcheck->execute($herd);
         }
+        else {
+            $VERBOSE >= 1 and warn "Herd already exists: $herd\n";
+        }
         $SQL = 'INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,?)';
         $addtoherd = $dbh->prepare($SQL);
     }
@@ -3870,14 +3879,27 @@ sub add_all_goats {
 
     ## Walk through all returned tables from the remote database
     my %count = (seenit => 0, added => 0);
-    my (%old, %new, %fail);
+    my (%old, %new, %fail, $id);
     for my $row (@{$sth->fetchall_arrayref()}) {
         my ($S,$T) = @$row;
+        my $tinfo;
         ## Do we already have this one?
         if (exists $hastable{$S}{$T}) {
             $VERBOSE >= 2 and warn "Skipping $type already in goat: $S.$T\n";
             $count{seenit}++;
             $old{$S}{$T} = 1;
+            if ($herd and 'table' eq $type) {
+                ## In case this is not already in the herd, grab the id and jump down
+                $SQL = 'SELECT * FROM goat WHERE db=? AND schemaname=? AND tablename=? AND reltype=?';
+                $sth = $dbh->prepare($SQL);
+                $count = $sth->execute($db->{name},$S,$T,'table');
+                if ($count < 1) {
+                    die "Could not find table $S.$T in database $db->{name}!\n";
+                }
+                $tinfo = $sth->fetchall_arrayref({})->[0];
+                $id = $tinfo->{id};
+                goto HERD;
+            }
             next;
         }
         $VERBOSE >= 2 and warn "Attempting to add $S.$T to the goat table\n";
@@ -3901,20 +3923,31 @@ sub add_all_goats {
             next;
         }
         $SQL = q{SELECT currval('bucardo.goat_id_seq')};
-        my $id = $dbh->selectall_arrayref($SQL)->[0][0];
+        $id = $dbh->selectall_arrayref($SQL)->[0][0];
         $VERBOSE >= 2 and warn "ID of new table $S.$T is $id\n";
-
-        ## Pull the information back out about this item
-        $SQL = 'SELECT * FROM bucardo.goat WHERE id = ?';
-        $sth = $dbh->prepare($SQL);
-        $sth->execute($id);
-        my $info = $sth->fetchall_arrayref({});
 
         $count{added}++;
         $new{$S}{$T} = 1;
+      HERD:
         if ($herd) {
-            $addtoherd->execute($herd, $id);
-            $VERBOSE >= 2 and warn "Added $type $id to herd $herd\n";
+            if (! defined $tinfo) {
+                $SQL = 'SELECT * FROM goat WHERE id = ?';
+                $sth = $dbh->prepare($SQL);
+                $sth->execute($id);
+                $tinfo = $sth->fetchall_arrayref({})->[0];
+            }
+            if ($bcargs->{pkonly} and 'table' eq $type and ! length $tinfo->{pkey}) {
+                warn "Not adding table $S.$T to herd: no pkey\n";
+            }
+            else {
+                $SQL = 'SELECT 1 FROM herdmap WHERE herd=? AND goat = ?';
+                $sth = $dbh->prepare($SQL);
+                $count = $sth->execute($herd, $id);
+                if ($count < 1) {
+                    $addtoherd->execute($herd, $id);
+                    $VERBOSE >= 2 and warn "Added $type $S.$T to herd $herd\n";
+                }
+            }
         }
 
     }
