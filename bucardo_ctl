@@ -2949,6 +2949,9 @@ sub add_item {
     ## Allow plurals
     $type =~ s/s$//;
 
+    ## In case we used 'all'
+    my $type2 = $nouns[0] || '';
+
     if ($type eq 'code' or $type eq 'customcode' or $type eq 'custom_code') {
         add_customcode();
     }
@@ -2962,18 +2965,29 @@ sub add_item {
         add_herd();
     }
     elsif ($type eq 'table') {
-        add_table('table');
+        if ($type2 eq 'all') {
+            add_all_tables();
+            $dbh->commit();
+        }
+        else {
+            add_table('table');
+        }
         exit 0;
     }
     elsif ($type eq 'sequence') {
-        add_table('sequence');
+        if ($type2 eq 'all') {
+            add_all_sequences();
+            $dbh->commit();
+        }
+        else {
+            add_table('sequence');
+        }
         exit 0;
     }
     elsif ($type eq 'sync') {
         add_sync();
     }
     elsif ($type eq 'all') {
-        my $type2 = shift @nouns || '';
         if ($type2 =~ /table/i) {
             add_all_tables();
             $dbh->commit();
