@@ -5950,9 +5950,9 @@ This document describes version 4.5.0 of bucardo_ctl
 
   ./bucardo_ctl add database newdb name=internal_name port=5432 host=myserver
 
-  ./bucardo_ctl add all tables db=foo
+  ./bucardo_ctl add all tables db=foo [herd=x] [pkonly]
 
-  ./bucardo_ctl add all sequences db=foo
+  ./bucardo_ctl add all sequences db=foo [herd=x]
 
   ./bucardo_ctl add herd newherd table1 table2 table3 ...
 
@@ -6069,7 +6069,7 @@ Usage:  add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass
 
 Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx herd=xxx
 
-Usage:  add all tables herd=xxx
+Usage:  add all tables [herd=xxx] [pkonly]
 
 Usage:  add sequence [schema].table herd=xxx
 
