@@ -414,6 +414,9 @@ sub superhelp {
     ## Because usage() sometimes relies on the verb
     $verb = $word1;
 
+    ## Allow plurals
+    $word2 =~ s/s$//;
+
     if ('add' eq $word1) {
         if ('customcode' eq $word2 or 'custom_code' eq $word2 or 'code' eq $word2) {
             warn usage('add_customcode') . "\n";
@@ -2942,6 +2945,9 @@ sub add_item {
     ## First word must be a type we know about
     my $type = shift @nouns;
     $type = lc $type;
+
+    ## Allow plurals
+    $type =~ s/s$//;
 
     if ($type eq 'code' or $type eq 'customcode' or $type eq 'custom_code') {
         add_customcode();
