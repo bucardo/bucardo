@@ -3604,7 +3604,11 @@ sub add_table {
     if (! exists $dbcols->{db}) {
         ## If we only have one database, we can use that
         my $count = keys %{$global{db}};
-        $count == 1 or die "Please specify a database with db=<name>\n";
+        if ($count != 1) {
+            warn "Please specify a database with db=<name>\n";
+            _list_databases();
+            exit;
+        }
         ($dbcols->{db}) = keys %{$global{db}};
         ## Replace any existing database
         if ($cols =~ s/\bdb\b//) {
@@ -3623,7 +3627,9 @@ sub add_table {
     my $db = $dbcols->{db};
 
     if (! exists $global{db}{$db}) {
-        die qq{Invalid database: "$db"\n};
+        warn qq{Invalid database: "$db"\n};
+        _list_databases();
+        exit;
     }
 
     my $finalmsg = '';
@@ -3693,6 +3699,18 @@ sub add_table {
     return;
 
 } ## end of add_table
+
+
+sub _list_databases {
+
+    return if ! keys %{$global{db}};
+    warn "The following databases are available:\n";
+    for (sort keys %{$global{db}}) {
+        print "$_\n";
+    }
+    return;
+
+} ## end of list_databases
 
 
 sub add_all_tables {
