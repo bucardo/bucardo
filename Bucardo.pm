@@ -3025,7 +3025,7 @@ sub start_controller {
                             $sth = $maindbh->prepare($SQL);
                             $sth->execute($syncname);
                             $maindbh->commit();
-                            $sync->{onetimecopy_savepid} = 0;
+                            $sync->{onetimecopy_savepid} = $sync->{onetimecopy} = 0;
                             ## Reset to the original values, in case we changed them
                             $sync->{synctype} = $synctype;
                             $sync->{kidsalive} = $kidsalive;
@@ -3889,7 +3889,6 @@ sub start_kid {
     ($source_backend, $sourcedbh) = $self->connect_database($sourcedb);
     $self->glog("Source database backend PID is $source_backend", LOG_VERBOSE);
 
-
     ## Connect to the target database
     ($target_backend, $targetdbh) = $self->connect_database($targetdb);
     $self->glog("Target database backend PID is $target_backend", LOG_VERBOSE);
@@ -4544,7 +4543,7 @@ sub start_kid {
                             $sth->execute($g->{oid},$g->{safeschema},$g->{safetable},$syncname,$targetdb,
                                         $deltacount{source}{truncatelog}{$g->{oid}});
                             $deltacount{truncates}++;
-                            $self->glog('Marking this truncate as done in bucardo_truncate_trigger_log', LOG_DEBUG);
+                            $self->glog(qq{Marking truncate for $S.$T as done in bucardo_truncate_trigger_log}, LOG_DEBUG);
                         }
                     }
                 }
@@ -4555,7 +4554,10 @@ sub start_kid {
             for my $g (@$goatlist) {
 
                 ## If this table was truncated on the source, we do nothing here
-                next if $g->{source}{needstruncation};
+                if ($g->{source}{needstruncation}) {
+                    $self->glog(qq{Bypassing normal pushdelta counting afor $S.$%T as this is a truncate}, LOG_DEBUG);
+                    next;
+                }
 
                 ($S,$T) = ($g->{safeschema},$g->{safetable});
 
@@ -4664,6 +4666,10 @@ sub start_kid {
 
         ## FULLCOPY
         if ($synctype eq 'fullcopy' or $deltacount{truncates}) {
+
+            if ($deltacount{truncates}) {
+                $self->glog('Switching to fullcopy mode to handle truncate', LOG_DEBUG);
+            }
 
             for my $g (@$goatlist) {
 
