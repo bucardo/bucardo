@@ -406,7 +406,6 @@ CREATE TABLE bucardo.sync (
   stayalive          BOOLEAN     NOT NULL DEFAULT 'true', -- Does the sync controller stay connected?
   kidsalive          BOOLEAN     NOT NULL DEFAULT 'true', -- Do the children stay connected?
   usecustomselect    BOOLEAN     NOT NULL DEFAULT 'false',
-  copytype           TEXT        NOT NULL DEFAULT 'copy',
   copyextra          TEXT        NOT NULL DEFAULT '',  -- e.g. WITH OIDS
   deletemethod       TEXT        NOT NULL DEFAULT 'delete',
   limitdbs           SMALLINT    NOT NULL DEFAULT 0,     -- How many databases can sync at once? 0=all
