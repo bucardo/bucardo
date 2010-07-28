@@ -417,7 +417,6 @@ CREATE TABLE bucardo.sync (
   target_makedelta   ONOFF       NOT NULL DEFAULT 'inherits',
   rebuild_index      SMALLINT    NOT NULL DEFAULT 0,     -- Load without indexes and then REINDEX table
   priority           SMALLINT    NOT NULL DEFAULT 0,     -- Higher is better
-  txnmode            TEXT        NOT NULL DEFAULT 'SERIALIZABLE',
   analyze_after_copy BOOLEAN     NOT NULL DEFAULT 'true',
   strict_checking    BOOLEAN     NOT NULL DEFAULT 'true',
   overdue            INTERVAL    NOT NULL DEFAULT '0 seconds'::interval,

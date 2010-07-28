@@ -1084,7 +1084,7 @@ sub start_mcp {
 
                         ## Only certain things can be changed "on the fly"
                         ## no critic (ProhibitHardTabs)
-                        for my $val (qw/checksecs stayalive limitdbs do_listen txnmode deletemethod status ping
+                        for my $val (qw/checksecs stayalive limitdbs do_listen deletemethod status ping
                                         analyze_after_copy targetgroup targetdb usecustomselect onetimecopy
                                         lifetimesecs maxkicks rebuild_index/) {
                             $sync->{$syncname}{$val} = $self->{sync}{$syncname}{$val} = $info->{$val};
@@ -4463,9 +4463,9 @@ sub start_kid {
 
         ## Start the main transaction. From here on out, speed is key
         ## Note that all database handles are currently not in a txn (last action was commit or rollback)
-        $targetdbh->do("SET TRANSACTION ISOLATION LEVEL $sync->{txnmode} READ WRITE");
+        $targetdbh->do("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE");
         if ($synctype eq 'swap' or $synctype eq 'pushdelta') {
-            $sourcedbh->do("SET TRANSACTION ISOLATION LEVEL $sync->{txnmode} READ WRITE");
+            $sourcedbh->do("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE");
         }
 
         ## We may want to lock all the tables
