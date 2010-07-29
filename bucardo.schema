@@ -431,8 +431,6 @@ COMMENT ON TABLE bucardo.sync IS $$Defines a single replication event from a her
 
 ALTER TABLE bucardo.sync ADD CONSTRAINT sync_type CHECK (synctype IN ('pushdelta','fullcopy','swap'));
 
-ALTER TABLE bucardo.sync ADD CONSTRAINT sync_copytype CHECK (copytype IN ('insert','copy'));
-
 ALTER TABLE bucardo.sync ADD CONSTRAINT sync_deletemethod CHECK (deletemethod IN ('truncate', 'delete', 'truncate_cascade'));
 
 CREATE UNIQUE INDEX sync_source_targetdb_type ON bucardo.sync(source, targetdb, synctype);
