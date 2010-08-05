@@ -2576,8 +2576,7 @@ sub start_controller {
     $self->glog($msg, LOG_NORMAL);
     $mailmsg .= "$msg\n";
 
-    my $otc = $sync->{onetimecopy} || 0;
-    $msg = qq{  limitdbs: $limitdbs kicked: $kicked kidsalive: $kidsalive onetimecopy: $otc};
+    $msg = qq{  limitdbs: $limitdbs kicked: $kicked kidsalive: $kidsalive onetimecopy: $sync->{onetimecopy}};
     $self->glog($msg, LOG_NORMAL);
     $mailmsg .= "$msg\n";
 
@@ -2919,9 +2918,17 @@ sub start_controller {
         $maindbh->rollback();
     }
 
+    ## Do a general check for truncate items, merely to hint at the cleanup below
+    my $srcdbh = $self->connect_database($sourcedb);
+    $SQL = 'SELECT 1 FROM bucardo.bucardo_truncate_trigger WHERE sync = ? AND replicated IS NULL';
+    $sth = $srcdbh->prepare($SQL);
+    $count = $sth->execute($syncname);
+    $self->{needtruncate} = $count >= 1 ? 1 : 0;
+    $srcdbh->disconnect();
+
     ## If these are perpetual children, kick them off right away
     ## Also handle "onetimecopy" here as well
-    if ($kidsalive or $otc) {
+    if ($kidsalive or $sync->{onetimecopy}) {
         for my $dbname (sort keys %$targetdb) {
             my $kid = $targetdb->{$dbname};
             if ($kid->{pid}) { ## Can this happen?
@@ -2934,14 +2941,15 @@ sub start_controller {
             }
             $kid->{dbname} = $dbname;
             $self->{kidcheckq} = 1;
-            if ($otc) {
+            if ($sync->{onetimecopy}) {
+                ## We're forcing the kid to go to fullcopy mode here
                 $sth{qinsert}->execute($syncname,$$,$sourcedb,$dbname,'fullcopy');
                 $maindbh->commit();
                 ## These changes are for the newly created kid, but also stick in the controller.
+                ## We reset them at the end of create_newkid
                 $sync->{synctype} = 'fullcopy';
                 $sync->{kidsalive} = 0;
                 $sync->{track_rates} = 0;
-                $sync->{onetimecopy_savepid} = 1;
             }
             $self->create_newkid($sync,$kid);
         }
@@ -3013,24 +3021,38 @@ sub start_controller {
                     $self->{aborted}{$dbname} = 0;
                     ## If everyone is finished, tell the MCP (overlaps?)
                     if (! grep { ! $_->{finished} } values %$targetdb) {
-                        my $notifymsg = "bucardo_syncdone_$syncname";
-                        $maindbh->do(qq{NOTIFY "$notifymsg"}) or die "NOTIFY $notifymsg failed";
-                        $self->glog(qq{Sent notice "bucardo_syncdone_$syncname"}, LOG_DEBUG);
-                        $maindbh->commit();
 
                         ## Reset the one-time-copy flag, so we only do it one time!
-                        if ($otc) {
-                            $otc = 0;
+                        if ($sync->{onetimecopy}) {
                             $SQL = 'UPDATE sync SET onetimecopy = 0 WHERE name = ?';
                             $sth = $maindbh->prepare($SQL);
                             $sth->execute($syncname);
                             $maindbh->commit();
-                            $sync->{onetimecopy_savepid} = $sync->{onetimecopy} = 0;
+                            $sync->{onetimecopy} = 0;
+                            $self->glog(qq{Set onetimecopy back to 0 for sync "$syncname"}, LOG_DEBUG);
                             ## Reset to the original values, in case we changed them
                             $sync->{synctype} = $synctype;
                             $sync->{kidsalive} = $kidsalive;
                             $sync->{track_rates} = $track_rates;
                         }
+
+                        ## This is not foolproof, but it doesn't have to be:
+                        ## we still always check bucardo_truncate_trigger_log
+                        if ($self->{needtruncate}) {
+                            ## Clear out any truncate items
+                            my $srcdbh = $self->connect_database($sourcedb);
+                            $SQL = 'UPDATE bucardo.bucardo_truncate_trigger SET replicated=now() WHERE sync = ? AND replicated IS NULL';
+                            $sth = $srcdbh->prepare($SQL);
+                            ($count = $sth->execute($syncname)) =~ s/0E0/0/o;
+                            $self->glog("Reset all truncate items for sync $syncname on source: count was $count");
+                            $srcdbh->commit();
+                            $srcdbh->disconnect();
+                        }
+
+                        my $notifymsg = "bucardo_syncdone_$syncname";
+                        $maindbh->do(qq{NOTIFY "$notifymsg"}) or die "NOTIFY $notifymsg failed";
+                        $self->glog(qq{Sent notice "bucardo_syncdone_$syncname"}, LOG_DEBUG);
+                        $maindbh->commit();
 
                         ## Run all after_sync custom codes
                         for my $code (@{$sync->{code_after_sync}}) {
@@ -3157,7 +3179,7 @@ sub start_controller {
 
             ## Has it been long enough to force a sync?
             if ($checksecs and time() - $lastheardfrom >= $checksecs) {
-                if ($otc) {
+                if ($sync->{onetimecopy}) {
                     $self->glog(qq{Timed out, but in onetimecopy mode, so not kicking, for "$syncname"}, LOG_DEBUG);
                 }
                 else {
@@ -3223,7 +3245,7 @@ sub start_controller {
                     $kid->{pid} = 0; ## No need to check it again
 
                     ## Also make a special exception for one-time-copy kids
-                    if ($kid->{onetimecopy} or ($kid->{finished} and !$kidsalive)) {
+                    if ($sync->{onetimecopy} or ($kid->{finished} and !$kidsalive)) {
                         $self->glog(qq{Kid $pid has died a natural death. Removing from list}, LOG_VERBOSE);
                         next;
                     }
@@ -3472,9 +3494,6 @@ sub start_controller {
         $kid->{cdate} = time;
         $kid->{life}++;
         $kid->{finished} = 0;
-        if ($kidsync->{onetimecopy_savepid}) {
-            $kid->{onetimecopy} = 1;
-        }
         sleep $config{ctl_createkid_time};
         return;
 
@@ -3669,7 +3688,8 @@ sub start_kid {
     ## Adjust the process name, start logging
     $0 = qq{Bucardo Kid.$self->{extraname} Sync "$syncname": ($synctype) "$sourcedb" -> "$targetdb"};
     $self->{logprefix} = 'KID';
-    $self->glog(qq{New kid, syncs "$sourcedb" to "$targetdb" for sync "$syncname" alive=$kidsalive Parent=$self->{parent} Type=$synctype PID=$$}, LOG_TERSE);
+    my $extra = $sync->{onetimecopy} ? "OTC: $sync->{onetimecopy}" : '';
+    $self->glog(qq{New kid, syncs "$sourcedb" to "$targetdb" for sync "$syncname" alive=$kidsalive Parent=$self->{parent} Type=$synctype PID=$$ $extra}, LOG_TERSE);
 
     ## Store our PID into a file
     my $kidpidfile = "$config{piddir}/bucardo.kid.sync.$syncname.$targetdb.pid";
@@ -4515,11 +4535,11 @@ sub start_kid {
             ## Check for truncate activity. If found, switch to fullcopy for a table as needed.
             ## For now, just do pushdelta
             if ($synctype eq 'pushdelta') {
-                $deltacount{sourcetruncate} = $sth{source}{checktruncate}->execute($syncname);
-                $sth{source}{checktruncate}->finish() if $deltacount{sourcetruncate} =~ s/0E0/0/o;
-                $self->glog(qq{Source truncate count: $deltacount{sourcetruncate}},
-                            $deltacount{sourcetruncate} ? LOG_NORMAL : LOG_VERBOSE);
-                if ($deltacount{sourcetruncate}) {
+                $self->{sourcetruncate} = $sth{source}{checktruncate}->execute($syncname);
+                $sth{source}{checktruncate}->finish() if $self->{sourcetruncate} =~ s/0E0/0/o;
+                $self->glog(qq{Source truncate count: $self->{sourcetruncate}},
+                            $self->{sourcetruncate} ? LOG_NORMAL : LOG_VERBOSE);
+                if ($self->{sourcetruncate}) {
                     ## For each table that was truncated, see if this target has already handled it
                     for my $row (@{$sth{source}{checktruncate}->fetchall_arrayref()}) {
                         $count = $sth{source}{checktruncatelog}->execute($syncname, $targetdb, @$row);
@@ -4530,6 +4550,7 @@ sub start_kid {
                     ## Which of the tables we are tracking need truncation support?
                     $SQL = 'INSERT INTO bucardo.bucardo_truncate_trigger_log (tablename,sname,tname,sync,targetdb,replicated) '
                         . 'VALUES(?,?,?,?,?,?)';
+
                     for my $g (@$goatlist) {
                         next if $g->{reltype} ne 'table';
                         ## deltacount may not exist = no truncation needed
@@ -4538,6 +4559,7 @@ sub start_kid {
                         $g->{source}{needstruncation} =
                             (exists $deltacount{source}{truncate}{$g->{oid}} and !$deltacount{source}{truncate}{$g->{oid}})
                             ? 1 : 0;
+                        ($S,$T) = ($g->{safeschema},$g->{safetable});
                         if ($g->{source}{needstruncation}) {
                             $sth = $sourcedbh->prepare_cached($SQL);
                             $sth->execute($g->{oid},$g->{safeschema},$g->{safetable},$syncname,$targetdb,
@@ -4555,7 +4577,7 @@ sub start_kid {
 
                 ## If this table was truncated on the source, we do nothing here
                 if ($g->{source}{needstruncation}) {
-                    $self->glog(qq{Bypassing normal pushdelta counting afor $S.$%T as this is a truncate}, LOG_DEBUG);
+                    $self->glog(qq{Bypassing normal pushdelta counting for $S.$T as this is a truncate}, LOG_DEBUG);
                     next;
                 }
 
