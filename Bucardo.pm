@@ -285,8 +285,8 @@ sub connect_database {
     ## Set the application name if we can
     if ($dbh->{pg_server_version} >= 90000) {
         $dbh->do(q{SET application_name='bucardo'});
-		$dbh->commit();
-	}
+        $dbh->commit();
+    }
 
     ## If we are using something like pgbouncer, we need to tell Bucardo not to
     ## use server-side prepared statements, as they will not span commits/rollbacks.
@@ -1085,8 +1085,8 @@ sub start_mcp {
                         ## Only certain things can be changed "on the fly"
                         ## no critic (ProhibitHardTabs)
                         for my $val (qw/checksecs stayalive limitdbs do_listen deletemethod status ping
-                                        analyze_after_copy targetgroup targetdb usecustomselect onetimecopy
-                                        lifetimesecs maxkicks rebuild_index/) {
+                                        analyze_after_copy vacuum_after_copy targetgroup targetdb usecustomselect 
+                                        onetimecopy lifetimesecs maxkicks rebuild_index/) {
                             $sync->{$syncname}{$val} = $self->{sync}{$syncname}{$val} = $info->{$val};
                         }
                         ## use critic
@@ -2919,12 +2919,14 @@ sub start_controller {
     }
 
     ## Do a general check for truncate items, merely to hint at the cleanup below
-    my $srcdbh = $self->connect_database($sourcedb);
-    $SQL = 'SELECT 1 FROM bucardo.bucardo_truncate_trigger WHERE sync = ? AND replicated IS NULL';
-    $sth = $srcdbh->prepare($SQL);
-    $count = $sth->execute($syncname);
-    $self->{needtruncate} = $count >= 1 ? 1 : 0;
-    $srcdbh->disconnect();
+    if ($synctype eq 'pushdelta') {
+        my $srcdbh = $self->connect_database($sourcedb);
+        $SQL = 'SELECT 1 FROM bucardo.bucardo_truncate_trigger WHERE sync = ? AND replicated IS NULL';
+        $sth = $srcdbh->prepare($SQL);
+        $count = $sth->execute($syncname);
+        $self->{needtruncate} = $count >= 1 ? 1 : 0;
+        $srcdbh->disconnect();
+    }
 
     ## If these are perpetual children, kick them off right away
     ## Also handle "onetimecopy" here as well
@@ -6271,20 +6273,38 @@ sub start_kid {
             $maindbh->commit();
         }
 
-        if ($synctype eq 'fullcopy'
-            and $sync->{analyze_after_copy}
-            and !$self->{dryrun}) {
-            for my $g (@$goatlist) {
-                next if ! $g->{analyze_after_copy} or $g->{reltype} ne 'table';
-                if ($g->{onetimecopy_ifempty}) {
-                    $g->{onetimecopy_ifempty} = 0;
-                    next;
+        if ($synctype eq 'fullcopy' and !$self->{dryrun}) {
+            if ($sync->{vacuum_after_copy}) {
+                for my $g (@$goatlist) {
+                    next if ! $g->{vacuum_after_copy} or $g->{reltype} ne 'table';
+                    ($S,$T) = ($g->{safeschema},$g->{safetable});
+                    my $total_time = sprintf '%.2f', tv_interval($kid_start_time);
+                    $self->glog("Vacuuming $S.$T on $targetdb. Time: $total_time", LOG_VERBOSE);
+                    $targetdbh->commit();
+                    {
+                        local $targetdbh->{AutoCommit} = 1;
+                        $targetdbh->do("VACUUM $S.$T");
+                    }
+                    $targetdbh->commit();
+                    $total_time = sprintf '%.2f', tv_interval($kid_start_time);
+                    $self->glog("Vacuum complete. Time: $total_time", LOG_VERBOSE);
                 }
-                ($S,$T) = ($g->{safeschema},$g->{safetable});
-                my $total_time = sprintf '%.2f', tv_interval($kid_start_time);
-                $self->glog("Analyzing $S.$T on $targetdb. Time: $total_time", LOG_VERBOSE);
-                $targetdbh->do("ANALYZE $S.$T");
-                $targetdbh->commit();
+            }
+            if ($sync->{analyze_after_copy}) {
+                for my $g (@$goatlist) {
+                    next if ! $g->{analyze_after_copy} or $g->{reltype} ne 'table';
+                    if ($g->{onetimecopy_ifempty}) {
+                        $g->{onetimecopy_ifempty} = 0;
+                        next;
+                    }
+                    ($S,$T) = ($g->{safeschema},$g->{safetable});
+                    my $total_time = sprintf '%.2f', tv_interval($kid_start_time);
+                    $self->glog("Analyzing $S.$T on $targetdb. Time: $total_time", LOG_VERBOSE);
+                    $targetdbh->do("ANALYZE $S.$T");
+                    $targetdbh->commit();
+                    $total_time = sprintf '%.2f', tv_interval($kid_start_time);
+                    $self->glog("Analyze complete. Time: $total_time", LOG_VERBOSE);
+                }
             }
         }
 
