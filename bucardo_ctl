@@ -4645,6 +4645,13 @@ sub generate_clause {
     my (@oneitem,@itemlist);
     for my $name (@{$items}) {
         $name =~ s/^\s*(.+?)\s*$/$1/;
+		## Break into schema and relation
+		my $schema = '';
+		if ($col eq 'tablename' and $name =~ s/(.+\w)\.(\w.+)/$2/) {
+			$schema = $1;
+		}
+
+		my $one = 1;
         ## Contains:
         if ($name =~ s/^\*(.+)\*$/$1/) {
             push @oneitem => "$col ${NOTR}~ " . qquote($1);
@@ -4659,7 +4666,24 @@ sub generate_clause {
         }
         else {
             push @itemlist => qquote($name);
+			$one = 0;
         }
+		if ($schema) {
+			my $col2 = 'schemaname';
+			my $old = $one ? pop @oneitem : pop @itemlist;
+			if ($schema =~ s/^\*(.+)\*$/$1/) {
+				push @oneitem => "($old AND $col2 ${NOTR}~ " . qquote($1) . ')';
+			}
+			elsif ($schema =~ s/^\*(.+)/$1/) {
+				push @oneitem => "($old AND $col2 ${NOTR}~ " . qquote("$1\$") . ')';
+			}
+			elsif ($schema =~ s/(.+)\*$/$1/) {
+				push @oneitem => "($old AND $col2 ${NOTR}~ " . qquote("^$1") . ')';
+			}
+			else {
+				push @oneitem => "($col = $old AND $col2 = " . qquote($schema) . ')';
+			}
+		}
     }
     if (@itemlist) {
         my $list = sprintf "$col ${NOT}IN (" . (join ',' => @itemlist) . ')';
