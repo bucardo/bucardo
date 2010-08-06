@@ -885,7 +885,7 @@ sub update {
         $tabname = $item = 'herd';
     }
     else {
-        die "Invalid item: must be code, db, dbgroup, sequence, sync, or table.\n";
+        die "Invalid item: must be code, db, dbgroup, herd, sequence, sync, or table.\n";
     }
 
     $SQL = "SELECT * FROM $tabname WHERE $lookupcol = ?";
