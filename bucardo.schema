@@ -267,6 +267,7 @@ CREATE TABLE bucardo.goat (
   ghost              BOOLEAN     NOT NULL DEFAULT 'false', -- only drop triggers, do not replicate
   standard_conflict  TEXT            NULL,
   analyze_after_copy BOOLEAN     NOT NULL DEFAULT 'true',
+  vacuum_after_copy  BOOLEAN     NOT NULL DEFAULT 'true',
   strict_checking    BOOLEAN     NOT NULL DEFAULT 'true',
   delta_bypass       BOOLEAN     NOT NULL DEFAULT 'false',
   delta_bypass_min   BIGINT          NULL,
@@ -418,6 +419,7 @@ CREATE TABLE bucardo.sync (
   rebuild_index      SMALLINT    NOT NULL DEFAULT 0,     -- Load without indexes and then REINDEX table
   priority           SMALLINT    NOT NULL DEFAULT 0,     -- Higher is better
   analyze_after_copy BOOLEAN     NOT NULL DEFAULT 'true',
+  vacuum_after_copy  BOOLEAN     NOT NULL DEFAULT 'false',
   strict_checking    BOOLEAN     NOT NULL DEFAULT 'true',
   overdue            INTERVAL    NOT NULL DEFAULT '0 seconds'::interval,
   expired            INTERVAL    NOT NULL DEFAULT '0 seconds'::interval,
