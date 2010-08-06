@@ -6281,11 +6281,9 @@ sub start_kid {
                     my $total_time = sprintf '%.2f', tv_interval($kid_start_time);
                     $self->glog("Vacuuming $S.$T on $targetdb. Time: $total_time", LOG_VERBOSE);
                     $targetdbh->commit();
-                    {
-                        local $targetdbh->{AutoCommit} = 1;
-                        $targetdbh->do("VACUUM $S.$T");
-                    }
-                    $targetdbh->commit();
+                    $targetdbh->{AutoCommit} = 1;
+                    $targetdbh->do("VACUUM $S.$T");
+                    $targetdbh->{AutoCommit} = 0;
                     $total_time = sprintf '%.2f', tv_interval($kid_start_time);
                     $self->glog("Vacuum complete. Time: $total_time", LOG_VERBOSE);
                 }
