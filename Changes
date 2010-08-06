@@ -59,6 +59,8 @@ Bucardo version 4.5.0, released ??, 2010
 
   - Don't bother comparing the 'log_cnt' field of sequences. [Rosser Schwarz]
 
+  - Allow "schema.table" format for bucardo_ctl list tables [GSM]
+
   - Make sure we update bucardo_config.bucardo_current_version when doing 
     a bucardo_ctl upgrade [GSM] (Bug #5)
 
