@@ -29,9 +29,10 @@ END {
 	$dbhA->disconnect();
 	$dbhB->disconnect();
 	$dbhC->disconnect();
+	$dbhD->disconnect();
 }
 
-## Get A, B, and C created, emptied out, and repopulated with sample data
+## Get A, B, C, and D created, emptied out, and repopulated with sample data
 $dbhA = $bct->repopulate_cluster('A');
 $dbhB = $bct->repopulate_cluster('B');
 $dbhC = $bct->repopulate_cluster('C');
@@ -75,7 +76,7 @@ $t = q{Adding all tables on the master works};
 $command =
 "bucardo_ctl add tables all db=A herd=therd";
 $res = $bct->ctl($command);
-like ($res, qr/Creating herd: therd.*New tables added: \d+/s, $t);
+like ($res, qr/Creating herd: therd.*New tables added: \d/s, $t);
 
 ## Remove the 'droptest' table
 $command =
