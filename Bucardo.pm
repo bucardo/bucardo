@@ -5255,7 +5255,7 @@ sub start_kid {
 
             $self->glog("Pushdelta counts: deletes=$dmlcount{alldeletes}{target} inserts=$dmlcount{allinserts}{target}", LOG_DEBUG);
 
-        } ## end pushdelta
+        } ## end of synctype pushdelta
 
         ## SWAP
         if ($synctype eq 'swap') {
@@ -6155,7 +6155,7 @@ sub start_kid {
 
             } ## end each goat
 
-        } ## end swap
+        } ## end of synctype swap
 
         ## Update bucardo_track table so that the bucardo_delta rows we just processed
         ##  are marked as "done" and ignored by subsequent runs
@@ -6223,7 +6223,7 @@ sub start_kid {
             $maindbh->rollback();
         }
         else {
-            $self->glog('Issuing final commit for source and target', LOG_VERBOSE);
+            $self->glog(qq{Issuing final commit for source $sourcedb and target $targetdb}, LOG_VERBOSE);
             $sourcedbh->commit();
             $targetdbh->commit();
             if ($sync->{usecustomselect}) {
