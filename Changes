@@ -70,6 +70,9 @@ Bucardo version 4.5.0, released ??, 2010
 
   - Add create_child_q_table() function. [GSM]
 
+  - Allow 'bucardo_ctl update herd foo remove <table(s)>'
+    and 'bucardo_ctl update herd foo add <table(s)>' [GSM]
+
   - Better formatting of bucardo.reason.log, and log startup failures. [GSM]
 
   - Log the current configuration settings on startup. [GSM]

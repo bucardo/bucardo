@@ -1063,6 +1063,103 @@ sub update {
         exit 0;
     }
 
+    if ('herd' eq $item and ($nouns[0] eq 'add' or $nouns[0] eq 'remove')) {
+        my $v = shift @nouns;
+        die "Can only $v to one herd at a time\n" if @$info > 1;
+        $info = $info->[0];
+        my $miniusage = "Usage: update herd $name $v <table(s)>\n";
+        @nouns or die $miniusage;
+
+        ## Grab all tables in this herd
+        $SQL = 'SELECT g.id, g.schemaname, g.tablename FROM bucardo.goat g '
+            . 'JOIN bucardo.herdmap h ON (h.goat = g.id) WHERE h.herd = ?';
+        $sth = $dbh->prepare($SQL);
+        $sth->execute($name);
+        my $tablist = $sth->fetchall_hashref('id');
+
+        my %found;
+
+        if ($v eq 'remove') {
+
+            for my $tab (@nouns) {
+                my $wild = ($tab =~ s/\*//) ? 1 : 0;
+                for my $id (keys %$tablist) {
+                    my ($sname,$tname) = ($tablist->{$id}{schemaname}, $tablist->{$id}{tablename});
+                    if ($wild) {
+                        if ($tname =~ /$tab/) {
+                            $found{$id} = [$sname,$tname];
+                        }
+                    }
+                    elsif ($tab =~ /(.+)\.(.+)/) {
+                        my ($s,$t) = ($1,$2);
+                        if ($s eq $sname and $t eq $tname) {
+                            $found{$id} = [$sname,$tname];
+                        }
+                    }
+                    elsif ($tname eq $tab) {
+                        $found{$id} = [$sname,$tname];
+                    }
+                }
+            }
+
+            if (keys %found) {
+                $SQL = 'DELETE FROM bucardo.herdmap WHERE herd = ? AND goat = ?';
+                $sth = $dbh->prepare($SQL);
+                for my $id (sort keys %found) {
+                    my ($sname,$tname) = @{$found{$id}};
+                    $count = $sth->execute($name,$id);
+                    if ($count >= 1) {
+                        print "  Removed from herd $name: $sname.$tname\n";
+                    }
+                    else {
+                        print "Could not remove from herd $name: $sname.$tname\n";
+                    }
+                }
+                $dbh->commit();
+            }
+
+            exit 0;
+
+        } ## end 'remove'
+
+        ## Must be 'add'
+        my $flatsql = 'SELECT id,schemaname,tablename FROM bucardo.goat WHERE tablename = ?';
+        my $wildsql = 'SELECT id,schemaname,tablename FROM bucardo.goat WHERE tablename ~ ?';
+
+        for my $tab (@nouns) {
+            my $wild = ($tab =~ s/\*//) ? 1 : 0;
+
+            $sth = $dbh->prepare($wild ? $wildsql : $flatsql);
+            $count = $sth->execute($tab);
+            next if $count < 1;
+
+            for my $row (@{$sth->fetchall_arrayref()}) {
+                $found{$row->[0]} = [$row->[1],$row->[2]];
+            }
+        }
+
+        if (keys %found) {
+
+            $SQL = 'INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,?)';
+            $sth = $dbh->prepare($SQL);
+            for my $id (sort keys %found) {
+                next if exists $tablist->{$id};
+                $tablist->{$id}++;
+                my ($sname,$tname) = @{$found{$id}};
+                $count = $sth->execute($name,$id);
+                if ($count >= 1) {
+                    print "  Added to herd $name: $sname.$tname\n";
+                }
+                else {
+                    print "Could not add to herd $name: $sname.$tname\n";
+                }
+            }
+            $dbh->commit();
+        }
+
+        exit 0;
+    }
+
     ## Process each change in turn
     ## Can be code, sync, dbgroup, table, schema, herd, or db
     my %change;
