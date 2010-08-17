@@ -2924,6 +2924,7 @@ sub start_controller {
         $SQL = 'SELECT 1 FROM bucardo.bucardo_truncate_trigger WHERE sync = ? AND replicated IS NULL';
         $sth = $srcdbh->prepare($SQL);
         $count = $sth->execute($syncname);
+        $sth->finish();
         $self->{needtruncate} = $count >= 1 ? 1 : 0;
         $srcdbh->disconnect();
     }
