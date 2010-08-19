@@ -3720,6 +3720,8 @@ sub start_kid {
         my ($msg) = @_;
         $msg =~ s/\s+$//g;
 
+        my $line = (caller)[2];
+
         ## Find any error messages/states for the master, source, or target databases.
         my ($merr,$serr,$terr, $mstate,$sstate,$tstate) = ('', '', '', '', '', '');
         if ($msg =~ /DBD::Pg/) {
@@ -3729,7 +3731,7 @@ sub start_kid {
             $mstate = $maindbh->state || '?';
             $sstate = $sourcedbh->state || '?';
             $tstate = $targetdbh->state || '?';
-            $msg .= "\n main error: $merr\nsource error: $serr\ntarget error: $terr\nStates: $mstate/$sstate/$tstate\n";
+            $msg .= "\n main error: $merr\nsource error: $serr\ntarget error: $terr\nStates: $mstate/$sstate/$tstate\nLine: $line\n";
         }
 
         ## If the error was because we could not serialize, maybe add a sleep time
@@ -3780,6 +3782,10 @@ sub start_kid {
         (my $flatmsg = $msg) =~ s/\n/ /g;
         my $count = $sth->execute($flatmsg,$syncname,$sourcedb,$targetdb,$self->{parent},$$);
 
+        if ($merr or $serr or $terr) {
+            $self->glog($flatmsg, LOG_TERSE);
+        }
+
         ## Clean up the audit_pid table
         if ($config{audit_pid}) {
             $SQL = qq{
@@ -3801,7 +3807,6 @@ sub start_kid {
         ## Send an email as needed (never for clean exit)
         if (! $self->{clean_exit} and $self->{sendmail} or $self->{sendmail_file}) {
             my $warn = $msg =~ /CTL request/ ? '' : 'Warning! ';
-            my $line = (caller)[2];
             $self->glog(qq{${warn}Child for sync "$syncname" ("$sourcedb" -> "$targetdb") was killed at line $line: $msg}, LOG_WARN);
 
             ## Never display the database password
