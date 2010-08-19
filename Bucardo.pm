@@ -4583,13 +4583,13 @@ sub start_kid {
             $deltacount{allsource} = $deltacount{alltarget} = 0;
             for my $g (@$goatlist) {
 
+                ($S,$T) = ($g->{safeschema},$g->{safetable});
+
                 ## If this table was truncated on the source, we do nothing here
                 if ($g->{source}{needstruncation}) {
                     $self->glog(qq{Bypassing normal pushdelta counting for $S.$T as this is a truncate}, LOG_DEBUG);
                     next;
                 }
-
-                ($S,$T) = ($g->{safeschema},$g->{safetable});
 
                 ## We'll handle sequence changes here and now (pushdelta only)
                 if ($synctype eq 'pushdelta' and $g->{reltype} eq 'sequence') {
