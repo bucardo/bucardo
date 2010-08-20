@@ -4637,7 +4637,7 @@ sub start_kid {
 
                     }
 
-                }
+                } ## end sequence checking
 
                 ## No need to continue unless we are a table
                 next if $g->{reltype} ne 'table';
@@ -4654,6 +4654,7 @@ sub start_kid {
                                 $deltacount{target}{$S}{$T} ? LOG_NORMAL : LOG_VERBOSE);
                 }
             }
+
             if ($synctype eq 'swap') {
                 $self->glog("Total source delta count: $deltacount{allsource}", LOG_VERBOSE);
                 $self->glog("Total target delta count: $deltacount{alltarget}", LOG_VERBOSE);
@@ -4663,13 +4664,20 @@ sub start_kid {
 
             ## If no changes, rollback dbs, close out q, notify listeners, and leave or reloop
             if (! $deltacount{all} and ! $deltacount{truncates}) {
+                ## If we modified the bucardo_sequence table, save the change
+                if ($deltacount{sequences}) {
+                    $sourcedbh->commit();
+                }
+                else {
+                    $sourcedbh->rollback();
+                }
                 $targetdbh->rollback();
-                $sourcedbh->rollback();
                 $sth{qend}->execute(0,0,0,$syncname,$targetdb,$$);
                 $maindbh->do(qq{NOTIFY "bucardo_syncdone_${syncname}_$targetdb"})
                     or die qq{NOTIFY failed: bucardo_syncdone_${syncname}_$targetdb};
                 $maindbh->commit();
                 sleep $config{kid_nodeltarows_sleep};
+                $self->glog('No changes made this round', LOG_DEBUG);
                 redo KID if $kidsalive;
                 last KID;
             }
