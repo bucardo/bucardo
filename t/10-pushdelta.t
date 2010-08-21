@@ -15,7 +15,7 @@ my $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object f
 $location = 'pushdelta';
 
 my $numtabletypes = keys %tabletype;
-plan tests => 21 + ($numtabletypes * 20);
+plan tests => 32 + ($numtabletypes * 20);
 
 pass("*** Beginning pushdelta tests");
 
@@ -506,6 +506,7 @@ SKIP: {
 		$t = qq{Truncation of table with pkey of type $type is replicated to C};
 
 		bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
+
 	}
 
 } ## end of SKIP
@@ -518,17 +519,24 @@ bucardo_ctl list sync pushdeltaAB -vv';
 $res = $bct->ctl($command);
 like ($res, qr{onetimecopy\s+=\s+0}, $t);
 
+## Add a new rows (inty=99) to both slaves
 $t = qq{A new row on slave is not automatically removed by a pushdelta sync};
-$dbhB->do("INSERT INTO bucardo_test1(id,inty) values(99,99)");
+$dbhB->do('INSERT INTO bucardo_test1(id,inty) VALUES(99,99)');
 $dbhB->commit();
-$dbhC->do("INSERT INTO bucardo_test1(id,inty) values(99,99)");
+$dbhC->do('INSERT INTO bucardo_test1(id,inty) VALUES(99,99)');
 $dbhC->commit();
+$dbhA->do('INSERT INTO bucardo_test1(id,inty) VALUES (17,17)');
+$dbhA->commit();
 $bct->ctl('kick sync pushdeltaAB 0');
 
+## Sanity check that both sides have the new row
+$t = qq{New row created on slave database B};
 $SQL = 'SELECT count(*) FROM bucardo_test1 WHERE inty = 99';
-$res = $dbhB->selectall_arrayref($SQL)->[0][0];
-is ($res, 1, $t);
+bc_deeply ([[1]], $dbhB, $SQL, $t);
+$t = qq{New row created on slave database C};
+bc_deeply ([[1]], $dbhC, $SQL, $t);
 
+## Flip the sync to onetimecopy=2, then kick it off
 $command = '
 bucardo_ctl update sync pushdeltaAB set onetimecopy=2';
 $bct->ctl($command);
@@ -542,7 +550,6 @@ like ($res, qr{onetimecopy\s+=\s+2}, $t);
 $command =
 "bucardo_ctl reload sync pushdeltaAB";
 $bct->ctl($command);
-
 $bct->ctl('kick sync pushdeltaAB 0');
 
 $t = qq{Sync attrib onetimecopy resets itself to 0 when complete};
@@ -552,42 +559,19 @@ $res = $bct->ctl($command);
 like ($res, qr{onetimecopy\s+=\s+0}, $t);
 
 $t = q{Setting onetimecopy=2 does not overwrite tables on B with data in them};
-$res = $dbhB->selectall_arrayref($SQL)->[0][0];
-is ($res, 1, $t);
+bc_deeply ([[1]], $dbhB, $SQL, $t);
 
 $t = q{Setting onetimecopy=2 does not overwrite tables on C with data in them};
-$res = $dbhC->selectall_arrayref($SQL)->[0][0];
-is ($res, 1, $t);
+bc_deeply ([[1]], $dbhC, $SQL, $t);
 
-$dbhC->do(q{TRUNCATE TABLE bucardo_test1});
-$dbhC->commit();
+$t = q{Rows are copied from A to B};
+$SQL = 'SELECT count(*) FROM bucardo_test1 WHERE inty = 17';
+bc_deeply ([[1]], $dbhB, $SQL, $t);
 
-$t = qq{Sync attrib onetimecopy accepts and keeps a setting of 2};
-$command = '
-bucardo_ctl list sync pushdeltaAB -vv';
-$res = $bct->ctl($command);
-like ($res, qr{onetimecopy\s+=\s+2}, $t);
+$t = q{Rows are copied from A to C};
+bc_deeply ([[1]], $dbhB, $SQL, $t);
 
-$command =
-"bucardo_ctl reload sync pushdeltaAB";
-$bct->ctl($command);
-
-$dbhX->commit();
-wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltaAB', 5);
-
-$t = qq{Sync attrib onetimecopy resets itself to 0 when complete};
-$command = '
-bucardo_ctl list sync pushdeltaAB -vv';
-$res = $bct->ctl($command);
-like ($res, qr{onetimecopy\s+=\s+0}, $t);
-
-$t = q{Setting onetimecopy=2 does not overwrite tables on B with data in them};
-$res = $dbhB->selectall_arrayref($SQL)->[0][0];
-is ($res, 1, $t);
-
-$t = q{Setting onetimecopy=2 does overwrite tables on C without data in them};
-$res = $dbhC->selectall_arrayref($SQL)->[0][0];
-is ($res, 2, $t);
+## Now do onetimecopy=1
 
 exit;
 
