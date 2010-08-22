@@ -865,6 +865,11 @@ sub update {
     my $info;
     my $lookupcol = 'name';
     my $tabname;
+    if ($item =~ /^all$/i) {
+        $tabname = $item = $name;
+        $name = 'all';
+    }
+
     if ($item =~ /^code/i or $item =~ /^custom/i) {
         $tabname = $item = 'customcode';
     }
@@ -912,7 +917,7 @@ sub update {
     ## Because both 'table' and 'tables' are valid, but we want good output:
     (my $single_item = $item) =~ s/s$//;
 
-    if ($count < 1) {
+    if ($count < 1 and $name ne 'all') {
         $sth->finish();
         die qq{No matches found for $single_item "$name"\n};
     }
@@ -1179,6 +1184,22 @@ sub update {
             if ($count >= 1) {
                 push @{$change{$name}} => ['DIRECT', "Tables removed from herd: $count"];
             }
+            next;
+        }
+
+        ## Special table handling
+        if ('table' eq $single_item and 'all' eq $name) {
+            ## Can only change a few things globally
+            if ('standard_conflict' ne $n
+                 and 'analyze_after_copy' ne $n
+                     and 'vacuum_after_copy' ne $n) {
+                die qq{Sorry, cannot change that for all tables\n};
+            }
+            $SQL = "UPDATE bucardo.goat SET $n = ? WHERE reltype='table'";
+            ## Only one of targetdb and targetgroup can be set, no NULL the other one
+            $sth = $dbh->prepare($SQL);
+            $sth->execute($v);
+            push @{$change{'all tables'}} => [$n, 'N/A', $v];
             next;
         }
 

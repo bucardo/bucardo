@@ -74,9 +74,7 @@ $SQL = 'SELECT * FROM bucardo_test1';
 my $info = $dbhB->selectall_arrayref($SQL);
 
 ## Switch things up to try and trick the unique index
-my $table = 'bucardo_test1';
-$SQL = "UPDATE $table SET email = ? WHERE id = ?";
-$sth = $dbhA->prepare($SQL);
+SQL);
 $sth->execute('larrytemp', 2);
 $sth->execute('larry', 1);
 $sth->execute('moe', 3);

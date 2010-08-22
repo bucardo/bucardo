@@ -24,6 +24,10 @@ $t = q{Calling bucardo_ctl with 'add herd' gives expected message};
 $i = $bct->ctl('add herd');
 like($i, qr{Usage: add herd <name>}, $t);
 
+## Create 'monkey test' data as needed
+$bct->setup_monkey_data();
+exit;
+
 # Expects you've already run previous 02-monkey* tests without clearing the database
 ## Create and return handles for some test databases
 #my $dbhA = $bct->setup_database({db => 'A'});
