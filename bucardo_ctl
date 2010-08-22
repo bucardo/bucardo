@@ -1188,7 +1188,7 @@ sub update {
         }
 
         ## Special table handling
-        if ('table' eq $single_item and 'all' eq $name) {
+        if ('all' eq $name and 'table' eq $single_item) {
             ## Can only change a few things globally
             if ('standard_conflict' ne $n
                  and 'analyze_after_copy' ne $n
@@ -1196,10 +1196,22 @@ sub update {
                 die qq{Sorry, cannot change that for all tables\n};
             }
             $SQL = "UPDATE bucardo.goat SET $n = ? WHERE reltype='table'";
-            ## Only one of targetdb and targetgroup can be set, no NULL the other one
             $sth = $dbh->prepare($SQL);
             $sth->execute($v);
             push @{$change{'all tables'}} => [$n, 'N/A', $v];
+            next;
+        }
+
+        ## Special table handling
+        if ('all' eq $name and 'sequence' eq $single_item) {
+            ## Can only change a few things globally
+            if ('standard_conflict' ne $n) {
+                die qq{Sorry, cannot change that for all sequences\n};
+            }
+            $SQL = "UPDATE bucardo.goat SET $n = ? WHERE reltype='sequence'";
+            $sth = $dbh->prepare($SQL);
+            $sth->execute($v);
+            push @{$change{'all sequences'}} => [$n, 'N/A', $v];
             next;
         }
 
