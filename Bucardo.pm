@@ -1876,8 +1876,7 @@ sub start_mcp {
             } ## end standard conflict
 
             ## Swap syncs must have some way of resolving conflicts
-            if ($s->{synctype} eq 'swap' and !$g->{standard_conflict} and !exists $g->{code_conflict}
-                    and $g->{reltype} eq 'table') {
+            if ($s->{synctype} eq 'swap' and !$g->{standard_conflict} and !exists $g->{code_conflict}) {
                 $self->glog(qq{Warning! Tables used in swaps must specify a conflict handler. $g->{schemaname}.$g->{tablename} appears to have neither standard or custom handler.}, LOG_WARN);
                 return 0;
             }
