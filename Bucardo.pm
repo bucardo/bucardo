@@ -3121,7 +3121,7 @@ sub start_controller {
                                         $g->{binarypkey}[$x] ? 'text' : $g->{pkeytype}[$x],
                                         $x ? $x+1 : '',
                                         $g->{binarypkey}[$x] ? 'text' : $g->{pkeytype}[$x];
-                                        $cols ||= $g->{binarypkey}[0] ? qq{ENCODE(t.$qpk,'base64'),} : "t.$qpk";
+                                        $cols ||= $g->{binarypkey}[0] ? qq{ENCODE(t.$qpk,'base64') AS $qpk,} : "t.$qpk";
                                         $x++;
                                     }
                                     $clause =~ s/ AND $//;
@@ -4055,7 +4055,7 @@ sub start_kid {
                         $g->{binarypkey}[$x] ? 'text' : $g->{pkeytype}[$x],
                         $x ? $x+1 : '',
                         $g->{binarypkey}[$x] ? 'text' : $g->{pkeytype}[$x];
-                    $cols .= $g->{binarypkey}[0] ? qq{ENCODE(t.$qpk,'base64'),} : "t.$qpk,";
+                    $cols .= $g->{binarypkey}[0] ? qq{ENCODE(t.$qpk,'base64') AS $qpk,} : "t.$qpk,";
                     $x++;
                 }
                 $clause =~ s/ AND $//;
