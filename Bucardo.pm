@@ -5888,9 +5888,10 @@ sub start_kid {
                 my $pre = '';
                 for my $q (@{$g->{qpkey}}) {
                     $list .= sprintf '%s,',
-                        $g->{binarypkey}[$x++] ? "ENCODE($q,'base64')" : $q;
+                        $g->{binarypkey}[$x] ? "ENCODE($q,'base64')" : $q;
                     $pre .= sprintf q{%s||'|'||},
-                        $g->{binarypkey}[$x++] ? "ENCODE($q,'base64')" : "${q}::text";
+                        $g->{binarypkey}[$x] ? "ENCODE($q,'base64')" : "${q}::text";
+                    $x++;
                 }
                 ## We are pulling back a combined scalar, not necessarily the exact primary key
                 $pre =~ s/.......$/ AS id/;
