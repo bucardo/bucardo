@@ -1364,7 +1364,7 @@ sub start_mcp {
         $self->glog(('Loading sync table. Rows=' . (scalar (keys %{$self->{sync}}))), LOG_VERBOSE);
 
         ## At this point, we are authoritative, so we can safely clean out the q table
-        $SQL = q{
+        $SQL = qq{
           UPDATE bucardo.q
           SET aborted=$self->{mcp_clock_timestamp}, whydie=?
           WHERE started is NOT NULL
