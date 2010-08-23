@@ -280,6 +280,7 @@ sub empty_cluster {
 		local $dbh->{AutoCommit} = 1;
 		debug(qq{Creating database $dbname});
 		$dbh->do("CREATE DATABASE $dbname");
+		$dbh = $self->connect_database($clustername, $dbname);
 	}
 
 	return $dbh;
@@ -322,11 +323,11 @@ random_page_cost           = 2.5
 log_statement              = 'all'
 log_min_duration_statement = 0
 client_min_messages        = WARNING
-log_line_prefix            = '%s[%s] '
+log_line_prefix            = '%s %s[%s] '
 listen_addresses           = ''
 
 ",
-	$info->{port}, '%m', '%p';
+	$info->{port}, '%m', '%d', '%p';
 
 	## Make some per-version adjustments
 	if ($info->{ver} >= 8.3) {
