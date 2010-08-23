@@ -517,7 +517,7 @@ CREATE INDEX q_ppid ON bucardo.q (ppid,pid) WHERE ended IS NULL AND aborted IS N
 
 CREATE INDEX q_aborted ON bucardo.q(sync) WHERE started IS NOT NULL AND aborted IS NOT NULL AND ended IS NULL;
 
-CREATE INDEX q_cleanup ON bucardo.q(cdate) WHERE ended IS NOT NULL;
+CREATE INDEX q_cleanup ON bucardo.q(cdate) WHERE ended IS NOT NULL OR aborted IS NOT NULL;
 
 CREATE INDEX q_stathelper ON bucardo.q(cdate, sync) WHERE ended IS NOT NULL;
 
