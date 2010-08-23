@@ -1366,7 +1366,7 @@ sub start_mcp {
         ## At this point, we are authoritative, so we can safely clean out the q table
         $SQL = q{
           UPDATE bucardo.q
-          SET aborted=now(), whydie=?
+          SET aborted=$self->{mcp_clock_timestamp}, whydie=?
           WHERE started is NOT NULL
           AND ended IS NULL
           AND aborted IS NULL
