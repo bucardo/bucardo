@@ -31,10 +31,6 @@ bucardo_ctl.html
 .perlcriticrc
 t/01-basic.t
 t/02-simple.t
-t/02-monkey_with_db_table.t
-t/02-monkey_with_goat_table.t
-t/02-monkey_with_herd.t
-t/02-monkey_with_sync_table.t
 t/03-goat.t
 t/04-pushdelta.t
 t/05-fullcopy.t
