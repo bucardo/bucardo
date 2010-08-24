@@ -95,9 +95,9 @@ like ($res, qr/New sequences added: \d/, $t);
 ## Add a new fullcopy sync that goes from A to B
 $t = q{Adding a new fullcopy sync works};
 $command =
-"bucardo_ctl add sync fullcopyAB type=fullcopy source=therd targetdb=B";
+"bucardo_ctl add sync testfullcopy type=fullcopy source=therd targetdb=B";
 $res = $bct->ctl($command);
-like ($res, qr/Added sync "fullcopyAB"/, $t);
+like ($res, qr/Added sync "testfullcopy"/, $t);
 
 ## Create a database group consisting of A and B
 $t = q{Adding dbgroup 'slaves' works};
@@ -109,7 +109,7 @@ like ($res, qr/\QAdded database "B" to group "slaves"\E.*
               \QAdded database group "slaves"/xsm, $t);
 
 ## We want to know when the sync has finished
-$dbhX->do(q{LISTEN "bucardo_syncdone_fullcopyAB"});
+$dbhX->do(q{LISTEN "bucardo_syncdone_testfullcopy"});
 $dbhX->commit();
 
 ## Time to startup Bucardo
@@ -162,17 +162,17 @@ $dbhA->commit();
 ## Have it vacuum afterwards
 $t = q{Value of vacuum_after_copy can be changed};
 $command =
-'bucardo_ctl update sync fullcopyAB vacuum_after_copy=1';
+'bucardo_ctl update sync testfullcopy vacuum_after_copy=1';
 $res = $bct->ctl($command);
 like ($res, qr{vacuum_after_copy}, $t);
 
 ## Reload the sync
 $command =
-"bucardo_ctl reload sync fullcopyAB";
+"bucardo_ctl reload sync testfullcopy";
 $res = $bct->ctl($command);
 
 ## Kick the sync and wait for it to finish
-$bct->ctl('kick sync fullcopyAB 0');
+$bct->ctl('kick sync testfullcopy 0');
 
 ## Check the second database for the new rows
 for my $table (sort keys %tabletype) {
@@ -206,7 +206,7 @@ for my $table (keys %tabletype) {
 $dbhA->commit();
 
 ## Kick the sync and wait for it to finish
-$bct->ctl('kick sync fullcopyAB 0');
+$bct->ctl('kick sync testfullcopy 0');
 
 ## Rows should be gone from B now
 for my $table (sort keys %tabletype) {
@@ -229,7 +229,7 @@ for my $table (keys %tabletype) {
 $dbhA->commit();
 
 ## Kick the sync and wait for it to finish
-$bct->ctl('kick sync fullcopyAB 0');
+$bct->ctl('kick sync testfullcopy 0');
 
 ## B should have the two new rows
 for my $table (sort keys %tabletype) {
@@ -248,7 +248,7 @@ for my $table (keys %tabletype) {
     $dbhA->do($SQL);
 }
 $dbhA->commit();
-$bct->ctl('kick sync fullcopyAB 0');
+$bct->ctl('kick sync testfullcopy 0');
 
 ## B should have the updated rows
 for my $table (sort keys %tabletype) {
@@ -275,7 +275,7 @@ for my $table (keys %tabletype) {
     $dbhA->do($SQL);
     $dbhA->commit();
 }
-$bct->ctl('kick sync fullcopyAB 0');
+$bct->ctl('kick sync testfullcopy 0');
 
 ## B should have the updated rows
 for my $table (sort keys %tabletype) {
@@ -296,7 +296,7 @@ for my $table (sort keys %tabletype) {
     $dbhA->pg_putcopyend();
     $dbhA->commit();
 }
-$bct->ctl('kick sync fullcopyAB 0');
+$bct->ctl('kick sync testfullcopy 0');
 
 ## B should have the new rows
 for my $table (sort keys %tabletype) {
@@ -310,7 +310,7 @@ for my $table (sort keys %tabletype) {
 
 ## Modify the sync and have it go to B *and* C
 $command =
-"bucardo_ctl update sync fullcopyAB set targetgroup=slaves";
+"bucardo_ctl update sync testfullcopy set targetgroup=slaves";
 $res = $bct->ctl($command);
 
 ## Before the sync reload, C should not have anything
@@ -324,10 +324,10 @@ for my $table (sort keys %tabletype) {
 }
 
 $command =
-"bucardo_ctl reload sync fullcopyAB";
+"bucardo_ctl reload sync testfullcopy";
 $res = $bct->ctl($command);
 
-$bct->ctl('kick sync fullcopyAB 0');
+$bct->ctl('kick sync testfullcopy 0');
 
 ## After the sync is reloaded and kicked, C will have all the rows
 for my $table (sort keys %tabletype) {
@@ -346,7 +346,7 @@ for my $table (keys %tabletype) {
     $dbhA->do($SQL);
 }
 $dbhA->commit();
-$bct->ctl('kick sync fullcopyAB 0');
+$bct->ctl('kick sync testfullcopy 0');
 
 for my $table (sort keys %tabletype) {
 
@@ -366,7 +366,7 @@ for my $table (sort keys %tabletype) {
 $dbhA->do("SELECT setval('bucardo_test_seq1', 123)");
 $dbhA->commit();
 
-$bct->ctl("kick fullcopyAB 0");
+$bct->ctl("kick testfullcopy 0");
 
 $SQL = q{SELECT nextval('bucardo_test_seq1')};
 $t='Fullcopy replicated a sequence properly to B';
@@ -379,7 +379,7 @@ bc_deeply($result, $dbhC, $SQL, $t);
 $dbhA->do("SELECT setval('bucardo_test_seq1', 223, false)");
 $dbhA->commit();
 
-$bct->ctl("kick fullcopyAB 0");
+$bct->ctl("kick testfullcopy 0");
 
 $SQL = q{SELECT nextval('bucardo_test_seq1')};
 $t='Fullcopy replicated a sequence properly with a false setval to B';
@@ -392,8 +392,8 @@ bc_deeply($result, $dbhC, $SQL, $t);
 $dbhA->do("SELECT setval('bucardo_test_seq1', 345, true)");
 $dbhA->commit();
 
-$bct->ctl("kick fullcopyAB 0");
-wait_for_notice($dbhX, 'bucardo_syncdone_fullcopyAB', 5);
+$bct->ctl("kick testfullcopy 0");
+wait_for_notice($dbhX, 'bucardo_syncdone_testfullcopy', 5);
 
 $SQL = q{SELECT nextval('bucardo_test_seq1')};
 $t='Fullcopy replicated a sequence properly with a true setval to B';
@@ -418,23 +418,23 @@ $command =
 $res = $bct->ctl($command);
 like ($res, qr{\Qcustomselect : changed from (null) to "SELECT id FROM bucardo_test1"}, $t);
 
-$t = q{Set usecustomselect to true for sync fullcopyAB};
+$t = q{Set usecustomselect to true for sync testfullcopy};
 $command =
-"bucardo_ctl update sync fullcopyAB usecustomselect=true";
+"bucardo_ctl update sync testfullcopy usecustomselect=true";
 $res = $bct->ctl($command);
 like ($res, qr{usecustomselect : changed from "f" to "true"}, $t);
 
-$t = q{Reloaded the sync fullcopyAB};
+$t = q{Reloaded the sync testfullcopy};
 $command =
-"bucardo_ctl reload sync fullcopyAB";
+"bucardo_ctl reload sync testfullcopy";
 $res = $bct->ctl($command);
-like ($res, qr{Reloading sync fullcopyAB...DONE!}, $t);
+like ($res, qr{Reloading sync testfullcopy...DONE!}, $t);
 
 ## Update both id and inty, but only the former should get propagated
 $dbhA->do("UPDATE bucardo_test1 SET id=id + 100, inty=inty + 100");
 $dbhA->commit();
 
-$bct->ctl('kick sync fullcopyAB 0');
+$bct->ctl('kick sync testfullcopy 0');
 
 $t = q{Table bucardo_test1 copied only some rows to B due to customselect};
 $SQL = 'SELECT id, inty FROM bucardo_test1';
@@ -447,19 +447,19 @@ $result = [[1234569,9],[1234571,4],[1234572,55]];
 bc_deeply($result, $dbhB, $SQL, $t);
 
 ## Now try truncate mode instead of delete
-$t = q{Reloaded the sync fullcopyAB};
+$t = q{Reloaded the sync testfullcopy};
 $command =
-"bucardo_ctl update sync fullcopyAB deletemethod=truncate usecustomselect=f";
+"bucardo_ctl update sync testfullcopy deletemethod=truncate usecustomselect=f";
 $res = $bct->ctl($command);
 like ($res, qr{Changes made to sync}, $t);
 
-$t = q{Reloaded the sync fullcopyAB};
+$t = q{Reloaded the sync testfullcopy};
 $command =
-"bucardo_ctl reload sync fullcopyAB";
+"bucardo_ctl reload sync testfullcopy";
 $res = $bct->ctl($command);
-like ($res, qr{Reloading sync fullcopyAB...DONE!}, $t);
+like ($res, qr{Reloading sync testfullcopy...DONE!}, $t);
 
-$bct->ctl("kick fullcopyAB 0");
+$bct->ctl("kick testfullcopy 0");
 
 my $table = 'bucardo_test1';
 
