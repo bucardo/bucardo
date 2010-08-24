@@ -81,7 +81,7 @@ Bucardo version 4.5.0, released ??, 2010
 
   - Log the current configuration settings on startup. [GSM]
 
-  - Fix incorrect assignement of ppid in the bucardo.q table. [GSM]
+  - Fix incorrect assignment of ppid in the bucardo.q table. [GSM]
 
   - Remove unused 'kick_sleep' config variable. [GSM]
 
@@ -454,7 +454,7 @@ Bucardo version 3.0.8, released February 5, 2008
 
   - Fix a sorting problem in the bucardo-report script. [Jon Jensen <jon@endpoint.com>]
 
-  - Fix problem with after_sync code not firing at correct time for staylive kids. [GSM]
+  - Fix problem with after_sync code not firing at correct time for stayalive kids. [GSM]
 
 
 Bucardo version 3.0.7, released October 11, 2007

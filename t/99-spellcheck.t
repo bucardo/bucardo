@@ -157,6 +157,10 @@ subdirectory
 
 ## Changes
 
+
+- Allow multiple item updates, e.g. bucardo_ctl update sync s1 s2 s3 ping=true
+- Allow wildcards in item updates, e.g. bucardo_ctl update sync s* ping=true
+Aolmezov
 Backcountry
 Bahlai
 Boes
@@ -168,6 +172,7 @@ FreeBSD
 GSM
 Gugic
 Kebrt
+Machado
 Mathieu
 NAMEDATALEN
 PgBouncer's
@@ -175,6 +180,8 @@ PID
 PIDCLEANUP
 PIDs
 Refactor
+Rosser
+Schwarz
 SMTP
 Sendmail
 Tolley
@@ -182,11 +189,15 @@ UNLISTEN
 Vilem
 Wendt
 Yan
+addallsequences
+addalltables
 attnums
 boolean
 bytea
+checktime
 chunking
 config
+cnt
 ctl
 customcode
 dbhost
@@ -199,9 +210,11 @@ getconn
 ident
 inactivedestroy
 intra
+kidsalive
 localtime
 maxkicks
 mcp
+migrator
 multi
 onetimecopy
 pgbouncer
@@ -213,14 +226,18 @@ rc
 respawn
 rowid
 schemas
+slony
 smallint
 sourcedbh
+sourcelimit
 src
-staylive
+stayalive
+targetlimit
 tcp
 timestamp
 timestamptz
 trigrules
+upsert
 wildcards
 
 ## TODO
@@ -268,6 +285,7 @@ GetOptions
 MCP
 notimer
 piddir
+pkonly
 qquote
 retrysleep
 rootdb
@@ -374,7 +392,7 @@ dbhA
 dbhB
 dbhX
 diag
-dropschema
+droptest
 env
 fff
 india
@@ -390,6 +408,7 @@ Pushdelta
 qq
 Spellcheck
 textfiles
+therd
 YAML
 YAMLiciousness
 yml
@@ -426,6 +445,7 @@ Sys
 Syslog
 bsd
 bugtracker
+bugzilla
 repo
 sourceforge
 url
