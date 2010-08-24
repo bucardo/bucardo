@@ -30,15 +30,10 @@ bucardo_ctl.html
 ## Testing-related stuff
 .perlcriticrc
 t/01-basic.t
-t/08-wildkick.t
 t/09-uniqueconstraint.t
 t/10-fullcopy.t
 t/10-pushdelta.t
 t/10-swap.t
-t/11-customselect.t
-t/12-addtable.t
-t/13-ddl.t
-t/14-truncate.t
 t/15-star.t
 t/98-cleanup.t
 t/99-signature.t
