@@ -1426,12 +1426,12 @@ sub kick {
                             $exitstatus = 2;
                         }
                         elsif ($name =~ /^bucardo_syncdone_${sync}_(.+)$/) {
-                            my $new = sprintf "$1(%ds) ", ceil(time-$time);
+                            my $new = sprintf '%s(%ds) ', $1, ceil(time-$time);
                             print $new unless $QUIET;
                             $printstring .= $new;
                         }
                         elsif ($name =~ /^bucardo_synckill_${sync}_(.+)$/) {
-                            my $new = sprintf "%s KILLED (%ds) ", $1, ceil(time-$time);
+                            my $new = sprintf '%s KILLED (%ds) ', $1, ceil(time-$time);
                             print $new unless $QUIET;
                             $printstring .= $new;
                             $exitstatus = 2;
@@ -2721,7 +2721,7 @@ sub list_syncs {
     my $usage = usage('list_syncs');
 
     ## Strip out special words from the nouns list as modifiers
-    my (@tmod,@smod);;
+    my (@tmod,@smod);
     my $WHERE = '';
     for my $term (@nouns) {
         if ($term =~ /^(?:swap|pushdelta|fullcopy)$/i) {
@@ -4511,7 +4511,7 @@ sub domain_exists {
 
     ## Checks if a domain exists. Returns 0 or 1
     my ($schema,$name) = @_;
-    my $SQL = 
+    my $SQL =
           q{SELECT count(*) FROM pg_catalog.pg_type t }
         . q{JOIN pg_namespace n ON (n.oid = t.typnamespace) }
         . q{WHERE t.typtype = 'd' AND n.nspname = ? AND t.typname = ?};
@@ -5198,10 +5198,10 @@ sub upgrade {
 
     ## Drop any old functions
     for my $row (@old_functions) {
-        my ($name, $args) = @$row;
-        next if ! function_exists('bucardo', $name, $args);
-        clog "Dropped function $name($args)";
-        upgrade_and_log(qq{DROP FUNCTION bucardo."$name"($args)});
+        my ($name, $largs) = @$row;
+        next if ! function_exists('bucardo', $name, $largs);
+        clog "Dropped function $name($largs)";
+        upgrade_and_log(qq{DROP FUNCTION bucardo."$name"($largs)});
         $changes++;
     }
 
@@ -5374,7 +5374,7 @@ sub upgrade {
     ## Check that object comments exist and match
     for my $row (@comlist) {
         my ($type,$schema,$relation,$comment,$full) = @$row;
-        my $current_comment = 
+        my $current_comment =
             $type eq 'table' ? table_comment($schema,$relation)
             : $type eq 'domain' ? domain_comment($schema,$relation)
             : 'Unkonwn type';

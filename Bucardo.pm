@@ -159,7 +159,7 @@ sub new {
         $self->{dryrun} = 1;
     }
     if ($self->{dryrun}) {
-        $self->glog("'** DRYRUN - Syncs will not be committed! **", LOG_WARN);
+        $self->glog(q{** DRYRUN - Syncs will not be committed! **}, LOG_WARN);
     }
 
     ## This gets appended to the process description ($0)
@@ -735,7 +735,7 @@ sub start_mcp {
     $self->show_db_version_and_time($self->{masterdbh}, 'Master DB ');
     $self->glog("PID: $$", LOG_WARN);
     $self->glog("Backend PID: $mcp_backend", LOG_WARN);
-    $self->glog("Postgres library version: " . $self->{masterdbh}{pg_lib_version}, LOG_WARN);
+    $self->glog('Postgres library version: ' . $self->{masterdbh}{pg_lib_version}, LOG_WARN);
     $self->glog("bucardo_ctl: $old0", LOG_WARN);
     $self->glog('Bucardo.pm: ' . $INC{'Bucardo.pm'}, LOG_WARN);
     $self->glog((sprintf 'OS: %s Perl: %s %vd', $^O, $^X, $^V), LOG_WARN);
@@ -1763,7 +1763,7 @@ sub start_mcp {
                 my $md = $dbinfo->{$name}{makedelta};
                 $s->{does_target_makedelta} = 1 if $md eq 'on';
                 if ($oldval ne $md and $oldval) {
-                    $self->glog(qq{Warning! Not all target databases have the same makedelta}, LOG_WARN);
+                    $self->glog(q{Warning! Not all target databases have the same makedelta}, LOG_WARN);
                 }
                 $oldval = $md;
             }
@@ -4491,9 +4491,9 @@ sub start_kid {
 
         ## Start the main transaction. From here on out, speed is key
         ## Note that all database handles are currently not in a txn (last action was commit or rollback)
-        $targetdbh->do("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE");
+        $targetdbh->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE');
         if ($synctype eq 'swap' or $synctype eq 'pushdelta') {
-            $sourcedbh->do("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE");
+            $sourcedbh->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE');
         }
 
         ## We may want to lock all the tables

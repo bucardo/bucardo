@@ -18,6 +18,7 @@ profile-strictness = quiet
 ## Four:
 ##
 
+[-BuiltinFunctions::RequireBlockGrep]
 ## We are just fine with 'die', thanks very much
 [-ErrorHandling::RequireUseOfExceptions]
 [-InputOutput::ProhibitOneArgSelect]
@@ -28,10 +29,10 @@ profile-strictness = quiet
 ## This does such a poor job we have to exclude it
 [-RegularExpressions::ProhibitCaptureWithoutTest]
 [-RegularExpressions::ProhibitFixedStringMatches]
+[-ValuesAndExpressions::ProhibitConstantPragma]
 [-ValuesAndExpressions::ProhibitMixedBooleanOperators]
 [-Variables::RequireLocalizedPunctuationVars]
 [-InputOutput::ProhibitExplicitStdin]
-
 ##
 ## Three:
 ##
@@ -94,6 +95,7 @@ profile-strictness = quiet
 [-InputOutput::RequireCheckedSyscalls]
 [-Miscellanea::RequireRcsKeywords]
 [-NamingConventions::Capitalization]
+[-RegularExpressions::ProhibitEnumeratedClasses]
 [-RegularExpressions::ProhibitEscapedMetacharacters]
 
 ## Change the severity level of some specific items
