@@ -15,14 +15,12 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Handle partitioned tables
 - Allow notification emails to be regex sorted, e.g. serialization warnings
 - Make bucardo_ctl use same algorithm as bucardo-report for grabbing sync history
-- Have bucardo_ctl give details on KILLED syncs while kicking
 - Address all XXX and TODO inside Bucardo.pm
 - Have a single table track current status of each sync/target combo. This would 
   allow the controller to do smarter things, and would make the reporting much faster
 - Add a pause mode
 - Add exception code for DELETE
 - Purge or move audit_pid on startup
-- Break logging into named levels
 - I8n all messages/docs/etc.
 - Allow targets to be hard-linked: nobody goes on until everyone has finished
 - Support large objects
@@ -35,7 +33,6 @@ These range the gamut from wildly speculative ideas to must-have features.
 - bucardo_help() function to explain all
 - Handle non-orderable data types such as polygons
 - Put this list into a bug tracker
-- Document all LISTEN/NOTIFY strings in one area
 - Use 2PC where possible
 - Consider intra-kid communication to copy tables one-by-one to keep things in cache
 - Use DBD::Pg async mode to reduce waiting, esp. for multi-master
@@ -44,6 +41,4 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Consider keeping long-term stats for a sync/table: total rows transferred, etc.
 - Add support for manual DDL changes (in progress)
 - Add support for automatic DDL changes (in progress)
-- Allow multiple item updates, e.g. bucardo_ctl update sync s1 s2 s3 ping=true
-- Allow wildcards in item updates, e.g. bucardo_ctl update sync s* ping=true
-- Cacading slaves: makedelta should create infrastructure as necessary
+- Cascading slaves: makedelta should create infrastructure as necessary
