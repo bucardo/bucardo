@@ -17,7 +17,7 @@ none/
 .tmp$
 .blame$
 bucardo.warning.log
-t/00_release.t
+t/00-release.t
 t/99-yaml.t
 t/99-perlcritic.t
 t/99-spellcheck.t
