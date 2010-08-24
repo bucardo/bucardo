@@ -24,28 +24,28 @@ closedir $dh or warn qq{Could not close the 'scripts' directory: $!\n};
 plan tests => @important_files + @test_files + @script_files;
 
 for my $file (@important_files) {
-	my $t=qq{File $file compiles without errors};
-	eval {
-		require $file;
-	};
-	is($@, q{}, $t);
-	$@ and BAIL_OUT qq{Cannot continue until $file compiles cleanly\n};
+    my $t=qq{File $file compiles without errors};
+    eval {
+        require $file;
+    };
+    is($@, q{}, $t);
+    $@ and BAIL_OUT qq{Cannot continue until $file compiles cleanly\n};
 }
 
 for my $file (@test_files) {
-	my $t=qq{File $file compiles without errors};
-	my $com = "perl -c t/$file 2>&1";
-	my $res = qx{$com};
-	chomp $res;
-	is($res, qq{t/$file syntax OK}, $t);
+    my $t=qq{File $file compiles without errors};
+    my $com = "perl -c t/$file 2>&1";
+    my $res = qx{$com};
+    chomp $res;
+    is($res, qq{t/$file syntax OK}, $t);
 }
 
 for my $file (@script_files) {
-	my $t=qq{File $file compiles without errors};
-	my $com = "perl -c scripts/$file 2>&1";
-	my $res = qx{$com};
-	chomp $res;
-	is($res, qq{scripts/$file syntax OK}, $t);
+    my $t=qq{File $file compiles without errors};
+    my $com = "perl -c scripts/$file 2>&1";
+    my $res = qx{$com};
+    chomp $res;
+    is($res, qq{scripts/$file syntax OK}, $t);
 }
 
 exit;
