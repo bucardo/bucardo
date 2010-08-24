@@ -4491,10 +4491,8 @@ sub start_kid {
 
         ## Start the main transaction. From here on out, speed is key
         ## Note that all database handles are currently not in a txn (last action was commit or rollback)
+        $sourcedbh->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE');
         $targetdbh->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE');
-        if ($synctype eq 'swap' or $synctype eq 'pushdelta') {
-            $sourcedbh->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE');
-        }
 
         ## We may want to lock all the tables
         ## TODO: alternate ways to trigger this
