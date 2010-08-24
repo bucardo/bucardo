@@ -15,7 +15,7 @@ use Data::Dumper;
 
 use vars qw/$SQL $sth $count $COM %dbh/;
 
-my $DEBUG = 1;
+my $DEBUG = $ENV{BUCARDO_DEBUG} || 0;
 
 use base 'Exporter';
 our @EXPORT = qw/%tabletype %sequences %val compare_tables bc_deeply clear_notices wait_for_notice $location/;
