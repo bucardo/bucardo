@@ -56,7 +56,7 @@ our %tabletype =
      'bucardo_test9' => 'int_unsigned',
      );
 
-our @tables2empty = (qw/droptest bucardo_test_multicol/);
+our @tables2empty = (qw/droptest/);
 
 our %sequences =
     (
@@ -668,16 +668,6 @@ sub add_test_schema {
             };
         $table =~ /0/ and $SQL =~ s/NEW.inty/0/;
         $dbh->do($SQL);
-    }
-
-    if ( !table_exists($dbh => 'bucardo_test_multicol') ) {
-        $tcount++;
-        $dbh->do(q{CREATE TABLE bucardo_test_multicol (
-        id   INTEGER,
-        id2  INTEGER,
-        id3  INTEGER,
-        data TEXT,
-        PRIMARY KEY (id, id2, id3))});
     }
 
     ## Create one sequence for each table type
@@ -1376,7 +1366,6 @@ sub add_test_tables_to_herd {
     }
 
     my $addstring = join ' ' => sort keys %tabletype;
-    $addstring .= ' bucardo_test_multicol';
     my $com = "add table $addstring db=$db herd=$herd";
     $result = $self->ctl($com);
     if ($result !~ /Added table/) {
