@@ -1,4 +1,5 @@
-#!perl
+#!/usr/bin/env perl
+# -*-mode:cperl; indent-tabs-mode: nil-*-
 
 ## This test creates a star-like set of databases. A is the center; B and C are two spokes.
 ## The idea is to see if we can replicate everything everywhere with A

@@ -1,4 +1,5 @@
-#!perl
+#!/usr/bin/env perl
+# -*-mode:cperl; indent-tabs-mode: nil-*-
 
 ## Cleanup any mess we made
 

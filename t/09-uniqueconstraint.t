@@ -1,4 +1,5 @@
-#!perl
+#!/usr/bin/env perl
+# -*-mode:cperl; indent-tabs-mode: nil-*-
 
 ## Test pushdelta functionality, with custom code
 
