@@ -55,6 +55,8 @@ Bucardo version 4.5.0, released ??, 2010
   - Add a --force option so we can remove databases via 'bucardo_ctl remove db'
     along with all related goats and syncs. [GSM]
 
+  - Remove race condition from bucardo_purge_q_table() [GSM]
+
   - Add new options for 'bucardo_ctl add db': addalltables and addallsequences [GSM]
 
   - Don't bother comparing the 'log_cnt' field of sequences. [Rosser Schwarz]
