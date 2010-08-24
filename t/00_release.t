@@ -113,26 +113,58 @@ else {
 	}
 }
 
-$file = 'bucardo.schema';
-open $fh, '<', $file or die qq{Could not open "$file": $!\n};
-$good = 1;
-while (<$fh>) {
-	if (/\t/) {
-		diag "Found a tab at line $. of bucardo.schema\n";
-		$good = 0;
-	}
-	if (! /^[\S ]*/) {
-		diag "Invalid character at line $. of bucardo.schema: $_\n";
-		$good = 0; die;
-	}
-}
-close $fh or warn qq{Could not close "$file": $!\n};
+## Make sure all files in the MANIFEST are "clean":
+## no tabs, no unusual characters
 
-if ($good) {
-	pass 'The bucardo.schema file has no tabs or unusual characters';
+$file = 'MANIFEST';
+open my $mfh, '<', $file or die qq{Could not open "$file": $!\n};
+while (<$mfh>) {
+	next if /^#/;
+	file_is_clean($1) if /(\S.+)/;
 }
-else {
-	fail 'The bucardo.schema file did not pass inspection!';
+close $mfh or warn qq{Could not close "$file": $!\n};
+exit;
+
+
+$file = 'bucardo.schema';
+file_is_clean($file);
+file_is_clean('Bucardo.pm');
+
+sub file_is_clean {
+
+	my $file = shift or die;
+
+	if (!open $fh, '<', $file) {
+		warn qq{Could not open "$file": $!\n};
+		return;
+	}
+	$good = 1;
+	my $inside_copy = 0;
+	while (<$fh>) {
+		if (/^COPY .+ FROM stdin/i) {
+			$inside_copy = 1;
+		}
+		if (/^\\./ and $inside_copy) {
+			$inside_copy = 0;
+		}
+		if (/\t/ and $file ne 'Makefile.PL' and $file !~ /\.html$/ and ! $inside_copy) {
+			diag "Found a tab at line $. of $file\n";
+			$good = 0;
+		}
+		if (! /^[\S ]*/) {
+			diag "Invalid character at line $. of $file: $_\n";
+			$good = 0; die;
+		}
+	}
+	close $fh or warn qq{Could not close "$file": $!\n};
+
+	if ($good) {
+		pass "The $file file has no tabs or unusual characters";
+	}
+	else {
+		fail "The $file file did not pass inspection!";
+	}
+
 }
 
 exit;

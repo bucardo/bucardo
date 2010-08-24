@@ -75,8 +75,8 @@ is_deeply($result, $result2, 'Newly-added table is correctly replicated');
 exit;
 
 END {
-	$bct->stop_bucardo($dbhX);
-	$dbhX->disconnect();
-	$dbhA->disconnect();
-	$dbhB->disconnect();
+    $bct->stop_bucardo($dbhX);
+    $dbhX->disconnect();
+    $dbhA->disconnect();
+    $dbhB->disconnect();
 }

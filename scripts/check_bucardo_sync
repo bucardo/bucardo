@@ -29,14 +29,14 @@ my %opt;
 $opt{timeout} = 25;
 $opt{verbose} = 0;
 GetOptions(\%opt,
-		   'version',
-		   'verbose',
-		   'help',
-		   'url=s',
-		   'timeout=i',
-		   'delta=i',
-		   'track=i',
-		   'debug=s',
+           'version',
+           'verbose',
+           'help',
+           'url=s',
+           'timeout=i',
+           'delta=i',
+           'track=i',
+           'debug=s',
 );
 
 $opt{version} and print qq{$0 Version $VERSION\n} and exit $ERRORS{'OK'};
@@ -47,7 +47,7 @@ $opt{url} or print "ERROR: No URL was passed in\n$USAGE" and exit $ERRORS{'UNKNO
 
 ## Special url shortcuts
 if ($opt{url} eq 'all') {
-	$opt{url} = 'http://www.example.com/cgi-bin/bucardo-report?host=all';
+    $opt{url} = 'http://www.example.com/cgi-bin/bucardo-report?host=all';
 }
 
 my $MAX_DELTA = $opt{delta} || 50_000;
@@ -139,10 +139,10 @@ for my $host (sort keys %bc) {
     for my $host
       (
        sort {
-	$a->{sync} cmp $b->{sync}
-	or $a->{target} cmp $b->{target}
-	}
-	@{$B->{overduedetail}}) {
+    $a->{sync} cmp $b->{sync}
+    or $a->{target} cmp $b->{target}
+    }
+    @{$B->{overduedetail}}) {
       $wdetail .= "$host->{sync}${SEP}$host->{target}${SEP}$host->{time} ";
     }
   }
@@ -153,31 +153,31 @@ for my $host (sort keys %bc) {
     for my $host
       (
        sort {
-	$a->{sync} cmp $b->{sync}
-	or $a->{target} cmp $b->{target}
-	}
-	@{$B->{expireddetail}}) {
+    $a->{sync} cmp $b->{sync}
+    or $a->{target} cmp $b->{target}
+    }
+    @{$B->{expireddetail}}) {
       $edetail .= "$host->{sync}${SEP}$host->{target}${SEP}$host->{time} ";
     }
   }
   ## Check for syncs that are dying
   if (exists $B->{death} and $B->{death} > 0) {
-	$wmsg .= "$host failed syncs: $B->{death} ";
+    $wmsg .= "$host failed syncs: $B->{death} ";
     $ddetail .= " $host failure details: ";
-	if ($B->{deathdetail}) {
-	  for my $host
-		(
-		 sort {
-		   $a->{sync} cmp $b->{sync}
-			 or $a->{target} cmp $b->{target}
-		   }
-		 @{$B->{deathdetail}}) {
-		  $ddetail .= "$host->{sync}${SEP}$host->{target}${SEP}$host->{time} ";
-		}
-	}
-	else {
-	  $ddetail .= '???';
-	}
+    if ($B->{deathdetail}) {
+      for my $host
+        (
+         sort {
+           $a->{sync} cmp $b->{sync}
+             or $a->{target} cmp $b->{target}
+           }
+         @{$B->{deathdetail}}) {
+          $ddetail .= "$host->{sync}${SEP}$host->{target}${SEP}$host->{time} ";
+        }
+    }
+    else {
+      $ddetail .= '???';
+    }
   }
   ## Check for bloat in the support tables
   if ($B->{delta} > $MAX_DELTA) {

@@ -30,72 +30,72 @@ status_cmd="${name}_status"
 
 bucardo_ctl_start()
 {
-	if [ -x ${command} ]; then
-		${command} ${bucardo_ctl_flags} start "Started by rc script."
-	else
-		echo "${command} not found or not executable!"
-		exit 1
-	fi
+    if [ -x ${command} ]; then
+        ${command} ${bucardo_ctl_flags} start "Started by rc script."
+    else
+        echo "${command} not found or not executable!"
+        exit 1
+    fi
 }
 
 bucardo_ctl_stop()
 {
-	if [ -x ${command} ]; then
-		${command} ${bucardo_ctl_flags} stop "Stopped by rc script."
-	else
-		echo "${command} not found or not executable!"
-		exit 1
-	fi
+    if [ -x ${command} ]; then
+        ${command} ${bucardo_ctl_flags} stop "Stopped by rc script."
+    else
+        echo "${command} not found or not executable!"
+        exit 1
+    fi
 }
 
 bucardo_ctl_reload()
 {
-	if [ -x ${command} ]; then
-		${command} ${bucardo_ctl_flags} reload_config
-	else
-		echo "${command} not found or not executable!"
-		exit 1
-	fi
+    if [ -x ${command} ]; then
+        ${command} ${bucardo_ctl_flags} reload_config
+    else
+        echo "${command} not found or not executable!"
+        exit 1
+    fi
 }
 
 bucardo_ctl_restart()
 {
-	if [ -x ${command} ]; then
-		${command} ${bucardo_ctl_flags} stop "Restarting: Stopped by rc script"
-		${command} ${bucardo_ctl_flags} start "Restarting: Started by rc script"
-	else
-		echo "${command} not found or not executable!"
-		exit 1
-	fi
+    if [ -x ${command} ]; then
+        ${command} ${bucardo_ctl_flags} stop "Restarting: Stopped by rc script"
+        ${command} ${bucardo_ctl_flags} start "Restarting: Started by rc script"
+    else
+        echo "${command} not found or not executable!"
+        exit 1
+    fi
 }
 
 bucardo_ctl_kick()
 {
-	if [ -x ${command} ]; then
-		if [ $# -gt 0 ]; then
-			${command} ${bucardo_ctl_flags} kick $*
-		else
-			echo "Specifiy sync name to kick off"
-			exit 1
-		fi
-	else
-		echo "${command} not found or not executable!"
-		exit 1
-	fi
+    if [ -x ${command} ]; then
+        if [ $# -gt 0 ]; then
+            ${command} ${bucardo_ctl_flags} kick $*
+        else
+            echo "Specifiy sync name to kick off"
+            exit 1
+        fi
+    else
+        echo "${command} not found or not executable!"
+        exit 1
+    fi
 }
 
 bucardo_ctl_status()
 {
-	if [ -x ${command} ]; then
-		if [ $# -gt 0 ]; then
-			${command} ${bucardo_ctl_flags} status $*
-		else
-			${command} ${bucardo_ctl_flags} status
-		fi
-	else
-		echo "${command} not found or not executable!"
-		exit 1
-	fi
+    if [ -x ${command} ]; then
+        if [ $# -gt 0 ]; then
+            ${command} ${bucardo_ctl_flags} status $*
+        else
+            ${command} ${bucardo_ctl_flags} status
+        fi
+    else
+        echo "${command} not found or not executable!"
+        exit 1
+    fi
 
 }
 

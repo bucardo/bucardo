@@ -45,9 +45,9 @@ $bct->restart_bucardo($dbhX);
 exit;
 
 END {
-	$bct->stop_bucardo($dbhX);
-	$dbhX->disconnect();
-	$dbhA->disconnect();
-	$dbhB->disconnect();
-	$dbhC->disconnect();
+    $bct->stop_bucardo($dbhX);
+    $dbhX->disconnect();
+    $dbhA->disconnect();
+    $dbhB->disconnect();
+    $dbhC->disconnect();
 }

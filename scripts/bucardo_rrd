@@ -36,13 +36,13 @@ my @q;
 while (<DATA>) {
   next if /^\s*#/ or /^\s*$/;
   if (/^DB:(\w+)/) {
-	my $newdb = $1;
-	push @q, [$db,$query] if defined $query;
-	$db = $newdb;
-	$query = '';
+    my $newdb = $1;
+    push @q, [$db,$query] if defined $query;
+    $db = $newdb;
+    $query = '';
   }
   else {
-	$query .= $_;
+    $query .= $_;
   }
 }
 push @q, [$db,$query] if defined $query and length $query;
@@ -55,10 +55,10 @@ for (@q) {
   my $sth = $dbh->{$db}->prepare($sql);
   $sth->execute();
   for my $row (@{$sth->fetchall_arrayref({})}) {
-	for my $key (keys %$row) {
-	  $info->{$key} = $row->{$key};
-	}
-	last;
+    for my $key (keys %$row) {
+      $info->{$key} = $row->{$key};
+    }
+    last;
   }
 }
 
@@ -91,19 +91,19 @@ for my $row (@{$dbh->{bucardo}->selectall_arrayref($query)}) {
   $info->{aborts}++;
   $reason ||= '';
   if ($reason =~ /deadlock/) {
-	$abort{deadlock}++;
+    $abort{deadlock}++;
   }
   elsif ($reason =~ /could not serialize/) {
-	$abort{serialize}++;
+    $abort{serialize}++;
   }
   elsif ($reason =~ /route to host/) {
-	$abort{route}++;
+    $abort{route}++;
   }
   elsif ($reason =~ /unexpectedly/) {
-	$abort{killed}++;
+    $abort{killed}++;
   }
   else {
-	$abort{unknown}++;
+    $abort{unknown}++;
   }
 }
 

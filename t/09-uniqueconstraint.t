@@ -204,8 +204,8 @@ is($dbhA->do('SELECT * FROM uniq_cc_flag'), 1, 'Custom code exception handler ra
 exit;
 
 END {
-	$bct->stop_bucardo($dbhX);
-	$dbhX->disconnect();
-	$dbhA->disconnect();
-	$dbhB->disconnect();
+    $bct->stop_bucardo($dbhX);
+    $dbhX->disconnect();
+    $dbhA->disconnect();
+    $dbhB->disconnect();
 }

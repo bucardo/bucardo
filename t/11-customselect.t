@@ -31,10 +31,10 @@ $bct->add_test_tables_to_herd('A', 'testherd1');
 
 ## Create tables for this test
 for my $dbh (($dbhA, $dbhB)) {
-	for my $t (qw/csone csmulti/) {
-		if (BucardoTesting::table_exists($dbh, $t)) {
-			$dbh->do("DROP TABLE $t");
-		}
+    for my $t (qw/csone csmulti/) {
+        if (BucardoTesting::table_exists($dbh, $t)) {
+            $dbh->do("DROP TABLE $t");
+        }
     }
     $dbh->do(q{
         CREATE TABLE csone (
@@ -112,7 +112,7 @@ $dbhB->do(q{TRUNCATE TABLE csone});
 $dbhA->do(q{DELETE FROM csone WHERE id <> 2});
 $dbhA->commit;
 for my $x (1..3) {
-	$dbhB->do(qq{ALTER TABLE csone DROP COLUMN field$x});
+    $dbhB->do(qq{ALTER TABLE csone DROP COLUMN field$x});
 }
 $dbhB->do(q{ALTER TABLE csone ADD COLUMN f1 DATE});
 $dbhB->do(q{ALTER TABLE csone ADD COLUMN f2 BIGINT});
@@ -133,8 +133,8 @@ is_deeply($aa, $bb, 'customselect works for target with different columns');
 exit;
 
 END {
-	$bct->stop_bucardo($dbhX);
-	$dbhX->disconnect();
-	$dbhA->disconnect();
-	$dbhB->disconnect();
+    $bct->stop_bucardo($dbhX);
+    $dbhX->disconnect();
+    $dbhA->disconnect();
+    $dbhB->disconnect();
 }

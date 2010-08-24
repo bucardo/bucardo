@@ -64,9 +64,9 @@
 <pre>
   ./bucardo_ctl add database newdb name=internal_name port=5432 host=myserver</pre>
 <pre>
-  ./bucardo_ctl add all tables db=foo</pre>
+  ./bucardo_ctl add all tables db=foo [herd=x] [pkonly]</pre>
 <pre>
-  ./bucardo_ctl add all sequences db=foo</pre>
+  ./bucardo_ctl add all sequences db=foo [herd=x]</pre>
 <pre>
   ./bucardo_ctl add herd newherd table1 table2 table3 ...</pre>
 <pre>
@@ -177,7 +177,7 @@ after the type will look up all matching entries.</p>
 <p>Usage:  add &lt;item_type&gt; &lt;item_name&gt;</p>
 <p>Usage:  add database &lt;dbname&gt; name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx ssp=1/0</p>
 <p>Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx herd=xxx</p>
-<p>Usage:  add all tables herd=xxx</p>
+<p>Usage:  add all tables [herd=xxx] [pkonly]</p>
 <p>Usage:  add sequence [schema].table herd=xxx</p>
 <p>Usage:  add all sequences herd=xxx</p>
 <p>Usage:  add sync syncname options</p>

@@ -23,7 +23,7 @@ my $dbhA = $bct->blank_database('A');
 ## Bail out if the version if not high enough
 my $ver = $dbhA->{pg_server_version};
 if ($ver < 80400) {
-	plan (skip_all =>  "Cannot test truncate triggers unless version 8.4 or greater - this is $ver");
+    plan (skip_all =>  "Cannot test truncate triggers unless version 8.4 or greater - this is $ver");
 }
 plan tests => 13;
 
@@ -126,9 +126,9 @@ $SQL = q{SELECT tname,sync,targetdb FROM bucardo.bucardo_truncate_trigger_log};
 $result = $dbhA->selectall_arrayref($SQL);
 is_deeply($result,
 [
-	['bucardo_test1','truncatetest','B'],
-	['bucardo_test1','truncatetest','B'],
-	['bucardo_test1','truncatetest','B'],
+    ['bucardo_test1','truncatetest','B'],
+    ['bucardo_test1','truncatetest','B'],
+    ['bucardo_test1','truncatetest','B'],
 ]
 , $t);
 
@@ -141,16 +141,16 @@ $SQL = q{SELECT tname,sync,targetdb FROM bucardo.bucardo_truncate_trigger_log};
 $result = $dbhA->selectall_arrayref($SQL);
 is_deeply($result,
 [
-	['bucardo_test1','truncatetest','B'],
-	['bucardo_test1','truncatetest','B'],
-	['bucardo_test1','truncatetest','B'],
+    ['bucardo_test1','truncatetest','B'],
+    ['bucardo_test1','truncatetest','B'],
+    ['bucardo_test1','truncatetest','B'],
 ]
 , $t);
 
 END {
-	$bct->stop_bucardo($dbhX);
-	$dbhX and $dbhX->disconnect();
-	$dbhA and $dbhA->disconnect();
-	$dbhB and $dbhB->disconnect();
-	$dbhC and $dbhC->disconnect();
+    $bct->stop_bucardo($dbhX);
+    $dbhX and $dbhX->disconnect();
+    $dbhA and $dbhA->disconnect();
+    $dbhB and $dbhB->disconnect();
+    $dbhC and $dbhC->disconnect();
 }

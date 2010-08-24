@@ -27,6 +27,8 @@ Bucardo version 4.5.0, released ??, 2010
 
   - Show the reason why a sync failed on a failed bucardo_ctl kick. [GSM]
 
+  - Fix errors with bytea and swap syncs. [GSM]
+
   - Add a log_level parameter, and classify all messages inside Bucardo.pm
     with a log_level of TERSE, NORMAL, VERBOSE, or DEBUG. [Rosser Schwarz and GSM]
 

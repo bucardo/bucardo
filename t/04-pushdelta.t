@@ -43,27 +43,27 @@ $dbhX->commit();
 $bct->restart_bucardo($dbhX);
 
 sub test_empty_drop {
-	my ($table, $dbh) = @_;
-	my $DROPSQL = 'SELECT * FROM droptest';
-	my $line = (caller)[2];
-	$t=qq{ Triggers and rules did NOT fire on remote table $table};
-	$result = [];
-	bc_deeply($result, $dbhB, $DROPSQL, $t, $line);
+    my ($table, $dbh) = @_;
+    my $DROPSQL = 'SELECT * FROM droptest';
+    my $line = (caller)[2];
+    $t=qq{ Triggers and rules did NOT fire on remote table $table};
+    $result = [];
+    bc_deeply($result, $dbhB, $DROPSQL, $t, $line);
 }
 
 ## Test unique index violation problems
 ## Test a deletion
 for my $table (sort keys %tabletype) {
-	my $pkeyname = $table =~ /test5/ ? q{"id space"} : 'id';
-	my $type = $tabletype{$table};
-	my $val1 = $val{$type}{1};
-	my $val2 = $val{$type}{2};
-	my $val3 = $val{$type}{3};
-	$SQL = "INSERT INTO $table($pkeyname, inty, data1, email) VALUES (?,?,?,?)";
-	$sth = $dbhA->prepare($SQL);
-	$sth->execute($val1, 1, 1, 'moe');
-	$sth->execute($val2, 2, 2, 'larry');
-	$sth->execute($val3, 3, 3, 'curly');
+    my $pkeyname = $table =~ /test5/ ? q{"id space"} : 'id';
+    my $type = $tabletype{$table};
+    my $val1 = $val{$type}{1};
+    my $val2 = $val{$type}{2};
+    my $val3 = $val{$type}{3};
+    $SQL = "INSERT INTO $table($pkeyname, inty, data1, email) VALUES (?,?,?,?)";
+    $sth = $dbhA->prepare($SQL);
+    $sth->execute($val1, 1, 1, 'moe');
+    $sth->execute($val2, 2, 2, 'larry');
+    $sth->execute($val3, 3, 3, 'curly');
 }
 $dbhA->commit();
 
@@ -127,7 +127,7 @@ bc_deeply($result, $dbhB, $SQL, $t);
 
 ## Reset the tables
 for my $table (sort keys %tabletype) {
-	$dbhA->do("DELETE FROM $table");
+    $dbhA->do("DELETE FROM $table");
 }
 $dbhA->do('DELETE FROM droptest');
 $dbhA->commit();
@@ -139,28 +139,28 @@ $dbhB->commit();
 ## Prepare some insert statement handles, add a row to source database
 for my $table (sort keys %tabletype) {
 
-	my $type = $tabletype{$table};
-	my $val1 = $val{$type}{1};
-	my $val2 = $val{$type}{2};
-	if (!defined $val1 or !defined $val2) {
-		BAIL_OUT "Could not determine value for $table $type\n";
-	}
+    my $type = $tabletype{$table};
+    my $val1 = $val{$type}{1};
+    my $val2 = $val{$type}{2};
+    if (!defined $val1 or !defined $val2) {
+        BAIL_OUT "Could not determine value for $table $type\n";
+    }
 
-	$pkey{$table} = $table =~ /test5/ ? q{"id space"} : 'id';
+    $pkey{$table} = $table =~ /test5/ ? q{"id space"} : 'id';
 
-	$SQL = $table =~ /0/
-		? "INSERT INTO $table($pkey{$table}) VALUES (?)"
-			: "INSERT INTO $table($pkey{$table},data1,inty) VALUES (?,'one',1)";
-	$sql{insert}{$table} = $dbhA->prepare($SQL);
-	if ($type eq 'BYTEA') {
-		$sql{insert}{$table}->bind_param(1, undef, {pg_type => PG_BYTEA});
-	}
-	$val{$table} = $val1;
+    $SQL = $table =~ /0/
+        ? "INSERT INTO $table($pkey{$table}) VALUES (?)"
+            : "INSERT INTO $table($pkey{$table},data1,inty) VALUES (?,'one',1)";
+    $sql{insert}{$table} = $dbhA->prepare($SQL);
+    if ($type eq 'BYTEA') {
+        $sql{insert}{$table}->bind_param(1, undef, {pg_type => PG_BYTEA});
+    }
+    $val{$table} = $val1;
 
-	$sql{insert}{$table}->execute($val{$table});
+    $sql{insert}{$table}->execute($val{$table});
 
-	## Save for later
-	$val{"2.$table"} = $val2;
+    ## Save for later
+    $val{"2.$table"} = $val2;
 
 }
 $dbhA->commit();
@@ -168,25 +168,25 @@ $dbhA->commit();
 ## Verify triggers and rules on source database still fire
 for my $table (sort keys %tabletype) {
 
-	$t=q{ After insert, trigger and rule both populate droptest table };
-	my $qtable = $dbhX->quote($table);
-	my $LOCALDROPSQL = $table =~ /0/
-		? "SELECT type,0 FROM droptest WHERE name = $qtable ORDER BY 1,2"
-			: "SELECT type,inty FROM droptest WHERE name = $qtable ORDER BY 1,2";
-	my $tval = $table =~ /0/ ? 0 : 1;
-	$result = [['rule',$tval],['trigger',$tval]];
-	bc_deeply($result, $dbhA, $LOCALDROPSQL, $t);
+    $t=q{ After insert, trigger and rule both populate droptest table };
+    my $qtable = $dbhX->quote($table);
+    my $LOCALDROPSQL = $table =~ /0/
+        ? "SELECT type,0 FROM droptest WHERE name = $qtable ORDER BY 1,2"
+            : "SELECT type,inty FROM droptest WHERE name = $qtable ORDER BY 1,2";
+    my $tval = $table =~ /0/ ? 0 : 1;
+    $result = [['rule',$tval],['trigger',$tval]];
+    bc_deeply($result, $dbhA, $LOCALDROPSQL, $t);
 
-	test_empty_drop($table,$dbhB);
+    test_empty_drop($table,$dbhB);
 }
 
 ## Make sure second database is still empty
 for my $table (sort keys %tabletype) {
-	$t=qq{ Second table $table still empty before kick };
-	$sql{select}{$table} = "SELECT inty FROM $table ORDER BY $pkey{$table}";
-	$table =~ /0/ and $sql{select}{$table} =~ s/inty/$pkey{$table}/;
-	$result = [];
-	bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
+    $t=qq{ Second table $table still empty before kick };
+    $sql{select}{$table} = "SELECT inty FROM $table ORDER BY $pkey{$table}";
+    $table =~ /0/ and $sql{select}{$table} =~ s/inty/$pkey{$table}/;
+    $result = [];
+    bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
 }
 
 ## Kick the source database, replicate one row in each table
@@ -196,11 +196,11 @@ wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 
 ## Make sure second database has the new rows, and that triggers and rules did not fire
 for my $table (sort keys %tabletype) {
-	$t=qq{ Second table $table got the pushdelta row};
-	$result = [[1]];
-	bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
+    $t=qq{ Second table $table got the pushdelta row};
+    $result = [[1]];
+    bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
 
-	test_empty_drop($table,$dbhB);
+    test_empty_drop($table,$dbhB);
 }
 $bct->ctl("kick pushdeltatest 5");
 wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
@@ -211,17 +211,17 @@ for my $table (sort keys %tabletype) {
     $dbhX->func('pg_notifies');
     $dbhX->commit();
 
-	$dbhA->do("UPDATE $table SET inty = 2");
-	$dbhA->commit();
+    $dbhA->do("UPDATE $table SET inty = 2");
+    $dbhA->commit();
     ## Hack.
     sleep 2;
-	wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
+    wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 
-	$t=qq{ Second table $table got the pushdelta row};
-	$result = [[2]];
-	bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
+    $t=qq{ Second table $table got the pushdelta row};
+    $result = [[2]];
+    bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
 
-	test_empty_drop($table,$dbhB);
+    test_empty_drop($table,$dbhB);
 }
 
 ## Add a new target database
@@ -244,19 +244,19 @@ $dbhX->do('LISTEN bucardo_reloaded_sync_pushdeltatest');
 $dbhX->commit();
 
 for my $table (sort keys %tabletype) {
-	$dbhA->do("UPDATE $table SET inty = 3");
+    $dbhA->do("UPDATE $table SET inty = 3");
 }
 $dbhA->commit();
 
 for my $table (sort keys %tabletype) {
-	$t=qq{ Second table $table did not change rows, not pinging};
-	$result = [[2]];
-	bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
-	$result = [];
-	bc_deeply($result, $dbhC, $sql{select}{$table}, $t);
+    $t=qq{ Second table $table did not change rows, not pinging};
+    $result = [[2]];
+    bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
+    $result = [];
+    bc_deeply($result, $dbhC, $sql{select}{$table}, $t);
 
-	test_empty_drop($table,$dbhB);
-	test_empty_drop($table,$dbhC);
+    test_empty_drop($table,$dbhB);
+    test_empty_drop($table,$dbhC);
 }
 
 wait_for_notice($dbhX, 'bucardo_reloaded_sync_pushdeltatest', 10);
@@ -266,24 +266,24 @@ $bct->ctl("kick pushdeltatest 5");
 wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 0);
 
 for my $table (sort keys %tabletype) {
-	$t=qq{ Second table $table did not change rows, not pinging};
-	$result = [[3]];
-	bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
-	bc_deeply($result, $dbhC, $sql{select}{$table}, $t);
+    $t=qq{ Second table $table did not change rows, not pinging};
+    $result = [[3]];
+    bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
+    bc_deeply($result, $dbhC, $sql{select}{$table}, $t);
 
-	test_empty_drop($table,$dbhB);
-	test_empty_drop($table,$dbhC);
+    test_empty_drop($table,$dbhB);
+    test_empty_drop($table,$dbhC);
 }
 
 ## Make sure local changes stick
 for my $table (sort keys %tabletype) {
-	$dbhB->do("UPDATE $table SET inty = 4");
+    $dbhB->do("UPDATE $table SET inty = 4");
 }
 $dbhB->do('DELETE FROM droptest');
 $dbhB->commit();
 
 for my $table (sort keys %tabletype) {
-	$sql{insert}{$table}->execute($val{"2.$table"});
+    $sql{insert}{$table}->execute($val{"2.$table"});
 }
 $dbhA->commit();
 
@@ -291,19 +291,19 @@ $bct->ctl("kick pushdeltatest 0");
 wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 
 for my $table (sort keys %tabletype) {
-	$t=qq{ Second table $table did not get overwritten by pushdelta};
-	$result = [[4],[1]];
-	bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
-	$result = [[3],[1]];
-	bc_deeply($result, $dbhC, $sql{select}{$table}, $t);
+    $t=qq{ Second table $table did not get overwritten by pushdelta};
+    $result = [[4],[1]];
+    bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
+    $result = [[3],[1]];
+    bc_deeply($result, $dbhC, $sql{select}{$table}, $t);
 
-	test_empty_drop($table,$dbhB);
-	test_empty_drop($table,$dbhC);
+    test_empty_drop($table,$dbhB);
+    test_empty_drop($table,$dbhC);
 }
 
 ## Test a deletion
 for my $table (sort keys %tabletype) {
-	$dbhA->do("DELETE FROM $table");
+    $dbhA->do("DELETE FROM $table");
 }
 $dbhA->commit();
 
@@ -311,23 +311,23 @@ $bct->ctl("kick pushdeltatest 0");
 wait_for_notice($dbhX, 'bucardo_syncdone_pushdeltatest', 5);
 
 for my $table (sort keys %tabletype) {
-	$t=qq{ Second table $table got the delete};
-	$result = [];
-	bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
-	$result = [];
-	bc_deeply($result, $dbhC, $sql{select}{$table}, $t);
+    $t=qq{ Second table $table got the delete};
+    $result = [];
+    bc_deeply($result, $dbhB, $sql{select}{$table}, $t);
+    $result = [];
+    bc_deeply($result, $dbhC, $sql{select}{$table}, $t);
 
-	test_empty_drop($table,$dbhB);
-	test_empty_drop($table,$dbhC);
+    test_empty_drop($table,$dbhB);
+    test_empty_drop($table,$dbhC);
 }
 
 
 exit;
 
 END {
-	$bct->stop_bucardo($dbhX);
-	$dbhX->disconnect();
-	$dbhA->disconnect();
-	$dbhB->disconnect();
-	$dbhC->disconnect();
+    $bct->stop_bucardo($dbhX);
+    $dbhX->disconnect();
+    $dbhA->disconnect();
+    $dbhB->disconnect();
+    $dbhC->disconnect();
 }

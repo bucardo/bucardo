@@ -24,12 +24,12 @@ use vars qw/ $dbhX $dbhA $dbhB $dbhC $dbhD $res $command $t %pkey $SQL %sth %sql
 use vars qw/ $i $result /;
 
 END {
-	$bct->stop_bucardo($dbhX);
-	$dbhX->disconnect();
-	$dbhA->disconnect();
-	$dbhB->disconnect();
-	$dbhC->disconnect();
-	$dbhD->disconnect();
+    $bct->stop_bucardo($dbhX);
+    $dbhX->disconnect();
+    $dbhA->disconnect();
+    $dbhB->disconnect();
+    $dbhC->disconnect();
+    $dbhD->disconnect();
 }
 
 ## Get A, B, C, and D created, emptied out, and repopulated with sample data
@@ -119,42 +119,42 @@ $bct->restart_bucardo($dbhX);
 ## Get the statement handles ready for each table type
 for my $table (sort keys %tabletype) {
 
-	$pkey{$table} = $table =~ /test5/ ? q{"id space"} : 'id';
+    $pkey{$table} = $table =~ /test5/ ? q{"id space"} : 'id';
 
-	## INSERT
-	for my $x (1..4) {
-		$SQL = $table =~ /0/
-			? "INSERT INTO $table($pkey{$table}) VALUES (?)"
-				: "INSERT INTO $table($pkey{$table},data1,inty) VALUES (?,'foo',$x)";
-		$sth{insert}{$x}{$table}{A} = $dbhA->prepare($SQL);
-		if ('BYTEA' eq $tabletype{$table}) {
-			$sth{insert}{$x}{$table}{A}->bind_param(1, undef, {pg_type => PG_BYTEA});
-		}
-	}
+    ## INSERT
+    for my $x (1..4) {
+        $SQL = $table =~ /0/
+            ? "INSERT INTO $table($pkey{$table}) VALUES (?)"
+                : "INSERT INTO $table($pkey{$table},data1,inty) VALUES (?,'foo',$x)";
+        $sth{insert}{$x}{$table}{A} = $dbhA->prepare($SQL);
+        if ('BYTEA' eq $tabletype{$table}) {
+            $sth{insert}{$x}{$table}{A}->bind_param(1, undef, {pg_type => PG_BYTEA});
+        }
+    }
 
-	## SELECT
-	$sql{select}{$table} = "SELECT inty FROM $table ORDER BY $pkey{$table}";
-	$table =~ /0/ and $sql{select}{$table} =~ s/inty/$pkey{$table}/;
+    ## SELECT
+    $sql{select}{$table} = "SELECT inty FROM $table ORDER BY $pkey{$table}";
+    $table =~ /0/ and $sql{select}{$table} =~ s/inty/$pkey{$table}/;
 
-	## DELETE
-	$SQL = "DELETE FROM $table";
-	$sth{deleteall}{$table}{A} = $dbhA->prepare($SQL);
+    ## DELETE
+    $SQL = "DELETE FROM $table";
+    $sth{deleteall}{$table}{A} = $dbhA->prepare($SQL);
 
 }
 
 ## Add one row per table type to A
 for my $table (keys %tabletype) {
-	my $type = $tabletype{$table};
-	my $val1 = $val{$type}{1};
-	$sth{insert}{1}{$table}{A}->execute($val1);
+    my $type = $tabletype{$table};
+    my $val1 = $val{$type}{1};
+    $sth{insert}{1}{$table}{A}->execute($val1);
 }
 
 ## Before the commit on A, B should be empty
 for my $table (sort keys %tabletype) {
-	my $type = $tabletype{$table};
-	$t = qq{B has not received rows for table $table before A commits};
-	$res = [];
-	bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
+    my $type = $tabletype{$table};
+    $t = qq{B has not received rows for table $table before A commits};
+    $res = [];
+    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 }
 $dbhA->commit();
 
@@ -176,31 +176,31 @@ $bct->ctl('kick sync fullcopyAB 0');
 ## Check the second database for the new rows
 for my $table (sort keys %tabletype) {
 
-	my $type = $tabletype{$table};
-	$t = qq{Row with pkey of type $type gets copied to B};
+    my $type = $tabletype{$table};
+    $t = qq{Row with pkey of type $type gets copied to B};
 
-	$res = [[1]];
-	bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
+    $res = [[1]];
+    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 }
 
 ## The droptest table should be populated for A, but not for B
 for my $table (sort keys %tabletype) {
 
-	$t = qq{Triggers and rules fired on A};
-	$SQL = qq{SELECT type FROM droptest WHERE name = '$table' ORDER BY 1};
+    $t = qq{Triggers and rules fired on A};
+    $SQL = qq{SELECT type FROM droptest WHERE name = '$table' ORDER BY 1};
 
-	$res = [['rule'],['trigger']];
-	bc_deeply($res, $dbhA, $SQL, $t);
+    $res = [['rule'],['trigger']];
+    bc_deeply($res, $dbhA, $SQL, $t);
 
-	$t = qq{Triggers and rules did not fire on B};
-	$res = [];
-	bc_deeply($res, $dbhB, $SQL, $t);
+    $t = qq{Triggers and rules did not fire on B};
+    $res = [];
+    bc_deeply($res, $dbhB, $SQL, $t);
 }
 
 ## Delete the rows from A, make sure deletion makes it to B
 ## Delete rows from A
 for my $table (keys %tabletype) {
-	$sth{deleteall}{$table}{A}->execute();
+    $sth{deleteall}{$table}{A}->execute();
 }
 $dbhA->commit();
 
@@ -210,20 +210,20 @@ $bct->ctl('kick sync fullcopyAB 0');
 ## Rows should be gone from B now
 for my $table (sort keys %tabletype) {
 
-	my $type = $tabletype{$table};
-	$t = qq{Row with pkey of type $type is deleted from B};
+    my $type = $tabletype{$table};
+    $t = qq{Row with pkey of type $type is deleted from B};
 
-	$res = [];
-	bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
+    $res = [];
+    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 }
 
 ## Now add two rows at once
 for my $table (keys %tabletype) {
-	my $type = $tabletype{$table};
-	my $val2 = $val{$type}{2};
-	my $val3 = $val{$type}{3};
-	$sth{insert}{2}{$table}{A}->execute($val2);
-	$sth{insert}{3}{$table}{A}->execute($val3);
+    my $type = $tabletype{$table};
+    my $val2 = $val{$type}{2};
+    my $val3 = $val{$type}{3};
+    $sth{insert}{2}{$table}{A}->execute($val2);
+    $sth{insert}{3}{$table}{A}->execute($val3);
 }
 $dbhA->commit();
 
@@ -233,18 +233,18 @@ $bct->ctl('kick sync fullcopyAB 0');
 ## B should have the two new rows
 for my $table (sort keys %tabletype) {
 
-	my $type = $tabletype{$table};
-	$t = qq{Two rows with pkey of type $type are copied to B};
+    my $type = $tabletype{$table};
+    $t = qq{Two rows with pkey of type $type are copied to B};
 
-	$res = [[2],[3]];
-	bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
+    $res = [[2],[3]];
+    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 }
 
 ## Test out an update
 for my $table (keys %tabletype) {
-	my $type = $tabletype{$table};
-	$SQL = "UPDATE $table SET inty=inty+10";
-	$dbhA->do($SQL);
+    my $type = $tabletype{$table};
+    $SQL = "UPDATE $table SET inty=inty+10";
+    $dbhA->do($SQL);
 }
 $dbhA->commit();
 $bct->ctl('kick sync fullcopyAB 0');
@@ -252,59 +252,59 @@ $bct->ctl('kick sync fullcopyAB 0');
 ## B should have the updated rows
 for my $table (sort keys %tabletype) {
 
-	my $type = $tabletype{$table};
-	$t = qq{Updates of two rows with pkey of type $type are copied to B};
+    my $type = $tabletype{$table};
+    $t = qq{Updates of two rows with pkey of type $type are copied to B};
 
-	$res = [[12],[13]];
-	bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
+    $res = [[12],[13]];
+    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 }
 
 ## Test insert, update, and delete all at once, across multiple transactions
 for my $table (keys %tabletype) {
-	my $type = $tabletype{$table};
-	$SQL = "UPDATE $table SET inty=inty-3";
-	$dbhA->do($SQL);
-	$dbhA->commit();
+    my $type = $tabletype{$table};
+    $SQL = "UPDATE $table SET inty=inty-3";
+    $dbhA->do($SQL);
+    $dbhA->commit();
 
-	my $val4 = $val{$type}{4};
-	$sth{insert}{4}{$table}{A}->execute($val4);
-	$dbhA->commit();
+    my $val4 = $val{$type}{4};
+    $sth{insert}{4}{$table}{A}->execute($val4);
+    $dbhA->commit();
 
-	$SQL = "DELETE FROM $table WHERE inty = 10";
-	$dbhA->do($SQL);
-	$dbhA->commit();
+    $SQL = "DELETE FROM $table WHERE inty = 10";
+    $dbhA->do($SQL);
+    $dbhA->commit();
 }
 $bct->ctl('kick sync fullcopyAB 0');
 
 ## B should have the updated rows
 for my $table (sort keys %tabletype) {
 
-	my $type = $tabletype{$table};
-	$t = qq{Updates of two rows with pkey of type $type are copied to B};
+    my $type = $tabletype{$table};
+    $t = qq{Updates of two rows with pkey of type $type are copied to B};
 
-	$res = [[9],[4]];
-	bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
+    $res = [[9],[4]];
+    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 }
 
 for my $table (sort keys %tabletype) {
-	my $type = $tabletype{$table};
-	$dbhA->do("COPY $table($pkey{$table},inty,data1) FROM STDIN");
-	my $val5 = $val{$type}{5};
-	$val5 =~ s/\0//;
-	$dbhA->pg_putcopydata("$val5\t5\tfive");
-	$dbhA->pg_putcopyend();
-	$dbhA->commit();
+    my $type = $tabletype{$table};
+    $dbhA->do("COPY $table($pkey{$table},inty,data1) FROM STDIN");
+    my $val5 = $val{$type}{5};
+    $val5 =~ s/\0//;
+    $dbhA->pg_putcopydata("$val5\t5\tfive");
+    $dbhA->pg_putcopyend();
+    $dbhA->commit();
 }
 $bct->ctl('kick sync fullcopyAB 0');
 
 ## B should have the new rows
 for my $table (sort keys %tabletype) {
 
-	my $type = $tabletype{$table};
-	$t = qq{COPY to A with pkey type $type makes it way to B};
+    my $type = $tabletype{$table};
+    $t = qq{COPY to A with pkey type $type makes it way to B};
 
-	$res = [[9],[4],[5]];
-	bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
+    $res = [[9],[4],[5]];
+    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 }
 
 ## Modify the sync and have it go to B *and* C
@@ -315,11 +315,11 @@ $res = $bct->ctl($command);
 ## Before the sync reload, C should not have anything
 for my $table (sort keys %tabletype) {
 
-	my $type = $tabletype{$table};
-	$t = qq{Row with pkey of type $type does not exist on C yet};
+    my $type = $tabletype{$table};
+    $t = qq{Row with pkey of type $type does not exist on C yet};
 
-	$res = [];
-	bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
+    $res = [];
+    bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 }
 
 $command =
@@ -331,33 +331,33 @@ $bct->ctl('kick sync fullcopyAB 0');
 ## After the sync is reloaded and kicked, C will have all the rows
 for my $table (sort keys %tabletype) {
 
-	my $type = $tabletype{$table};
-	$t = qq{Row with pkey of type $type is copied to C};
+    my $type = $tabletype{$table};
+    $t = qq{Row with pkey of type $type is copied to C};
 
-	$res = [[9],[4],[5]];
-	bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
+    $res = [[9],[4],[5]];
+    bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 }
 
 ## Do an update, and have it appear on both sides
 for my $table (keys %tabletype) {
-	my $type = $tabletype{$table};
-	$SQL = "UPDATE $table SET inty=55 WHERE inty = 5";
-	$dbhA->do($SQL);
+    my $type = $tabletype{$table};
+    $SQL = "UPDATE $table SET inty=55 WHERE inty = 5";
+    $dbhA->do($SQL);
 }
 $dbhA->commit();
 $bct->ctl('kick sync fullcopyAB 0');
 
 for my $table (sort keys %tabletype) {
 
-	my $type = $tabletype{$table};
-	$t = qq{Row with pkey of type $type is replicated to B};
+    my $type = $tabletype{$table};
+    $t = qq{Row with pkey of type $type is replicated to B};
 
-	$res = [[9],[4],[55]];
-	bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
+    $res = [[9],[4],[55]];
+    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 
-	$t = qq{Row with pkey of type $type is replicated to C};
-	$res = [[9],[4],[55]];
-	bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
+    $t = qq{Row with pkey of type $type is replicated to C};
+    $res = [[9],[4],[55]];
+    bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 }
 
 ## Sequence testing

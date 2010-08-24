@@ -15,8 +15,8 @@ use lib 't','.';
 use BucardoTesting;
 
 my $info = {
-			name => 'goat'
-			};
+            name => 'goat'
+            };
 my $bctest = BucardoTesting->new($info);
 
 ok('No tests');
@@ -48,11 +48,11 @@ $sth = $dbh->prepare($SQL);
 
 my $bc = get_bc();
 $sth->execute('one',
-	$bc->{DBHOST1},
-	$bc->{DBPORT1},
-	$bc->{TESTDB1},
-	$bc->{TESTBC1},
-	$bc->{TESTPW1}
+    $bc->{DBHOST1},
+    $bc->{DBPORT1},
+    $bc->{TESTDB1},
+    $bc->{TESTBC1},
+    $bc->{TESTPW1}
 );
 
 $dbh1->{AutoCommit} = 1;
@@ -70,8 +70,8 @@ $SQL = "UPDATE goat SET pkey = ? WHERE tablename = 'bctest'";
 my $redo = $dbh->prepare($SQL);
 
 sub get_goat {
-	$SQL = "SELECT pkey, pkeytype, qpkey FROM goat WHERE tablename = 'bctest'";
-	return $dbh->selectall_arrayref($SQL)->[0];
+    $SQL = "SELECT pkey, pkeytype, qpkey FROM goat WHERE tablename = 'bctest'";
+    return $dbh->selectall_arrayref($SQL)->[0];
 }
 sub get_pkey     { return get_goat()->[0]; }
 sub get_pkeytype { return get_goat()->[1]; }
