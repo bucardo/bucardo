@@ -552,7 +552,12 @@ BEGIN
   RAISE DEBUG 'Purging q table of finished items older than %', $1;
   INSERT INTO freezer.master_q SELECT * FROM bucardo.q
     WHERE (ended IS NOT NULL OR aborted IS NOT NULL) AND cdate <= now() - $1;
-  DELETE FROM bucardo.q WHERE (ended IS NOT NULL OR aborted IS NOT NULL) AND cdate <= now() - $1;
+  DELETE FROM bucardo.q WHERE cdate <= now() - $1
+    AND (
+         (ended IS NOT NULL AND ended < now())
+         OR
+         (aborted IS NOT NULL AND aborted < now())
+  );
   GET DIAGNOSTICS numrows := row_count;
   SELECT count(*) FROM q INTO qcount;
   RAISE NOTICE 'Rows left in q table: %', qcount;
