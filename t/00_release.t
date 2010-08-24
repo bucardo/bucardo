@@ -14,13 +14,23 @@ if (! $ENV{RELEASE_TESTING}) {
 	plan (skip_all =>  'Test skipped unless environment variable RELEASE_TESTING is set');
 }
 
-plan tests => 2;
+## Grab all files from the MANIFEST to generate a test count
+my $file = 'MANIFEST';
+my @mfiles;
+open my $mfh, '<', $file or die qq{Could not open "$file": $!\n};
+while (<$mfh>) {
+	next if /^#/;
+	push @mfiles => $1 if /(\S.+)/o;
+}
+close $mfh or warn qq{Could not close "$file": $!\n};
+
+plan tests => 1 + @mfiles;
 
 my %v;
 my $vre = qr{(\d+\.\d+\.\d+\_?\d*)};
 
 ## Grab version from various files
-my $file = 'META.yml';
+$file = 'META.yml';
 open my $fh, '<', $file or die qq{Could not open "$file": $!\n};
 while (<$fh>) {
 	push @{$v{$file}} => [$1,$.] if /version\s*:\s*$vre/;
@@ -113,29 +123,20 @@ else {
 	}
 }
 
-## Make sure all files in the MANIFEST are "clean":
-## no tabs, no unusual characters
+## Make sure all files in the MANIFEST are "clean": no tabs, no unusual characters
 
-$file = 'MANIFEST';
-open my $mfh, '<', $file or die qq{Could not open "$file": $!\n};
-while (<$mfh>) {
-	next if /^#/;
-	file_is_clean($1) if /(\S.+)/;
+for my $mfile (@mfiles) {
+	file_is_clean($mfile);
 }
-close $mfh or warn qq{Could not close "$file": $!\n};
+
 exit;
-
-
-$file = 'bucardo.schema';
-file_is_clean($file);
-file_is_clean('Bucardo.pm');
 
 sub file_is_clean {
 
 	my $file = shift or die;
 
 	if (!open $fh, '<', $file) {
-		warn qq{Could not open "$file": $!\n};
+		fail qq{Could not open "$file": $!\n};
 		return;
 	}
 	$good = 1;
