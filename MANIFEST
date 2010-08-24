@@ -30,7 +30,6 @@ bucardo_ctl.html
 ## Testing-related stuff
 .perlcriticrc
 t/01-basic.t
-t/04-pushdelta.t
 t/05-fullcopy.t
 t/06-multicolpk.t
 t/06-multicolpushdelta.t
