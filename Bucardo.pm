@@ -4019,7 +4019,7 @@ sub start_kid {
                     for (@{$g->{binarycols}}) {
                         $sth{target}{$g}{insertrow}->bind_param($_ + $g->{pkcols}, undef, {pg_type => DBD::Pg::PG_BYTEA});
                         $sth{target}{$g}{updaterow}->bind_param($_, undef, {pg_type => DBD::Pg::PG_BYTEA});
-                        $sth{source}{$g}{insertrow}->bind_param($_+1, undef, {pg_type => DBD::Pg::PG_BYTEA});
+                        $sth{source}{$g}{insertrow}->bind_param($_ + $g->{pkcols}, undef, {pg_type => DBD::Pg::PG_BYTEA});
                         $sth{source}{$g}{updaterow}->bind_param($_, undef, {pg_type => DBD::Pg::PG_BYTEA});
                     }
                 }
