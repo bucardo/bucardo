@@ -281,6 +281,7 @@ sub empty_cluster {
         local $dbh->{AutoCommit} = 1;
         debug(qq{Creating database $dbname});
         $dbh->do("CREATE DATABASE $dbname");
+        $dbh->disconnect();
         $dbh = $self->connect_database($clustername, $dbname);
     }
 
@@ -578,7 +579,7 @@ sub add_test_schema {
 
     ## Create the language if needed
     if (!language_exists($dbh => 'plpgsql')) {
-        debug(q{Creating language plpgsql'});
+        debug(q{Creating language plpgsql});
         $dbh->do('CREATE LANGUAGE plpgsql');
     }
     $dbh->commit() if ! $dbh->{AutoCommit};
