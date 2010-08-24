@@ -43,7 +43,8 @@ t/06-multicolpushdelta.t
 t/07-multicolswap.t
 t/08-wildkick.t
 t/09-uniqueconstraint.t
-t/10-makedelta.t
+t/10-pushdelta.t
+t/10-swap.t
 t/11-customselect.t
 t/12-addtable.t
 t/13-ddl.t
