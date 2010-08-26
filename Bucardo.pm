@@ -16,19 +16,22 @@ use warnings;
 
 our $VERSION = '4.5.0';
 
-use sigtrap qw( die normal-signals ); ## Call die() on HUP, INT, PIPE, or TERM
-use Config;                           ## Used to map signal names
+use DBI 1.51;            ## How Perl talks to databases
+use DBD::Pg 2.0;         ## How Perl talks to Postgres databases
+use DBIx::Safe '1.2.4';  ## Filter out what DB calls customcode may use
+
+use sigtrap       qw( die normal-signals ); ## Call die() on HUP, INT, PIPE, or TERM
+use Config        qw( %Config            ); ## Used to map signal names
+use Data::Dumper  qw( Dumper             ); ## Used to dump information in email alerts
+use POSIX         qw( strftime           ); ## For grabbing the local timezone
+use Sys::Hostname qw( hostname           ); ## Used for debugging/mail sending
+use IO::Handle    qw( autoflush          ); ## Used to prevent stdout/stderr buffering
+use Sys::Syslog   qw( openlog syslog     ); ## In case we are logging via syslog()
+use Net::SMTP     qw(                    ); ## Used to send out email alerts
+
 use Time::HiRes
-  qw(sleep gettimeofday tv_interval); ## For better resolution than the built-in sleep
-use DBI 1.51;                         ## How Perl talks to databases
-use DBD::Pg 2.0;                      ## The Postgres driver for DBI
-use POSIX qw( strftime );             ## For grabbing the local timezone
-use Net::SMTP;                        ## Used to send out email alerts
-use Sys::Hostname qw( hostname );     ## Used for debugging/mail sending
-use IO::Handle qw( autoflush );       ## Used to prevent stdout/stderr buffering
-use Sys::Syslog qw( openlog syslog ); ## In case we are logging via syslog()
-use DBIx::Safe '1.2.4';               ## Filter out what DB calls customcode may use
-use Data::Dumper qw( Dumper );        ## Used to dump information in email alerts
+ qw(sleep gettimeofday tv_interval); ## For better resolution than the built-in sleep
+                                     ## and for timing of events
 
 ## Formatting of Dumper() calls:
 $Data::Dumper::Varname = 'BUCARDO';
@@ -191,8 +194,9 @@ sub new {
     $self->{warning_file} ||= $config{warning_file};
 
     ## Make sure we are running where we are supposed to be
-    ## This prevents things in bucardo.db from getting run on QA
-    ## Or at least makes sure people have to work a little harder
+    ## This prevents items in bucardo.db that reference production
+    ## systems from getting run on QA!
+    ## ...or at least makes sure people have to work a lot harder
     ## to shoot themselves in the foot.
     if (length $config{host_safety_check}) {
         my $safe = $config{host_safety_check};
@@ -235,10 +239,13 @@ sub new {
 sub connect_database {
 
     ## Connect to the given database
-    ## First and only argument is the database id
-    ## If blank or zero, we return the main database
-    ## Returns the string 'inactive' if set as such in the db table
-    ## Returns the database handle and the backend PID
+    ## Arguments:
+    ## 1. The id of the database
+    ##   If the database id is blank or zero, we return the main database
+    ## Returns:
+    ## - the database handle and the backend PID
+    ## OR
+    ## - the string 'inactive' if set as such in the db table
 
     my $self = shift;
 
@@ -301,8 +308,8 @@ sub connect_database {
     my $backend = $dbh->selectall_arrayref($SQL)->[0][0];
     $dbh->rollback();
 
+    ## If the main database, prepend 'bucardo' to the search path
     if (!$id) {
-        ## Prepend bucardo to the search path
         $dbh->do(q{SELECT pg_catalog.set_config('search_path', 'bucardo,' || current_setting('search_path'), false)});
         $dbh->commit();
     }
@@ -316,6 +323,8 @@ sub reload_config_database {
 
     ## Reload the %config and %config_about hashes from the bucardo_config table
     ## Calls commit on the masterdbh
+    ## Arguments: none
+    ## Returns: undef
 
     my $self = shift;
 
@@ -361,8 +370,10 @@ sub reload_config_database {
 sub glog { ## no critic (RequireArgUnpacking)
 
     ## Reformat and log internal messages to the correct place
-    ## First argument is the message
-    ## Second argument is the log level - defaults to 0 (normal)
+    ## Arguments:
+    ## 1. the log message
+    ## 2. the log level (defaults to 0)
+    ## Returns: undef
 
     ## Quick shortcut if verbose is 'off' (which is not recommended!)
     return if ! $_[0]->{verbose};
@@ -375,7 +386,7 @@ sub glog { ## no critic (RequireArgUnpacking)
     ## Return if we have not met the minimum log level
     return if $loglevel > $config{log_level_number};
 
-    ## We should always have a prefix, either BC!, MCP, CTL, or KID
+    ## We should always have a prefix, either BC!, MCP, CTL, KID or CLU
     my $prefix = $self->{logprefix} || '???';
     $msg = "$prefix $msg";
 
@@ -419,7 +430,7 @@ sub glog { ## no critic (RequireArgUnpacking)
             select((select($self->{debugfilehandle}{$$}{$file}),$|=1)[0]);
         }
 
-        ## Write the message.
+        ## Write the message
         printf {$self->{debugfilehandle}{$$}{$file}} "%s%s\n",
             $header,
             $msg;
@@ -430,17 +441,16 @@ sub glog { ## no critic (RequireArgUnpacking)
 } ## end of glog
 
 
-sub clog {
+sub conflict_log {
 
     ## Log a message to the conflict log file at config{log_conflict_file}
+    ## Arguments:
+    ## 1. the log message
+    ## Returns: undef
 
-    my ($self,$msg,@extra) = @_;
+    my $self = shift;
+    my $msg = shift;
     chomp $msg;
-
-    ## Extra args indicates we are using printf style $msg string
-    if (@extra) {
-        $msg = sprintf $msg, @extra;
-    }
 
     my $cfile = $config{log_conflict_file};
     my $clog;
@@ -454,12 +464,16 @@ sub clog {
 
     return;
 
-} ## end of clog
+} ## end of conflict_log
 
 
 sub show_db_version_and_time {
 
-    ## Output the time, timezone, and version information for a given db handle
+    ## Output the time, timezone, and version information to the log
+    ## Arguments:
+    ## 1. Database handle
+    ## 2. A string indicating which database this is
+    ## Returns: undef
 
     my ($self,$ldbh,$prefix) = @_;
 
@@ -481,9 +495,11 @@ sub show_db_version_and_time {
 
 sub get_dbs {
 
-    ## Return a hashref of everything in the db table
-
+    ## Fetch a hashref of everything in the db table
     ## Used by start_controller(), connect_database()
+    ## Calls commit on the masterdbh
+    ## Arguments: none
+    ## Returns: hashref
 
     my $self = shift;
 
@@ -500,9 +516,11 @@ sub get_dbs {
 
 sub get_dbgroups {
 
-    ## Return a hashref of dbgroups
-
-    ## Called by validate_sync
+    ## Fetch a hashref of dbgroups
+    ## Used by validate_sync()
+    ## Calls commit on the masterdbh
+    ## Arguments: none
+    ## Returns: hashref
 
     my $self = shift;
 
@@ -512,8 +530,7 @@ sub get_dbgroups {
         LEFT JOIN dbmap m ON (m.dbgroup=d.name)
         ORDER BY  m.priority ASC, random()
     };
-    my $maindbh = $self->{masterdbh};
-    $sth = $maindbh->prepare($SQL);
+    $sth = $self->{masterdbh}->prepare($SQL);
     $sth->execute();
     my $groups;
     for my $x (@{$sth->fetchall_arrayref({})}) {
@@ -522,7 +539,7 @@ sub get_dbgroups {
         }
         defined $x->{db} and push @{$groups->{$x->{name}}{members}}, $x->{db};
     }
-    $maindbh->commit();
+    $self->{masterdbh}->commit();
 
     return $groups;
 
@@ -531,9 +548,11 @@ sub get_dbgroups {
 
 sub get_goats {
 
-    ## Return a hashref of everything in the goat table
-
+    ## Fetch a hashref of everything in the goat table
     ## Used by find_goats()
+    ## Calls commit on the masterdbh
+    ## Arguments: none
+    ## Returns: hashref
 
     my $self = shift;
 
@@ -542,6 +561,7 @@ sub get_goats {
     $sth->execute();
     my $info = $sth->fetchall_hashref('id');
     $self->{masterdbh}->commit();
+
     return $info;
 
 } ## end of get_goats
@@ -550,25 +570,28 @@ sub get_goats {
 sub find_goats {
 
     ## Given a herd, return an arrayref of goats
-
-    ## Used in validate_sync
+    ## Used by validate_sync()
+    ## Calls commit on the masterdbh
+    ## Arguments: none
+    ## Returns: hashref
 
     my ($self,$herd) = @_;
+
     my $goats = $self->get_goats();
-    my $maindbh = $self->{masterdbh};
     $SQL = q{
         SELECT   goat
         FROM     bucardo.herdmap
         WHERE    herd = ?
         ORDER BY priority DESC, goat ASC
     };
-    $sth = $maindbh->prepare($SQL);
+    $sth = $self->{masterdbh}->prepare($SQL);
     $sth->execute($herd);
     my $newgoats = [];
     for (@{$sth->fetchall_arrayref()}) {
         push @$newgoats, $goats->{$_->[0]};
     }
-    $maindbh->commit();
+    $self->{masterdbh}->commit();
+
     return $newgoats;
 
 } ## end of find_goats
@@ -576,9 +599,11 @@ sub find_goats {
 
 sub get_syncs {
 
-    ## Return a hashref of everything in the sync table
-
+    ## Fetch a hashref of everything in the sync table
     ## Used by reload_mcp()
+    ## Calls commit on the masterdbh
+    ## Arguments: none
+    ## Returns: hashref
 
     my $self = shift;
 
@@ -602,7 +627,9 @@ sub get_syncs {
 sub get_reason {
 
     ## Returns the current string (if any) in the reason file
-    ## If given an arg, the reason file is unlinked
+    ## Arguments:
+    ## 1. Optional boolean: if true, the reason file is removed
+    ## Returns: string
 
     my $delete = shift || 0;
 
@@ -623,6 +650,9 @@ sub get_reason {
 sub start_mcp {
 
     ## Start the Bucardo daemon. Called by bucardo_ctl after setsid()
+    ## Arguments:
+    ## 1. Hashref of startup arguments
+    ## Returns: undef
 
     my ($self,$arg) = @_;
 
@@ -790,10 +820,13 @@ sub start_mcp {
         $0 .= ' Requested syncs: ' . join ' ' => sort keys %{$self->{dosyncs}};
     }
 
-    ## Get all syncs, and check if each can be activated
-
     ## From this point forward, we want to die gracefully
     $SIG{__DIE__} = sub {
+
+        ## Arguments:
+        ## 1. The error message
+        ## Returns: undef (exits or execs!)
+
         my $msg = shift;
         my $line = (caller)[2];
         $self->glog("Warning: Killed (line $line): $msg", LOG_WARN);
@@ -847,11 +880,11 @@ sub start_mcp {
 
     }; ## end SIG{__DIE__}
 
-    ## Resets listeners, kills children, loads and activate syncs
+    ## This resets listeners, kills children, and loads/activates syncs
     my $active_syncs = $self->reload_mcp();
+
     $self->glog("Active syncs: $active_syncs", LOG_TERSE);
     if (!$active_syncs) {
-        ## Should we allow an option to hang around anyway?
         $self->glog('No active syncs were found, so we are exiting', LOG_WARN);
         $self->{masterdbh}->do('NOTIFY bucardo_nosyncs');
         $self->{masterdbh}->commit();
@@ -863,7 +896,7 @@ sub start_mcp {
         $self->reload_mcp();
     };
 
-    ## Let others know we're here
+    ## Let others know we've made it this far
     my $mcpdbh = $self->{masterdbh};
     $mcpdbh->do('NOTIFY bucardo_started')  or warn 'NOTIFY failed';
     $mcpdbh->commit();
@@ -904,11 +937,17 @@ sub start_mcp {
     ## Start the main loop
     $self->mcp_main();
 
+    die 'We should never reach this point!';
+
     ##
     ## Everything from this point forward in start_mcp is subroutines
     ##
 
     sub mcp_main {
+
+        ## The main MCP process
+        ## Arguments: none
+        ## Returns: never
 
         my $self = shift;
 
@@ -930,7 +969,7 @@ sub start_mcp {
                 $self->glog(qq{Found stopfile "$self->{stopfile}": exiting}, LOG_WARN);
                 my $msg = 'Found stopfile';
 
-                ## Grab the reason if it exists so we can propogate it onward
+                ## Grab the reason if it exists so we can propagate it onward
                 my $mcpreason = get_reason(0);
                 if ($mcpreason) {
                     $msg .= ": $mcpreason";
@@ -952,7 +991,7 @@ sub start_mcp {
                 $lastpingcheck = time();
             }
 
-            ## Gather up and handle any received notices
+            ## Empty out our notification queue
             undef @notice;
 
             ## Grab all notices from the main database
@@ -1154,7 +1193,7 @@ sub start_mcp {
 
             $maindbh->commit();
 
-            ## Just in case:
+            ## Just in case this changed behind our back:
             $sync = $self->{sync};
 
             ## Startup controllers for eligible syncs
@@ -1295,6 +1334,12 @@ sub start_mcp {
 
     sub fork_controller {
 
+        ## Fork off a controller process
+        ## Arguments:
+        ## 1. Hashref of sync information
+        ## 2. The name of the sync
+        ## Returns: undef
+
         my ($self, $s, $syncname) = @_;
         my $controller = fork;
         if (!defined $controller) {
@@ -1324,13 +1369,15 @@ sub start_mcp {
         $s->{start_time} = time();
 
         return;
-    }
+
+    } ## end of fork_controller
 
 
     sub reload_mcp {
 
         ## Reset listeners, kill children, load and activate syncs
-        ## Returns how many syncs we activated
+        ## Arguments: none
+        ## Returns: number of syncs we activated
 
         my $self = shift;
 
@@ -1435,7 +1482,9 @@ sub start_mcp {
     sub reset_mcp_listeners {
 
         ## Unlisten everything, the relisten to specific entries
-        ## Called by reload_mcp()
+        ## Used by reload_mcp()
+        ## Arguments: none
+        ## Returns: undef
 
         my $self = shift;
 
@@ -1491,7 +1540,9 @@ sub start_mcp {
     sub activate_sync {
 
         ## We've got a new sync to be activated (but not started)
-        ## Returns boolean success/failure
+        ## Arguments:
+        ## 1. Hashref of sync information
+        ## Returns: boolean success/failure
 
         my ($self,$s) = @_;
 
@@ -1540,7 +1591,9 @@ sub start_mcp {
     sub validate_sync {
 
         ## Check each database a sync needs to use, and (optionally) validate all tables and columns
-        ## Returns boolean success/failure
+        ## Arguments:
+        ## 1. Hashref of sync information
+        ## Returns: boolean success/failure
 
         my ($self,$s) = @_;
 
@@ -2259,7 +2312,9 @@ sub start_mcp {
     sub deactivate_sync {
 
         ## We need to turn off a running sync
-        ## Returns boolean success/failure
+        ## Arguments:
+        ## 1. Hashref of sync information
+        ## Returns: boolean success/failure
 
         my ($self,$s) = @_;
 
@@ -2331,6 +2386,9 @@ sub start_mcp {
         ## Attempt to kill any controller children
         ## Send a final NOTIFY
         ## Remove our PID file
+        ## Arguments:
+        ## 1. String with a reason for exiting
+        ## Returns: undef
 
         my ($self,$exitreason) = @_;
 
@@ -2433,12 +2491,11 @@ sub start_mcp {
             $self->glog("Warning! Failed to remove pid file $self->{pidfile}", LOG_WARN);
         }
 
-
         return;
 
     } ## end of cleanup_mcp
 
-    die 'We should never reach this point!';
+    return;
 
 } ## end of start_mcp
 
@@ -2446,6 +2503,8 @@ sub start_mcp {
 sub log_config {
 
     ## Write the current contents of the config hash to the log
+    ## Arguments: none
+    ## Returns: undef
 
     my $self = shift;
 
@@ -2465,6 +2524,12 @@ sub log_config {
 
 
 sub kill_bucardo_pid {
+
+    ## Send a kill signal to a specific process
+    ## Arguments:
+    ## 1. PID to be killed
+    ## 2. String either 'strict' or not
+    ## Returns: 1 on successful kill, < 0 otherwise
 
     my ($self,$pid,$nice) = @_;
 
@@ -2518,9 +2583,14 @@ sub kill_bucardo_pid {
 
 } ## end of kill_bucardo_pid
 
+
 sub start_controller {
 
     ## For a particular sync, does all the listening and issuing of jobs
+    ## aka the CTL process
+    ## Arguments:
+    ## 1. Hashref of sync information
+    ## Returns: never
 
     our ($self,$sync) = @_;
 
@@ -2594,6 +2664,10 @@ sub start_controller {
 
     ## From this point forward, we want to die gracefully
     $SIG{__DIE__} = sub {
+
+        ## Arguments:
+        ## 1. Error message
+        ## Returns: never (exit 0)
 
         my ($diemsg) = @_;
         my $line = (caller)[2];
@@ -3047,7 +3121,6 @@ sub start_controller {
                             $SQL = 'UPDATE bucardo.bucardo_truncate_trigger SET replicated=now() WHERE sync = ? AND replicated IS NULL';
                             $sth = $srcdbh->prepare($SQL);
                             ($count = $sth->execute($syncname)) =~ s/0E0/0/o;
-                            $self->glog("Reset all truncate items for sync $syncname on source: count was $count");
                             $srcdbh->commit();
                             $srcdbh->disconnect();
                         }
@@ -3282,6 +3355,15 @@ sub start_controller {
 
         sub run_ctl_custom_code {
 
+            ## Arguments:
+            ## 1. Hashref of customcode information
+            ## 2. Strictness boolean, defaults to false
+            ## 3. Number of attempts, defaults to 0
+            ## Returns: string indicating what to do, one of:
+            ## 'next'
+            ## 'redo'
+            ## 'normal'
+
             my $c = shift;
             my $strictness = shift || '';
             my $attempts = shift || 0;
@@ -3465,8 +3547,13 @@ sub start_controller {
     sub create_newkid {
 
         ## Fork and create a KID process
+        ## Arguments:
+        ## 1. Hashref of sync information
+        ## 2. Hashref of kid information
+        ## Returns: undef
 
         my ($self,$kidsync,$kid) = @_;
+
         $self->{parent} = $$;
 
         ## Clear out any aborted kid entries, so the controller does not resurrect them.
@@ -3513,6 +3600,9 @@ sub cleanup_controller {
     ## Disconnect from the database
     ## Attempt to kill any 'kid' children
     ## Remove our PID file
+    ## Arguments:
+    ## 1. Reason for leaving
+    ## Return: undef
 
     my ($self,$reason) = @_;
 
@@ -3624,7 +3714,10 @@ sub cleanup_controller {
 sub get_deadlock_details {
 
     ## Given a database handle, extract deadlock details from it
-    ## Returns a detailed string, or an empty one
+    ## Arguments:
+    ## 1. Database handle
+    ## 2. Database error string
+    ## Returns: detailed string, or an empty one
 
     my ($self, $dldbh, $dlerr) = @_;
     return '' unless $dlerr =~ /Process \d+ waits for /;
@@ -3680,6 +3773,11 @@ WHERE procpid = ?
 sub start_kid {
 
     ## A single kid, in charge of doing a sync between exactly two databases
+    ## aka the KID process
+    ## Arguments:
+    ## 1. Hashref of sync information
+    ## 2. Which target database we are connecting to
+    ## Returns: never
 
     our ($self,$sync,$targetdb) = @_;
 
@@ -3716,7 +3814,11 @@ sub start_kid {
     ## Fancy exception handler to clean things up before leaving.
     $SIG{__DIE__} = sub {
 
-        ## The message we were passed in. Remove whitespace from the end.
+        ## Arguments:
+        ## 1. Error message
+        ## Returns: never (exit 1)
+
+        ## Trim whitespace from our message
         my ($msg) = @_;
         $msg =~ s/\s+$//g;
 
@@ -4306,6 +4408,11 @@ sub start_kid {
 
 
     sub run_kid_custom_code {
+
+        ## Arguments:
+        ## 1. Hashref of customcode information
+        ## 2. Strictness boolean, defaults to false
+        ## 3. Number of attempts, defaults to 0
 
         my $c = shift;
         my $strictness = shift || '';
@@ -5561,11 +5668,11 @@ sub start_kid {
                             $srcrow .= $info1->{$pkval}{$column} . ',';
                             $tgtrow .= $info2->{$pkval}{$column} . ',';
                         }
-                        $self->clog("conflict,$S,$T");
-                        $self->clog('timestamp,' . localtime());
-                        $self->clog('header,' . substr($header, 0, -1));
-                        $self->clog('source,' . substr($srcrow, 0, -1));
-                        $self->clog('target,' . substr($tgtrow, 0, -1));
+                        $self->conflict_log("conflict,$S,$T");
+                        $self->conflict_log('timestamp,' . localtime());
+                        $self->conflict_log('header,' . substr($header, 0, -1));
+                        $self->conflict_log('source,' . substr($srcrow, 0, -1));
+                        $self->conflict_log('target,' . substr($tgtrow, 0, -1));
                         $self->glog("Logged details of conflict to $config{log_conflict_file}", LOG_VERBOSE);
                     }
 
@@ -6386,6 +6493,10 @@ sub cleanup_kid {
 
     ## Kid is shutting down
     ## Remove our PID file
+    ## Arguments:
+    ## 1. Reason for leaving
+    ## 2. Extra information
+    ## Returns: undef
 
     my ($self,$reason,$extrainfo) = @_;
 
@@ -6403,11 +6514,13 @@ sub cleanup_kid {
 
 } ## end of cleanup_kid
 
+
 sub send_mail {
 
     ## Send out an email message
-    ## Expects a hashref with mandatory args 'body' and 'subject'
-    ## Optional args: 'to'
+    ## Arguments:
+    ## 1. Hashref with mandatory args 'body' and 'subject'. Optional 'to'
+    ## Returns: undef
 
     my ($self,$arg) = @_;
 
