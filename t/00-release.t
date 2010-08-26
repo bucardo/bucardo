@@ -2,7 +2,8 @@
 # -*-mode:cperl; indent-tabs-mode: nil-*-
 
 ## Make sure the version number is consistent in all places
-## Ensure the bucardo.schema file has no tabs in it
+## Check all files in MANIFEST for tabs and odd characters
+## Check that all glog calls in Bucardo.pm have a level set
 
 use 5.006;
 use strict;
@@ -25,14 +26,33 @@ while (<$mfh>) {
 }
 close $mfh or warn qq{Could not close "$file": $!\n};
 
-plan tests => 1 + @mfiles;
+plan tests => 2 + @mfiles;
 
 my %v;
 my $vre = qr{(\d+\.\d+\.\d+\_?\d*)};
 
 ## Grab version from various files
-$file = 'META.yml';
+$file = 'Bucardo.pm';
 open my $fh, '<', $file or die qq{Could not open "$file": $!\n};
+my $logsok = 1;
+while (<$fh>) {
+	push @{$v{$file}} => [$1,$.] if (/VERSION = '$vre'/ or /document describes version $vre/);
+    if (/self->glog.+\);/ and ! /LOG_(\w+)\)/) {
+        $logsok = 0;
+        diag "Bad glog call at line $. of Bucardo.pm\n";
+    }
+}
+close $fh or warn qq{Could not close "$file": $!\n};
+
+if ($logsok) {
+    pass 'All calls to glog inside of Bucardo.pm are using a log level';
+}
+else {
+    fail 'Not all calls to glog inside of Bucardo.pm are using a log level';
+}
+
+$file = 'META.yml';
+open $fh, '<', $file or die qq{Could not open "$file": $!\n};
 while (<$fh>) {
 	push @{$v{$file}} => [$1,$.] if /version\s*:\s*$vre/;
 }
@@ -42,13 +62,6 @@ $file = 'Makefile.PL';
 open $fh, '<', $file or die qq{Could not open "$file": $!\n};
 while (<$fh>) {
 	push @{$v{$file}} => [$1,$.] if /VERSION = '$vre'/;
-}
-close $fh or warn qq{Could not close "$file": $!\n};
-
-$file = 'Bucardo.pm';
-open $fh, '<', $file or die qq{Could not open "$file": $!\n};
-while (<$fh>) {
-	push @{$v{$file}} => [$1,$.] if (/VERSION = '$vre'/ or /document describes version $vre/);
 }
 close $fh or warn qq{Could not close "$file": $!\n};
 
