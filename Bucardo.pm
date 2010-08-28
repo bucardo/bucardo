@@ -63,16 +63,19 @@ for (split(' ', $Config{sig_name})) {
 ## Configuration of DBIx::Safe
 ## Specify exactly what database handles are allowed to do within custom code
 ## Here, 'strict' means 'inside the main transaction that Bucardo uses to make changes'
+my $strict_allow = 'SELECT INSERT UPDATE DELETE quote quote_identifier';
+my $nostrict_allow = "$strict_allow COMMIT ROLLBACK NOTIFY SET pg_savepoint pg_release pg_rollback_to";
+
 my %dbix = (
     source => {
         strict => {
-            allow_command   => 'SELECT INSERT UPDATE DELETE',
+            allow_command   => $strict_allow,
             allow_attribute => '',
             allow_regex     => '', ## Must be qr{} if not empty
             deny_regex      => ''
         },
         notstrict => {
-            allow_command   => 'SELECT INSERT UPDATE DELETE COMMIT ROLLBACK SET pg_savepoint pg_release pg_rollback_to NOTIFY',
+            allow_command   => $nostrict_allow,
             allow_attribute => 'RaiseError PrintError',
             allow_regex     => [qr{CREATE TEMP TABLE},qr{CREATE(?: UNIQUE)? INDEX}],
             deny_regex      => ''
@@ -80,13 +83,13 @@ my %dbix = (
     },
     target => {
         strict => {
-            allow_command   => 'SELECT INSERT UPDATE DELETE',
+            allow_command   => $strict_allow,
             allow_attribute => '',
             allow_regex     => '', ## Must be qr{} if not empty
             deny_regex      => ''
         },
         notstrict => {
-            allow_command   => 'SELECT INSERT UPDATE DELETE COMMIT ROLLBACK SET pg_savepoint pg_release pg_rollback_to NOTIFY',
+            allow_command   => $nostrict_allow,
             allow_attribute => 'RaiseError PrintError',
             allow_regex     => [qr{CREATE TEMP TABLE}],
             deny_regex      => ''
@@ -5314,6 +5317,14 @@ sub start_kid {
                         my $runagain = 0;
                         for my $code (@{$g->{code_exception}}) {
                             $self->glog("Trying exception code $code->{id}: $code->{name}", LOG_TERSE);
+                            %rowinfo = (
+                                schema     => $S,
+                                table      => $T,
+                                pkeyname   => $g->{pkey},
+                                pkeytype   => $g->{pkeytype},
+                                pkey       => $pkval,
+                                dbi_error  => $err,
+                            );
                             my $result = run_kid_custom_code($code, 'strict', $pushdelta_attempts);
                             if ($result eq 'next') {
                                 $self->glog('Going to next available exception code', LOG_VERBOSE);

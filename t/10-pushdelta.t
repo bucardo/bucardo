@@ -16,7 +16,7 @@ my $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object f
 $location = 'pushdelta';
 
 my $numtabletypes = keys %tabletype;
-plan tests => 32 + ($numtabletypes * 20);
+plan tests => 43 + ($numtabletypes * 20);
 
 pass("*** Beginning pushdelta tests");
 
@@ -115,7 +115,7 @@ for my $table (sort keys %tabletype) {
     $pkey{$table} = $table =~ /test5/ ? q{"id space"} : 'id';
 
     ## INSERT
-    for my $x (1..4) {
+    for my $x (1..6) {
         $SQL = $table =~ /0/
             ? "INSERT INTO $table($pkey{$table}) VALUES (?)"
                 : "INSERT INTO $table($pkey{$table},data1,inty) VALUES (?,'foo',$x)";
@@ -520,7 +520,7 @@ bucardo_ctl list sync pushdeltaAB -vv';
 $res = $bct->ctl($command);
 like ($res, qr{onetimecopy\s+=\s+0}, $t);
 
-## Add a new rows (inty=99) to both slaves
+## Add a new rows (inty=99) to both slaves and a row (inty=17) to the master
 $t = qq{A new row on slave is not automatically removed by a pushdelta sync};
 $dbhB->do('INSERT INTO bucardo_test1(id,inty) VALUES(99,99)');
 $dbhB->commit();
@@ -536,6 +536,8 @@ $SQL = 'SELECT count(*) FROM bucardo_test1 WHERE inty = 99';
 bc_deeply ([[1]], $dbhB, $SQL, $t);
 $t = qq{New row created on slave database C};
 bc_deeply ([[1]], $dbhC, $SQL, $t);
+$t = qq{New row not created on slave database A};
+bc_deeply ([[0]], $dbhA, $SQL, $t);
 
 ## Flip the sync to onetimecopy=2, then kick it off
 $command = '
@@ -547,6 +549,8 @@ $command = '
 bucardo_ctl list sync pushdeltaAB -vv';
 $res = $bct->ctl($command);
 like ($res, qr{onetimecopy\s+=\s+2}, $t);
+
+$bct->ctl(q{message "Begin onetimecopy 2 tests"});
 
 $command =
 "bucardo_ctl reload sync pushdeltaAB";
@@ -572,8 +576,135 @@ bc_deeply ([[1]], $dbhB, $SQL, $t);
 $t = q{Rows are copied from A to C};
 bc_deeply ([[1]], $dbhB, $SQL, $t);
 
-## Now do onetimecopy=1
+## Flip the sync to onetimecopy=1, then kick it off
+
+$bct->ctl(q{message "Begin onetimecopy 2 tests"});
+
+$dbhA->do("UPDATE bucardo_test1 SET inty=18 WHERE inty=17");
+$dbhA->commit();
+
+$command = '
+bucardo_ctl update sync pushdeltaAB set onetimecopy=1';
+$bct->ctl($command);
+
+$t = qq{Sync attrib onetimecopy accepts and keeps a setting of 1};
+$command = '
+bucardo_ctl list sync pushdeltaAB -vv';
+$res = $bct->ctl($command);
+like ($res, qr{onetimecopy\s+=\s+1}, $t);
+
+$command =
+"bucardo_ctl reload sync pushdeltaAB";
+$bct->ctl($command);
+$bct->ctl('kick sync pushdeltaAB 0');
+
+$t = qq{Sync attrib onetimecopy resets itself to 0 when complete};
+$command = '
+bucardo_ctl list sync pushdeltaAB -vv';
+$res = $bct->ctl($command);
+like ($res, qr{onetimecopy\s+=\s+0}, $t);
+
+$SQL = 'SELECT count(*) FROM bucardo_test1 WHERE inty = 99';
+
+$t = q{Setting onetimecopy=1 overwrites tables on B with data in them};
+bc_deeply ([[0]], $dbhB, $SQL, $t);
+
+$t = q{Setting onetimecopy=1 overwrites tables on C with data in them};
+bc_deeply ([[0]], $dbhC, $SQL, $t);
+
+$t = q{Rows are copied from A to B};
+$SQL = 'SELECT count(*) FROM bucardo_test1 WHERE inty = 18';
+bc_deeply ([[1]], $dbhB, $SQL, $t);
+
+$t = q{Rows are copied from A to C};
+bc_deeply ([[1]], $dbhB, $SQL, $t);
+
+## Use customode to solve a unique constraint issue
+
+$dbhA->do('DELETE FROM bucardo_test1');
+$dbhB->do('DELETE FROM bucardo_test1');
+
+$SQL = q{INSERT INTO bucardo_test1(id,inty,email) VALUES (1,1,'zed')};
+$dbhA->do($SQL);
+$dbhA->commit();
+
+$SQL = q{INSERT INTO bucardo_test1(id,inty,email) VALUES (2,2,'zed')};
+$dbhB->do($SQL);
+$dbhB->commit();
+
+$dbhX->do(<<'END_CCINSERT'
+INSERT INTO bucardo.customcode
+    (name, about, whenrun, getrows, src_code)
+VALUES
+    ('solve_unique_email',
+     'Solve a unique email problem',
+     'exception',
+     true,
+$perl$
+my $args = $_[0];
+
+return if (exists $args->{dummy});
+
+## If we have a unique email constraint, fix it up
+my $info = $args->{rowinfo};
+if ($info->{dbi_error} !~ /unique constraint "bucardo_test1_email_key"/) {
+  die "Do not know how to handle this exception\n";
+}
+
+## We don't need any more information such as table name, pkey, etc. because 
+## we know enough from that constraint name
+## Perhaps make this a generic handler with a regex name later?
+
+## Grab the row that failed
+if ($info->{dbi_error} !~ /line \d+: "(.+)"/) {
+  die "Could not extract COPY line\n";
+}
+
+my $fail = $1;
+my @fail = map { $_ =~ /\\N/ ? undef : $_ } split /\t/ => $fail;
+
+my $pkval = $fail[0];
+my $email = $fail[5];
+
+## In this case, we'll remove the one on the target
+my $targetdbh = $args->{targetdbh};
+my $safemail;
+eval { 
+  $safemail = $targetdbh->quote($email);
+};
+$@ and warn "customcode failure: $@\n";
+eval {
+$targetdbh->do("DELETE FROM bucardo_test1 WHERE email = $safemail");
+};
+$@ and warn "customcode failure: $@\n";
+$args->{runagain} = 1;
+return;
+$perl$);
+END_CCINSERT
+);
+
+
+$dbhX->do(q{INSERT INTO bucardo.customcode_map (code, goat) 
+    SELECT 1, id FROM bucardo.goat WHERE tablename = 'bucardo_test1'});
+$dbhX->commit();
+
+
+$command =
+"bucardo_ctl reload sync pushdeltaAB";
+$res = $bct->ctl($command);
+
+$SQL = 'SELECT id,email FROM bucardo_test1 ORDER BY 1';
+
+bc_deeply ([[1,'zed']], $dbhA, $SQL, $t);
+
+bc_deeply ([[2,'zed']], $dbhB, $SQL, $t);
+
+$bct->ctl('kick sync pushdeltaAB 0');
+
+bc_deeply ([[1,'zed']], $dbhA, $SQL, $t);
+
+bc_deeply ([[1,'zed']], $dbhB, $SQL, $t);
+
 
 exit;
-
 
