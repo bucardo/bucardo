@@ -5357,7 +5357,7 @@ sub start_kid {
 
                         ## Make sure the database connections are still clean
                         my $sourceping = $sourcedbh->ping();
-                        if ($sourceping !~ /^[13]$/o) {
+                        if ($sourceping !~ /^[123]$/o) {
                             $self->glog("Warning! Source ping after exception handler was $sourceping", LOG_WARN);
                         }
                         my $targetping = $targetdbh->ping();
