@@ -4055,6 +4055,18 @@ sub start_kid {
 
     if ($synctype eq 'pushdelta' or $synctype eq 'swap') {
 
+        $SQL = 'DELETE FROM bucardo.bucardo_sequences WHERE tablename=? AND syncname=? AND targetdb=?';
+        $sth{source}{deletesequence} = $sourcedbh->prepare($SQL);
+        $sth{target}{deletesequence} = $targetdbh->prepare($SQL) if $synctype eq 'swap';
+
+        $SQL = 'INSERT INTO bucardo.bucardo_sequences '
+            . '(tablename,syncname,targetdb,last_value,start_value,'
+            . '(increment_by,max_value,min_value,is_cycled,is_called) '
+            . 'VALUES (?,?,?,?,?,?,?,?,?,?)';
+        $sth{source}{insertsequence} = $sourcedbh->prepare($SQL);
+        $sth{target}{insertsequence} = $targetdbh->prepare($SQL) if $synctype eq 'swap';
+
+
         for my $g (@$goatlist) {
 
             next if $g->{reltype} ne 'table';
@@ -4702,47 +4714,46 @@ sub start_kid {
                 ## We'll handle sequence changes here and now (pushdelta only)
                 if ($synctype eq 'pushdelta' and $g->{reltype} eq 'sequence') {
 
-                    $SQL = "SELECT last_value, is_called FROM $S.$T";
-                    my ($lastval, $iscalled) = @{$sourcedbh->selectall_arrayref($SQL)->[0]};
-
-                    ## Check our internal table to see if we really need to propagate this sequence
-                    $SQL = 'SELECT value, iscalled FROM bucardo.bucardo_sequences WHERE tablename = ? AND syncname = ?';
+                    ## Compare the current sequence information with out stored values
+                    ## to see if we need to replicate it.
+                    $SQL = "SELECT * FROM $S.$T";
                     $sth = $sourcedbh->prepare($SQL);
-                    $count = $sth->execute($g->{oid}, $sync->{name});
-                    my $newval = 0;
-                    if ($count < 1) {
-                        $newval = 1; ## Never before seen, so add to the table
-                        $sth->finish();
-                    }
-                    else {
-                        my ($oldval,$oldcalled) = @{$sth->fetchall_arrayref()->[0]};
-                        if ($oldval != $lastval) {
-                            $newval = 2; ## Value has changed
-                        }
-                        elsif ($oldcalled ne $iscalled) {
-                            $newval = 3; ## is_called has changed
-                        }
-                    }
-                    if ($newval) {
-                        $self->glog("Setting sequence $S.$T to value of $lastval, is_called is $iscalled", LOG_NORMAL);
-                        $SQL = "SELECT setval('$S.$T', $lastval, '$iscalled')";
+                    $sth->execute();
+                    my $currseq = $sth->fetchall_arrayref({})->[0];
+
+                    $SQL = 'SELECT * FROM bucardo.bucardo_sequences WHERE tablename=? AND syncname=? AND targetdb=?';
+                    $sth = $sourcedbh->prepare($SQL);
+                    $count = $sth->execute($g->{oid}, $sync->{name}, $targetdb);
+                    my $newval = $count < 1 ? 1 : 0; ## Do we insert or update bucardo_sequences?
+                    my $oldseq = $sth->fetchall_arrayref({})->[0];
+
+                    ## Do we need to call setval?
+                    if ($newval
+                        or $currseq->{last_value} != $oldseq->{last_value}
+                        or $currseq->{is_called} != $oldseq->{is_called}
+                       ) {
+                        $self->glog("Setting sequence $S.$T to value of $currseq->{last_value}, is_called is $currseq->{is_called}", LOG_NORMAL);
+                        $SQL = "SELECT setval('$S.$T', $currseq->{last_value}, '$currseq->{is_called}')";
                         $targetdbh->do($SQL);
+                        $newval = 1;
+                    }
 
-                        ## Copy the change to our internal table
-                        if ($newval == 1) {
-                            $SQL = 'INSERT INTO bucardo.bucardo_sequences (tablename, syncname, value, iscalled) VALUES (?,?,?,?)';
-                            $sth = $sourcedbh->prepare($SQL);
-                            $sth->execute($g->{oid},$sync->{name},$lastval,$iscalled);
-                        }
-                        else {
-                            $SQL = 'UPDATE bucardo.bucardo_sequences SET value=?, iscalled=? WHERE tablename=? AND syncname=?';
-                            $sth = $sourcedbh->prepare($SQL);
-                            $sth->execute($lastval,$iscalled,$g->{oid}, $sync->{name});
-                        }
+                    ## Do we need to call ALTER SEQUENCE?
+                    for my $val (sort keys %$currseq) {
+                        next if $currseq->{$val} eq $oldseq->{$val};
+                        $self->glog("Sequence $S.$T has a different $val value: was $oldseq->{$val}, now $currseq->{$val}", LOG_DEBUG);
+                        $SQL = "ALTER SEQUENCE $S.$T";
+                        $newval =1;
+                    }
 
-                        ## Internal note so we know things have changed
+                    if ($newval) {
+                        $sth = $sth{source}{deletesequence};
+                        $sth->execute($g->{oid},$sync->{name},$targetdb);
+
+                        $sth = $sth{source}{insertsequence};
+                        $sth->execute($g->{oid},$sync->{name},$targetdb,@$currseq{qw/
+                          last_value start_value increment_by max_value min_value is_cycled is_called /});
                         $deltacount{sequences}++;
-
                     }
 
                 } ## end sequence checking
@@ -4772,7 +4783,7 @@ sub start_kid {
 
             ## If no changes, rollback dbs, close out q, notify listeners, and leave or reloop
             if (! $deltacount{all} and ! $deltacount{truncates}) {
-                ## If we modified the bucardo_sequence table, save the change
+                ## If we modified the bucardo_sequences table, save the change
                 if ($deltacount{sequences}) {
                     $sourcedbh->commit();
                 }
@@ -5399,7 +5410,8 @@ sub start_kid {
                 if ($g->{reltype} eq 'sequence') {
                     my $action = 0; ## 0 = skip, 1 = source->target, 2 = target->source
                     $g->{tempschema} = {};
-                    my $SEQUENCESQL = "SELECT last_value, is_called FROM $S.$T";
+                    my $SEQUENCESQL = "SELECT * FROM $S.$T";
+                    my $currseq;
                     if (exists $g->{code_conflict}) {
                         $self->glog('No support for custom conflict handlers for sequences yet!', LOG_WARN);
                     }
@@ -5415,6 +5427,11 @@ sub start_kid {
                             $action = 2;
                         }
                         elsif ('lowest' eq $sc or 'highest' eq $sc) {
+                            $SQL = "SELECT * FROM $S.$T";
+                            $sth = $sourcedbh->prepare($SQL);
+                            $sth->execute();
+                            $currseq = $sth->fetchall_arrayref({})->[0];
+
                             ($g->{tempschema}{s}{lastval},$g->{tempschema}{s}{iscalled}) =
                                 @{$sourcedbh->selectall_arrayref($SEQUENCESQL)->[0]};
                             ($g->{tempschema}{t}{lastval},$g->{tempschema}{t}{iscalled}) =
@@ -5443,7 +5460,7 @@ sub start_kid {
                     $deltacount{sequences}++;
 
                     ## Get the last seen value
-                    my $LASTSEQUENCESQL = 'SELECT value, iscalled FROM bucardo.bucardo_sequences WHERE tablename = ? AND syncname = ?';
+                    my $LASTSEQUENCESQL = 'SELECT * FROM bucardo.bucardo_sequences WHERE tablename = ? AND syncname = ? AND targetdb = ?';
 
                     ## Source wins - copy its value to the target
                     if (1 == $action) {
@@ -5459,7 +5476,7 @@ sub start_kid {
 
                         ## Has it changed since last visit?
                         $sth = $sourcedbh->prepare($LASTSEQUENCESQL);
-                        $count = $sth->execute($g->{oid}, $sync->{name});
+                        $count = $sth->execute($g->{oid}, $sync->{name}, $targetdb);
                         my $newval = 0;
                         if ($count < 1) {
                             $newval = 1; ## Never before seen, so add to the table
@@ -5484,12 +5501,13 @@ sub start_kid {
 
                         ## Save to the target's internal table
                         ## Rather than worry about upserts, we'll just delete/insert every time
-                        $SQL = 'DELETE FROM bucardo.bucardo_sequences WHERE tablename = ? AND syncname = ?';
-                        $sth = $sourcedbh->prepare($SQL);
-                        $sth->execute($g->{targetoid}{$targetdb}, $sync->{name});
-                        $SQL = 'INSERT INTO bucardo.bucardo_sequences (tablename, syncname, value, iscalled) VALUES (?,?,?,?)';
-                        $sth = $sourcedbh->prepare($SQL);
-                        $sth->execute($g->{targetoid}{$targetdb},$sync->{name},$lastval,$iscalled);
+                        $sth = $sth{target}{deletesequence};
+                        $sth->execute($g->{targetoid}{$targetdb},$sync->{name},$sourcedb);
+
+                        $sth = $sth{target}{insertsequence};
+                        $sth->execute($g->{targetoid}{$targetdb},$sync->{name},$sourcedb,@$currseq{qw/
+                          last_value start_value increment_by max_value min_value is_cycled is_called /});
+                        $deltacount{sequences}++;
 
                         ## Internal note so we know things have changed
                         $deltacount{sequences}++;
@@ -5511,7 +5529,7 @@ sub start_kid {
 
                     ## Has it changed since last visit?
                     $sth = $sourcedbh->prepare($LASTSEQUENCESQL);
-                    $count = $sth->execute($g->{oid}, $sync->{name});
+                    $count = $sth->execute($g->{oid}, $sync->{name}, $targetdb);
                     my $newval = 0;
                     if ($count < 1) {
                         $newval = 1; ## Never before seen, so add to the table
@@ -5536,12 +5554,13 @@ sub start_kid {
 
                     ## Save to the source's internal table
                     ## Rather than worry about upserts, we'll just delete/insert every time
-                    $SQL = 'DELETE FROM bucardo.bucardo_sequences WHERE tablename = ? AND syncname = ?';
-                    $sth = $targetdbh->prepare($SQL);
-                    $sth->execute($g->{oid}, $sync->{name});
-                    $SQL = 'INSERT INTO bucardo.bucardo_sequences (tablename, syncname, value, iscalled) VALUES (?,?,?,?)';
-                    $sth = $targetdbh->prepare($SQL);
-                    $sth->execute($g->{oid},$sync->{name},$lastval,$iscalled);
+                    $sth = $sth{source}{deletesequence};
+                    $sth->execute($g->{oid},$sync->{name},$targetdb);
+
+                    $sth = $sth{source}{insertsequence};
+                    $sth->execute($g->{oid},$sync->{name},$targetdb,@$currseq{qw/
+                          last_value start_value increment_by max_value min_value is_cycled is_called /});
+                    $deltacount{sequences}++;
 
                     ## Proceed to the next goat
                     next;

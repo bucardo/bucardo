@@ -1861,19 +1861,36 @@ $bc$
                      . q{bucardo.bucardo_truncate_trigger_log (sync,targetdb,replicated)};
                 run_sql($SQL,$dbh);
             }
+			## Check for older version of bucardo_sequences table
+			if ($found{bucardo_sequences}) {
+			   $SQL = q{SELECT count(*) FROM pg_attribute WHERE attname = 'targetdb' }
+                     .q{ AND attrelid = 'bucardo.bucardo_sequences'::regclass};
+			   my $count = $dbh->selectall_arrayref($SQL)->[0][0];
+			   if ($count < 12) {
+                 warn "Dropping older version of bucardo_sequences, then recreating empty\n";
+				 $dbh->do('DROP TABLE bucardo.bucardo_sequences');
+                 $found{bucardo_sequences} = 0;
+               }
+            }
             if (! $found{bucardo_sequences}) {
                 $SQL = qq{
                     CREATE TABLE bucardo.bucardo_sequences (
-                        tablename   OID         NOT NULL,
-                        syncname    TEXT        NOT NULL,
-                        value       BIGINT      NOT NULL,
-                        iscalled    BOOL        NOT NULL
+                        tablename    OID         NOT NULL,
+                        syncname     TEXT        NOT NULL,
+                        targetdb     TEXT        NOT NULL,
+                        last_value   BIGINT      NOT NULL,
+                        start_value  BIGINT      NOT NULL,
+                        increment_by BIGINT      NOT NULL,
+                        max_value    BIGINT      NOT NULL,
+                        min_value    BIGINT      NOT NULL,
+                        is_cycled    BOOL        NOT NULL,
+                        is_called    BOOL        NOT NULL
                     );
                 };
                 run_sql($SQL,$dbh);
 
                 $SQL = q{CREATE UNIQUE INDEX bucardo_sequences_tablename ON }
-                     . q{bucardo.bucardo_sequences (tablename, syncname)};
+                     . q{bucardo.bucardo_sequences (tablename, syncname, targetdb)};
                 run_sql($SQL,$dbh);
             }
             else {
