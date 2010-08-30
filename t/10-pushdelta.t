@@ -663,13 +663,12 @@ if ($info->{dbi_error} !~ /line \d+: "(.+)"/) {
 my $fail = $1;
 my @fail = map { $_ =~ /\\N/ ? undef : $_ } split /\t/ => $fail;
 
-my $pkval = $fail[0];
 my $email = $fail[5];
 
 ## In this case, we'll remove the one on the target
 my $targetdbh = $args->{targetdbh};
 my $safemail;
-eval { 
+eval {
   $safemail = $targetdbh->quote($email);
 };
 $@ and warn "customcode failure: $@\n";
@@ -688,7 +687,6 @@ $dbhX->do(q{INSERT INTO bucardo.customcode_map (code, goat)
     SELECT 1, id FROM bucardo.goat WHERE tablename = 'bucardo_test1'});
 $dbhX->commit();
 
-
 $command =
 "bucardo_ctl reload sync pushdeltaAB";
 $res = $bct->ctl($command);
@@ -704,7 +702,6 @@ $bct->ctl('kick sync pushdeltaAB 0');
 bc_deeply ([[1,'zed']], $dbhA, $SQL, $t);
 
 bc_deeply ([[1,'zed']], $dbhB, $SQL, $t);
-
 
 exit;
 
