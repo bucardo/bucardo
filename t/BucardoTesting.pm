@@ -18,10 +18,10 @@ use vars qw/$SQL $sth $count $COM %dbh/;
 my $DEBUG = $ENV{BUCARDO_DEBUG} || 0;
 
 use base 'Exporter';
-our @EXPORT = qw/%tabletype %sequences %val compare_tables bc_deeply clear_notices wait_for_notice $location/;
+our @EXPORT = qw/%tabletype %sequences %val compare_tables bc_deeply clear_notices wait_for_notice $location
+                 is_deeply like pass is isa_ok ok/;
 
 my $dbname = 'bucardo_test';
-
 
 our $location = 'setup';
 my $testmsg  = ' ?';
@@ -942,67 +942,6 @@ sub table_exists    { return thing_exists(@_, 'pg_class',     'relname'); }
 sub function_exists { return thing_exists(@_, 'pg_proc',      'proname'); }
 sub domain_exists   { return thing_exists(@_, 'pg_type',      'typname'); }
 
-## Hack to override some Test::More methods
-## no critic
-{
-    no warnings; ## Yes, we know they are being redefined!
-    sub is_deeply {
-        t($_[2],$_[3] || (caller)[2]);
-        return if Test::More::is_deeply($_[0],$_[1],$testmsg);
-        if ($bail_on_error > $total_errors++) {
-            my $line = (caller)[2];
-            my $time = time;
-            Test::More::diag("GOT: ".Dumper $_[0]);
-            Test::More::diag("EXPECTED: ".Dumper $_[1]);
-            Test::More::BAIL_OUT "Stopping on a failed 'is_deeply' test from line $line. Time: $time";
-        }
-    } ## end of is_deeply
-    sub like($$;$) {
-        t($_[2],(caller)[2]);
-        return if Test::More::like($_[0],$_[1],$testmsg);
-        if ($bail_on_error > $total_errors++) {
-            my $line = (caller)[2];
-            my $time = time;
-            Test::More::diag("GOT: ".Dumper $_[0]);
-            Test::More::diag("EXPECTED: ".Dumper $_[1]);
-            Test::More::BAIL_OUT "Stopping on a failed 'like' test from line $line. Time: $time";
-        }
-    } ## end of like
-    sub pass(;$) {
-        t($_[0],$_[1]||(caller)[2]);
-        Test::More::pass($testmsg);
-    } ## end of pass
-    sub is($$;$) {
-        t($_[2],(caller)[2]);
-        return if Test::More::is($_[0],$_[1],$testmsg);
-        if ($bail_on_error > $total_errors++) {
-            my $line = (caller)[2];
-            my $time = time;
-            Test::More::BAIL_OUT "Stopping on a failed 'is' test from line $line. Time: $time";
-        }
-    } ## end of is
-    sub isa_ok($$;$) {
-        t("Object isa $_[1]",(caller)[2]);
-        my ($name, $type, $msg) = ($_[0],$_[1]);
-        if (ref $name and ref $name eq $type) {
-            Test::More::pass($testmsg);
-            return;
-        }
-        $bail_on_error > $total_errors++ and Test::More::BAIL_OUT "Stopping on a failed test";
-    } ## end of isa_ok
-    sub ok($;$) {
-        t($_[1]||$testmsg);
-        return if Test::More::ok($_[0],$testmsg);
-        if ($bail_on_error > $total_errors++) {
-            my $line = (caller)[2];
-            my $time = time;
-            Test::More::BAIL_OUT "Stopping on a failed 'ok' test from line $line. Time: $time";
-        }
-    } ## end of ok
-}
-## use critic
-## end of Test::More hacks
-
 
 sub wait_for_notice {
 
@@ -1408,6 +1347,7 @@ sub bc_deeply {
     }
 
     $dbh->commit();
+
     return is_deeply($got,$exp,$msg,$oline||(caller)[2]);
 
 } ## end of bc_deeply
@@ -1462,121 +1402,67 @@ sub drop_database {
     return;
 }
 
-sub scrub_bucardo_tables {
+## Hack to override some Test::More methods
+## no critic
 
-    ## Empty out all stuff from the bucardo schema
-
-    my $self = shift;
-    my $dbh = shift;
-
-    $dbh->do("DELETE FROM bucardo.sync");
-    $dbh->do("DELETE FROM bucardo.herd");
-    $dbh->do("DELETE FROM bucardo.herdmap");
-    $dbh->do("DELETE FROM bucardo.goat");
-    $dbh->do("DELETE FROM bucardo.db_connlog");
-    $dbh->do("DELETE FROM bucardo.dbgroup");
-    $dbh->do("DELETE FROM bucardo.db");
-    $dbh->do("DELETE FROM bucardo.q");
-    $dbh->commit;
-
-    return;
-
-} ## end of scrub_bucardo_tables
-
-
-
-
-sub setup_monkey_data {
-
-    my ($self,$dbh) = @_;
-
-    ## Make sure the database is setup with the data for the "monkey" tests
-
-    ## If already there, reset everything
-
-    debug('Inside setup_monkey_data');
-
-    ## Database A contains bucardo itself and is the first "master"
-    $self->start_cluster('A');
-
-    my $dbhA = $self->connect_database('A', 'postgres');
-
-    $dbhA->{AutoCommit} = 1;
-
-    if ( !database_exists($dbh => 'bucardo')) {
-        
-    }
-
-
-
-
-    ## First, we need the clusters to be there.
-    $self->start_cluster('B');
-    $self->start_cluster('C');
-
-
-
-
-    ## Next, we install Bucardo into database A
-    if (schema_exists($dbhA => 'bucardo')) {
-        $dbhA->do('DROP SCHEMA bucardo CASCADE');
-        $dbhA->commit();
-    }
-    eval {
-        $dbhA->do('CREATE USER postgres SUPERUSER');
-    };
-    $dbhA->commit();
-
-    my $info;
-    eval {
-        local $SIG{ALRM} = sub { die "Alarum!\n"; };
-        alarm 3;
-        $info = $self->ctl('install --batch');
-        alarm 0;
-    };
-    if ($@ and $@ =~ /Alarum/ or $info =~ /Alarum/) {
-        warn "bucardo_ctl install never finished!\n";
-        exit;
-    }
-    $@ and die $@;
-
-    if ($info !~ /Installation is now complete/) {
-        die "Installation failed\n";
-    }
-die Dumper $info;
-exit;
-    debug('Bucardo has been installed on database A');
-
-    my $dbname = 'monkey';
-
-    ## If needed, create the monkey database
-    if (! database_exists($dbhA => $dbname)) {
-        debug("Creating database $dbname");
-        $dbhA->do("CREATE DATABASE $dbname");
-    }
-
-    ## Drop the public schema and recreate with all tables
-    if (schema_exists($dbhA => 'public')) {
-        debug('Dropping the public schema');
-        $dbhA->do('DROP SCHEMA public CASCADE');
-    }
-    $dbhA->do('CREATE SCHEMA public');
-
-    $self->add_test_schema($dbhA);
-
-    if (! database_exists($dbhA => "${dbname}_template")) {
-        $dbhA->do("CREATE DATABASE ${dbname}_template");
-    }
-
-
-
-    $dbhA->disconnect();
-
-    ## XXX: Make a template db for all of this
-
-    return;
-
-} ## End of setup_monkey_data
+{
+    #no warnings; ## Yes, we know they are being redefined!
+    sub is_deeply {
+        t($_[2],$_[3] || (caller)[2]);
+        return if Test::More::is_deeply($_[0],$_[1],$testmsg);
+        if ($bail_on_error > $total_errors++) {
+            my $line = (caller)[2];
+            my $time = time;
+            Test::More::diag("GOT: ".Dumper $_[0]);
+            Test::More::diag("EXPECTED: ".Dumper $_[1]);
+            Test::More::BAIL_OUT "Stopping on a failed 'is_deeply' test from line $line. Time: $time";
+        }
+    } ## end of is_deeply
+    sub like($$;$) {
+        t($_[2],(caller)[2]);
+        return if Test::More::like($_[0],$_[1],$testmsg);
+        if ($bail_on_error > $total_errors++) {
+            my $line = (caller)[2];
+            my $time = time;
+            Test::More::diag("GOT: ".Dumper $_[0]);
+            Test::More::diag("EXPECTED: ".Dumper $_[1]);
+            Test::More::BAIL_OUT "Stopping on a failed 'like' test from line $line. Time: $time";
+        }
+    } ## end of like
+    sub pass(;$) {
+        t($_[0],$_[1]||(caller)[2]);
+        Test::More::pass($testmsg);
+    } ## end of pass
+    sub is($$;$) {
+        t($_[2],(caller)[2]);
+        return if Test::More::is($_[0],$_[1],$testmsg);
+        if ($bail_on_error > $total_errors++) {
+            my $line = (caller)[2];
+            my $time = time;
+            Test::More::BAIL_OUT "Stopping on a failed 'is' test from line $line. Time: $time";
+        }
+    } ## end of is
+    sub isa_ok($$;$) {
+        t("Object isa $_[1]",(caller)[2]);
+        my ($name, $type, $msg) = ($_[0],$_[1]);
+        if (ref $name and ref $name eq $type) {
+            Test::More::pass($testmsg);
+            return;
+        }
+        $bail_on_error > $total_errors++ and Test::More::BAIL_OUT "Stopping on a failed test";
+    } ## end of isa_ok
+    sub ok($;$) {
+        t($_[1]||$testmsg);
+        return if Test::More::ok($_[0],$testmsg);
+        if ($bail_on_error > $total_errors++) {
+            my $line = (caller)[2];
+            my $time = time;
+            Test::More::BAIL_OUT "Stopping on a failed 'ok' test from line $line. Time: $time";
+        }
+    } ## end of ok
+}
+## use critic
+## end of Test::More hacks
 
 
 1;
