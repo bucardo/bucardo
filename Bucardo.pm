@@ -407,12 +407,22 @@ sub glog { ## no critic (RequireArgUnpacking)
     $msg = "$prefix $msg";
 
     ## We may also show other optional things: PID, timestamp, line we came from
-    my $header = sprintf '%s%s',
+    my $showtime = '';
+    if ($config{log_showtime}) {
+        my ($sec,$msec) = gettimeofday;
+        $showtime =
+            1 == $config{log_showtime} ? $sec
+            : 2 == $config{log_showtime} ? (scalar gmtime($sec))
+            : 3 == $config{log_showtime} ? (scalar localtime($sec))
+            : '';
+        if ($config{log_microsecond}) {
+            $showtime =~ s/(:\d\d) /$1.$msec /o;
+        }
+    }
+
+    my $header = sprintf '%s%s%s',
         $config{log_showpid}  ? "($$) " : '',
-        1 == $config{log_showtime}       ? ('['.time.'] ')
-            : 2 == $config{log_showtime} ? ('['.scalar gmtime(time).'] ')
-            : 3 == $config{log_showtime} ? ('['.scalar localtime(time).'] ')
-            : '',
+        $showtime ? "[$showtime] " : '',
         $config{log_showline} ? (sprintf '#%04d ', (caller)[2]) : '';
 
     ## If using syslog, send the message at the 'info' priority
