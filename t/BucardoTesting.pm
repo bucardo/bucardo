@@ -916,7 +916,7 @@ sub setup_bucardo {
     $dbh->commit();
 
     ## Adjust a second way
-    $self->ctl('set log_level=debug');
+    $self->ctl('set log_level=debug log_microsecond=1 log_showline=1');
 
     debug(qq{Install complete});
 
