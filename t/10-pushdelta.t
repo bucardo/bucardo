@@ -16,7 +16,7 @@ my $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object f
 $location = 'pushdelta';
 
 my $numtabletypes = keys %tabletype;
-plan tests => 43 + ($numtabletypes * 20);
+plan tests => 43 + ($numtabletypes * 19);
 
 pass("*** Beginning pushdelta tests");
 
@@ -451,34 +451,27 @@ for my $seq (sort keys %sequences) {
 
 }
 
+## Make some more invasive changes to the sequences
+## Update all the sequences on A
+for my $seq (sort keys %sequences) {
+    $dbhA->do("ALTER SEQUENCE $seq minvalue 2 restart 3 start 4 maxvalue 500 cycle increment by 5");
+}
+$dbhA->commit();
+$bct->ctl('kick sync pushdeltaAB 0');
 
-SKIP: {
+for my $seq (sort keys %sequences) {
 
-    skip q{Sequence meta-information not replicated yet}, $numtabletypes * 2;
+    $t = qq{Sequence $seq is copied to database B};
 
-    ## Make some more invasive changes to the sequences
-    ## Update all the sequences on A
-    for my $seq (sort keys %sequences) {
-        $dbhA->do("ALTER SEQUENCE $seq start 2 minvalue 2 maxvalue 500 cycle increment by 2");
-    }
-    $dbhA->commit();
-    $bct->ctl('kick sync pushdeltaAB 0');
+    $SQL = "SELECT sequence_name, last_value, increment_by, max_value, min_value, is_cycled FROM $seq";
+    my $seqA = $dbhA->selectall_arrayref($SQL)->[0];
+    my $seqB = $dbhB->selectall_arrayref($SQL)->[0];
+    is_deeply($seqA, $seqB, $t);
 
-    for my $seq (sort keys %sequences) {
-
-        $t = qq{Sequence $seq is copied to database B};
-
-        $SQL = "SELECT sequence_name, last_value, increment_by, max_value, min_value, is_cycled FROM $seq";
-        my $seqA = $dbhA->selectall_arrayref($SQL)->[0];
-        my $seqB = $dbhB->selectall_arrayref($SQL)->[0];
-        is_deeply($seqA, $seqB, $t);
-
-        $t = qq{Sequence $seq is copied to database C};
-        my $seqC = $dbhC->selectall_arrayref($SQL)->[0];
-        is_deeply($seqA, $seqC, $t);
-    }
-
-} ## end of SKIP
+    $t = qq{Sequence $seq is copied to database C};
+    my $seqC = $dbhC->selectall_arrayref($SQL)->[0];
+    is_deeply($seqA, $seqC, $t);
+}
 
 ## Test of truncation
 SKIP: {
@@ -702,6 +695,8 @@ $bct->ctl('kick sync pushdeltaAB 0');
 bc_deeply ([[1,'zed']], $dbhA, $SQL, $t);
 
 bc_deeply ([[1,'zed']], $dbhB, $SQL, $t);
+
+pass('Done with pushdelta testing');
 
 exit;
 
