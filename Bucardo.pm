@@ -6472,10 +6472,6 @@ sub adjust_sequence {
 
     my $oldseq = $self->get_sequence_info($sdbh, $schemaname, $seqname, $syncname, $targetname);
 
-$self->glog("currseq for $seqname: " . (Dumper $currseq));
-$self->glog("oldseq for $seqname: " . (Dumper $oldseq));
-
-
     ## Call SETVAL as needed
     if (! exists $oldseq->{last_value}
           or $currseq->{last_value} != $oldseq->{last_value}
