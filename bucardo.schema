@@ -1863,7 +1863,7 @@ $bc$
             }
 			## Check for older version of bucardo_sequences table
 			if ($found{bucardo_sequences}) {
-			   $SQL = q{SELECT count(*) FROM pg_attribute WHERE attname = 'targetdb' }
+			   $SQL = q{SELECT count(*) FROM pg_attribute WHERE attname = 'targetname' }
                      .q{ AND attrelid = 'bucardo.bucardo_sequences'::regclass};
 			   my $count = $dbh->selectall_arrayref($SQL)->[0][0];
 			   if ($count < 12) {
@@ -1875,9 +1875,10 @@ $bc$
             if (! $found{bucardo_sequences}) {
                 $SQL = qq{
                     CREATE TABLE bucardo.bucardo_sequences (
-                        tablename    OID         NOT NULL,
+					    schemaname   TEXT        NOT NULL,
+                        seqname      TEXT        NOT NULL,
                         syncname     TEXT        NOT NULL,
-                        targetdb     TEXT        NOT NULL,
+                        targetname   TEXT        NOT NULL,
                         last_value   BIGINT      NOT NULL,
                         start_value  BIGINT      NOT NULL,
                         increment_by BIGINT      NOT NULL,
@@ -1890,23 +1891,8 @@ $bc$
                 run_sql($SQL,$dbh);
 
                 $SQL = q{CREATE UNIQUE INDEX bucardo_sequences_tablename ON }
-                     . q{bucardo.bucardo_sequences (tablename, syncname, targetdb)};
+                     . q{bucardo.bucardo_sequences (schemaname, seqname, syncname, targetname)};
                 run_sql($SQL,$dbh);
-            }
-            else {
-                 ## Make sure we upgrade any old version
-                 my $SQL = 'SELECT 1 FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n, '.
-                 'pg_catalog.pg_attribute a WHERE n.oid=c.relnamespace AND n.nspname = ? AND c.relname = ? '.
-                 'AND a.attname = ? AND a.attrelid = c.oid';
-                 my $sth = $dbh->prepare_cached($SQL);
-                 my $count = $sth->execute('bucardo','bucardo_sequences','syncname');
-                 $sth->finish();
-                 my $dbname = $dbh->selectall_arrayref('SELECT current_database()')->[0][0];
-                 if ($count < 1) {
-                     $dbh->do('ALTER TABLE bucardo.bucardo_sequences ADD syncname TEXT');
-                     $dbh->do('UPDATE bucardo.bucardo_sequences SET syncname = ' . $dbh->quote($syncname));
-                     $dbh->do('ALTER TABLE bucardo.bucardo_sequences ALTER syncname SET NOT NULL');
-                 }
             }
 
             if ($force) {
