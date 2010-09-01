@@ -16,7 +16,7 @@ my $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object f
 $location = 'pushdelta';
 
 my $numtabletypes = keys %tabletype;
-plan tests => 43 + ($numtabletypes * 19);
+plan tests => 41 + ($numtabletypes * 19);
 
 pass("*** Beginning pushdelta tests");
 
@@ -186,6 +186,8 @@ $res = $bct->ctl($command);
 $command =
 "bucardo_ctl reload sync pushdeltaAB";
 $res = $bct->ctl($command);
+
+sleep 1;
 
 ## Delete rows from A
 for my $table (keys %tabletype) {
