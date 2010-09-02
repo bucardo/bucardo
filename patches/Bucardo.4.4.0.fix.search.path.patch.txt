@@ -1,0 +1,40 @@
+--- Bucardo.pm	2010/09/02 14:08:46	1.1
++++ Bucardo.pm	2010/09/02 14:09:47
+@@ -1832,6 +1832,9 @@
+ 					push @{$g->{binarypkey}} => 0;
+ 				}
+ 
++                ## Turn off the search path, to help the checks below match up
++                $srcdbh->do('SET LOCAL search_path = pg_catalog');
++
+ 				## Check the source columns, and save them
+ 				$sth = $sth{checkcols};
+ 				$sth->execute($g->{oid});
+@@ -1878,6 +1881,8 @@
+ 					push @{$g->{binarycols}}, $colinfo->{$colname}{order};
+ 				}
+ 
++                $srcdbh->do('RESET search_path');
++
+ 			} ## end if reltype is table
+ 
+ 			## If a sequence, grab all info as a hash
+@@ -1976,6 +1981,9 @@
+ 				## Store away our oid, as we may need it later to access bucardo_delta
+ 				$g->{targetoid}{$db} = $oid;
+ 
++                ## Turn off the search path, to help the checks below match up
++                $dbh->do('SET LOCAL search_path = pg_catalog');
++
+ 				## Grab column information about this table
+ 				$sth = $dbh->prepare($SQL{checkcols});
+ 				$sth->execute($oid);
+@@ -1987,6 +1995,8 @@
+ 					$targetcolinfo->{$_}{realattnum} = $x++;
+ 				}
+ 
++                $dbh->do('RESET search_path');
++
+ 				my $t = "$g->{schemaname}.$g->{tablename}";
+ 
+ 				## We'll state no problems until we are proved wrong
