@@ -16,7 +16,8 @@ my $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object f
 $location = 'pushdelta';
 
 my $numtabletypes = keys %tabletype;
-plan tests => 41 + ($numtabletypes * 19);
+my $numsequences = keys %sequences;
+plan tests => 41 + ($numtabletypes * 15) + ($numsequences * 4);
 
 pass("*** Beginning pushdelta tests");
 

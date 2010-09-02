@@ -16,7 +16,8 @@ my $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object f
 $location = 'swap';
 
 my $numtabletypes = keys %tabletype;
-plan tests => 11 + ($numtabletypes * 24);
+my $numsequences = keys %sequences;
+plan tests => 12 + ($numtabletypes * 24) + ($numsequences + 1);
 
 pass("*** Beginning swap tests");
 
@@ -192,6 +193,17 @@ for my $table (sort keys %tabletype) {
 
 ## Kick the sync and wait for it to finish
 $bct->ctl('kick sync swaptest 0');
+
+for my $seq (sort keys %sequences) {
+
+    $t = qq{Sequence $seq is copied to database B};
+
+    $SQL = "SELECT sequence_name, last_value, increment_by, max_value, min_value, is_cycled FROM $seq";
+    my $seqA = $dbhA->selectall_arrayref($SQL)->[0];
+    my $seqB = $dbhB->selectall_arrayref($SQL)->[0];
+    is_deeply($seqA, $seqB, $t);
+
+}
 
 ## Rows should be gone from B now
 for my $table (sort keys %tabletype) {
@@ -373,6 +385,7 @@ for my $table (sort keys %tabletype) {
 }
 
 ## Insert same rows to A and B, change B, extra rows to B
+## Also tweak some sequences
 for my $table (sort keys %tabletype) {
 
     my $type = $tabletype{$table};
@@ -399,6 +412,13 @@ for my $table (sort keys %tabletype) {
     $dbhA->do($SQL);
     $SQL = "UPDATE $table SET inty = 777 WHERE inty <> 66";
     $dbhB->do($SQL);
+
+    ## Change a sequence on A
+    $SQL = q{SELECT setval('bucardo_test_seq1', 45)};
+    $dbhA->do($SQL);
+    $SQL = q{ALTER SEQUENCE bucardo_test_seq1 MAXVALUE 400};
+    $dbhA->do($SQL);
+
 }
 $dbhA->commit();
 $dbhB->commit();
@@ -415,7 +435,15 @@ for my $table (sort keys %tabletype) {
     bc_deeply($res, $dbhA, $sql{select}{$table}, $t);
     $res = [[55],[66],[77]];
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
+
 }
+
+$t = qq{Sequence bucardo_test_seq1 is copied to database B};
+
+$SQL = 'SELECT sequence_name, last_value, increment_by, max_value, min_value, is_cycled FROM bucardo_test_seq1';
+my $seqA = $dbhA->selectall_arrayref($SQL)->[0];
+my $seqB = $dbhB->selectall_arrayref($SQL)->[0];
+is_deeply($seqA, $seqB, $t);
 
 ## Make B the "master"
 $command =
@@ -494,5 +522,7 @@ for my $table (sort keys %tabletype) {
     $res = [[55],[66],[777]];
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 }
+
+pass('Done with swap testing');
 
 exit;
