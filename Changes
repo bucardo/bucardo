@@ -6,6 +6,9 @@ Bucardo version 4.5.0, released ??, 2010
     options for both syncs and goats, which inherit from the higher level (goat 
     inherits from sync inherits from db). Add makedelta as on/off for db. [GSM]
 
+  - Overhaul of sequence handling: now allows for all attributes to be replicated, 
+    such as INCREMENT_BY and MAXVALUE [GSM]
+
   - Allow triggers and rules to work on bucardo_delta and bucardo_track by 
     setting new column bucardo.db.makedelta_triggers to true. [GSM]
 
@@ -28,6 +31,9 @@ Bucardo version 4.5.0, released ??, 2010
   - Show the reason why a sync failed on a failed bucardo_ctl kick. [GSM]
 
   - Fix errors with bytea and swap syncs. [GSM]
+
+  - Force time zone to GMT to resolve timestamptz issues with bucardo_delta
+    [GSM, Michelle Sullivan]
 
   - Add a log_level parameter, and classify all messages inside Bucardo.pm
     with a log_level of TERSE, NORMAL, VERBOSE, or DEBUG. [Rosser Schwarz and GSM]
@@ -64,6 +70,8 @@ Bucardo version 4.5.0, released ??, 2010
   - Don't bother comparing the 'log_cnt' field of sequences. [Rosser Schwarz]
 
   - Allow "schema.table" format for bucardo_ctl list tables [GSM]
+
+  - Add new option "log_microsecond" to show sub-second output in logs. [GSM]
 
   - Make sure we update bucardo_config.bucardo_current_version when doing 
     a bucardo_ctl upgrade [GSM] (Bug #5)
