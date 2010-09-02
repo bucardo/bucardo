@@ -4607,6 +4607,8 @@ sub start_kid {
         ## Note that all database handles are currently not in a txn (last action was commit or rollback)
         $sourcedbh->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE');
         $targetdbh->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE');
+        $sourcedbh->do('SET TIME ZONE GMT');
+        $targetdbh->do('SET TIME ZONE GMT');
 
         ## We may want to lock all the tables
         ## TODO: alternate ways to trigger this
