@@ -45,15 +45,16 @@ my @dbs = qw/A B C D/;
 
 our %tabletype =
     (
-     'bucardo_test1' => 'SMALLINT',
-     'bucardo_test2' => 'INT',
-     'bucardo_test3' => 'BIGINT',
-     'bucardo_test4' => 'TEXT',
-     'bucardo_test5' => 'DATE',
-     'bucardo_test6' => 'TIMESTAMP',
-     'bucardo_test7' => 'NUMERIC',
-     'bucardo_test8' => 'BYTEA',
-     'bucardo_test9' => 'int_unsigned',
+     'bucardo_test1'  => 'SMALLINT',
+     'bucardo_test2'  => 'INT',
+     'bucardo_test3'  => 'BIGINT',
+     'bucardo_test4'  => 'TEXT',
+     'bucardo_test5'  => 'DATE',
+     'bucardo_test6'  => 'TIMESTAMP',
+     'bucardo_test7'  => 'NUMERIC',
+     'bucardo_test8'  => 'BYTEA',
+     'bucardo_test9'  => 'int_unsigned',
+     'bucardo_test10' => 'TIMESTAMPTZ',
      );
 
 our @tables2empty = (qw/droptest/);
@@ -172,6 +173,7 @@ for (1..30) {
     $val{NUMERIC}{$_} = 0.7 + $_;
     $val{BYTEA}{$_} = "$_\0Z";
     $val{int_unsigned}{$_} = 5000 + $_;
+    $val{TIMESTAMPTZ}{$_} = $val{DATE}{$_} . " 11:22:33";
 }
 
 
@@ -635,7 +637,7 @@ sub add_test_schema {
         $SQL = qq{
             CREATE TABLE $table (
                 $pkeyname    $tabletype{$table} NOT NULL $pkindex};
-        $SQL .= $table =~ /0/ ? "\n)" : qq{,
+        $SQL .= $table =~ /X/ ? "\n)" : qq{,
                 data1 TEXT                   NULL,
                 inty  SMALLINT               NULL,
                 bite1 BYTEA                  NULL,
@@ -1405,64 +1407,62 @@ sub drop_database {
 ## Hack to override some Test::More methods
 ## no critic
 
-{
-    #no warnings; ## Yes, we know they are being redefined!
-    sub is_deeply {
-        t($_[2],$_[3] || (caller)[2]);
-        return if Test::More::is_deeply($_[0],$_[1],$testmsg);
-        if ($bail_on_error > $total_errors++) {
-            my $line = (caller)[2];
-            my $time = time;
-            Test::More::diag("GOT: ".Dumper $_[0]);
-            Test::More::diag("EXPECTED: ".Dumper $_[1]);
-            Test::More::BAIL_OUT "Stopping on a failed 'is_deeply' test from line $line. Time: $time";
-        }
-    } ## end of is_deeply
-    sub like($$;$) {
-        t($_[2],(caller)[2]);
-        return if Test::More::like($_[0],$_[1],$testmsg);
-        if ($bail_on_error > $total_errors++) {
-            my $line = (caller)[2];
-            my $time = time;
-            Test::More::diag("GOT: ".Dumper $_[0]);
-            Test::More::diag("EXPECTED: ".Dumper $_[1]);
-            Test::More::BAIL_OUT "Stopping on a failed 'like' test from line $line. Time: $time";
-        }
-    } ## end of like
-    sub pass(;$) {
-        t($_[0],$_[1]||(caller)[2]);
+sub is_deeply {
+    t($_[2],$_[3] || (caller)[2]);
+    return if Test::More::is_deeply($_[0],$_[1],$testmsg);
+    if ($bail_on_error > $total_errors++) {
+        my $line = (caller)[2];
+        my $time = time;
+        Test::More::diag("GOT: ".Dumper $_[0]);
+        Test::More::diag("EXPECTED: ".Dumper $_[1]);
+        Test::More::BAIL_OUT "Stopping on a failed 'is_deeply' test from line $line. Time: $time";
+    }
+} ## end of is_deeply
+sub like($$;$) {
+    t($_[2],(caller)[2]);
+    return if Test::More::like($_[0],$_[1],$testmsg);
+    if ($bail_on_error > $total_errors++) {
+        my $line = (caller)[2];
+        my $time = time;
+        Test::More::diag("GOT: ".Dumper $_[0]);
+        Test::More::diag("EXPECTED: ".Dumper $_[1]);
+        Test::More::BAIL_OUT "Stopping on a failed 'like' test from line $line. Time: $time";
+    }
+} ## end of like
+sub pass(;$) {
+    t($_[0],$_[1]||(caller)[2]);
+    Test::More::pass($testmsg);
+} ## end of pass
+sub is($$;$) {
+    t($_[2],(caller)[2]);
+    return if Test::More::is($_[0],$_[1],$testmsg);
+    if ($bail_on_error > $total_errors++) {
+        my $line = (caller)[2];
+        my $time = time;
+        Test::More::BAIL_OUT "Stopping on a failed 'is' test from line $line. Time: $time";
+    }
+} ## end of is
+sub isa_ok($$;$) {
+    t("Object isa $_[1]",(caller)[2]);
+    my ($name, $type, $msg) = ($_[0],$_[1]);
+    if (ref $name and ref $name eq $type) {
         Test::More::pass($testmsg);
-    } ## end of pass
-    sub is($$;$) {
-        t($_[2],(caller)[2]);
-        return if Test::More::is($_[0],$_[1],$testmsg);
-        if ($bail_on_error > $total_errors++) {
-            my $line = (caller)[2];
-            my $time = time;
-            Test::More::BAIL_OUT "Stopping on a failed 'is' test from line $line. Time: $time";
-        }
-    } ## end of is
-    sub isa_ok($$;$) {
-        t("Object isa $_[1]",(caller)[2]);
-        my ($name, $type, $msg) = ($_[0],$_[1]);
-        if (ref $name and ref $name eq $type) {
-            Test::More::pass($testmsg);
-            return;
-        }
-        $bail_on_error > $total_errors++ and Test::More::BAIL_OUT "Stopping on a failed test";
-    } ## end of isa_ok
-    sub ok($;$) {
-        t($_[1]||$testmsg);
-        return if Test::More::ok($_[0],$testmsg);
-        if ($bail_on_error > $total_errors++) {
-            my $line = (caller)[2];
-            my $time = time;
-            Test::More::BAIL_OUT "Stopping on a failed 'ok' test from line $line. Time: $time";
-        }
-    } ## end of ok
-}
+        return;
+    }
+    $bail_on_error > $total_errors++ and Test::More::BAIL_OUT "Stopping on a failed test";
+} ## end of isa_ok
+sub ok($;$) {
+    t($_[1]||$testmsg);
+    return if Test::More::ok($_[0],$testmsg);
+    if ($bail_on_error > $total_errors++) {
+        my $line = (caller)[2];
+        my $time = time;
+        Test::More::BAIL_OUT "Stopping on a failed 'ok' test from line $line. Time: $time";
+    }
+} ## end of ok
+
 ## use critic
-## end of Test::More hacks
+
 
 
 1;

@@ -117,7 +117,7 @@ for my $table (sort keys %tabletype) {
 
     ## INSERT
     for my $x (1..6) {
-        $SQL = $table =~ /0/
+        $SQL = $table =~ /X/
             ? "INSERT INTO $table($pkey{$table}) VALUES (?)"
                 : "INSERT INTO $table($pkey{$table},data1,inty) VALUES (?,'foo',$x)";
         $sth{insert}{$x}{$table}{A} = $dbhA->prepare($SQL);
@@ -128,7 +128,7 @@ for my $table (sort keys %tabletype) {
 
     ## SELECT
     $sql{select}{$table} = "SELECT inty FROM $table ORDER BY $pkey{$table}";
-    $table =~ /0/ and $sql{select}{$table} =~ s/inty/$pkey{$table}/;
+    $table =~ /X/ and $sql{select}{$table} =~ s/inty/$pkey{$table}/;
 
     ## DELETE
     $SQL = "DELETE FROM $table";
