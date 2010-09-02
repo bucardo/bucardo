@@ -72,14 +72,9 @@ like ($res, qr/New sequences added: \d/, $t);
 
 ## Tell it how to handle conflicts
 $command =
-"bucardo_ctl update all tables standard_conflict=source";
+"bucardo_ctl set default_standard_conflict=source";
 $res = $bct->ctl($command);
-like ($res, qr/"all tables"/, $t);
-
-$command =
-"bucardo_ctl update all sequences standard_conflict=source";
-$res = $bct->ctl($command);
-like ($res, qr/"all sequences"/, $t);
+like ($res, qr/"default_standard_conflict".+"source"/, $t);
 
 ## Add a new swap sync that goes from A to B
 $t = q{Adding a new swap sync works};
@@ -446,6 +441,12 @@ my $seqB = $dbhB->selectall_arrayref($SQL)->[0];
 is_deeply($seqA, $seqB, $t);
 
 ## Make B the "master"
+## Tell it how to handle conflicts
+$command =
+"bucardo_ctl set default_standard_conflict=none";
+$res = $bct->ctl($command);
+like ($res, qr/"default_standard_conflict"/, $t);
+
 $command =
 "bucardo_ctl update all tables standard_conflict=target";
 $res = $bct->ctl($command);

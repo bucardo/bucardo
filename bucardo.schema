@@ -150,6 +150,7 @@ WITH DELIMITER '|';
 default_email_from|nobody@example.com|Who the alert emails are sent as
 default_email_to|nobody@example.com|Who to send alert emails to
 default_email_host|localhost|Which host to send email through
+default_standard_conflict||Default conflict method for all goats
 email_debug_file||File to save a copy of all outgoing emails to
 host_safety_check||Regex to make sure we don't accidentally run where we should not
 kid_abort_limit|3|How many times we will restore an aborted kid before giving up?
@@ -1117,6 +1118,14 @@ $bc$
     $source =~ s/'/''/go;
     ## Source is always a herd
 
+    ## Gather information from bucardo_config
+    $SQL = 'SELECT setting,value FROM bucardo_config';
+    $rv = spi_exec_query($SQL);
+    my $config;
+    for my $row (@{$rv->{rows}}) {
+      $config->{$row->{setting}} = $row->{value};
+    }
+
     ## Prepare a list of all databases and tables involved in this sync
     ## We need to verify that the databases are reachable, that the tables exists,
     ## that the columns match up, and that the delta stuff is set up as needed.
@@ -1257,7 +1266,7 @@ $bc$
             $tinfo->{synctype} = $info->{synctype};
             my $delta = $info->{synctype} =~ /pushdelta|swap/ ? 1 : 0;
             my $ping = $info->{ping} eq 't' ? 1 : 0;
-            my $columns = bucardo_validate_table(1,$sourcedb,$tinfo,$delta,$ping,$syncname,\%cache,$source,$force);
+            my $columns = bucardo_validate_table(1,$sourcedb,$tinfo,$delta,$ping,$syncname,\%cache,$source,$force,$config);
             if ($columns == -1) {
                 $badtable{$schema}{$table}=1;
                 next TABLE;
@@ -1266,7 +1275,7 @@ $bc$
             $delta = $info->{synctype} =~ /swap/ ? 1 : 0;
             $ping = $delta;
             for my $tdb (sort keys %$targetdb) {
-                my $tcolumns = bucardo_validate_table(0,$tdb,$tinfo,$delta,$ping,$syncname,\%cache,$source,$force);
+                my $tcolumns = bucardo_validate_table(0,$tdb,$tinfo,$delta,$ping,$syncname,\%cache,$source,$force,$config);
                 if ($columns == -1) {
                     $badtable{$schema}{$table}=1;
                     next TABLE;
@@ -1345,7 +1354,7 @@ $bc$
 
     sub bucardo_validate_table {
 
-        my ($is_source, $db, $info, $delta, $ping, $syncname, $cache, $source, $force) = @_;
+        my ($is_source, $db, $info, $delta, $ping, $syncname, $cache, $source, $force, $config) = @_;
         my ($sth,$SQL);
 
         my ($schema, $safeschema, $table,  $safetable, $pkey, $safepkey, $safedb, $pkeytype) = @$info{qw(
@@ -1411,7 +1420,9 @@ $bc$
                         "AND whenrun = 'conflict'";
                 elog(DEBUG, "Running $SQL");
                 my $count = spi_exec_query($SQL)->{processed};
-                if (! $info->{standard_conflict} and ! $count) {
+                if (! $info->{standard_conflict}
+                    and ! $count
+                    and ! $config->{'default_standard_conflict'}) {
                     elog(ERROR, qq{Table "$schema.$table" must specify a way to handle conflicts});
                 }
             }
@@ -1862,21 +1873,21 @@ $bc$
                      . q{bucardo.bucardo_truncate_trigger_log (sync,targetdb,replicated)};
                 run_sql($SQL,$dbh);
             }
-			## Check for older version of bucardo_sequences table
-			if ($found{bucardo_sequences}) {
-			   $SQL = q{SELECT count(*) FROM pg_attribute WHERE attname = 'targetname' }
+            ## Check for older version of bucardo_sequences table
+            if ($found{bucardo_sequences}) {
+               $SQL = q{SELECT count(*) FROM pg_attribute WHERE attname = 'targetname' }
                      .q{ AND attrelid = 'bucardo.bucardo_sequences'::regclass};
-			   my $count = $dbh->selectall_arrayref($SQL)->[0][0];
-			   if ($count < 12) {
+               my $count = $dbh->selectall_arrayref($SQL)->[0][0];
+               if ($count < 12) {
                  warn "Dropping older version of bucardo_sequences, then recreating empty\n";
-				 $dbh->do('DROP TABLE bucardo.bucardo_sequences');
+                 $dbh->do('DROP TABLE bucardo.bucardo_sequences');
                  $found{bucardo_sequences} = 0;
                }
             }
             if (! $found{bucardo_sequences}) {
                 $SQL = qq{
                     CREATE TABLE bucardo.bucardo_sequences (
-					    schemaname   TEXT        NOT NULL,
+                        schemaname   TEXT        NOT NULL,
                         seqname      TEXT        NOT NULL,
                         syncname     TEXT        NOT NULL,
                         targetname   TEXT        NOT NULL,

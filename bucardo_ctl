@@ -5819,6 +5819,14 @@ sub config {
                 die "Invalid log_level, must be terse, normal, verbose, or debug\n";
             }
         }
+        if ($setting eq 'default_standard_conflict') {
+            if ($val !~ /^(?:source|target|skip|random|latest|none)$/oi) {
+                die "Invalid default_standard_conflict, must be none, source, target, skip, random, or latest\n";
+            }
+            if ($val =~ /none/i) {
+                $val = '';
+            }
+        }
 
         $sth->execute($val,$setting);
         print qq{Set "$setting" to "$val"\n};
