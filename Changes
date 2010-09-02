@@ -32,6 +32,8 @@ Bucardo version 4.5.0, released ??, 2010
 
   - Fix errors with bytea and swap syncs. [GSM]
 
+  - Add 'default_standard_conflict' option, per idea from Franz Dürr. [GSM]
+
   - Force time zone to GMT to resolve timestamptz issues with bucardo_delta
     [GSM, Michelle Sullivan]
 
