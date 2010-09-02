@@ -173,7 +173,7 @@ for (1..30) {
     $val{NUMERIC}{$_} = 0.7 + $_;
     $val{BYTEA}{$_} = "$_\0Z";
     $val{int_unsigned}{$_} = 5000 + $_;
-    $val{TIMESTAMPTZ}{$_} = $val{DATE}{$_} . " 11:22:33";
+    $val{TIMESTAMPTZ}{$_} = $val{DATE}{$_} . " 11:22:33+00";
 }
 
 
