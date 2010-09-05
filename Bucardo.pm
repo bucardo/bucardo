@@ -736,13 +736,11 @@ sub start_mcp {
     $self->{dbpass} = $oldpass;
 
     ## Prepare to send an email letting people know we have started up
-    ## no critic (ProhibitHardTabs)
     my $body = qq{
         Master Control Program $$ was started on $hostname
         Args: $old0
         Version: $VERSION
     };
-    ## use critic
     my $subject = qq{Bucardo $VERSION started on $shorthost};
 
     ## If someone left a message in the reason file, append it, and delete the file
@@ -1148,13 +1146,11 @@ sub start_mcp {
                         $maindbh->commit();
 
                         ## Only certain things can be changed "on the fly"
-                        ## no critic (ProhibitHardTabs)
                         for my $val (qw/checksecs stayalive limitdbs do_listen deletemethod status ping
                                         analyze_after_copy vacuum_after_copy targetgroup targetdb usecustomselect 
                                         onetimecopy lifetimesecs maxkicks rebuild_index/) {
                             $sync->{$syncname}{$val} = $self->{sync}{$syncname}{$val} = $info->{$val};
                         }
-                        ## use critic
 
                         ## TODO: Fix those double assignments
 
@@ -2614,12 +2610,10 @@ sub start_controller {
     ## Custom code may require a copy of the rows
     our $rows_for_custom_code;
 
-    ## no critic (ProhibitHardTabs)
     my ($syncname, $synctype, $kicked,  $source, $limitdbs) = @$sync{qw(
            name     synctype mcp_kicked  source   limitdbs)};
     my ($sourcedb, $stayalive, $kidsalive, $checksecs, $track_rates) = @$sync{qw(
          sourcedb   stayalive   kidsalive   checksecs   track_rates)};
-    ## use critic
 
     ## Set our process name
     $0 = qq{Bucardo Controller.$self->{extraname} Sync "$syncname" ($synctype) for source "$source"};
@@ -2697,7 +2691,6 @@ sub start_controller {
             ## TODO: Strip out large src_code sections
             my $dump = Dumper $self;
             $self->{dbpass} = $oldpass; ## For our final cleanup connection
-            ## no critic (ProhibitHardTabs)
             my $body = qq{
                 Controller $$ has been killed at line $line
                 Host: $hostname
@@ -2709,7 +2702,6 @@ sub start_controller {
                 Parent process: $self->{ppid}
                 Version: $VERSION
             };
-            ## use critic
             $body =~ s/^\s+//gsm;
 
             ## Give some hints in the subject lines for known types of errors
@@ -3793,10 +3785,8 @@ sub start_kid {
 
     our ($self,$sync,$targetdb) = @_;
 
-    ## no critic (ProhibitHardTabs)
     our ($syncname, $synctype, $sourcedb, $goatlist, $kidsalive ) = @$sync{qw(
            name      synctype   sourcedb   goatlist   kidsalive )};
-    ## use critic
 
     ## Adjust the process name, start logging
     $0 = qq{Bucardo Kid.$self->{extraname} Sync "$syncname": ($synctype) "$sourcedb" -> "$targetdb"};
@@ -3931,7 +3921,6 @@ sub start_kid {
 
             ## Create the body of the message to be mailed
             my $dump = Dumper $self;
-            ## no critic (ProhibitHardTabs)
             my $body = qq{
             Kid $$ has been killed at line $line
             Error: $msg
@@ -3946,7 +3935,6 @@ sub start_kid {
             Version: $VERSION
             Loops: $kidloop
             };
-            ## use critic
             $body =~ s/^\s+//gsm;
             my $moresub = '';
             if ($msg =~ /Found stopfile/) {
