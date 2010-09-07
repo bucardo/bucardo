@@ -2981,8 +2981,10 @@ sub get_syncs {
             $s->{targets} = $dbgroup{$s->{targetgroup}};
         }
     }
+
     ## Check what exists in the pid directory
-    opendir my $sdir, $PIDDIR or die qq{Could not opendir "$PIDDIR": $!\n};
+    opendir my $sdir, $PIDDIR or return $sync;
+
     my $syncpidfile;
     while (defined ($syncpidfile = readdir($sdir))) {
         next if $syncpidfile =~ /^\.\.?$/
