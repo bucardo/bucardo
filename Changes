@@ -69,6 +69,8 @@ Bucardo version 4.5.0, released ??, 2010
 
   - Add new options for 'bucardo_ctl add db': addalltables and addallsequences [GSM]
 
+  - Allow 'bucardo_ctl status' to run even if piddir is not available. [GSM]
+
   - Don't bother comparing the 'log_cnt' field of sequences. [Rosser Schwarz]
 
   - Allow "schema.table" format for bucardo_ctl list tables [GSM]
