@@ -519,6 +519,7 @@ sub show_db_version_and_time {
 
 } ## end of show_db_version_and_time
 
+
 sub get_dbs {
 
     ## Fetch a hashref of everything in the db table
@@ -686,11 +687,12 @@ sub start_mcp {
     my $old0 = $0;
     $0 = "Bucardo Master Control Program v$VERSION.$self->{extraname}";
 
-    ## Prefix all lines in the log file with this TLA
+    ## Prefix all lines in the log file with this TLA (until overriden by a forked child)
     $self->{logprefix} = 'MCP';
 
     ## If the pid file already exists, cowardly refuse to run
     if (-e $self->{pidfile}) {
+        ## Grab the PID if we can, but don't abort if we can't
         my $extra = '';
         my $fh;
         if (open ($fh, '<', $self->{pidfile})) {
@@ -792,7 +794,7 @@ sub start_mcp {
     $self->glog('Postgres library version: ' . $self->{masterdbh}{pg_lib_version}, LOG_WARN);
     $self->glog("bucardo_ctl: $old0", LOG_WARN);
     $self->glog('Bucardo.pm: ' . $INC{'Bucardo.pm'}, LOG_WARN);
-    $self->glog((sprintf 'OS: %s Perl: %s %vd', $^O, $^X, $^V), LOG_WARN);
+    $self->glog((sprintf 'OS: %s  Perl: %s %vd', $^O, $^X, $^V), LOG_WARN);
     $self->glog((sprintf 'DBI version: %s  DBD::Pg version: %s', $DBI::VERSION, $DBD::Pg::VERSION), LOG_WARN);
     $self->glog("Log level: $config{log_level}", LOG_WARN);
 
@@ -840,7 +842,7 @@ sub start_mcp {
             %{$self->{dosyncs}} = map { $_ => 1 } grep { $arg->{sync}{$_} } keys %{$arg->{sync}};
         }
     }
-    if (keys %{$self->{dosyncs}}) {
+    if (exists $self->{dosyncs}) {
         $self->glog(('Only doing these syncs: ' . join ' ' => sort keys %{$self->{dosyncs}}), LOG_TERSE);
         $0 .= ' Requested syncs: ' . join ' ' => sort keys %{$self->{dosyncs}};
     }
@@ -903,7 +905,7 @@ sub start_mcp {
         ## We are not respawning, so we exit
         exit 1;
 
-    }; ## end SIG{__DIE__}
+    }; ## end anonymous SIG{__DIE_} sub
 
     ## This resets listeners, kills children, and loads/activates syncs
     my $active_syncs = $self->reload_mcp();
@@ -1737,7 +1739,7 @@ sub start_mcp {
             $s->{$key} = [];
         }
 
-        ## Validate all (active) custom code for this sync
+        ## Validate all (active) custom codes for this sync
         my $goatlistcodes = join ',' => map { $_->{id} } @{$s->{goatlist}};
 
         $SQL = qq{
@@ -2603,6 +2605,7 @@ sub start_controller {
 
     our ($self,$sync) = @_;
 
+    ## Change the TLA prefix from MCP to CTL
     $self->{logprefix} = 'CTL';
 
     ## For custom code:
@@ -2729,7 +2732,8 @@ sub start_controller {
         $self->cleanup_controller($diemsg);
 
         exit 0;
-    };
+
+    }; ## end anonymous SIG{__DIE_} sub
 
     ## Connect to the master database
     my $ctl_backend;
@@ -3786,12 +3790,14 @@ sub start_kid {
 
     our ($self,$sync,$targetdb) = @_;
 
+    ## Change the TLA prefix from CTL to KID
+    $self->{logprefix} = 'KID';
+
     our ($syncname, $synctype, $sourcedb, $goatlist, $kidsalive ) = @$sync{qw(
            name      synctype   sourcedb   goatlist   kidsalive )};
 
     ## Adjust the process name, start logging
     $0 = qq{Bucardo Kid.$self->{extraname} Sync "$syncname": ($synctype) "$sourcedb" -> "$targetdb"};
-    $self->{logprefix} = 'KID';
     my $extra = $sync->{onetimecopy} ? "OTC: $sync->{onetimecopy}" : '';
     $self->glog(qq{New kid, syncs "$sourcedb" to "$targetdb" for sync "$syncname" alive=$kidsalive Parent=$self->{parent} Type=$synctype PID=$$ $extra}, LOG_TERSE);
 
@@ -3963,7 +3969,7 @@ sub start_kid {
 
         exit 1;
 
-    }; ## end $SIG{__DIE__}
+    }; ## end anonymous SIG{__DIE_} sub
 
     ## Connect to the main database; overwrites previous handle from the controller
     my $kid_backend;
