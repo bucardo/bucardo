@@ -255,7 +255,7 @@ sub new {
 sub connect_database {
 
     ## Connect to the given database
-    ## Arguments:
+    ## Arguments: one
     ## 1. The id of the database
     ##   If the database id is blank or zero, we return the main database
     ## Returns:
@@ -386,7 +386,7 @@ sub reload_config_database {
 sub glog { ## no critic (RequireArgUnpacking)
 
     ## Reformat and log internal messages to the correct place
-    ## Arguments:
+    ## Arguments: two
     ## 1. the log message
     ## 2. the log level (defaults to 0)
     ## Returns: undef
@@ -470,7 +470,7 @@ sub glog { ## no critic (RequireArgUnpacking)
 sub conflict_log {
 
     ## Log a message to the conflict log file at config{log_conflict_file}
-    ## Arguments:
+    ## Arguments: one
     ## 1. the log message
     ## Returns: undef
 
@@ -496,7 +496,7 @@ sub conflict_log {
 sub show_db_version_and_time {
 
     ## Output the time, timezone, and version information to the log
-    ## Arguments:
+    ## Arguments: two
     ## 1. Database handle
     ## 2. A string indicating which database this is
     ## Returns: undef
@@ -653,7 +653,7 @@ sub get_syncs {
 sub get_reason {
 
     ## Returns the current string (if any) in the reason file
-    ## Arguments:
+    ## Arguments: one
     ## 1. Optional boolean: if true, the reason file is removed
     ## Returns: string
 
@@ -676,7 +676,7 @@ sub get_reason {
 sub start_mcp {
 
     ## Start the Bucardo daemon. Called by bucardo_ctl after setsid()
-    ## Arguments:
+    ## Arguments: one
     ## 1. Hashref of startup arguments
     ## Returns: undef
 
@@ -848,7 +848,7 @@ sub start_mcp {
     ## From this point forward, we want to die gracefully
     $SIG{__DIE__} = sub {
 
-        ## Arguments:
+        ## Arguments: one
         ## 1. The error message
         ## Returns: undef (exits or execs!)
 
@@ -1358,7 +1358,7 @@ sub start_mcp {
     sub fork_controller {
 
         ## Fork off a controller process
-        ## Arguments:
+        ## Arguments: two
         ## 1. Hashref of sync information
         ## 2. The name of the sync
         ## Returns: undef
@@ -1563,7 +1563,7 @@ sub start_mcp {
     sub activate_sync {
 
         ## We've got a new sync to be activated (but not started)
-        ## Arguments:
+        ## Arguments: one
         ## 1. Hashref of sync information
         ## Returns: boolean success/failure
 
@@ -1614,7 +1614,7 @@ sub start_mcp {
     sub validate_sync {
 
         ## Check each database a sync needs to use, and (optionally) validate all tables and columns
-        ## Arguments:
+        ## Arguments: one
         ## 1. Hashref of sync information
         ## Returns: boolean success/failure
 
@@ -2321,7 +2321,7 @@ sub start_mcp {
     sub deactivate_sync {
 
         ## We need to turn off a running sync
-        ## Arguments:
+        ## Arguments: one
         ## 1. Hashref of sync information
         ## Returns: boolean success/failure
 
@@ -2395,7 +2395,7 @@ sub start_mcp {
         ## Attempt to kill any controller children
         ## Send a final NOTIFY
         ## Remove our PID file
-        ## Arguments:
+        ## Arguments: one
         ## 1. String with a reason for exiting
         ## Returns: undef
 
@@ -2535,7 +2535,7 @@ sub log_config {
 sub kill_bucardo_pid {
 
     ## Send a kill signal to a specific process
-    ## Arguments:
+    ## Arguments: two
     ## 1. PID to be killed
     ## 2. String either 'strict' or not
     ## Returns: 1 on successful kill, < 0 otherwise
@@ -2597,7 +2597,7 @@ sub start_controller {
 
     ## For a particular sync, does all the listening and issuing of jobs
     ## aka the CTL process
-    ## Arguments:
+    ## Arguments: one
     ## 1. Hashref of sync information
     ## Returns: never
 
@@ -2672,7 +2672,7 @@ sub start_controller {
     ## From this point forward, we want to die gracefully
     $SIG{__DIE__} = sub {
 
-        ## Arguments:
+        ## Arguments: one
         ## 1. Error message
         ## Returns: never (exit 0)
 
@@ -3360,7 +3360,7 @@ sub start_controller {
 
         sub run_ctl_custom_code {
 
-            ## Arguments:
+            ## Arguments: three
             ## 1. Hashref of customcode information
             ## 2. Strictness boolean, defaults to false
             ## 3. Number of attempts, defaults to 0
@@ -3552,7 +3552,7 @@ sub start_controller {
     sub create_newkid {
 
         ## Fork and create a KID process
-        ## Arguments:
+        ## Arguments: two
         ## 1. Hashref of sync information
         ## 2. Hashref of kid information
         ## Returns: undef
@@ -3605,7 +3605,7 @@ sub cleanup_controller {
     ## Disconnect from the database
     ## Attempt to kill any 'kid' children
     ## Remove our PID file
-    ## Arguments:
+    ## Arguments: one
     ## 1. Reason for leaving
     ## Return: undef
 
@@ -3719,7 +3719,7 @@ sub cleanup_controller {
 sub get_deadlock_details {
 
     ## Given a database handle, extract deadlock details from it
-    ## Arguments:
+    ## Arguments: two
     ## 1. Database handle
     ## 2. Database error string
     ## Returns: detailed string, or an empty one
@@ -3779,7 +3779,7 @@ sub start_kid {
 
     ## A single kid, in charge of doing a sync between exactly two databases
     ## aka the KID process
-    ## Arguments:
+    ## Arguments: two
     ## 1. Hashref of sync information
     ## 2. Which target database we are connecting to
     ## Returns: never
@@ -3817,7 +3817,7 @@ sub start_kid {
     ## Fancy exception handler to clean things up before leaving.
     $SIG{__DIE__} = sub {
 
-        ## Arguments:
+        ## Arguments: one
         ## 1. Error message
         ## Returns: never (exit 1)
 
@@ -4410,7 +4410,7 @@ sub start_kid {
 
     sub run_kid_custom_code {
 
-        ## Arguments:
+        ## Arguments: three
         ## 1. Hashref of customcode information
         ## 2. Strictness boolean, defaults to false
         ## 3. Number of attempts, defaults to 0
@@ -6389,7 +6389,7 @@ sub cleanup_kid {
 
     ## Kid is shutting down
     ## Remove our PID file
-    ## Arguments:
+    ## Arguments: two
     ## 1. Reason for leaving
     ## 2. Extra information
     ## Returns: undef
@@ -6415,7 +6415,7 @@ sub get_sequence_info {
 
     ## Get sequence information
     ## Not technically MVCC but good enough for our purposes
-    ## Arguments:
+    ## Arguments: five
     ## 1. Database handle
     ## 2. Schema name
     ## 3. Sequence name
@@ -6451,7 +6451,7 @@ sub adjust_sequence {
 
     ## Change a sequence if needed
     ## If changed, update the bucardo_sequences table
-    ## Arguments:
+    ## Arguments: six
     ## 1. source database handle (where bucardo_sequences lives)
     ## 2. target database handle (the sequence to be updated/altered)
     ## 3. Schema name
@@ -6538,7 +6538,7 @@ sub adjust_sequence {
 sub send_mail {
 
     ## Send out an email message
-    ## Arguments:
+    ## Arguments: one
     ## 1. Hashref with mandatory args 'body' and 'subject'. Optional 'to'
     ## Returns: undef
 
