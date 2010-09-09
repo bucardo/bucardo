@@ -416,7 +416,7 @@ sub glog { ## no critic (RequireArgUnpacking)
             : 3 == $config{log_showtime} ? (scalar localtime($sec))
             : '';
         if ($config{log_microsecond}) {
-            $showtime =~ s/(:\d\d) /$1.$msec /o;
+            $showtime =~ s/(:\d\d) /"$1." . substr($msec,0,3) . ' '/oe;
         }
     }
 
