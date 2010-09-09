@@ -16,9 +16,9 @@ use warnings;
 
 our $VERSION = '4.5.0';
 
-use DBI 1.51;            ## How Perl talks to databases
-use DBD::Pg 2.0;         ## How Perl talks to Postgres databases
-use DBIx::Safe '1.2.4';  ## Filter out what DB calls customcode may use
+use DBI 1.51;                               ## How Perl talks to databases
+use DBD::Pg 2.0   qw( :async             ); ## How Perl talks to Postgres databases
+use DBIx::Safe '1.2.4';                     ## Filter out what DB calls customcode may use
 
 use sigtrap       qw( die normal-signals ); ## Call die() on HUP, INT, PIPE, or TERM
 use Config        qw( %Config            ); ## Used to map signal names
@@ -260,7 +260,7 @@ sub connect_database {
     ##   If the database id is blank or zero, we return the main database
     ## Returns:
     ## - the database handle and the backend PID
-    ## OR
+    ##   OR
     ## - the string 'inactive' if set as such in the db table
 
     my $self = shift;
