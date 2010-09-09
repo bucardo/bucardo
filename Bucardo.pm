@@ -793,6 +793,7 @@ sub start_mcp {
     $self->glog("bucardo_ctl: $old0", LOG_WARN);
     $self->glog('Bucardo.pm: ' . $INC{'Bucardo.pm'}, LOG_WARN);
     $self->glog((sprintf 'OS: %s Perl: %s %vd', $^O, $^X, $^V), LOG_WARN);
+    $self->glog((sprintf 'DBI version: %s  DBD::Pg version: %s', $DBI::VERSION, $DBD::Pg::VERSION), LOG_WARN);
     $self->glog("Log level: $config{log_level}", LOG_WARN);
 
     ## Again with the password trick
