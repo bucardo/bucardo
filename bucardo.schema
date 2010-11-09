@@ -1996,7 +1996,7 @@ $bc$
                     AS
                     \$clone\$
                     BEGIN
-                        SET TIME ZONE 'GMT';
+                        SET LOCAL TIME ZONE 'GMT';
                         IF (TG_OP = 'INSERT') THEN
                           INSERT INTO bucardo.bucardo_delta(tablename,$rowids) VALUES (TG_RELID, $new);
                         ELSIF (TG_OP = 'UPDATE') THEN
