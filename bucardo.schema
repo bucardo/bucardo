@@ -1,4 +1,3 @@
-
 -- Schema for the main Bucardo database
 -- Version 4.5.0
 
@@ -1878,7 +1877,7 @@ $bc$
                $SQL = q{SELECT count(*) FROM pg_attribute WHERE attname = 'targetname' }
                      .q{ AND attrelid = 'bucardo.bucardo_sequences'::regclass};
                my $count = $dbh->selectall_arrayref($SQL)->[0][0];
-               if ($count < 12) {
+               if ($count < 1) {
                  warn "Dropping older version of bucardo_sequences, then recreating empty\n";
                  $dbh->do('DROP TABLE bucardo.bucardo_sequences');
                  $found{bucardo_sequences} = 0;
