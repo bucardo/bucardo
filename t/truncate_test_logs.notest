@@ -12,27 +12,27 @@ use Time::HiRes qw/sleep/;
 opendir my $dh, '.' or die qq{Could not opendir current directory\n};
 while (my $name = readdir($dh)) {
 
-	next if $name !~ /^bucardo_test_database_/;
+    next if $name !~ /^bucardo_test_database_/;
 
-	my $logfile = "$name/pg.log";
+    my $logfile = "$name/pg.log";
 
-	next if ! -e $logfile or ! -s _;
+    next if ! -e $logfile or ! -s _;
 
-	my $pidfile = "$name/postmaster.pid";
+    my $pidfile = "$name/postmaster.pid";
 
-	if (-e $pidfile) {
-		open my $fh, '<', $pidfile or die qq{Could not open "$pidfile": $!\n};
-		my $pid = int <$fh>;
-		close $fh or warn qq{Could not close "$pidfile": $!\n};
-		kill 15 => $pid;
-		kill 3  => $pid;
-	}
+    if (-e $pidfile) {
+        open my $fh, '<', $pidfile or die qq{Could not open "$pidfile": $!\n};
+        my $pid = int <$fh>;
+        close $fh or warn qq{Could not close "$pidfile": $!\n};
+        kill 15 => $pid;
+        kill 3  => $pid;
+    }
 
-	sleep 0.2;
+    sleep 0.2;
 
-	unlink $logfile;
+    unlink $logfile;
 
-	warn "Removed: $logfile\n";
+    warn "Removed: $logfile\n";
 
 }
 closedir $dh or warn qq{Could not closedir current directory\n};

@@ -1,5 +1,4 @@
-#!/usr/bin/env perl
-# -*-mode:cperl; indent-tabs-mode: nil-*-
+#!perl
 
 ## Test that our SIGNATURE file is valid - requires TEST_SIGNATURE env
 

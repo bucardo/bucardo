@@ -1,52 +1,42 @@
-#!/usr/bin/env perl
-# -*-mode:cperl; indent-tabs-mode: nil-*-
+#!perl
 
 ## Basic tests of Things That Should Always Work
-## Any failures of important files immediately call BAIL_OUT
+## Any failures immediately call BAIL_OUT
 
 use strict;
 use warnings;
-use Data::Dumper;
 use lib 't','.';
-use Test::More;
+use Test::More tests => 4;
 use BucardoTesting;
 
-my @important_files = qw{Bucardo.pm bucardo_ctl };
+my $t=q{File Bucardo.pm compiles without errors};
+eval {
+    require Bucardo;
+};
+is($@, q{}, $t);
+$@ and BAIL_OUT qq{Cannot continue until Bucardo.pm compiles cleanly\n};
 
-opendir my $dh, 't' or die qq{Could not open the 't' directory: are you running this from the right place?\n};
-my @test_files = grep { /\.t$/ } readdir $dh;
-closedir $dh or warn qq{Could not close the 't' directory: $!\n};
+$t=q{File bucardo_ctl compiles without errors};
+$ENV{BUCARDO_CTL_TEST} = 1;
+eval {
+    require 'bucardo_ctl';
+};
+$ENV{BUCARDO_CTL_TEST} = 0;
+is($@, q{}, $t);
+$@ and BAIL_OUT qq{Cannot continue until bucardo_ctl compiles cleanly\n};
 
-opendir $dh, 'scripts' or die qq{Could not open the 'scripts' directory};
-my @script_files = grep { /^[a-z]/ and ! /\.rc$/ } readdir $dh;
-closedir $dh or warn qq{Could not close the 'scripts' directory: $!\n};
+$t=qq{Helper module BucardoTesting.pm compiles without errors};
+eval {
+    require BucardoTesting;
+};
+is($@, q{}, $t);
+$@ and BAIL_OUT qq{Cannot continue until BucardoTesting cleanly\n};
 
-plan tests => @important_files + @test_files + @script_files;
-
-for my $file (@important_files) {
-    my $t=qq{File $file compiles without errors};
-    eval {
-        require $file;
-    };
-    is($@, q{}, $t);
-    $@ and BAIL_OUT qq{Cannot continue until $file compiles cleanly\n};
-}
-
-for my $file (@test_files) {
-    my $t=qq{File $file compiles without errors};
-    my $com = "perl -c t/$file 2>&1";
-    my $res = qx{$com};
-    chomp $res;
-    is($res, qq{t/$file syntax OK}, $t);
-}
-
-for my $file (@script_files) {
-    my $t=qq{File $file compiles without errors};
-    my $com = "perl -c scripts/$file 2>&1";
-    my $res = qx{$com};
-    chomp $res;
-    is($res, qq{scripts/$file syntax OK}, $t);
-}
-
-exit;
+$t=q{BucardoTesting->new() works};
+my $bct;
+eval {
+    $bct = BucardoTesting->new();
+};
+is($@, q{}, $t);
+$@ and BAIL_OUT qq{Cannot continue until BucardoTesting->new() works\n};
 

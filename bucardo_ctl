@@ -3,7 +3,7 @@
 
 ## Script to control Bucardo
 ##
-## Copyright 2006-2010 Greg Sabino Mullane <greg@endpoint.com>
+## Copyright 2006-2011 Greg Sabino Mullane <greg@endpoint.com>
 ##
 ## Please see http://bucardo.org/ for full documentation
 
@@ -22,7 +22,7 @@ $Data::Dumper::Indent = 1;
 
 return 1 if $ENV{BUCARDO_CTL_TEST};
 
-our $VERSION = '4.5.0';
+our $VERSION = '4.4.2';
 
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
@@ -63,7 +63,6 @@ my $bcargs = {
               debugsyslog  => 1,
               debugfile    => 1,
               cleandebugs  => 0,
-              batch        => 0,
           };
 
 ## These options must come before the GetOptions call
@@ -123,7 +122,6 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'compress',
      'retry=i',
      'retrysleep=i',
-     'batch',
 
      ## These are sent to the constructor:
      'bcverbose',
@@ -140,7 +138,6 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'debugdir=s',
      'debugfile=i',
      'cleandebugs=i',
-     'force',
 
      ## Used internally
      'schema|n=s@',
@@ -196,7 +193,6 @@ $bcargs->{dbhost} and length $bcargs->{dbhost} and $DSN .= ";host=$bcargs->{dbho
 $bcargs->{dbport} and length $bcargs->{dbport} and $DSN .= ";port=$bcargs->{dbport}";
 $dbh = DBI->connect($DSN, $bcargs->{dbuser}, $bcargs->{dbpass}, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
 $dbh->do('SET search_path = bucardo');
-check_version($dbh);
 $dbh->commit();
 
 my $REASONFILE = get_config('reason_file') or die "Invalid reason_file!\n";
@@ -239,7 +235,6 @@ my @syncs;
 my $gotall = 0;
 my @allvars;
 SYNCMATCH: for my $sync (@nouns) {
-
     if ($sync =~ /^\d+$/) {
         $adverb = $sync;
         next SYNCMATCH;
@@ -280,23 +275,10 @@ SYNCMATCH: for my $sync (@nouns) {
         next SYNCMATCH;
     }
     next if $sync eq 'sync';
-
     if (! exists $syncs->{$sync}) {
-        ## Be nice and print a list of active syncs
-        my @goodsyncs;
-        for my $s (sort keys %$syncs) {
-            push @goodsyncs => $s if $syncs->{$s}{status} eq 'active';
-        }
-        my $msg = qq{Sync "$sync" does not appear to exist\n};
-        if (@goodsyncs) {
-            $msg .= "Active syncs:\n";
-            $msg .= join "\n" => @goodsyncs;
-        }
-        die "$msg\n";
+        die qq{Sync "$sync" does not appear to exist\n};
     }
-
     push @syncs, $sync;
-
 }
 
 if ($gotall) {
@@ -340,19 +322,6 @@ kick() if $verb eq 'kick';
 
 help();
 
-sub check_version {
-    my $dbh = shift;
-    my $res = $dbh->selectall_arrayref('SELECT version()')->[0][0];
-    if ($res !~ /(\d+)\.(\d+)(\S+)/) {
-        die "Sorry, unable to determine the database version\n";
-    }
-    my ($maj,$min,$rev) = ($1,$2,$3);
-    $rev =~ s/^\.//;
-    $rev =~ s/(\d+)\.\d+/$1/;
-    if ($maj < 8 or (8 == $maj and $min < 1)) {
-        die "Sorry, Bucardo requires Postgres version 8.1 or higher. This is only $maj.$min\n";
-    }
-}
 
 sub help {
     warn qq{Usage: $progname args
@@ -391,8 +360,7 @@ sub help {
   message
                  ** Write a message to the Bucardo logs
 
-  show [all|item]
-  set [item=value]
+  config [set|show]
                  ** View or set configuration parameters
 
   reload_config   ** Force a running Bucardo to reload the bucardo_config table
@@ -413,9 +381,6 @@ sub superhelp {
 
     ## Because usage() sometimes relies on the verb
     $verb = $word1;
-
-    ## Allow plurals
-    $word2 =~ s/s$//;
 
     if ('add' eq $word1) {
         if ('customcode' eq $word2 or 'custom_code' eq $word2 or 'code' eq $word2) {
@@ -605,25 +570,14 @@ sub start {
 
     ## Attempt to start Bucardo
 
-    append_reason_file('start');
+    set_reason(0);
 
     ## Refuse to go on if we get a ping response within 5 seconds
     $QUIET or print "Checking for existing processes\n";
 
     my $oldpid = 0;
     if ($oldpid) {
-        $nouns = "Cannot start, process $oldpid is already running\n";
-        $QUIET or print $nouns;
-        append_reason_file('fail');
-        exit 1;
-    }
-
-    my $dbversion = get_config('bucardo_current_version') or die "Could not find Bucardo version!\n";
-    if ($dbversion ne $VERSION) {
-        $nouns = "Version mismatch: bucardo_ctl is $VERSION, but bucardo database is $dbversion\n";
-        append_reason_file('fail');
-        warn $nouns;
-        warn "Perhaps you need to run 'bucardo_ctl upgrade' ?\n";
+        $QUIET or print "Cannot start, process $oldpid is already running\n";
         exit 1;
     }
 
@@ -633,9 +587,7 @@ sub start {
 
     my $pm_version = $bc->{version} || 'unknown';
     if ($VERSION ne $pm_version) {
-        $nouns = "Version mismatch: bucardo_ctl is $VERSION, but Bucardo.pm is $pm_version\n";
-        append_reason_file('fail');
-        die $nouns;
+        die "Version mismatch: bucardo_ctl is $VERSION, but Bucardo.pm is $pm_version\n";
     }
 
     stop_bucardo();
@@ -672,7 +624,7 @@ sub stop {
 
     ## Attempt to stop Bucardo
 
-    append_reason_file('stop');
+    set_reason(0);
 
     print "Creating $STOPFILE ... " unless $QUIET;
     stop_bucardo();
@@ -795,7 +747,7 @@ sub validate {
 
     my @synclist;
     if ($nouns[0] eq 'all' and ! defined $nouns[1]) {
-        @synclist = sort keys %$synclist;
+        @synclist = keys %$synclist;
         if (! @synclist) {
             print "Sorry, there are no syncs to validate!\n";
             exit 0;
@@ -865,11 +817,6 @@ sub update {
     my $info;
     my $lookupcol = 'name';
     my $tabname;
-    if ($item =~ /^all$/i) {
-        $tabname = $item = $name;
-        $name = 'all';
-    }
-
     if ($item =~ /^code/i or $item =~ /^custom/i) {
         $tabname = $item = 'customcode';
     }
@@ -886,11 +833,8 @@ sub update {
     elsif ($item =~ /^db/i) {
         $tabname = $item = 'db';
     }
-    elsif ($item =~ /^herd/i) {
-        $tabname = $item = 'herd';
-    }
     else {
-        die "Invalid item: must be code, db, dbgroup, herd, sequence, sync, or table.\n";
+        die "Invalid item: must be code, db, dbgroup, sequence, sync, or table.\n";
     }
 
     $SQL = "SELECT * FROM $tabname WHERE $lookupcol = ?";
@@ -914,12 +858,9 @@ sub update {
         $count = $sth->execute($name);
     }
 
-    ## Because both 'table' and 'tables' are valid, but we want good output:
-    (my $single_item = $item) =~ s/s$//;
-
-    if ($count < 1 and $name ne 'all') {
+    if ($count < 1) {
         $sth->finish();
-        die qq{No matches found for $single_item "$name"\n};
+        die qq{No matches found for $item "$name"\n};
     }
 
     my $pkcol = $tabname eq 'goat' ? 'id' : 'name';
@@ -1068,105 +1009,8 @@ sub update {
         exit 0;
     }
 
-    if ('herd' eq $item and ($nouns[0] eq 'add' or $nouns[0] eq 'remove')) {
-        my $v = shift @nouns;
-        die "Can only $v to one herd at a time\n" if @$info > 1;
-        $info = $info->[0];
-        my $miniusage = "Usage: update herd $name $v <table(s)>\n";
-        @nouns or die $miniusage;
-
-        ## Grab all tables in this herd
-        $SQL = 'SELECT g.id, g.schemaname, g.tablename FROM bucardo.goat g '
-            . 'JOIN bucardo.herdmap h ON (h.goat = g.id) WHERE h.herd = ?';
-        $sth = $dbh->prepare($SQL);
-        $sth->execute($name);
-        my $tablist = $sth->fetchall_hashref('id');
-
-        my %found;
-
-        if ($v eq 'remove') {
-
-            for my $tab (@nouns) {
-                my $wild = ($tab =~ s/\*//) ? 1 : 0;
-                for my $id (keys %$tablist) {
-                    my ($sname,$tname) = ($tablist->{$id}{schemaname}, $tablist->{$id}{tablename});
-                    if ($wild) {
-                        if ($tname =~ /$tab/) {
-                            $found{$id} = [$sname,$tname];
-                        }
-                    }
-                    elsif ($tab =~ /(.+)\.(.+)/) {
-                        my ($s,$t) = ($1,$2);
-                        if ($s eq $sname and $t eq $tname) {
-                            $found{$id} = [$sname,$tname];
-                        }
-                    }
-                    elsif ($tname eq $tab) {
-                        $found{$id} = [$sname,$tname];
-                    }
-                }
-            }
-
-            if (keys %found) {
-                $SQL = 'DELETE FROM bucardo.herdmap WHERE herd = ? AND goat = ?';
-                $sth = $dbh->prepare($SQL);
-                for my $id (sort keys %found) {
-                    my ($sname,$tname) = @{$found{$id}};
-                    $count = $sth->execute($name,$id);
-                    if ($count >= 1) {
-                        print "  Removed from herd $name: $sname.$tname\n";
-                    }
-                    else {
-                        print "Could not remove from herd $name: $sname.$tname\n";
-                    }
-                }
-                $dbh->commit();
-            }
-
-            exit 0;
-
-        } ## end 'remove'
-
-        ## Must be 'add'
-        my $flatsql = 'SELECT id,schemaname,tablename FROM bucardo.goat WHERE tablename = ?';
-        my $wildsql = 'SELECT id,schemaname,tablename FROM bucardo.goat WHERE tablename ~ ?';
-
-        for my $tab (@nouns) {
-            my $wild = ($tab =~ s/\*//) ? 1 : 0;
-
-            $sth = $dbh->prepare($wild ? $wildsql : $flatsql);
-            $count = $sth->execute($tab);
-            next if $count < 1;
-
-            for my $row (@{$sth->fetchall_arrayref()}) {
-                $found{$row->[0]} = [$row->[1],$row->[2]];
-            }
-        }
-
-        if (keys %found) {
-
-            $SQL = 'INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,?)';
-            $sth = $dbh->prepare($SQL);
-            for my $id (sort keys %found) {
-                next if exists $tablist->{$id};
-                $tablist->{$id}++;
-                my ($sname,$tname) = @{$found{$id}};
-                $count = $sth->execute($name,$id);
-                if ($count >= 1) {
-                    print "  Added to herd $name: $sname.$tname\n";
-                }
-                else {
-                    print "Could not add to herd $name: $sname.$tname\n";
-                }
-            }
-            $dbh->commit();
-        }
-
-        exit 0;
-    }
-
     ## Process each change in turn
-    ## Can be code, sync, dbgroup, table, schema, herd, or db
+    ## Can be code, sync, dbgroup, table, schema, or db
     my %change;
     for my $arg (@nouns) {
         next if $arg eq 'set';
@@ -1174,52 +1018,11 @@ sub update {
         my ($n,$v) = (lc $1,$2);
         $n =~ /^\w+$/ or die "Invalid name\n";
         $n = 'server_side_prepares' if $n eq 'ssp';
-
-        ## Special herd handling
-        if ('herd' eq $item and 'notable' eq $n) {
-            $SQL = 'DELETE FROM bucardo.herdmap WHERE herd = ? AND goat IN '
-                . '(SELECT id FROM bucardo.goat WHERE tablename ~ ?)';
-            $sth = $dbh->prepare($SQL);
-            $count = $sth->execute($name, $v);
-            if ($count >= 1) {
-                push @{$change{$name}} => ['DIRECT', "Tables removed from herd: $count"];
-            }
-            next;
-        }
-
-        ## Special table handling
-        if ('all' eq $name and 'table' eq $single_item) {
-            ## Can only change a few things globally
-            if ('standard_conflict' ne $n
-                 and 'analyze_after_copy' ne $n
-                     and 'vacuum_after_copy' ne $n) {
-                die qq{Sorry, cannot change that for all tables\n};
-            }
-            $SQL = "UPDATE bucardo.goat SET $n = ? WHERE reltype='table'";
-            $sth = $dbh->prepare($SQL);
-            $sth->execute($v);
-            push @{$change{'all tables'}} => [$n, 'N/A', $v];
-            next;
-        }
-
-        ## Special table handling
-        if ('all' eq $name and 'sequence' eq $single_item) {
-            ## Can only change a few things globally
-            if ('standard_conflict' ne $n) {
-                die qq{Sorry, cannot change that for all sequences\n};
-            }
-            $SQL = "UPDATE bucardo.goat SET $n = ? WHERE reltype='sequence'";
-            $sth = $dbh->prepare($SQL);
-            $sth->execute($v);
-            push @{$change{'all sequences'}} => [$n, 'N/A', $v];
-            next;
-        }
-
         for my $row (@$info) {
             my $localname = $tabname eq 'goat' ? "$row->{schemaname}.$row->{tablename}" : $row->{name};
             my $localid = $tabname eq 'goat' ? $row->{id} : $row->{name};
             if (! exists $row->{$n}) {
-                die qq{Sorry, cannot change "$n" for $single_item "$localname"\n};
+                die qq{Sorry, cannot change "$n" for $item "$localname"\n};
             }
             if ($tabname eq 'db' and $n eq 'dbhost' and $v eq 'none') {
                 $SQL = "UPDATE bucardo.db SET dbhost = '' WHERE $pkcol = ?";
@@ -1271,13 +1074,9 @@ sub update {
     }
 
     for my $thing (sort keys %change) {
-        print qq{Changes made to $single_item "$thing":\n};
+        print qq{Changes made to $item "$thing":\n};
         for my $row (@{$change{$thing}}) {
             my $col = $row->[0];
-            if ($col eq 'DIRECT') {
-                print "$row->[1]\n";
-                next;
-            }
             my $old = defined $row->[1] ? qq{"$row->[1]"} : '(null)';
             my $new = qq{"$row->[2]"};
             if ($tabname eq 'customcode' and $col eq 'src_code') {
@@ -1293,7 +1092,6 @@ sub update {
 
     $dbh->commit();
     $dbh->disconnect();
-
     exit 0;
 
 } ## end of update
@@ -1353,6 +1151,10 @@ sub kick {
         exit 1;
     }
 
+    ## Is someone listening for this sync? (We assume its the MCP)
+    $SQL = 'SELECT 1 FROM pg_listener WHERE relname = ?';
+    my $sthl = $dbh->prepare($SQL);
+
     my ($exitstatus, $retries, $do_retry) = (0,0,0);
 
   RETRY: {
@@ -1360,6 +1162,16 @@ sub kick {
         $exitstatus = 0;
       SYNC: for my $sync (@syncs) {
             my $relname = "bucardo_kick_sync_$sync";
+
+            ## If nobody is listening, our kick is not going to be very effective!
+            if ($dbh->{pg_server_version} < 90000) {
+                $count = $sthl->execute($relname);
+                $sthl->finish();
+                if ($count < 1) {
+                    warn qq{Cannot kick sync "$sync" - are you sure it is active?\n};
+                    next;
+                }
+            }
 
             ## If this sync is not active, cowardly refuse to kick it
             if ($syncs->{$sync}{status} ne 'active') {
@@ -1426,12 +1238,12 @@ sub kick {
                             $exitstatus = 2;
                         }
                         elsif ($name =~ /^bucardo_syncdone_${sync}_(.+)$/) {
-                            my $new = sprintf '%s(%ds) ', $1, ceil(time-$time);
+                            my $new = sprintf "$1(%ds) ", ceil(time-$time);
                             print $new unless $QUIET;
                             $printstring .= $new;
                         }
                         elsif ($name =~ /^bucardo_synckill_${sync}_(.+)$/) {
-                            my $new = sprintf '%s KILLED (%ds) ', $1, ceil(time-$time);
+                            my $new = sprintf "$1 KILLED (%ds) ", ceil(time-$time);
                             print $new unless $QUIET;
                             $printstring .= $new;
                             $exitstatus = 2;
@@ -1450,34 +1262,26 @@ sub kick {
                     }
                     sleep($WAITSLEEP);
                     redo WAITIN;
-
-                } ## end of WAITIN
-
+                }
                 alarm 0 if $timeout;
             };
-
             alarm 0 if $timeout;
             if ($do_retry) {
                 $do_retry = 0;
                 redo RETRY;
             }
-
-            if (2 == $exitstatus) {
-                my $reason = show_why_sync_killed($sync);
-                $reason and print "\n$reason\n";
-            }
-
             if ($@) {
                 if ($@ =~ /Timed out/o) {
                     $exitstatus = 1;
                     warn "Timed out!\n";
                 }
                 else {
-                    $exitstatus = 3;
+                    $exitstatus = 2;
                     warn "Error: $@\n";
                 }
                 next SYNC;
             }
+
             next SYNC if $QUIET;
 
             if ($PROGRESS) {
@@ -1493,40 +1297,6 @@ sub kick {
     exit $exitstatus;
 
 } ## end of kick
-
-
-sub show_why_sync_killed {
-
-    ## If a kick results in a "KILLED!" try and show why
-
-    my $sync = shift;
-
-    $SQL = q{
-SELECT * FROM bucardo.q
-WHERE sync = ?
-AND aborted IS NOT NULL
-AND LENGTH(whydie) > 2
-AND aborted >= now() - '30 seconds'::interval
-ORDER BY aborted DESC LIMIT 1
-};
-    $sth = $dbh->prepare($SQL);
-    $count = $sth->execute($sync);
-    if ($count != 1) {
-        $sth->finish();
-        return '';
-    }
-
-    my $result = $sth->fetchall_arrayref({})->[0];
-    (my $whydie = $result->{whydie}) =~ s/\\n */\n    /g;
-    $whydie =~ s/: ERROR:/:\n    ERROR:/;
-    $whydie =~ s/ (at .+ line \d+\.)/\n      $1/g;
-    $whydie =~ s/\t/<tab>/g;
-    my $msg = sprintf "  PID: %s\n  Started: %s\n  Ended: %s\n    %s",
-        $result->{pid}, $result->{started}, $result->{aborted}, $whydie;
-
-    return $msg;
-
-} ## end of show_why_sync_killed
 
 
 sub status_all {
@@ -1680,7 +1450,6 @@ sub status_detail {
     my @synclist;
     for my $sync (sort @nouns) {
         $DEBUG and warn "Verify sync: $sync\n";
-        next if $sync eq 'sync';
         if (!exists $synclist->{$sync}) {
             ## If a number, skip for ease of "kick name #" toggling
             $sync !~ /^\d+$/ and die "No such sync: $sync\n";
@@ -1721,12 +1490,12 @@ sub status_detail {
         }
 
         my $morepid = '';
-        if ($s->{state} !~ /off/ and ($s->{stayalive} or $s->{kidsalive})) {
+        if ($s->{stayalive} or $s->{kidsalive}) {
             $morepid = " (PID = $s->{PID})";
         }
 
         ## Should be 'yes' or 'no'
-        for (qw/analyze_after_copy stayalive kidsalive ping do_listen usecustomselect/) {
+        for (qw/makedelta analyze_after_copy stayalive kidsalive ping do_listen usecustomselect/) {
             $s->{$_} = (defined $s->{$_} and $s->{$_}) ? 'yes' : 'no ';
         }
 
@@ -1759,7 +1528,7 @@ sub status_detail {
             $why =~ s/^/                  /mg;
 
             $why =~ s/^\s+//;
-            $morebad .= "\nLatest bad reason:    $why";
+            $morebad .= "\nLatest bad reason: $why";
         }
 
         my $sourcedb = $herdmap->{$s->{source}}{database} || '?';
@@ -1788,7 +1557,7 @@ Overdue time:         $s->{overdue}
 Expired time:         $s->{expired}
 Stayalive:            $s->{stayalive}      Kidsalive: $s->{kidsalive}
 Rebuild index:        $s->{rebuild_index}        Do_listen: $s->{do_listen}
-Ping:                 $s->{ping}      Makedelta: $s->{source_makedelta}/$s->{target_makedelta}
+Ping:                 $s->{ping}      Makedelta: $s->{makedelta}
 Onetimecopy:          $s->{onetimecopy}
 };
         if ($s->{synctype} eq 'fullcopy'){
@@ -1819,21 +1588,25 @@ sub get_config {
 } ## end of get_config
 
 
-sub append_reason_file {
+sub set_reason {
 
-    my $event = shift or die;
+    my $required = shift || 0;
 
-    my $string = sprintf "%s | %-5s | %s\n", (scalar localtime), $event, $nouns;
+    if (! length $nouns) {
+        return 1 if ! $required;
+        warn qq{Please provide a reason. For example:\n$progname $verb "Adding new table -Greg"\n};
+        exit 1;
+    }
 
     open my $fh, '>', $REASONFILE or die qq{Could not open "$REASONFILE": $!\n};
-    print {$fh} $string;
+    print {$fh} (scalar localtime) . " | $nouns\n";
     close $fh or warn qq{Could not close $REASONFILE: $!\n};
     open $fh, '>>', $REASONFILE_LOG or die qq{Could not open "$REASONFILE_LOG": $!\n};
-    print {$fh} $string;
+    print {$fh} (scalar localtime) . " | $verb | $nouns\n";
     close $fh or warn qq{Could not close $REASONFILE_LOG: $!\n};
     return 1;
 
-} ## end of append_reason_file
+} ## end of set_reason
 
 
 sub stop_bucardo {
@@ -1975,7 +1748,6 @@ ORDER BY started DESC LIMIT 1
 
         ## Check for current activity
         $s->{timeq1} = $s->{timeq2} = '';
-        my $targ = $s->{targetdb} || $s->{targetgroup};
         for my $row (@{$s->{active_now}}) {
             $s->{timeq} = $s->{timeq1} = pretty_time($row->{q1});
             if (defined $row->{q2}) {
@@ -1983,13 +1755,13 @@ ORDER BY started DESC LIMIT 1
             }
             my $len = length('WAIT:') + length($s->{timeq});
             if (length $s->{timeq2}) {
-                $len += (1 + length($targ));
+                $len += (1 + length($s->{targetdb}));
             }
             $max{stat} = $len if $len > $max{stat};
             last;
         }
 
-        $s->{state} = length($s->{timeq2}) ? "RUN:$s->{timeq}>$targ" :
+        $s->{state} = length($s->{timeq2}) ? "RUN:$s->{timeq}>$s->{targetdb}" :
             length($s->{timeq1}) ? "WAIT:$s->{timeq}" :
             ($s->{status} eq 'active') ? 'idle' : 'off';
 
@@ -2433,25 +2205,6 @@ sub process_simple_args {
 
     }
 
-    ## Apply any magic
-    if (exists $arg->{morph}) {
-        for my $mline (@{$arg->{morph}}) {
-            if (exists $mline->{field}) {
-                next unless exists $dbcol{$mline->{field}};
-                next if $dbcol{$mline->{field}} ne $mline->{value};
-                for my $change (split /\s+/ => $mline->{new_defaults}) {
-                    my ($f,$v) = split /\|/ => $change;
-                    next if exists $dbcol{$f};
-                    $dbcol{$f} = $v;
-                }
-            }
-            else {
-                die "Do not know how to handle that morph!\n";
-            }
-        }
-    }
-
-
     ## Build the lists of columns and placeholders for the SQL statement
     my ($cols,$phs,$vals) = ('','',[]);
     for my $col (sort keys %dbcol) {
@@ -2506,7 +2259,7 @@ sub list_customcodes {
     $count = $sth->execute();
     if ($count < 1) {
         $sth->finish();
-        printf "There are no%s entries in the 'customcode' table.\n",
+        printf "There are no%s entries in the 'db' table.\n",
             $WHERE ? ' matching' : '';
         exit 1;
     }
@@ -2721,15 +2474,11 @@ sub list_syncs {
     my $usage = usage('list_syncs');
 
     ## Strip out special words from the nouns list as modifiers
-    my (@tmod,@smod);
+    my @mod;
     my $WHERE = '';
     for my $term (@nouns) {
         if ($term =~ /^(?:swap|pushdelta|fullcopy)$/i) {
-            push @tmod => lc $term;
-            next;
-        }
-        if ($term =~ /^(?:active|inactive)$/i) {
-            push @smod => lc $term;
+            push @mod => lc $term;
             next;
         }
         my $wild = $term =~ s/[*%]//g ? '~' : '=';
@@ -2740,26 +2489,13 @@ sub list_syncs {
     }
 
     $SQL = "SELECT * FROM bucardo.sync $WHERE ORDER BY name";
-
-    ## Filter by synctype
-    my $tmod = join ' OR ' => map { "synctype = '$_'" } @tmod;
-    if ($tmod) {
+    my $mod = join ' OR ' => map { "synctype = '$_'" } @mod;
+    if ($mod) {
         if ($SQL =~ /WHERE /) {
-            $SQL =~ s/WHERE (.+)\s+ORDER BY/WHERE ($tmod) AND ($1) ORDER BY/;
+            $SQL =~ s/WHERE (.+)\s+ORDER BY/WHERE ($mod) AND ($1) ORDER BY/;
         }
         else {
-            $SQL =~ s/sync/sync WHERE $tmod/;
-        }
-    }
-
-    ## Filter by status?
-    my $smod = join ' OR ' => map { "status = '$_'" } @smod;
-    if ($smod) {
-        if ($SQL =~ /WHERE /) {
-            $SQL =~ s/WHERE (.+)\s+ORDER BY/WHERE ($smod) AND ($1) ORDER BY/;
-        }
-        else {
-            $SQL =~ s/sync/sync WHERE $smod/;
+            $SQL =~ s/sync/sync WHERE $mod/;
         }
     }
 
@@ -2915,7 +2651,6 @@ sub list_sequences {
         $VERBOSE >= 2 and show_all_columns($row);
     }
 
-
     exit 0;
 
 } ## end of list_sequences
@@ -2981,10 +2716,8 @@ sub get_syncs {
             $s->{targets} = $dbgroup{$s->{targetgroup}};
         }
     }
-
     ## Check what exists in the pid directory
     opendir my $sdir, $PIDDIR or return $sync;
-
     my $syncpidfile;
     while (defined ($syncpidfile = readdir($sdir))) {
         next if $syncpidfile =~ /^\.\.?$/
@@ -3078,12 +2811,6 @@ sub add_item {
     my $type = shift @nouns;
     $type = lc $type;
 
-    ## Allow plurals
-    $type =~ s/s$//;
-
-    ## In case we used 'all'
-    my $type2 = $nouns[0] || '';
-
     if ($type eq 'code' or $type eq 'customcode' or $type eq 'custom_code') {
         add_customcode();
     }
@@ -3097,42 +2824,23 @@ sub add_item {
         add_herd();
     }
     elsif ($type eq 'table') {
-        if ($type2 eq 'all') {
-            shift @nouns;
-            add_all_tables();
-            $dbh->commit();
-        }
-        else {
-            add_table('table');
-        }
+        add_table('table');
         exit 0;
     }
     elsif ($type eq 'sequence') {
-        if ($type2 eq 'all') {
-            shift @nouns;
-            add_all_sequences();
-            $dbh->commit();
-        }
-        else {
-            add_table('sequence');
-        }
+        add_table('sequence');
         exit 0;
     }
     elsif ($type eq 'sync') {
         add_sync();
     }
     elsif ($type eq 'all') {
+        my $type2 = shift @nouns || '';
         if ($type2 =~ /table/i) {
-            shift @nouns;
             add_all_tables();
-            $dbh->commit();
-            exit 0;
         }
         elsif ($type2 =~ /sequence/i) {
-            shift @nouns;
             add_all_sequences();
-            $dbh->commit();
-            exit 0;
         }
         else {
             warn qq{The 'all' option can only be used with 'table' and 'sequence'\n};
@@ -3300,18 +3008,14 @@ sub add_database {
         host|dbhost              dbhost               0                null
         port|dbport              dbport               numeric          null
         pass|dbpass              dbpass               0                null
+        group|dbgroup            group                0                skip
         conn|dbconn              dbconn               0                null
         stat|status              status               =active|inactive null
         service|dbservice        dbservice            0                null
         pgpass                   pgpass               0                null
         sourcelimit              sourcelimit          numeric          null
         targetlimit              targetlimit          numeric          null
-        makedelta                makedelta            =on|off          null
-        makedelta_triggers       makedelta_triggers   TF               null
         server_side_prepares|ssp server_side_prepares TF               null
-        group|dbgroup            none                 0                skip
-        addalltables             none                 0                skip
-        addallsequences          none                 0                skip
     };
 
     my ($dbcols,$cols,$phs,$vals)
@@ -3364,12 +3068,6 @@ sub add_database {
         }
         $finalmsg .= qq{Added database "$newname" to group "$gname"\n};
     }
-
-    $bcargs->{db} = $newname;
-
-    add_all_tables() if grep /addalltab/i, @nouns;
-
-    add_all_sequences() if grep /addallseq/i, @nouns;
 
     $dbh->commit();
 
@@ -3482,7 +3180,6 @@ sub add_herd {
 
     my %goat2add;
     for my $rel (@nouns) {
-        $rel =~ s/(?:sequence|table)=(\w.*)/$1/;
         if (! exists $goatlist->{$rel}) {
             die qq{Could not find a table or sequence named "$rel"\n};
         }
@@ -3559,8 +3256,7 @@ sub add_sync {
         do_listen                do_listen            TF               null
         checktime                checktime            interval         null
         status                   status               =active|inactive null
-        source_makedelta         source_makedelta     =inherits|on|off null
-        target_makedelta         target_makedelta     =inherits|on|off null
+        makedelta                makedelta            TF               null
         priority                 priority             numeric          null
         analyze_after_copy       analyze_after_copy   TF               null
         overdue                  overdue              interval         null
@@ -3574,19 +3270,8 @@ sub add_sync {
         tables                   tables               0                skip
     };
 
-    ## Fullcopy syncs get some of their defaults overriden
-    ## Because who wants ping on a fullcopy sync?
-
-    my $morph = [
-        {
-            field => 'synctype',
-            value => 'fullcopy',
-            new_defaults => 'ping|F stayalive|F kidsalive|F'
-        },
-    ];
-
     my ($dbcols,$cols,$phs,$vals)
-        = process_simple_args({cols => $validcols, list => \@nouns, usage => $usage, morph => $morph});
+        = process_simple_args({cols => $validcols, list => \@nouns, usage => $usage});
 
     if (! exists $dbcols->{synctype}) {
         die "Need to specify the type of sync: pushdelta, fullcopy, or swap\n";
@@ -3677,15 +3362,6 @@ sub add_sync {
         $count = $sth->execute(@$vals);
     };
     if ($@) {
-        if ($@ =~ /sync_targetdb_fk/) {
-            die "No such target database: $dbcols->{targetdb}\n";
-        }
-        if ($@ =~ /sync_targetgroup_fk/) {
-            die "No such target database group: $dbcols->{targetgroup}\n";
-        }
-        if ($@ =~ /sync_source_targetdb_type/) {
-            die "Already have a sync with same source, target, and type!\n";
-        }
         die "Failed to add sync: $@\n";
     }
 
@@ -3721,8 +3397,7 @@ sub add_table {
         has_delta                has_delta            TF               null
         ping                     ping                 TF               null
         customselect             customselect         0                null
-        source_makedelta         source_makedelta     =inherits|on|off null
-        target_makedelta         target_makedelta     =inherits|on|off null
+        makedelta                makedelta            TF               null
         rebuild_index            rebuild_index        numeric          null
         standard_conflict        standard_conflict    0                null
         analyze_after_copy       analyze_after_copy   TF               null
@@ -3760,32 +3435,18 @@ sub add_table {
     if (! exists $dbcols->{db}) {
         ## If we only have one database, we can use that
         my $count = keys %{$global{db}};
-        if ($count != 1) {
-            warn "Please specify a database with db=<name>\n";
-            _list_databases();
-            exit 1;
+        $count == 1 or die "Please specify a database with db=<name>\n";
+        for (keys %{$global{db}}) {
+            $dbcols->{db} = $global{db}{name};
+            (my $testcols = $cols) =~ s/(.*db).*/$1/;
+            my $offset = $testcols =~ tr/,/,/;
+            $vals->[$offset] = $dbcols->{db};
         }
-        ($dbcols->{db}) = keys %{$global{db}};
-        ## Replace any existing database
-        if ($cols =~ s/\bdb\b//) {
-            $phs =~ s/\?//;
-            $phs =~ s/,,/,/;
-        }
-        ## Add this in to the start of the list
-        $cols = "db,$cols";
-        unshift @$vals => $dbcols->{db};
-        $phs .= ',?';
-        ## Cleanups
-        $cols =~ s/,,/,/;
-        $cols =~ s/,$//;
-        $phs =~ s/^,//;
     }
     my $db = $dbcols->{db};
 
     if (! exists $global{db}{$db}) {
-        warn qq{Invalid database: "$db"\n};
-        _list_databases();
-        exit 1;
+        die qq{Invalid database: "$db"\n};
     }
 
     my $finalmsg = '';
@@ -3857,18 +3518,6 @@ sub add_table {
 } ## end of add_table
 
 
-sub _list_databases {
-
-    return if ! keys %{$global{db}};
-    warn "The following databases are available:\n";
-    for (sort keys %{$global{db}}) {
-        print "$_\n";
-    }
-    return;
-
-} ## end of list_databases
-
-
 sub add_all_tables {
     add_all_goats('table');
     return;
@@ -3892,17 +3541,12 @@ sub add_all_goats {
     ## --table or -t: limit to the given tables
     ## --exclude-table or -t: exclude these tables
     ## --herd: name of the herd to add new tables to
-    ## pkonly: exclude tables with no pkey
 
     ## Transform command-line args to traditional format
     ## e.g. db=foo becomes the equivalent of --db=foo
-    ## foo becomes foo=1
     for my $noun (@nouns) {
         if ($noun =~ /(\w+)=(\w+)/) {
             $bcargs->{$1} = $2;
-        }
-        else {
-            $bcargs->{$noun} = 1;
         }
     }
 
@@ -3933,7 +3577,10 @@ sub add_all_goats {
     }
 
     if ($showdbs) {
-        _list_databases();
+        warn "Database choices:\n";
+        for my $row (sort keys %$dbs) {
+            warn "  db=$row\n";
+        }
         exit 1;
     }
 
@@ -3952,28 +3599,28 @@ sub add_all_goats {
     my @clause;
 
     ## If they gave a schema option, restrict the query by namespace
-    push @clause => generate_clause({col => 'nspname', items => [$bcargs->{schema}]});
+    push @clause => generate_clause({col => 'nspname', items => $bcargs->{schema}});
 
     ## If they have asked to exclude schemas, append that to the namespace clause
-    push @clause => generate_clause({col => 'nspname', items => [$bcargs->{'exclude-schema'}], not => 1});
+    push @clause => generate_clause({col => 'nspname', items => $bcargs->{'exclude-schema'}, not => 1});
 
     ## If they gave a table option, restrict the query by relname
-    push @clause => generate_clause({col => 'relname', items => [$bcargs->{table}]});
+    push @clause => generate_clause({col => 'relname', items => $bcargs->{table}});
 
     ## If they have asked to exclude tables, append that to the relname clause
-    push @clause => generate_clause({col => 'relname', items => [$bcargs->{'exclude-table'}], not => 1});
+    push @clause => generate_clause({col => 'relname', items => $bcargs->{'exclude-table'}, not => 1});
 
     for my $c (@clause) {
         next if ! $c;
         $SQL .= "\nAND ($c)";
     }
 
-    ## Fetch all the items, warn if no matches are found
+    ## Fetch all the items, bail if no matches are found
     $VERBOSE >= 2 and warn "Query: $SQL\n";
     $sth = $dbh2->prepare($SQL);
     $count = $sth->execute();
     if ($count < 1) {
-        warn "Sorry, no ${type}s were found\n";
+        die "Sorry, no ${type}s were found\n";
     }
 
     ## Grab all current tables or sequences from the goat table.
@@ -3998,9 +3645,6 @@ sub add_all_goats {
             $herdcheck = $dbh->prepare($SQL);
             $herdcheck->execute($herd);
         }
-        else {
-            $VERBOSE >= 1 and warn "Herd already exists: $herd\n";
-        }
         $SQL = 'INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,?)';
         $addtoherd = $dbh->prepare($SQL);
     }
@@ -4011,27 +3655,14 @@ sub add_all_goats {
 
     ## Walk through all returned tables from the remote database
     my %count = (seenit => 0, added => 0);
-    my (%old, %new, %fail, $id);
+    my (%old, %new, %fail);
     for my $row (@{$sth->fetchall_arrayref()}) {
         my ($S,$T) = @$row;
-        my $tinfo;
         ## Do we already have this one?
         if (exists $hastable{$S}{$T}) {
             $VERBOSE >= 2 and warn "Skipping $type already in goat: $S.$T\n";
             $count{seenit}++;
             $old{$S}{$T} = 1;
-            if ($herd and 'table' eq $type) {
-                ## In case this is not already in the herd, grab the id and jump down
-                $SQL = 'SELECT * FROM goat WHERE db=? AND schemaname=? AND tablename=? AND reltype=?';
-                $sth = $dbh->prepare($SQL);
-                $count = $sth->execute($db->{name},$S,$T,'table');
-                if ($count < 1) {
-                    die "Could not find table $S.$T in database $db->{name}!\n";
-                }
-                $tinfo = $sth->fetchall_arrayref({})->[0];
-                $id = $tinfo->{id};
-                goto HERD;
-            }
             next;
         }
         $VERBOSE >= 2 and warn "Attempting to add $S.$T to the goat table\n";
@@ -4055,37 +3686,24 @@ sub add_all_goats {
             next;
         }
         $SQL = q{SELECT currval('bucardo.goat_id_seq')};
-        $id = $dbh->selectall_arrayref($SQL)->[0][0];
+        my $id = $dbh->selectall_arrayref($SQL)->[0][0];
         $VERBOSE >= 2 and warn "ID of new table $S.$T is $id\n";
+
+        ## Pull the information back out about this item
+        $SQL = 'SELECT * FROM bucardo.goat WHERE id = ?';
+        $sth = $dbh->prepare($SQL);
+        $sth->execute($id);
+        my $info = $sth->fetchall_arrayref({});
 
         $count{added}++;
         $new{$S}{$T} = 1;
-      HERD:
         if ($herd) {
-            if (! defined $tinfo) {
-                $SQL = 'SELECT * FROM goat WHERE id = ?';
-                $sth = $dbh->prepare($SQL);
-                $sth->execute($id);
-                $tinfo = $sth->fetchall_arrayref({})->[0];
-            }
-            if ($bcargs->{pkonly} and 'table' eq $type and ! length $tinfo->{pkey}) {
-                warn "Not adding table $S.$T to herd: no pkey\n";
-            }
-            else {
-                $SQL = 'SELECT 1 FROM herdmap WHERE herd=? AND goat = ?';
-                $sth = $dbh->prepare($SQL);
-                $count = $sth->execute($herd, $id);
-                if ($count < 1) {
-                    $addtoherd->execute($herd, $id);
-                    $VERBOSE >= 2 and warn "Added $type $S.$T to herd $herd\n";
-                }
-            }
+            $addtoherd->execute($herd, $id);
+            $VERBOSE >= 2 and warn "Added $type $id to herd $herd\n";
         }
 
     }
-
-    ## Disconnect from the remote database
-    $dbh2->disconnect();
+    $dbh->commit();
 
     if ($VERBOSE >= 1) {
         if (%new) {
@@ -4109,7 +3727,10 @@ sub add_all_goats {
     print "New ${type}s added: $count{added}\n";
     print "Already added: $count{seenit}\n";
 
-    return;
+    $dbh->disconnect();
+    $dbh2->disconnect();
+
+    exit 0;
 
 } ## end of add_all_goats
 
@@ -4232,23 +3853,13 @@ sub remove_database {
             $sth->execute($name);
         };
         if ($@) {
-            if ($bcargs->{force} and $@ =~ /"goat_db_fk"|"sync_targetdb_fk"/) {
-                warn "Dropping all tables and syncs that reference this database\n";
-                $dbh->rollback();
-                $dbh->do('DELETE FROM bucardo.goat WHERE db = ' . $dbh->quote($name));
-                $dbh->do('DELETE FROM bucardo.sync WHERE targetdb = ' . $dbh->quote($name));
-                eval {
-                    $sth->execute($name);
-                };
-            }
-
             if ($@ =~ /"goat_db_fk"/) {
                 die qq{Cannot delete database "$name": must remove all tables that reference it first\n};
             }
             if ($@ =~ /"sync_targetdb_fk"/) {
                 die qq{Cannot delete database "$name": must remove all syncs that reference it first\n};
             }
-            $@ and die qq{Could not delete database "$name"\n$@\n};
+            die qq{Could not delete database "$name"\n$@\n};
         }
     }
 
@@ -4379,7 +3990,16 @@ sub remove_sync {
     }
 
     ## Make sure none of the syncs are currently running
-    ## XXX Is there anything we can do to check that the sync is active?
+    $SQL = q{SELECT 1 FROM pg_catalog.pg_listener WHERE relname = ?};
+    for my $name (@nouns) {
+        my $dname = "bucardo_deactivate_sync_$name";
+        $sth = $dbh->prepare($SQL);
+        $count = $sth->execute($dname);
+        $sth->finish();
+        if (1 == $count) {
+            die qq{Cannot remove active sync "$name": please deactivate it first\n};
+        }
+    }
 
     $SQL = 'DELETE FROM bucardo.sync WHERE name = ?';
     $sth = $dbh->prepare($SQL);
@@ -4390,14 +4010,14 @@ sub remove_sync {
         };
         if ($@) {
             if ($@ =~ /"goat_db_fk"/) {
-                die qq{Cannot delete sync "$name": must remove all tables that reference it first\n};
+                die qq{Cannot delete database "$name": must remove all tables that reference it first\n};
             }
-            die qq{Could not delete sync "$name"\n$@\n};
+            die qq{Could not delete database "$name"\n$@\n};
         }
     }
 
     for my $name (@nouns) {
-        print qq{Removed sync "$name"\n};
+        print qq{Removed database "$name"\n};
         print "Note: table triggers (if any) are not automatically removed!\n";
     }
 
@@ -4505,21 +4125,6 @@ sub relation_exists {
     }
     $sth->finish();
     return 0;
-
-} ## end of relation_exists
-
-
-sub domain_exists {
-
-    ## Checks if a domain exists. Returns 0 or 1
-    my ($schema,$name) = @_;
-    my $SQL =
-          q{SELECT count(*) FROM pg_catalog.pg_type t }
-        . q{JOIN pg_namespace n ON (n.oid = t.typnamespace) }
-        . q{WHERE t.typtype = 'd' AND n.nspname = ? AND t.typname = ?};
-    my $sth = $dbh->prepare_cached($SQL);
-    $count = $sth->execute($schema,$name);
-    return $sth->fetchall_arrayref()->[0][0];
 
 } ## end of relation_exists
 
@@ -4654,49 +4259,10 @@ sub constraint_definition {
     $def =~ s/<> ALL \(ARRAY\[(.+)\]\)/NOT IN ($1)/;
     $def =~ s/::text//g;
     $def =~ s/(\w+) ~ '/$1 ~ E'/g;
-    $def =~ s/CHECK \(\((\w+)\) <>/CHECK ($1 <>/;
 
     return $def;
 
 } ## end of constraint_definition
-
-
-sub table_comment {
-
-    my ($schema,$relation) = @_;
-
-    my $SQL = q{SELECT description FROM pg_description WHERE objoid = (}
-        . q{ SELECT c.oid FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace)}
-        . q{ WHERE n.nspname = ? AND c.relname = ?)};
-
-    my $sth = $dbh->prepare($SQL);
-    $count = $sth->execute($schema,$relation);
-    if ($count < 1) {
-        $sth->finish();
-        return '';
-    }
-    return $sth->fetchall_arrayref()->[0][0];
-
-} ## end of table_comment
-
-
-sub domain_comment {
-
-    my ($schema,$relation) = @_;
-
-    my $SQL = q{SELECT description FROM pg_description WHERE objoid = (}
-        . q{ SELECT t.oid FROM pg_type t JOIN pg_namespace n ON (n.oid = t.typnamespace)}
-        . q{ WHERE t.typtype = 'd' AND n.nspname = ? AND t.typname = ?)};
-
-    my $sth = $dbh->prepare($SQL);
-    $count = $sth->execute($schema,$relation);
-    if ($count < 1) {
-        $sth->finish();
-        return '';
-    }
-    return $sth->fetchall_arrayref()->[0][0];
-
-} ## end of domain_comment
 
 
 sub find_bucardo_schema {
@@ -4763,7 +4329,7 @@ sub generate_clause {
     ## Generate a snippet of SQL for a WHERE clause
 
     my $arg = shift or die;
-    return '' if ! $arg->{items} or ! defined $arg->{items}[0];
+    return '' if ! $arg->{items};
 
     my $col = $arg->{col} or die;
     my $items = $arg->{items};
@@ -4798,8 +4364,8 @@ sub generate_clause {
         }
         else {
             push @itemlist => qquote($name);
-            $one = 0;
         }
+
         if ($schema) {
             my $col2 = 'schemaname';
             my $old = $one ? pop @oneitem : pop @itemlist;
@@ -4816,6 +4382,7 @@ sub generate_clause {
                 push @oneitem => "($col = $old AND $col2 = " . qquote($schema) . ')';
             }
         }
+
     }
     if (@itemlist) {
         my $list = sprintf "$col ${NOT}IN (" . (join ',' => @itemlist) . ')';
@@ -4877,9 +4444,12 @@ sub upgrade {
         'dbgroup_id_seq',
     );
 
+    my @new_sequences = (
+        'audit_pid_id_seq',
+    );
+
     my @old_configs = (
         'pidfile',
-        'upsert_attempts',
     );
 
     my @old_constraints = (
@@ -4908,6 +4478,28 @@ sub upgrade {
     );
 
     my @new_columns = (
+        ['bucardo', 'audit_pid', 'id',                   q{INTEGER NOT NULL DEFAULT nextval('audit_pid_id_seq')}],
+        ['bucardo', 'audit_pid', 'parentid',             q{INTEGER     NULL}],
+        ['bucardo', 'audit_pid', 'familyid',             q{INTEGER     NULL}],
+        ['bucardo', 'audit_pid', 'source',               q{TEXT        NULL}],
+        ['bucardo', 'audit_pid', 'target',               q{TEXT        NULL}],
+        ['bucardo', 'audit_pid', 'master_backend',       q{INT     NOT NULL DEFAULT pg_backend_pid()}],
+        ['bucardo', 'audit_pid', 'source_backend',       q{INT         NULL}],
+        ['bucardo', 'audit_pid', 'target_backend',       q{INT         NULL}],
+        ['bucardo', 'customcode','trigrules',            q{BOOLEAN NOT NULL DEFAULT 'false'}],
+        ['bucardo', 'db',        'dbservice',            q{TEXT        NULL}],
+        ['bucardo', 'db',        'server_side_prepares', q{BOOLEAN NOT NULL DEFAULT 'true'}],
+        ['bucardo', 'goat',      'delta_bypass',         q{BOOLEAN NOT NULL DEFAULT 'false'}],
+        ['bucardo', 'goat',      'delta_bypass_min',     q{BIGINT      NULL}],
+        ['bucardo', 'goat',      'delta_bypass_count',   q{BIGINT      NULL}],
+        ['bucardo', 'goat',      'delta_bypass_percent', q{SMALLINT    NULL}],
+        ['bucardo', 'goat',      'qpkey',                q{TEXT        NULL}],
+        ['bucardo', 'sync',      'lifetime',             q{INTERVAL NULL}],
+        ['bucardo', 'sync',      'maxkicks',             q{INTEGER NOT NULL DEFAULT 0}],
+        ['bucardo', 'sync',      'onetimecopy',          q{SMALLINT NOT NULL DEFAULT 0}],
+        ['bucardo', 'sync',      'strict_checking',      q{BOOLEAN NOT NULL DEFAULT 'true'}],
+        ['bucardo', 'sync',      'track_rates',          q{BOOLEAN NOT NULL DEFAULT 'false'}],
+
         ['freezer', 'old_audit_pid', 'id',              q{INTEGER}],
         ['freezer', 'old_audit_pid', 'parentid',        q{INTEGER}],
         ['freezer', 'old_audit_pid', 'familyid',        q{INTEGER}],
@@ -4919,9 +4511,9 @@ sub upgrade {
     );
 
     my @altered_columns = (
-        ['bucardo', 'goat', 'rebuild_index', 'BOOL2SMALLINT1'],
         ['bucardo', 'goat', 'schemaname',    'NO DEFAULT'],
-        ['bucardo', 'sync', 'rebuild_index', 'BOOL2SMALLINT1'],
+        ['bucardo', 'goat', 'rebuild_index', 'BOOL2SMALLINT'],
+        ['bucardo', 'sync', 'rebuild_index', 'BOOL2SMALLINT'],
     );
 
     my @row_values = (
@@ -4981,137 +4573,21 @@ sub upgrade {
         $changes++;
     }
 
-    ## Parse the bucardo.schema file and verify the following types of objects exist:
-    ## Functions, triggers, constraints, sequences, indexes, comments, and domains
-    my (@flist, @tlist, @ilist, @clist, @clist2, @slist, @tablelist, @comlist, @domlist, @collist);
-    my ($fname,$args,$fbody) = ('','','');
-    my ($tname,$tbody) = ('','');
-    my ($tablename,$tablebody) = ('','');
-    my ($altername,$alterbody,$alterstat) = ('','','');
-    seek $fh, 0, 0;
-    while (<$fh>) {
-        if ($fbody) {
-            if (/^(\$bc\$;)/) {
-                $fbody .= $1;
-                push @flist, [$fname, $args, $fbody];
-                $fbody = $fname = $args = '';
-            }
-            else {
-                $fbody .= $_;
-            }
-            next;
-        }
-        if ($tbody) {
-            $tbody .= $_;
-            if (/;/) {
-                push @tlist, [$tname, $tbody];
-                $tbody = $tname = '';
-            }
-            next;
-        }
-        if ($tablebody) {
-            $tablebody .= $_;
-            if (/^\s*CONSTRAINT\s+(\w+)\s+(.+?)\s*$/) {
-                my ($cname,$def) = ($1,$2);
-                $def =~ s/,$//;
-                $def =~ s/\bbucardo\.//;
-                push @clist2, [$tablename, $cname, $def];
-            }
-            elsif (/^\s+([a-z_]+)\s+([A-Z]+)\s*(NOT)? NULL/) {
-                my ($colname,$coltype,$isnull) = ($1, $2, $3 ? 1 : 0);
-                push @collist, ['bucardo', $tablename, $colname, $_];
-            }
-            elsif (/;/) {
-                push @tablelist, [$tablename, $tablebody];
-                $tablebody = $tablename = '';
-            }
-            else {
-                die qq{Could not parse table definition: invalid column at line $. ($_)\n};
-            }
-            next;
-        }
-        if ($altername) {
-            $alterbody =~ s/\s+$//;
-            $alterbody ? s/^\s+/ / : s/^\s+//;
-            s/\s+$/ /;
-            $alterbody .= $_;
-            $alterstat .= $_;
-            if ($alterbody =~ s/;\s*$//) {
-                push @clist, [$altername->[0], $altername->[1], $alterbody, $alterstat];
-                $alterbody = $altername = $alterstat = '';
-            }
-            next;
-        }
-        if (/^CREATE (?:OR REPLACE )?FUNCTION\s+bucardo\.(.+?\))/) {
-            $fname = $1;
-            $fbody .= $_;
-            $fname =~ s/\((.*)\)// or die "No args found for function: $_\n";
-            $args = $1;
-            $args =~ s/,(\S)/, $1/g;
-            next;
-        }
-        if (/^CREATE TRIGGER (\S+)/) {
-            $tname = $1;
-            $tbody .= $_;
-            next;
-        }
-        if (/^CREATE TABLE bucardo\.(\w+)/) {
-            $tablename = $1;
-            $tablebody .= $_;
-            next;
-        }
-        if (/^CREATE (UNIQUE )?INDEX (\S+)/) {
-            push @ilist, [$1, $2, $_];
-            next;
-        }
-        if (/^ALTER TABLE bucardo\.(\S+)\s+ADD CONSTRAINT\s*(\S+)\s*(\S*.*)/) {
-            $altername = [$1,$2];
-            $alterbody = $3 || '';
-            $alterstat = $_;
-            next;
-        }
-        if (/^CREATE SEQUENCE bucardo\.(\w+)/) {
-            push @slist, [$1, $_];
-            next;
-        }
-        if (/^COMMENT ON (\w+) (\w+)\.(\w+) IS \$\$(.+)\$\$/) {
-            push @comlist, [lc $1, $2, $3, $4, $_];
-            next;
-        }
-        if (/^CREATE DOMAIN bucardo\.(\w+) (.+)/) {
-            push @domlist, [$1, $2];
-            next;
-        }
-    }
-
-    ## Add any new domains, verify existing ones
-    for my $row (@domlist) {
-        my ($name,$def) = @$row;
-        next if domain_exists('bucardo', $name);
-        upgrade_and_log("CREATE DOMAIN bucardo.$name $def");
-        clog("Created domain: $name");
+    ## Add new sequences as needed
+    for my $name (@new_sequences) {
+        next if relation_exists('bucardo', $name);
+        upgrade_and_log("CREATE SEQUENCE $name");
+        clog "Created sequence $name";
         $changes++;
     }
 
-    ## Add new columns as needed from the schema
-    for my $row (@collist) {
-        my ($schema,$table,$column,$def) = @$row;
-        next if column_exists($schema, $table, $column);
-        $def =~ s/\-\-.+$//;
-        $def =~ s/,\s*$//;
-        $def =~ s/\s+/ /g;
-        upgrade_and_log("ALTER TABLE $schema.$table ADD COLUMN $def");
-        clog "Created column: $schema.$table.$column";
-        $changes++;
-    }
-
-    ## Add specific new columns as needed
+    ## Add new columns as needed
     for my $row (@new_columns) {
         my ($schema,$table,$column,$def) = @$row;
         next if column_exists($schema, $table, $column);
         $def =~ s/\s+/ /g;
-        upgrade_and_log("ALTER TABLE $schema.$table ADD COLUMN $def");
-        clog "Created column: $schema.$table.$column";
+        upgrade_and_log("ALTER TABLE $schema.$table ADD COLUMN $column $def");
+        clog "Created column: $schema.$table.$column $def";
         $changes++;
     }
 
@@ -5140,13 +4616,12 @@ sub upgrade {
             clog("Changed DEFAULT on $schema.$table.$column to $newname");
             $changes++;
         }
-        elsif ($change =~ /BOOL2SMALLINT(\d)/) {
-            my $defval = $1;
+        elsif ($change eq 'BOOL2SMALLINT') {
             my $oldtype = column_type($schema, $table, $column);
             next if $oldtype eq 'smallint';
             upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column DROP DEFAULT");
             upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column TYPE smallint "
-                            . "USING CASE WHEN $column IS NULL OR $column IS FALSE THEN 0 ELSE $defval END");
+                            . "USING CASE WHEN $column IS NULL OR $column IS FALSE THEN 0 ELSE 1 END");
             upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column SET DEFAULT 0");
             clog("Changed type of $schema.$table.$column to smallint");
             $changes++;
@@ -5154,30 +4629,6 @@ sub upgrade {
         else {
             die qq{Do not know how to handle altered column spec of "$change"};
         }
-    }
-
-    ## Special cases
-    if (! column_exists('bucardo', 'goat', 'source_makedelta')) {
-        upgrade_and_log(q{ALTER TABLE bucardo.goat ADD COLUMN source_makedelta ONOFF NOT NULL DEFAULT 'inherits'});
-        upgrade_and_log(q{ALTER TABLE bucardo.goat ADD COLUMN target_makedelta ONOFF NOT NULL DEFAULT 'inherits'});
-        if (column_exists('bucardo', 'goat', 'makedelta')) {
-            upgrade_and_log(q{UPDATE goat SET source_makedelta='on', target_makedelta='on' WHERE makedelta IS TRUE});
-            upgrade_and_log(q{UPDATE goat SET source_makedelta='off', target_makedelta='off' WHERE makedelta IS FALSE});
-            upgrade_and_log('ALTER TABLE bucardo.goat DROP COLUMN makedelta');
-        }
-        clog('Added columns goat.source_makedelta and goat.target_makedelta');
-        $changes++;
-    }
-    if (! column_exists('bucardo', 'sync', 'source_makedelta')) {
-        upgrade_and_log(q{ALTER TABLE bucardo.sync ADD COLUMN source_makedelta ONOFF NOT NULL DEFAULT 'inherits'});
-        upgrade_and_log(q{ALTER TABLE bucardo.sync ADD COLUMN target_makedelta ONOFF NOT NULL DEFAULT 'inherits'});
-        if (column_exists('bucardo', 'sync', 'makedelta')) {
-            upgrade_and_log(q{UPDATE sync SET source_makedelta='on', target_makedelta='on' WHERE makedelta IS TRUE});
-            upgrade_and_log(q{UPDATE sync SET source_makedelta='off', target_makedelta='off' WHERE makedelta IS FALSE});
-            upgrade_and_log('ALTER TABLE bucardo.sync DROP COLUMN makedelta');
-        }
-        clog('Added columns sync.source_makedelta and sync.target_makedelta');
-        $changes++;
     }
 
     ## Drop any old columns
@@ -5200,10 +4651,10 @@ sub upgrade {
 
     ## Drop any old functions
     for my $row (@old_functions) {
-        my ($name, $largs) = @$row;
-        next if ! function_exists('bucardo', $name, $largs);
-        clog "Dropped function $name($largs)";
-        upgrade_and_log(qq{DROP FUNCTION bucardo."$name"($largs)});
+        my ($name, $args) = @$row;
+        next if ! function_exists('bucardo', $name, $args);
+        clog "Dropped function $name($args)";
+        upgrade_and_log(qq{DROP FUNCTION bucardo."$name"($args)});
         $changes++;
     }
 
@@ -5245,7 +4696,6 @@ sub upgrade {
             $newcfg->execute($setting,$value,$about);
         }
     }
-    close $fh or die qq{Could not close file "$file": $!\n};
 
     ## Apply any specific row changes
     for my $row (@row_values) {
@@ -5262,6 +4712,94 @@ sub upgrade {
         $changes++;
     }
 
+    ## Parse the bucardo.schema file and verify the following types of objects exist:
+    ## Functions, triggers, constraints, sequences, and indexes
+    my (@flist, @tlist, @ilist, @clist, @clist2, @slist, @tablelist);
+    my ($fname,$args,$fbody) = ('','','');
+    my ($tname,$tbody) = ('','');
+    my ($tablename,$tablebody) = ('','');
+    my ($altername,$alterbody,$alterstat) = ('','','');
+    seek $fh, 0, 0;
+    while (<$fh>) {
+        if ($fbody) {
+            if (/^(\$bc\$;)/) {
+                $fbody .= $1;
+                push @flist, [$fname, $args, $fbody];
+                $fbody = $fname = $args = '';
+            }
+            else {
+                $fbody .= $_;
+            }
+            next;
+        }
+        if ($tbody) {
+            $tbody .= $_;
+            if (/;/) {
+                push @tlist, [$tname, $tbody];
+                $tbody = $tname = '';
+            }
+            next;
+        }
+        if ($tablebody) {
+            $tablebody .= $_;
+            if (/^\s*CONSTRAINT\s+(\w+)\s+(.+?)\s*$/) {
+                my ($cname,$def) = ($1,$2);
+                $def =~ s/,$//;
+                $def =~ s/\bbucardo\.//;
+                push @clist2, [$tablename, $cname, $def];
+            }
+            if (/;/) {
+                push @tablelist, [$tablename, $tablebody];
+                $tablebody = $tablename = '';
+            }
+            next;
+        }
+        if ($altername) {
+            $alterbody =~ s/\s+$//;
+            $alterbody ? s/^\s+/ / : s/^\s+//;
+            s/\s+$/ /;
+            $alterbody .= $_;
+            $alterstat .= $_;
+            if ($alterbody =~ s/;\s*$//) {
+                push @clist, [$altername->[0], $altername->[1], $alterbody, $alterstat];
+                $alterbody = $altername = $alterstat = '';
+            }
+            next;
+        }
+        if (/^CREATE (?:OR REPLACE )?FUNCTION\s+bucardo\.(\S+)/) {
+            $fname = $1;
+            $fbody .= $_;
+            $fname =~ s/\((.*)\)// or die "No args found for function: $_\n";
+            $args = $1;
+            $args =~ s/,(\S)/, $1/g;
+            next;
+        }
+        if (/^CREATE TRIGGER (\S+)/) {
+            $tname = $1;
+            $tbody .= $_;
+            next;
+        }
+        if (/^CREATE TABLE bucardo\.(\w+)/) {
+            $tablename = $1;
+            $tablebody .= $_;
+            next;
+        }
+        if (/^CREATE (UNIQUE )?INDEX (\S+)/) {
+            push @ilist, [$1, $2, $_];
+            next;
+        }
+        if (/^ALTER TABLE bucardo\.(\S+)\s+ADD CONSTRAINT\s*(\S+)\s*(\S*.*)/) {
+            $altername = [$1,$2];
+            $alterbody = $3 || '';
+            $alterstat = $_;
+            next;
+        }
+        if (/^CREATE SEQUENCE bucardo\.(\w+)/) {
+            push @slist, [$1, $_];
+            next;
+        }
+    }
+    close $fh or die qq{Could not close file "$file": $!\n};
 
     $SQL = 'SELECT pg_catalog.md5(?)';
     my $md5sth = $dbh->prepare($SQL);
@@ -5373,22 +4911,6 @@ sub upgrade {
         $changes++;
     }
 
-    ## Check that object comments exist and match
-    for my $row (@comlist) {
-        my ($type,$schema,$relation,$comment,$full) = @$row;
-        my $current_comment =
-            $type eq 'table' ? table_comment($schema,$relation)
-            : $type eq 'domain' ? domain_comment($schema,$relation)
-            : 'Unkonwn type';
-        if ($current_comment ne $comment) {
-            upgrade_and_log($full);
-            clog (length $current_comment
-                ? "Changed comment on $type $schema.$relation"
-                : "Added comment for $type $schema.$relation");
-            $changes++;
-        }
-    }
-
     ## The freezer.q_staging table is no longer needed, but we must empty it before dropping
     if (relation_exists('freezer','q_staging')) {
         upgrade_and_log('INSERT INTO freezer.master_q SELECT * FROM freezer.q_staging');
@@ -5488,10 +5010,7 @@ Optional information:
  status=status      (active or inactive, defaults to 'active')
  sourcelimit=#      (maximum concurrent reads from this database. Default is 0 (no limit))
  targetlimit=#      (maximum concurrent writes from this database. Default is 0 (no limit))
- ssp=#              (if server-side prepares are used, defaults to 1 (on))
- makedelta=onoff    (whether this database needs makedelta magic)
- addalltables       (automatically adds all tables in the database)
- addallsequences    (automatically adds all sequences in the database)};
+ ssp=#              (if server-side prepares are used, defaults to 1 (on))};
     }
     if ('add_dbgroup' eq $name) {
         return q{Usage: add dbgroup <name> [database1 database2 ...]
@@ -5775,12 +5294,6 @@ sub config {
 
     my $setusage = "Usage: $progname set setting=value [setting=value ...]\n";
 
-    ## Allow for old syntax
-    if ($verb eq 'config') {
-        @nouns or die "Usage: $progname config [set|show]\n";
-        $verb = shift @nouns;
-    }
-
     if (!@nouns) {
         $verb eq 'set' and die $setusage;
         die "Usage: $progname show <all|setting1> [settting2 ...]\n";
@@ -5813,21 +5326,6 @@ sub config {
 
         if (! exists $config->{$setting}) {
             die qq{Unknown setting "$setting"\n};
-        }
-
-        ## Sanity checks
-        if ($setting eq 'log_level') {
-            if ($val !~ /^(?:terse|normal|verbose|debug)$/oi) {
-                die "Invalid log_level, must be terse, normal, verbose, or debug\n";
-            }
-        }
-        if ($setting eq 'default_standard_conflict') {
-            if ($val !~ /^(?:source|target|skip|random|latest|none)$/oi) {
-                die "Invalid default_standard_conflict, must be none, source, target, skip, random, or latest\n";
-            }
-            if ($val =~ /none/i) {
-                $val = '';
-            }
         }
 
         $sth->execute($val,$setting);
@@ -5904,8 +5402,6 @@ sub install {
         print "3. User:          $user\n";
         print "4. Database:      $dbname\n";
         print "5. PID directory: $piddir\n";
-
-        last GOOEY if $bcargs->{batch};
 
         print 'Enter a number to change it, P to proceed, or Q to quit: ';
 
@@ -6009,28 +5505,17 @@ sub install {
 
     }
 
-    my $PSQL = "psql -p $port -U $user -d $dbname";
+    my $PSQL = "psql -p $port -U $user -d $dbname -c 'SELECT version()'";
     $host !~ /</ and $PSQL .= " --host=$host";
 
     my $COM = "$PSQL -c 'SELECT version()'";
 
-    my $res = qx{$COM 2>&1};
-
-    if ($res =~ /FATAL|ERROR/ or $res =~ /psql:/) {
-        warn $res;
-    }
-
-    ## Check for some common errors
-    if ($res =~ /role ".+" does not exist/) {
-        die "Sorry, please try using a different user\n";
-    }
-
+    my $res = qx{$COM};
     if ($res !~ /(\d+)\.(\d+)(\S+)/) {
-        die "Sorry, unable to connect to the database\n";
+        die "Sorry, unable to determine the database version\n";
     }
     my ($maj,$min,$rev) = ($1,$2,$3);
     $rev =~ s/^\.//;
-    $rev =~ s/(\d+)\.\d+/$1/;
 
     print "Postgres version is: $maj.$min\n";
 
@@ -6039,7 +5524,6 @@ sub install {
     }
 
     $COM = "$PSQL -AX -qt -f $schema_file 2>&1";
-    print "COM=$COM\n";
 
     print "Attempting to create and populate the bucardo database and schema\n";
 
@@ -6100,7 +5584,7 @@ bucardo_ctl - utility script for controlling the Bucardo program
 
 =head1 VERSION
 
-This document describes version 4.5.0 of bucardo_ctl
+This document describes version 4.4.2 of bucardo_ctl
 
 =head1 SYNOPSIS
 
@@ -6114,9 +5598,9 @@ This document describes version 4.5.0 of bucardo_ctl
 
   ./bucardo_ctl add database newdb name=internal_name port=5432 host=myserver
 
-  ./bucardo_ctl add all tables db=foo [herd=x] [pkonly]
+  ./bucardo_ctl add all tables db=foo
 
-  ./bucardo_ctl add all sequences db=foo [herd=x]
+  ./bucardo_ctl add all sequences db=foo
 
   ./bucardo_ctl add herd newherd table1 table2 table3 ...
 
@@ -6231,9 +5715,9 @@ Usage:  add <item_type> <item_name>
 
 Usage:  add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx ssp=1/0
 
-Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx herd=xxx
+Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx makedelta=bool herd=xxx
 
-Usage:  add all tables [herd=xxx] [pkonly]
+Usage:  add all tables herd=xxx
 
 Usage:  add sequence [schema].table herd=xxx
 

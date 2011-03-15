@@ -1,5 +1,4 @@
-#!/usr/bin/env perl
-# -*-mode:cperl; indent-tabs-mode: nil-*-
+#!perl
 
 ## This test creates a star-like set of databases. A is the center; B and C are two spokes.
 ## The idea is to see if we can replicate everything everywhere with A
@@ -75,9 +74,9 @@ for my $db (qw/A B C/) {
     ($res, @dummy) = split"\n", $bct->ctl("add herd herd$db");
     like($res, qr/Added herd/, $res);
     if ($db eq 'A') {
-        ($res, @dummy) = split "\n", $bct->ctl("add table star_test db=$db herd=herd$db target_makedelta=on");
+        ($res, @dummy) = split "\n", $bct->ctl("add table star_test db=$db herd=herd$db makedelta=true");
         like($res, qr/Added table/, $res);
-        ($res, @dummy) = split "\n", $bct->ctl("add table star_test_mcpk db=$db herd=herd$db target_makedelta=on");
+        ($res, @dummy) = split "\n", $bct->ctl("add table star_test_mcpk db=$db herd=herd$db makedelta=true");
         like($res, qr/Added table/, $res);
     }
     else {
@@ -96,10 +95,10 @@ $res = $bct->ctl('add sync star_a_c source=herdA type=pushdelta targetdb=C');
 chomp $res;
 like($res, qr/Added sync/, $res);
 
-$res = $bct->ctl('add sync star_b_a source=herdB type=pushdelta targetdb=A target_makedelta=on');
+$res = $bct->ctl('add sync star_b_a source=herdB type=pushdelta targetdb=A makedelta=true');
 chomp $res;
 like($res, qr/Added sync/, $res);
-$res = $bct->ctl('add sync star_c_a source=herdC type=pushdelta targetdb=A target_makedelta=on');
+$res = $bct->ctl('add sync star_c_a source=herdC type=pushdelta targetdb=A makedelta=true');
 chomp $res;
 like($res, qr/Added sync/, $res);
 
