@@ -1,6 +1,6 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-Bucardo version 4.4.2, released ...
+Bucardo version 4.4.2, released March 17, 2011
 
   - Fix incorrect SET TIME ZONE inside the bucardo_delta functions. [GSM]
 
