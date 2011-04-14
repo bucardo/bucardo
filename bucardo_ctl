@@ -3990,14 +3990,17 @@ sub remove_sync {
     }
 
     ## Make sure none of the syncs are currently running
-    $SQL = q{SELECT 1 FROM pg_catalog.pg_listener WHERE relname = ?};
-    for my $name (@nouns) {
-        my $dname = "bucardo_deactivate_sync_$name";
-        $sth = $dbh->prepare($SQL);
-        $count = $sth->execute($dname);
-        $sth->finish();
-        if (1 == $count) {
-            die qq{Cannot remove active sync "$name": please deactivate it first\n};
+    ## Will not work on 9.0 and up: will need some other way to check...
+    if ($dbh->{pg_server_version} < 90000) {
+        $SQL = q{SELECT 1 FROM pg_catalog.pg_listener WHERE relname = ?};
+        for my $name (@nouns) {
+            my $dname = "bucardo_deactivate_sync_$name";
+            $sth = $dbh->prepare($SQL);
+            $count = $sth->execute($dname);
+            $sth->finish();
+            if (1 == $count) {
+                die qq{Cannot remove active sync "$name": please deactivate it first\n};
+            }
         }
     }
 
