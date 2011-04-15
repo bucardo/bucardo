@@ -1,6 +1,6 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-Bucardo version 4.4.3
+Bucardo version 4.4.3, released April 15, 2011
 
   - Fix rare race condition when slave database dies. [GSM]
     Thanks to Kaveh Mousavi Zamani for the report.
