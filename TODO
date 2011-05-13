@@ -24,7 +24,6 @@ These range the gamut from wildly speculative ideas to must-have features.
 - bucardo_help() function to explain all
 - Handle non-orderable data types such as polygons
 - Put this list into a bug tracker
-- Use 2PC where possible
 - Consider failover strategies
 - Log validate_sync changes somewhere, add rollback statements
 - Add support for manual DDL changes (in progress)
