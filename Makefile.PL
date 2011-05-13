@@ -4,10 +4,11 @@ use warnings;
 use 5.008003;
 
 ## No version.pm for this one, as the prereqs are not loaded yet.
-my $VERSION = '4.4.3';
+my $VERSION = '5.0.0';
 
 WriteMakefile(
     NAME         => 'Bucardo',
+    clean        => { FILES => 'log.bucardo.* *~ *.tmp outgoingmail.* bucardo_test_database*/' },
     ABSTRACT     => 'Postgres asynchronous multi-master replication system',
     AUTHOR       => 'Greg Sabino Mullane <greg@endpoint.com>',
     LICENSE      => 'BSD',
@@ -24,11 +25,11 @@ WriteMakefile(
                      'Sys::Syslog'         => '0.13',
                  },
     NO_META      => 1,
+    NEEDS_LINKING => 0,
     VERSION_FROM => 'Bucardo.pm',
     EXE_FILES    => ['bucardo_ctl'],
     MAN1PODS     => { 'bucardo_ctl' => 'blib/man1/bucardo_ctl.1pm' },
     NORECURS     => 1,
-    clean        => { FILES => 'log.bucardo.* *~ *.tmp outgoingmail.* bucardo_test_database*/' },
 );
 
 package MY;

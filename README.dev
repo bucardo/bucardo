@@ -24,7 +24,7 @@ Here is what each file in the distribution does:
 * Text files:
 
 Changes - lists changes made to each version. Please be consistent and use 
-  spaces, not tabs, to indent. Try to list who found the bug, and who 
+  tabs, not spaces, to indent. Try to list who found the bug, and who 
   fixed it (if not the same person). Put the person who made the actual 
   changes in brackets. This file contains a version number.
 
@@ -152,9 +152,11 @@ t/99-yaml.t - Uses Test::YAML::Meta to verify the META.yml file.
 =============
 
 All the perl files should have a cperl pragma at the top of the file, for easy use in emacs. 
-Please use spaces and not tabs everywhere, and keep the indenting to the cperl standard.
+Please use tabs and not spaces everywhere, and keep the indenting to the cperl standard.
 When in doubt, use the guidelines from the Perl Best Practices book, with the following 
 exceptions:
+
+* Use tabs, not spaces. When using spaces, make them 4 characters wide.
 
 ================
 == Test Files ==

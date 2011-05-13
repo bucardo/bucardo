@@ -1,6 +1,6 @@
 
 -- Schema for the main Bucardo database
--- Version 4.4.3
+-- Version 5.0.0
 
 -- Should be run as a superuser
 
@@ -9,7 +9,8 @@
 SET CLIENT_MIN_MESSAGES = 'FATAL';
 CREATE USER bucardo SUPERUSER;
 CREATE DATABASE bucardo OWNER bucardo;
-ALTER USER bucardo SET search_path = bucardo;
+ALTER DATABASE bucardo SET search_path = bucardo, public;
+ALTER USER bucardo SET search_path = bucardo, public;
 SET CLIENT_MIN_MESSAGES = 'WARNING';
 
 \c bucardo bucardo
@@ -20,14 +21,17 @@ CREATE LANGUAGE plpgsql;
 CREATE LANGUAGE plperlu;
 SET client_min_messages = 'ERROR';
 
-\set ON_ERROR_STOP on
-
 SET CLIENT_MIN_MESSAGES = 'FATAL';
 CREATE SCHEMA bucardo;
+DROP SCHEMA freezer;
 CREATE SCHEMA freezer;
+
+\set ON_ERROR_STOP on
+
+BEGIN;
+
 SET CLIENT_MIN_MESSAGES = 'WARNING';
 SET search_path TO bucardo;
-
 SET client_min_messages   = 'WARNING';
 SET escape_string_warning = 'OFF';
 
@@ -38,8 +42,6 @@ LANGUAGE plperlu
 AS $bc$
 return 'Pl/PerlU was successfully installed';
 $bc$;
-
-SELECT plperlu_test();
 
 --
 -- Main bucardo configuration information
@@ -52,8 +54,9 @@ CREATE TABLE bucardo.bucardo_config (
   name     TEXT            NULL, -- which specific sync or goat
   cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.bucardo_config IS $$Contains configuration variables for a specific Bucardo instance$$;
 
-CREATE UNIQUE INDEX bucardo_config_unique ON bucardo.bucardo_config(setting) WHERE name IS NULL;
+CREATE UNIQUE INDEX bucardo_config_unique ON bucardo.bucardo_config(LOWER(setting)) WHERE name IS NULL;
 
 CREATE UNIQUE INDEX bucardo_config_unique_name ON bucardo.bucardo_config(setting,name,type) WHERE name IS NOT NULL;
 
@@ -91,13 +94,13 @@ CREATE TRIGGER check_bucardo_config
 COPY bucardo.bucardo_config(setting,value,about)
 FROM STDIN
 WITH DELIMITER '|';
-mcp_loop_sleep|0.1|How long does the main MCP daemon sleep between loops?
+mcp_loop_sleep|0.5|How long does the main MCP daemon sleep between loops?
 mcp_dbproblem_sleep|15|How many seconds to sleep before trying to respawn
-ctl_nothingfound_sleep|0.2|How long does the controller loop sleep if nothing is found?
-kid_nothingfound_sleep|0.3|How long does a kid sleep if nothing is found?
-kid_nodeltarows_sleep|0.8|How long do kids sleep if no delta rows are found?
+ctl_sleep|0.5|How long does the controller loop sleep?
+kid_sleep|0.5|How long does a kid loop sleep?
+kid_nodeltarows_sleep|0.5|How long do kids sleep if no delta rows are found?
 kid_serial_sleep|10|How long to sleep in seconds if we hit a serialization error
-kid_abort_sleep|1|How long to sleep in seconds when adding back an aborted sync?
+kid_restart_sleep|1|How long to sleep in seconds when restarting a kid?
 endsync_sleep|1.0|How long do we sleep when custom code requests an endsync?
 \.
 
@@ -107,10 +110,8 @@ COPY bucardo.bucardo_config(setting,value,about)
 FROM STDIN
 WITH DELIMITER '|';
 mcp_pingtime|60|How often do we ping check the MCP?
-ctl_pingtime|600|How often do we ping check the CTL?
 kid_pingtime|60|How often do we ping check the KID?
 ctl_checkonkids_time|10|How often does the controller check on the kids health?
-ctl_checkabortedkids_time|30|How often does the controller check the q table for aborted children?
 ctl_createkid_time|0.5|How long do we sleep to allow kids-on-demand to get on their feet?
 tcp_keepalives_idle|0|How long to wait between each keepalive probe.
 tcp_keepalives_interval|0|How long to wait for a response to a keepalive probe.
@@ -121,12 +122,14 @@ tcp_keepalives_count|0|How many probes to send. 0 indicates sticking with system
 COPY bucardo.bucardo_config(setting,value,about)
 FROM STDIN
 WITH DELIMITER '|';
-audit_pid|0|Do we populate the audit_pid table or not?
-log_showpid|0|Show PID in the log output?
-log_showtime|3|Show timestamp in the log output?  0=off  1=seconds since epoch  2=scalar gmtime  3=scalar localtime
+log_microsecond|0|Show microsecond output in the timestamps?
+log_showpid|1|Show PID in the log output?
+log_showlevel|0|Show log level in the log output?
 log_showline|0|Show line number in the log output?
+log_showtime|3|Show timestamp in the log output?  0=off  1=seconds since epoch  2=scalar gmtime  3=scalar localtime
 log_conflict_details|0|Log detailed conflict data?
 log_conflict_file|bucardo_conflict.log|Name of the conflict detail log file
+log_level|NORMAL|How verbose to make the logging. Higher is more verbose.
 warning_file|bucardo.warning.log|File containing all log lines starting with "Warning"
 \.
 
@@ -134,8 +137,8 @@ warning_file|bucardo.warning.log|File containing all log lines starting with "Wa
 COPY bucardo.bucardo_config(setting,value,about)
 FROM STDIN
 WITH DELIMITER '|';
-bucardo_version|4.4.3|Bucardo version this schema was created with
-bucardo_current_version|4.4.3|Current version of Bucardo
+bucardo_version|5.0.0|Bucardo version this schema was created with
+bucardo_current_version|5.0.0|Current version of Bucardo
 \.
 
 -- Other settings:
@@ -145,7 +148,9 @@ WITH DELIMITER '|';
 default_email_from|nobody@example.com|Who the alert emails are sent as
 default_email_to|nobody@example.com|Who to send alert emails to
 default_email_host|localhost|Which host to send email through
+default_standard_conflict|bucardo_latest|Default conflict method for all syncs
 email_debug_file||File to save a copy of all outgoing emails to
+flatfile_dir|.|Directory to store the flatfile output inside of
 host_safety_check||Regex to make sure we don't accidentally run where we should not
 kid_abort_limit|3|How many times we will restore an aborted kid before giving up?
 max_delete_clause|200|Maximum number of items to delete inside of IN() clauses
@@ -155,6 +160,12 @@ reason_file|bucardo.restart.reason.log|File to hold reasons for stopping and sta
 stats_script_url|http://www.bucardo.org/|Location of the stats script
 stopfile|fullstopbucardo|Name of the semaphore file used to stop Bucardo processes
 syslog_facility|LOG_LOCAL1|Which syslog facility level to use
+\.
+
+-- Unused at the moment:
+COPY bucardo.bucardo_config(setting,value,about)
+FROM STDIN
+WITH DELIMITER '|';
 autosync_ddl|newcol|Which DDL changing conditions do we try to remedy automatically?
 \.
 
@@ -164,8 +175,9 @@ autosync_ddl|newcol|Which DDL changing conditions do we try to remedy automatica
 CREATE TABLE bucardo.db (
   name                 TEXT        NOT NULL,  -- local name for convenience, not necessarily database name
                          CONSTRAINT db_name_pk PRIMARY KEY (name),
+  dbtype               TEXT        NOT NULL DEFAULT 'postgres',
   dbhost               TEXT        NOT NULL DEFAULT '',
-  dbport               TEXT        NOT NULL DEFAULT 5432,
+  dbport               TEXT        NOT NULL DEFAULT '',
   dbname               TEXT        NOT NULL,
   dbuser               TEXT        NOT NULL,
   dbpass               TEXT            NULL,
@@ -176,10 +188,15 @@ CREATE TABLE bucardo.db (
   sourcelimit          SMALLINT    NOT NULL DEFAULT 0, -- maximum concurrent read connections to this database
   targetlimit          SMALLINT    NOT NULL DEFAULT 0, -- maximum concurrent write connections to this database
   server_side_prepares BOOLEAN     NOT NULL DEFAULT 'true',
+  makedelta            BOOLEAN     NOT NULL DEFAULT 'false',
   cdate                TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE UNIQUE INDEX db_dsn_unique ON bucardo.db(dbhost,dbport,dbname,dbuser) WHERE NOT name ~ '^bctest';
+COMMENT ON TABLE bucardo.db IS $$Holds information about each database used in replication$$;
+
 ALTER TABLE bucardo.db ADD CONSTRAINT db_status CHECK (status IN ('active','inactive'));
+
+CREATE UNIQUE INDEX db_dsn_unique ON bucardo.db(dbhost,dbport,dbname,dbuser) WHERE NOT name ~ '^bctest' AND dbport <> '';
+
 
 --
 -- Databases can belong to zero or more named groups
@@ -189,15 +206,21 @@ CREATE TABLE bucardo.dbgroup (
               CONSTRAINT dbgroup_name_pk PRIMARY KEY (name),
   cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.dbgroup IS $$Named groups of databases: used as 'targetgroup' for syncs$$;
 
 CREATE TABLE bucardo.dbmap (
-  db       TEXT        NOT NULL,
-             CONSTRAINT  dbmap_db_fk FOREIGN KEY (db) REFERENCES bucardo.db(name) ON UPDATE CASCADE ON DELETE CASCADE,
-  dbgroup  TEXT        NOT NULL,
-             CONSTRAINT  dbmap_dbgroup_fk FOREIGN KEY (dbgroup) REFERENCES bucardo.dbgroup(name) ON UPDATE CASCADE ON DELETE CASCADE,
-  priority SMALLINT    NOT NULL DEFAULT 0,
-  cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
+  db        TEXT        NOT NULL,
+              CONSTRAINT  dbmap_db_fk FOREIGN KEY (db) REFERENCES bucardo.db(name) ON UPDATE CASCADE ON DELETE CASCADE,
+  dbgroup   TEXT        NOT NULL,
+              CONSTRAINT  dbmap_dbgroup_fk FOREIGN KEY (dbgroup) REFERENCES bucardo.dbgroup(name) ON UPDATE CASCADE ON DELETE CASCADE,
+  priority  SMALLINT    NOT NULL DEFAULT 0,
+  role      TEXT        NOT NULL DEFAULT 'target',
+  gang      SMALLINT    NOT NULL DEFAULT 1,
+  makedelta BOOLEAN         NULL,
+  cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.dbmap IS $$Associates a database with one or more groups$$;
+
 CREATE UNIQUE INDEX dbmap_unique ON bucardo.dbmap(db,dbgroup);
 
 
@@ -213,7 +236,7 @@ CREATE TABLE bucardo.db_connlog (
                 CONSTRAINT db_connlog_status CHECK (status IN ('unknown', 'good', 'down', 'unreachable')),
   version     TEXT            NULL
 );
-
+COMMENT ON TABLE bucardo.db_connlog IS $$Tracks connection attempts to each database when its information changes$$;
 
 --
 -- We need to track each item we want to replicate from or replicate to
@@ -233,11 +256,12 @@ CREATE TABLE bucardo.goat (
   has_delta          BOOLEAN     NOT NULL DEFAULT 'false',
   ping               BOOLEAN         NULL,                 -- overrides sync-level ping
   customselect       TEXT            NULL,
-  makedelta          BOOLEAN         NULL,
-  rebuild_index      SMALLINT    NOT NULL DEFAULT 0,       -- overrides sync-level rebuild_index
-  ghost              BOOLEAN     NOT NULL DEFAULT 'false', -- only drop triggers, do not replicate
   standard_conflict  TEXT            NULL,
+  makedelta          BOOLEAN         NULL,
+  rebuild_index      SMALLINT        NULL DEFAULT 0,       -- overrides sync-level rebuild_index
+  ghost              BOOLEAN     NOT NULL DEFAULT 'false', -- only drop triggers, do not replicate
   analyze_after_copy BOOLEAN     NOT NULL DEFAULT 'true',
+  vacuum_after_copy  BOOLEAN     NOT NULL DEFAULT 'true',
   strict_checking    BOOLEAN     NOT NULL DEFAULT 'true',
   delta_bypass       BOOLEAN     NOT NULL DEFAULT 'false',
   delta_bypass_min   BIGINT          NULL,
@@ -245,6 +269,8 @@ CREATE TABLE bucardo.goat (
   delta_bypass_percent   SMALLINT    NULL,
   cdate              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.goat IS $$Holds information on each table or sequence that may be replicated$$;
+
 ALTER TABLE bucardo.goat ADD CONSTRAINT has_schemaname CHECK (length(schemaname) > 1);
 
 ALTER TABLE bucardo.goat ADD CONSTRAINT valid_reltype CHECK (reltype IN ('table','sequence'));
@@ -253,13 +279,6 @@ ALTER TABLE bucardo.goat ADD CONSTRAINT custom_needs_pkey CHECK (customselect IS
 
 ALTER TABLE bucardo.goat ADD CONSTRAINT pkey_needs_type CHECK (pkey = '' OR pkeytype IS NOT NULL);
 
-ALTER TABLE bucardo.goat ADD CONSTRAINT standard_conflict
-  CHECK (((reltype <> 'table') OR (standard_conflict IS NULL)) OR (standard_conflict 
-  IN ('source','target','skip','random','latest','abort')));
-
-ALTER TABLE bucardo.goat ADD CONSTRAINT standard_conflict_sequence 
-  CHECK (((reltype <> 'sequence') OR (standard_conflict IS NULL)) OR (standard_conflict
-  IN ('source','target','skip','lowest','highest')));
 
 --
 -- Set of filters for each goat.
@@ -278,6 +297,7 @@ CREATE TABLE bucardo.bucardo_custom_trigger (
   status            TEXT        NOT NULL DEFAULT 'active',
   cdate             TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.bucardo_custom_trigger IS $$Used to override the default bucardo_add_delta trigger on a per-table basis$$;
 
 ALTER TABLE bucardo.bucardo_custom_trigger ADD CONSTRAINT type_is_delta_or_trigger CHECK (trigger_type IN ('delta', 'triggerkick'));
 
@@ -293,6 +313,7 @@ CREATE TABLE bucardo.herd (
                CONSTRAINT herd_name_pk PRIMARY KEY (name),
   cdate      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.herd IS $$Named group of tables or sequences from the goat table: used as the 'source' for syncs$$;
 
 --
 -- Goats belong to zero or more herds. In most cases, they will 
@@ -306,6 +327,8 @@ CREATE TABLE bucardo.herdmap (
   priority  SMALLINT    NOT NULL DEFAULT 0,
   cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.herdmap IS $$Associates a goat with one or more herds$$;
+
 CREATE UNIQUE INDEX bucardo_herdmap_unique ON bucardo.herdmap(herd,goat);
 
 CREATE FUNCTION bucardo.herdcheck()
@@ -361,17 +384,14 @@ CREATE TRIGGER herdcheck
 CREATE TABLE bucardo.sync (
   name               TEXT        NOT NULL UNIQUE,
                        CONSTRAINT sync_name_pk PRIMARY KEY (name),
-  source             TEXT        NOT NULL,
-                       CONSTRAINT sync_source_herd_fk FOREIGN KEY (source) REFERENCES bucardo.herd(name) ON UPDATE CASCADE ON DELETE RESTRICT,
-  targetdb           TEXT            NULL,
-                       CONSTRAINT sync_targetdb_fk FOREIGN KEY (targetdb) REFERENCES bucardo.db(name) ON UPDATE CASCADE ON DELETE RESTRICT,
-  targetgroup        TEXT            NULL,
-                       CONSTRAINT sync_targetgroup_fk FOREIGN KEY (targetgroup) REFERENCES bucardo.dbgroup(name) ON UPDATE CASCADE ON DELETE RESTRICT,
-  synctype           TEXT        NOT NULL,
+  herd               TEXT            NULL,
+                       CONSTRAINT sync_herd_fk FOREIGN KEY (herd) REFERENCES bucardo.herd(name) ON UPDATE CASCADE ON DELETE RESTRICT,
+  dbs                TEXT            NULL,
+                       CONSTRAINT sync_dbs_fk FOREIGN KEY (dbs) REFERENCES bucardo.dbgroup(name) ON UPDATE CASCADE ON DELETE RESTRICT,
   stayalive          BOOLEAN     NOT NULL DEFAULT 'true', -- Does the sync controller stay connected?
   kidsalive          BOOLEAN     NOT NULL DEFAULT 'true', -- Do the children stay connected?
+  standard_conflict  TEXT        NOT NULL DEFAULT '',
   usecustomselect    BOOLEAN     NOT NULL DEFAULT 'false',
-  copytype           TEXT        NOT NULL DEFAULT 'copy',
   copyextra          TEXT        NOT NULL DEFAULT '',  -- e.g. WITH OIDS
   deletemethod       TEXT        NOT NULL DEFAULT 'delete',
   limitdbs           SMALLINT    NOT NULL DEFAULT 0,     -- How many databases can sync at once? 0=all
@@ -379,11 +399,11 @@ CREATE TABLE bucardo.sync (
   do_listen          BOOLEAN     NOT NULL DEFAULT false,     -- LISTEN for kicks on source/target database if ! ping
   checktime          INTERVAL        NULL,                   -- How often to check if we've not heard anything?
   status             TEXT        NOT NULL DEFAULT 'active',  -- Possibly CHECK / FK ('stopped','paused','b0rken')
-  makedelta          BOOLEAN     NOT NULL DEFAULT 'false',
+  makedelta          BOOLEAN         NULL,
   rebuild_index      SMALLINT    NOT NULL DEFAULT 0,     -- Load without indexes and then REINDEX table
   priority           SMALLINT    NOT NULL DEFAULT 0,     -- Higher is better
-  txnmode            TEXT        NOT NULL DEFAULT 'SERIALIZABLE',
   analyze_after_copy BOOLEAN     NOT NULL DEFAULT 'true',
+  vacuum_after_copy  BOOLEAN     NOT NULL DEFAULT 'false',
   strict_checking    BOOLEAN     NOT NULL DEFAULT 'true',
   overdue            INTERVAL    NOT NULL DEFAULT '0 seconds'::interval,
   expired            INTERVAL    NOT NULL DEFAULT '0 seconds'::interval,
@@ -393,24 +413,9 @@ CREATE TABLE bucardo.sync (
   maxkicks           INTEGER     NOT NULL DEFAULT 0,         -- force controller and kids to restart
   cdate              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-ALTER TABLE bucardo.sync ADD CONSTRAINT sync_type CHECK (synctype IN ('pushdelta','fullcopy','swap'));
-
-ALTER TABLE bucardo.sync ADD CONSTRAINT sync_copytype CHECK (copytype IN ('insert','copy'));
+COMMENT ON TABLE bucardo.sync IS $$Defines a single replication event from a herd to one or more target databases$$;
 
 ALTER TABLE bucardo.sync ADD CONSTRAINT sync_deletemethod CHECK (deletemethod IN ('truncate', 'delete', 'truncate_cascade'));
-
-CREATE UNIQUE INDEX sync_source_targetdb_type ON bucardo.sync(source, targetdb, synctype);
-
-CREATE UNIQUE INDEX sync_source_targetgroup_type ON bucardo.sync(source, targetgroup, synctype);
-
-ALTER TABLE bucardo.sync ADD CONSTRAINT sync_validtarget CHECK
-  (((targetdb IS NULL) AND (targetgroup IS NOT NULL))
-  OR
-  ((targetdb IS NOT NULL) AND (targetgroup IS NULL)));
-
-ALTER TABLE bucardo.sync ADD CONSTRAINT sync_swap_nogroup CHECK
-  (synctype <> 'swap' OR targetdb IS NOT NULL);
 
 -- Because NOTIFY is broke, make sure our names are simple:
 ALTER TABLE bucardo.db      ADD CONSTRAINT db_name_sane      CHECK (name ~ E'^[a-zA-Z]\\w*$');
@@ -420,135 +425,100 @@ ALTER TABLE bucardo.dbgroup ADD CONSTRAINT dbgroup_name_sane CHECK (name ~ E'^[a
 ALTER TABLE bucardo.sync    ADD CONSTRAINT sync_name_sane
   CHECK (name ~ E'^[a-zA-Z]\\w*$' AND lower(name) NOT IN ('pushdelta','fullcopy','swap'));
 
+-- XXX Separate standard_conflict for sequences?
 
---
--- Track our children
---
-CREATE SEQUENCE bucardo.audit_pid_id_seq;
-CREATE TABLE bucardo.audit_pid (
-  id             INTEGER     NOT NULL DEFAULT nextval('audit_pid_id_seq'),
-  parentid       INTEGER         NULL, -- CTL or MCP id
-  familyid       INTEGER         NULL, -- the MCP id
-  type           TEXT        NOT NULL,
-  sync           TEXT        NOT NULL,
-  source         TEXT            NULL,
-  target         TEXT            NULL,
-  master_backend INT         NOT NULL DEFAULT pg_backend_pid(),
-  source_backend INT             NULL,
-  target_backend INT             NULL,
-  ppid           INTEGER     NOT NULL,
-  pid            INTEGER     NOT NULL,
-  birthdate      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  killdate       TIMESTAMPTZ     NULL,
-  birth          TEXT            NULL,
-  death          TEXT            NULL
-);
-
-
-CREATE UNIQUE INDEX audit_pid_id ON bucardo.audit_pid(id);
-
-CREATE TABLE freezer.old_audit_pid AS SELECT * FROM audit_pid LIMIT 0;
-
---
--- Traffic control for children
---
-CREATE TABLE bucardo.q (
-  sync      TEXT           NULL,
-              CONSTRAINT q_sync_fk FOREIGN KEY (sync) REFERENCES bucardo.sync(name) ON UPDATE CASCADE ON DELETE SET NULL,
-  sourcedb  TEXT           NULL,
-              CONSTRAINT q_sdb_fk FOREIGN KEY (sourcedb) REFERENCES bucardo.db(name) ON UPDATE CASCADE ON DELETE SET NULL,
-  targetdb  TEXT           NULL,
-              CONSTRAINT q_tdb_fk FOREIGN KEY (targetdb) REFERENCES bucardo.db(name) ON UPDATE CASCADE ON DELETE SET NULL,
-  ppid      INTEGER     NOT NULL,
-  pid       INTEGER         NULL,
-  synctype  TEXT            NULL,
-  updates   BIGINT          NULL,
-  inserts   BIGINT          NULL,
-  deletes   BIGINT          NULL,
-  started   TIMESTAMPTZ     NULL,
-  aborted   TIMESTAMPTZ     NULL,
-  whydie    TEXT            NULL,
-  ended     TIMESTAMPTZ     NULL,
+CREATE SEQUENCE bucardo.customcode_id_seq;
+CREATE TABLE bucardo.customcode (
+  id        INTEGER     NOT NULL DEFAULT nextval('customcode_id_seq'),
+              CONSTRAINT customcode_id_pk PRIMARY KEY (id),
+  name      TEXT        NOT NULL UNIQUE,
+  about     TEXT            NULL,
+  whenrun   TEXT        NOT NULL,
+  getdbh    BOOLEAN     NOT NULL DEFAULT 'true',
+  getrows   BOOLEAN     NOT NULL DEFAULT 'false',
+  trigrules BOOLEAN     NOT NULL DEFAULT 'false',
+  src_code  TEXT        NOT NULL,
   cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
--- insert constraint - db and sync not null
--- Can only be one unstarted source->target per sync
-CREATE UNIQUE INDEX q_unique ON bucardo.q (sync,sourcedb,targetdb) WHERE started IS NULL;
+COMMENT ON TABLE bucardo.customcode IS $$Holds Perl subroutines that run via hooks in the replication process$$;
 
-CREATE INDEX q_ppid ON bucardo.q (ppid,pid) WHERE ended IS NULL AND aborted IS NULL;
+ALTER TABLE bucardo.customcode ADD CONSTRAINT customcode_whenrun
+  CHECK (whenrun IN ('before_txn',
+  'before_check_rows',
+  'before_trigger_disable',
+  'after_trigger_disable',
+  'after_table_sync',
+  'exception',
+  'conflict',
+  'before_trigger_enable',
+  'after_trigger_enable',
+  'after_txn',
+  'before_sync',
+  'after_sync'));
 
-CREATE INDEX q_aborted ON bucardo.q(sync) WHERE started IS NOT NULL AND aborted IS NOT NULL AND ended IS NULL;
+CREATE TABLE bucardo.customcode_map (
+  code     INTEGER     NOT NULL,
+             CONSTRAINT customcode_map_code_fk FOREIGN KEY (code) REFERENCES bucardo.customcode(id) ON DELETE CASCADE,
+  sync     TEXT            NULL,
+             CONSTRAINT customcode_map_sync_fk FOREIGN KEY (sync) REFERENCES bucardo.sync(name) ON UPDATE CASCADE ON DELETE SET NULL,
+  goat     INTEGER         NULL,
+             CONSTRAINT customcode_map_goat_fk FOREIGN KEY (goat) REFERENCES bucardo.goat(id) ON DELETE SET NULL,
+  active   BOOLEAN     NOT NULL DEFAULT 'true',
+  priority SMALLINT    NOT NULL DEFAULT 0,
+  cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+COMMENT ON TABLE bucardo.customcode_map IS $$Associates a custom code with one or more syncs or goats$$;
 
-CREATE INDEX q_cleanup ON bucardo.q(cdate) WHERE ended IS NOT NULL OR aborted IS NOT NULL;
+ALTER TABLE bucardo.customcode_map ADD CONSTRAINT customcode_map_syncgoat
+  CHECK (sync IS NULL OR goat IS NULL);
 
-CREATE INDEX q_stathelper ON bucardo.q(cdate, sync) WHERE ended IS NOT NULL;
+CREATE UNIQUE INDEX customcode_map_unique_sync ON bucardo.customcode_map(code,sync) WHERE sync IS NOT NULL;
+CREATE UNIQUE INDEX customcode_map_unique_goat ON bucardo.customcode_map(code,goat) WHERE goat IS NOT NULL;
+
+--
+-- Keep track of syncs as they run: provides instant and historical status information
+--
+CREATE TABLE bucardo.syncrun (
+  sync      TEXT             NULL,
+  deletes   BIGINT       NOT NULL DEFAULT 0,
+  inserts   BIGINT       NOT NULL DEFAULT 0,
+  started   TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  ended     TIMESTAMPTZ      NULL,
+  lastgood  BOOLEAN      NOT NULL DEFAULT 'false',
+  lastbad   BOOLEAN      NOT NULL DEFAULT 'false',
+  lastempty BOOLEAN      NOT NULL DEFAULT 'false',
+  status    TEXT             NULL
+);
+COMMENT ON TABLE bucardo.syncrun IS $$Information about specific runs of syncs$$;
+
+-- Link back to the sync table, but never lose the data even on a sync drop
+ALTER TABLE bucardo.syncrun
+  ADD CONSTRAINT syncrun_sync_fk
+  FOREIGN KEY (sync) REFERENCES bucardo.sync (name)
+  ON UPDATE CASCADE ON DELETE SET NULL;
+
+-- Is essentially a unique index, but we want to avoid any [b]locking
+CREATE INDEX syncrun_sync_started ON syncrun(sync) WHERE ended IS NULL;
+
+-- We often need the last good and last bad for a sync:
+
+CREATE INDEX syncrun_sync_lastgood ON syncrun(sync) WHERE lastgood IS TRUE;
+
+CREATE INDEX syncrun_sync_lastbad ON syncrun(sync) WHERE lastbad IS TRUE;
 
 
-CREATE FUNCTION bucardo.bucardo_q()
-RETURNS TRIGGER 
-LANGUAGE plpgsql
-AS $bc$
-BEGIN
-EXECUTE 'NOTIFY "bucardo_q_'||NEW.sync||'_'||NEW.targetdb||'"';
-RETURN NEW;
-END;
-$bc$;
+--
+-- Keep track of which dbs are currently being used, for traffic control
+--
+CREATE TABLE bucardo.dbrun (
+  sync       TEXT         NOT NULL,
+  dbname     TEXT         NOT NULL,
+  pgpid      SMALLINT     NOT NULL,
+  started    TIMESTAMPTZ  NOT NULL  DEFAULT now()
+);
+COMMENT ON TABLE bucardo.dbrun IS $$Information about which databases are being accessed$$;
 
-CREATE TRIGGER bucardo_q
-  AFTER INSERT ON bucardo.q
-  FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_q();
-
-CREATE TABLE freezer.master_q AS SELECT * FROM q LIMIT 0;
-GRANT SELECT ON freezer.master_q TO PUBLIC;
-
-CREATE FUNCTION bucardo.bucardo_purge_q_table(interval)
-RETURNS BIGINT
-SECURITY DEFINER
-LANGUAGE plpgsql
-AS $bc$
-DECLARE
-  numrows BIGINT;
-  qcount  BIGINT;
-BEGIN
-  RAISE DEBUG 'Purging q table of finished items older than %', $1;
-  INSERT INTO freezer.master_q SELECT * FROM bucardo.q
-    WHERE (ended IS NOT NULL OR aborted IS NOT NULL) AND cdate <= now() - $1;
-  DELETE FROM bucardo.q WHERE cdate <= now() - $1
-    AND (
-         (ended IS NOT NULL AND ended < now())
-         OR
-         (aborted IS NOT NULL AND aborted < now())
-  );
-  GET DIAGNOSTICS numrows := row_count;
-  SELECT count(*) FROM q INTO qcount;
-  RAISE NOTICE 'Rows left in q table: %', qcount;
-  RETURN numrows;
-END;
-$bc$;
-
-CREATE FUNCTION bucardo.bucardo_purge_q_table(text)
-RETURNS BIGINT
-LANGUAGE SQL
-AS $bc$
-SELECT bucardo.bucardo_purge_q_table($1::interval);
-$bc$;
-
-CREATE FUNCTION bucardo.bucardo_purge_q_table()
-RETURNS BIGINT
-LANGUAGE SQL
-AS $bc$
-SELECT bucardo.bucardo_purge_q_table('2 hours'::interval);
-$bc$;
-
-CREATE FUNCTION bucardo.bucardo_purge_q_table(integer)
-RETURNS BIGINT
-LANGUAGE plpgsql
-IMMUTABLE
-AS $bc$
-BEGIN
-RAISE EXCEPTION 'Please use an time interval such as ''2 hours''';
-END;
-$bc$;
+CREATE INDEX dbrun_index ON bucardo.dbrun(sync);
 
 
 CREATE FUNCTION bucardo.table_exists(text,text)
@@ -566,70 +536,32 @@ BEGIN
 END;
 $bc$;
 
--- Called on update to master_q. Creates and populates child tables, empties master_q.
-CREATE OR REPLACE FUNCTION bucardo.populate_child_q_table()
-RETURNS TRIGGER
+
+--
+-- Return a safe/standard name for a table, for use in delta/track namings
+--
+CREATE OR REPLACE FUNCTION bucardo.bucardo_tablename_maker(text)
+RETURNS TEXT
 LANGUAGE plpgsql
-VOLATILE
-SECURITY DEFINER
-AS
-$bc$
+IMMUTABLE
+AS $bc$
 DECLARE
-  myrec RECORD;
-  myst  TEXT;
-  needindex BOOL = false;
-  tablename TEXT;
+  tname ALIAS FOR $1;
+  newname TEXT;
+  hashed TEXT;
 BEGIN
-
-  -- Make sure we have all child tables
-  FOR myrec IN SELECT DISTINCT TO_CHAR(cdate, 'YYYYMMDD') AS t FROM ONLY freezer.master_q LOOP
-    needindex = false;
-    tablename = 'child_q_' || myrec.t;
-    RAISE DEBUG 'Found %', tablename;
-    PERFORM 1 FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace)
-    WHERE n.nspname = 'freezer' AND c.relname = tablename;
-    IF NOT FOUND THEN
-      myst = 'CREATE TABLE freezer.' || tablename ||'() INHERITS (freezer.master_q)';
-      EXECUTE myst;
-      myst = 'GRANT SELECT ON freezer.' || tablename ||' TO public';
-      EXECUTE myst;
-      needindex = TRUE;
-    END IF;
-
-    IF needindex IS FALSE THEN
-      PERFORM 1 FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace)
-      WHERE n.nspname = 'freezer' AND c.relname = tablename||'_daterange';
-      IF NOT FOUND THEN
-        needindex = TRUE;
-      END IF;
-    END IF;
-    IF needindex IS TRUE THEN
-      myst = 'CREATE INDEX '
-             || tablename
-             || '_daterange ON freezer.'
-             || tablename
-             || '(cdate)';
-      EXECUTE myst;
-    END IF;
-
-    -- Move all the rows over!
-    myst = 'INSERT INTO freezer.'
-           || tablename
-           || $$ SELECT * FROM ONLY freezer.master_q WHERE TO_CHAR(cdate,'YYYYMMDD') = $$
-           || quote_literal(myrec.t);
-    EXECUTE myst;
-    myst = $$DELETE FROM ONLY freezer.master_q WHERE TO_CHAR(cdate, 'YYYYMMDD') = $$
-           || quote_literal(myrec.t);
-    EXECUTE myst;
-  END LOOP;
-  RETURN NULL;
-
+  -- Assumes max_identifier_length is 63
+  -- Because even if not, we'll still abbreviate for consistency and portability
+  SELECT INTO newname SUBSTRING(tname FROM 1 FOR 57);
+  IF (newname != tname) THEN
+    SELECT INTO newname SUBSTRING(tname FROM 1 FOR 46)
+      || '!'
+      || SUBSTRING(MD5(tname) FROM 1 FOR 10);
+  END IF;
+  RETURN newname;
 END;
 $bc$;
 
-CREATE TRIGGER populate_child_q_table
-  AFTER INSERT OR UPDATE ON freezer.master_q
-  FOR EACH STATEMENT EXECUTE PROCEDURE bucardo.populate_child_q_table();
 
 --
 -- Return a created connection string from the db table
@@ -640,40 +572,24 @@ LANGUAGE plperlu
 SECURITY DEFINER
 AS $bc$
 
-## Given the name of a db, return a connection string, username, password, and attribs
+## Given the name of a db, return the type, plus type-specific connection information
+## Postgres: a connection string, username, password, and attribs
+## Mongo: foo: bar connection information, one per line
 
-use strict; use warnings; use DBI;
+use strict;
+use warnings;
+use DBI;
 my ($name, $SQL, $rv, $row, %db);
 
 $name = shift;
 
 $name =~ s/'/''/go;
-$SQL = "SELECT * FROM db WHERE name = '$name'";
+$SQL = "SELECT * FROM bucardo.db WHERE name = '$name'";
 $rv = spi_exec_query($SQL);
 if (!$rv->{processed}) {
     elog(ERROR, qq{Error: Could not find a database with a name of $name\n});
 }
 $row = $rv->{rows}[0];
-
-## If there is a dbfile and it exists, it overrides the rest
-## Format = hostname:port:database:username:password
-## http://www.postgresql.org/docs/current/static/libpq-pgpass.html
-
-## We also check for one if no password is given
-if (!defined $row->{dbpass}) {
-    my $passfile = $row->{pgpass} || '';
-    if (open my $pass, "<", $passfile) {
-        ## We only do complete matches
-        my $match = "$row->{dbhost}:$row->{dbport}:$row->{dbname}:$row->{dbuser}";
-        while (<$pass>) {
-            if (/^$match:(.+)/) {
-                $row->{dbpass} = $1;
-                elog(DEBUG, "Found password in pgpass file $passfile for $match");
-                last;
-            }
-        }
-    }
-}
 
 for (qw(host port name user pass conn)) {
     $db{$_} = exists $row->{"db$_"} ? $row->{"db$_"} : '';
@@ -684,19 +600,55 @@ if (defined $db{port} and length $db{port} and $db{port} !~ /^\d+$/) {
     elog(ERROR, qq{Database port must be numeric, but got "$db{port}"\n});
 }
 
-length $db{name} or elog(ERROR, qq{Database name is mandatory\n});
-length $db{user} or elog(ERROR, qq{Database username is mandatory\n});
+my $dbtype = $row->{dbtype} || 'postgres';
 
-my $connstring = "dbi:Pg:dbname=$db{name}";
-$db{host} ||= ''; $db{port} ||= ''; $db{pass} ||= '';
-length $db{host} and $connstring .= ";host=$db{host}";
-length $db{port} and $connstring .= ";port=$db{port}";
-length $db{conn} and $connstring .= ";$db{conn}";
+if ($dbtype eq 'postgres') {
+    ## If there is a dbfile and it exists, it overrides the rest
+    ## Format = hostname:port:database:username:password
+    ## http://www.postgresql.org/docs/current/static/libpq-pgpass.html
 
-my $ssp = $row->{server_side_prepares};
-$ssp = 1 if ! defined $ssp;
+    ## We also check for one if no password is given
+    if (!defined $row->{dbpass}) {
+        my $passfile = $row->{pgpass} || '';
+        if (open my $pass, "<", $passfile) {
+            ## We only do complete matches
+            my $match = "$row->{dbhost}:$row->{dbport}:$row->{dbname}:$row->{dbuser}";
+            while (<$pass>) {
+                if (/^$match:(.+)/) {
+                    $row->{dbpass} = $1;
+                    elog(DEBUG, "Found password in pgpass file $passfile for $match");
+                    last;
+                }
+            }
+        }
+    }
 
-return "$connstring\n$db{user}\n$db{pass}\n$ssp";
+	length $db{name} or elog(ERROR, qq{Database name is mandatory\n});
+	length $db{user} or elog(ERROR, qq{Database username is mandatory\n});
+
+	my $connstring = "dbi:Pg:dbname=$db{name}";
+	$db{host} ||= ''; $db{port} ||= ''; $db{pass} ||= '';
+	length $db{host} and $connstring .= ";host=$db{host}";
+	length $db{port} and $connstring .= ";port=$db{port}";
+	length $db{conn} and $connstring .= ";$db{conn}";
+
+	my $ssp = $row->{server_side_prepares};
+	$ssp = 1 if ! defined $ssp;
+
+	return "$dbtype\n$connstring\n$db{user}\n$db{pass}\n$ssp";
+
+} ## end postgres
+
+if ($dbtype eq 'mongo') {
+   my $connstring = "$dbtype\n";
+   for my $name (qw/ host port user pass /) {
+     defined $db{$name} and length $db{$name} and $connstring .= "$name: $db{$name}\n";
+   }
+   chomp $connstring;
+   return $connstring;
+}
+
+return "Unknown database type: $dbtype";
 
 $bc$;
 
@@ -726,7 +678,13 @@ if (!$rv->{processed}) {
     elog(ERROR, qq{Error: Could not find a database with an name of $name\n});
 }
 $row = $rv->{rows}[0]{bob};
-($db{dsn},$db{user},$db{pass}) = split /\n/ => $row;
+($db{type},$db{dsn},$db{user},$db{pass}) = split /\n/ => $row;
+
+if ($db{type} ne 'postgres') {
+  return '';
+}
+
+
 my $safeconn = "$db{dsn} user=$db{user}"; ## No password for now
 $safeconn =~ s/'/''/go;
 (my $safename = $name) =~ s/'/''/go;
@@ -745,7 +703,10 @@ if ($@ or !$dbh) {
 
 $version = $dbh->{pg_server_version};
 
-# Install plpgsql if not there already
+## Just in case, switch to read/write mode
+$dbh->do('SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE');
+
+## Install plpgsql if not there already
 $SQL = q{SELECT 1 FROM pg_language WHERE lanname = 'plpgsql'};
 my $sth = $dbh->prepare($SQL);
 my $count = $sth->execute();
@@ -784,7 +745,8 @@ return;
 
 $bc$;
 
-CREATE TRIGGER db_change AFTER INSERT OR UPDATE ON bucardo.db
+CREATE TRIGGER db_change
+  AFTER INSERT OR UPDATE ON bucardo.db
   FOR EACH ROW EXECUTE PROCEDURE bucardo.db_change();
 
 --
@@ -838,7 +800,7 @@ if ($old
     and $old->{tablename} eq $new->{tablename}
     and (defined $new->{pkey} and $new->{pkey} eq $old->{pkey})
     ) {
-    #return;
+    return;
 }
 
 (my $safedbname = $dbname) =~ s/'/''/go;
@@ -848,7 +810,11 @@ if (!$rv->{processed}) {
     elog(ERROR, qq{Error: Could not find a database with an name of $dbname\n});
 }
 $row = $rv->{rows}[0]{apple};
-($db{dsn},$db{user},$db{pass},$db{ssp}) = split /\n/ => $row;
+($db{type},$db{dsn},$db{user},$db{pass},$db{ssp}) = split /\n/ => $row;
+
+if ($db{type} ne 'postgres') {
+  elog(INFO, qq{Not checking database of type $db{type}});
+}
 
 elog(DEBUG, "Connecting in validate_goat as $db{dsn} user=$db{user} pid=$$ for table $schema.$table");
 
@@ -974,711 +940,446 @@ CREATE TRIGGER validate_goat
 -- Check that the goat tables are ready and compatible
 --
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- this is spaced so the func starts at line 1000 for debugging help
+
 CREATE OR REPLACE FUNCTION bucardo.validate_sync(text,integer)
 RETURNS TEXT
 LANGUAGE plperlu
 SECURITY DEFINER
 AS
 $bc$
-    use strict; use warnings; use DBI;
 
-    my $syncname = shift;
-    my $force = shift || 0;
-    my ($rv,$SQL,%cache);
+## Connect to all (active) databases used in a sync
+## Verify table structures are the same
+## Add delta relations as needed
 
-    elog(LOG, "Starting validate_sync for $syncname");
+use strict;
+use warnings;
+use DBI;
 
-    ## Connect to source and target(s) and verify that tables exist,
-    ## and are identical. Setup the delta stuff as needed.
+my $syncname = shift;
 
-    ## Grab information about this sync from the database
-    my $safename = $syncname;
-    $safename =~ s/'/''/go;
-    $SQL = "SELECT * FROM sync WHERE name = '$safename'";
-    $rv = spi_exec_query($SQL);
-    if (!$rv->{processed}) {
-        elog(ERROR, "No such sync: $syncname");
-    }
+elog(LOG, "Starting validate_sync for $syncname");
 
-    my $info = $rv->{rows}[0];
-    my $source = $info->{source};
-    $source =~ s/'/''/go;
-    ## Source is always a herd
+## If force is set, we don't hesitate to drop indexes, etc.
+my $force = shift || 0;
 
-    ## Prepare a list of all databases and tables involved in this sync
-    ## We need to verify that the databases are reachable, that the tables exists,
-    ## that the columns match up, and that the delta stuff is set up as needed.
-    my %database;
+## Common vars
+my ($rv,$SQL,%cache,$msg);
 
-    ## Does this herd exist?
-    $SQL = qq{SELECT 1 FROM herd WHERE name = '$source'};
-    $rv = spi_exec_query($SQL);
-    if (!$rv->{processed}) {
-       elog(ERROR, "No such herd: $source");
-    }
+## Grab information about this sync from the database
+(my $safesyncname = $syncname) =~ s/'/''/go;
+$SQL = "SELECT * FROM sync WHERE name = '$safesyncname'";
+$rv = spi_exec_query($SQL);
+if (!$rv->{processed}) {
+    elog(ERROR, "No such sync: $syncname");
+}
 
-    ## Process the source herd
-    $SQL = qq{
+my $info = $rv->{rows}[0];
+
+## Does this herd exist?
+(my $herd = $info->{herd}) =~ s/'/''/go;
+$SQL = qq{SELECT 1 FROM herd WHERE name = '$herd'};
+$rv = spi_exec_query($SQL);
+if (!$rv->{processed}) {
+    elog(ERROR, "No such herd: $herd");
+}
+
+## Grab information on all members of this herd
+$SQL = qq{
         SELECT id, db, schemaname, tablename, pkey, pkeytype, reltype, 
-               standard_conflict, ping AS goatping,
+               ping AS goatping,
                pg_catalog.quote_ident(db)         AS safedb,
                pg_catalog.quote_ident(schemaname) AS safeschema,
                pg_catalog.quote_ident(tablename)  AS safetable,
                pg_catalog.quote_ident(pkey)       AS safepkey
         FROM   goat g, herdmap h
         WHERE  g.id = h.goat
-        AND    h.herd = '$source'
+        AND    h.herd = '$herd'
     };
-    $rv = spi_exec_query($SQL);
-    if (!$rv->{processed}) {
-        elog(WARNING, "Herd has no members: $source");
-        return qq{Herd "$source" for sync "$syncname" has no members: cannot validate};
+$rv = spi_exec_query($SQL);
+if (!$rv->{processed}) {
+    elog(WARNING, "Herd has no members: $herd");
+    return qq{Herd "$herd" for sync "$syncname" has no members: cannot validate};
+}
+
+## Create a simple hash so we can look up the information by schema then table name
+my %goat;
+for my $x (@{$rv->{rows}}) {
+    $goat{$x->{schemaname}}{$x->{tablename}} = $x;
+}
+
+## Grab information from each of the databases
+my %db;
+(my $dbs = $info->{dbs}) =~ s/'/''/go;
+$SQL = qq{
+        SELECT m.db, m.role, pg_catalog.quote_ident(m.db) AS safedb, d.status, d.dbtype
+        FROM   dbmap m
+        JOIN   db d ON (d.name = m.db)
+        WHERE  dbgroup = '$dbs'
+    };
+$rv = spi_exec_query($SQL);
+if (!@{$rv->{rows}}) {
+    elog(ERROR, qq{Could not find a database group of $dbs});
+}
+
+## We also want to count up each type of role
+my %role = (
+    source => 0,
+    target => 0,
+    fullcopy => 0,
+);
+
+for (@{$rv->{rows}}) {
+    $db{$_->{db}} = {
+        safename => $_->{safedb},
+        role => $_->{role},
+        status => $_->{status},
+		dbtype => $_->{dbtype},
+    };
+    $role{$_->{role}}++;
+}
+
+## No source databases? Does not compute!
+if ($role{source} < 1) {
+    die "Invalid database group: at least one database must hav a role of 'source'!\n";
+}
+
+## If we have at least one target (or more than one source), we must have PKs on each table
+my $fullcopyonly = 1;
+if ($role{target} >= 1 or $role{source} > 1) { ## in other words, not just fullcopy
+    $fullcopyonly = 0;
+    for my $schema (sort keys %goat) {
+        for my $table (sort keys %{$goat{$schema}}) {
+            next if $goat{$schema}{$table}{reltype} ne 'table';
+            if (! $goat{$schema}{$table}{pkey}) {
+                elog(ERROR, qq{Table "$schema.$table" must specify a primary key!});
+            }
+        }
+    }
+}
+
+sub run_sql {
+    my ($sql,$dbh) = @_;
+	$sql =~ s/\t/    /gsm;
+    if ($sql =~ /^(\s+)/m) {
+		(my $ws = $1) =~ s/[^ ]//g;
+        my $leading = length($ws);
+        $sql =~ s/^\s{$leading}//gsm;
+    }
+    elog(NOTICE, "SQL: $sql");
+    $dbh->do($sql);
+}
+
+sub fetch1_sql {
+    my ($sql,$dbh,@items) = @_;
+	$sql =~ s/\t/    /gsm;
+    if ($sql =~ /^(\s+)/m) {
+		(my $ws = $1) =~ s/[^ ]//g;
+        my $leading = length($ws);
+        $sql =~ s/^\s{$leading}//gsm;
+    }
+	my $sth = $dbh->prepare($sql);
+	$sth->execute(@items);
+	return $sth->fetchall_arrayref()->[0][0];
+}
+
+## Determine the name of some functions we may need
+my $namelen = length($syncname);
+my $kickfunc = $namelen <= 42
+    ? "bucardo_triggerkick_$syncname" : $namelen <= 56
+    ? "bkick_$syncname"
+    : sprintf 'bucardo_triggerkick_%d', int (rand(88888) + 11111);
+
+## Not used yet, but will allow for selective recreation of various items below
+my %force;
+
+## Open a connection to each active database
+## Create the bucardo superuser if needed
+## Install the plpgsql language if needed
+## We do the source ones first as all their columns must exist on all other databases
+for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source') } keys %db) {
+
+    ## Skip if this database is not active
+    next if $db{$dbname}{status} ne 'active';
+
+	## Skip if this is a flatfile
+	next if $db{$dbname}{dbtype} =~ /flat/;
+
+	## Skip if this is mongodb
+	next if $db{$dbname}{dbtype} =~ /mongo/;
+
+    ## Figure out how to connect to this database
+    my $rv = spi_exec_query("SELECT bucardo.db_getconn('$dbname') AS conn");
+    $rv->{processed} or elog(ERROR, qq{Error: Could not find a database named "$dbname"\n});
+    my ($dbtype,$dsn,$user,$pass,$ssp) = split /\n/ => $rv->{rows}[0]{conn};
+    elog(DEBUG, "Connecting to $dsn as $user inside bucardo_validate_sync for language check");
+    my $dbh;
+    eval {
+        ## Cache this connection so we only have to connect one time
+        $dbh = $cache{dbh}{$dbname} = DBI->connect
+            ($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
+    };
+    if ($@) {
+        ## If the error might be because the bucardo user does not exist yet,
+        ## try again with the postgres user (and create the bucardo user!)
+        if ($@ =~ /"bucardo"/ and $user eq 'bucardo') {
+            elog(DEBUG, 'Failed connection, trying as user postgres');
+            my $tempdbh = DBI->connect($dsn, 'postgres', $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
+            $tempdbh->do('SET TRANSACTION READ WRITE');
+            $tempdbh->do('CREATE USER bucardo SUPERUSER');
+            $tempdbh->commit();
+            $tempdbh->disconnect();
+
+            ## Reconnect the same as above, with the new bucardo user
+            $dbh = $cache{dbh}{$dbname} = DBI->connect
+                ($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
+            warn "Created superuser bucardo on database $dbname\n";
+        } else {
+            ## Any other connection error is a simple exception
+            die $@;
+        }
     }
 
-    ## All the same database, so we can extract it outside of the loop
-    my $sourcedb = $rv->{rows}[0]{db};
-    elog(DEBUG, "Got a sourcedb of $sourcedb for herd of $source");
-    my %sourcetable;
-    my %goat;
-    for my $x (@{$rv->{rows}}) {
-        $sourcetable{$x->{schemaname}}{$x->{tablename}} = $x;
-    }
+    ## If server_side_prepares is off for this database, set it now
+    $ssp or $dbh->{pg_server_prepare} = 0;
 
-    ## Now to get all the target databases (will use schemas/tables from above)
-    my $targetdb;
-    if ($info->{targetdb}) {
-        $targetdb->{$info->{targetdb}} = 'target';
-    }
-    elsif ($info->{targetgroup}) {
-        my $group = $info->{targetgroup};
-        $group =~ s/'/''/go;
-        $SQL = qq{
-            SELECT db, pg_catalog.quote_ident(db) AS safedb
-            FROM   dbmap
-            WHERE  dbgroup = '$group'
+    ## Just in case this database is set to read-only
+    $dbh->do('SET TRANSACTION READ WRITE');
+
+    ## To help comparisons, remove any unknown search_paths
+    $dbh->do('SET LOCAL search_path = pg_catalog');
+
+    ## Prepare some common SQL:
+    my (%sth,$sth,$count,$x,%col);
+
+    ## Does a named schema exist?
+    $SQL = q{SELECT 1 FROM pg_namespace WHERE nspname = ?};
+    $sth{hazschema} = $dbh->prepare($SQL);
+
+    ## Does a named schema/relation exist? Return its OID and kind if so
+    $SQL = q{SELECT relkind,c.oid FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace) }
+        .q{WHERE nspname = ? AND relname = ?};
+    $sth{haztable} = $dbh->prepare($SQL);
+
+    ## Does a named function exist? Don't care about the args
+    $SQL = q{SELECT 1 FROM pg_proc p JOIN pg_namespace n ON (n.oid = p.pronamespace) }
+        .q{WHERE nspname = ? AND proname = ?};
+    $sth{hazfunc} = $dbh->prepare($SQL);
+
+    ## Does a named trigger on a certain table exist?
+    $SQL = q{SELECT 1 FROM pg_trigger WHERE tgrelid = ?::regclass AND tgname = ?};
+    $sth{haztrig} = $dbh->prepare($SQL);
+
+	## Does a named index exist?
+	$SQL = q{SELECT 1 FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace) }
+		.q{WHERE nspname = ? AND relname = ? AND relkind = 'i'};
+	$sth{hazindex} = $dbh->prepare($SQL);
+
+	## Does a named column exist on a specific table?
+	$SQL = q{SELECT 1 FROM pg_attribute WHERE attrelid = ?::regclass AND attname = ?};
+	$sth{hazcol} = $dbh->prepare($SQL);
+
+    ## Given a table oid, return detailed column information
+    $SQL = q{
+            SELECT   attname, quote_ident(attname) AS qattname, atttypid, format_type(atttypid, atttypmod) AS ftype,
+                     attnotnull, atthasdef, attnum,
+                     (SELECT pg_get_expr(adbin, adrelid) FROM pg_attrdef WHERE adrelid=attrelid
+                      AND adnum=attnum AND atthasdef) AS def
+            FROM     pg_attribute
+            WHERE    attrelid = ? AND attnum > 0 AND NOT attisdropped
+            ORDER BY attnum
         };
-        $rv = spi_exec_query($SQL);
-        if (!@{$rv->{rows}}) {
-            elog(ERROR, qq{Could not find a target database group of $info->{targetgroup}});
-        }
-        for (@{$rv->{rows}}) {
-            $targetdb->{$_->{db}} = 'target';
-        }
-    }
-    else {
-        elog(ERROR, "Could not figure out the target for this sync!");
-    }
-    if (! keys %$targetdb) {
-        elog(NOTICE, "No target databases found");
-        return "No target databases found for this sync";
-    }
+    $sth{hazcols} = $dbh->prepare($SQL);
 
-    ## We only want to check active databases
-    my %dbstatus;
-    $SQL = "SELECT name, status FROM db";
-    $rv = spi_exec_query($SQL);
-    for (@{$rv->{rows}}) {
-        $dbstatus{$_->{name}} = $_->{status};
-    }
-    for (keys %$targetdb) {
-        if ($dbstatus{$_} ne 'active') {
-            elog(NOTICE, qq{Skipping inactive target database "$_". This may affect pruning of bucardo_delta});
-            delete $targetdb->{$_};
-        }
-    }
-
-    my $dbs = join "," => map { s/'/''/go; $_; } keys %$targetdb;
-    if (!length $dbs) {
-        elog(NOTICE, "No active databases found for this sync");
-        return "No target databases found";
-    }
-    elog(DEBUG, "Target dbs: $dbs");
-
-    ## If any of these are the source database, bail
-    if (grep { $_ eq $sourcedb } keys %$targetdb) {
-        elog(ERROR, "Source and target databases cannot be the same: $sourcedb");
-    }
-
-    ## Make sure we have the plpgsql language installed for syncs that need it
-    if ($info->{synctype} eq 'pushdelta' or $info->{synctype} eq 'swap') {
-        (my $db = $sourcedb) =~ s/'/''/go;
-        my $rv = spi_exec_query("SELECT bucardo.db_getconn('$db') AS conn");
-        $rv->{processed} or elog(ERROR, qq{Error: Could not find a database named "$db"\n});
-        my ($dsn,$user,$pass,$ssp) = split /\n/ => $rv->{rows}[0]{conn};
-        elog(DEBUG, "Connecting to $dsn as $user inside bucardo_validate_sync for language check");
-        my $dbh = $cache{dbh}{$db} = DBI->connect($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
-        $ssp or $dbh->{pg_server_prepare} = 0;
-        $SQL = q{SELECT COUNT(*) FROM pg_language WHERE lanname = 'plpgsql'};
+    ## Unless we are strictly fullcopy, put plpgsql in place on all source dbs
+    ## We also will need a bucardo schema
+    my $role = $db{$dbname}{role};
+    if ($role eq 'source' and ! $fullcopyonly) {
+        ## Perform the check for plpgsql
+        $SQL = q{SELECT count(*) FROM pg_language WHERE lanname = 'plpgsql'};
         my $count = $dbh->selectall_arrayref($SQL)->[0][0];
-        if (! $count) {
+        if ($count < 1) {
             $dbh->do('CREATE LANGUAGE plpgsql');
             $dbh->commit();
-        }
-    }
-
-    ## Loop through and check each table in turn, setting up as needed.
-
-    my %badtable;
-    for my $schema (sort keys %sourcetable) {
-        TABLE: for my $table (sort keys %{$sourcetable{$schema}}) {
-
-            my $tinfo = $sourcetable{$schema}{$table};
-            $tinfo->{synctype} = $info->{synctype};
-            my $delta = $info->{synctype} =~ /pushdelta|swap/ ? 1 : 0;
-            my $ping = $info->{ping} eq 't' ? 1 : 0;
-            my $columns = bucardo_validate_table(1,$sourcedb,$tinfo,$delta,$ping,$syncname,\%cache,$source,$force);
-            if ($columns == -1) {
-                $badtable{$schema}{$table}=1;
-                next TABLE;
-            }
-
-            $delta = $info->{synctype} =~ /swap/ ? 1 : 0;
-            $ping = $delta;
-            for my $tdb (sort keys %$targetdb) {
-                my $tcolumns = bucardo_validate_table(0,$tdb,$tinfo,$delta,$ping,$syncname,\%cache,$source,$force);
-                if ($columns == -1) {
-                    $badtable{$schema}{$table}=1;
-                    next TABLE;
-                }
-            } ## end each target database
-
-
-        } ## end each source table
-
-    }  ## end each source schema
-
-    ## Remove any tables that were removed from the herd by bucardo_validate_table
-    for my $schema (keys %badtable) {
-        for my $table (keys %{$badtable{$schema}}) {
-            delete $sourcetable{$schema}{$table};
-        }
-    }
-
-    ## Update the bucardo_delta_targets table as needed
-    my $check = "SELECT 1 FROM bucardo.bucardo_delta_targets WHERE tablename=? AND targetdb=?";
-    my $add = "INSERT INTO bucardo.bucardo_delta_targets(tablename,targetdb) VALUES (?,?)";
-    if ($info->{synctype} eq 'swap' or $info->{synctype} eq 'pushdelta') {
-       ## Add all targets to the source
-       my $dbh = $cache{dbh}{$sourcedb};
-       my $sthc = $dbh->prepare($check);
-       my $stha = $dbh->prepare($add);
-       for my $tdb (sort keys %$targetdb) {
-           for my $schema (sort keys %sourcetable) {
-               for my $table (sort keys %{$sourcetable{$schema}}) {
-                   my $toid = $cache{oid}{$sourcedb}{$schema}{$table};
-                   my $ot = $cache{oid}{$tdb}{$schema}{$table};
-                   next if ! defined $ot; ## e.g. a sequence
-                   elog(DEBUG, "Adding oid $toid to source, other is $ot for $schema.$table");
-                   my $count = $sthc->execute($toid,$tdb);
-                   $sthc->finish();
-                   elog(DEBUG, "Checking on $tdb, count was $count");
-                   if ($count != 1) {
-                       $stha->execute($toid,$tdb);
-                       $dbh->commit();
-                   }
-               }
-           }
-       }
-    }
-    if ($info->{synctype} eq 'swap') {
-        ## Add source to the target(s)
-        for my $tdb (sort keys %$targetdb) {
-            my $dbh = $cache{dbh}{$tdb};
-            my $sthc = $dbh->prepare($check);
-            for my $schema (sort keys %sourcetable) {
-                for my $table (sort keys %{$sourcetable{$schema}}) {
-                    my $oid = $cache{oid}{$tdb}{$schema}{$table};
-                    my $count = $sthc->execute($oid,$sourcedb);
-                    $sthc->finish();
-                    elog(DEBUG, "Checking on source $sourcedb, count was $count");
-                    if ($count != 1) {
-                        my $stha = $dbh->prepare($add);
-                        $stha->execute($oid,$sourcedb);
-                        $dbh->commit();
-                    }
-                }
-            }
-        }
-    }
-
-    sub run_sql {
-        my ($sql,$dbh) = @_;
-        if ($sql =~ /^(\s+)/m) {
-            my $leading = length($1);
-            $sql =~ s/^\s{$leading}//gsm;
-            $sql =~ s/\t/    /gsm;
-        }
-        elog(DEBUG, "SQL: $sql");
-        $dbh->do($sql);
-    }
-
-    sub bucardo_validate_table {
-
-        my ($is_source, $db, $info, $delta, $ping, $syncname, $cache, $source, $force) = @_;
-        my ($sth,$SQL);
-
-        my ($schema, $safeschema, $table,  $safetable, $pkey, $safepkey, $safedb, $pkeytype) = @$info{qw(
-           schemaname safeschema  tablename safetable   pkey   safepkey   safedb   pkeytype)};
-
-        elog(DEBUG, "Validate_table for db $db $schema.$table, delta=$delta ping=$ping");
-
-        $db =~ s/'/''/go;
-        my $rv = spi_exec_query("SELECT bucardo.db_getconn('$db') AS conn");
-        $rv->{processed} or elog(ERROR, qq{Error: Could not find a database named "$db"\n});
-        my ($dsn,$user,$pass,$ssp) = split /\n/ => $rv->{rows}[0]{conn};
-        elog(DEBUG, "Connecting to $dsn as $user inside bucardo_validate_sync");
-        my $dbh;
-        if (exists $cache->{dbh}{$db}) {
-            $dbh = $cache->{dbh}{$db};
-            elog(DEBUG, 'Connected to cached version');
-        }
-        else {
-            $cache->{dbh}{$db} = $dbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
-            $ssp or $dbh->{pg_server_prepare}=0;
+            warn "Created language plpgsql on database $dbname\n";
         }
 
-        $dbh->do('SET TRANSACTION READ WRITE');
-        if ($info->{synctype} =~ /swap|delta/ and $info->{reltype} eq 'table') {
-            if (! $pkey) {
-                if (!$force) {
-                    elog(ERROR, qq{Table "$schema.$table" must specify a primary key when using a sync of '$info->{synctype}'});
-                }
-                warn qq{Table "$schema.$table" must specify a primary key when using a sync of '$info->{synctype}'};
-                warn qq{REMOVING TABLE "$schema.$table" from herd "$source"\n};
-                (my $safesource = $source) =~ s/'/''/g;
-                $SQL = "DELETE FROM herdmap WHERE herd='$safesource' AND goat IN (SELECT id FROM goat ".
-                "WHERE schemaname='$safeschema' AND tablename='$safetable')";
-                $rv = spi_exec_query($SQL);
-                return -1;
-            }
-            if (! $pkeytype) {
-                elog(ERROR, qq{Table "$schema.$table" must specify a pkeytype when using a sync of '$info->{synctype}'});
-            }
-            if ($info->{synctype} =~ /swap/) {
-
-                ## Grab a list of any custom conflict handlers
-                $SQL = "SELECT 1 FROM customcode c, customcode_map m ".
-                        "WHERE c.id=m.code AND m.goat=$info->{id} AND active IS TRUE ".
-                        "AND whenrun = 'conflict'";
-                elog(DEBUG, "Running $SQL");
-                my $count = spi_exec_query($SQL)->{processed};
-                if (! $info->{standard_conflict} and ! $count) {
-                    elog(ERROR, qq{Table "$schema.$table" must specify a way to handle conflicts});
-                }
-            }
-        }
-
-        ## Get an inventory of supporting objects
-        my %found;
-
-        ## Make sure this schema/table combo exists!
-        my $oid;
-        $SQL = qq{
-            SELECT c.oid
-            FROM   pg_catalog.pg_class c, pg_catalog.pg_namespace n
-            WHERE  c.relnamespace = n.oid
-            AND    c.relkind = ?
-            AND    n.nspname = ?
-            AND    c.relname = ?
-        };
-        elog(DEBUG, "SQL: $SQL Args: $schema, $table");
-        $sth = $dbh->prepare($SQL);
-        my $count = $sth->execute($info->{reltype} eq 'table' ? 'r' : 'S',$schema,$table);
+        ## Create the bucardo schema as needed
+        $sth = $sth{hazschema};
+        $count = $sth->execute('bucardo');
+        $sth->finish();
         if ($count < 1) {
-            $sth->finish();
-            elog(ERROR, qq{No such $info->{reltype} found for database $db: "$schema.$table"});
+            $dbh->do('CREATE SCHEMA bucardo');
         }
-        $oid = $sth->fetchall_arrayref()->[0][0];
+        my $newschema = $count < 1 ? 1 : 0;
 
-        $cache->{oid}{$db}{$schema}{$table} = $oid;
-
-        return 1 if $info->{reltype} ne 'table';
-
-        ## Make sure it does not have any verboten columns
-        $SQL = qq{
-            SELECT count(*)
-            FROM   pg_catalog.pg_attribute
-            WHERE  attrelid = $oid
-            AND    NOT attisdropped
-            AND    attname ~ '^BUCARDO';
-        };
-        $count = $dbh->selectall_arrayref($SQL)->[0][0];
-        if ($count) {
-            elog(ERROR, qq{Table "$schema.$table" contains a column starting with 'BUCARDO'});
+        ## Create the 'kickfunc' function as needed
+        $newschema and goto KICKFUNC;
+        ## We need a function for the kick notification
+        $sth = $sth{hazfunc};
+        $count = $sth->execute('bucardo',$kickfunc);
+        $sth->finish();
+        if ($count >= 1) {
+            ## We may want to recreate this function
+            if ($force{all} or $force{funcs} or $force{kickfunc}) {
+                $dbh->do(qq{DROP FUNCTION bucardo."$kickfunc"()});
+                $count = 0;
+            }
         }
-
-        $SQL = qq{
-            SELECT count(*)
-            FROM   pg_catalog.pg_namespace
-            WHERE  nspname = ?
-        };
-        $sth = $dbh->prepare($SQL);
-        $sth->execute('bucardo');
-        $found{bc_schema} = $sth->fetchall_arrayref()->[0][0];
-
-        my $func0 = length($syncname) <= 42 ? "bucardo_triggerkick_$syncname" : "bkick_$syncname";
-        my $trigger0 = "bucardo_triggerkick_$syncname";
-
-        ## (if bc_schema exists) Do these triggers exist on this table?
-        my $trigger1 = "bucardo_add_delta";
-        my $trigger2 = "bucardo_add_delta_binary";
-
-        if (!$found{bc_schema}) {
-            $found{trigger0} = $found{trigger1} = $found{trigger2} = 0;
-        }
-        else {
+        if ($count < 1) {
+          KICKFUNC:
+            ## We may override this later on with a custom function from bucardo_custom_trigger
+            ## and we may not even use it all, but no harm in creating the stock one here
+			my $notice = $dbh->{pg_server_version} >= 90000
+			    ? qq{bucardo, 'bucardo_kick_sync_$syncname'}
+                : qq{"bucardo_kick_sync_$syncname"};
             $SQL = qq{
-                SELECT max(t0), max(t1), max(t2)
-                FROM (
-                SELECT
-                  CASE WHEN t.tgname = ? THEN 1 ELSE 0 END AS t0,
-                  CASE WHEN t.tgname = ? THEN 1 ELSE 0 END AS t1,
-                  CASE WHEN t.tgname = ? THEN 1 ELSE 0 END AS t2
-                FROM   pg_catalog.pg_trigger t, pg_catalog.pg_class c, pg_catalog.pg_namespace n
-                WHERE  c.relnamespace = n.oid AND t.tgrelid = c.oid AND c.relkind = 'r'
-                AND    n.nspname = ?
-                AND    c.relname = ?
-                AND    t.tgname  IN (?,?,?)
-              ) foo
-            };
-            elog(DEBUG, "Preparing to check triggers: $SQL");
-            $sth = $dbh->prepare($SQL);
-            $sth->execute($trigger0,$trigger1,$trigger2,$schema,$table,$trigger0,$trigger1,$trigger2);
-            my $x = 0;
-            my $row = $sth->fetchall_arrayref()->[0];
-            for my $val (@$row) {
-                $found{"trigger$x"} = $val;
-                $x++;
-            }
+                  CREATE OR REPLACE FUNCTION bucardo."$kickfunc"()
+                  RETURNS TRIGGER
+                  VOLATILE
+                  LANGUAGE plpgsql
+                  AS \$notify\$
+                  BEGIN
+                    EXECUTE \$nn\$NOTIFY $notice\$nn\$;
+                  RETURN NEW;
+                  END;
+                  \$notify\$;
+                 };
+            run_sql($SQL,$dbh);
         }
 
-        ## If we are not a delta sync, we can jump to the ping part
-        $delta or goto PINGCHECK;
+		## Create the bucardo_tablename_maker function as needed
+		$newschema and goto TMAKER;
+		$sth = $sth{hazfunc};
+		$count = $sth->execute('bucardo', 'bucardo_tablename_maker');
+		$sth->finish();
+		if ($count < 1) {
+		    TMAKER:
+              $SQL = qq{
+                        CREATE FUNCTION bucardo.bucardo_tablename_maker(TEXT)
+RETURNS TEXT
+LANGUAGE plpgsql
+IMMUTABLE
+AS \$clone\$
+DECLARE
+  tname ALIAS FOR \$1;
+  newname TEXT;
+  hashed TEXT;
+BEGIN
+  -- Assumes max_identifier_length is 63
+  -- Because even if not, we'll still abbreviate for consistency and portability
+  SELECT INTO newname SUBSTRING(tname FROM 1 FOR 57);
+  IF (newname != tname) THEN
+    SELECT INTO newname SUBSTRING(tname FROM 1 FOR 46)
+      || '!'
+      || SUBSTRING(MD5(tname) FROM 1 FOR 10);
+  END IF;
+  RETURN newname;
+END;
+\$clone\$;
 
-        ## (if bc_schema exists) Do these supporting functions exist?
-        (my $noquotepkey = $safepkey) =~ s/^"(.+)"$/$1/;
-        my $func1 = length($noquotepkey) <= 45 ? "bucardo_add_delta_$noquotepkey" : "bad_$noquotepkey";
-        if (length $func1 > 63) {
-            $SQL = qq{SELECT 'bucardo_add_delta_'::text || md5('$schema$table$noquotepkey') AS m};
-            $func1 = spi_exec_query($SQL)->{rows}[0]{m};
+          };
+          run_sql($SQL,$dbh);
         }
-        my $func2 = length($noquotepkey) <= 38 ? "bucardo_add_delta_binary_$noquotepkey" : "badb_$noquotepkey";
-        if (length $func2 > 63) {
-            $SQL = qq{SELECT 'bucardo_add_delta_b_'::text || md5('$schema$table$noquotepkey') AS m};
-            $func2 = spi_exec_query($SQL)->{rows}[0]{m};
-        }
-        my $func3 = 'bucardo_purge_delta';
-        my $func4 = 'bucardo_compress_delta';
-        my $func5 = 'bucardo_audit';
-        if ($safepkey =~ /^"/) {
-           $func1 = qq{"$func1"};
-           $func2 = qq{"$func2"};
-        }
+              
 
-        if (!$found{bc_schema}) {
-            $found{func0} = $found{func1} = $found{func2} = $found{func3} = 
-            $found{func4} = $found{func5} = 0;
-        }
-        else {
+        ## Create the bucardo_delta_targets table as needed
+        $newschema and goto DELTAT;
+        $sth = $sth{haztable};
+        $count = $sth->execute('bucardo', 'bucardo_delta_targets');
+        $sth->finish();
+        if ($count < 1) {
+          DELTAT:
             $SQL = qq{
-                SELECT max(f0), max(f1), max(f2), max(f3), max(f4), max(f5)
-                FROM (
-                SELECT
-                  CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f0,
-                  CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f1,
-                  CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f2,
-                  CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f3,
-                  CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f4,
-                  CASE WHEN p.proname = ? THEN 1 ELSE 0 END AS f5
-                FROM   pg_catalog.pg_proc p, pg_catalog.pg_namespace n
-                WHERE  p.pronamespace = n.oid
-                AND    n.nspname = ?
-                AND    p.proname IN (?,?,?,?,?,?)
-            ) foo
-            };
-            elog(DEBUG, "Preparing to check functions: $SQL");
-            $sth = $dbh->prepare($SQL);
-            $sth->execute($func0,$func1,$func2,$func3,$func4,$func5,'bucardo',$func0,$func1,$func2,$func3,$func4,$func5);
-            my $x = 0;
-            my $row = $sth->fetchall_arrayref()->[0];
-            for my $val (@$row) {
-                $found{"func$x"} = $val;
-                $x++;
-            }
-        }
-
-        ## (if bc_schema exists) Does this table exist?
-
-        if (!$found{bc_schema}) {
-            $found{bucardo_delta} = $found{bucardo_track} = $found{bucardo_delta_targets}
-            = $found{bucardo_truncate_trigger} = $found{bucardo_truncate_trigger_log}
-            = $found{bucardo_sequences} = 0;
-        }
-        else {
-            $SQL = qq{
-                SELECT max(t1), max(t2), max(t3), max(t4), max(t5), max(t6)
-                FROM (
-                SELECT
-                  CASE WHEN c.relname = 'bucardo_delta' THEN 1 ELSE 0 END AS t1,
-                  CASE WHEN c.relname = 'bucardo_track' THEN 1 ELSE 0 END AS t2,
-                  CASE WHEN c.relname = 'bucardo_delta_targets' THEN 1 ELSE 0 END AS t3,
-                  CASE WHEN c.relname = 'bucardo_truncate_trigger' THEN 1 ELSE 0 END AS t4,
-                  CASE WHEN c.relname = 'bucardo_truncate_trigger_log' THEN 1 ELSE 0 END AS t5,
-                  CASE WHEN c.relname = 'bucardo_sequences' THEN 1 ELSE 0 END AS t6
-                FROM   pg_catalog.pg_class c, pg_catalog.pg_namespace n
-                WHERE  c.relnamespace = n.oid
-                AND    c.relkind = 'r'
-                AND    n.nspname = 'bucardo'
-                AND    c.relname IN (?,?,?,?,?,?)
-                ) foo
-            };
-            elog(DEBUG, "Preparing to check tables: $SQL");
-            $sth = $dbh->prepare($SQL);
-            $sth->execute('bucardo_delta','bucardo_track','bucardo_delta_targets','bucardo_truncate_trigger','bucardo_truncate_trigger_log','bucardo_sequences');
-            my $row = $sth->fetchall_arrayref()->[0];
-            $found{'bucardo_delta'} = $row->[0];
-            $found{'bucardo_track'} = $row->[1];
-            $found{'bucardo_delta_targets'} = $row->[2];
-            $found{'bucardo_truncate_trigger'} = $row->[3];
-            $found{'bucardo_truncate_trigger_log'} = $row->[4];
-            $found{'bucardo_sequences'} = $row->[5];
-        }
-
-        ## (if bucardo_delta exists) Do these indexes exist?
-        my $index1 = "bucardo_delta_${schema}_${table}_txn";
-        my $l = length $index1;
-        if ($l > 63) {
-            if ($l <= 67) {
-                $index1 = "bucardo_d_${schema}_${table}_txn";
-            }
-            elsif ($l <= 69) {
-                $index1 = "bucardo_d_${schema}_${table}_t";
-            }
-            elsif ($l <= 76) {
-                $index1 = "b_d_${schema}_${table}_t";
-            }
-            else {
-                $index1 = "bucardo_delta_" . int(rand 9999999999);
-            }
-        }
-        my $index2 = "bucardo_delta_${schema}_${table}_rowid";
-        $l = length $index2;
-        if ($l > 63) {
-            if ($l <= 67) {
-                $index2 = "bucardo_d_${schema}_${table}_rowid";
-            }
-            elsif ($l <= 71) {
-                $index2 = "bucardo_d_${schema}_${table}_r";
-            }
-            elsif ($l <= 78) {
-                $index2 = "b_d_${schema}_${table}_r";
-            }
-            else {
-                $index2 = "bucardo_delta_" . int(rand 9999999999);
-            }
-        }
-        my $index3 = "bucardo_track_target";
-        my $index4 = "bucardo_delta_targetdb_unique";
-        my $index5 = "bucardo_delta_txntime";
-        my $safeindex1 = $index1;
-        if ($safeindex1 =~ s/"/""/g or $safeindex1 =~ / /) {
-            $safeindex1 = qq{"$safeindex1"};
-        }
-
-        if (!$found{bucardo_delta}) {
-            $found{index1} = $found{index2} = $found{index3} = $found{index4} = $found{index5} = 0;
-        }
-        else {
-            $SQL = qq{
-                SELECT max(i1), max(i2), max(i3), max(i4), max(i5)
-                FROM (
-                SELECT
-                  CASE WHEN c.relname = ? THEN 1 ELSE 0 END AS i1,
-                  CASE WHEN c.relname = ? THEN 1 ELSE 0 END AS i2,
-                  CASE WHEN c.relname = ? THEN 1 ELSE 0 END AS i3,
-                  CASE WHEN c.relname = ? THEN 1 ELSE 0 END AS i4,
-                  CASE WHEN c.relname = ? THEN 1 ELSE 0 END AS i5
-                FROM   pg_catalog.pg_class c, pg_catalog.pg_namespace n
-                WHERE  c.relnamespace = n.oid
-                AND    c.relkind = 'i'
-                AND    n.nspname = ?
-                AND    c.relname IN (?,?,?,?,?)
-                ) foo
-            };
-            elog(DEBUG, "Preparing to check indexes: $SQL");
-            $sth = $dbh->prepare($SQL);
-            $sth->execute($index1,$index2,$index3,$index4,$index5,'bucardo',$index1,$index2,$index3,$index4,$index5);
-            my $x = 1;
-            my $row = $sth->fetchall_arrayref()->[0];
-            for my $val (@$row) {
-                $found{"index$x"} = $val;
-                $x++;
-            }
-        }
-
-      PINGCHECK:
-        ## Goat-level ping overrides the sync-level ping - source only
-        if (defined $info->{goatping} and $is_source) {
-            $ping = $info->{goatping} eq 't' ? 1 : 0;
-            elog(DEBUG, "Got goatping as $info->{goatping}, force ping to $ping");
-        }
-
-        ## If this is not set as ping, remove the trigger - the only one safe to remove
-        if (!$ping and $found{trigger0}) {
-            run_sql(qq{DROP TRIGGER "$trigger0" ON $safeschema.$safetable}, $dbh);
-        }
-
-        ## Schema is needed for both ping and delta
-        if (($ping or $delta) and !$found{bc_schema}) {
-            run_sql('CREATE SCHEMA bucardo', $dbh);
-        }
-
-        ## Ping needs a special function and trigger
-        if ($ping) {
-            my $custom_trigger_level;
-            my $custom_function_name;
-            $SQL = qq{SELECT trigger_language,trigger_body,trigger_level FROM bucardo_custom_trigger
-                      WHERE goat=$info->{id}
-                      AND status='active'
-                      AND trigger_type='triggerkick' };
-            elog(DEBUG, "Running $SQL");
-            $rv = spi_exec_query($SQL);
-                
-            if (!$found{func0} or $force or $rv->{processed}) {
-
-                if ($rv->{processed}) {
-                    $custom_function_name = $func0 . "_" . $info->{tablename};
-                    $custom_trigger_level = $rv->{rows}[0]{trigger_level};
-                    $SQL = qq{
-                        CREATE OR REPLACE FUNCTION bucardo."$custom_function_name"()
-                        RETURNS TRIGGER 
-                        LANGUAGE $rv->{rows}[0]{trigger_language}
-                        AS \$notify\$
-                    };
-                    $SQL .= qq{ $rv->{rows}[0]{trigger_body} };
-                    $SQL .= qq{ \$notify\$; };
-                } 
-                else {
-                    $SQL = qq{
-                        CREATE OR REPLACE FUNCTION bucardo."$func0"()
-                        RETURNS TRIGGER 
-                        LANGUAGE plpgsql
-                        AS \$notify\$
-                        BEGIN
-                          EXECUTE 'NOTIFY "bucardo_kick_sync_$syncname"';
-                          IF TG_OP = 'TRUNCATE' THEN
-                            INSERT INTO bucardo.bucardo_truncate_trigger(tablename,sname,tname,sync)
-                            VALUES (TG_RELID, TG_TABLE_SCHEMA, TG_TABLE_NAME, '$syncname');
-                          END IF;
-                        RETURN NEW;
-                        END;
-                        \$notify\$;
-                    };
-                }
-                run_sql($SQL,$dbh);
-            }
-            if (!$found{trigger0}) {
-                my $ttrig = $dbh->{pg_server_version} >= 80400 ? ' OR TRUNCATE' : '';
-                if ($custom_trigger_level && $custom_function_name) {
-                    $SQL = qq{
-                        CREATE TRIGGER "$trigger0"
-                        AFTER INSERT OR UPDATE OR DELETE$ttrig ON $safeschema.$safetable
-                        FOR EACH $custom_trigger_level EXECUTE PROCEDURE bucardo."$custom_function_name"()
-                    };
-                }
-                else {
-                    $SQL = qq{
-                        CREATE TRIGGER "$trigger0"
-                        AFTER INSERT OR UPDATE OR DELETE$ttrig ON $safeschema.$safetable
-                        FOR EACH STATEMENT EXECUTE PROCEDURE bucardo."$func0"()
-                    };
-                }
-                run_sql($SQL,$dbh);
-            }
-        }
-
-        ## If this is not a delta, clean up what we can
-        if (!$delta) {
-            if ($found{bucardo_delta}) {
-                elog(DEBUG, "Warning! NOT removing rows from bucardo.bucardo_delta where tablename=$oid ($table)");
-            }
-            if ($found{'bucardo_track'}) {
-                elog(DEBUG, "Warning! NOT removing rows from bucardo.bucardo_track where tablename=$oid ($table)");
-            }
-            $found{index1} and elog(DEBUG, "Warning! NOT removing index bucardo.$safeindex1");
-            $found{trigger1} and elog(DEBUG, "Warning! NOT removing trigger $trigger1 from $safeschema.$safetable");
-            $found{trigger2} and elog(DEBUG, "Warning! NOT removing trigger $trigger2 from $safeschema.$safetable");
-
-            ## Clean up the functions if nobody else is using them
-            if ($found{func1} or $found{func2}) {
-                $SQL = qq{
-                    SELECT count(*)
-                    FROM   pg_catalog.pg_trigger
-                    WHERE  tgfoid = (
-                        SELECT oid
-                        FROM   pg_proc
-                        WHERE  proname = ?
-                        AND    pronamespace = (SELECT oid FROM pg_catalog.pg_namespace WHERE nspname = ?)
-                    )
-                };
-                elog(DEBUG, "SQL: $SQL");
-                $sth = $dbh->prepare($SQL);
-                if ($found{func1}) {
-                    $sth->execute($func1,'bucardo');
-                    if (! $sth->fetchall_arrayref()->[0][0]) {
-                        elog(DEBUG, "Warning! NOT removing function bucardo.$func1()");
-                    }
-                }
-                if ($found{func2}) {
-                    $sth = $dbh->prepare($SQL);
-                    $sth->execute($func2,'bucardo');
-                    if (! $sth->fetchall_arrayref()->[0][0]) {
-                        elog(DEBUG, "Warning! NOT removing function bucardo.$func2()");
-                    }
-                }
-            }
-        } ## end if not delta
-        else {
-
-            my @pkeys = split (/\|/ => $pkey);
-            my $numpkeys = @pkeys;
-
-            if (! $found{bucardo_delta}) {
-                $SQL = qq{
-                    CREATE TABLE bucardo.bucardo_delta (
-                        tablename  OID         NOT NULL,
-                        rowid      TEXT        NOT NULL,
-                        txntime    TIMESTAMPTZ NOT NULL DEFAULT now()
-                    );
-                };
-                run_sql($SQL,$dbh);
-                for (2..$numpkeys) {
-                    $SQL = "ALTER TABLE bucardo.bucardo_delta ADD rowid$_ TEXT NULL";
-                    run_sql($SQL,$dbh);
-                }
-            }
-            if (! $found{'bucardo_track'}) {
-                $SQL = qq{
-                    CREATE TABLE bucardo.bucardo_track (
-                        txntime    TIMESTAMPTZ NOT NULL,
-                        tablename  OID         NOT NULL,
-                        targetdb   TEXT        NOT NULL
-                    );
-                };
-                run_sql($SQL,$dbh);
-            }
-            if (! $found{bucardo_delta_targets}) {
-                $SQL = qq{
                     CREATE TABLE bucardo.bucardo_delta_targets (
                         tablename  OID         NOT NULL,
                         targetdb   TEXT        NOT NULL,
                         cdate      TIMESTAMPTZ NOT NULL DEFAULT now()
                     );
                 };
-                run_sql($SQL,$dbh);
-            }
-            if (! $found{bucardo_truncate_trigger}) {
-                $SQL = qq{
+            run_sql($SQL,$dbh);
+        }
+
+        ## Create the bucardo_note_truncation function as needed
+        $sth = $sth{hazfunc};
+        $count = $sth->execute('bucardo', 'bucardo_note_truncation');
+        $sth->finish();
+        if ($count < 1) {
+            $SQL = qq{
+                  CREATE OR REPLACE FUNCTION bucardo.bucardo_note_truncation()
+                  RETURNS TRIGGER
+                  LANGUAGE plpgsql
+                  SECURITY DEFINER
+                  AS \$clone\$
+                  BEGIN
+                    INSERT INTO bucardo.bucardo_truncate_trigger(tablename,sname,tname,sync)
+                    VALUES (TG_RELID, TG_TABLE_SCHEMA, TG_TABLE_NAME, TG_ARGV[0]);
+                    RETURN NEW;
+                  END;
+                  \$clone\$;
+                };
+            run_sql($SQL,$dbh);
+        }
+
+        ## Create the bucardo_truncate_trigger table as needed
+        $newschema and goto TRUNCATET;
+        $sth = $sth{haztable};
+        $count = $sth->execute('bucardo', 'bucardo_truncate_trigger');
+        $sth->finish();
+        if ($count < 1) {
+          TRUNCATET:
+            $SQL = qq{
                     CREATE TABLE bucardo.bucardo_truncate_trigger (
                         tablename   OID         NOT NULL,
                         sname       TEXT        NOT NULL,
@@ -1688,15 +1389,21 @@ $bc$
                         cdate       TIMESTAMPTZ NOT NULL DEFAULT now()
                     );
                 };
-                run_sql($SQL,$dbh);
+            run_sql($SQL,$dbh);
 
-                $SQL = q{CREATE INDEX bucardo_truncate_trigger_index ON }
-                     . q{bucardo.bucardo_truncate_trigger (sync, tablename) WHERE replicated IS NULL};
-                run_sql($SQL,$dbh);
+            $SQL = q{CREATE INDEX bucardo_truncate_trigger_index ON }
+                . q{bucardo.bucardo_truncate_trigger (sync, tablename) WHERE replicated IS NULL};
+            run_sql($SQL,$dbh);
+        }
 
-            }
-            if (! $found{bucardo_truncate_trigger_log}) {
-                $SQL = qq{
+        ## Create the bucardo_truncate_trigger_log table as needed
+        $newschema and goto TTLOG;
+        $sth = $sth{haztable};
+        $count = $sth->execute('bucardo', 'bucardo_truncate_trigger_log');
+        $sth->finish();
+        if ($count < 1) {
+          TTLOG:
+            $SQL = qq{
                     CREATE TABLE bucardo.bucardo_truncate_trigger_log (
                         tablename   OID         NOT NULL,
                         sname       TEXT        NOT NULL,
@@ -1707,206 +1414,17 @@ $bc$
                         cdate       TIMESTAMPTZ NOT NULL DEFAULT now()
                     );
                 };
-                run_sql($SQL,$dbh);
+            run_sql($SQL,$dbh);
+        }
 
-                $SQL = q{CREATE INDEX bucardo_truncate_trigger_log_index ON }
-                     . q{bucardo.bucardo_truncate_trigger_log (sync,targetdb,replicated)};
-                run_sql($SQL,$dbh);
-            }
-            if (! $found{bucardo_sequences}) {
-                $SQL = qq{
-                    CREATE TABLE bucardo.bucardo_sequences (
-                        tablename   OID         NOT NULL,
-                        value       BIGINT      NOT NULL,
-                        iscalled    BOOL        NOT NULL
-                    );
-                };
-                run_sql($SQL,$dbh);
-
-                $SQL = q{CREATE UNIQUE INDEX bucardo_sequences_tablename ON }
-                     . q{bucardo.bucardo_sequences (tablename)};
-                run_sql($SQL,$dbh);
-            }
-            if ($force) {
-                if ($found{index1}) {
-                    elog(DEBUG, qq{Dropping index "$safeindex1"});
-                    $dbh->do(qq{DROP INDEX bucardo."$safeindex1"});
-                    $found{index1} = 0;
-                }
-                if ($found{index2}) {
-                    elog(DEBUG, qq{Dropping index "$index2"});
-                    $dbh->do(qq{DROP INDEX bucardo."$index2"});
-                    $found{index2} = 0;
-                }
-            }
-            if (! $found{index1}) {
-                $dbh->do(qq{CREATE INDEX "$safeindex1" ON bucardo.bucardo_delta(txntime) WHERE tablename = $oid});
-            }
-            for (2..$numpkeys) {
-                my $colname = "rowid$_";
-                $SQL = "SELECT count(*) FROM pg_catalog.pg_attribute a, pg_class c, pg_namespace n ".
-                    "WHERE c.relnamespace = n.oid AND n.nspname = 'bucardo' AND a.attrelid = c.oid ".
-                    "AND c.relname = 'bucardo_delta' AND a.attname = '$colname'";
-                $count = $dbh->selectall_arrayref($SQL)->[0][0];
-                if ($count != 1) {
-                    $SQL = "ALTER TABLE bucardo.bucardo_delta ADD $colname TEXT NULL";
-                    $dbh->do($SQL);
-                }
-            }
-            if (! $found{index2}) {
-                my @pkeytypes = split (/\|/ => $pkeytype);
-                if (1 == @pkeytypes) {
-                    my $safepkeytype = $pkeytype =~ /timestamptz|timestamp|date|bytea/ ? 'text' : $pkeytype;
-                    elog(DEBUG, "Create index $index2 on bucardo_delta(rowid::$safepkeytype)");
-                    $dbh->do(qq{CREATE INDEX "$index2" ON bucardo.bucardo_delta((rowid::$safepkeytype)) WHERE tablename = $oid});
-                }
-                else {
-                    my $x = 0;
-                    my $multicol = join ',' => map { s{timestamptz|timestamp|date|bytea}{text}; $x++; 
-                        sprintf "(rowid%s::$_)", $x<2 ? '' : $x; } split (/\|/ => $pkeytype);
-                    elog(DEBUG, "Creating index on $multicol");
-                    $dbh->do(qq{CREATE INDEX "$index2" ON bucardo.bucardo_delta($multicol) WHERE tablename = $oid});
-                }
-            }
-            if (! $found{index3}) {
-                $dbh->do(qq{CREATE INDEX "$index3" ON bucardo.bucardo_track(tablename,txntime,targetdb)});
-            }
-            if (! $found{index4}) {
-                $dbh->do(qq{CREATE UNIQUE INDEX "$index4" ON bucardo.bucardo_delta_targets(tablename,targetdb)});
-            }
-            if (! $found{index5}) {
-                $dbh->do(qq{CREATE INDEX "$index5" ON bucardo.bucardo_delta(txntime)});
-            }
-            my $rowids = 'rowid';
-            for (2..$numpkeys) {
-                $rowids .= ",rowid$_";
-            }
-            my $new = join ',' => map { qq{NEW."$_"::text} } @pkeys;
-            my $old = join ',' => map { qq{OLD."$_"::text} } @pkeys;
-            my $clause = join ' OR ' => map { qq{OLD."$_" <> NEW."$_"} } @pkeys;
-
-            $SQL = qq{SELECT trigger_language,trigger_body FROM bucardo_custom_trigger 
-                      WHERE goat=$info->{id} 
-                      AND status='active' 
-                      AND trigger_type='delta' };
-            elog(DEBUG, "Running $SQL");
-            $rv = spi_exec_query($SQL);
-
-            if (! $found{func1} and $rv->{processed}) {
-                $SQL = qq{
-                    CREATE OR REPLACE FUNCTION bucardo.$func1()
-                    RETURNS TRIGGER
-                    LANGUAGE $rv->{rows}[0]{trigger_language}
-                    SECURITY DEFINER
-                    VOLATILE
-                    AS
-                    \$clone\$
-                };
-                $SQL .= qq{ $rv->{rows}[0]{trigger_body} };
-                $SQL .= qq{ \$clone\$; };
-                run_sql($SQL,$dbh);
-            } 
-            elsif (! $found{func1} and $pkeytype ne 'bytea') {
-                $SQL = qq{
-                    CREATE OR REPLACE FUNCTION bucardo.$func1()
-                    RETURNS TRIGGER
-                    LANGUAGE plpgsql
-                    SECURITY DEFINER
-                    VOLATILE
-                    AS
-                    \$clone\$
-                    DECLARE
-                      oldtime TEXT;
-                    BEGIN
-                        SELECT INTO oldtime setting FROM pg_settings WHERE name = 'TimeZone';
-                        SET TIME ZONE 'GMT';
-                        IF (TG_OP = 'INSERT') THEN
-                          INSERT INTO bucardo.bucardo_delta(tablename,$rowids) VALUES (TG_RELID, $new);
-                        ELSIF (TG_OP = 'UPDATE') THEN
-                          INSERT INTO bucardo.bucardo_delta(tablename,$rowids) VALUES (TG_RELID, $old);
-                          IF ($clause) THEN
-                            INSERT INTO bucardo.bucardo_delta(tablename,$rowids) VALUES (TG_RELID, $new);
-                          END IF;
-                        ELSE
-                          INSERT INTO bucardo.bucardo_delta(tablename,$rowids) VALUES (TG_RELID, $old);
-                        END IF;
-                        EXECUTE(\$\$SET TIME ZONE '\$\$||oldtime||\$\$'\$\$);
-                        RETURN NULL;
-                    END;
-                    \$clone\$;
-                };
-                run_sql($SQL,$dbh);
-            }
-            elsif (! $found{func2} and $pkeytype eq 'bytea') {
-                $SQL = qq{
-                    CREATE OR REPLACE FUNCTION bucardo.$func2()
-                    RETURNS TRIGGER
-                    LANGUAGE plpgsql
-                    SECURITY DEFINER
-                    VOLATILE
-                    AS
-                    \$clone\$
-                    BEGIN
-                        IF (TG_OP = 'INSERT') THEN
-                          INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (TG_RELID,
-                                   ENCODE(NEW.${safepkey},'base64'));
-                        ELSIF (TG_OP = 'UPDATE') THEN
-                          INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (TG_RELID,
-                                   ENCODE(OLD.$safepkey,'base64'));
-                          IF (ENCODE(OLD.$safepkey,'base64') <> ENCODE(NEW.$safepkey,'base64')) THEN
-                            INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (TG_RELID,
-                                   ENCODE(NEW.$safepkey,'base64'));
-                          END IF;
-                        ELSE
-                          INSERT INTO bucardo.bucardo_delta(tablename,rowid) VALUES (TG_RELID,
-                                   ENCODE(OLD.$safepkey,'base64'));
-                        END IF;
-                        RETURN NULL;
-                    END;
-                    \$clone\$;
-                };
-                run_sql($SQL,$dbh);
-            }
-            if (! $found{func3}) {
-                $SQL = qq{
-                    CREATE OR REPLACE FUNCTION bucardo.bucardo_purge_delta(interval)
-                    RETURNS TEXT
-                    LANGUAGE plpgsql
-                    VOLATILE
-                    SECURITY DEFINER
-                    AS
-                    \$clone\$
-                    DECLARE
-                        drows BIGINT;
-                        trows BIGINT;
-                    BEGIN
-                        DELETE FROM bucardo.bucardo_delta
-                        USING 
-                        (SELECT b.tablename AS tn, b.txntime AS tt FROM
-                        (SELECT tablename, count(*) FROM bucardo.bucardo_delta_targets GROUP BY 1) AS a,
-                        (SELECT tablename, txntime, count(*) FROM bucardo.bucardo_track GROUP BY 1,2) AS b
-                        WHERE a.tablename = b.tablename
-                        AND a.count=b.count) AS foo
-                        WHERE tablename = tn AND txntime = tt
-                        AND txntime < now()-\$1;
-
-                        GET DIAGNOSTICS drows := row_count;
-
-                        DELETE FROM bucardo.bucardo_track
-                        WHERE NOT EXISTS (SELECT 1 FROM bucardo.bucardo_delta d WHERE d.txntime = bucardo_track.txntime);
-
-                        GET DIAGNOSTICS trows := row_count;
-
-                        RETURN 'Rows deleted from bucardo_delta: '||drows||
-                          ' Rows deleted from bucardo_track: '||trows;
-
-                  END;
-                    \$clone\$;
-                };
-                run_sql($SQL,$dbh);
-            }
-            if (! $found{func4}) {
-                $SQL = qq{
+        ## Create the bucardo_compress_delta function as needed
+        $newschema and goto COMPRESSD;
+        $sth = $sth{hazfunc};
+        $count = $sth->execute('bucardo', 'bucardo_compress_delta');
+        $sth->finish();
+        if ($count < 1) {
+          COMPRESSD:
+            $SQL = qq{
                   CREATE OR REPLACE FUNCTION bucardo.bucardo_compress_delta(text, text)
                   RETURNS TEXT
                   LANGUAGE plpgsql
@@ -1927,22 +1445,22 @@ $bc$
                     ids_grp TEXT;
                     idnum TEXT;
                   BEGIN
-                  
+
                   -- Are we running in serializable mode?
                   SELECT INTO mymode current_setting('transaction_isolation');
                   IF (mymode <> 'serializable') THEN
                     RAISE EXCEPTION 'This function must be run in serializable mode';
                   END IF;
-                  
+
                   -- Grab the oid of this schema/table combo
                   SELECT INTO myoid
                     c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
                     WHERE nspname = \$1 AND relname = \$2;
-                  
+
                   IF NOT FOUND THEN
                     RAISE EXCEPTION 'No such table: %.%', \$1, \$2;
                   END IF;
-                  
+
                   ids_where = 'COALESCE(rowid,''NULL'') = COALESCE(id, ''NULL'')';
                   ids_sel = 'rowid AS id';
                   ids_grp = 'rowid';
@@ -1976,7 +1494,7 @@ $bc$
                           || rname;
                       END IF;
                   END LOOP;
-                  
+
                   myst = 'DELETE FROM bucardo.bucardo_delta 
                   USING (SELECT MAX(txntime) AS maxt, '||ids_sel||'
                          FROM bucardo.bucardo_delta
@@ -1985,575 +1503,620 @@ $bc$
                   WHERE tablename = '|| myoid || ' AND ' || ids_where ||' AND txntime <> maxt';
                   RAISE DEBUG 'Running %', myst;
                   EXECUTE myst;
-                  
+
                   GET DIAGNOSTICS drows := row_count;
-                  
+
                   myst = 'DELETE FROM bucardo.bucardo_track'
                     || ' WHERE NOT EXISTS (SELECT 1 FROM bucardo.bucardo_delta d WHERE d.txntime = bucardo_track.txntime)';
                   EXECUTE myst;
-                  
+
                   GET DIAGNOSTICS trows := row_count;
-                  
+
                   RETURN 'Compressed '||\$1||'.'||\$2||'. Rows deleted from bucardo_delta: '||drows||
                     ' Rows deleted from bucardo_track: '||trows;
-                  
                   END;
                   \$clone\$;
                 };
-                run_sql($SQL,$dbh);
+            run_sql($SQL,$dbh);
 
-                $SQL = qq{
+            $SQL = qq{
                   CREATE OR REPLACE FUNCTION bucardo.bucardo_compress_delta(text)
                   RETURNS TEXT
                   LANGUAGE SQL
                   SECURITY DEFINER
                   AS \$clone\$
-                   SELECT bucardo.bucardo_compress_delta(n.nspname, c.relname) FROM pg_class c
-                   JOIN pg_namespace n ON n.oid = c.relnamespace
-                   WHERE relname = \$1 AND pg_table_is_visible(c.oid);
+                  SELECT bucardo.bucardo_compress_delta(n.nspname, c.relname) FROM pg_class c
+                  JOIN pg_namespace n ON n.oid = c.relnamespace
+                  WHERE relname = \$1 AND pg_table_is_visible(c.oid);
                   \$clone\$;
                 };
-                run_sql($SQL,$dbh);
-                  
-                $SQL = qq{
+            run_sql($SQL,$dbh);
+
+            $SQL = qq{
                   CREATE OR REPLACE FUNCTION bucardo.bucardo_compress_delta(oid)
                   RETURNS TEXT
                   LANGUAGE SQL
                   SECURITY DEFINER
                   AS \$clone\$
-                   SELECT bucardo.bucardo_compress_delta(n.nspname, c.relname) FROM pg_class c
-                   JOIN pg_namespace n ON n.oid = c.relnamespace
-                   WHERE c.oid = \$1;
+                  SELECT bucardo.bucardo_compress_delta(n.nspname, c.relname) FROM pg_class c
+                  JOIN pg_namespace n ON n.oid = c.relnamespace
+                  WHERE c.oid = \$1;
                   \$clone\$;
                 };
-                run_sql($SQL,$dbh);
-                  
-                $SQL = qq{
+            run_sql($SQL,$dbh);
+
+            $SQL = qq{
                   CREATE OR REPLACE FUNCTION bucardo.bucardo_compress_delta()
                   RETURNS SETOF TEXT
                   LANGUAGE SQL
                   SECURITY DEFINER
                   AS \$clone\$
-                   SELECT bucardo.bucardo_compress_delta(n.nspname, c.relname) FROM pg_class c
-                   JOIN pg_namespace n ON n.oid = c.relnamespace
-                   WHERE c.oid IN (SELECT DISTINCT tablename FROM bucardo.bucardo_delta);
+--                  SELECT bucardo.bucardo_compress_delta(n.nspname, c.relname) FROM pg_class c
+--                  JOIN pg_namespace n ON n.oid = c.relnamespace
+--                  WHERE c.oid IN (SELECT DISTINCT tablename FROM bucardo.bucardo_delta);
+SELECT 'Fixme'::TEXT;
                   \$clone\$;
                 };
-                run_sql($SQL,$dbh);
-            }
-                  
-            if (! $found{func5}) {
-                $SQL = q{
-                  CREATE OR REPLACE FUNCTION bucardo.bucardo_audit()
-RETURNS TEXT
-LANGUAGE plpgsql
-VOLATILE
-AS $clone$
-DECLARE
-  fmsg TEXT = $clone2$SET LOCAL search_path = 'bucardo';$clone2$;
-  myst TEXT;
-  myrec RECORD;
-  myrec2 RECORD;
-  mycount INT;
-  myvar TEXT;
-  mytablename TEXT;
-  delcount INT;
-  delcount2 INT;
+            run_sql($SQL,$dbh);
 
-BEGIN
+        } ## end of bucardo_compress_delta creations
 
--- This function attempts to cleanup various Bucardo-related problems that may exist.
--- Usage is to simply call it, then examine and carefully apply the output
--- Items checked
--- * Partial indexes on bucardo_delta for tables (oids) that no longer exist.
--- * Indexes on bucardo_delta that refer to tables without a 'bucardo_add_delta' trigger.
--- * Every table with a 'bucardo_add_delta' trigger has rowid and txntime triggers on bucardo_delta.
--- * There are no other triggers on the bucardo_delta for such tables.
--- * Check for name/oid matching on the two bucardo_delta indexes above.
--- * Tables that have bucardo_add_delta but no entry in bucardo_delta_targets table
--- * Index exists: bucardo_delta_txntime
--- * Index exists: bucardo_delta_rowid_all
--- * Unknown indexes on bucardo_delta
--- * Rows in bucardo_delta that refer to invalid tables (oids)
--- * Rows in bucardo_delta that refer to tables without a bucardo_add_delta trigger
--- * Index exists: bucardo_track_target
--- * Unknown indexes on bucardo_track
--- * Rows in bucardo_track that refer to invalid tables (oids)
--- * Rows in bucardo_track that refer to tables without a bucardo_add_delta trigger
--- * Rows in bucardo_delta_targets that are invalid tablenames (oids)
+        ## Create the bucardo_purge_delta function as needed
+        $newschema and goto PURGE;
+        $sth = $sth{hazfunc};
+        $count = $sth->execute('bucardo', 'bucardo_purge_delta');
+        $sth->finish();
+        if ($count < 1) {
+          PURGE:
+            $SQL = qq{
+                    CREATE OR REPLACE FUNCTION bucardo.bucardo_purge_delta(interval,text)
+                    RETURNS TEXT
+                    LANGUAGE plpgsql
+                    VOLATILE
+                    SECURITY DEFINER
+                    AS
+                    \$clone\$
+                    DECLARE
+                        drows BIGINT;
+                        trows BIGINT;
+                        trackname TEXT;
+                    BEGIN
+                        DELETE FROM bucardo.$2
+                        USING 
+                        (SELECT b.tablename AS tn, b.txntime AS tt FROM
+                        (SELECT tablename, count(*) FROM bucardo.bucardo_delta_targets GROUP BY 1) AS a,
+                        (SELECT tablename, txntime, count(*) FROM bucardo.trackname GROUP BY 1,2) AS b
+                        WHERE a.tablename = b.tablename
+                        AND a.count=b.count) AS foo
+                        WHERE tablename = tn AND txntime = tt
+                        AND txntime < now()-\$1;
 
--- Make sure that bucardo is in our search_path
-PERFORM set_config('search_path','bucardo,'
-  || (SELECT current_setting('search_path')),'f');
+                        GET DIAGNOSTICS drows := row_count;
 
--- Gather important information into temp tables
+                        DELETE FROM bucardo.bucardo_track
+                        WHERE NOT EXISTS (SELECT 1 FROM bucardo.bucardo_delta d WHERE d.txntime = bucardo_track.txntime);
 
--- Generate a list of all indexes on bucardo_delta
--- Identify which tables they are on, as well as which columns
--- This is a left join as there may be stale entries
--- If this table alredy exists in this session, drop it
-PERFORM 1 FROM information_schema.tables WHERE table_type = 'LOCAL TEMPORARY'
-  AND table_name = 'bucardo_audit_delta_index';
-IF FOUND THEN 
-  DROP TABLE bucardo_audit_delta_index;
-END IF;
-CREATE TEMP TABLE bucardo_audit_delta_index AS
-  SELECT foo.*, c.relname AS tablename FROM
-  ( SELECT c.relname AS indexname, c.oid AS indyoid,
-    pg_get_indexdef(indexrelid) AS indexdef,
-    substring(pg_get_indexdef(indexrelid) FROM E'\\\\((\\\\d+)') AS targetoid,
-    substring(pg_get_indexdef(indexrelid) FROM E'\\\\(+([^\\\\)]+)') AS targetcol
-    FROM pg_index i
-    JOIN pg_class c ON (c.oid = indexrelid)
-    WHERE indrelid = 'bucardo_delta'::regclass
-    ORDER BY c.relname
-  ) AS foo
-  LEFT JOIN pg_class c ON (c.oid = foo.targetoid::oid);
+                        GET DIAGNOSTICS trows := row_count;
 
--- Gather a list of indexes for bucardo_track
-PERFORM 1 FROM information_schema.tables WHERE table_type = 'LOCAL TEMPORARY'
-  AND table_name = 'bucardo_audit_track_index';
-IF FOUND THEN 
-  DROP TABLE bucardo_audit_track_index;
-END IF;
-CREATE TEMP TABLE bucardo_audit_track_index AS
-  SELECT foo.*, c.relname AS tablename FROM
-  ( SELECT c.relname AS indexname, c.oid AS indyoid,
-    pg_get_indexdef(indexrelid) AS indexdef,
-    substring(pg_get_indexdef(indexrelid) FROM E'\\\\((\\\\d+)') AS targetoid,
-    substring(pg_get_indexdef(indexrelid) FROM E'\\\\(+([^\\\\)]+)') AS targetcol
-    FROM pg_index i
-    JOIN pg_class c ON (c.oid = indexrelid)
-    WHERE indrelid = 'bucardo_track'::regclass
-    ORDER BY c.relname
-  ) AS foo
-  LEFT JOIN pg_class c ON (c.oid = foo.targetoid::oid);
+                        RETURN 'Rows deleted from bucardo_delta: '||drows||
+                          ' Rows deleted from bucardo_track: '||trows;
 
--- Gather a list of triggers that contain the string 'bucardo'
-PERFORM 1 FROM information_schema.tables WHERE table_type = 'LOCAL TEMPORARY'
-  AND table_name = 'bucardo_audit_table_triggers';
-IF FOUND THEN 
-  DROP TABLE bucardo_audit_table_triggers;
-END IF;
-CREATE TEMP TABLE bucardo_audit_table_triggers AS
-  SELECT tgname AS trigname, nspname AS schemaname, relname AS tablename, c.oid AS toid
-  FROM pg_trigger t
-  JOIN pg_class c ON (c.oid = t.tgrelid)
-  JOIN pg_namespace n ON (n.oid = c.relnamespace AND n.nspname <> 'bucardo')
-  WHERE tgname ~ 'bucardo';
 
--- Drop any partial indexes on bucardo_delta that refer to invalid tables (oids)
-FOR myrec IN
-  SELECT indexname, targetoid
-  FROM bucardo_audit_delta_index
-  WHERE targetoid IS NOT NULL
-  AND tablename IS NULL
-LOOP
-  fmsg = fmsg
-    || chr(10)
-    || 'Dropping index "'
-    || myrec.indexname
-    || '": refers to non-existent table '
-    || myrec.targetoid
-    || chr(10)
-    || 'DROP INDEX '
-    || quote_ident(myrec.indexname)
-    || ';';
-END LOOP;
 
--- Drop any indexes on bucardo_delta that refer to tables without bucardo triggers
-FOR myrec IN
-  SELECT tablename, indexname, targetoid
-  FROM bucardo_audit_delta_index
-  WHERE tablename IS NOT NULL
-LOOP
-  PERFORM 1 FROM bucardo_audit_table_triggers WHERE toid::text = myrec.targetoid
-    AND trigname = 'bucardo_add_delta';
-  IF NOT FOUND THEN
-    fmsg = fmsg
-      || chr(10)
-      || '-- bucardo_delta has index for '
-      || myrec.tablename
-      || ' ('
-      || myrec.targetoid
-      || '), but it has no bucardo_add_delta trigger'
-      || chr(10)
-      || 'DROP INDEX '
-      || quote_ident(myrec.indexname)
-      || ';';
-  END IF;
-END LOOP;
 
--- Check for correct number of triggers on bucardo_delta for each table that has 
---     a bucardo_add_delta trigger
---   Check that one exists for the rowid
---   Check that one exists for the txntime
--- Check that each of those tables is mentioned in bucardo_delta_targets
-FOR myrec IN
-  SELECT schemaname, tablename, toid
-  FROM bucardo_audit_table_triggers
-  WHERE trigname = 'bucardo_add_delta'
-LOOP
-  SELECT INTO mycount count(*) FROM bucardo_audit_delta_index WHERE targetoid = myrec.toid::text;
-  -- Should have no more than two
-  IF mycount > 2 THEN
-    fmsg = fmsg
-      || chr(10)
-      || '-- bucardo_delta has wrong number ('
-      || mycount::text
-      || ') of indexes for table '
-      || myrec.schemaname
-      || '.'
-      || myrec.tablename
-      || ' ('
-      || myrec.toid
-      || ')';
-  END IF;
-  -- Do we have one for rowid?
-  SELECT INTO mycount count(*) FROM bucardo_audit_delta_index
-    WHERE targetoid = myrec.toid::text AND targetcol = 'rowid';
-  RAISE NOTICE 'Failed to find toid %', myrec.toid;
-FOR myrec2 IN
-  SELECT *
-  FROM bucardo_audit_delta_index
-LOOP
-  RAISE NOTICE 'Found %, %, and %', myrec2.targetoid, myrec2.targetcol, myrec2.indexname;
-END LOOP;
-  IF mycount < 1 THEN
-    fmsg = fmsg
-     || chr(10)
-     || '-- bucardo_delta is missing a partial index on rowid for table '
-     || myrec.schemaname
-     || '.'
-     || myrec.tablename
-     || ' ('
-     || myrec.toid
-     || ')'
-     || chr(10)
-     || 'CREATE INDEX bucardo_delta_'
-     || myrec.schemaname
-     || '_'
-     || myrec.tablename
-     || '_rowid ON bucardo_delta(rowid) WHERE tablename = '
-     || myrec.toid
-     || ';';
-  ELSE
-    IF mycount > 1 THEN
-      fmsg = fmsg
-        || chr(10)
-        || '-- bucardo_delta has '
-        || mycount::text
-        || ' partial indexes on rowid for table '
-        || myrec.schemaname
-        || '.'
-        || myrec.tablename
-        || ' ('
-        || myrec.toid
-        || ') Drop one of:';
-      FOR myrec2 IN SELECT indexname FROM bucardo_audit_delta_index
-        WHERE targetoid = myrec.toid::text AND targetcol = 'rowid'
-      LOOP
-        fmsg = fmsg
-          || chr(10)
-          || '-- DROP INDEX '
-          || quote_ident(myrec2.indexname)
-          || ';';
-      END LOOP;
-    ELSE
-      -- Check for the correct table oid
-      SELECT INTO myst targetoid FROM bucardo_audit_delta_index
-          WHERE targetoid = myrec.toid::text AND targetcol = 'rowid';
-      IF myst <> myrec.toid::text THEN
-        fmsg = fmsg
-          || chr(10)
-          || '-- Wrong oid on bucardo_delta rowid index for '
-          || myrec.schemaname
-          || '.'
-          || myrec.tablename
-          || ' ('
-          || myst
-          || '), but the index says'
-          || myrec.toid
-          || '!';
-      END IF;
-    END IF;
-  END IF;
-  -- Do we have one for txntime?
-  SELECT INTO mycount count(*) FROM bucardo_audit_delta_index
-    WHERE targetoid = myrec.toid::text AND targetcol = 'txntime';
-  IF mycount < 1 THEN
-    fmsg = fmsg
-      || chr(10)
-      || '-- bucardo_delta is missing a partial index on txntime for table '
-      || myrec.schemaname
-      || '.'
-      || myrec.tablename
-      || ' ('
-      || myrec.toid
-      || ')'
-      || chr(10)
-      || 'CREATE INDEX bucardo_delta_'
-      || myrec.schemaname
-      || '_'
-      || myrec.tablename
-      || '_txntime ON bucardo_delta(rowid) WHERE tablename = '
-      || myrec.toid
-      || ';';
-  ELSE
-    IF mycount > 1 THEN
-      fmsg = fmsg
-        || chr(10)
-        || '-- bucardo_delta has '
-        || mycount::text
-        || ' partial indexes on txntime for table '
-        || myrec.schemaname
-        || '.'
-        || myrec.tablename
-        || ' ('
-        || myrec.toid
-        || ') Drop one of:';
-      FOR myrec2 IN SELECT indexname FROM bucardo_audit_delta_index
-        WHERE targetoid = myrec.toid::text AND targetcol = 'txntime'
-      LOOP
-        fmsg = fmsg
-          || chr(10)
-          || '-- DROP INDEX '
-          || quote_ident(myrec2.indexname)
-          || ';';
-      END LOOP;
-    ELSE
-      -- Check for the correct table oid
-      SELECT INTO myst targetoid FROM bucardo_audit_delta_index
-        WHERE targetoid = myrec.toid::text AND targetcol = 'txnid';
-      IF myst <> myrec.toid::text THEN
-        fmsg = fmsg
-          || chr(10)
-          || '-- Wrong oid on bucardo_delta txnid index for '
-          || myrec.schemaname
-          || '.'
-          || myrec.tablename
-          || ' ('
-          || myrec.toid
-          || '), but the index says '
-          || myrec.toid
-          || '!';
-      END IF;
-    END IF;
-  END IF;
-  -- Does this table exist in bucardo_delta_targets?
-  PERFORM 1 FROM bucardo.bucardo_delta_targets WHERE tablename = myrec.toid;
-  IF NOT FOUND THEN
-    fmsg = fmsg
-      || chr(10)
-      || '--Missing entry in bucardo_delta_targets for table '
-      || myrec.tablename
-      || chr(10)
-      || '-- This may be also be caused by an old bucardo_add_delta trigger';
-  END IF;
-END LOOP;
 
--- Make sure bucardo_delta has a non-partial index on txntime
-PERFORM 1 FROM bucardo_audit_delta_index
-WHERE targetoid IS NULL
-AND indexname = 'bucardo_delta_txntime'
-AND targetcol = 'txntime';
-IF NOT FOUND THEN
-  fmsg = fmsg
-    || chr(10)
-    || '-- Index bucardo_delta_txntime on bucardo_delta was not found!'
-    || chr(10)
-    || 'CREATE INDEX bucardo_delta_txntime ON bucardo_delta(txntime);';
-END IF;
 
--- Make sure bucardo_delta has a non-partial index on rowid
-PERFORM 1 FROM bucardo_audit_delta_index
-WHERE targetoid IS NULL
-AND indexname = 'bucardo_delta_rowid_all'
-AND targetcol = 'rowid';
-IF NOT FOUND THEN
-  fmsg = fmsg
-    || chr(10)
-    || '-- Index bucardo_delta_rowid_all on bucardo_delta was not found!'
-    || chr(10)
-    || 'CREATE INDEX bucardo_delta_rowid_all ON bucardo_delta(rowid);';
-END IF;
+                        RETURN 'Rows deleted from bucardo_delta: '||drows||
+                          ' Rows deleted from bucardo_track: '||trows;
 
--- Check for any unknown indexes on bucardo_delta
-FOR myrec IN
-  SELECT *
-  FROM bucardo_audit_delta_index
-  WHERE targetoid IS NULL
-  AND indexname NOT IN ('bucardo_delta_txntime', 'bucardo_delta_rowid_all')
-LOOP
-  fmsg = fmsg
-   || chr(10)
-   || '-- Unknown index on bucardo_delta: '
-   || myrec.indexname;
-  -- Show stats about it
-  FOR myrec2 IN 
-    SELECT
-      pg_stat_get_blocks_fetched(myrec.indyoid) AS blocks_fetched,
-      pg_stat_get_blocks_hit(myrec.indyoid) AS blocks_hit,
-      pg_stat_get_numscans(myrec.indyoid) AS numscans,
-      pg_stat_get_tuples_returned(myrec.indyoid) AS tups_returned,
-      pg_stat_get_tuples_fetched(myrec.indyoid) AS tups_fetched
-  LOOP
-    fmsg = fmsg
-      || chr(10)
-      || '-- Blocks fetched/hit: '
-      || myrec2.blocks_fetched::text
-      || '/'
-      || myrec2.blocks_hit::text
-      || ' Tuples scanned/fetched/returned: '
-      || myrec2.numscans::text
-      || '/'
-      || myrec2.tups_returned::text
-      || '/'
-      || myrec2.tups_fetched::text
-      || chr(10)
-      || 'DROP INDEX '
-      || quote_ident(myrec.indexname)
-      || ';';
-  END LOOP;
-END LOOP;
-
--- That wraps up the indexes. Now the bucardo_delta data
-
--- Delete rows in bucardo_delta that refer to non-existent tables
-FOR myrec IN SELECT DISTINCT tablename FROM bucardo_delta ORDER BY 1 LOOP
-  SELECT relname FROM pg_class WHERE oid = myrec.tablename INTO mytablename;
-  IF NOT FOUND THEN
-    fmsg = fmsg
-      || chr(10)
-      || '-- Table in bucardo_delta does not exist: oid '
-      || myrec.tablename
-      || chr(10)
-      || 'DELETE FROM bucardo_delta WHERE tablename = '
-      || myrec.tablename
-      || ';';
-  ELSE
-    -- A.1 Check that any such tables have a bucardo_add_delta trigger
-    PERFORM 1 FROM pg_trigger WHERE tgrelid = myrec.tablename AND tgname = 'bucardo_add_delta';
-    IF NOT FOUND THEN
-     fmsg = fmsg
-       || chr(10)
-       || '-- Table '
-       || myrec.tablename
-       || ' ('
-       || mytablename
-       || ') needs a bucardo_add_delta trigger. Try running validate_sync()?';
-    END IF;
-  END IF;
-END LOOP;
-
--- Time for bucardo_track
-
--- Make sure bucardo_track has its lone index
-SELECT INTO mycount
-  count(*) FROM bucardo_audit_track_index
-  WHERE indexname = 'bucardo_track_target';
-IF mycount < 1 THEN
-  fmsg = fmsg
-    || chr(10)
-    || '-- Index bucardo_track_target not found!';
-  fmsg = fmsg || chr(10) || 'CREATE INDEX bucardo_track_target ON bucardo_track(tablename,txntime,targetdb);';
-END IF;
-
--- Should only be one index on bucardo_track
-SELECT INTO mycount
-  count(*) FROM bucardo_audit_track_index;
-IF mycount <> 1 THEN
-  fmsg = fmsg
-    || chr(10)
-    || '-- The bucardo_track table has the wrong number ('
-    || mycount::text
-    || ') of indexes';
-END IF;
-
--- Delete rows in bucardo_track that refer to invalid tables
-FOR myrec IN SELECT DISTINCT tablename FROM bucardo_track ORDER BY 1 LOOP
-  SELECT relname FROM pg_class WHERE oid = myrec.tablename INTO mytablename;
-  IF NOT FOUND THEN
-    fmsg = fmsg
-      || chr(10)
-      || '-- Table in bucardo_track does not exist: oid '
-      || myrec.tablename
-      || chr(10)
-      || 'DELETE FROM bucardo_track WHERE tablename = '
-      || myrec.tablename
-      || ';';
-  ELSE
-    -- A.1 Check that any such tables have a bucardo_add_delta trigger
-    PERFORM 1 FROM pg_trigger WHERE tgrelid = myrec.tablename AND tgname = 'bucardo_add_delta';
-    IF NOT FOUND THEN
-      fmsg = fmsg
-        || chr(10)
-        || '-- Table '
-        || myrec.tablename
-        || ' ('
-        || mytablename
-        || ') needs a bucardo_add_delta trigger. Try running validate_sync()?';
-    END IF;
-  END IF;
-END LOOP;
-
--- Remove any stale entries from bucardo_delta_targets
-PERFORM 1 FROM bucardo_delta_targets t WHERE NOT EXISTS
-  (SELECT 1 FROM pg_class WHERE oid = t.tablename AND relkind = 'r');
-IF FOUND THEN
-  fmsg = fmsg
-    || chr(10)
-    || '-- Remove stale entries from bucardo_delta_targets: '
-    || chr(10)
-    || 'DELETE FROM bucardo_delta_targets t WHERE tablename NOT IN '
-    || chr(10)
-    || $clone2$(SELECT oid FROM pg_class WHERE relkind = 'r');$clone2$;
-END IF;
-
-fmsg = fmsg || chr(10) || '-- End of audit';
-
-RETURN fmsg;
-
-END;
-$clone$;
-};
-                run_sql($SQL,$dbh);
-
-            }
-
-            if (! $found{trigger1} and $pkeytype ne 'bytea') {
-                $SQL = qq{
-                    CREATE TRIGGER "$trigger1"
-                    AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
-                    FOR EACH ROW EXECUTE PROCEDURE bucardo.$func1()
+                  END;
+                    \$clone\$;
                 };
-                run_sql($SQL,$dbh);
+            run_sql($SQL,$dbh);
+        }
+
+        $newschema and goto SEQUENCE;
+        $sth = $sth{haztable};
+        $count = $sth->execute('bucardo', 'bucardo_sequences');
+        $sth->finish();
+        if ($count < 1) {
+            ## Check for older version of bucardo_sequences table
+            $SQL = q{SELECT count(*) FROM pg_attribute WHERE attname = 'targetname' }
+                .q{ AND attrelid = 'bucardo.bucardo_sequences'::regclass};
+            $count = $dbh->selectall_arrayref($SQL)->[0][0];
+            if ($count < 12) {
+                warn "Dropping older version of bucardo_sequences, then recreating empty\n";
+                $dbh->do('DROP TABLE bucardo.bucardo_sequences');
             }
-            if (! $found{trigger2} and $pkeytype eq 'bytea') {
-                $SQL = qq{
-                    CREATE TRIGGER "$trigger2"
-                    AFTER INSERT OR UPDATE OR DELETE ON $safeschema.$safetable
-                    FOR EACH ROW EXECUTE PROCEDURE bucardo.$func2()
+          SEQUENCE:
+            $SQL = qq{
+                    CREATE TABLE bucardo.bucardo_sequences (
+                        schemaname   TEXT        NOT NULL,
+                        seqname      TEXT        NOT NULL,
+                        syncname     TEXT        NOT NULL,
+                        targetname   TEXT        NOT NULL,
+                        last_value   BIGINT      NOT NULL,
+                        start_value  BIGINT      NOT NULL,
+                        increment_by BIGINT      NOT NULL,
+                        max_value    BIGINT      NOT NULL,
+                        min_value    BIGINT      NOT NULL,
+                        is_cycled    BOOL        NOT NULL,
+                        is_called    BOOL        NOT NULL
+                    );
                 };
+            run_sql($SQL,$dbh);
+
+            $SQL = q{CREATE UNIQUE INDEX bucardo_sequences_tablename ON }
+                . q{bucardo.bucardo_sequences (schemaname, seqname, syncname, targetname)};
+            run_sql($SQL,$dbh);
+        }
+
+        ## Create the bucardo_audit function as needed
+        $newschema and goto AUDIT;
+        $sth = $sth{hazfunc};
+        $count = $sth->execute('bucardo', 'bucardo_audit');
+        $sth->finish();
+        if ($count < 1) {
+		  AUDIT:
+            $SQL = q{fillin later fixme};
+        }                        ## end of adding bucardo_audit()
+
+    }                            ## end not fullcopy / all global items
+
+    ## Check out each table in turn
+
+  SCHEMA: for my $schema (sort keys %goat) {
+
+        ## Does this schema exist?
+        $sth = $sth{hazschema};
+        $count = $sth->execute($schema);
+        $sth->finish();
+        if ($count < 1) {
+            die qq{Could not find schema "$schema" in database "$dbname"!\n};
+        }
+
+      TABLE: for my $table (sort keys %{$goat{$schema}}) {
+
+            $sth = $sth{haztable};
+            $count = $sth->execute($schema,$table);
+            if ($count < 1) {
+                die qq{Could not find "$table" inside the "$schema" schema on database "$dbname"!\n};
+            }
+            my ($relkind,$oid) = @{$sth->fetchall_arrayref()->[0]};
+
+            ## Verify that this is the kind of relation we expect it to be
+            my $tinfo = $goat{$schema}{$table};
+            if ('r' eq $relkind) {
+                if ('table' ne $tinfo->{reltype}) {
+                    die qq{Found "$schema.$table" on database "$dbname", but it's a table, not a $tinfo->{reltype}!};
+                }
+            } elsif ('S' eq $relkind) {
+                if ('sequence' ne $tinfo->{reltype}) {
+                    die qq{Found "$schema.$table" on database "$dbname", but it's a sequence, not a $tinfo->{reltype}!};
+                }
+            } else {
+                die qq{Found "$schema.$table" on database "$dbname", but it's neither a table nor a sequence!};
+            }
+
+            ## Nothing further needed if it's a sequence
+            next TABLE if $tinfo->{reltype} eq 'sequence';
+
+			## Get the escaped version of things
+            my $safeschema = $tinfo->{safeschema};
+            my $safetable = $tinfo->{safetable};
+
+            ## Go through each column in the tables to check against the other databases
+
+
+            $sth = $sth{hazcols};
+            $count = $sth->execute($oid);
+            if ($count < 1) {
+                $sth->finish();
+                die qq{Could not determine column information for table "$schema.$table"!\n};
+            }
+
+            $dbh->do('RESET search_path');
+
+            my $colinfo = $sth->fetchall_hashref('attname');
+            ## Allow for 'dead' columns in the attnum ordering
+            ## Turn the old keys (attname) into new keys (number)
+            $x=1;
+            for (sort { $colinfo->{$a}{attnum} <=> $colinfo->{$b}{attnum} } keys %$colinfo) {
+                $colinfo->{$_}{realattnum} = $x++;
+            }
+
+            ## Things that will cause it to fail this sync
+            my @problem;
+
+            ## Things that are problematic but not a show-stopper
+            my @warning;
+
+            ## Is this the first time we've seen this table?
+            ## If so, this becomes canonical entry
+            my $t = "$schema.$table";
+            if (! exists $col{$t}) {
+                $col{$t} = $colinfo; ## hashref: key is column name
+                $col{db} = $dbname;
+            }
+            else { ## Seen this before, so check against canonical list
+
+                ## Todo: customselect
+
+                ## First, any columns that exist on a source but not this one is not allowed
+                for my $c1 (sort keys %{$col{$t}}) {
+                    if (! exists $colinfo->{$c1}) {
+                        push @problem => "Column $t.$c1 exists on db $col{db} but not on db $dbname";
+                    }
+                }
+
+                ## Any columns that exist here but not the original source may be a problem
+                for my $c2 (sort keys %$colinfo) {
+                    if (! exists $col{$t}{$c2}) {
+                        my $msg = "Column $t.$c2 exists on db $dbname but not on db $col{db}";
+                        if ($role eq 'source') {
+                            push @problem => $msg;
+                        } else {
+                            push @warning => $msg;
+                        }
+                        next;    ## Skip to next column
+                    }
+                    my $c1 = $col{$t}{$c2};
+
+                    ## Must be in the same order so we can COPY smoothly
+                    ## Someday we can consider using a custom COPY list if the server supports it
+                    if ($c1->{realattnum} != $c2->{realattnum}) {
+                        push @problem => "Column $t.$c1 is in position $c2->{realattnum} on db $col{db}"
+                            . " but in position $c1->{realattnum} on db $dbname";
+                    }
+
+                    ## Must be the same (or very compatible) datatypes
+                    if ($c1->{ftype} ne $c2->{ftype}) {
+                        $msg = "Column $t.$c1 is type $c1->{ftype} on db $col{db} but type $c2->{ftype} on db $dbname";
+                                ## Carve out some known exceptions (but still warn about them)
+                                ## Allowed: varchar == text
+                        if (($c1->{ftype} eq 'character varying' and $c2->{ftype} eq 'text') or
+                                ($c2->{ftype} eq 'character varying' and $c1->{ftype} eq 'text')) {
+                            push @warning => $msg;
+                        } else {
+                            push @problem => $msg;
+                        }
+                    }
+
+                    ## Warn of a notnull mismatch
+                    if ($c1->{attnotnull} != $c2->{attnotnull}) {
+                        push @warning => sprintf 'Column %s on db %s is %s but %s on db %s',
+                            "$t.$c1", $col{db},
+                                $c1->{attnotnull} ? 'NOT NULL' : 'NULL',
+                                    $c2->{attnotnull} ? 'NOT NULL' : 'NULL',
+                                        $dbname;
+                    }
+
+                    ## Warn of DEFAULT existence mismatch
+                    if ($c1->{atthasdef} != $c2->{atthasdef}) {
+                        push @warning => sprintf 'Column %s on db %s %s but %s on db %s',
+                            "$t.$c1", $col{db},
+                                $c1->{atthasdef} ? 'has a DEFAULT value' : 'has no DEFAULT value',
+                                    $c2->{attnotnull} ? 'has none' : 'does',
+                                        $dbname;
+                    }
+
+                }                ## end each column to check
+
+            }              ## end check this against previous source db
+
+            if (@problem) {
+                $msg = "Column verification failed:\n";
+                $msg .= join "\n" => @problem;
+                die $msg;
+            }
+
+            if (@warning) {
+                $msg = "Warnings found on column verification:\n";
+                $msg .= join "\n" => @warning;
+                warn $msg;
+            }
+
+            ## If this is not a source database, we don't need to go any further
+            next if $role ne 'source';
+
+            ## If this is a fullcopy only sync, also don't need to go any further
+            next if $fullcopyonly;
+
+            ## This is a source database and we need to track changes.
+            ## First step: a way to add things to the bucardo_delta table
+
+            ## We can only put a truncate trigger in if the database is 8.4 or higher
+            if ($dbh->{pg_server_version} >= 80400) {
+                ## Figure out the name of this trigger
+                my $trunctrig = $namelen <= 42
+                    ? "bucardo_note_trunc_$syncname" : $namelen <= 54
+                        ? "btrunc_$syncname"
+                            : sprintf 'bucardo_note_trunc_%d', int (rand(88888) + 11111);
+                $sth = $sth{haztrig};
+                $count = $sth->execute("$schema.$table",$trunctrig);
+                if ($count < 1) {
+                    $SQL = qq{
+          CREATE TRIGGER "$trunctrig"
+          AFTER TRUNCATE ON $schema.$table
+          FOR EACH STATEMENT EXECUTE PROCEDURE bucardo.bucardo_note_truncation('$syncname')
+        };
+                    run_sql($SQL,$dbh);
+                }
+            }
+
+			## TODO: Per-table bucardo_delta and bucardo_track!
+			## bucardo._tablename or bucardo.delta_tablename
+			## overflow: bucardo.delta_randomnumber (with a comment)
+			## or bucardo.delta_(firstfewchars)_randomnumber
+
+			## Need a quick little function to return the name used
+			## DONE: bucardo_tablename_maker		
+			## Maybe also do it here?
+		    $SQL = "SELECT bucardo.bucardo_tablename_maker(?)";
+			my $makername = fetch1_sql($SQL,$dbh,$schema.'_'.$table);
+			## Create this table if needed, with one column per PK columns
+			$sth = $sth{haztable};
+			my $delta_table = "delta_$makername";
+            $count = $sth->execute('bucardo',$delta_table);
+            if ($count < 1) {
+			   ## Create that table!
+               my $pkcols = join ',' => map { qq{"$_"} } split (/\|/ => $tinfo->{pkey});
+			   $SQL = qq{
+			       CREATE TABLE bucardo."$delta_table"
+                     AS SELECT $pkcols, now()::TIMESTAMPTZ AS txntime
+                        FROM $schema.$table LIMIT 0
+               };
+			   run_sql($SQL,$dbh);
+			   $SQL = qq{
+                   ALTER TABLE bucardo."$delta_table"
+                     ALTER txntime SET NOT NULL,
+                     ALTER txntime SET DEFAULT now()
+               };
+               run_sql($SQL, $dbh);
+            }
+
+			## Need an index on the txntime column
+			my $index1_name = "dex1_$makername";
+			$sth = $sth{hazindex};
+            $count = $sth->execute('bucardo',$index1_name);
+            $sth->finish();
+            if ($count < 1) {
+			    $SQL = qq{CREATE INDEX $index1_name ON bucardo.$delta_table(txntime)};
+                run_sql($SQL, $dbh);
+            }
+
+			## Need an index on all other columns
+			my $index2_name = "dex2_$makername";
+			$sth = $sth{hazindex};
+            $count = $sth->execute('bucardo',$index2_name);
+            $sth->finish();
+            if ($count < 1) {
+			    my $pkcols = join ',' => map { qq{"$_"} } split (/\|/ => $tinfo->{pkey});
+			    $SQL = qq{CREATE INDEX $index2_name ON bucardo.$delta_table($pkcols)};
+                run_sql($SQL, $dbh);
+            }
+
+            ## Track any change (insert/update/delete) with an entry in bucardo_delta
+
+			## Trigger function to add any changed primary key rows to this new table
+			## TODO: Check for too long of a name
+			## Function is same as the table name?
+			my $deltafunc = "delta_$makername";
+
+			my @pkeys = split (/\|/ => $tinfo->{pkey});
+
+            $sth = $sth{hazfunc};
+            $count = $sth->execute('bucardo', $deltafunc);
+            $sth->finish();
+            if ($count < 1) {
+			     my $new = join ',' => map { qq{NEW."$_"} } @pkeys;
+				 my $old = join ',' => map { qq{OLD."$_"} } @pkeys;
+                 my $clause = join ' OR ' => map { qq{OLD."$_" <> NEW."$_"} } @pkeys;
+                $SQL = qq{
+        CREATE OR REPLACE FUNCTION bucardo."$deltafunc"()
+        RETURNS TRIGGER
+        LANGUAGE plpgsql
+        SECURITY DEFINER
+        VOLATILE
+        AS
+        \$clone\$
+        BEGIN
+        IF (TG_OP = 'INSERT') THEN
+          INSERT INTO bucardo.$delta_table VALUES ($new);
+        ELSIF (TG_OP = 'UPDATE') THEN
+          INSERT INTO bucardo.$delta_table VALUES ($old);
+          IF ($clause) THEN
+            INSERT INTO bucardo.$delta_table VALUES ($new);
+          END IF;
+        ELSE
+          INSERT INTO bucardo.$delta_table VALUES ($old);
+        END IF;
+        RETURN NULL;
+        END;
+        \$clone\$;
+      };
                 run_sql($SQL,$dbh);
             }
 
-        } ## end if delta
+            ## Check if the bucardo_add_delta is a custom function, and create if needed
+            $SQL = qq{SELECT trigger_language,trigger_body FROM bucardo_custom_trigger 
+              WHERE goat=$tinfo->{id} 
+              AND status='active' 
+              AND trigger_type='delta'
+    };
+            elog(DEBUG, "Running $SQL");
+            $rv = spi_exec_query($SQL);
+            my $customdeltafunc = '';
+            if ($rv->{processed}) {
+                my $customdeltafunc = "bucardo_add_delta_$tinfo->{id}";
+                $sth = $sth{hazfunc};
+                $count = $sth->execute('bucardo', $customdeltafunc);
+                $sth->finish();
+                if ($count < 1) {
+                    $SQL = qq{
+               CREATE OR REPLACE FUNCTION bucardo."$customdeltafunc"()
+               RETURNS TRIGGER
+               LANGUAGE $rv->{rows}[0]{trigger_language}
+               SECURITY DEFINER
+               VOLATILE
+               AS
+               \$clone\$
+         };
+                    $SQL .= qq{ $rv->{rows}[0]{trigger_body} };
+                    $SQL .= qq{ \$clone\$; };
+                    run_sql($SQL,$dbh);
+                }
+            }
 
-        $dbh->commit();
-        return 1;
+            $sth = $sth{haztrig};
+            $count = $sth->execute("$schema.$table", 'bucardo_add_delta');
+            $sth->finish();
+            my $func = $customdeltafunc || $deltafunc;
+            if ($count < 1) {
+                $SQL = qq{
+        CREATE TRIGGER bucardo_add_delta
+        AFTER INSERT OR UPDATE OR DELETE ON $schema.$table
+        FOR EACH ROW EXECUTE PROCEDURE bucardo."$func"()
+      };
+                run_sql($SQL,$dbh);
+            }
 
-    } ## end of bucardo_validate_table
 
-    for (values %{$cache{dbh}}) {
-        $_->disconnect();
-    }
+			## Now the 'track' table
+			my $track_table = "track_$makername";
+            $sth = $sth{haztable};
+            $count = $sth->execute('bucardo',$track_table);
+            $sth->finish();
+            if ($count < 1) {
+				$SQL = qq{
+                   CREATE TABLE bucardo."$track_table" (
+                      txntime    TIMESTAMPTZ,
+                      targetdb   TEXT
+                   );
+                };
+				run_sql($SQL,$dbh);
+            }
 
-    $SQL = qq{NOTIFY "bucardo_validated_sync_$syncname"};
-    spi_exec_query($SQL);
+			## Need to index both columns of the txntime table
+			$sth = $sth{hazindex};
+			my $index3_name = "dex3_$makername";
+			$count = $sth->execute('bucardo', $index3_name);
+            $sth->finish();
+            if ($count < 1) {
+				$SQL = qq{CREATE INDEX $index3_name ON bucardo.$track_table(targetdb, txntime)};
+			    run_sql($SQL,$dbh);
+            }
 
-    return 'MODIFY';
+			## The 'stage' table, which feeds 'track' once targets have committed
+			my $stage_table = "stage_$makername";
+            $sth = $sth{haztable};
+            $count = $sth->execute('bucardo',$stage_table);
+            $sth->finish();
+            if ($count < 1) {
+                my $unlogged = $dbh->{pg_server_version} >= 90100 ? 'UNLOGGED' : '';
+				$SQL = qq{
+                   CREATE $unlogged TABLE bucardo."$stage_table" (
+                      txntime    TIMESTAMPTZ,
+                      targetdb   TEXT
+                   );
+                };
+				run_sql($SQL,$dbh);
+            }
+
+            $count = $sth->execute('bucardo','bucardo_delta_targetdb_unique');
+            $sth->finish();
+            if ($count < 1) {
+                $dbh->do(qq{CREATE INDEX bucardo_delta_targetdb_unique ON bucardo.bucardo_delta_targets(tablename,targetdb)});
+            }
+
+            ## Override the 'ping' kick trigger if needed
+            $SQL = qq{SELECT trigger_language,trigger_body,trigger_level FROM bucardo_custom_trigger
+              WHERE goat=$tinfo->{id}
+              AND status='active'
+              AND trigger_type='triggerkick'
+    };
+            elog(DEBUG, "Running $SQL");
+            $rv = spi_exec_query($SQL);
+            if ($rv->{processed}) {
+                my $custom_function_name = "bucardo_triggerkick_$tinfo->{id}";
+                $sth = $sth{hazfunc};
+                $count = $sth->execute('bucardo', $custom_function_name);
+                $sth->finish();
+                if ($count < 1) {
+                    my $custom_trigger_level = $rv->{rows}[0]{trigger_level};
+                    $SQL = qq{
+               CREATE OR REPLACE FUNCTION bucardo."$custom_function_name"()
+               RETURNS TRIGGER 
+               LANGUAGE $rv->{rows}[0]{trigger_language}
+               AS \$notify\$
+        };
+                    $SQL .= qq{ $rv->{rows}[0]{trigger_body} };
+                    $SQL .= qq{ \$notify\$; };
+                }
+            }
+
+            ## Add in the ping triggers as needed
+            $sth = $sth{haztrig};
+            $count = $sth->execute("$schema.$table", $kickfunc);
+            $sth->finish();
+            if ($count < 1) {
+                my $ttrig = $dbh->{pg_server_version} >= 80400 ? ' OR TRUNCATE' : '';
+                my $custom_trigger_level = '';
+                my $custom_function_name = '';
+                if ($custom_trigger_level && $custom_function_name) {
+                    $SQL = qq{
+               CREATE TRIGGER "$kickfunc" FIXMENAME
+               AFTER INSERT OR UPDATE OR DELETE$ttrig ON $safeschema.$safetable
+               FOR EACH $custom_trigger_level EXECUTE PROCEDURE bucardo."$custom_function_name"()
+        };
+                } else {
+                    $SQL = qq{
+               CREATE TRIGGER "$kickfunc"
+               AFTER INSERT OR UPDATE OR DELETE$ttrig ON $safeschema.$safetable
+               FOR EACH STATEMENT EXECUTE PROCEDURE bucardo."$kickfunc"()
+        };
+                }
+                run_sql($SQL,$dbh);
+            }
+
+        } ## end each TABLE
+    }     ## end each SCHEMA
+
+	$dbh->commit();
+
+}         ## end connecting to each database
+
+## Gather information from bucardo_config
+my $config;
+$SQL = 'SELECT setting,value FROM bucardo_config';
+$rv = spi_exec_query($SQL);
+for my $row (@{$rv->{rows}}) {
+    $config->{$row->{setting}} = $row->{value};
+}
+
+
+## Update the bucardo_delta_targets table as needed
+## FIXME FROM old
+#if ($info->{synctype} eq 'swap') {
+    ## Add source to the target(s)
+    ## MORE FIXME
+#}
+
+## Disconnect from all our databases
+for (values %{$cache{dbh}}) {
+    $_->disconnect();
+}
+
+## Let anyone listening know that we just finished the validation
+$SQL = qq{NOTIFY "bucardo_validated_sync_$syncname"};
+spi_exec_query($SQL);
+
+elog(LOG, "Ending validate_sync for $syncname");
+
+return 'MODIFY';
+
 $bc$;
+-- end of validate_sync
 
 CREATE OR REPLACE FUNCTION bucardo.validate_sync(text)
 RETURNS TEXT
@@ -2653,7 +2216,7 @@ AS $bc$
     $SQL = qq{SELECT 1 FROM herd WHERE name = '$herd'};
     $rv = spi_exec_query($SQL);
     if (!$rv->{processed}) {
-       elog(ERROR, "Cannot delete: sync refers to an invalid herd: $herd");
+	   #elog(ERROR, "Cannot delete: sync refers to an invalid herd: $herd");
     }
 
     $SQL = qq{
@@ -2676,7 +2239,7 @@ AS $bc$
     }
     $rv = spi_exec_query("SELECT bucardo.db_getconn('$sourcedb') AS conn");
     $rv->{processed} or die qq{Could not find a database named "$sourcedb"};
-    my ($dsn,$user,$pass,$ssp) = split /\n/ => $rv->{rows}[0]{conn};
+    my ($dbtype,$dsn,$user,$pass,$ssp) = split /\n/ => $rv->{rows}[0]{conn};
     elog(DEBUG, "Connecting to $dsn as $user inside bucardo_delete_sync");
     my $sdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
     $ssp or $sdbh->{pg_server_prepare} = 0;
@@ -2719,7 +2282,7 @@ AS $bc$
     (my $targetdb = $old->{targetdb}) =~ s/'/''/go;
     $rv = spi_exec_query("SELECT bucardo.db_getconn('$targetdb') AS conn");
     $rv->{processed} or die qq{Could not find a database named "$targetdb"};
-    ($dsn,$user,$pass,$ssp) = split /\n/ => $rv->{rows}[0]{conn};
+    ($dbtype,$dsn,$user,$pass,$ssp) = split /\n/ => $rv->{rows}[0]{conn};
     elog(DEBUG, "Connecting to $dsn as $user inside bucardo_delete_sync");
     my $tdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
     $ssp or $tdbh->{pg_server_prepare} = 0;
@@ -2741,50 +2304,6 @@ $bc$;
 CREATE TRIGGER bucardo_delete_sync
   AFTER DELETE ON bucardo.sync
   FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delete_sync();
-
-CREATE SEQUENCE bucardo.customcode_id_seq;
-CREATE TABLE bucardo.customcode (
-  id        INTEGER     NOT NULL DEFAULT nextval('customcode_id_seq'),
-              CONSTRAINT customcode_id_pk PRIMARY KEY (id),
-  name      TEXT        NOT NULL UNIQUE,
-  about     TEXT            NULL,
-  whenrun   TEXT        NOT NULL,
-  getdbh    BOOLEAN     NOT NULL DEFAULT 'true',
-  getrows   BOOLEAN     NOT NULL DEFAULT 'false',
-  trigrules BOOLEAN     NOT NULL DEFAULT 'false',
-  src_code  TEXT        NOT NULL,
-  cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-ALTER TABLE bucardo.customcode ADD CONSTRAINT customcode_whenrun
-  CHECK (whenrun IN ('before_txn',
-  'before_check_rows',
-  'before_trigger_drop',
-  'after_trigger_drop',
-  'after_table_sync',
-  'exception',
-  'conflict',
-  'before_trigger_enable',
-  'after_trigger_enable',
-  'after_txn',
-  'before_sync',
-  'after_sync'));
-
-CREATE TABLE bucardo.customcode_map (
-  code     INTEGER     NOT NULL,
-             CONSTRAINT customcode_map_code_fk FOREIGN KEY (code) REFERENCES bucardo.customcode(id) ON DELETE CASCADE,
-  sync     TEXT            NULL,
-             CONSTRAINT customcode_map_sync_fk FOREIGN KEY (sync) REFERENCES bucardo.sync(name) ON UPDATE CASCADE ON DELETE SET NULL,
-  goat     INTEGER         NULL,
-             CONSTRAINT customcode_map_goat_fk FOREIGN KEY (goat) REFERENCES bucardo.goat(id) ON DELETE SET NULL,
-  active   BOOLEAN     NOT NULL DEFAULT 'true',
-  priority SMALLINT    NOT NULL DEFAULT 0,
-  cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-ALTER TABLE bucardo.customcode_map ADD CONSTRAINT customcode_map_syncgoat
-  CHECK (sync IS NULL OR goat IS NULL);
-
-CREATE UNIQUE INDEX customcode_map_unique_sync ON bucardo.customcode_map(code,sync) WHERE sync IS NOT NULL;
-CREATE UNIQUE INDEX customcode_map_unique_goat ON bucardo.customcode_map(code,goat) WHERE goat IS NOT NULL;
 
 
 CREATE OR REPLACE FUNCTION bucardo.find_unused_goats()
@@ -2836,6 +2355,8 @@ CREATE TABLE bucardo.bucardo_rate (
   slavecommit  TIMESTAMPTZ NOT NULL,
   total        INTEGER     NOT NULL
 );
+COMMENT ON TABLE bucardo.bucardo_rate IS $$If track_rates is on, measure how fast replication occurs$$;
+
 CREATE INDEX bucardo_rate_sync ON bucardo.bucardo_rate(sync);
 
 -- Keep track of any upgrades as we go along
@@ -2845,6 +2366,12 @@ CREATE TABLE bucardo.upgrade_log (
   version  TEXT        NOT NULL,
   cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.upgrade_log IS $$Historical record of upgrade actions$$;
+
+INSERT INTO bucardo.upgrade_log(action,summary,version)
+  SELECT 'Initial install', '', value
+  FROM bucardo.bucardo_config
+  WHERE setting = 'bucardo_version';
 
 -- Allow users to insert messages in the Bucardo logs
 
@@ -2862,10 +2389,37 @@ CREATE TABLE bucardo.bucardo_log_message (
   msg TEXT NOT NULL,
   cdate TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE bucardo.bucardo_log_message IS $$Helper table for sending messages to the Bucardo logging system$$;
+
 CREATE TRIGGER bucardo_log_message_trigger
   AFTER INSERT ON bucardo.bucardo_log_message
   FOR EACH STATEMENT EXECUTE PROCEDURE bucardo.bucardo_log_message_notify();
 
+CREATE FUNCTION bucardo.magic_update()
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $bc$
+DECLARE
+  myver INTEGER;
+BEGIN
+  -- What version are we?
+  SELECT INTO myver setting FROM pg_settings WHERE name = 'server_version_num';
+
+  -- If we are 9.1 or better, change some tables to UNLOGGED
+  IF myver >= 90100 THEN
+    -- bucardo.dbrun: DROP, RECREATE, or SET an attribute?
+  END IF; -- end of Postgres 9.1 and up
+
+  RETURN ''::TEXT;
+END;
+$bc$;
+
+SELECT bucardo.magic_update();
+
+SELECT plperlu_test();
+
+
+COMMIT;
 
 --
 -- END OF THE SCHEMA

@@ -1,93 +1,111 @@
-[GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
+[ GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-Bucardo version 4.4.3, released April 15, 2011
+Bucardo version 5.0.0, released ??, 2011
 
-  - Fix rare race condition when slave database dies. [GSM]
-    Thanks to Kaveh Mousavi Zamani for the report.
+  - Change the way that swap syncs work: should be much faster [GSM]
 
+  - Use asynchronous queries when possible [GSM]
 
-Bucardo version 4.4.2, released March 17, 2011
+  - Redo the makedelta system, and break into source_makedelta and target_makedelta 
+    options for both syncs and goats, which inherit from the higher level (goat 
+    inherits from sync inherits from db). Add makedelta as on/off for db. [GSM]
 
-  - Fix incorrect SET TIME ZONE inside the bucardo_delta functions. [GSM]
+  - Overhaul of sequence handling: now allows for all attributes to be replicated, 
+    such as INCREMENT_BY and MAXVALUE [GSM]
 
+  - Allow triggers and rules to work on bucardo_delta and bucardo_track by 
+    setting new column bucardo.db.makedelta_triggers to true. [GSM]
 
-Bucardo version 4.4.1, released November 9, 2010
+  - Fix for failing swap syncs when column is not all lowercase. [GSM]
 
- - Set the search_path to prevent bogus warnings on startup about sequence 
-   mismatches based on schema names. [GSM] (Bug #17)
+  - Fix for proper sourcelimit and targetlimit calculations. [GSM]
 
- - Fix failing makedelta when using multi-column primary keys. 
-   [GSM, reported by Michelle Sullivan]
+  - Add slony_migrator.pl script [Josh Tolley]
 
- - Fix for failing swap syncs when column is not all lowercase. [GSM]
+  - Add example scripts in 'bucardo_examples' directory [Selena Deckelmann]
 
- - Fix errors with bytea and swap syncs. [GSM]
+  - Allow 'list sync' to filter by 'active' and 'inactive' [GSM]
 
- - Use clock_timestamp if Postgres version is 8.2 or better. (Bug #25)
-   Thanks to David Christensen <david@endpoint.com> for digging in 
-   and solving this.
+  - Remove unused config variable 'upsert_attempts' [GSM]
 
- - Fix error in bind_param for target to source. [GSM]
+  - Show detailed information on KID error exit. [GSM]
 
- - Make sure we truly reset onetimecopy for persistent controllers and children. [GSM]
+  - Fix bug in bucardo_purge_q_table in index detection logic. [Aolmezov]
 
- - If in onetimecopy mode, always create a q entry, regardless of synctype. [GSM]
+  - Show the reason why a sync failed on a failed bucardo_ctl kick. [GSM]
 
- - Rename the ENCODE call for bytea selects. [GSM]
+  - Fix errors with bytea and swap syncs. [GSM]
 
- - Always make the source transaction serializable. [GSM]
+  - Add 'default_standard_conflict' option, per idea from Franz Dürr. [GSM]
 
- - Force time zone to GMT to resolve timestamptz issues with bucardo_delta
-   [GSM, Michelle Sullivan]
+  - Force time zone to GMT to resolve timestamptz issues with bucardo_delta
+    [GSM, Michelle Sullivan]
 
- - Allow '2' as a valid sqlstate after exception thrown. [GSM]
+  - Add a log_level parameter, and classify all messages inside Bucardo.pm
+    with a log_level of TERSE, NORMAL, VERBOSE, or DEBUG. [Rosser Schwarz and GSM]
 
- - Fix typo with 'lowest/highest' standard conflict methods. Caught by Don Drake.
+  - Relax SELECT version() regex in bucardo_ctl, to let modified versions 
+    of Postgres tell us their version. [GSM]
 
- - Remove race condition from bucardo_purge_q_table() [GSM]
+  - Fix incorrect automatic population of database when using bucardo_ctl 
+    add database and only one database exists. [GSM]
 
- - Make search_path declaration LOCAL in bucardo_audit() [GSM]
+  - Fix failing makedelta when using multi-column primary keys. 
+    [GSM, reported by Michelle Sullivan]
 
- - Fix bug in bucardo_purge_q_table in index detection logic. [Aolmezov]
+  - Add new vacuum_after_copy variable for goats and syncs. [GSM]
 
- - Don't bother comparing the 'log_cnt' field of sequences. [Rosser Schwarz]
+  - Do not perform a checktime kick if onetimecopy mode is on. [GSM]
 
- - Do not perform a checktime kick if onetimecopy mode is on. [GSM]
+  - New syncs of type fullcopy now default to false for ping, stayalive, 
+    and kidsalive. [GSM, idea from Andrew Spencer]
 
- - Add quote() methods to safe list for DBIx::Safe call [GSM]
+  - Refuse to start if the bucardo database version does not match that of 
+    bucardo_ctl (the former is set by 'bucardo_ctl upgrade') [GSM]
 
- - Add -vv option to bucardo_ctl as a shortcut for --verbose --verbose [GSM]
+  - Set the search_path to prevent bogus warnings on startup about sequence 
+    mismatches based on schema names. [GSM] (Bug #17)
 
- - Don't allow kicking of inactive syncs. [GSM]
+  - Add a --force option so we can remove databases via 'bucardo_ctl remove db'
+    along with all related goats and syncs. [GSM]
 
- - Relax SELECT version() regex in bucardo_ctl, to let modified versions 
-   of Postgres tell us their version. [GSM]
+  - Remove race condition from bucardo_purge_q_table() [GSM]
 
- - Change DESTDIR to INSTALL_BASE in the makefile [GSM]
+  - Add new options for 'bucardo_ctl add db': addalltables and addallsequences [GSM]
 
- - No need to look at anything but ONLY master_q for populate_child_q function. [GSM]
+  - Allow 'bucardo_ctl status' to run even if piddir is not available. [GSM]
 
- - Automatically create the bucardo (superuser) if we can connect as 'postgres'. [GSM]
+  - Don't bother comparing the 'log_cnt' field of sequences. [Rosser Schwarz]
 
- - Allow 'bucardo_ctl status' to run even if piddir is not available. [GSM]
+  - Allow "schema.table" format for bucardo_ctl list tables [GSM]
 
- - Allow "schema.table" format for bucardo_ctl list tables [GSM]
+  - Add new option "log_microsecond" to show sub-second output in logs. [GSM]
 
- - Show the database name when listing herds via bucardo_ctl. [GSM]
+  - Make sure we update bucardo_config.bucardo_current_version when doing 
+    a bucardo_ctl upgrade [GSM] (Bug #5)
 
- - Show the database name when listing sequences via bucardo_ctl. [Douglas Tan]
+  - Automatically create the bucardo (superuser) if we can connect as 'postgres'. [GSM]
 
- - Make sure we update bucardo_config.bucardo_current_version when doing 
-   a bucardo_ctl upgrade [GSM] (Bug #5)
+  - Allow removal of tables from herds via bucardo_ctl. [GSM]
 
- - Add additional clause to the the q_cleanup index. [GSM]
+  - Add create_child_q_table() function. [GSM]
 
- - Remove unused config variable 'upsert_attempts' [GSM]
+  - Allow 'bucardo_ctl update herd foo remove <table(s)>'
+    and 'bucardo_ctl update herd foo add <table(s)>' [GSM]
 
- - Remove unused 'kick_sleep' config variable. [GSM]
+  - Better formatting of bucardo.reason.log, and log startup failures. [GSM]
 
- - Show additional version information on startup for debugging [GSM]
+  - Log the current configuration settings on startup. [GSM]
 
+  - Fix incorrect assignment of ppid in the bucardo.q table. [GSM]
+
+  - Remove unused 'kick_sleep' config variable. [GSM]
+
+  - Show the database name when listing herds via bucardo_ctl. [GSM]
+
+  - Show the database name when listing sequences via bucardo_ctl. [Douglas Tan]
+
+  - Show each target's Postgres version, time, and timezone on first connect. [GSM]
 
 Bucardo version 4.4.0, released October 14, 2009
 
@@ -120,6 +138,10 @@ Bucardo version 4.4.0, released October 14, 2009
 
   - Allow testing of multiple versions of Postgres at the same time by setting the 
     environment variables PGBINDIR[A-Z]. [GSM]
+
+  - Don't look for hard-coded string to determine if cluster is up [GSM, thanks 
+    to Andre Felipe Machado for suggesting]
+
 
 Bucardo version 4.3.0, released October 8, 2009
 
@@ -322,7 +344,6 @@ New features:
 
   - Add the bucardo_custom_trigger table, which allows tight control of exactly 
     what items in a table will be replicated. [Ben Allen]
-
   - Add the bucardo_rate table to track exactly how long replication takes
     on a per-sync and per-table basis. [GSM]
 

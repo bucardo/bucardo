@@ -144,7 +144,6 @@ Sabino
 Mullane
 bucardorc
 customselect
-dropschema
 fullcopy
 pushdelta
 perl
@@ -158,6 +157,9 @@ subdirectory
 
 ## Changes
 
+
+- Allow multiple item updates, e.g. bucardo_ctl update sync s1 s2 s3 ping=true
+- Allow wildcards in item updates, e.g. bucardo_ctl update sync s* ping=true
 Aolmezov
 Backcountry
 Bahlai
@@ -165,7 +167,6 @@ Boes
 BSD's
 BUCARDODIR
 Deckelmann
-DESTDIR
 Farmawan
 FreeBSD
 GSM
@@ -216,7 +217,6 @@ mcp
 migrator
 multi
 onetimecopy
-param
 pgbouncer
 pid
 pidfile
@@ -226,12 +226,10 @@ rc
 respawn
 rowid
 schemas
-serializable
 slony
 smallint
 sourcedbh
 sourcelimit
-sqlstate
 src
 stayalive
 targetlimit
@@ -241,7 +239,7 @@ timestamptz
 trigrules
 upsert
 wildcards
-vv
+
 ## TODO
 
 CPAN

@@ -28,17 +28,25 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Check for superuser on startup, to prevent errors that only show when a KID tries something.
 - Add a flag that allows for table structure checking before each sync
 - Make a Bucardo bundle for CPAN-like fun
-- Optimize swaps: use COPY if only new stuff on both sides. If exception, fall back
 - Readonly slaves: trigger/rule to prevent with good message
 - bucardo_help() function to explain all
 - Handle non-orderable data types such as polygons
 - Put this list into a bug tracker
 - Use 2PC where possible
 - Consider intra-kid communication to copy tables one-by-one to keep things in cache
-- Use DBD::Pg async mode to reduce waiting, esp. for multi-master
 - Consider failover strategies
 - Log validate_sync changes somewhere, add rollback statements
 - Consider keeping long-term stats for a sync/table: total rows transferred, etc.
 - Add support for manual DDL changes (in progress)
 - Add support for automatic DDL changes (in progress)
 - Cascading slaves: makedelta should create infrastructure as necessary
+- Use polling not sleep for loop notificationa
+
+- Remove large src_code sections from the kid output when dieing
+- Force to C locale until we get i18n in place
+
+- Clean out dbrun when starting up
+
+- Use C triggers for the delta stuff if we can
+
+Test: no Dumper without a $DEBUG in bucardo_ctl
