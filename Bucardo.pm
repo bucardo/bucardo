@@ -6650,7 +6650,7 @@ sub push_rows {
     ## Build a list of all PK values to feed to IN clauses
     my $pkvals = '';
     for my $key (keys %$rows) {
-        my $inner = join ',' => map { s/\'/''/go; qq{'$_'}; } split '\0' => $key;
+        my $inner = join ',' => map { s{\'}{''}go; s{\\}{\\\\}go; qq{'$_'}; } split '\0' => $key;
         $pkvals .= $numpks > 1 ? "($inner)," : "$inner,";
     }
     chop $pkvals;
