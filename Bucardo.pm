@@ -2888,7 +2888,7 @@ sub start_controller {
                                 ## Connect to the source database
                                 my $srcdbh = $self->connect_database($sourcedb);
                                 ## Create a list of all targets
-                                my $targetlist = join ',' => map { s/\'/''/g; qq{'$_'} } keys %$targetdb;
+                                my $targetlist = join ',' => map { s/\'/''/g; s{\\}{\\\\}go; qq{'$_'} } keys %$targetdb;
                                 my $numtargets = keys %$targetdb;
                                 for my $g (@{$sync->{goatlist}}) {
 
@@ -4825,7 +4825,7 @@ sub start_kid {
                     ## Build a list of all PK values
                     my $pkvals = '';
                     for my $row (@$info) {
-                        my $inner = join ',' => map { s/\'/''/go; qq{'$_'}; } @$row;
+                        my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}go; qq{'$_'}; } @$row;
                         $pkvals .= $g->{pkcols} > 1 ? "($inner)," : "$inner,";
                     }
                     chop $pkvals;
@@ -4876,7 +4876,7 @@ sub start_kid {
                                 my $dcount = 0;
                                 my $delcount = 0;
                                 for my $row (@$info) {
-                                    my $inner = join ',' => map { s/\'/''/go; qq{'$_'}; } @$row;
+                                    my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}go; qq{'$_'}; } @$row;
                                     ## Put this group of pks into a temporary array
                                     $delchunks[$delcount] .= $g->{pkcols} > 1 ? "($inner)," : "$inner,";
                                     ## Once we reach out limit, start appending to the next bit of the array
@@ -5491,6 +5491,7 @@ sub start_kid {
                         }
                         else {
                             (my $safepkval = $pkval) =~ s/\'/''/go;
+							$safepkval =~ s{\\}{\\\\}go;
                             push @safepk => qq{'$safepkval'};
                         }
                     }
@@ -5502,6 +5503,7 @@ sub start_kid {
                             }
                             else {
                                 (my $safepkval = $pk) =~ s/\'/''/go;
+								$safepkval =~ s{\\}{\\\\}go;
                                 push @safepk => qq{'$safepkval'};
                             }
                         }
