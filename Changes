@@ -6,6 +6,9 @@ Bucardo version 4.4.4, released May 14, 2011
     DELETE queries for pushdelta syncs [GSM]. Reported 
     by Gabriel Weinberg <yegg@alum.mit.edu>
 
+  - Report correct number of inserts/deletions in 
+    bucardo_ctl status [GSM]. Reported by Gabriel 
+    Weinberg <yegg@alum.mit.edu>
 
 Bucardo version 4.4.3, released April 15, 2011
 
