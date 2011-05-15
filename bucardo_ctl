@@ -5290,9 +5290,9 @@ sub add_table {
             ## Get a list of matching tables from all (active?) databases
             my %goats_per_db;
             for my $dbname (sort keys %$DB) {
+                next if $DB->{$dbname} ne 'postgres';
                 $goats_per_db{$dbname} = find_goats_in_db($dbname, @nouns);
             }
-            die;
 
 sub find_goats_in_db {
 
@@ -5393,7 +5393,7 @@ sub find_relnames {
             next;
         }
         eval {
-            $sth->execute($s,$t,$type,@$vals);
+            $sth->execute($s,$t,$type,$db);
         };
         if ($@) {
             die qq{Failed to add $type "$s.$t": $@\n};
@@ -5433,9 +5433,10 @@ sub find_relnames {
 
 sub _list_databases {
 
-    return if ! keys %{$global{db}};
+    return if ! keys %{ $DB };
     warn "The following databases are available:\n";
-    for (sort keys %{$global{db}}) {
+    for (sort keys %{ $DB }) {
+        next if $DB->{$_}{dbtype} ne 'postgres';
         print "$_\n";
     }
     return;
