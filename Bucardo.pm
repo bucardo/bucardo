@@ -6561,7 +6561,7 @@ sub delete_rows {
             $SQL = "$self->{sqlprefix}DELETE FROM $S.$T WHERE $pkcols IN (";
             my @delq;
             for my $key (keys %$rows) {
-                my $inner = join ',' => map { s/\'/''/go; qq{'$_'}; } split '\0' => $key;
+                my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0' => $key;
                 $SQL .= "($inner),";
             }
             chop $SQL;
