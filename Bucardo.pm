@@ -13,7 +13,7 @@ use 5.008003;
 use strict;
 use warnings;
 
-our $VERSION = '4.4.3';
+our $VERSION = '4.4.4';
 
 use sigtrap qw( die normal-signals ); ## Call die() on HUP, INT, PIPE, or TERM
 use Config;                           ## Used to map signal names
@@ -6235,7 +6235,7 @@ Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This document describes version 4.4.3 of Bucardo
+This document describes version 4.4.4 of Bucardo
 
 =head1 WEBSITE
 

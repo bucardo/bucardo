@@ -1,5 +1,12 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
+Bucardo version 4.4.4, released May 14, 2011
+
+  - Make sure we escape backslashes when building the 
+    DELETE queries for pushdelta syncs [GSM]. Reported 
+    by Gabriel Weinberg <yegg@alum.mit.edu>
+
+
 Bucardo version 4.4.3, released April 15, 2011
 
   - Fix rare race condition when slave database dies. [GSM]

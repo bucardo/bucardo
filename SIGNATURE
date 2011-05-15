@@ -16,21 +16,21 @@ Hash: RIPEMD160
 
 SHA1 57c33900036014972baca98ce5c014e802050bc7 .gitignore
 SHA1 721d9bef993d601be558b059f33f17e38edd6d3c .perlcriticrc
-SHA1 4cfee59e4bebdfc9ef55b922c788101aba32aeb9 Bucardo.pm
+SHA1 7aa1cdf2ec848b446f5eb7cbbc3d028ff36c8462 Bucardo.pm
 SHA1 f810abc8c011ef501ad95978edbbd06a6995e4b2 Bucardo.pm.html
-SHA1 c0b595f53556bd67d0fdd2f4bc6efed95ea8a5fc Changes
+SHA1 9ede87a473d81b5456c542b2881ee1c4e88a85d4 Changes
 SHA1 1f0f70bd74872837da0b48c83df3800cf4c7e0b0 INSTALL
 SHA1 bf81be749492fdcc2506046d75892c5c20286fb2 LICENSE
 SHA1 78f25ec1a2709032ee4a42c360890973cda42275 MANIFEST
 SHA1 b8daeb8ec60c2bff1a99b5081f9ba46c255dc339 MANIFEST.SKIP
-SHA1 beab3f2d8cc8d13094e3dc06a9ebaf2b58d12923 META.yml
-SHA1 5a746afaa4dddf6a6520012bb8bd0999ef574add Makefile.PL
-SHA1 bbe50e24252a98c23f4c487d761d127aab67eb5c README
+SHA1 8cf949a0538478ab9ff05a53d3d908cf338619b9 META.yml
+SHA1 d43d90f1588721655aa0f06f811b19962b5200c5 Makefile.PL
+SHA1 8422abb8d835719c64b1f2816b1e519f63257919 README
 SHA1 e3b3b6308e27cc932c92cf6e2e46d2920ad47a6d README.dev
 SHA1 8d5bda2fcaff0cc9840fae795275d0be61080b6f TODO
 SHA1 11dee45376376dd58a27beb74d5ef284735b59fe UPGRADE
-SHA1 bd0be9d55013816e9cc414b77a0d5c126f98c67b bucardo.schema
-SHA1 ddc9cb21ec552e6cf073554035445c8c1dbb0b55 bucardo_ctl
+SHA1 a24d88319e39140a8ea7b4c2588c834eb1023c7b bucardo.schema
+SHA1 33d7a6f08d9b65c9d4dd7fa6fe568892ea4d2542 bucardo_ctl
 SHA1 1a8401b69caef867034d11cbd9a9e58e12157606 bucardo_ctl.html
 SHA1 98e77ebb6f5d7477d1dc0a7ca2ed79f3f791df5e patches/Bucardo.4.4.0.fix.search.path.patch.txt
 SHA1 059acdd6381de8cbded6b901f70ee2a986817930 scripts/README
@@ -41,24 +41,7 @@ SHA1 8233a545068fa32b70878e42286218977812cbb9 scripts/check_bucardo_sync
 SHA1 7152048497806c7ce141958f0f291cdabfe8b52f scripts/slony_migrator.pl
 SHA1 2d1285b3ab048742318e529ee331416f67f8d5a2 t/00-release.t
 SHA1 d092deff719749b3d32de4f1c7e8941fe133e703 t/01-basic.t
-SHA1 c371b42f9ad9abd8f60b3bb9b56065c8794e579d t/02-monkey_with_db_table.t
-SHA1 e886fbeee1d0bf0826cfda5256e2a8582382cd0e t/02-monkey_with_goat_table.t
-SHA1 791f4db9e572be6b2d78dbdeb0a32dd5bf829246 t/02-monkey_with_herd.t
-SHA1 6f258a4db24c21b0b021dc1f786c73d577ecc550 t/02-monkey_with_sync_table.t
-SHA1 ccacd73522ad318de945c39660b5a4af0070fc05 t/02-simple.t
-SHA1 3c24b4f558a5ebdec287514ead4a0cee4cfc5564 t/03-goat.t
-SHA1 0da14327b4028a9917cf2319192c6afdf76b4456 t/04-pushdelta.t
-SHA1 46626ef9be53f7639bbbd244c6e8fbece290529e t/05-fullcopy.t
-SHA1 a9494b7fc38b90319328d67704d75e9d3f85ca90 t/06-multicolpk.t
-SHA1 c0196da55b65a43313a670e79495fef3ee814f72 t/06-multicolpushdelta.t
-SHA1 875aa3ef88bcaaaefb3242c9e9de9fa225f12b1b t/07-multicolswap.t
-SHA1 205367f8191023d1d07b0ff8db8085b632c7a05a t/08-wildkick.t
 SHA1 522f9acee039331212339253ab7bc5d62c4d9c5a t/09-uniqueconstraint.t
-SHA1 8836a6207adb9b1fc58c1bdd8facd8273f04b0d0 t/10-makedelta.t
-SHA1 9c52f264403b50f465d6e55463aeef931d380baf t/11-customselect.t
-SHA1 2726da3c6758da440dcada745b7cfde50f1a2ba5 t/12-addtable.t
-SHA1 5d05c7c5d67f28413e4daf3ee74e40a73a6fcf27 t/13-ddl.t
-SHA1 c8d02738e72e10c91559b51e71d00f74cc8c4fef t/14-truncate.t
 SHA1 84b9dcbebeaf3d9a309f6b86a58a3348fa72c232 t/15-star.t
 SHA1 5d8863591abff577746ee226cd2db68fe50e8da6 t/98-cleanup.t
 SHA1 32c1f4deff2f03393ef4bc746a9250569464a3e8 t/99-signature.t
@@ -66,7 +49,7 @@ SHA1 3b4d7c1913f2703457e842b952fd2de53cd562f3 t/BucardoTesting.pm
 SHA1 e34204e19b81328cf90ad2e656db9a4e4ae57f0a t/truncate_test_logs.notest
 -----BEGIN PGP SIGNATURE-----
 
-iEYEAREDAAYFAk2nsfQACgkQvJuQZxSWSsgxYwCgwMykUGzdDhxtjCD2PYVB/Gh9
-hpEAn2hLRqCF9b2Fon1jruHK4CncRlM9
-=nkiI
+iEYEAREDAAYFAk3PPecACgkQvJuQZxSWSsjGAwCgog+DmiVLGPJj/skac25D/baz
+jFMAnik19gwOpIUw4PRJkdFcEvBv4TQp
+=1nsF
 -----END PGP SIGNATURE-----
