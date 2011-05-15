@@ -4924,6 +4924,7 @@ sub start_kid {
                             my $buffer = '';
                             $self->glog(qq{Begin COPY to $S.$T});
 
+							my $rows_copied = 0;
                             if ($source_modern_copy and @delchunks) {
                                 my $dcount = 1;
                                 for my $chunk (@delchunks) {
@@ -4933,6 +4934,7 @@ sub start_kid {
                                     $dcount++;
                                     while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
                                         $targetdbh->pg_putcopydata($buffer);
+										$rows_copied++;
                                     }
                                 }
                             }
@@ -4940,12 +4942,12 @@ sub start_kid {
                                 $sourcedbh->do($srccmd);
                                 while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
                                     $targetdbh->pg_putcopydata($buffer);
+									$rows_copied++;
                                 }
                             }
 
                             $targetdbh->pg_putcopyend();
-                            $self->glog(qq{End COPY to $S.$T});
-                            $dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T} = @$info;
+                            $dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T} = $rows_copied;
 
                             if (! $source_modern_copy) {
                                 $self->glog("Dropping temporary table $temptable");
