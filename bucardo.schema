@@ -1344,7 +1344,7 @@ END;
             $SQL = qq{
                     CREATE TABLE bucardo.bucardo_delta_targets (
                         tablename  OID         NOT NULL,
-                        targetdb   TEXT        NOT NULL,
+                        target     TEXT        NOT NULL,
                         cdate      TIMESTAMPTZ NOT NULL DEFAULT now()
                     );
                 };
@@ -1362,9 +1362,26 @@ END;
                   LANGUAGE plpgsql
                   SECURITY DEFINER
                   AS \$clone\$
+				  DECLARE
+                    deltaname TEXT;
+                    myst TEXT;
                   BEGIN
                     INSERT INTO bucardo.bucardo_truncate_trigger(tablename,sname,tname,sync)
-                    VALUES (TG_RELID, TG_TABLE_SCHEMA, TG_TABLE_NAME, TG_ARGV[0]);
+                      VALUES (TG_RELID, TG_TABLE_SCHEMA, TG_TABLE_NAME, TG_ARGV[0]);
+
+                    SELECT INTO deltaname
+                      bucardo.bucardo_tablename_maker(TG_TABLE_SCHEMA || '_' || TG_TABLE_NAME);
+
+                    myst = 'TRUNCATE TABLE bucardo.delta_' || deltaname;
+                    EXECUTE myst;
+
+                    myst = 'TRUNCATE TABLE bucardo.track_' || deltaname;
+                    EXECUTE myst;
+
+					-- Not strictly necessary, but nice to have a clean slate
+                    myst = 'TRUNCATE TABLE bucardo.stage_' || deltaname;
+                    EXECUTE myst;
+
                     RETURN NEW;
                   END;
                   \$clone\$;
@@ -1409,7 +1426,7 @@ END;
                         sname       TEXT        NOT NULL,
                         tname       TEXT        NOT NULL,
                         sync        TEXT        NOT NULL,
-                        targetdb    TEXT        NOT NULL,
+                        target      TEXT        NOT NULL,
                         replicated  TIMESTAMPTZ NOT NULL,
                         cdate       TIMESTAMPTZ NOT NULL DEFAULT now()
                     );
@@ -1991,7 +2008,7 @@ SELECT 'Fixme'::TEXT;
 				$SQL = qq{
                    CREATE TABLE bucardo."$track_table" (
                       txntime    TIMESTAMPTZ,
-                      targetdb   TEXT
+                      target     TEXT
                    );
                 };
 				run_sql($SQL,$dbh);
@@ -2003,7 +2020,7 @@ SELECT 'Fixme'::TEXT;
 			$count = $sth->execute('bucardo', $index3_name);
             $sth->finish();
             if ($count < 1) {
-				$SQL = qq{CREATE INDEX $index3_name ON bucardo.$track_table(targetdb, txntime)};
+				$SQL = qq{CREATE INDEX $index3_name ON bucardo.$track_table(target, txntime)};
 			    run_sql($SQL,$dbh);
             }
 
@@ -2017,16 +2034,16 @@ SELECT 'Fixme'::TEXT;
 				$SQL = qq{
                    CREATE $unlogged TABLE bucardo."$stage_table" (
                       txntime    TIMESTAMPTZ,
-                      targetdb   TEXT
+                      target     TEXT
                    );
                 };
 				run_sql($SQL,$dbh);
             }
 
-            $count = $sth->execute('bucardo','bucardo_delta_targetdb_unique');
+            $count = $sth->execute('bucardo','bucardo_delta_target_unique');
             $sth->finish();
             if ($count < 1) {
-                $dbh->do(qq{CREATE INDEX bucardo_delta_targetdb_unique ON bucardo.bucardo_delta_targets(tablename,targetdb)});
+                $dbh->do(qq{CREATE INDEX bucardo_delta_target_unique ON bucardo.bucardo_delta_targets(tablename,target)});
             }
 
             ## Override the 'ping' kick trigger if needed
@@ -2262,7 +2279,7 @@ AS $bc$
     }
 
     ## Try and delete each combo
-    $SQL = "DELETE FROM bucardo.bucardo_delta_targets WHERE targetdb = ? AND tablename = ".
+    $SQL = "DELETE FROM bucardo.bucardo_delta_targets WHERE target = ? AND tablename = ".
         "(SELECT c.oid FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n WHERE c.relname = ? ".
         "AND c.relnamespace = n.oid AND n.nspname = ?)";
     $sth = $sdbh->prepare($SQL);

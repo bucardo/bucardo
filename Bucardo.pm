@@ -879,7 +879,7 @@ sub mcp_main {
 
                     ## Only certain things can be changed "on the fly"
                     for my $val (qw/checksecs stayalive limitdbs do_listen deletemethod status ping
-                                    analyze_after_copy vacuum_after_copy targetgroup targetdb usecustomselect 
+                                    analyze_after_copy vacuum_after_copy targetgroup targetdb usecustomselect
                                     onetimecopy lifetimesecs maxkicks rebuild_index/) {
                         $sync->{$syncname}{$val} = $self->{sync}{$syncname}{$val} = $info->{$val};
                     }
@@ -1932,7 +1932,7 @@ sub start_kid {
 
             ## Check for the latest truncate to this target for each table
             $SQL = 'SELECT 1 FROM bucardo.bucardo_truncate_trigger_log '
-                 . 'WHERE sync = ? AND targetdb=? AND tablename = ? AND replicated = ?';
+                 . 'WHERE sync = ? AND target = ? AND tablename = ? AND replicated = ?';
             $sth{checktruncatelog}{$dbname} = $d->{dbh}->prepare($SQL);
         }
     }
@@ -1971,34 +1971,34 @@ sub start_kid {
                            SELECT 1
                            FROM   bucardo.$g->{tracktable} t
                            WHERE  d.txntime = t.txntime
-                           AND    t.targetdb = TARGETNAME::text
+                           AND    t.target = TARGETNAME::text
                         )
                 };
 
             ## Mark all unclaimed visible delta rows as done in the track table
             $SQL{track}{$g} = qq{
-                INSERT INTO bucardo.$g->{tracktable} (txntime,targetdb)
+                INSERT INTO bucardo.$g->{tracktable} (txntime,target)
                 SELECT DISTINCT txntime, TARGETNAME::text
                 FROM bucardo.$g->{deltatable} d
                 WHERE NOT EXISTS (
                     SELECT 1
                     FROM   bucardo.$g->{tracktable} t
                     WHERE  d.txntime = t.txntime
-                    AND    t.targetdb = TARGETNAME::text
+                    AND    t.target = TARGETNAME::text
                 );
             };
 
             ## The same thing, but to the staging table instead, as we have to
             ## wait for all targets to succesfully commit in multi-source situations
             $SQL{stage}{$g} = qq{
-                INSERT INTO bucardo.$g->{stagetable} (txntime,targetdb)
+                INSERT INTO bucardo.$g->{stagetable} (txntime,target)
                 SELECT DISTINCT txntime, TARGETNAME::text
                 FROM bucardo.$g->{deltatable} d
                 WHERE NOT EXISTS (
                     SELECT 1
                     FROM   bucardo.$g->{tracktable} t
                     WHERE  d.txntime = t.txntime
-                    AND    t.targetdb = TARGETNAME::text
+                    AND    t.target = TARGETNAME::text
                 );
             };
 
@@ -2008,7 +2008,7 @@ sub start_kid {
         for my $dbname (@dbs_source) {
             $x = $sync->{db}{$dbname};
 
-            ## Set the TARGETNAME for each database: the bucardo.track_* targetdb entry
+            ## Set the TARGETNAME for each database: the bucardo.track_* target entry
             ## Until we start using gangs again, just use the dbgroup?
             $x->{TARGETNAME} = "dbgroup $dbs";
 
@@ -2674,7 +2674,7 @@ sub start_kid {
                         $deltacount{source}{truncatelog}{$row->[0]} = $row->[1];
                     }
                     ## Which of the tables we are tracking need truncation support?
-                    $SQL = 'INSERT INTO bucardo.bucardo_truncate_trigger_log (tablename,sname,tname,sync,targetdb,replicated) '
+                    $SQL = 'INSERT INTO bucardo.bucardo_truncate_trigger_log (tablename,sname,tname,sync,target,replicated) '
                         . 'VALUES(?,?,?,?,?,?)';
 
                     for my $g (@$goatlist) {
