@@ -1374,23 +1374,6 @@ sub start_controller {
         $self->{pidmap}{$x->{backend}} = "DB $dbname";
     }
 
-    ## Do a general check for truncate items, merely to hint at the cleanup below
-    ## XXX truncate work
-    if (0 and $synctype eq 'delta') {
-        $SQL = 'SELECT 1 FROM bucardo.bucardo_truncate_trigger WHERE sync = ? AND replicated IS NULL';
-        for my $dbname (sort keys %{ $sync->{db} }) {
-            $x = $sync->{db}{$dbname};
-            next if $x->{role} ne 'source';
-            next if $x->{dbtype} ne 'postgres';
-
-            $self->glog(qq{Checking truncate_trigger table on database "$dbname"}, LOG_NORMAL);
-            $sth = $x->{dbh}->prepare($SQL);
-            $count = $sth->execute($syncname);
-            $sth->finish();
-            $self->{$dbname}{needtruncate} = $count >= 1 ? 1 : 0;
-        }
-    }
-
     ## Set to true if we determine the kid(s) should make a run
     ## Can be set by:
     ##   kick notice from the MCP for this sync
@@ -1482,18 +1465,6 @@ sub start_controller {
                 ## Reset to the original values, in case we changed them
                 $sync->{synctype} = $synctype;
                 $sync->{kidsalive} = $kidsalive;
-            }
-
-            ## XXX truncate work
-            ## This is not foolproof, but it doesn't have to be:
-            ## we still always check bucardo_truncate_trigger_log
-            if ($self->{needtruncate}) { ## XXX per dbname now!
-                ## Clear out any truncate items
-                #my $srcdbh = $sync->{db}{$sourcename}{dbh};
-                #$SQL = 'UPDATE bucardo.bucardo_truncate_trigger SET replicated=now() WHERE sync = ? AND replicated IS NULL';
-                #$sth = $srcdbh->prepare($SQL);
-                #($count = $sth->execute($syncname)) =~ s/0E0/0/o;
-                #$srcdbh->commit();
             }
 
             ## Run all after_sync custom codes
@@ -1920,23 +1891,6 @@ sub start_kid {
         $self->glog(qq{Database "$dbname" backend PID: $x->{backend}}, LOG_VERBOSE);
     }
 
-    ## XXX truncate work
-    if (0 and $synctype ne 'fullcopy' and 0) {
-        for my $dbname (@dbs_source) {
-            my $d = $sync->{db}{$dbname};
-
-            ## Check for any unhandled truncates in general. If there are, no reason to even look at bucardo_delta
-            $SQL = 'SELECT tablename, MAX(cdate) FROM bucardo.bucardo_truncate_trigger '
-                 . 'WHERE sync = ? AND replicated IS NULL GROUP BY 1';
-            $sth{checktruncate}{$dbname} = $d->{dbh}->prepare($SQL);
-
-            ## Check for the latest truncate to this target for each table
-            $SQL = 'SELECT 1 FROM bucardo.bucardo_truncate_trigger_log '
-                 . 'WHERE sync = ? AND target = ? AND tablename = ? AND replicated = ?';
-            $sth{checktruncatelog}{$dbname} = $d->{dbh}->prepare($SQL);
-        }
-    }
-
     ## Set the maximum length of the $dbname.$S.$T string.
     ## Used for logging output
     $self->{maxdbname} = 1;
@@ -2152,7 +2106,7 @@ sub start_kid {
     ## How long it has been since we last ran a ping against our databases
     my $lastpingcheck = 0;
 
-    ## Row counts from bucardo_delta and bucardo_truncate_trigger:
+    ## Row counts from the delta tables:
     my %deltacount;
 
     ## Count of changes made (insert/delete/summary):
@@ -2655,49 +2609,46 @@ sub start_kid {
 
         if ($synctype eq 'delta') {
 
-            ## XXX truncate work
-            ## Check for truncate activity. If found, switch to fullcopy for a table as needed.
-            ## For now, just do pushdelta
-            if (0) {
-                my $sourcename = 'fixme';
-                my $targetname = 'fixme';
-                $self->{sourcetruncate} = $sth{checktruncate}{$sourcename}->execute($syncname);
-                $sth{checktruncate}{$sourcename}->finish() if $self->{sourcetruncate} =~ s/0E0/0/o;
-                $self->glog(qq{Source truncate count: $self->{sourcetruncate}},
-                            $self->{sourcetruncate} ? LOG_NORMAL : LOG_VERBOSE);
-                if ($self->{sourcetruncate}) {
-                    ## For each table that was truncated, see if this target has already handled it
-                    for my $row (@{$sth{checktruncate}{$sourcename}->fetchall_arrayref()}) {
-                        $count = $sth{checktruncatelog}{$sourcename}->execute($syncname, $targetname, @$row);
-                        $sth{checktruncatelog}{$sourcename}->finish();
-                        ($deltacount{source}{truncate}{$row->[0]} = $count) =~ s/0E0/0/o;
-                        $deltacount{source}{truncatelog}{$row->[0]} = $row->[1];
-                    }
-                    ## Which of the tables we are tracking need truncation support?
-                    $SQL = 'INSERT INTO bucardo.bucardo_truncate_trigger_log (tablename,sname,tname,sync,target,replicated) '
-                        . 'VALUES(?,?,?,?,?,?)';
+            ## Check if any tables were truncated on all source databases
+            ## Store the result in $self->{truncateinfo}
+            ## First level keys are schema then table name
+            ## Third level is maxtime and maxdb, showing the "winner" for each table
+            delete $self->{truncateinfo};
 
-                    for my $g (@$goatlist) {
-                        next if $g->{reltype} ne 'table';
-                        ## deltacount may not exist = no truncation needed
-                        ## may exist but be zero = truncate!
-                        ## may exists and be positive = no truncation needed
-                        #$g->{source}{needstruncation} =
-                        #    (exists $deltacount{source}{truncate}{$g->{oid}{$sourcename}} and !$deltacount{source}{truncate}{$g->{oid}{$sourcename}})
-                        #    ? 1 : 0;
-                        ($S,$T) = ($g->{safeschema},$g->{safetable});
-                        if ($g->{source}{needstruncation}) {
-                            #$sth = $sourcedbh->prepare_cached($SQL);
-                            #$sth->execute($g->{oid}{$sourcename},$g->{safeschema},$g->{safetable},$syncname,$targetname,
-                            #            $deltacount{source}{truncatelog}{$g->{oid}{$sourcename}});
-                            #$deltacount{truncates}++;
-                            die "FIXME";
-                            $self->glog(qq{Marking truncate for $S.$T as done in bucardo_truncate_trigger_log}, LOG_DEBUG);
-                        }
+            $SQL = 'SELECT sname, tname, MAX(EXTRACT(epoch FROM cdate)) FROM bucardo.bucardo_truncate_trigger '
+                   . ' WHERE sync = ? AND replicated IS NULL GROUP BY 1,2';
+            for my $dbname (@dbs_source) {
+                $x = $sync->{db}{$dbname};
+
+                ## Remove our previous truncation flag
+                delete $x->{truncatewinner};
+
+                ## Grab the latest truncation time for each table, for this source database
+                $self->glog(qq{Checking truncate_trigger table on database "$dbname"}, LOG_VERBOSE);
+                $sth = $x->{dbh}->prepare($SQL);
+                $count = $sth->execute($syncname);
+                for my $row (@{ $sth->fetchall_arrayref() }) {
+                    my ($s,$t,$time) = @{ $row };
+                    if (! exists $self->{truncateinfo}{$s}{$t}{maxtime}
+                            or $time > $self->{truncateinfo}{$s}{$t}{maxtime}) {
+                        $self->{truncateinfo}{$s}{$t}{maxtime} = $time;
+                        $self->{truncateinfo}{$s}{$t}{maxdb} = $dbname;
                     }
                 }
 
-            } ## end of pushdelta (truncate)
+            } ## end each source database, checking for truncations
+
+            ## Now go through and mark the winner within the "x" hash, for easy skipping later on
+            if (exists $self->{truncateinfo}) {
+                for my $s (keys %{ $self->{truncateinfo} }) {
+                    for my $t (keys %{ $self->{truncateinfo}{$s} }) {
+                        my $dbname = $self->{truncateinfo}{$s}{$t}{maxdb};
+                        $x = $sync->{db}{$dbname};
+                        $x->{truncatewinner}{$s}{$t} = 1;
+                        $self->glog("Truncate winner for $s.$t is database $dbname");
+                    }
+                }
+            }
 
             ## XXX sequence work
             ## First, handle all the sequences
@@ -2728,16 +2679,18 @@ sub start_kid {
                 ## Populate the global vars
                 ($S,$T) = ($g->{safeschema},$g->{safetable});
 
-                ## If this table was truncated on the source, we do nothing here
-                ## XXX decision - does a truncate always win against other sources?
-                if ($g->{source}{needstruncation}) {
-                    $self->glog(qq{Bypassing normal pushdelta counting for $S.$T as this is a truncate}, LOG_DEBUG);
-                    next;
-                }
-
                 ## This is the meat of Bucardo:
                 for my $dbname (@dbs_source) {
                     $x = $sync->{db}{$dbname};
+
+                    ## If we had a truncation, we only get deltas from the "winning" source
+                    if (exists $self->{truncateinfo}{$S}{$T}) {
+                        if (! exists $x->{truncatewinner}{$S}{$T}) {
+                            $self->glog("Skipping deltas from database $dbname, as some other source has truncated",
+                                        LOG_NORMAL);
+                            next;
+                        }
+                    }
 
                     ## Gets all relevant rows from bucardo_deltas: runs asynchronously
                     $sth{getdelta}{$dbname}{$g}->execute();
@@ -2747,6 +2700,10 @@ sub start_kid {
                 ## Order does not really matter here, except for consistency in the logs
                 for my $dbname (@dbs_source) {
                     $x = $sync->{db}{$dbname};
+
+                    ## Skip if truncating and this one is not the winner
+                    next if exists $self->{truncateinfo}{$S}{$T}
+                        and ! exists $x->{truncatewinner}{$S}{$T};
 
                     ## pg_result tells us to wait for the query to finish
                     $count = $x->{dbh}->pg_result();
@@ -2778,6 +2735,9 @@ sub start_kid {
 
                 for my $dbname (@dbs_source) {
                     $x = $sync->{db}{$dbname};
+
+                    next if exists $self->{truncateinfo}{$S}{$T}
+                        and ! exists $x->{truncatewinner}{$S}{$T};
 
                     $self->glog((sprintf q{Delta count for %-*s : %*d},
                                  $self->{maxdbstname},
@@ -3237,7 +3197,7 @@ sub start_kid {
 
                                 my $sdbh = $sync->{db}{$dbname1}{dbh};
 
-                                ## Here's the real action: delete from target, then copy from source to target
+                                ## Here's the real action: delete/truncate from target, then copy from source to target
 
                                 ## For this table, delete all rows that may exist on the target(s)
                                 $dmlcount{deletes} += $self->delete_rows(
@@ -3498,6 +3458,21 @@ sub start_kid {
             ## Remove the old ones, just in case
             delete $x->{filename};
             delete $x->{filehandle};
+        }
+
+        ## If doing truncate, do some cleanup
+        if (exists $self->{truncateinfo}) {
+            ## For each source database that had a truncate entry, mark them all as done
+            $SQL  = 'UPDATE bucardo.bucardo_truncate_trigger SET replicated = now() WHERE sync = ?';
+            for my $dbname (@dbs_source) {
+                $x = $sync->{db}{$dbname};
+                $x->{sth} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
+                $x->{sth}->execute($syncname);
+            }
+            for my $dbname (@dbs_source) {
+                $x = $sync->{db}{$dbname};
+                $x->{dbh}->pg_result();
+            }
         }
 
         ## Run all 'before_trigger_enable' code
@@ -3923,7 +3898,7 @@ sub glog { ## no critic (RequireArgUnpacking)
     my $loglevel = shift || 0;
 
     ## Return and do nothing, if we have not met the minimum log level
-    return if $loglevel > $config{log_level_number};
+
 
     ## We should always have a prefix, either BC!, MCP, CTL, or KID
     ## Prepend it to our message
@@ -4047,7 +4022,7 @@ sub show_db_version_and_time {
 
     return if ! defined $ldbh;
 
-    next if ref $ldbh ne 'DBI::db';
+    return if ref $ldbh ne 'DBI::db';
 
     ## Get the databases epoch, timestamp, and timezone
     $SQL = q{SELECT extract(epoch FROM now()), now(), current_setting('timezone')};
@@ -4715,7 +4690,6 @@ sub validate_sync {
 
         $self->glog(qq{  Inspecting source $g->{reltype} "$g->{schemaname}.$g->{tablename}" on database "$sourcename"}, LOG_NORMAL);
         ## Check the source table, save escaped versions of the names
-
 
         $sth = $sth{checktable};
         $count = $sth->execute("$g->{schemaname}.$g->{tablename}");
@@ -6529,12 +6503,58 @@ sub delete_rows {
         $deldb = [$deldb];
     }
 
+    ## Are we truncating?
+    if (exists $self->{truncateinfo}{$S}{$T}) {
+
+        ## Try and truncate each target
+        for my $t (@$deldb) {
+            my $type = $t->{dbtype};
+
+            ## Postgres is a plain and simple TRUNCATE
+            ## TRUNCATE CASCADE is not needed as everything should be in one 
+            ## sync (herd), and we have turned all FKs off
+            if ('postgres' eq $type) {
+                my $tdbh = $t->{dbh};
+                $tdbh->do("TRUNCATE TABLE $S.$T", { pg_async => PG_ASYNC });
+            } ## end postgres database
+
+            ## For MongoDB, we simply remove everything from the collection
+            ## This keeps the indexes around (which is why we don't "drop")
+            if ('mongo' eq $type) {
+                $self->{collection} = $t->{dbh}->get_collection($T);
+                my $result = $self->{collection}->remove({}, { safe => 1} );
+                $self->glog("Results of removing collection $T:", LOG_VERBOSE);
+                $self->glog((Dumper $result), LOG_VERBOSE);
+                next;
+            }
+
+            if ($type =~ /flat/o) {
+                printf {$t->{filehandle}} qq{TRUNCATE TABLE %S;\n\n},
+                    'flatpg' eq $type ? "$S.$T" : $T;
+                $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
+            }
+
+        } ## end each database to be truncated
+
+        ## Final cleanup for each target
+        for my $t (@$deldb) {
+            my $type = $t->{dbtype};
+            if ('postgres' eq $type) {
+                ## Wrap up all the async truncate call
+                $t->{dbh}->pg_result();
+            }
+        }
+
+        return 0;
+
+    } ## end truncation
+
     ## Setup our deletion SQL as needed
     my %SQL;
     for my $t (@$deldb) {
         my $type = $t->{dbtype};
 
-        ## For mongo, we simply update, so no need to delete at all
+        ## No special preparation for mongo
         next if 'mongo' eq $type;
 
         ## Set the type of SQL we are using: IN vs ANY
@@ -6558,7 +6578,10 @@ sub delete_rows {
         }
         ## Normal DELETE call with IN() clause
         elsif ($sqltype eq 'IN') {
-            $SQL = "$self->{sqlprefix}DELETE FROM $S.$T WHERE $pkcols IN (";
+            $SQL = sprintf '%sDELETE FROM %s WHERE %s IN (',
+                $self->{sqlprefix},
+                'flatsql' eq $type ? "$T" : "$S.$T",
+                $pkcols;
             my @delq;
             for my $key (keys %$rows) {
                 my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0' => $key;
@@ -6573,7 +6596,6 @@ sub delete_rows {
     ## Do each target in turn
     for my $t (@$deldb) {
         my $type = $t->{dbtype};
-        next if 'mongo' eq $type;
 
         if ('postgres' eq $type) {
             my $tdbh = $t->{dbh};
@@ -6585,15 +6607,25 @@ sub delete_rows {
                 $tdbh->do($SQL{IN}, { pg_direct => 1, pg_async => PG_ASYNC });
                 $t->{deletesth} = 0;
             }
+            next;
         } ## end postgres database
 
-        elsif ($type =~ /flat/o) {
+        if ('mongo' eq $type) {
+            $self->{collection} = $t->{dbh}->get_collection($T);
+            my $result = $self->{collection}->remove
+                ({$pkcols => { '$in' => [keys %$rows] }}, { safe => 1 } );
+            #$self->glog("Results of removing from collection $T:", LOG_VERBOSE);
+            #$self->glog((Dumper $result), LOG_VERBOSE);
+            next;
+        }
+
+        if ($type =~ /flat/o) {
             print {$t->{filehandle}} qq{$SQL{IN};\n\n};
             $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
+            next;
         }
-        else {
-            die qq{No support for database type "$type" yet!};
-        }
+
+        die qq{No support for database type "$type" yet!};
     }
 
     ## Final cleanup as needed (e.g. process async results)
@@ -6723,18 +6755,15 @@ sub push_rows {
                 chomp $buffer;
                 my @cols = split /\t/ => $buffer;
 
-                ## Grab the primary keys as the criteria
-                my $criteria = {};
+                ## Our object consists of the primary keys, plus all other fields
+                my $object = {};
                 for my $pkname (@{ $goat->{pkey} }) {
-                    $criteria->{$pkname} = shift @cols;
+                    $object->{$pkname} = shift @cols;
                 }
-
-                ## The rest of the columns become the object
-                my $columns;
                 for my $cname (@{ $goat->{cols} }) {
-                    $columns->{$cname} = shift @cols;
+                    $object->{$cname} = shift @cols;
                 }
-                $self->{collection}->update($criteria, $columns, {upsert => 1, safe => 1});
+                $self->{collection}->insert($object, { safe => 1 });
             }
         }
     }
