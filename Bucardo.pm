@@ -2955,15 +2955,11 @@ sub start_kid {
                     ## If we are grabbing the 'latest', figure out which it is
                     elsif ('bucardo_latest' eq $g->{standard_conflict}) {
 
-                        ## Find the transaction time on each database, if it exists
+                        ## Find the highest transaction time on each database, if it exists
 
                         ## Prep our SQL
                         if (!exists $g->{sql_max_delta}) {
-                            $SQL = qq{SELECT extract(epoch FROM MAX(txntime)) FROM bucardo.$g->{deltatable} }
-                                . qq{WHERE ($g->{pklist}) = (?)};
-                            for (2..$g->{numpkcols}) {
-                                $SQL =~ s/\)$/,?)/;
-                            }
+                            $SQL = qq{SELECT extract(epoch FROM MAX(txntime)) FROM bucardo.$g->{deltatable} };
                             $g->{sql_max_delta} = $SQL;
                         }
 
@@ -2974,14 +2970,25 @@ sub start_kid {
                             for my $dbname (sort keys %{ $conflict{$key} }) {
                                 if (! exists $self->{sth_max_delta}{$g}{$dbname}) {
                                     my $dbh = $sync->{db}{$dbname}{dbh};
-                                    $self->{sth_max_delta}{$g}{$dbname} = $dbh->prepare($g->{sql_max_delta});
+                                    $self->{sth_max_delta}{$g}{$dbname} =
+                                        $dbh->prepare($g->{sql_max_delta}, { pg_async => PG_ASYNC } );
                                 }
                                 $sth = $self->{sth_max_delta}{$g}{$dbname};
-                                $sth->execute(split /\0/ => $key);
-                                my $epoch = $sth->fetchall_arrayref()->[0][0];
-                                if ($epoch > $highest) {
-                                    $highest = $epoch;
-                                    $winner = $dbname;
+                                $sth->execute();
+                            }
+                            ## Second run to finish the async and grab the results
+                            for my $dbname (sort keys %{ $conflict{$key} }) {
+                                $sth = $self->{sth_max_delta}{$g}{$dbname};
+                                $count = $sth->pg_result();
+                                if ($count < 1) { ## No rows at all!
+                                    $sth->finish();
+                                }
+                                else {
+                                    my $epoch = $sth->fetchall_arrayref()->[0][0];
+                                    if ($epoch > $highest) {
+                                        $highest = $epoch;
+                                        $winner = $dbname;
+                                    }
                                 }
                             }
                             if (! defined $winner) {
