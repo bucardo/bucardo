@@ -1597,31 +1597,30 @@ SELECT 'Fixme'::TEXT;
                         drows BIGINT;
                         trows BIGINT;
                         trackname TEXT;
+                        myst TEXT;
                     BEGIN
-                        DELETE FROM bucardo.$2
-                        USING 
-                        (SELECT b.tablename AS tn, b.txntime AS tt FROM
-                        (SELECT tablename, count(*) FROM bucardo.bucardo_delta_targets GROUP BY 1) AS a,
-                        (SELECT tablename, txntime, count(*) FROM bucardo.trackname GROUP BY 1,2) AS b
-                        WHERE a.tablename = b.tablename
-                        AND a.count=b.count) AS foo
-                        WHERE tablename = tn AND txntime = tt
-                        AND txntime < now()-\$1;
+                        myst = 'DELETE FROM bucardo.'
+                          || $2
+                          || 'USING (SELECT b.tablename AS tn, b.txntime AS tt FROM '
+                          || '(SELECT tablename, count(*) FROM bucardo.bucardo_delta_targets GROUP BY 1) AS a,'
+                          || '(SELECT tablename, txntime, count(*) FROM bucardo.trackname GROUP BY 1,2) AS b'
+                          || ' WHERE a.tablename = b.tablename'
+                          || ' AND a.count=b.count) AS foo'
+                          || ' WHERE tablename = tn AND txntime = tt'
+                          || ' AND txntime < now() - '
+						  || $1;
+
+                        EXECUTE myst;
 
                         GET DIAGNOSTICS drows := row_count;
 
-                        DELETE FROM bucardo.bucardo_track
-                        WHERE NOT EXISTS (SELECT 1 FROM bucardo.bucardo_delta d WHERE d.txntime = bucardo_track.txntime);
+                        -- DELETE FROM bucardo.bucardo_track
+                        -- WHERE NOT EXISTS (SELECT 1 FROM bucardo.bucardo_delta d WHERE d.txntime = bucardo_track.txntime);
 
-                        GET DIAGNOSTICS trows := row_count;
+                        -- GET DIAGNOSTICS trows := row_count;
 
                         RETURN 'Rows deleted from bucardo_delta: '||drows||
                           ' Rows deleted from bucardo_track: '||trows;
-
-
-
-
-
 
                         RETURN 'Rows deleted from bucardo_delta: '||drows||
                           ' Rows deleted from bucardo_track: '||trows;
