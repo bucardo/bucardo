@@ -2341,36 +2341,8 @@ sub start_kid {
           GOAT: for my $g (@$goatlist) {
 
                 ## Handle sequences first
+                ## XXX Steal from delta
                 if ($g->{reltype} eq 'sequence') {
-
-                    next; ## FIX
-
-                    my $currseq = $self->get_sequence_info(); ## $sourcedbh, $S, $T);
-
-                    my ($lastval, $iscalled) = @$currseq{qw/last_value is_called/};
-
-                    $self->glog("Setting sequence $S.$T to value of $lastval, is_called is $iscalled", LOG_NORMAL);
-                    $SQL = "SELECT setval('$S.$T', $lastval, '$iscalled')";
-                    die; #$targetdbh->do($SQL);
-
-                    ## Just in case, ALTER the sequence as well
-                    $SQL = "ALTER SEQUENCE $S.$T";
-                    my @alter;
-                    for my $col (@sequence_columns) {
-                        my ($name,$syntax) = @$col;
-                        next if ! $syntax;
-                        if ($syntax =~ s/BOOL //) {
-                            $SQL .= sprintf ' %s%s',
-                                $currseq->{$name} ? '' : 'NO ',
-                                $syntax;
-                        }
-                        else {
-                            $SQL .= " $syntax $currseq->{$name}";
-                        }
-                    }
-                    #$targetdbh->do($SQL);
-
-                    ## No need to continue any further
                     next;
                 }
 
@@ -2650,7 +2622,6 @@ sub start_kid {
                 }
             }
 
-            ## XXX sequence work
             ## First, handle all the sequences
             for my $g (@$goatlist) {
 
@@ -2658,9 +2629,34 @@ sub start_kid {
 
                 ($S,$T) = ($g->{safeschema},$g->{safetable});
 
-                #$deltacount{sequences} +=
-                #        $self->adjust_sequence($sourcedbh, $targetdbh, $S, $T, $sync->{name}, $targetname);
-            }
+                ## Poll all of the Postgres databases and find which source sequence is highest
+                ## Right now, this is the only sane option.
+                ## In the future, we might consider coupling tables and sequences and
+                ## then copying sequences based on the 'winning' underlying table
+                $SQL = "SELECT * FROM $S.$T";
+                my $maxvalue = -1;
+                for my $dbname (@dbs_postgres) {
+                    $x = $sync->{db}{$dbname};
+                    $sth = $x->{dbh}->prepare($SQL);
+                    $sth->execute();
+                    my $info = $sth->fetchall_arrayref({})->[0];
+                    $g->{sequenceinfo}{$dbname} = $info;
+
+                    ## Only the source databases matter
+                    next if $x->{role} ne 'source';
+
+                    if ($info->{last_value} > $maxvalue) {
+                        $maxvalue = $info->{last_value};
+                        $g->{winning_db} = $dbname;
+                    }
+                }
+
+                $self->glog("Sequence from db $g->{winning_db} is the highest", LOG_DEBUG);
+
+                ## Now that we have a winner, apply the changes to every other PG database
+                $deltacount{sequences} += $self->adjust_sequence($g, $sync, $S, $T, $syncname);
+
+            } ## end of handling sequences
 
             ## We want to line up all the delta count numbers in the logs,
             ## so this tracks the largest number returned
@@ -2778,12 +2774,16 @@ sub start_kid {
             ## update the syncrun and dbrun tables, notify listeners,
             ## then either re-loop or leave
 
-            if (! $deltacount{all} and ! $deltacount{truncates}) {
+            if (! $deltacount{all} and ! $deltacount{truncates}
+                    ## XXX:
+                    and ! $deltacount{sequences}
+
+) {
                 ## If we modified the bucardo_sequences table, save the change
 
                 ## XXX sequence work
                 if ($deltacount{sequences}) {
-                    die "fixme";
+                    #die "fixme";
                     #$sourcedbh->commit();
                 }
 
@@ -4691,8 +4691,6 @@ sub validate_sync {
     ## Go through each table and make sure it exists and matches everywhere
     for my $g (@{$s->{goatlist}}) {
 
-        next if $g->{reltype} ne 'table';
-
         ## SKIP, now done in validate_sync()
 
         $self->glog(qq{  Inspecting source $g->{reltype} "$g->{schemaname}.$g->{tablename}" on database "$sourcename"}, LOG_NORMAL);
@@ -4801,11 +4799,12 @@ sub validate_sync {
 
         } ## end if reltype is table
 
-        ## Grab sequence information for comparison to target further down
         my $sourceseq = 1;
         #$g->{reltype} eq 'sequence'
         #    ? $self->get_sequence_info($srcdbh, $S, $T)
         #    : {};
+
+        next if $g->{reltype} ne 'table';
 
         ## Customselect may be null, so force to a false value
         $g->{customselect} ||= '';
@@ -6181,86 +6180,77 @@ sub get_sequence_info {
 
 sub adjust_sequence {
 
-    ## Change a sequence if needed
+    ## Adjusts all sequences as needed using a "winning" source database sequence
     ## If changed, update the bucardo_sequences table
-    ## Arguments: six
-    ## 1. source database handle (where bucardo_sequences lives)
-    ## 2. target database handle (the sequence to be updated/altered)
-    ## 3. Schema name
-    ## 4. Sequence name
-    ## 5. Name of the current sync
-    ## 6. Name of the current target
+    ## Arguments: four
+    ## 1. goat object (which contains 'winning_db' and 'sequenceinfo')
+    ## 2. sync object
+    ## 2. Schema name
+    ## 3. Sequence name
+    ## 4. Name of the current sync
     ## Returns: number of changes made for this sequence
 
-    my ($self,$sdbh,$tdbh,$schemaname,$seqname,$syncname,$targetname) = @_;
+    my ($self,$g,$sync,$S,$T,$syncname) = @_;
 
+    ## Total changes made across all databases
     my $changes = 0;
 
-    my $currseq = $self->get_sequence_info($sdbh, $schemaname, $seqname);
+    my $winner = $g->{winning_db};
 
-    my $oldseq = $self->get_sequence_info($sdbh, $schemaname, $seqname, $syncname, $targetname);
+    my $sourceinfo = $g->{sequenceinfo}{$winner};
 
-    ## Call SETVAL as needed
-    if (! exists $oldseq->{last_value}
-          or $currseq->{last_value} != $oldseq->{last_value}
-          or $currseq->{is_called} != $oldseq->{is_called}
-        ) {
-        $self->glog("Setting sequence $schemaname.$seqname to value of $currseq->{last_value}, is_called is $currseq->{is_called}", LOG_NORMAL);
-        $SQL = "SELECT setval('$schemaname.$seqname', $currseq->{last_value}, '$currseq->{is_called}')";
-        $tdbh->do($SQL);
-        $changes++;
-    }
+    ## Walk through all Postgres databases and set the sequence
+    for my $dbname (sort keys %{ $g->{sequenceinfo} }) { ## same as @dbs_postgres
+        next if $dbname eq $winner; ## Natch
+        my $targetinfo = $g->{sequenceinfo}{$dbname};
 
-    ## Call ALTER SEQUENCE as needed
-    my @alter;
-    for my $col (@sequence_columns) {
-        my ($name,$syntax) = @$col;
+        $x = $sync->{db}{$dbname};
 
-        next if ! $syntax;
-
-        next if exists $oldseq->{$name} and $currseq->{$name} eq $oldseq->{$name};
-
-        ## No output if we've not seen it before: just apply everything
-        if (exists $oldseq->{$name}) {
-            $self->glog("Sequence $schemaname.$seqname has a different $name value: was $oldseq->{$name}, now $currseq->{$name}", LOG_NORMAL);
+        ## First, change things up via SETVAL if needed
+        if ($sourceinfo->{last_value} != $targetinfo->{last_value}
+            or
+            $sourceinfo->{is_called} != $targetinfo->{is_called}) {
+            $self->glog("Set sequence $dbname.$S.$T to $sourceinfo->{last_value} (is_called to $sourceinfo->{is_called})",
+                        LOG_DEBUG);
+            $SQL = qq{SELECT setval('$S.$T', $sourceinfo->{last_value}, '$sourceinfo->{is_called}')};
+            $x->{dbh}->do($SQL);
+            $changes++;
         }
 
-        if ($syntax =~ s/BOOL //) {
-            push @alter => sprintf '%s%s',
-                $currseq->{$name} ? '' : 'NO ',
-                $syntax;
+        ## Then, change things up via ALTER SEQUENCE if needed
+        my @alter;
+        for my $col (@sequence_columns) {
+            my ($name,$syntax) = @$col;
+
+            ## Skip things not set by ALTER SEQUENCE
+            next if ! $syntax;
+
+            ## Skip if these items are the exact same
+            next if $sourceinfo->{$name} eq $targetinfo->{$name};
+
+            $self->glog("Sequence $S.$T has a different $name value: was $targetinfo->{$name}, now $sourceinfo->{$name}", LOG_VERBOSE);
+
+            ## If this is a boolean setting, we want to simply prepend a 'NO' for false
+            if ($syntax =~ s/BOOL //) {
+                push @alter => sprintf '%s%s',
+                    $sourceinfo->{$name} ? '' : 'NO ',
+                    $syntax;
+            }
+            else {
+                push @alter => "$syntax $sourceinfo->{$name}";
+            }
+            $changes++;
+
+        } ## end each sequence column
+
+        if (@alter) {
+            $SQL = "ALTER SEQUENCE $S.$T ";
+            $SQL .= join ' ' => @alter;
+            $self->glog("Running on target $dbname: $SQL", LOG_DEBUG);
+            $x->{dbh}->do($SQL);
         }
-        else {
-            push @alter => "$syntax $currseq->{$name}";
-        }
-        $changes++;
-    }
-    if (@alter) {
-        $SQL = "ALTER SEQUENCE $schemaname.$seqname ";
-        $SQL .= join ' ' => @alter;
-        $self->glog("Running on target $targetname: $SQL", LOG_DEBUG);
-        $tdbh->do($SQL);
-    }
 
-    return 0 if ! $changes;
-
-    ## Need to update the local bucardo_sequences table
-    $SQL = 'DELETE FROM bucardo.bucardo_sequences WHERE schemaname=? AND seqname=? AND syncname=? AND targetname=?';
-    $sth = $sdbh->prepare_cached($SQL);
-    $sth->execute($schemaname,$seqname,$syncname,$targetname);
-
-    $SQL = 'INSERT INTO bucardo.bucardo_sequences (schemaname,seqname,syncname,targetname,'
-            . 'last_value,start_value, increment_by,max_value,min_value, is_cycled,is_called) '
-            . 'VALUES (?,?,?,?, ?,?, ?,?,?, ?,?)';
-    $sth = $sdbh->prepare_cached($SQL);
-    $sth->execute($schemaname,$seqname,$syncname,$targetname,
-                  $currseq->{'last_value'},
-                  $currseq->{'start_value'},
-                  $currseq->{'increment_by'},
-                  $currseq->{'max_value'},
-                  $currseq->{'min_value'},
-                  $currseq->{'is_cycled'},
-                  $currseq->{'is_called'});
+    } ## end each database
 
     return $changes;
 
