@@ -29,7 +29,8 @@ use Sys::Hostname qw( hostname           ); ## Used for debugging/mail sending
 use IO::Handle    qw( autoflush          ); ## Used to prevent stdout/stderr buffering
 use Sys::Syslog   qw( openlog syslog     ); ## In case we are logging via syslog()
 use Net::SMTP     qw(                    ); ## Used to send out email alerts
-use MIME::Base64  qw( encode_base64      ); ## For making text versions of bytea primary keys
+use MIME::Base64  qw( encode_base64
+                      decode_base64      ); ## For making text versions of bytea primary keys
 
 use Time::HiRes
  qw(sleep gettimeofday tv_interval); ## For better resolution than the built-in sleep
@@ -2775,13 +2776,10 @@ sub start_kid {
             ## update the syncrun and dbrun tables, notify listeners,
             ## then either re-loop or leave
 
-            if (! $deltacount{all} and ! $deltacount{truncates}
-                    ## XXX:
-                    and ! $deltacount{sequences}
+            if (! $deltacount{all}
+                    and ! exists $self->{truncateinfo}) {
 
-) {
-                ## If we modified the bucardo_sequences table, save the change
-
+               ## If we modified the bucardo_sequences table, save the change
                 ## XXX sequence work
                 if ($deltacount{sequences}) {
                     #die "fixme";
@@ -2839,7 +2837,8 @@ sub start_kid {
                 next if $g->{source}{needstruncation};
 
                 ## Skip this table if no source rows have changed
-                next unless $deltacount{table}{$S}{$T};
+                next if ! $deltacount{table}{$S}{$T}
+                    and ! exists $self->{truncateinfo}{$S}{$T};
 
                 ## How many times this goat has handled an exception?
                 $g->{exceptions} ||= 0;
@@ -2856,6 +2855,10 @@ sub start_kid {
                     $g->{numpkcols} > 1 and $g->{pkeycols} = "($g->{pkeycols})";
                     ## Example: id
                     ## Example MCPK: (id,"space bar",cdate)
+
+                    ## Store a raw version for some non-Postgres targets
+                    $g->{pkeycolsraw} = join ',' => @{ $g->{pkey} };
+
                 }
 
                 ## How many times have we done the loop below?
@@ -2866,6 +2869,13 @@ sub start_kid {
                 ## We've already executed and got a count from these queries:
                 ## it's now time to gather the actual data
                 my %deltabin;
+
+                ## If we had a truncate, make sure all databases have at least a bare deltabin entry
+                if (exists $self->{truncateinfo}) {
+                    for my $dbname (@dbs_source) {
+                        $deltabin{$dbname} = {};
+                    }
+                }
 
                 for my $dbname (@dbs_source) {
 
@@ -2883,9 +2893,6 @@ sub start_kid {
                             $deltabin{$dbname}{join "\0" => @$x} = 1;
                         }
                         else {
-                            $self->glog("ZZZ Checking on $S.$T binary!");
-                            $self->glog(Dumper $g);
-                            $self->glog(Dumper $x);
                             my $decodename = '';
 
                             my @pk;
@@ -3210,7 +3217,7 @@ sub start_kid {
                                 ## How many rows are we pushing around? If none, we done!
                                 my $rows = keys %{ $deltabin{$dbname1} };
                                 $self->glog("Rows to push from $dbname1.$S.$T: $rows", LOG_VERBOSE);
-                                next if ! $rows;
+                                next if ! $rows and ! exists $self->{truncateinfo}{$S}{$T};
 
                                 ## Build the list of target databases we are pushing to
                                 my @pushdbs;
@@ -3817,6 +3824,8 @@ sub connect_database {
     ## Grab the backend PID for this Postgres process
     ## Also a nice check that everything is working properly
     $SQL = 'SELECT pg_backend_pid()';
+
+    ## XXX Getting a SIGTERM from this occasionally?
     my $backend = $dbh->selectall_arrayref($SQL)->[0][0];
     $dbh->rollback();
 
@@ -6543,8 +6552,8 @@ sub delete_rows {
             if ('mongo' eq $type) {
                 $self->{collection} = $t->{dbh}->get_collection($T);
                 my $result = $self->{collection}->remove({}, { safe => 1} );
-                $self->glog("Results of removing collection $T:", LOG_VERBOSE);
-                $self->glog((Dumper $result), LOG_VERBOSE);
+                #$self->glog("Results of removing collection $T:", LOG_VERBOSE);
+                #$self->glog((Dumper $result), LOG_VERBOSE);
                 next;
             }
 
@@ -6632,9 +6641,24 @@ sub delete_rows {
 
         if ('mongo' eq $type) {
             $self->{collection} = $t->{dbh}->get_collection($T);
+
+            ## We want the 'raw' versions of the primary keys
+            my $pkcolsraw = $goat->{pkeycolsraw};
+
+            ## If this is a binary pkey, we need to decode it
+            my $delkeys = [];
+            if ($goat->{hasbinarypkey}) {
+                for my $k (keys %$rows) {
+                    push @$delkeys => decode_base64($k);
+                }
+            }
+            else {
+                $delkeys = [keys %$rows];
+            }
+
             my $result = $self->{collection}->remove
-                ({$pkcols => { '$in' => [keys %$rows] }}, { safe => 1 } );
-            #$self->glog("Results of removing from collection $T:", LOG_VERBOSE);
+                ({$pkcolsraw => { '$in' => [keys %$rows] }}, { safe => 1 } );
+            #$self->glog("Results of removing from collection $T using $pkcolsraw:", LOG_VERBOSE);
             #$self->glog((Dumper $result), LOG_VERBOSE);
             next;
         }
@@ -6713,6 +6737,9 @@ sub push_rows {
     if (ref $todb ne 'ARRAY') {
         $todb = [$todb];
     }
+
+    ## This can happen if we truncated but had no delta activity
+    return if ! defined $pkvals or ! length $pkvals;
 
     ## Get ready to export from the source
     my $srccmd = "$self->{sqlprefix}COPY (SELECT * FROM $S.$T WHERE $pkcols IN ($pkvals)) TO STDOUT";
