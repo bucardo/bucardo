@@ -1860,14 +1860,6 @@ SELECT 'Fixme'::TEXT;
                 }
             }
 
-			## TODO: Per-table bucardo_delta and bucardo_track!
-			## bucardo._tablename or bucardo.delta_tablename
-			## overflow: bucardo.delta_randomnumber (with a comment)
-			## or bucardo.delta_(firstfewchars)_randomnumber
-
-			## Need a quick little function to return the name used
-			## DONE: bucardo_tablename_maker		
-			## Maybe also do it here?
 		    $SQL = "SELECT bucardo.bucardo_tablename_maker(?)";
 			my $makername = fetch1_sql($SQL,$dbh,$schema.'_'.$table);
 			## Create this table if needed, with one column per PK columns
