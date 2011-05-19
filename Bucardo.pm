@@ -3766,7 +3766,7 @@ sub connect_database {
             return 0, 'flat';
         }
 
-        if ($d->{dbtype} eq 'mongo') {
+        if ('mongo' eq $d->{dbtype}) {
             my $dsn = {};
             for my $name (qw/ dbhost dbport dbuser dbpass /) {
                 defined $d->{$name} and length $d->{$name} and $dsn->{$name} = $d->{$name};
@@ -3780,7 +3780,7 @@ sub connect_database {
             return $backend, $dbh;
         }
 
-        if ($d->{dbtype} ne 'postgres') {
+        if ('postgres' ne $d->{dbtype}) {
             die qq{Cannot handle databases of type "$d->{dbtype}"\n};
         }
 
@@ -6773,7 +6773,7 @@ sub push_rows {
             elsif ('mongo' eq $type) {
                 ## Have to map these values back to their names
                 chomp $buffer;
-                my @cols = split /\t/ => $buffer;
+                my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
 
                 ## Our object consists of the primary keys, plus all other fields
                 my $object = {};
