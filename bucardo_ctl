@@ -760,7 +760,7 @@ sub add_database {
     my ($dbcols,$cols,$phs,$vals,$extra)
         = process_simple_args({cols => $validcols, list => \@nouns, usage => $usage});
 
-    my $newname = $dbcols->{name};
+    my $newname = $dbcols->{name} or die qq{Must provide a database name\n};
 
     ## Cannot add if already there
     if (exists $DB->{$newname}) {
@@ -774,8 +774,8 @@ sub add_database {
 
     ## Attempt to insert this into the database
     $SQL = "INSERT INTO bucardo.db ($cols) VALUES ($phs)";
-    $DEBUG and warn "SQL: $SQL\n";
-    $DEBUG and warn Dumper $vals;
+    debug("SQL: $SQL");
+    debug(Dumper $vals);
     $sth = $dbh->prepare($SQL);
     eval {
         $count = $sth->execute(map { $vals->{$_} } sort keys  %$vals);
@@ -842,7 +842,7 @@ sub add_database {
 
         if ('postgres' eq $vals->{dbtype}) {
 
-            my ($dsn,$user,$pass,$ssp) = split /\n/ => $dbconn;
+            my ($type,$dsn,$user,$pass,$ssp) = split /\n/ => $dbconn;
             my $testdbh;
             my $realuser = $user;
 
@@ -7647,7 +7647,7 @@ sub process_simple_args {
                 if ($ENV{$env}) {
 
                     ## Skip if it starts with PG and this is not postgres
-                    next if $env =~ /^PG/ and $xyargs->{type} ne 'postgres';
+                    next if $env =~ /^PG/ and exists $xyargs->{type} and $xyargs->{type} ne 'postgres';
 
                     $dbcol{$dbcol} = $ENV{$env};
                     last;
