@@ -29,6 +29,7 @@ use Sys::Hostname qw( hostname           ); ## Used for debugging/mail sending
 use IO::Handle    qw( autoflush          ); ## Used to prevent stdout/stderr buffering
 use Sys::Syslog   qw( openlog syslog     ); ## In case we are logging via syslog()
 use Net::SMTP     qw(                    ); ## Used to send out email alerts
+use MIME::Base64  qw( encode_base64      ); ## For making text versions of bytea primary keys
 
 use Time::HiRes
  qw(sleep gettimeofday tv_interval); ## For better resolution than the built-in sleep
@@ -2848,8 +2849,8 @@ sub start_kid {
                     $g->{pkeycols} = '';
                     $x=0;
                     for my $qpk (@{$g->{qpkey}}) {
-                        ## XXX Needed anymore?
-                        $g->{pkeycols} .= sprintf '%s,', $g->{binarypkey}[$x] ? qq{ENCODE($qpk,'base64')} : $qpk;
+                        $g->{pkeycols} .= sprintf '%s,', $g->{binarypkey}{$x} ? qq{ENCODE($qpk,'base64')} : $qpk;
+                        $x++;
                     }
                     chop $g->{pkeycols};
                     $g->{numpkcols} > 1 and $g->{pkeycols} = "($g->{pkeycols})";
@@ -2878,7 +2879,28 @@ sub start_kid {
                         ## Join all primary keys together with \0, put into hash as key
                         ## XXX: Revisit for binary, now that we have local bucardo_deltas
                         ## XXX: Nulls? Different divider?
-                        $deltabin{$dbname}{join "\0" => @$x} = 1;
+                        if (!$g->{hasbinarypk}) {
+                            $deltabin{$dbname}{join "\0" => @$x} = 1;
+                        }
+                        else {
+                            $self->glog("ZZZ Checking on $S.$T binary!");
+                            $self->glog(Dumper $g);
+                            $self->glog(Dumper $x);
+                            my $decodename = '';
+
+                            my @pk;
+                            my $y=0;
+                            for my $row (@$x) {
+                                if ($g->{binarypkey}{$y}) {
+                                    push @pk => encode_base64($row, '');
+                                }
+                                else {
+                                    push @pk => $row;
+                                }
+                                $y++;
+                            }
+                            $deltabin{$dbname}{join "\0" => @pk} = 1;
+                        }
                     }
 
                 } ## end getting pks from each db for this table
@@ -4730,8 +4752,9 @@ sub validate_sync {
             $g->{pkeytype}       = [split /\|/o => $g->{pkeytype}];
             $g->{numpkcols}      = @{$g->{pkey}};
             $g->{hasbinarypk}    = 0; ## Not used anywhere?
+            $x=0;
             for (@{$g->{pkey}}) {
-                push @{$g->{binarypkey}} => 0;
+                $g->{binarypkey}{$x++} = 0;
             }
 
             ## All pks together for the main delta query
@@ -4785,7 +4808,7 @@ sub validate_sync {
                 $x = 0;
                 for my $pk (@{$g->{pkey}}) {
                     if ($colname eq $pk) {
-                        $g->{binarypkey}[$x] = 1;
+                        $g->{binarypkey}{$x} = 1;
                         $g->{hasbinarypk} = 1;
                         next BCOL;
                     }
