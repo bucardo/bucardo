@@ -36,8 +36,16 @@ if (!$evalok) {
 }
 
 use BucardoTesting;
+
+## For now, remove the bytea table type as we don't have full mongo support yet
+delete $tabletype{bucardo_test8};
+
+## Also cannot handle multi-column primary keys
+delete $tabletype{bucardo_test2};
+
+
 my $numtabletypes = keys %tabletype;
-plan tests => 82;
+plan tests => 125;
 
 ## Make sure we start clean by dropping the test database
 my $dbname = 'bucardotest';
@@ -137,10 +145,20 @@ for my $table (sort keys %tabletype) {
     $sql{select}{$table} = "SELECT inty FROM $table ORDER BY $pkey{$table}";
     $table =~ /X/ and $sql{select}{$table} =~ s/inty/$pkey{$table}/;
 
-    ## DELETE
+    ## DELETE ALL
     $SQL = "DELETE FROM $table";
     $sth{deleteall}{$table}{A} = $dbhA->prepare($SQL);
 
+    ## DELETE ONE
+    $SQL = "DELETE FROM $table WHERE inty = ?";
+    $sth{deleteone}{$table}{A} = $dbhA->prepare($SQL);
+
+    ## TRUNCATE
+    $SQL = "TRUNCATE TABLE $table";
+    $sth{truncate}{$table}{A} = $dbhA->prepare($SQL);
+    ## UPDATE
+    $SQL = "UPDATE $table SET inty = ?";
+    $sth{update}{$table}{A} = $dbhA->prepare($SQL);
 }
 
 ## Add one row per table type to A
@@ -162,8 +180,8 @@ for my $table (sort keys %tabletype) {
 ## Commit, then kick off the sync
 $dbhA->commit();
 $bct->ctl('bucardo_ctl kick mongo 0');
+$bct->ctl('bucardo_ctl kick mongo 0');
 
-sleep 1;
 ## Check B and C for the new rows
 for my $table (sort keys %tabletype) {
 
@@ -218,6 +236,107 @@ for my $table (sort keys %tabletype) {
         },
 
         $t);
+}
+
+## Update each row
+for my $table (keys %tabletype) {
+    $sth{update}{$table}{A}->execute(42);
+}
+$dbhA->commit();
+$bct->ctl('bucardo_ctl kick mongo 0');
+
+for my $table (keys %tabletype) {
+    $t = "Mongo collection $table has correct number of rows";
+    my $col = $db->get_collection($table);
+    my @rows = $col->find->all;
+    my $count = @rows;
+    is ($count, 1, $t);
+
+    $t = "Mongo collection $table has updated value";
+    is ($rows[0]->{inty}, 42, $t);
+}
+
+## Delete each row
+for my $table (keys %tabletype) {
+    $sth{deleteall}{$table}{A}->execute();
+}
+$dbhA->commit();
+$bct->ctl('bucardo_ctl kick mongo 0');
+
+for my $table (keys %tabletype) {
+    $t = "Mongo collection $table has correct number of rows after delete";
+    my $col = $db->get_collection($table);
+    my @rows = $col->find->all;
+    my $count = @rows;
+    is ($count, 0, $t);
+}
+
+## Insert two rows, then delete one of them
+## Add one row per table type to A
+for my $table (keys %tabletype) {
+    my $type = $tabletype{$table};
+    my $val1 = $val{$type}{1};
+    $sth{insert}{1}{$table}{A}->execute($val1);
+    my $val2 = $val{$type}{2};
+    $sth{insert}{2}{$table}{A}->execute($val2);
+}
+$dbhA->commit();
+$bct->ctl('bucardo_ctl kick mongo 0');
+
+for my $table (keys %tabletype) {
+    $t = "Mongo collection $table has correct number of rows after double insert";
+    my $col = $db->get_collection($table);
+    my @rows = $col->find->all;
+    my $count = @rows;
+    is ($count, 2, $t);
+}
+
+## Delete one of the rows
+for my $table (keys %tabletype) {
+    $sth{deleteone}{$table}{A}->execute(2); ## inty = 2
+}
+$dbhA->commit();
+$bct->ctl('bucardo_ctl kick mongo 0');
+
+for my $table (keys %tabletype) {
+    $t = "Mongo collection $table has correct number of rows after single deletion";
+    my $col = $db->get_collection($table);
+    my @rows = $col->find->all;
+    my $count = @rows;
+    is ($count, 1, $t);
+}
+
+## Insert two more rows, then truncate
+for my $table (keys %tabletype) {
+    my $type = $tabletype{$table};
+    my $val3 = $val{$type}{3};
+    $sth{insert}{3}{$table}{A}->execute($val3);
+    my $val4 = $val{$type}{4};
+    $sth{insert}{4}{$table}{A}->execute($val4);
+}
+$dbhA->commit();
+$bct->ctl('bucardo_ctl kick mongo 0');
+
+for my $table (keys %tabletype) {
+    $t = "Mongo collection $table has correct number of rows after more inserts";
+    my $col = $db->get_collection($table);
+    my @rows = $col->find->all;
+    my $count = @rows;
+    is ($count, 3, $t);
+}
+
+for my $table (keys %tabletype) {
+    $sth{truncate}{$table}{A}->execute();
+}
+$dbhA->commit();
+$bct->ctl('bucardo_ctl kick mongo 0');
+
+for my $table (keys %tabletype) {
+    $t = "Mongo collection $table has correct number of rows after trunacte";
+    my $col = $db->get_collection($table);
+    my @rows = $col->find->all;
+    my $count = @rows;
+    is ($count, 0, $t);
 }
 
 pass('Done with mongo testing');
