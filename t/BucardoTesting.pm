@@ -43,7 +43,7 @@ if ($FRESHLOG) {
     unlink 'tmp/bucardo.log';
 }
 
-## Test test databases are labelled as A, B, C, etc.
+## Test databases are labelled as A, B, C, etc.
 my @dbs = qw/A B C D/;
 
 ### TODO: Add point type (which has no natural ordering operator!)
@@ -327,7 +327,10 @@ sub create_cluster {
 
     debug(qq{Running $localinitdb for cluster "$clustername"});
 
-    qx{$localinitdb -D $dirname 2>&1};
+    my $res = qx{$localinitdb -D $dirname 2>&1};
+    if ($DEBUG) {
+        warn Dumper $res;
+    }
 
     ## Make some minor adjustments
     my $file = "$dirname/postgresql.conf";
@@ -1365,11 +1368,6 @@ sub add_test_tables_to_herd {
 } ## end of add_test_tables_to_herd
 
 
-
-
-
-
-
 sub bc_deeply {
 
     my ($exp,$dbh,$sql,$msg,$oline) = @_;
@@ -1385,7 +1383,7 @@ sub bc_deeply {
         $got = $dbh->selectall_arrayref($sql);
     };
     if ($@) {
-        die "bc_deeply failed from line $line. SQL=$sql\n";
+        die "bc_deeply failed from line $line. SQL=$sql\n$@\n";
     }
 
     $dbh->commit();
