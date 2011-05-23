@@ -488,6 +488,7 @@ CREATE TABLE bucardo.syncrun (
   lastgood  BOOLEAN      NOT NULL DEFAULT 'false',
   lastbad   BOOLEAN      NOT NULL DEFAULT 'false',
   lastempty BOOLEAN      NOT NULL DEFAULT 'false',
+  details   TEXT             NULL,
   status    TEXT             NULL
 );
 COMMENT ON TABLE bucardo.syncrun IS $$Information about specific runs of syncs$$;

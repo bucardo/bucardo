@@ -1892,7 +1892,7 @@ sub start_kid {
     ## We do not set ended, but let the controller handle that
     $SQL = q{
         UPDATE bucardo.syncrun
-        SET    deletes=deletes+?, inserts=inserts+?, truncates=truncates+?, status=?
+        SET    deletes=deletes+?, inserts=inserts+?, truncates=truncates+?, details=?, status=?
         WHERE  sync=?
         AND    ended IS NULL
     };
@@ -3624,8 +3624,10 @@ sub start_kid {
 
         ## Update the syncrun table, including the delete and insert counts
         my $reason = "Finished (KID $$)";
+        my $details = '';
         $count = $sth{kid_syncrun_end}->execute(
-            $dmlcount{deletes}, $dmlcount{inserts}, $dmlcount{truncates}, $reason, $syncname);
+            $dmlcount{deletes}, $dmlcount{inserts}, $dmlcount{truncates},
+            $details, $reason, $syncname);
         $maindbh->commit();
         ## Just in case, report on failure to update
         if ($count != 1) {
