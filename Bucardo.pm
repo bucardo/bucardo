@@ -1253,9 +1253,8 @@ sub start_controller {
     $maindbh->commit();
 
     ## SQL to update the syncrun table's status only
-    ## XXX Do we want to do syncrun at all in the controller?
-    ## As it stands now, no, as we insert and mark ended from the kid
-    ## However, it would be nice to syncrun the before_sync and after_sync
+    ## This is currently unused, but no harm in leaving it in place.
+    ## It would be nice to syncrun the before_sync and after_sync
     ## custom codes. If we reintroduce the multi-kid 'gang' concept,
     ## that changes things radically as well.
     $SQL = q{
@@ -1266,7 +1265,7 @@ sub start_controller {
     };
     $sth{ctl_syncrun_update_status} = $maindbh->prepare($SQL);
 
-    ## SQL to update the syncrun table when this sync finishes (either normal or aborted)
+    ## SQL to update the syncrun table on startup
     ## Returns the insert (start) time
     $SQL = q{
         UPDATE    bucardo.syncrun
@@ -1333,7 +1332,7 @@ sub start_controller {
             FROM bucardo.syncrun
             WHERE sync=?
             AND lastgood IS TRUE
-             OR lastempty IS TRUE
+            OR  lastempty IS TRUE
         };
         $sth = $maindbh->prepare($SQL);
         $count = $sth->execute($syncname);
@@ -1472,7 +1471,8 @@ sub start_controller {
             ## Run all after_sync custom codes
             if (exists $sync->{code_after_sync}) {
                 for my $code (@{$sync->{code_after_sync}}) {
-                    $sth{ctl_syncrun_update_status}->execute("Code after_sync (CTL $$)", $syncname);
+                    #$sth{ctl_syncrun_update_status}->execute("Code after_sync (CTL $$)", $syncname);
+                    $maindbh->commit();
                     my $result = $self->run_ctl_custom_code($sync,$input,$code, 'nostrict');
                     $self->glog("End of after_sync $code->{id}", LOG_VERBOSE);
                 } ## end each custom code
@@ -1483,8 +1483,20 @@ sub start_controller {
             $self->db_notify($maindbh, $notifymsg);
 
             ## Remove any existing 'lastgood' entry for this sync, and close out the current one
-            $self->end_syncrun($maindbh, 'good', $syncname, "Complete (CTL $$)");
-            $maindbh->commit();
+            $SQL = 'SELECT truncates,deletes,inserts FROM bucardo.syncrun WHERE sync = ? AND ended IS NULL';
+            $sth = $maindbh->prepare($SQL);
+            $count = $sth->execute($syncname);
+            if ($count < 1) {
+                $self->glog("Did not find a valid row in the syncrun table for $syncname!", LOG_NORMAL);
+                $sth->finish();
+            }
+            else {
+                my $row = $sth->fetchall_arrayref({})->[0];
+                my $action = ($row->{truncates} or $row->{deletes} or $row->{inserts})
+                    ? 'good' : 'empty';
+                $self->end_syncrun($maindbh, $action, $syncname, "Complete (CTL $$)");
+                $maindbh->commit();
+            }
 
             ## If we are not a stayalive, this is a good time to leave
             if (! $sync->{stayalive} and ! $kidsalive) {
@@ -1586,7 +1598,8 @@ sub start_controller {
         ## Run all before_sync code
         ## XXX Move to kid? Do not want to run over and over if something is queued
         if (exists $sync->{code_before_sync}) {
-            $sth{ctl_syncrun_update_status}->execute("Code before_sync (CTL $$)", $syncname);
+            #$sth{ctl_syncrun_update_status}->execute("Code before_sync (CTL $$)", $syncname);
+            $maindbh->commit();
             for my $code (@{$sync->{code_before_sync}}) {
                 my $result = $self->run_ctl_custom_code($sync,$input,$code, 'nostrict');
                 if ($result eq 'redo') {
@@ -1775,6 +1788,7 @@ sub start_kid {
         ## Mark this syncrun as aborted if needed, replace the 'lastbad'
         my $status = "Failed : $flatmsg (KID $$)";
         $self->end_syncrun($finaldbh, 'bad', $syncname, $status);
+        $finaldbh->commit();
 
         ## Update the dbrun table as needed
         $SQL = q{DELETE FROM bucardo.dbrun WHERE sync = ?};
@@ -1875,9 +1889,10 @@ sub start_kid {
     $sth{kid_syncrun_update_status} = $maindbh->prepare($SQL);
 
     ## SQL to set the syncrun table as ended once complete
+    ## We do not set ended, but let the controller handle that
     $SQL = q{
         UPDATE bucardo.syncrun
-        SET    ended=now(), deletes=deletes+?, inserts=inserts+?, status=?
+        SET    deletes=deletes+?, inserts=inserts+?, truncates=truncates+?, status=?
         WHERE  sync=?
         AND    ended IS NULL
     };
@@ -2237,6 +2252,7 @@ sub start_kid {
         undef %dmlcount;
         $dmlcount{deletes} = 0;
         $dmlcount{inserts} = 0;
+        $dmlcount{truncates} = 0;
         $dmlcount{conflicts} = 0;
 
         ## Reset both of the above at a per-database level
@@ -2249,6 +2265,7 @@ sub start_kid {
         ## Run all 'before_txn' code
         if (exists $sync->{code_before_txn}) {
             $sth{kid_syncrun_update_status}->execute("Code before_txn (KID $$)", $syncname);
+            $maindbh->commit();
             for my $code (@{$sync->{code_before_txn}}) {
                 last if 'last' eq $self->run_kid_custom_code($sync, $code);
             }
@@ -2315,6 +2332,7 @@ sub start_kid {
         ## Run all 'before_check_rows' code
         if (exists $sync->{code_before_check_rows}) {
             $sth{kid_syncrun_update_status}->execute("Code before_check_rows (KID $$)", $syncname);
+            $maindbh->commit();
             for my $code (@{$sync->{code_before_check_rows}}) {
                 last if 'last' eq $self->run_kid_custom_code($sync, $code);
             }
@@ -2429,6 +2447,7 @@ sub start_kid {
                         ## Run all 'before_trigger_disable' code
                         if (exists $sync->{code_before_trigger_disable}) {
                             $sth{kid_syncrun_update_status}->execute("Code before_trigger_disable (KID $$)", $syncname);
+                            $maindbh->commit();
                             for my $code (@{$sync->{code_before_trigger_disable}}) {
                                 last if 'last' eq $self->run_kid_custom_code($sync, $code);
                             }
@@ -2440,6 +2459,7 @@ sub start_kid {
                         ## Run all 'after_trigger_disable' code
                         if (exists $sync->{code_after_trigger_disable}) {
                             $sth{kid_syncrun_update_status}->execute("Code after_trigger_disable (KID $$)", $syncname);
+                            $maindbh->commit();
                             for my $code (@{$sync->{code_after_trigger_disable}}) {
                                 last if 'last' eq $self->run_kid_custom_code($sync, $code);
                             }
@@ -2467,6 +2487,7 @@ sub start_kid {
 
                     if ($use_delete) {
                         $sth{kid_syncrun_update_status}->execute("DELETE $S.$T (KID $$)", $syncname);
+                        $maindbh->commit();
                         $dmlcount{D}{target}{$S}{$T} = $self->delete_table($S, $T, $x->{dbh});
                         $dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
                         $self->glog("Rows deleted from $S.$T: $dmlcount{D}{target}{$S}{$T}", LOG_VERBOSE);
@@ -2492,6 +2513,7 @@ sub start_kid {
                 ## Prepare the source database to send the data
                 if (defined $src_prep) {
                     $sth{kid_syncrun_update_status}->execute("Create temp table for $S.$T (KID $$)", $syncname);
+                    $maindbh->commit();
                     $self->glog("Creating temp table $g->{cs_temptable} for custom select on $S.$T", LOG_NORMAL);
                     $sourcedbh->do($src_prep);
                 }
@@ -2522,6 +2544,7 @@ sub start_kid {
 
                 ## Read rows from the source, then push to all the targets
                 $sth{kid_syncrun_update_status}->execute("COPY $S.$T (KID $$)", $syncname);
+                $maindbh->commit();
                 my $buffer='';
                 while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
                     $_->pg_putcopydata($buffer) for @targetdbh;
@@ -2539,6 +2562,7 @@ sub start_kid {
                     next if ! $x->{index_disabled};
 
                     $sth{kid_syncrun_update_status}->execute("REINDEX $S.$T (KID $$)", $syncname);
+                    $maindbh->commit();
                     $SQL = "UPDATE pg_class SET relhasindex = 't' WHERE oid = '$S.$T'::regclass";
                     $x->{dbh}->do($SQL);
                     $x->{index_disabled} = 0;
@@ -2622,6 +2646,9 @@ sub start_kid {
                         $self->glog("Truncate winner for $s.$t is database $dbname");
                     }
                 }
+                ## Set the truncate count
+                my $number = @dbs_dbi;
+                $dmlcount{truncate} = $number - 1;
             }
 
             ## First, handle all the sequences
@@ -3105,6 +3132,7 @@ sub start_kid {
                         ## Run all 'before_trigger_disable' code
                         if (exists $sync->{code_before_trigger_disable}) {
                             $sth{kid_syncrun_update_status}->execute("Code before_trigger_disable (KID $$)", $syncname);
+                            $maindbh->commit();
                             for my $code (@{$sync->{code_before_trigger_disable}}) {
                                 last if 'last' eq $self->run_kid_custom_code($sync, $code);
                             }
@@ -3116,6 +3144,7 @@ sub start_kid {
                         ## Run all 'after_trigger_disable' code
                         if (exists $sync->{code_after_trigger_disable}) {
                             $sth{kid_syncrun_update_status}->execute("Code after_trigger_disable (KID $$)", $syncname);
+                            $maindbh->commit();
                             for my $code (@{$sync->{code_after_trigger_disable}}) {
                                 last if 'last' eq $self->run_kid_custom_code($sync, $code);
                             }
@@ -3204,6 +3233,7 @@ sub start_kid {
                         local $SIG{__DIE__} = sub {};
 
                         $sth{kid_syncrun_update_status}->execute("Sync $S.$T (KID $$)", $syncname);
+                        $maindbh->commit();
 
                         ## Everything before this point should work, so we delay the eval until right before
                         ##   our first actual data change on a target
@@ -3514,6 +3544,7 @@ sub start_kid {
         ## Run all 'before_trigger_enable' code
         if (exists $sync->{code_before_trigger_enable}) {
             $sth{kid_syncrun_update_status}->execute("Code before_trigger_enable (KID $$)", $syncname);
+            $maindbh->commit();
             for my $code (@{$sync->{code_before_trigger_enable}}) {
                 last if 'last' eq $self->run_kid_custom_code($sync, $code);
             }
@@ -3534,6 +3565,7 @@ sub start_kid {
         ## Run all 'after_trigger_enable' code
         if (exists $sync->{code_after_trigger_enable}) {
             $sth{kid_syncrun_update_status}->execute("Code after_trigger_enable (KID $$)", $syncname);
+            $maindbh->commit();
             for my $code (@{$sync->{code_after_trigger_enable}}) {
                 last if 'last' eq $self->run_kid_custom_code($sync, $code);
             }
@@ -3592,7 +3624,8 @@ sub start_kid {
 
         ## Update the syncrun table, including the delete and insert counts
         my $reason = "Finished (KID $$)";
-        $count = $sth{kid_syncrun_end}->execute($dmlcount{deletes}, $dmlcount{inserts}, $reason, $syncname);
+        $count = $sth{kid_syncrun_end}->execute(
+            $dmlcount{deletes}, $dmlcount{inserts}, $dmlcount{truncates}, $reason, $syncname);
         $maindbh->commit();
         ## Just in case, report on failure to update
         if ($count != 1) {
@@ -3635,6 +3668,7 @@ sub start_kid {
             if ($sync->{vacuum_after_copy}) {
                 ## May want to break this output down by table
                 $sth{kid_syncrun_update_status}->execute("VACUUM (KID $$)", $syncname);
+                $maindbh->commit();
                 for my $dbname (@dbs_postgres) {
                     $x = $sync->{db}{$dbname};
 
@@ -3656,6 +3690,7 @@ sub start_kid {
             }
             if ($sync->{analyze_after_copy}) {
                 $sth{kid_syncrun_update_status}->execute("ANALYZE (KID $$)", $syncname);
+                $maindbh->commit();
                 for my $dbname (@dbs_postgres) {
                     $x = $sync->{db}{$dbname};
 
@@ -3690,6 +3725,7 @@ sub start_kid {
         ## Run all 'after_txn' code
         if (exists $sync->{code_after_txn}) {
             $sth{kid_syncrun_update_status}->execute("Code after_txn (KID $$)", $syncname);
+            $maindbh->commit();
             for my $code (@{$sync->{code_after_txn}}) {
                 last if 'last' eq $self->run_kid_custom_code($sync, $code);
             }
@@ -4228,6 +4264,12 @@ sub db_listen {
     my $ldbh = shift;
     my $string = shift;
     my $name = shift || 'bucardo';
+
+    if (! ref $ldbh) {
+        my $line = (caller)[2];
+        $self->glog("Call to db_listen from an invalid database handle for $name, line $line", LOG_WARN);
+        return;
+    }
 
     ## If using payloads, we only need to listen for one thing
     if ($ldbh->{pg_server_version} >= 90000) {
@@ -5090,8 +5132,8 @@ sub validate_sync {
     ## If pinging, listen for a triggerkick on all source databases
     if ($s->{ping} or $s->{do_listen}) {
         my $l = "kick_sync_$syncname";
-        for my $dbname (sort keys %{ $s->{db} }) {
-            $x = $s->{db}{$dbname};
+        for my $dbname (sort keys %{ $self->{sdb} }) {
+            $x = $self->{sdb}{$dbname};
             next if $x->{role} ne 'source';
             $self->db_listen($x->{dbh}, $l, $dbname);
             $x->{dbh}->commit();
@@ -5852,7 +5894,8 @@ sub cleanup_controller {
 
 sub end_syncrun {
 
-    ## End the current syncrun entry, and adjust lastgood/lastbad as needed
+    ## End the current syncrun entry, and adjust lastgood/lastbad/lastempty as needed
+    ## If there is no null ended for this sync, does nothing
     ## Does NOT commit
     ## Arguments: four
     ## 1. The database handle to use
@@ -5870,6 +5913,20 @@ sub end_syncrun {
         $exitmode eq 'empty' ? 'lastempty' :
         die qq{Invalid exitmode "$exitmode"};
 
+    ## Make sure we have something to update
+    $SQL = qq{
+        SELECT ctid
+        FROM   bucardo.syncrun
+        WHERE  sync = ?
+        AND    ended IS NULL};
+    $sth = $ldbh->prepare($SQL);
+    $count = $sth->execute($syncname);
+    if ($count < 1) {
+        $sth->finish();
+        return;
+    }
+    my $ctid = $sth->fetchall_arrayref()->[0][0];
+
     ## Remove the previous 'last' entry, if any
     $SQL = qq{
         UPDATE bucardo.syncrun
@@ -5878,17 +5935,16 @@ sub end_syncrun {
         AND    sync = ?
         };
     $sth = $ldbh->prepare($SQL);
-    $sth->execute($syncname);
+    $count = $sth->execute($syncname);
 
     ## End the current row, and elevate it to a 'last' position
     $SQL = qq{
         UPDATE bucardo.syncrun
         SET    $lastcol = 'true', ended=now(), status=?
-        WHERE  sync = ?
-        AND    ended IS NULL
+        WHERE  ctid = ?
         };
     $sth = $ldbh->prepare($SQL);
-    $sth->execute($status, $syncname);
+    $count = $sth->execute($status, $ctid);
 
     return;
 

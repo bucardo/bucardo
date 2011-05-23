@@ -17,7 +17,7 @@ use IO::Handle;
 use Getopt::Long;
 Getopt::Long::Configure(qw/no_ignore_case/);
 use Time::HiRes 'sleep';
-use POSIX qw/ceil setsid/;
+use POSIX qw/ceil setsid localeconv/;
 use Data::Dumper 'Dumper';
 $Data::Dumper::Indent = 1;
 
@@ -31,6 +31,7 @@ our $VERSION = '5.0.0';
 use vars qw/$dbh $SQL $sth %sth $count $info %global $SYNC $GOAT $DB $DBGROUP $HERD/;
 
 my $DATEFORMAT       = q{Mon DD, YYYY HH24:MI:SS};
+my $SHORTDATEFORMAT  = q{HH24:MI:SS};
 my $DEFAULT_DAYSBACK = 3;
 my $WAITSLEEP        = 1;
 my $PROGRESS         = 1;
@@ -127,6 +128,7 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'batch',
      'dryrun|dry-run',
      'confirm',
+     'tsep=s',
 
      ## These are sent to the constructor:
      'bcverbose',
@@ -3573,11 +3575,9 @@ sub status_all {
 
     ## Show status of all syncs in the database
 
-    print "Days back: $DAYSBACK  $DBCONN  ";
-
     ## See if the MCP is running and what its PID is
     if (! -e $PIDFILE) {
-        print "\nBucardo may not be running. No file found at $PIDFILE";
+        #print " (Bucardo does not appear to be currently running)\n";
     }
     else {
         my $fh;
@@ -3611,27 +3611,47 @@ sub status_all {
         exit 0;
     }
 
-    printf qq{%-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s\n},
-        $max->{name},'Name',
-        $max->{type}, 'Type',
-        $max->{stat}, 'State',
-        $max->{pid}, 'PID',
-        $max->{good}, 'Last_good',
-        $max->{total}, 'Time',
-        $max->{iud}, 'I/U/D',
-        $max->{bad}, 'Last_bad',
-        $max->{totalbad}, 'Time';
+    ## The titles
+    my %title = (
+        name     => ' Name',
+        state    => ' State',
+        lastgood => ' Last good',
+        timegood => ' Time',
+        dit      => ($max->{truncate} ? 'Last I/D/T' : ' Last I/D'),
+        lastbad  => ' Last bad',
+        timebad  => ' Time',
+    );
 
-    printf qq{%s+%s+%s+%s+%s+%s+%s+%s+%s\n},
+    ## Set the maximum as needed based on the titles
+    for my $name (keys %title) {
+        if (! exists $max->{$name}
+                or length($title{$name}) > $max->{$name}) {
+            $max->{$name} = length $title{$name};
+        }
+    }
+
+    ## Account for our extra spacing by bumping everything up
+    for my $var (values %$max) {
+        $var += 2;
+    }
+
+    printf qq{%-*s %-*s %-*s %-*s %-*s %-*s %-*s\n},
+        $max->{name},     $title{name},
+        $max->{state},    $title{state},
+        $max->{lastgood}, $title{lastgood},
+        $max->{timegood}, $title{timegood},
+        $max->{dit},      $title{dit},
+        $max->{lastbad},  $title{lastbad},
+        $max->{timebad},  $title{timebad};
+
+    printf qq{%s+%s+%s+%s+%s+%s+%s\n},
         '=' x $max->{name},
-        '=' x $max->{type},
-        '=' x $max->{stat},
-        '=' x $max->{pid},
-        '=' x $max->{good},
-        '=' x $max->{total},
-        '=' x $max->{iud},
-        '=' x $max->{bad},
-        '=' x $max->{totalbad};
+        '=' x $max->{state},
+        '=' x $max->{lastgood},
+        '=' x $max->{timegood},
+        '=' x $max->{dit},
+        '=' x $max->{lastbad},
+        '=' x $max->{timebad};
 
     ## If fancy sorting desired, call the list ourself to sort
     sub sortme {
@@ -3642,17 +3662,9 @@ sub status_all {
 
         my ($uno,$dos) = ($synclist->{$a}, $synclist->{$b});
 
-        ## Synctype
-        +2 == $sortcol and return ($uno->{synctype} cmp $dos->{synctype} or $a cmp $b);
-        -2 == $sortcol and return ($dos->{synctype} cmp $uno->{synctype} or $a cmp $b);
-
-        ## Status
+        ## State
         +3 == $sortcol and return ($uno->{state} cmp $dos->{state} or $a cmp $b);
         -3 == $sortcol and return ($dos->{state} cmp $uno->{state} or $a cmp $b);
-
-        ## PID
-        +4 == $sortcol and return $uno->{PID} <=> $dos->{PID};
-        -4 == $sortcol and return $dos->{PID} <=> $uno->{PID};
 
         ## Last good
         +5 == $sortcol and return ($uno->{lastgoodsecs} <=> $dos->{lastgoodsecs} or $a cmp $b);
@@ -3664,10 +3676,10 @@ sub status_all {
 
         if ($sortcol == 7 or $sortcol == -7) {
             my ($total1,$total2) = (0,0);
-            while ($uno->{iud} =~ /(\d+)/go) {
+            while ($uno->{dit} =~ /(\d+)/go) {
                 $total1 += $1;
             }
-            while ($dos->{iud} =~ /(\d+)/go) {
+            while ($dos->{dit} =~ /(\d+)/go) {
                 $total2 += $1;
             }
 
@@ -3691,19 +3703,25 @@ sub status_all {
 
     for my $sync (sort sortme keys %$synclist) {
         my $s = $synclist->{$sync};
-        my $X = '|';
-        printf qq{%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s\n},
-            $max->{name},$sync,
-            $max->{type},$s->{typetext},
-            $max->{stat}, $s->{state},
-            $max->{pid}, $s->{PID} || '',
-            $max->{good}, $s->{lastgood},
-            $max->{total}, $s->{timegood},
-            $max->{iud}, $s->{iud},
-            $max->{bad}, $s->{lastbad},
-            $max->{totalbad}, $s->{timebad};
-    }
+        next if ! exists $s->{state}; ## e.g. has been filtered out by args
 
+        ## Populate any missing fields with an empty string
+        for my $name (keys %title) {
+            if (! exists $s->{$name}) {
+                $s->{$name} = '';
+            }
+        }
+
+        my $X = '|';
+        printf qq{%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s\n},
+            $max->{name}," $sync ",
+            $max->{state}, " $s->{state} ",
+            $max->{lastgood}, " $s->{lastgood} ",
+            $max->{timegood}, " $s->{timegood} ",
+            $max->{dit}, " $s->{dit} ",
+            $max->{lastbad}, " $s->{lastbad} ",
+            $max->{timebad}, " $s->{timebad} ";
+    }
 
     exit 0;
 
@@ -3744,97 +3762,106 @@ sub status_detail {
         $herdmap->{$herdname}{database} = $goatinfo->{db};
     }
 
-    print "Days back: $DAYSBACK  $DBCONN\n";
-
     ## Present each ordered by name
     for my $sync (sort { lc $a cmp lc $b } @synclist) {
         print '=' x 70; print "\n";
         my $s = $synclist->{$sync};
 
+        my @items;
+
+        ## The source database we get the tables from
+        my $sourcedb = $herdmap->{$s->{herd}}{database} || '?';
+
+        ## Determine how many tables are in this sync
+        $SQL = 'SELECT count(*) FROM bucardo.herdmap WHERE herd = ?';
+        $sth = $dbh->prepare($SQL);
+        $sth->execute($s->{herd});
+        my $numtables = $sth->fetch()->[0];
+
+        ## Last good time, and number of rows affected
+        if (exists $s->{rowgood}) {
+            my $tt = pretty_time($s->{rowgood}{total_time});
+            push @items => ['Last good', "$s->{rowgood}{started_time} (time to run: $tt)"];
+
+            ## Space out the numbers
+            $s->{dit} =~ s{/}{ / }g;
+            ## Pretty comma formatting (based on ENV)
+            $s->{dit} =~ s/(\d+)/pretty_number($1)/ge;
+
+            ## Change the title if we have any truncates
+            my $extra = $max->{truncates} ? '/Truncates' : '';
+            push @items => ["Rows deleted/inserted$extra", $s->{dit}];
+        }
+
+        ## Last bad time, and the exact error
+        ## The error should always be last, so we defer adding it to the queue
+        my $lasterror = '';
+        if (exists $s->{rowbad}) {
+            my $tt = pretty_time($s->{rowbad}{total_time});
+            push @items => ['Last bad',  "$s->{rowbad}{started_time} (time until fail: $tt)"];
+
+            ## Grab the error message, and strip out trailing whitespace
+            ($lasterror = $s->{rowbad}{status}) =~ s/\s+$//;
+            ## Add any newlines back in
+            $lasterror =~ s/\\n/\n/g;
+            ## Remove starting whitespace
+            $lasterror =~ s/^\s+//;
+        }
+
         ## Undefined should be written as 'none'
         for (qw/checktime/) {
             $s->{$_} ||= 'none';
         }
-        ## Not true should be empty
-        for (qw/PID PIDFILE CREATED/) {
-            $s->{$_} ||= '';
-        }
-
-        my $morepid = '';
-        if ($s->{state} !~ /off/ and ($s->{stayalive} or $s->{kidsalive})) {
-            $morepid = " (PID = $s->{PID})";
-        }
 
         ## Should be 'yes' or 'no'
-        for (qw/analyze_after_copy stayalive kidsalive ping do_listen usecustomselect/) {
+        for (qw/analyze_after_copy vacuum_after_copy stayalive kidsalive ping do_listen usecustomselect/) {
             $s->{$_} = (defined $s->{$_} and $s->{$_}) ? 'yes' : 'no ';
         }
 
-        my $target;
-        if ($s->{targetdb}) {
-            $target = "Target database:      $s->{targetdb}";
-        }
-        else {
-            $target = "Target group:         $s->{targetgroup} (";
-            $target .= join ',' => @{$s->{targets}};
-            $target .= ')';
+        ## If currently running, there should be a PID file
+        if (exists $s->{PIDFILE}) {
+            push @items => ['PID file'         => $s->{PIDFILE}];
+            push @items => ['PID file created' => $s->{CREATED}];
         }
 
-        $s->{iud} =~ s{/}{ / }g;
-        $s->{state} =~ s{>}{ > };
+        ## Build the display list
+        push @items => ['Sync name'            => $sync];
+        push @items => ['Current state'        => $s->{state}];
+        push @items => ['Source herd/database' => "$s->{herd} / $sourcedb"];
+        push @items => ['Tables in sync'       => $numtables];
+        push @items => ['Status'               => $s->{status}];
+        push @items => ['Check time'           => $s->{checktime}];
+        push @items => ['Overdue time'         => $s->{overdue}];
+        push @items => ['Expired time'         => $s->{expired}];
+        push @items => ['Stayalive/Kidsalive'  => "$s->{stayalive} / $s->{kidsalive}"];
+        push @items => ['Rebuild index'        => $s->{rebuild_index}];
+        push @items => ['Ping'                 => $s->{ping}];
+        push @items => ['Onetimecopy'          => $s->{onetimecopy}];
 
-        my $moregood = '';
-        if ($s->{lastgood} ne 'unknown') {
-            $moregood .= " (time to run: $s->{timegood})";
-            $moregood .= "\nLast good time:       $s->{latest_good}{last_ended_date}";
-            $moregood .= "  Target: $s->{latest_good}{targetdb}";
+        ## Only show these if enabled
+        if ($s->{usecustomselect} eq 'yes') {
+            push @items => ['Custom select', $s->{usecustomselect}];
+        }
+        if ($s->{analyze_after_copy} eq 'yes') {
+            push @items => ['Post-copy analyze', 'Yes'];
+        }
+        if ($s->{vacuum_after_copy} eq 'yes') {
+            push @items => ['Post-copy vacuum', 'Yes'];
         }
 
-        my $morebad = '';
-        if ($s->{lastbad} ne 'unknown') {
-            $morebad = " (time to run: $s->{timebad})";
-            $morebad .= "\nLast bad time:        $s->{latest_bad}{last_aborted_date}";
-            $morebad .= "  Target: $s->{latest_bad}{targetdb}";
-            (my $why = $s->{latest_bad}{whydie}) =~ s/\s+$//;
-            $why =~ s/^/                  /mg;
+        ## Final items:
+        push @items => ['Last error:' => $lasterror];
 
-            $why =~ s/^\s+//;
-            $morebad .= "\nLatest bad reason:    $why";
+        ## Figure out the maximum size of the left-hand items
+        my $leftmax = 0;
+        for (@items) {
+            $leftmax = length $_->[0] if length $_->[0] > $leftmax;
         }
 
-        my $sourcedb = $herdmap->{$s->{source}}{database} || '?';
-
-        $SQL = 'SELECT count(*) FROM bucardo.herdmap WHERE herd = ?';
-        $sth = $dbh->prepare($SQL);
-        $sth->execute($s->{source});
-        my $numtables = $sth->fetch()->[0];
-
-        print qq{Sync name:            $sync
-Current state:        $s->{state}$morepid
-Type:                 $s->{synctype}
-Source herd/database: $s->{source} / $sourcedb
-$target
-Tables in sync:       $numtables
-Last good:            $s->{lastgood}$moregood
-Ins/Upd/Del:          $s->{iud}
-Last bad:             $s->{lastbad}$morebad
-PID file:             $s->{PIDFILE}
-PID file created:     $s->{CREATED}
-Status:               $s->{status}
-Limitdbs:             $s->{limitdbs}
-Priority:             $s->{priority}
-Checktime:            $s->{checktime}
-Overdue time:         $s->{overdue}
-Expired time:         $s->{expired}
-Stayalive:            $s->{stayalive}      Kidsalive: $s->{kidsalive}
-Rebuild index:        $s->{rebuild_index}        Do_listen: $s->{do_listen}
-Ping:                 $s->{ping}      Makedelta: $s->{source_makedelta}/$s->{target_makedelta}
-Onetimecopy:          $s->{onetimecopy}
-};
-        if ($s->{synctype} eq 'fullcopy'){
-            print qq{Custom select:        $s->{usecustomselect} $s->{copyextra}\n};
-            print qq{Post-copy analyze:    $s->{analyze_after_copy}\n};
-            print qq{Delete method:        $s->{deletemethod}\n};
+        ## Print it all out
+        for (@items) {
+            printf "%-*s : %s\n",
+                $leftmax, $_->[0], $_->[1];
         }
 
     }
@@ -3892,158 +3919,119 @@ sub get_detailed_syncs {
 
     my $synclist = get_syncs();
 
-    ## Now see exactly what's going on with it at this moment (according to q)
+    ## View the details of the syncs via the syncrun table
 
-    die "Needs adjusting for Bucardo 5";
-
-    ## First, we need to hard-code our time backwards
-
-    $SQL = "SELECT date (now() - '$DAYSBACK days'::interval)";
-    my $oldtime = $dbh->selectall_arrayref($SQL)->[0][0];
-    $dbh->do('SET constraint_exclusion = true');
-
-    ## We want information about the last time it ran successfully
-    $SQL = qq{
-SELECT *, 
-TO_CHAR(ended,'$DATEFORMAT') AS last_ended_date,
-TO_CHAR(aborted,'$DATEFORMAT') AS last_aborted_date,
-round(extract(epoch FROM ended-started)) AS total_time_ended,
-round(extract(epoch FROM aborted-started)) AS total_time_aborted,
-round(extract(epoch FROM now()-ended)) AS last_ended_secs,
-round(extract(epoch FROM now()-aborted)) AS last_aborted_secs
-FROM
-(SELECT * FROM bucardo.q WHERE sync = \$1 AND cdate >= '$oldtime'
-UNION ALL
-SELECT * FROM freezer.master_q WHERE sync = \$1 AND cdate >= '$oldtime') AS foo
-WHERE ended is NOT NULL AND aborted IS NULL
-ORDER BY ended DESC LIMIT 1;
-};
-    $sth{latest_good} = $dbh->prepare($SQL);
-
-    ## If the last one was an abort, find the latest good run:
-    $SQL =~ s/IS NULL/IS NOT NULL/;
-    $sth{latest_bad} = $dbh->prepare($SQL);
-
-    ## Is it running right now?
-    ## no critic (ProhibitInterpolationOfLiterals)
     $SQL = qq{
 SELECT *,
-round(extract(epoch FROM now()-cdate)) AS q1,
-round(extract(epoch FROM now()-started)) AS q2
-FROM bucardo.q
-WHERE sync = \$1
-AND ended IS NULL
-AND aborted IS NULL
-ORDER BY started DESC LIMIT 1
+TO_CHAR(started,'$DATEFORMAT') AS started_time,
+CASE WHEN current_date = ended::date
+  THEN TO_CHAR(ended,'$SHORTDATEFORMAT')
+  ELSE TO_CHAR(ended,'$DATEFORMAT') END AS ended_time,
+ROUND(EXTRACT(epoch FROM ended)) AS ended_epoch,
+EXTRACT(epoch FROM ended-started) AS total_time,
+ROUND(EXTRACT(epoch FROM now()-started)) AS total_time_started,
+ROUND(EXTRACT(epoch FROM now()-ended)) AS total_time_ended
+FROM syncrun
+WHERE sync = ?
+AND (   lastgood  IS TRUE
+     OR lastbad   IS TRUE
+     OR lastempty IS TRUE
+     OR ended IS NULL)
 };
-    ## use critic
-    $sth{active_now} = $dbh->prepare($SQL);
+    $sth = $dbh->prepare($SQL);
 
+    ## Find the maximum lengths of items so we can line things up pretty
     my %max = (
-               name     => 4,
-               type     => 5,
-               stat     => 5,
-               pid      => 3,
-               q1       => 6,
-               q2       => 6,
-               iud      => 5,
-               good     => 9,
-               total    => 5,
-               bad      => 8,
-               totalbad => 4,
-               );
-    for my $sync (sort keys %$synclist) {
-        if ($arg->{syncs}) {
-            next unless grep { $_ eq $sync } @{$arg->{syncs}}; ## no critic (ProhibitBooleanGrep)
-        }
-        $DEBUG and warn "Reading sync $sync...\n";
+        name      => 1,
+        state     => 1,
+        dit       => 1,
+        lastgood  => 1,
+        timegood  => 1,
+        lastbad   => 1,
+        timebad   => 1,
+    );
+
+    for my $sync (keys %$synclist) {
 
         my $s = $synclist->{$sync};
 
-        ## Normal types are too long
-        $s->{typetext} = ' ' . uc(substr $s->{synctype},0,1);
+        ## Sometimes we only want some of them
+        if ($arg->{syncs}) {
+            next unless grep { $_ eq $sync } @{$arg->{syncs}}; ## no critic (ProhibitBooleanGrep)
+        }
 
-        ## Set some basic lengths
         $max{name} = length($sync) if length($sync) > $max{name};
-        $s->{PID} = 0 if ! defined $s->{PID};
-        $max{pid} = length($s->{PID}) if length($s->{PID}) > $max{pid};
 
-        ## Grab information from the q tables
-        $sth{latest_good}->execute($sync);
-        $s->{latest_good}  = $sth{latest_good}->fetchall_arrayref({})->[0];
-
-        $sth{latest_bad}->execute($sync);
-        $s->{latest_bad} = $sth{latest_bad}->fetchall_arrayref({})->[0];
-
-        $sth{active_now}->execute($sync);
-        $s->{active_now} = $sth{active_now}->fetchall_arrayref({});
-
-        ## Pretty up the times
-        $s->{lastgoodsecs} = $s->{lastgoodtime} = 0;
-        $s->{lastbadsecs} = $s->{lastbadtime} = 0;
-        $s->{lastgood} = $s->{lastbad} = 'unknown';
-        $s->{timegood} = $s->{timebad} = '';
-        $s->{iud} = '';
-        $s->{is_overdue} = $s->{is_expired} = '?';
-        if (defined $s->{latest_good}) {
-            my $g = $s->{latest_good};
-            $s->{iud} = "$g->{inserts}/$g->{updates}/$g->{deletes}";
-            $max{iud} = length($s->{iud}) if length($s->{iud}) > $max{iud};
-
-            $s->{timegood} = pretty_time($g->{total_time_ended});
-            $max{total} = length($s->{timegood}) if length($s->{timegood}) > $max{total};
-            $s->{lastgoodtime} = $g->{total_time_ended};
-
-            $s->{lastgood} = pretty_time($g->{last_ended_secs});
-            $max{good} = length($s->{lastgood}) if length($s->{lastgood}) > $max{good};
-            $s->{lastgoodsecs} = $g->{last_ended_secs};
-
-            $s->{is_overdue} = ($g->{last_ended_secs} > $s->{overdue_secs}) ? 'yes' : 'no';
-            $s->{is_expired} = ($g->{last_ended_secs} > $s->{expired_secs}) ? 'yes' : 'no';
-
+        $count = $sth->execute($sync);
+        if ($count < 1) {
+            $sth->finish;
+            $s->{state} = 'No records found';
+            $max{state} = length($s->{state}) if length($s->{state}) > $max{state};
+            next;
         }
-        $s->{is_expired} = 'no' if $s->{expired_secs} < 1;
-        $s->{is_overdue} = 'no' if $s->{overdue_secs} < 1;
-
-        if (defined $s->{latest_bad}) {
-            $s->{timebad} = pretty_time($s->{latest_bad}{total_time_aborted});
-            $max{totalbad} = length($s->{timebad}) if length($s->{timebad}) > $max{totalbad};
-            $s->{lastbadtime} = $s->{latest_bad}{total_time_aborted};
-
-            $s->{lastbad} = pretty_time($s->{latest_bad}{last_aborted_secs});
-            $max{bad} = length($s->{lastbad}) if length($s->{lastbad}) > $max{bad};
-            $s->{lastbadsecs} = $s->{latest_bad}{last_aborted_secs};
-        }
-
-        ## Check for current activity
-        $s->{timeq1} = $s->{timeq2} = '';
-        my $targ = $s->{targetdb} || $s->{targetgroup};
-        for my $row (@{$s->{active_now}}) {
-            $s->{timeq} = $s->{timeq1} = pretty_time($row->{q1});
-            if (defined $row->{q2}) {
-                $s->{timeq} = $s->{timeq2} = pretty_time($row->{q2});
+        for my $row (@{ $sth->fetchall_arrayref({}) }) {
+            if ($row->{lastgood}) {
+                $s->{rowgood} = $row;
             }
-            my $len = length('WAIT:') + length($s->{timeq});
-            if (length $s->{timeq2}) {
-                $len += (1 + length($targ));
+            elsif ($row->{lastempty}) {
+                $s->{rowempty} = $row;
             }
-            $max{stat} = $len if $len > $max{stat};
-            last;
+            elsif ($row->{lastbad}) {
+                $s->{rowbad} = $row;
+            }
+            else {
+                $s->{runningrow} = $row;
+            }
         }
 
-        $s->{state} = length($s->{timeq2}) ? "RUN:$s->{timeq}>$targ" :
-            length($s->{timeq1}) ? "WAIT:$s->{timeq}" :
-            ($s->{status} eq 'active') ? 'idle' : 'off';
+        ## What is the state of this sync? First, is it still actively running?
+        if (exists $s->{runningrow}) {
+            $s->{state} = "$s->{runningrow}{status}";
+        }
+        else {
+            ## What was the most recent run?
+            my $highepoch = 0;
+            undef $s->{latestrow};
+            my $wintype;
+            for my $type (qw/ bad good /) {
+                my $r = $s->{"row$type"};
+                next if ! defined $r;
+                my $etime = $r->{ended_epoch};
+                if ($etime >= $highepoch) {
+                    $s->{latestrow} = $r;
+                    $highepoch = $etime;
+                    $wintype = $type;
+                }
+            }
+            if (! defined $s->{latestrow}) {
+                $s->{state} = 'Unknown';
+                $max{state} = length($s->{state}) if length($s->{state}) > $max{state};
+                next;
+            }
+            $s->{state} =
+                $wintype eq 'empty' ? 'Empty'
+                : $wintype eq 'bad' ? 'Bad'
+                : 'Good';
+        }
 
-        ## Is anything overdue or expired?
-        if ($s->{is_expired} eq 'yes') {
-            $s->{typetext} .= ' E!'
+        ## deletes/inserts/truncates
+        $s->{dit} = '';
+        if (exists $s->{rowgood}) {
+            if ($s->{rowgood}{truncates}) {
+                $max{truncates} = 1;
+                $s->{dit} = "$s->{rowgood}{deletes}/$s->{rowgood}{inserts}/$s->{rowgood}{truncates}";
+            }
+            else {
+                $s->{dit} = "$s->{rowgood}{deletes}/$s->{rowgood}{inserts}";
+            }
         }
-        elsif ($s->{is_overdue} eq 'yes') {
-            $s->{typetext} .= ' O!';
-        }
-        elsif ($s->{is_expired} ne 'no') {
-            $s->{typetext} .= ' ?';
+        $s->{lastgood} = exists $s->{rowgood} ? $s->{rowgood}{ended_time} : 'none';
+        $s->{timegood} = exists $s->{rowgood} ? pretty_time($s->{rowgood}{total_time_ended}) : '';
+        $s->{lastbad} = exists $s->{rowbad} ? $s->{rowbad}{ended_time} : 'none';
+        $s->{timebad} = exists $s->{rowbad} ? pretty_time($s->{rowbad}{total_time_ended}) : '';
+
+        for my $var (qw/ state dit lastgood timegood lastbad timebad /) {
+            $max{$var} = length($s->{$var}) if length($s->{$var}) > $max{$var};
         }
 
     }
@@ -4591,6 +4579,9 @@ sub list_sequences {
 sub pretty_time {
 
     my $secs = shift;
+
+    $secs = ceil($secs);
+
     return '?' if ! defined $secs or $secs !~ /^\-?\d+$/o or $secs < 0;
     my ($D,$H,$M,$S) = (0,0,0,0);
 
@@ -4616,7 +4607,32 @@ sub pretty_time {
         $answer =~ s/ //g;
     }
     return $answer;
-}
+
+} ## end of pretty_time
+
+
+sub pretty_number {
+
+    ## Format a raw number in a more readable style
+
+    my $number = shift;
+
+    return $number if $number !~ /^\d+$/ or $number < 1000;
+
+    ## If this is our first time here, find the correct separator
+    if (! defined $bcargs->{tsep}) {
+        my $lconv = localeconv();
+        $bcargs->{tsep} = $lconv->{thousands_sep} || ',';
+    }
+
+    ## No formatting at all
+    return $number if '' eq $bcargs->{tsep} or ! $bcargs->{tsep};
+
+    (my $reverse = reverse $number) =~ s/(...)(?=\d)/$1$bcargs->{tsep}/g;
+    $number = reverse $reverse;
+    return $number;
+
+} ## end of pretty_number
 
 
 sub get_syncs {

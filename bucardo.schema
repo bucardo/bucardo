@@ -480,6 +480,7 @@ CREATE UNIQUE INDEX customcode_map_unique_goat ON bucardo.customcode_map(code,go
 --
 CREATE TABLE bucardo.syncrun (
   sync      TEXT             NULL,
+  truncates INTEGER      NOT NULL DEFAULT 0,
   deletes   BIGINT       NOT NULL DEFAULT 0,
   inserts   BIGINT       NOT NULL DEFAULT 0,
   started   TIMESTAMPTZ  NOT NULL DEFAULT now(),
@@ -500,12 +501,13 @@ ALTER TABLE bucardo.syncrun
 -- Is essentially a unique index, but we want to avoid any [b]locking
 CREATE INDEX syncrun_sync_started ON syncrun(sync) WHERE ended IS NULL;
 
--- We often need the last good and last bad for a sync:
+-- We often need the last good/bad/empty for a sync:
 
 CREATE INDEX syncrun_sync_lastgood ON syncrun(sync) WHERE lastgood IS TRUE;
 
 CREATE INDEX syncrun_sync_lastbad ON syncrun(sync) WHERE lastbad IS TRUE;
 
+CREATE INDEX syncrun_sync_lastempty ON syncrun(sync) WHERE lastempty IS TRUE;
 
 --
 -- Keep track of which dbs are currently being used, for traffic control
