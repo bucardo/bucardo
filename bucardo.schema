@@ -10,7 +10,7 @@ SET CLIENT_MIN_MESSAGES = 'FATAL';
 CREATE USER bucardo SUPERUSER;
 CREATE DATABASE bucardo OWNER bucardo;
 ALTER DATABASE bucardo SET search_path = bucardo, public;
-ALTER USER bucardo SET search_path = bucardo, public;
+-- ALTER USER bucardo SET search_path = bucardo, public;
 SET CLIENT_MIN_MESSAGES = 'WARNING';
 
 \c bucardo bucardo
