@@ -1717,7 +1717,8 @@ sub add_herd {
     my %goat2add;
     for my $nam (@nouns) {
 		if (exists $goatlist->{nomatch}{$nam}) {
-			warn qq{No match found for: $nam\n};
+            ## XXX Fixme, giving output even when there is a match
+			#warn qq{No match found for: $nam\n};
         }
     }
 
@@ -5280,6 +5281,9 @@ sub add_table {
     ## Any single words are table names.
     my @tables;
     for (@nouns) {
+        if (/(\w+)=(.+)/) {
+            $dbcols->{$1} = $2;
+        }
         next if /=/;
         if (/^(\w*?)?\.?(\w+)$/) {
             push @tables => length $1 ? [$1,$2] : [$DEFAULT_SCHEMA,$2];
@@ -5296,66 +5300,31 @@ sub add_table {
     }
 
     if (! exists $dbcols->{db}) {
+        my $winner;
+        my $count = keys %$DB;
         ## If we only have one database, we can use that
-        my $count = keys %{$global{db}};
-        if ($count != 1) {
-            warn "Please specify a database with db=<name>\n";
-            ## XXX Can we pick the best candidate?
-            ## i.e. if only two and the only sync is using one as a source?
-            ## or see if it exists in both (all) databases the same?
-            ## Get a list of matching tables from all (active?) databases
-            my %goats_per_db;
-            for my $dbname (sort keys %$DB) {
-                next if $DB->{$dbname} ne 'postgres';
-                $goats_per_db{$dbname} = find_goats_in_db($dbname, @nouns);
-            }
-
-sub find_goats_in_db {
-
-    ## Given a database name and one or more table strings, return all matches
-    ## This version does *not* add them!
-
-    my $dbname = shift or die;
-    print qq{Checking inside database "$dbname" for some matching goats\n};
-
-    ## Get connection to this database
-    my $dbh = connect_database($dbname);
-
-    my @names = @_;
-
-    for my $name (@names) {
-        print "Looking for name $name\n";
-        ## Table vs sequence?
-        my @items = find_relnames($dbh, $name);
-    }
-
-
-
-    return;
-
-} ## end of find_goats_in_db
-
-sub find_relnames {
-
-    ## Given a db handle and a name, return all matching relnames
-    ## Returns relkind, nspname, and relname
-
-    my $dbh = shift or die;
-    my $name = shift or die;
-
-    ## Is this a wildcard etc. etc.
-
-    return;
-
-
-} ## end of find_relnames
-
-
-
-            _list_databases();
-            exit 1;
+        if ($count == 1) {
+            ($winner) = keys %{$global{db}};
         }
-        ($dbcols->{db}) = keys %{$global{db}};
+        else {
+            ## Since they did not provide one, pick the oldest postgres database
+            #die Dumper $DB->{mydb2};
+            for my $db (sort
+                        { $DB->{$a}{epoch} <=> $DB->{$b}{epoch} or $a cmp $b }
+                        grep { $DB->{$_}{dbtype} eq 'postgres' }
+                        keys %$DB) {
+                $winner = $db;
+                last;
+            }
+            if (! defined $winner) {
+                warn "Please specify a database with db=<name>\n";
+                _list_databases();
+                exit 1;
+            }
+        }
+
+        $dbcols->{db} = $winner;
+
         ## Replace any existing database
         if ($cols =~ s/\bdb\b//) {
             $phs =~ s/\?//;
@@ -5363,7 +5332,7 @@ sub find_relnames {
         }
         ## Add this in to the start of the list
         $cols = "db,$cols";
-        unshift @$vals => $dbcols->{db};
+        $vals->{db} = $dbcols->{db};
         $phs .= ',?';
         ## Cleanups
         $cols =~ s/,,/,/;
@@ -5445,6 +5414,48 @@ sub find_relnames {
     return;
 
 } ## end of add_table
+
+
+sub find_goats_in_db {
+
+    ## Given a database name and one or more table strings, return all matches
+    ## This version does *not* add them!
+
+    my $dbname = shift or die;
+    print qq{Checking inside database "$dbname" for some matching goats\n};
+
+    ## Get connection to this database
+    my $dbh = connect_database($dbname);
+
+    my @names = @_;
+
+    for my $name (@names) {
+        print "Looking for name $name\n";
+        ## Table vs sequence?
+        my @items = find_relnames($dbh, $name);
+    }
+
+
+
+    return;
+
+} ## end of find_goats_in_db
+
+
+sub find_relnames {
+
+    ## Given a db handle and a name, return all matching relnames
+    ## Returns relkind, nspname, and relname
+
+    my $dbh = shift or die;
+    my $name = shift or die;
+
+    ## Is this a wildcard etc. etc.
+
+    return;
+
+
+} ## end of find_relnames
 
 
 sub _list_databases {
@@ -7883,7 +7894,7 @@ sub load_bucardo_info {
     return if exists $global{db} and ! $force;
 
     ## Grab all database information
-    $SQL = 'SELECT *, ROUND(EXTRACT(epoch FROM cdate)) AS epoch FROM bucardo.db';
+    $SQL = 'SELECT *, EXTRACT(epoch FROM cdate) AS epoch FROM bucardo.db';
     $sth = $dbh->prepare($SQL);
     $sth->execute();
     my $db = $sth->fetchall_hashref('name');
