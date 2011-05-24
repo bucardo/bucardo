@@ -766,6 +766,9 @@ sub mcp_main {
 
             my $npid = $notice->{$name}{firstpid};
 
+            ## Ignore things sent from ourselves
+            next if $npid == $self->{mcp_backend};
+
             ## Request to stop everything
             if ('mcp_fullstop' eq $name) {
                 $self->glog("Received full stop notice from PID $npid, leaving", LOG_TERSE);
@@ -799,6 +802,13 @@ sub mcp_main {
                 }
             }
 
+            ## A sync has finished
+            elsif ($name =~ /^syncdone_(.+)/o) {
+                my $syncdone = $1;
+                $self->glog("Sync $syncdone has finished", LOG_DEBUG);
+                ## Echo out to anyone listening
+                $self->db_notify($maindbh, $name, 1);
+            }
             ## Request to reload the configuration file
             elsif ('reload_config' eq $name) {
                 $self->glog('Reloading configuration table', LOG_TERSE);
@@ -811,7 +821,7 @@ sub mcp_main {
                 $self->reload_mcp();
 
                 ## Let anyone listening know we are done
-                $self->db_notify($maindbh, 'reload_config_finished');
+                $self->db_notify($maindbh, 'reload_config_finished', 1);
             }
 
             ## Request to reload the MCP
@@ -820,13 +830,13 @@ sub mcp_main {
                 $self->reload_mcp();
 
                 ## Let anyone listening know we are done
-                $self->db_notify($maindbh, 'reloaded_mcp');
+                $self->db_notify($maindbh, 'reloaded_mcp', 1);
             }
 
             ## Request for a ping via listen/notify
             elsif ('mcp_ping' eq $name) {
                 $self->glog("Got a ping from PID $npid, issuing pong", LOG_DEBUG);
-                $self->db_notify($maindbh, 'mcp_pong');
+                $self->db_notify($maindbh, 'mcp_pong', 1);
             }
 
             ## Request that we parse and empty the log message table
@@ -902,7 +912,7 @@ sub mcp_main {
                     }
                     else {
                         ## Let anyone listening know the sync is now ready
-                        $self->db_notify($maindbh, "reloaded_sync_$syncname");
+                        $self->db_notify($maindbh, "reloaded_sync_$syncname", 1);
                     }
                     $maindbh->commit();
                 }
@@ -916,7 +926,7 @@ sub mcp_main {
                 }
                 elsif ($sync->{$syncname}{mcp_active}) {
                     $self->glog(qq{Sync "$syncname" is already activated}, LOG_TERSE);
-                    $self->db_notify($maindbh, "activated_sync_$syncname");
+                    $self->db_notify($maindbh, "activated_sync_$syncname", 1);
                 }
                 else {
                     if ($self->activate_sync($sync->{$syncname})) {
@@ -933,7 +943,7 @@ sub mcp_main {
                 }
                 elsif (! $sync->{$syncname}{mcp_active}) {
                     $self->glog(qq{Sync "$syncname" is already deactivated}, LOG_TERSE);
-                    $self->db_notify($maindbh, "deactivated_sync_$syncname");
+                    $self->db_notify($maindbh, "deactivated_sync_$syncname", 1);
                 }
                 elsif ($self->deactivate_sync($sync->{$syncname})) {
                     $sync->{$syncname}{mcp_active} = 0;
@@ -1242,7 +1252,7 @@ sub start_controller {
     $self->{pidmap}{$self->{master_backend}} = 'Bucardo DB';
 
     ## Listen for kick requests from the MCP for this sync
-    my $kicklisten = "ctl_kick_$syncname";
+    my $kicklisten = "kick_$syncname";
     $self->db_listen($maindbh, $kicklisten);
 
     ## Listen for a controller ping request
@@ -1320,7 +1330,7 @@ sub start_controller {
     $sync->{numgangs} = keys %gang;
 
     ## Listen for a kid letting us know the sync has finished
-    my $syncdone = "ctl_syncdone_$syncname";
+    my $syncdone = "syncdone_$syncname";
     $self->db_listen($maindbh, $syncdone);
 
     ## Determine the last time this sync fired, if we are using "checksecs"
@@ -1413,6 +1423,9 @@ sub start_controller {
       NOTICE: for my $name (sort keys %{ $nlist }) {
 
             my $npid = $nlist->{$name}{firstpid};
+
+            ## Ignore things from ourselves
+            next if $npid == $self->{master_backend};
 
             ## Kick request from the MCP?
             if ($name eq $kicklisten) {
@@ -2191,7 +2204,7 @@ sub start_kid {
                 }
 
                 ## The controller has told us we are clear to go
-                elsif ($name eq "kid_run_$syncname") {
+                elsif ($name eq "run_$syncname") {
                     $dorun = 1;
                 }
 
@@ -4256,16 +4269,19 @@ sub get_reason {
 sub db_listen {
 
     ## Listen for specific messages. Does not commit.
-    ## Arguments: two or three
+    ## Arguments: two, three, or four
     ## 1. Database handle
     ## 2. String to listen for
     ## 3. Short name of the database (optional, for debug output, default to 'bucardo')
+    ## 4. Whether to skip payloads. Optional boolean, defaults to false
+
     ## Returns: undef
 
     my $self = shift;
     my $ldbh = shift;
     my $string = shift;
     my $name = shift || 'bucardo';
+    my $skip_payload = shift || 0;
 
     if (! ref $ldbh) {
         my $line = (caller)[2];
@@ -4274,7 +4290,7 @@ sub db_listen {
     }
 
     ## If using payloads, we only need to listen for one thing
-    if ($ldbh->{pg_server_version} >= 90000) {
+    if ($ldbh->{pg_server_version} >= 90000 and ! $skip_payload) {
 
         ## Do nothing if we are already listening
         return if $self->{listen_payload}{$ldbh};
@@ -4369,7 +4385,7 @@ sub db_unlisten_all {
 
 sub db_notify {
 
-    ## Send an asynchronous notification into the DB aether, then commits
+    ## Send an asynchronous notification into the DB aether, then commit
 
     ## 1. Database handle
     ## 2. The string to send
@@ -4379,6 +4395,7 @@ sub db_notify {
     my ($self, $ldbh, $string, $skip_payload) = @_;
 
     ## We make some exceptions to the payload system, mostly for early MCP notices
+    ## This is because we don't want to complicate external clients with payload decisions
     $skip_payload = 0 if ! defined $skip_payload;
 
     ## XXX TODO: We should make this log level test more generic and apply it elsewhere
@@ -5137,7 +5154,8 @@ sub validate_sync {
         for my $dbname (sort keys %{ $self->{sdb} }) {
             $x = $self->{sdb}{$dbname};
             next if $x->{role} ne 'source';
-            $self->db_listen($x->{dbh}, $l, $dbname);
+            ## The 1 tells it to not use payloads, as these messages are embedded in triggers
+            $self->db_listen($x->{dbh}, $l, $dbname, 1);
             $x->{dbh}->commit();
         }
     }
@@ -5181,8 +5199,8 @@ sub activate_sync {
     ## We don't need to listen for activation requests anymore
     $self->db_unlisten($maindbh, "activate_sync_$syncname");
     ## But we do need to listen for deactivate and kick requests
-    $self->db_listen($maindbh, "deactivate_sync_$syncname", 0);
-    $self->db_listen($maindbh, "kick_sync_$syncname", 0);
+    $self->db_listen($maindbh, "deactivate_sync_$syncname", '', 1);
+    $self->db_listen($maindbh, "kick_sync_$syncname", '', 1);
     $maindbh->commit();
 
     ## Redo our process name to include an updated list of active syncs
@@ -5232,7 +5250,7 @@ sub deactivate_sync {
     $self->db_unlisten($maindbh, "deactivate_sync_$syncname");
     $self->db_unlisten($maindbh, "kick_sync_$syncname");
     ## But we do need to listen for an activation request
-    $self->db_listen($maindbh, "activate_sync_$syncname");
+    $self->db_listen($maindbh, "activate_sync_$syncname", '', 1);
     $maindbh->commit();
 
     ## If we are listening for kicks on the source, stop doing so
@@ -5343,7 +5361,7 @@ sub reset_mcp_listeners {
             'log_message',
             'mcp_ping',
     ) {
-        $self->db_listen($maindbh, $l);
+        $self->db_listen($maindbh, $l, '', 1);
     }
 
     ## Listen for sync specific items
@@ -5366,7 +5384,7 @@ sub reset_mcp_listeners {
             }
 
             my $listen = "${l}_$syncname";
-            $self->db_listen($maindbh, $listen);
+            $self->db_listen($maindbh, $listen, '', 1);
         }
     }
 
