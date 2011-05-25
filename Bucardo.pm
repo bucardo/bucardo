@@ -1914,7 +1914,8 @@ sub start_kid {
     ## We do not set ended, but let the controller handle that
     $SQL = q{
         UPDATE bucardo.syncrun
-        SET    deletes=deletes+?, inserts=inserts+?, truncates=truncates+?, details=?, status=?
+        SET    deletes=deletes+?, inserts=inserts+?, truncates=truncates+?,
+               conflicts=?, details=?, status=?
         WHERE  sync=?
         AND    ended IS NULL
     };
@@ -3671,7 +3672,7 @@ sub start_kid {
         my $reason = "Finished (KID $$)";
         my $details = '';
         $count = $sth{kid_syncrun_end}->execute(
-            $dmlcount{deletes}, $dmlcount{inserts}, $dmlcount{truncates},
+            $dmlcount{deletes}, $dmlcount{inserts}, $dmlcount{truncates}, $dmlcount{conflicts},
             $details, $reason, $syncname);
 
         ## Change this row to the latest good or empty

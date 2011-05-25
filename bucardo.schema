@@ -483,6 +483,7 @@ CREATE TABLE bucardo.syncrun (
   truncates INTEGER      NOT NULL DEFAULT 0,
   deletes   BIGINT       NOT NULL DEFAULT 0,
   inserts   BIGINT       NOT NULL DEFAULT 0,
+  conflicts BIGINT       NOT NULL DEFAULT 0,
   started   TIMESTAMPTZ  NOT NULL DEFAULT now(),
   ended     TIMESTAMPTZ      NULL,
   lastgood  BOOLEAN      NOT NULL DEFAULT 'false',

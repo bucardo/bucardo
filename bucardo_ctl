@@ -3658,7 +3658,9 @@ sub status_all {
         state    => ' State',
         lastgood => ' Last good',
         timegood => ' Time',
-        dit      => ($max->{truncate} ? 'Last I/D/T' : ' Last I/D'),
+        dit      => ($max->{truncate} ?
+                    $max->{conflicts} ? ' Last I/D/T/C' : ' Last I/D/T' :
+                    $max->{conflicts} ? ' Last I/D/C' :' Last I/D'),
         lastbad  => ' Last bad',
         timebad  => ' Time',
     );
@@ -3830,7 +3832,11 @@ sub status_detail {
             $s->{dit} =~ s/(\d+)/pretty_number($1)/ge;
 
             ## Change the title if we have any truncates
-            my $extra = $max->{truncates} ? '/Truncates' : '';
+            my $extra = $max->{truncates} ? '/truncates' : '';
+
+            ## Change the title if we have any conflicts
+            $extra .= $max->{conflicts} ? '/conflicts' : '';
+
             push @items => ["Rows deleted/inserted$extra", $s->{dit}];
         }
 
@@ -4055,15 +4061,17 @@ AND (   lastgood  IS TRUE
                 : 'Good';
         }
 
-        ## deletes/inserts/truncates
+        ## deletes/inserts/truncates/conflicts
         $s->{dit} = '';
         if (exists $s->{rowgood}) {
+            $s->{dit} = "$s->{rowgood}{deletes}/$s->{rowgood}{inserts}";
             if ($s->{rowgood}{truncates}) {
                 $max{truncates} = 1;
-                $s->{dit} = "$s->{rowgood}{deletes}/$s->{rowgood}{inserts}/$s->{rowgood}{truncates}";
+                $s->{dit} .= "/$s->{rowgood}{truncates}";
             }
-            else {
-                $s->{dit} = "$s->{rowgood}{deletes}/$s->{rowgood}{inserts}";
+            if ($s->{rowgood}{conflicts}) {
+                $max{conflicts} = 1;
+                $s->{dit} .= "/$s->{rowgood}{conflicts}";
             }
         }
         $s->{lastgood} = exists $s->{rowgood} ? $s->{rowgood}{ended_time} : 'none';
