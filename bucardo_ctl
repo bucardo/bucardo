@@ -773,6 +773,7 @@ sub add_database {
     ## Clean up and standardize the names
     $vals->{dbtype} =~ s/postgres.*/postgres/io;
     $vals->{dbtype} =~ s/mongo.*/mongo/io;
+    $vals->{dbtype} =~ s/mysql.*/mysql/io;
 
     ## Attempt to insert this into the database
     $SQL = "INSERT INTO bucardo.db ($cols) VALUES ($phs)";
@@ -802,7 +803,10 @@ sub add_database {
             ## All is good, proceed below
         }
         elsif ($vals->{dbtype} eq 'mongo') {
-            #last TESTCONN;
+            ## Proceed
+        }
+        elsif ($vals->{dbtype} eq 'mysql') {
+            ## Proceed
         }
         else {
             die qq{Unknown database type: $vals->{dbtype}\n};
@@ -894,6 +898,33 @@ sub add_database {
                 } } ## end of CONNLOOP
 
         } ## end postgres
+
+        if ('mysql' eq $vals->{dbtype}) {
+
+            my ($type,$dsn,$user,$pass) = split /\n/ => $dbconn;
+
+            my $found = 0;
+            eval {
+                require DBD::mysql;
+                $found = 1;
+            };
+            if (!$found) {
+                die "Cannot add unless the DBD::mysql module is available\n";
+            }
+
+            my $testdbh;
+            $found = 0;
+            eval {
+                $testdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+                $found = 1;
+            };
+            if (! $found) {
+                die "MySQL connection test failed. You can force add it with the --force argument. Error was: $@\n\n";
+            }
+
+            $testdbh->disconnect();
+
+        } ## end mysql
 
         ## If we got a group, process that as well
         if (exists $extra->{dbgroup}) {
@@ -1285,6 +1316,15 @@ sub list_databases {
             if (length $info->{dbhost}) {
                 print "Host: $info->{dbhost}";
             }
+        }
+        if ($dbtype eq 'mysql') {
+            my $showport = (length $info->{dbport} and $info->{dbport} != 3306)
+                ? " --port $info->{dbport}" : '';
+            printf "Conn: mysql -u %s -D %s%s%s",
+                $info->{dbuser},
+                $info->{dbname},
+                $showhost,
+                $showport;
         }
         print "\n";
 
@@ -4258,6 +4298,7 @@ sub process_args {
     if (exists $arg{type}) {
         $arg{type} =~ s/postgres.*/postgres/io;
         $arg{type} =~ s/mongo.*/mongo/io;
+        $arg{type} =~ s/mysql.*/mysql/io;
     }
 
     return \%arg;

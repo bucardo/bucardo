@@ -751,9 +751,11 @@ sub mcp_main {
         ## Add in any messages from each remote database
         for my $dbname (keys %{ $self->{sdb} }) {
             $x = $self->{sdb}{$dbname};
-            next if $x->{dbtype} =~ /flat/o;
-            next if $x->{dbtype} =~ /mongo/o;
+
+            next if $x->{dbtype} ne 'postgres';
+
             my $nlist = $self->db_get_notices($x->{dbh});
+            $x->{dbh}->rollback();
             for my $name (keys %{ $nlist } ) {
                 if (! exists $notice->{$name}) {
                     $notice->{$name} = $nlist->{$name};
@@ -1253,11 +1255,11 @@ sub start_controller {
 
     ## Listen for kick requests from the MCP for this sync
     my $kicklisten = "kick_$syncname";
-    $self->db_listen($maindbh, $kicklisten);
+    $self->db_listen($maindbh, "ctl_$kicklisten");
 
     ## Listen for a controller ping request
-    my $pinglisten = "ctl_${$}_ping";
-    $self->db_listen($maindbh, $pinglisten);
+    my $pinglisten = "${$}_ping";
+    $self->db_listen($maindbh, "ctl_$pinglisten");
 
     ## Commit so we start listening right away
     $maindbh->commit();
@@ -1331,7 +1333,7 @@ sub start_controller {
 
     ## Listen for a kid letting us know the sync has finished
     my $syncdone = "syncdone_$syncname";
-    $self->db_listen($maindbh, $syncdone);
+    $self->db_listen($maindbh, "ctl_$syncdone");
 
     ## Determine the last time this sync fired, if we are using "checksecs"
     if ($sync->{checksecs}) {
@@ -1376,8 +1378,8 @@ sub start_controller {
             next;
         }
 
-        ## Do not need mongo handle for the controller
-        next if $x->{dbtype} eq 'mongo';
+        ## Do not need non-Postgres handles for the controller
+        next if $x->{dbtype} ne 'postgres';
 
         ## Overwrites the MCP database handles
         ($x->{backend}, $x->{dbh}) = $self->connect_database($dbname);
@@ -1426,6 +1428,9 @@ sub start_controller {
 
             ## Ignore things from ourselves
             next if $npid == $self->{master_backend};
+
+            ## Strip prefix so we can easily use both pre and post 9.0 versions
+            $name =~ s/^ctl_//o;
 
             ## Kick request from the MCP?
             if ($name eq $kicklisten) {
@@ -1496,11 +1501,12 @@ sub start_controller {
             $self->db_notify($maindbh, $notifymsg);
 
             ## Remove any existing 'lastgood' entry for this sync, and close out the current one
+            ## This is not used anymore, but again, no harm in leaving it in for now
             $SQL = 'SELECT truncates,deletes,inserts FROM bucardo.syncrun WHERE sync = ? AND ended IS NULL';
             $sth = $maindbh->prepare($SQL);
             $count = $sth->execute($syncname);
             if ($count < 1) {
-                $self->glog("Did not find a valid row in the syncrun table for $syncname!", LOG_NORMAL);
+                #$self->glog("Did not find a valid row in the syncrun table for $syncname!", LOG_NORMAL);
                 $sth->finish();
             }
             else {
@@ -1683,11 +1689,14 @@ sub start_kid {
     };
 
     ## Set up some common groupings of databases inside sync->{db}
-    my (@dbs_postgres, @dbs_source, @dbs_target, @dbs_dbi, @dbs_connectable);
+    my (@dbs_postgres, @dbs_mysql, @dbs_source, @dbs_target, @dbs_dbi, @dbs_connectable);
     for my $dbname (sort keys %{ $sync->{db} }) {
         $x = $sync->{db}{$dbname};
         push @dbs_postgres => $dbname
             if $x->{dbtype} eq 'postgres';
+
+        push @dbs_mysql => $dbname
+            if $x->{dbtype} eq 'mysql';
 
         push @dbs_source => $dbname
             if $x->{role} eq 'source';
@@ -1696,13 +1705,12 @@ sub start_kid {
             if $x->{role} ne 'source';
 
         push @dbs_dbi => $dbname
-            if $x->{dbtype} eq 'postgres';
+            if $x->{dbtype} eq 'postgres'
+            or $x->{dbtype} eq 'mysql';
 
         push @dbs_connectable => $dbname
             if $x->{dbtype} !~ /flat/;
     }
-
-
 
     ## Connect to the main database
     ## Overwrites the previous handle from the controller
@@ -1879,11 +1887,12 @@ sub start_kid {
     }
 
     ## Listen for a kid ping, even if not persistent
-    $self->db_listen( $maindbh, "kid_${$}_ping" );
+    my $kidping = "${$}_ping";
+    $self->db_listen( $maindbh, "kid_$kidping" );
 
     ## Listen for a sync-wide exit signal
-    my $stop_sync_request = "kid_stopsync_$syncname";
-    $self->db_listen( $maindbh, $stop_sync_request );
+    my $stop_sync_request = "stopsync_$syncname";
+    $self->db_listen( $maindbh, "kid_$stop_sync_request" );
 
     ## Prepare all of our SQL
     ## Note that none of this is actually 'prepared' until the first execute
@@ -2133,6 +2142,18 @@ sub start_kid {
         $xdbh->commit();
     }
 
+    ## Get MySQL into bulk loading mode
+    for my $dbname (@dbs_mysql) {
+        $x = $sync->{db}{$dbname};
+
+        my $xdbh = $x->{dbh};
+
+        ## No foreign key checks, please
+        $xdbh->do('SET foreign_key_checks = 0');
+
+        $xdbh->commit();
+    }
+
     ## How long it has been since we last ran a ping against our databases
     my $lastpingcheck = 0;
 
@@ -2197,6 +2218,9 @@ sub start_kid {
 
                 my $npid = $nlist->{$name}{firstpid};
 
+                ## Strip the prefix
+                $name =~ s/^kid_//o;
+
                 ## The controller wants us to exit
                 if ( $name eq $stop_sync_request ) {
                     $self->glog('Got a stop sync request, so exiting', LOG_TERSE);
@@ -2209,7 +2233,7 @@ sub start_kid {
                 }
 
                 ## Got a ping? Respond with a pong.
-                elsif ($name eq "kid_${$}_ping") {
+                elsif ($name eq "${$}_ping") {
                     $self->glog('Got a ping, issuing pong', LOG_DEBUG);
                     $self->db_notify($maindbh, "kid_${$}_pong");
                 }
@@ -3575,6 +3599,14 @@ sub start_kid {
             $x->{dbh}->do($SQL{enable_trigrules});
         }
 
+        ## Get the MySQL connection back to normal
+        for my $dbname (@dbs_mysql) {
+            $x = $sync->{db}{$dbname};
+            next if ! $x->{writtento};
+            $self->glog(qq{Turning foreign key checks back on for $dbname}, LOG_VERBOSE);
+            $x->{dbh}->do('SET foreign_key_checks = 1');
+        }
+
         ## Run all 'after_trigger_enable' code
         if (exists $sync->{code_after_trigger_enable}) {
             $sth{kid_syncrun_update_status}->execute("Code after_trigger_enable (KID $$)", $syncname);
@@ -3641,10 +3673,16 @@ sub start_kid {
         $count = $sth{kid_syncrun_end}->execute(
             $dmlcount{deletes}, $dmlcount{inserts}, $dmlcount{truncates},
             $details, $reason, $syncname);
+
+        ## Change this row to the latest good or empty
+        my $action = ($dmlcount{deletes} or $dmlcount{inserts} or $dmlcount{truncates})
+            ? 'good' : 'empty';
+        $self->end_syncrun($maindbh, $action, $syncname, "Complete (KID $$)");
         $maindbh->commit();
+
         ## Just in case, report on failure to update
         if ($count != 1) {
-            $self->glog("Unable to update syncrun table! (count was $count)", LOG_TERSE);
+            $self->glog("Unable to correctly update syncrun table! (count was $count)", LOG_TERSE);
         }
 
         ## Notify the parent that we are done
@@ -3799,6 +3837,8 @@ sub connect_database {
 
     my ($dsn,$dbh,$user,$pass,$ssp);
 
+    my $dbtype = 'postgres';
+
     ## If id is 0, connect to the main database
     if (!$id) {
         $dsn = "dbi:Pg:dbname=$self->{dbname}";
@@ -3815,16 +3855,17 @@ sub connect_database {
         exists $db->{$id} or die qq{Invalid database id!: $id\n};
 
         my $d = $db->{$id};
+        $dbtype = $d->{dbtype};
         if ($d->{status} ne 'active') {
             return 0, 'inactive';
         }
 
         ## Flat files do not actually get connected to, of course
-        if ($d->{dbtype} =~ /flat/o) {
+        if ($dbtype =~ /flat/o) {
             return 0, 'flat';
         }
 
-        if ('mongo' eq $d->{dbtype}) {
+        if ('mongo' eq $dbtype) {
             my $dsn = {};
             for my $name (qw/ dbhost dbport dbuser dbpass /) {
                 defined $d->{$name} and length $d->{$name} and $dsn->{$name} = $d->{$name};
@@ -3838,11 +3879,16 @@ sub connect_database {
             return $backend, $dbh;
         }
 
-        if ('postgres' ne $d->{dbtype}) {
-            die qq{Cannot handle databases of type "$d->{dbtype}"\n};
+        if ('postgres' eq $dbtype) {
+            $dsn = "dbi:Pg:dbname=$d->{dbname}";
+        }
+        elsif ('mysql' eq $dbtype) {
+            $dsn = "dbi:mysql:database=$d->{dbname}";
+        }
+        else {
+            die qq{Cannot handle databases of type "$dbtype"\n};
         }
 
-        $dsn = "dbi:Pg:dbname=$d->{dbname}";
         defined $d->{dbport} and length $d->{dbport} and $dsn .= ";port=$d->{dbport}";
         defined $d->{dbhost} and length $d->{dbhost} and $dsn .= ";host=$d->{dbhost}";
         length $d->{dbconn} and $dsn .= ";$d->{dbconn}";
@@ -3858,6 +3904,10 @@ sub connect_database {
          $pass,
          {AutoCommit=>0, RaiseError=>1, PrintError=>0}
     );
+
+    if ($dbtype ne 'postgres') {
+        return 0, $dbh;
+    }
 
     ## Set the application name if we can
     if ($dbh->{pg_server_version} >= 90000) {
@@ -4113,6 +4163,8 @@ sub show_db_version_and_time {
 
     return if ref $ldbh ne 'DBI::db';
 
+    return if $ldbh->{Driver}{Name} ne 'Pg';
+
     ## Get the databases epoch, timestamp, and timezone
     $SQL = q{SELECT extract(epoch FROM now()), now(), current_setting('timezone')};
     my $sth = $ldbh->prepare($SQL);
@@ -4134,7 +4186,6 @@ sub show_db_version_and_time {
     return;
 
 } ## end of show_db_version_and_time
-
 
 sub get_dbs {
 
@@ -4450,6 +4501,7 @@ sub db_get_notices {
 
     while ($n = $ldbh->func('pg_notifies')) {
         my ($name, $pid, $payload) = @$n;
+
         if ($ldbh->{pg_server_version} >= 90000 and $payload) {
             $name = $payload; ## presto!
         }
@@ -4929,6 +4981,9 @@ sub validate_sync {
             ## Mongo is skipped because it can create things on the fly
             next if $self->{sdb}{$dbname}{dbtype} =~ /mongo/o;
 
+            ## MySQL is skipped for now, but should be added later
+            next if $self->{sdb}{$dbname}{dbtype} =~ /mysql/o;
+
             ## Respond to ping here and now for very impatient watchdog programs
             $maindbh->commit();
 
@@ -5154,8 +5209,8 @@ sub validate_sync {
         for my $dbname (sort keys %{ $self->{sdb} }) {
             $x = $self->{sdb}{$dbname};
             next if $x->{role} ne 'source';
-            ## The 1 tells it to not use payloads, as these messages are embedded in triggers
-            $self->db_listen($x->{dbh}, $l, $dbname, 1);
+
+            $self->db_listen($x->{dbh}, $l, $dbname);
             $x->{dbh}->commit();
         }
     }
@@ -5256,8 +5311,7 @@ sub deactivate_sync {
     ## If we are listening for kicks on the source, stop doing so
     for my $dbname (sort keys %{ $self->{sdb} }) {
         $x = $self->{sdb}{$dbname};
-        next if $x->{dbtype} =~ /flat/o;
-        next if $x->{dbtype} =~ /mongo/o;
+        next if $x->{dbtype} ne 'postgres';
 
         $x->{dbh} ||= $self->connect_database($dbname);
         $x->{dbh}->commit();
@@ -5386,6 +5440,10 @@ sub reset_mcp_listeners {
             my $listen = "${l}_$syncname";
             $self->db_listen($maindbh, $listen, '', 1);
         }
+
+        ## Listen for controller telling us the sync is done
+        $self->db_listen($maindbh, "syncdone_$syncname");
+
     }
 
     $maindbh->commit();
@@ -5945,6 +6003,9 @@ sub end_syncrun {
         $sth->finish();
         return;
     }
+    if ($count > 1) {
+        $self->glog("Expected one row from end_syncrun, but got $count", LOG_NORMAL);
+    }
     my $ctid = $sth->fetchall_arrayref()->[0][0];
 
     ## Remove the previous 'last' entry, if any
@@ -6421,7 +6482,7 @@ sub run_kid_custom_code {
     ## In case the custom code wants to use other table's rules or triggers:
     if ($c->{trigrules}) {
         ## We assume the default is something other than replica, naturally
-        for my $dbname (keys %{ $sync->{db} }) {
+        for my $dbname (keys %{ $sync->{db} } ) {
             if ($sync->{db}{$dbname}{disable_trigrules} eq 'replica') {
                 $sync->{db}{$dbname}{dbh}->do(q{SET session_replication_role TO DEFAULT});
             }
@@ -6616,7 +6677,7 @@ sub delete_rows {
             my $type = $t->{dbtype};
 
             ## Postgres is a plain and simple TRUNCATE
-            ## TRUNCATE CASCADE is not needed as everything should be in one 
+            ## TRUNCATE CASCADE is not needed as everything should be in one
             ## sync (herd), and we have turned all FKs off
             if ('postgres' eq $type) {
                 my $tdbh = $t->{dbh};
@@ -6633,6 +6694,13 @@ sub delete_rows {
                 next;
             }
 
+            ## For MySQL, we simply truncate the table name without the schema
+            if ('mysql' eq $type) {
+                my $tdbh = $t->{dbh};
+                $tdbh->do("TRUNCATE TABLE $T");
+            }
+
+            ## For flatfiles, write out a basic truncate statement
             if ($type =~ /flat/o) {
                 printf {$t->{filehandle}} qq{TRUNCATE TABLE %S;\n\n},
                     'flatpg' eq $type ? "$S.$T" : $T;
@@ -6662,13 +6730,22 @@ sub delete_rows {
         ## No special preparation for mongo
         next if 'mongo' eq $type;
 
+        ## Not everything has a schema
+        my $useschema = ($type =~ /postgres/ or $type =~ /pg/) ? 1 : 0;
+
         ## Set the type of SQL we are using: IN vs ANY
         my $sqltype = '';
         if ('postgres' eq $type) {
-            $sqltype = (1 == $numpks) ? 'ANY' : 'IN';
+            $sqltype = (1 == $numpks) ? 'ANY' : 'PGIN';
+        }
+        elsif ('mysql' eq $type) {
+            $sqltype = 'IN';
+        }
+        elsif ($type =~ /flatpg/o) {
+            ## XXX Worth the trouble to allow building an ANY someday for flatpg?
+            $sqltype = 'PGIN';
         }
         elsif ($type =~ /flat/o) {
-            ## XXX Worth the trouble to allow building an ANY someday for flatpg?
             $sqltype = 'IN';
         }
 
@@ -6685,7 +6762,7 @@ sub delete_rows {
         elsif ($sqltype eq 'IN') {
             $SQL = sprintf '%sDELETE FROM %s WHERE %s IN (',
                 $self->{sqlprefix},
-                'flatsql' eq $type ? "$T" : "$S.$T",
+                $T,
                 $pkcols;
             my @delq;
             for my $key (keys %$rows) {
@@ -6695,6 +6772,21 @@ sub delete_rows {
             chop $SQL;
             $SQL .= ')';
             $SQL{IN} = $SQL;
+        }
+        ## Postgres-specific IN clause (schemas)
+        elsif ($sqltype eq 'PGIN') {
+            $SQL = sprintf '%sDELETE FROM %s WHERE %s IN (',
+                $self->{sqlprefix},
+                "$S.$T",
+                $pkcols;
+            my @delq;
+            for my $key (keys %$rows) {
+                my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0' => $key;
+                $SQL .= "($inner),";
+            }
+            chop $SQL;
+            $SQL .= ')';
+            $SQL{PGIN} = $SQL;
         }
     }
 
@@ -6709,7 +6801,7 @@ sub delete_rows {
                 $t->{deletesth}->execute($SQL{ANYargs});
             }
             else {
-                $tdbh->do($SQL{IN}, { pg_direct => 1, pg_async => PG_ASYNC });
+                $tdbh->do($SQL{PGIN}, { pg_direct => 1, pg_async => PG_ASYNC });
                 $t->{deletesth} = 0;
             }
             next;
@@ -6739,6 +6831,18 @@ sub delete_rows {
             next;
         }
 
+        if ('mysql' eq $type) {
+            my $tdbh = $t->{dbh};
+            ($count{$t} = $tdbh->do($SQL{IN})) =~ s/0E0/0/o;
+            next;
+        }
+
+        if ($type =~ /flatpg/o) {
+            print {$t->{filehandle}} qq{$SQL{PGIN};\n\n};
+            $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
+            next;
+        }
+
         if ($type =~ /flat/o) {
             print {$t->{filehandle}} qq{$SQL{IN};\n\n};
             $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
@@ -6752,6 +6856,7 @@ sub delete_rows {
     for my $t (@$deldb) {
         my $type = $t->{dbtype};
         next if 'mongo' eq $type;
+        next if 'mysql' eq $type;
 
         my $tdbh = $t->{dbh};
         if ('postgres' eq $type) {
@@ -6799,6 +6904,9 @@ sub push_rows {
 
     my $total = keys %$rows;
 
+    ## Total number of rows written
+    $count = 0;
+
     ## Build a list of all PK values to feed to IN clauses
     my $pkvals = '';
     for my $key (keys %$rows) {
@@ -6828,7 +6936,7 @@ sub push_rows {
         if ('postgres' eq $type) {
             my $tgtcmd = "$self->{sqlprefix}COPY $S.$T FROM STDIN";
             $t->{dbh}->do($tgtcmd);
-        } ## end postgres database
+        }
         elsif ('flatpg' eq $type) {
             print {$t->{filehandle}} "COPY $S.$T FROM STDIN;\n";
             $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
@@ -6839,6 +6947,12 @@ sub push_rows {
         }
         elsif ('mongo' eq $type) {
             $self->{collection} = $t->{dbh}->get_collection($T);
+        }
+        elsif ('mysql' eq $type) {
+            my $tgtcmd = "INSERT INTO $T VALUES (";
+            $tgtcmd .= '?,' x keys %{ $goat->{columnhash} };
+            $tgtcmd =~ s/,$/)/o;
+            $t->{sth} = $t->{dbh}->prepare($tgtcmd);
         }
         else {
             die qq{No support for database type "$type" yet!};
@@ -6888,6 +7002,12 @@ sub push_rows {
                 }
                 $self->{collection}->insert($object, { safe => 1 });
             }
+            ## For MySQL, so some basic INSERTs
+            elsif ('mysql' eq $type) {
+                chomp $buffer;
+                my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
+                $count += $t->{sth}->execute(@cols);
+            }
         }
     }
 
@@ -6898,7 +7018,6 @@ sub push_rows {
     }
 
     ## Perform final cleanups for each target
-    $count = 0;
     for my $t (@$todb) {
         my $type = $t->{dbtype};
 
@@ -6918,6 +7037,9 @@ sub push_rows {
             print {$t->{filehandle}} ";\n\n";
         }
         elsif ('mongo' eq $type) {
+            ## Nothing special needed
+        }
+        elsif ('mysql' eq $type) {
             ## Nothing special needed
         }
     }
