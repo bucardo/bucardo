@@ -207,7 +207,7 @@ for my $table (sort keys %tabletype) {
 
 ## Check that mongo has the new rows
 for my $table (sort keys %tabletype) {
-    $t = "Mongo collection $table has correct number of rows";
+    $t = "Mongo collection $table has correct number of rows after insert";
     my $col = $db->get_collection($table);
     my @rows = $col->find->all;
     my $count = @rows;
@@ -246,7 +246,7 @@ $dbhA->commit();
 $bct->ctl('bucardo_ctl kick mongo 0');
 
 for my $table (keys %tabletype) {
-    $t = "Mongo collection $table has correct number of rows";
+    $t = "Mongo collection $table has correct number of rows after update";
     my $col = $db->get_collection($table);
     my @rows = $col->find->all;
     my $count = @rows;
