@@ -2147,12 +2147,13 @@ sub start_kid {
     for my $dbname (@dbs_mysql) {
         $x = $sync->{db}{$dbname};
 
-        my $xdbh = $x->{dbh};
-
         ## No foreign key checks, please
-        $xdbh->do('SET foreign_key_checks = 0');
+        $x->{dbh}->do('SET foreign_key_checks = 0');
 
-        $xdbh->commit();
+        ## Serializable for this session
+        $x->{dbh}->do('SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE');
+
+        $x->{dbh}->commit();
     }
 
     ## How long it has been since we last ran a ping against our databases
@@ -6740,7 +6741,7 @@ sub delete_rows {
             $sqltype = (1 == $numpks) ? 'ANY' : 'PGIN';
         }
         elsif ('mysql' eq $type) {
-            $sqltype = 'IN';
+            $sqltype = 'MYIN';
         }
         elsif ($type =~ /flatpg/o) {
             ## XXX Worth the trouble to allow building an ANY someday for flatpg?
@@ -6769,6 +6770,31 @@ sub delete_rows {
             for my $key (keys %$rows) {
                 my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0' => $key;
                 $SQL .= "($inner),";
+            }
+            chop $SQL;
+            $SQL .= ')';
+            $SQL{IN} = $SQL;
+        }
+        ## MySQL IN clause
+        elsif ($sqltype eq 'MYIN') {
+            (my $safepk = $pkcols) =~ s/\"/`/go;
+            $SQL = sprintf '%sDELETE FROM %s WHERE %s IN (',
+                $self->{sqlprefix},
+                $T,
+                $safepk;
+            my @delq;
+            ## Quick workaround for a more standard timestamp
+            if ($goat->{pkeytype}[0] =~ /timestamptz/) {
+                for my $key (keys %$rows) {
+                    my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; s/\+\d\d$//; qq{'$_'}; } split '\0' => $key;
+                    $SQL .= "($inner),";
+                }
+            }
+            else {
+                for my $key (keys %$rows) {
+                    my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0' => $key;
+                    $SQL .= "($inner),";
+                }
             }
             chop $SQL;
             $SQL .= ')';
@@ -6827,8 +6853,6 @@ sub delete_rows {
 
             my $result = $self->{collection}->remove
                 ({$pkcolsraw => { '$in' => [keys %$rows] }}, { safe => 1 } );
-            #$self->glog("Results of removing from collection $T using $pkcolsraw:", LOG_VERBOSE);
-            #$self->glog((Dumper $result), LOG_VERBOSE);
             next;
         }
 
