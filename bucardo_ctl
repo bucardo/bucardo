@@ -742,8 +742,8 @@ sub add_database {
         type                     dbtype               0                postgres
         dbname                   dbname               0                $item_name
         user|dbuser|pguser       dbuser               0                bucardo
-        host|dbhost|pghost       dbhost               0                PGHOSTADDR|PGHOST
-        port|dbport|pgport       dbport               numeric          PGPORT
+        host|dbhost|pghost       dbhost               0                ENV:PGHOSTADDR|PGHOST
+        port|dbport|pgport       dbport               numeric          ENV:PGPORT
         pass|dbpass              dbpass               0                null
         conn|dbconn|pgconn       dbconn               0                null
         stat|status              status               =active|inactive null
@@ -7717,8 +7717,8 @@ sub process_simple_args {
             $item{$name} = [$dbcol,$flag,$default];
             $alias{$name} = $alias;
         }
-        ## Got all caps? Possible environment variable default
-        if ($default !~ /[a-z]/ and $default =~ /[A-Z]/) {
+        ## Process environment variable default
+        if ($default =~ s/^ENV://) {
             for my $env (split /\|/ => $default) {
                 if ($ENV{$env}) {
 
