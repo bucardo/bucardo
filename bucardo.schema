@@ -550,12 +550,12 @@ LANGUAGE plpgsql
 IMMUTABLE
 AS $bc$
 DECLARE
-  tname ALIAS FOR $1;
+  tname TEXT;
   newname TEXT;
   hashed TEXT;
 BEGIN
   -- Change the first period to an underscore
-  SELECT INTO tname REPLACE(tname, '.', '_');
+  SELECT INTO tname REPLACE($1, '.', '_');
   -- Assumes max_identifier_length is 63
   -- Because even if not, we'll still abbreviate for consistency and portability
   SELECT INTO newname SUBSTRING(tname FROM 1 FOR 57);
@@ -1317,12 +1317,12 @@ LANGUAGE plpgsql
 IMMUTABLE
 AS \$clone\$
 DECLARE
-  tname ALIAS FOR \$1;
+  tname TEXT;
   newname TEXT;
   hashed TEXT;
 BEGIN
   -- Change the first period to an underscore
-  SELECT INTO tname REPLACE(tname, '.', '_');
+  SELECT INTO tname REPLACE(\$1, '.', '_');
   -- Assumes max_identifier_length is 63
   -- Because even if not, we'll still abbreviate for consistency and portability
   SELECT INTO newname SUBSTRING(tname FROM 1 FOR 57);
