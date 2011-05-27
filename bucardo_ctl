@@ -252,7 +252,7 @@ reload_config() if $verb eq 'reload_config';
 reload()        if $verb eq 'reload';
 add_item()      if $verb eq 'add';
 remove_item()   if $verb eq 'remove' or $verb eq 'delete';
-upgrade()       if $verb eq 'upgrade';
+upgrade()       if $verb eq 'upgrade' or $verb eq 'uprgade';
 message()       if $verb eq 'message';
 list()          if $verb eq 'list' or $verb eq 'l' or $verb eq 'lsit';;
 config()        if $verb eq 'set' or $verb eq 'show' or $verb eq 'config';
