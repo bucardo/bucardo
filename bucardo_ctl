@@ -6358,6 +6358,13 @@ sub upgrade {
 
     my $changes = 0;
 
+    ## Quick sanity to make sure we don't try to cross the 4/5 boundary
+    if (!relation_exists('bucardo', 'syncrun')) {
+      print "Sorry, but Bucardo version 4 cannot be upgraded to version 5\n";
+      print "You will have to recreate your information (dbs, syncs, etc.)\n";
+      exit 1;
+    }
+
     ## Make sure the upgrade_log table is in place
 
     if (!relation_exists('bucardo', 'upgrade_log')) {
