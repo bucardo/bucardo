@@ -554,6 +554,8 @@ DECLARE
   newname TEXT;
   hashed TEXT;
 BEGIN
+  -- Change the first period to an underscore
+  SELECT INTO tname REPLACE(tname, '.', '_');
   -- Assumes max_identifier_length is 63
   -- Because even if not, we'll still abbreviate for consistency and portability
   SELECT INTO newname SUBSTRING(tname FROM 1 FOR 57);
@@ -989,27 +991,6 @@ CREATE TRIGGER validate_goat
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 -- this is spaced so the func starts at line 1000 for debugging help
 
 CREATE OR REPLACE FUNCTION bucardo.validate_sync(text,integer)
@@ -1330,7 +1311,7 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
 		if ($count < 1) {
 		    TMAKER:
               $SQL = qq{
-                        CREATE FUNCTION bucardo.bucardo_tablename_maker(TEXT)
+                        CREATE OR REPLACE FUNCTION bucardo.bucardo_tablename_maker(TEXT)
 RETURNS TEXT
 LANGUAGE plpgsql
 IMMUTABLE
@@ -1340,6 +1321,8 @@ DECLARE
   newname TEXT;
   hashed TEXT;
 BEGIN
+  -- Change the first period to an underscore
+  SELECT INTO tname REPLACE(tname, '.', '_');
   -- Assumes max_identifier_length is 63
   -- Because even if not, we'll still abbreviate for consistency and portability
   SELECT INTO newname SUBSTRING(tname FROM 1 FOR 57);
@@ -1356,7 +1339,6 @@ END;
           run_sql($SQL,$dbh);
         }
               
-
         ## Create the bucardo_delta_targets table as needed
         $newschema and goto DELTAT;
         $sth = $sth{haztable};
@@ -1367,12 +1349,38 @@ END;
             $SQL = qq{
                     CREATE TABLE bucardo.bucardo_delta_targets (
                         tablename  OID         NOT NULL,
-                        target     TEXT        NOT NULL,
+                        sync       TEXT        NOT NULL,
                         cdate      TIMESTAMPTZ NOT NULL DEFAULT now()
                     );
                 };
             run_sql($SQL,$dbh);
         }
+
+		## Populate bucardo_delta_targets with this sync name
+        $SQL = 'SELECT 1 FROM bucardo.bucardo_delta_targets WHERE tablename=? AND sync=?';
+        my $sthc = $dbh->prepare($SQL);
+        $SQL = 'INSERT INTO bucardo.bucardo_delta_targets(tablename,sync) VALUES (?,?)';
+        my $stha = $dbh->prepare($SQL);
+		for my $schema (sort keys %goat) {
+            for my $table (sort keys %{$goat{$schema}}) {
+		        $sth = $sth{haztable};
+                $count = $sth->execute($schema,$table);
+                if ($count < 1) {
+                    $sth->finish();
+                    next;
+                }
+                my ($relkind,$oid) = @{$sth->fetchall_arrayref()->[0]};
+                next if $relkind ne 'r';
+
+                my $count = $sthc->execute($oid,$syncname);
+                $sthc->finish();
+                if ($count != 1) {
+                    $stha->execute($oid,$syncname);
+                    $dbh->commit();
+                }
+            }
+        }
+
 
         ## Create the bucardo_note_truncation function as needed
         $sth = $sth{hazfunc};
@@ -1609,7 +1617,7 @@ SELECT 'Fixme'::TEXT;
         if ($count < 1) {
           PURGE:
             $SQL = qq{
-                    CREATE OR REPLACE FUNCTION bucardo.bucardo_purge_delta(interval,text)
+                    CREATE OR REPLACE FUNCTION bucardo.bucardo_purge_delta(text,text)
                     RETURNS TEXT
                     LANGUAGE plpgsql
                     VOLATILE
@@ -1617,38 +1625,76 @@ SELECT 'Fixme'::TEXT;
                     AS
                     \$clone\$
                     DECLARE
-                        drows BIGINT;
-                        trows BIGINT;
-                        trackname TEXT;
-                        myst TEXT;
+                      maker TEXT;
+                      deltatable TEXT;
+                      tracktable TEXT;
+                      myst TEXT;
+                      drows BIGINT = 0;
+                      trows BIGINT = 0;
                     BEGIN
-                        myst = 'DELETE FROM bucardo.'
-                          || $2
-                          || 'USING (SELECT b.tablename AS tn, b.txntime AS tt FROM '
-                          || '(SELECT tablename, count(*) FROM bucardo.bucardo_delta_targets GROUP BY 1) AS a,'
-                          || '(SELECT tablename, txntime, count(*) FROM bucardo.trackname GROUP BY 1,2) AS b'
-                          || ' WHERE a.tablename = b.tablename'
-                          || ' AND a.count=b.count) AS foo'
-                          || ' WHERE tablename = tn AND txntime = tt'
-                          || ' AND txntime < now() - '
-						  || $1;
-
-                        EXECUTE myst;
-
-                        GET DIAGNOSTICS drows := row_count;
-
-                        -- DELETE FROM bucardo.bucardo_track
-                        -- WHERE NOT EXISTS (SELECT 1 FROM bucardo.bucardo_delta d WHERE d.txntime = bucardo_track.txntime);
-
-                        -- GET DIAGNOSTICS trows := row_count;
-
-                        RETURN 'Rows deleted from bucardo_delta: '||drows||
-                          ' Rows deleted from bucardo_track: '||trows;
-
-                        RETURN 'Rows deleted from bucardo_delta: '||drows||
-                          ' Rows deleted from bucardo_track: '||trows;
-
-                  END;
+                    
+                      -- Clean out the search_path so the regclass casting works as expected
+                      SET LOCAL search_path = pg_catalog;
+                    
+                      -- See how many syncs are being used by this table
+                      SELECT INTO drows 
+                        COUNT(*)
+                        FROM bucardo.bucardo_delta_targets
+                        WHERE tablename::regclass::text = \$2;
+                    
+                      -- If no syncs, no point in going on, as we will never purge anything
+                      IF drows < 1 THEN
+                        RETURN 'No syncs are using table '||\$2||', according to bucardo_delta_targets';
+                      END IF;
+                    
+                      -- Figure out the names of the delta and track tables for this relation
+                      SELECT INTO maker
+                        bucardo.bucardo_tablename_maker(\$2);
+                      SELECT INTO deltatable
+                        'delta_' || maker;
+                      SELECT INTO tracktable
+                        'track_' || maker;
+                    
+                      -- Delete all txntimes from the delta table that:
+                      -- 1) Have been used by all syncs listed in bucardo_delta_targets
+                      -- 2) Have a matching txntime from the track table
+                      -- 3) Are older than the first argument interval
+                      myst = 'DELETE FROM bucardo.'
+                      || deltatable
+                      || ' USING (SELECT txntime AS tt FROM bucardo.'
+                      || tracktable 
+                      || ' GROUP BY 1 HAVING COUNT(*) = '
+                      || drows
+                      || ') AS foo'
+                      || ' WHERE txntime = tt'
+                      || ' AND txntime < now() - interval '
+                      || quote_literal(\$1);
+                    
+                      EXECUTE myst;
+                    
+                      GET DIAGNOSTICS drows := row_count;
+                    
+                      -- Now that we have done that, we can remove rows from the track table
+                      -- which have no match at all in the delta table
+                      myst = 'DELETE FROM bucardo.'
+                      || tracktable
+                      || ' WHERE NOT EXISTS (SELECT 1 FROM bucardo.'
+                      || deltatable
+                      || ' d WHERE d.txntime = bucardo.'
+                      || tracktable
+                      || '.txntime)';
+                    
+                      EXECUTE myst;
+                    
+                      GET DIAGNOSTICS trows := row_count;
+                    
+                    RETURN 'Rows deleted from bucardo_delta: '||drows||
+                    ' Rows deleted from bucardo_track: '||trows;
+                    
+                    RETURN 'Rows deleted from bucardo_delta: '||drows||
+                    ' Rows deleted from bucardo_track: '||trows;
+                    
+                    END;
                     \$clone\$;
                 };
             run_sql($SQL,$dbh);
@@ -2057,7 +2103,7 @@ SELECT 'Fixme'::TEXT;
             $count = $sth->execute('bucardo','bucardo_delta_target_unique');
             $sth->finish();
             if ($count < 1) {
-                $dbh->do(qq{CREATE INDEX bucardo_delta_target_unique ON bucardo.bucardo_delta_targets(tablename,target)});
+                $dbh->do(qq{CREATE INDEX bucardo_delta_target_unique ON bucardo.bucardo_delta_targets(tablename,sync)});
             }
 
             ## Override the 'ping' kick trigger if needed
