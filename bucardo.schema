@@ -1609,7 +1609,7 @@ SELECT 'Fixme'::TEXT;
 
         } ## end of bucardo_compress_delta creations
 
-        ## Create the bucardo_purge_delta function as needed
+        ## Create the bucardo_purge_delta functions as needed
         $newschema and goto PURGE;
         $sth = $sth{hazfunc};
         $count = $sth->execute('bucardo', 'bucardo_purge_delta');
@@ -1688,18 +1688,52 @@ SELECT 'Fixme'::TEXT;
                     
                       GET DIAGNOSTICS trows := row_count;
                     
-                    RETURN 'Rows deleted from bucardo_delta: '||drows||
-                    ' Rows deleted from bucardo_track: '||trows;
-                    
-                    RETURN 'Rows deleted from bucardo_delta: '||drows||
-                    ' Rows deleted from bucardo_track: '||trows;
+                    RETURN 'Rows deleted from '
+                      || deltatable
+                      || ': '
+					  || drows
+                      || ' Rows deleted from '
+                      || tracktable
+                      || ': '
+                      || trows;
                     
                     END;
                     \$clone\$;
                 };
             run_sql($SQL,$dbh);
-        }
 
+            $SQL = qq{
+                    CREATE OR REPLACE FUNCTION bucardo.bucardo_purge_delta(text)
+                    RETURNS TEXT
+                    LANGUAGE plpgsql
+                    VOLATILE
+                    SECURITY DEFINER
+                    AS
+                    \$clone\$
+                    DECLARE
+                      myrec RECORD;
+                      myrez TEXT;
+                      total INTEGER = 0;
+                    BEGIN
+                    
+                      SET LOCAL search_path = pg_catalog;
+                    
+                     -- Grab all potential tables to be vacuumed by looking at bucardo_delta_targets
+                      FOR myrec IN SELECT DISTINCT tablename::regclass::text
+                        FROM bucardo.bucardo_delta_targets LOOP
+                        SELECT INTO myrez
+                          bucardo.bucardo_purge_delta(\$1, myrec.tablename);
+                        RAISE NOTICE '%', myrez;
+                        total = total + 1;
+                      END LOOP;
+                    
+                    RETURN 'Tables processed: ' || total;
+                    END;
+                    \$clone\$;
+                };
+            run_sql($SQL,$dbh);
+        }
+                    
         $newschema and goto SEQUENCE;
         $sth = $sth{haztable};
         $count = $sth->execute('bucardo', 'bucardo_sequences');
