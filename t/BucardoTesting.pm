@@ -18,8 +18,8 @@ use vars qw/$SQL $sth $count $COM %dbh/;
 my $DEBUG = $ENV{BUCARDO_DEBUG} || 0;
 
 use base 'Exporter';
-our @EXPORT = qw/%tabletype %sequences %val compare_tables bc_deeply clear_notices wait_for_notice $location
-                 is_deeply like pass is isa_ok ok/;
+our @EXPORT = qw/%tabletype %tabletypemysql %sequences %val compare_tables bc_deeply clear_notices 
+                 wait_for_notice $location is_deeply like pass is isa_ok ok/;
 
 my $dbname = 'bucardo_test';
 
@@ -61,6 +61,21 @@ our %tabletype =
      'bucardo_test9'  => 'int_unsigned',
      'bucardo_test10' => 'TIMESTAMPTZ',
      );
+
+our %tabletypemysql =
+    (
+     'bucardo_test1'  => 'SMALLINT',
+     'bucardo_test2'  => 'INT',
+     'bucardo_test3'  => 'BIGINT',
+     'bucardo_test4'  => 'VARCHAR(1000)',
+     'bucardo_test5'  => 'DATE',
+     'bucardo_test6'  => 'DATETIME',
+     'bucardo_test7'  => 'NUMERIC(5,1)',
+     'bucardo_test8'  => 'VARBINARY(1000)',
+     'bucardo_test9'  => 'INTEGER UNSIGNED',
+     'bucardo_test10' => 'DATETIME',
+     );
+
 
 our @tables2empty = (qw/droptest/);
 
