@@ -4067,7 +4067,7 @@ sub glog { ## no critic (RequireArgUnpacking)
     my $header = sprintf '%s%s%s',
         ($config{log_showpid} ? "($$) " : ''),
         ($showtime ? "[$showtime] " : ''),
-        $config{log_showline} ? (sprintf '#%04d', (caller)[2]) : '';
+        $config{log_showline} ? (sprintf '#%04d ', (caller)[2]) : '';
 
     ## Prepend the loglevel to the message
     if ($config{log_showlevel}) {
