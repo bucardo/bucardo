@@ -2683,9 +2683,6 @@ sub update_sync {
         die qq{Could not find a sync named "$name"\nUse 'list syncs' to see all available.};
     }
 
-    ## Now we can react to the first 'verb' word
-    my $verb = lc shift @actions;
-
     ## Adding something to this sync
     if ('add' eq $verb or 'insert' eq $verb) {
 
@@ -2725,6 +2722,7 @@ sub update_sync {
             }
         }
         return;
+
     } ## end of 'add'
 
     ## Removing something from this sync
@@ -2734,6 +2732,16 @@ sub update_sync {
 
     ## Changing something about this sync
     if ('update' eq $verb or 'change' eq $verb) {
+        for my $n (@nouns) {
+            if ($n =~ /status=(.+)/) {
+                my $onoff = $1;
+                my $status = $onoff =~ /active|on/ ? 'Active' : 'Inactive';
+                $SQL = 'UPDATE sync SET status = ? WHERE name = ?';
+                $sth = $dbh->prepare($SQL);
+                $sth->execute($status, $name);
+                $dbh->commit();
+            }
+        }
         return;
     }
 

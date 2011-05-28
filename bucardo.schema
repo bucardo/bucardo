@@ -1093,7 +1093,7 @@ for (@{$rv->{rows}}) {
 
 ## No source databases? Does not compute!
 if ($role{source} < 1) {
-    die "Invalid database group: at least one database must hav a role of 'source'!\n";
+    die "Invalid database group: at least one database must have a role of 'source'!\n";
 }
 
 ## If we have at least one target (or more than one source), we must have PKs on each table
