@@ -5518,7 +5518,7 @@ sub reload_mcp {
         $s->{mcp_active} = $s->{mcp_kicked} = $s->{controller} = 0;
 
         ## If this sync is active, don't bother going any further
-        if ($s->{status} ne 'active') {
+        if ($s->{status} !~ /^active/i) {
             $self->glog(qq{Skipping sync "$syncname": status is "$s->{status}"}, LOG_TERSE);
             next;
         }
