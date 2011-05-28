@@ -4039,7 +4039,7 @@ sub glog { ## no critic (RequireArgUnpacking)
     my $loglevel = shift || 0;
 
     ## Return and do nothing, if we have not met the minimum log level
-
+    return if $loglevel > $config{log_showlevel};
 
     ## We should always have a prefix, either BC!, MCP, CTL, or KID
     ## Prepend it to our message
@@ -4065,9 +4065,9 @@ sub glog { ## no critic (RequireArgUnpacking)
     ## Optionally show the PID (and set the time from above)
     ## Show which line we came from as well
     my $header = sprintf '%s%s%s',
-        $config{log_showpid} ? "($$) " : '',
-        $showtime ? "[$showtime] " : '',
-        $config{log_showline} ? (sprintf '#%04d ', (caller)[2]) : '';
+        ($config{log_showpid} ? "($$) " : ''),
+        ($showtime ? "[$showtime] " : ''),
+        $config{log_showline} ? (sprintf '#%04d', (caller)[2]) : '';
 
     ## Prepend the loglevel to the message
     if ($config{log_showlevel}) {
