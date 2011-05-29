@@ -3692,10 +3692,13 @@ sub start_kid {
 
         ## Put a note in the logs for how long this took
         my $synctime = sprintf '%.2f', tv_interval($kid_start_time);
-        $self->glog(sprintf 'Total sync time: %s%s',
+        $self->glog((sprintf 'Total time for sync "%s" (%s rows): %s%s',
+                    $syncname,
+                    $deltacount{all},
                     pretty_time($synctime),
-                    $synctime < 120 ? '' : " ($synctime seconds)",
-                    LOG_NORMAL);
+                    $synctime < 120 ? '' : " ($synctime seconds)",),
+                    ## We don't want to output a "finished" if no changes made unless verbose
+                    $deltacount{all} ? LOG_NORMAL : LOG_VERBOSE);
 
         ## Update our rate information as needed
         if ($sync->{track_rates}) {
@@ -4039,7 +4042,7 @@ sub glog { ## no critic (RequireArgUnpacking)
     my $loglevel = shift || 0;
 
     ## Return and do nothing, if we have not met the minimum log level
-    return if $loglevel > $config{log_showlevel};
+    return if $loglevel > $config{log_level_number};
 
     ## We should always have a prefix, either BC!, MCP, CTL, or KID
     ## Prepend it to our message
@@ -5518,7 +5521,7 @@ sub reload_mcp {
         $s->{mcp_active} = $s->{mcp_kicked} = $s->{controller} = 0;
 
         ## If this sync is active, don't bother going any further
-        if ($s->{status} !~ /^active/i) {
+        if ($s->{status} ne 'active') {
             $self->glog(qq{Skipping sync "$syncname": status is "$s->{status}"}, LOG_TERSE);
             next;
         }
