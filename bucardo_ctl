@@ -5269,9 +5269,7 @@ sub add_sync {
         }
     }
 
-warn "Using herd $dbcols->{herd}\n";
-warn "Using database group $dbcols->{dbs}\n";
-$dbh->commit();
+    $dbh->commit();
 
     ## Attempt to insert this into the database
     $SQL = "INSERT INTO bucardo.sync ($cols) VALUES ($phs)";
