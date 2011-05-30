@@ -1118,7 +1118,7 @@ sub run_sql {
         my $leading = length($ws);
         $sql =~ s/^\s{$leading}//gsm;
     }
-    elog(NOTICE, "SQL: $sql");
+    elog(DEBUG, "SQL: $sql");
     $dbh->do($sql);
 }
 
