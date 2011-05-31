@@ -2735,7 +2735,7 @@ sub update_sync {
         for my $n (@nouns) {
             if ($n =~ /status=(.+)/) {
                 my $onoff = $1;
-                my $status = $onoff =~ /active|on/ ? 'Active' : 'Inactive';
+                my $status = $onoff =~ /^active|on/ ? 'active' : 'inactive';
                 $SQL = 'UPDATE sync SET status = ? WHERE name = ?';
                 $sth = $dbh->prepare($SQL);
                 $sth->execute($status, $name);
