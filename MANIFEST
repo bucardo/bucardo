@@ -1,5 +1,3 @@
-CURRENT
-
 Bucardo.pm
 bucardo.schema
 bucardo_ctl
@@ -34,36 +32,9 @@ t/01-basic.t
 t/02-bctl-db.t
 t/02-bctl-dbg.t
 t/09-uniqueconstraint.t
-t/10-fullcopy.t
-t/10-pushdelta.t
-t/10-swap.t
 t/15-star.t
 t/98-cleanup.t
 t/99-signature.t
 t/BucardoTesting.pm
 
-bucardo_examples/INSTALL
-bucardo_examples/pushdelta_sync/1_script.sh
-bucardo_examples/pushdelta_sync/2_script.sh
-bucardo_examples/pushdelta_sync/3_script.sh
-bucardo_examples/pushdelta_sync/4_script.sh
-bucardo_examples/pushdelta_sync/5_script.sh
-bucardo_examples/pushdelta_sync/cleanup.sh
-bucardo_examples/pushdelta_sync/cleanup.sql
-bucardo_examples/pushdelta_sync/tables.sql
-bucardo_examples/README
-bucardo_examples/simple_swap_sync/1_script.sh
-bucardo_examples/simple_swap_sync/2_script.sh
-bucardo_examples/simple_swap_sync/3_script.sh
-bucardo_examples/simple_swap_sync/4_script.sh
-bucardo_examples/simple_swap_sync/5_script.sh
-bucardo_examples/simple_swap_sync/6_script.sh
-bucardo_examples/simple_swap_sync/7_script.sh
-bucardo_examples/simple_swap_sync/alter_sequences.sql
-bucardo_examples/simple_swap_sync/cleanup.sh
-bucardo_examples/simple_swap_sync/cleanup.sql
-bucardo_examples/simple_swap_sync/dummy_function.sql
-bucardo_examples/simple_swap_sync/README
-bucardo_examples/simple_swap_sync/set_standard_confict.sql
-bucardo_examples/simple_swap_sync/tables.sql
 
