@@ -3013,8 +3013,11 @@ sub start_kid {
                 }
 
                 ## If we had any conflicts, handle them now
-                $count = $dmlcount{conflicts} = keys %conflict;
+                $count = keys %conflict;
                 if ($count) {
+
+                    ## Increment count across all tables
+                    $dmlcount{conflicts} += $count;
 
                     $self->glog("Conflicts for $S.$T: $count", LOG_NORMAL);
 
@@ -3141,7 +3144,7 @@ sub start_kid {
                         }
                     }
 
-                    $self->glog('Conflicts have been resolved!', LOG_VERBOSE);
+                    $self->glog('Conflicts have been resolved', LOG_NORMAL);
 
                 } ## end if have conflicts
 
@@ -3466,7 +3469,7 @@ sub start_kid {
             } ## end each goat
 
             $self->glog("Totals: deletes=$dmlcount{deletes} inserts=$dmlcount{inserts} conflicts=$dmlcount{conflicts}",
-                        LOG_DEBUG);
+                        LOG_NORMAL);
 
             ## Update bucardo_track table so that the bucardo_delta rows we just processed
             ##  are marked as "done" and ignored by subsequent runs
