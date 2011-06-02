@@ -6923,7 +6923,7 @@ sub upgrade {
 
     if ($changes) {
         printf "Okay to commit $changes %s? ", $changes==1 ? 'change' : 'changes';
-        exit if <STDIN> !~ /Y/i;
+        #exit if <STDIN> !~ /Y/i;
         $dbh->commit();
         print "Changes have been commited\n";
     }
@@ -7615,7 +7615,7 @@ sub install {
     }
 
     $COM = "$PSQL -AX -qt -f $schema_file 2>&1";
-    print "COM=$COM\n";
+    #print "COM=$COM\n";
 
     print "Attempting to create and populate the bucardo database and schema\n";
 
