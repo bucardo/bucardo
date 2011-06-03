@@ -1689,9 +1689,12 @@ sub start_kid {
     };
 
     ## Set up some common groupings of databases inside sync->{db}
-    my (@dbs_postgres, @dbs_mysql, @dbs_source, @dbs_target, @dbs_dbi, @dbs_connectable);
+    my (@dbs, @dbs_postgres, @dbs_mysql, @dbs_source, @dbs_target, @dbs_dbi, @dbs_connectable);
     for my $dbname (sort keys %{ $sync->{db} }) {
         $x = $sync->{db}{$dbname};
+
+        push @dbs => $dbname;
+
         push @dbs_postgres => $dbname
             if $x->{dbtype} eq 'postgres';
 
@@ -1802,6 +1805,30 @@ sub start_kid {
             $sth = $sth{dbrun_delete};
             $sth->execute($syncname, $dbname);
             $finaldbh->commit();
+        }
+
+        ## If using semaphore tables, mark the status as 'failed'
+        ## At least in the Mongo case, it's pretty safe to do this,
+        ## as it is unlikely the error came from Mongo Land
+        if ($config{semaphore_table}) {
+            my $tname = $config{semaphore_table};
+            for my $dbname (@dbs_connectable) {
+                $x = $sync->{db}{$dbname};
+                if ($x->{dbtype} eq 'mongo') {
+                    my $collection = $x->{dbh}->get_collection($tname);
+                    my $object = {
+                        sync => $syncname,
+                        status => 'failed',
+                        endtime => scalar gmtime,
+                    };
+                    $collection->update
+                        (
+                            {sync => $syncname},
+                            $object,
+                            { upsert => 1, safe => 1 }
+                        );
+                }
+            }
         }
 
         (my $flatmsg = $msg) =~ s/\n/ /g;
@@ -3245,6 +3272,28 @@ sub start_kid {
                         or die qq{Could not open flatfile "$x->{filename}": $!\n};
                 }
 
+                ## Populate the semaphore table if the setting is non-empty
+                if ($config{semaphore_table}) {
+                    my $tname = $config{semaphore_table};
+                    for my $dbname (@dbs_connectable) {
+                        $x = $sync->{db}{$dbname};
+                        if ($x->{dbtype} eq 'mongo') {
+                            my $collection = $x->{dbh}->get_collection($tname);
+                            my $object = {
+                                sync => $syncname,
+                                status => 'started',
+                                starttime => scalar gmtime,
+                                };
+                            $collection->update
+                                (
+                                    {sync => $syncname},
+                                    $object,
+                                    { upsert => 1, safe => 1 }
+                                );
+                        }
+                    }
+                }
+
                 ## This is where we want to 'rewind' to on a handled exception
               PUSH_SAVEPOINT: {
 
@@ -3566,6 +3615,28 @@ sub start_kid {
             ## Remove the old ones, just in case
             delete $x->{filename};
             delete $x->{filehandle};
+        }
+
+        ## If using semaphore tables, mark the status as 'complete'
+        if ($config{semaphore_table}) {
+            my $tname = $config{semaphore_table};
+            for my $dbname (@dbs_connectable) {
+                $x = $sync->{db}{$dbname};
+                if ($x->{dbtype} eq 'mongo') {
+                    my $collection = $x->{dbh}->get_collection($tname);
+                    my $object = {
+                        sync => $syncname,
+                        status => 'complete',
+                        endtime => scalar gmtime,
+                    };
+                    $collection->update
+                        (
+                            {sync => $syncname},
+                            $object,
+                            { upsert => 1, safe => 1 }
+                        );
+                }
+            }
         }
 
         ## If doing truncate, do some cleanup
