@@ -109,6 +109,7 @@ my ($pg_ver, $pg_major_version, $pg_minor_version, $pg_point_version);
 if (defined $pgversion and $pgversion =~ /initdb \(PostgreSQL\) (\d+\..*)/) {
     $pg_ver = $1;
     ($pg_major_version, $pg_minor_version, $pg_point_version) = split /\./, $pg_ver;
+    $pg_minor_version =~ s/(\d+).+/$1/;
 }
 else {
     die qq{Could not determine initdb version information from running "$initdb -V"\n};
@@ -141,6 +142,7 @@ for my $name ('A'..'Z') {
         die "Cannot find version from: $COM" if $answer !~ /initdb \(PostgreSQL\) (\d+\..*)/;
         $localver = $1;
         ($lmaj,$lmin,$lrev) = split /\./, $localver;
+        $lmin =~ s/(\d+).+/$1/;
     }
     $pgver{$name} = {
         bindir  => $lbindir,
