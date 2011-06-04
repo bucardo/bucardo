@@ -3082,38 +3082,52 @@ sub start_kid {
 
                         ## Find the highest transaction time on each database, if it exists
 
-                        ## Prep our SQL
+                        ## Prep our SQL: find the epoch of the latest transactio for this table
                         if (!exists $g->{sql_max_delta}) {
                             $SQL = qq{SELECT extract(epoch FROM MAX(txntime)) FROM bucardo.$g->{deltatable} };
                             $g->{sql_max_delta} = $SQL;
                         }
 
+                        ## Cached epoch value per database:
+                        my %dbhightime;
+
+                        ## Walk through each pkey conflict and declare a winner
                         for my $key (keys %conflict) {
                             ## Highest one wins
                             my $highest = 0;
+                            ## The name of the winning database
                             my $winner;
-                            for my $dbname (sort keys %{ $conflict{$key} }) {
-                                if (! exists $self->{sth_max_delta}{$g}{$dbname}) {
+                            ## First pass, we kick off the query on all new databases
+                            for my $dbname (keys %{ $conflict{$key} }) {
+                                ## Once we have done this for a database this round,
+                                ## no need to do it again!
+                                if (! exists $dbhightime{$dbname}) {
                                     my $dbh = $sync->{db}{$dbname}{dbh};
-                                    $self->{sth_max_delta}{$g}{$dbname} =
+                                    $sth = $self->{sth_max_delta}{$g}{$dbname} =
                                         $dbh->prepare($g->{sql_max_delta}, { pg_async => PG_ASYNC } );
+                                    $sth->execute();
                                 }
-                                $sth = $self->{sth_max_delta}{$g}{$dbname};
-                                $sth->execute();
                             }
-                            ## Second run to finish the async and grab the results
+                            ## Second run to finish the async and grab the results if needed
                             for my $dbname (sort keys %{ $conflict{$key} }) {
-                                $sth = $self->{sth_max_delta}{$g}{$dbname};
-                                $count = $sth->pg_result();
-                                if ($count < 1) { ## No rows at all!
-                                    $sth->finish();
-                                }
-                                else {
-                                    my $epoch = $sth->fetchall_arrayref()->[0][0];
-                                    if ($epoch > $highest) {
-                                        $highest = $epoch;
-                                        $winner = $dbname;
+                                ## Note: we sorted the database names this round so even in the
+                                ## (very!) unlikely chance of a tie, the same database always 
+                                ## wins, even across all tables
+
+                                if (! exists $dbhightime{$dbname}) {
+                                    $sth = $self->{sth_max_delta}{$g}{$dbname};
+                                    $count = $sth->pg_result();
+                                    if ($count < 1) { ## No rows at all!
+                                        $sth->finish();
                                     }
+                                    else {
+                                        $dbhightime{$dbname} = $sth->fetchall_arrayref()->[0][0];
+                                    }
+                                }
+
+                                if ($dbhightime{$dbname} > $highest) {
+                                    $highest = $dbhightime{$dbname};
+                                    $winner = $dbname;
                                 }
                             }
                             if (! defined $winner) {
