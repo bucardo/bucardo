@@ -3,6 +3,7 @@ TODO list for Bucardo
 
 These range the gamut from wildly speculative ideas to must-have features.
 
+- Fix the insert/foreign key prolem for conflict resolution.
 - Have Bucardo do the cleanups based on PG version, rather than cronjobs
   (e.g. vacuum pg_listener, purge_bucardo_delta)
 - Death-level custom code hooks
