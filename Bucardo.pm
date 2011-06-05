@@ -2916,6 +2916,9 @@ sub start_kid {
             ## Only need to turn off triggers and rules once via pg_class
             my $disabled_via_pg_class = 0;
 
+            ## Cached epoch value per database for the standard conflict:
+            delete $self->{dbhightime};
+
             ## Do each goat in turn
 
           PUSHDELTA_GOAT: for my $g (@$goatlist) {
@@ -3010,6 +3013,9 @@ sub start_kid {
                 ## Simple map of what we've already compared:
                 my %seenpair;
 
+                ## Hash indicating which databases have conflicts:
+                $self->{db_hasconflict} = {};
+
                 ## Hash of all conflicts for this goat
                 ## Key is the primary key value
                 ## Value is a list of all databases containing this value
@@ -3035,6 +3041,10 @@ sub start_kid {
                             ## Got a conflict! Same pkey updated on both sides
                             $conflict{$key}{$dbname1} = 1;
                             $conflict{$key}{$dbname2} = 1;
+
+                            ## Build a list of which databases have conflicts
+                            $self->{db_hasconflict}{$dbname1} = 1;
+                            $self->{db_hasconflict}{$dbname2} = 1;
                         }
                     }
                 }
@@ -3080,16 +3090,35 @@ sub start_kid {
                     ## If we are grabbing the 'latest', figure out which it is
                     elsif ('bucardo_latest' eq $g->{standard_conflict}) {
 
-                        ## Find the highest transaction time on each database, if it exists
+                        ## If this is the first time with a conflict, grab all values
+                        ## We want the latest txntime across all tables for each database
+                        if (! exists $self->{dbhightime}) {
+                            for my $dbname (keys %{ $self->{db_hasconflict} }) {
+                                $x = $sync->{db}{$dbname};
 
-                        ## Prep our SQL: find the epoch of the latest transactio for this table
-                        if (!exists $g->{sql_max_delta}) {
-                            $SQL = qq{SELECT extract(epoch FROM MAX(txntime)) FROM bucardo.$g->{deltatable} };
-                            $g->{sql_max_delta} = $SQL;
+                                $self->{dbhightime}{$dbname} = 0;
+                                for my $g (@$goatlist) {
+
+                                    ## Prep our SQL: find the epoch of the latest transaction for this table
+                                    if (!exists $g->{sql_max_delta}) {
+                                        $SQL = qq{SELECT extract(epoch FROM MAX(txntime)) FROM bucardo.$g->{deltatable} };
+                                        $g->{sql_max_delta} = $SQL;
+                                    }
+                                    $sth = $x->{dbh}->prepare($g->{sql_max_delta});
+                                    $count = $sth->execute();
+                                    my $epoch = 0;
+                                    if ($count < 1) { ## No rows at all!
+                                        $sth->finish();
+                                    }
+                                    else {
+                                        $epoch = $sth->fetchall_arrayref()->[0][0];
+                                    }
+                                    if ($epoch > $self->{dbhightime}{$dbname}) {
+                                        $self->{dbhightime}{$dbname} = $epoch;
+                                    }
+                                }
+                            }
                         }
-
-                        ## Cached epoch value per database:
-                        my %dbhightime;
 
                         ## Walk through each pkey conflict and declare a winner
                         for my $key (keys %conflict) {
@@ -3097,36 +3126,12 @@ sub start_kid {
                             my $highest = 0;
                             ## The name of the winning database
                             my $winner;
-                            ## First pass, we kick off the query on all new databases
-                            for my $dbname (keys %{ $conflict{$key} }) {
-                                ## Once we have done this for a database this round,
-                                ## no need to do it again!
-                                if (! exists $dbhightime{$dbname}) {
-                                    my $dbh = $sync->{db}{$dbname}{dbh};
-                                    $sth = $self->{sth_max_delta}{$g}{$dbname} =
-                                        $dbh->prepare($g->{sql_max_delta}, { pg_async => PG_ASYNC } );
-                                    $sth->execute();
-                                }
-                            }
-                            ## Second run to finish the async and grab the results if needed
                             for my $dbname (sort keys %{ $conflict{$key} }) {
-                                ## Note: we sorted the database names this round so even in the
-                                ## (very!) unlikely chance of a tie, the same database always 
-                                ## wins, even across all tables
+                                ## We sort the database names so even in the (very!) unlikely
+                                ## chance of a tie, the same database always wins
 
-                                if (! exists $dbhightime{$dbname}) {
-                                    $sth = $self->{sth_max_delta}{$g}{$dbname};
-                                    $count = $sth->pg_result();
-                                    if ($count < 1) { ## No rows at all!
-                                        $sth->finish();
-                                    }
-                                    else {
-                                        $dbhightime{$dbname} = $sth->fetchall_arrayref()->[0][0];
-                                    }
-                                }
-
-                                if ($dbhightime{$dbname} > $highest) {
-                                    $highest = $dbhightime{$dbname};
+                                if ($self->{dbhightime}{$dbname} > $highest) {
+                                    $highest = $self->{dbhightime}{$dbname};
                                     $winner = $dbname;
                                 }
                             }
