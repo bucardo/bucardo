@@ -631,34 +631,34 @@ if ($dbtype eq 'postgres') {
         }
     }
 
-	length $db{name} or elog(ERROR, qq{Database name is mandatory\n});
-	length $db{user} or elog(ERROR, qq{Database username is mandatory\n});
+    length $db{name} or elog(ERROR, qq{Database name is mandatory\n});
+    length $db{user} or elog(ERROR, qq{Database username is mandatory\n});
 
-	my $connstring = "dbi:Pg:dbname=$db{name}";
-	$db{host} ||= ''; $db{port} ||= ''; $db{pass} ||= '';
-	length $db{host} and $connstring .= ";host=$db{host}";
-	length $db{port} and $connstring .= ";port=$db{port}";
-	length $db{conn} and $connstring .= ";$db{conn}";
+    my $connstring = "dbi:Pg:dbname=$db{name}";
+    $db{host} ||= ''; $db{port} ||= ''; $db{pass} ||= '';
+    length $db{host} and $connstring .= ";host=$db{host}";
+    length $db{port} and $connstring .= ";port=$db{port}";
+    length $db{conn} and $connstring .= ";$db{conn}";
 
-	my $ssp = $row->{server_side_prepares};
-	$ssp = 1 if ! defined $ssp;
+    my $ssp = $row->{server_side_prepares};
+    $ssp = 1 if ! defined $ssp;
 
-	return "$dbtype\n$connstring\n$db{user}\n$db{pass}\n$ssp";
+    return "$dbtype\n$connstring\n$db{user}\n$db{pass}\n$ssp";
 
 } ## end postgres
 
 if ($dbtype eq 'mysql') {
 
-	length $db{name} or elog(ERROR, qq{Database name is mandatory\n});
-	length $db{user} or elog(ERROR, qq{Database username is mandatory\n});
+    length $db{name} or elog(ERROR, qq{Database name is mandatory\n});
+    length $db{user} or elog(ERROR, qq{Database username is mandatory\n});
 
-	my $connstring = "dbi:mysql:database=$db{name}";
-	$db{host} ||= ''; $db{port} ||= ''; $db{pass} ||= '';
-	length $db{host} and $connstring .= ";host=$db{host}";
-	length $db{port} and $connstring .= ";port=$db{port}";
-	length $db{conn} and $connstring .= ";$db{conn}";
+    my $connstring = "dbi:mysql:database=$db{name}";
+    $db{host} ||= ''; $db{port} ||= ''; $db{pass} ||= '';
+    length $db{host} and $connstring .= ";host=$db{host}";
+    length $db{port} and $connstring .= ";port=$db{port}";
+    length $db{conn} and $connstring .= ";$db{conn}";
 
-	return "$dbtype\n$connstring\n$db{user}\n$db{pass}";
+    return "$dbtype\n$connstring\n$db{user}\n$db{pass}";
 
 } ## end mysql
 
@@ -1087,7 +1087,7 @@ for (@{$rv->{rows}}) {
         safename => $_->{safedb},
         role => $_->{role},
         status => $_->{status},
-		dbtype => $_->{dbtype},
+        dbtype => $_->{dbtype},
     };
     $role{$_->{role}}++;
 }
@@ -1113,9 +1113,9 @@ if ($role{target} >= 1 or $role{source} > 1) { ## in other words, not just fullc
 
 sub run_sql {
     my ($sql,$dbh) = @_;
-	$sql =~ s/\t/    /gsm;
+    $sql =~ s/\t/    /gsm;
     if ($sql =~ /^(\s+)/m) {
-		(my $ws = $1) =~ s/[^ ]//g;
+        (my $ws = $1) =~ s/[^ ]//g;
         my $leading = length($ws);
         $sql =~ s/^\s{$leading}//gsm;
     }
@@ -1125,15 +1125,15 @@ sub run_sql {
 
 sub fetch1_sql {
     my ($sql,$dbh,@items) = @_;
-	$sql =~ s/\t/    /gsm;
+    $sql =~ s/\t/    /gsm;
     if ($sql =~ /^(\s+)/m) {
-		(my $ws = $1) =~ s/[^ ]//g;
+        (my $ws = $1) =~ s/[^ ]//g;
         my $leading = length($ws);
         $sql =~ s/^\s{$leading}//gsm;
     }
-	my $sth = $dbh->prepare($sql);
-	$sth->execute(@items);
-	return $sth->fetchall_arrayref()->[0][0];
+    my $sth = $dbh->prepare($sql);
+    $sth->execute(@items);
+    return $sth->fetchall_arrayref()->[0][0];
 }
 
 ## Determine the name of some functions we may need
@@ -1155,14 +1155,14 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
     ## Skip if this database is not active
     next if $db{$dbname}{status} ne 'active';
 
-	## Skip if this is a flatfile
-	next if $db{$dbname}{dbtype} =~ /flat/;
+    ## Skip if this is a flatfile
+    next if $db{$dbname}{dbtype} =~ /flat/;
 
-	## Skip if this is mongodb
-	next if $db{$dbname}{dbtype} =~ /mongo/;
+    ## Skip if this is mongodb
+    next if $db{$dbname}{dbtype} =~ /mongo/;
 
-	## Skip if this is mysql
-	next if $db{$dbname}{dbtype} eq 'mysql';
+    ## Skip if this is mysql
+    next if $db{$dbname}{dbtype} eq 'mysql';
 
     ## Figure out how to connect to this database
     my $rv = spi_exec_query("SELECT bucardo.db_getconn('$dbname') AS conn");
@@ -1226,14 +1226,14 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
     $SQL = q{SELECT 1 FROM pg_trigger WHERE tgrelid = ?::regclass AND tgname = ?};
     $sth{haztrig} = $dbh->prepare($SQL);
 
-	## Does a named index exist?
-	$SQL = q{SELECT 1 FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace) }
-		.q{WHERE nspname = ? AND relname = ? AND relkind = 'i'};
-	$sth{hazindex} = $dbh->prepare($SQL);
+    ## Does a named index exist?
+    $SQL = q{SELECT 1 FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace) }
+        .q{WHERE nspname = ? AND relname = ? AND relkind = 'i'};
+    $sth{hazindex} = $dbh->prepare($SQL);
 
-	## Does a named column exist on a specific table?
-	$SQL = q{SELECT 1 FROM pg_attribute WHERE attrelid = ?::regclass AND attname = ?};
-	$sth{hazcol} = $dbh->prepare($SQL);
+    ## Does a named column exist on a specific table?
+    $SQL = q{SELECT 1 FROM pg_attribute WHERE attrelid = ?::regclass AND attname = ?};
+    $sth{hazcol} = $dbh->prepare($SQL);
 
     ## Given a table oid, return detailed column information
     $SQL = q{
@@ -1286,8 +1286,8 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
           KICKFUNC:
             ## We may override this later on with a custom function from bucardo_custom_trigger
             ## and we may not even use it all, but no harm in creating the stock one here
-			my $notice = $dbh->{pg_server_version} >= 90000
-			    ? qq{bucardo, 'kick_sync_$syncname'}
+            my $notice = $dbh->{pg_server_version} >= 90000
+                ? qq{bucardo, 'kick_sync_$syncname'}
                 : qq{"bucardo_kick_sync_$syncname"};
             $SQL = qq{
                   CREATE OR REPLACE FUNCTION bucardo."$kickfunc"()
@@ -1304,13 +1304,13 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
             run_sql($SQL,$dbh);
         }
 
-		## Create the bucardo_tablename_maker function as needed
-		$newschema and goto TMAKER;
-		$sth = $sth{hazfunc};
-		$count = $sth->execute('bucardo', 'bucardo_tablename_maker');
-		$sth->finish();
-		if ($count < 1) {
-		    TMAKER:
+        ## Create the bucardo_tablename_maker function as needed
+        $newschema and goto TMAKER;
+        $sth = $sth{hazfunc};
+        $count = $sth->execute('bucardo', 'bucardo_tablename_maker');
+        $sth->finish();
+        if ($count < 1) {
+            TMAKER:
               $SQL = qq{
                         CREATE OR REPLACE FUNCTION bucardo.bucardo_tablename_maker(TEXT)
 RETURNS TEXT
@@ -1357,14 +1357,14 @@ END;
             run_sql($SQL,$dbh);
         }
 
-		## Populate bucardo_delta_targets with this sync name
+        ## Populate bucardo_delta_targets with this sync name
         $SQL = 'SELECT 1 FROM bucardo.bucardo_delta_targets WHERE tablename=? AND sync=?';
         my $sthc = $dbh->prepare($SQL);
         $SQL = 'INSERT INTO bucardo.bucardo_delta_targets(tablename,sync) VALUES (?,?)';
         my $stha = $dbh->prepare($SQL);
-		for my $schema (sort keys %goat) {
+        for my $schema (sort keys %goat) {
             for my $table (sort keys %{$goat{$schema}}) {
-		        $sth = $sth{haztable};
+                $sth = $sth{haztable};
                 $count = $sth->execute($schema,$table);
                 if ($count < 1) {
                     $sth->finish();
@@ -1394,7 +1394,7 @@ END;
                   LANGUAGE plpgsql
                   SECURITY DEFINER
                   AS \$clone\$
-				  DECLARE
+                  DECLARE
                     deltaname TEXT;
                     myst TEXT;
                   BEGIN
@@ -1410,7 +1410,7 @@ END;
                     myst = 'TRUNCATE TABLE bucardo.track_' || deltaname;
                     EXECUTE myst;
 
-					-- Not strictly necessary, but nice to have a clean slate
+                    -- Not strictly necessary, but nice to have a clean slate
                     myst = 'TRUNCATE TABLE bucardo.stage_' || deltaname;
                     EXECUTE myst;
 
@@ -1692,7 +1692,7 @@ SELECT 'Fixme'::TEXT;
                     RETURN 'Rows deleted from '
                       || deltatable
                       || ': '
-					  || drows
+                      || drows
                       || ' Rows deleted from '
                       || tracktable
                       || ': '
@@ -1777,7 +1777,7 @@ SELECT 'Fixme'::TEXT;
         $count = $sth->execute('bucardo', 'bucardo_audit');
         $sth->finish();
         if ($count < 1) {
-		  AUDIT:
+          AUDIT:
             $SQL = q{fillin later fixme};
         }                        ## end of adding bucardo_audit()
 
@@ -1821,7 +1821,7 @@ SELECT 'Fixme'::TEXT;
             ## Nothing further needed if it's a sequence
             next TABLE if $tinfo->{reltype} eq 'sequence';
 
-			## Get the escaped version of things
+            ## Get the escaped version of things
             my $safeschema = $tinfo->{safeschema};
             my $safetable = $tinfo->{safetable};
 
@@ -1964,22 +1964,22 @@ SELECT 'Fixme'::TEXT;
                 }
             }
 
-		    $SQL = "SELECT bucardo.bucardo_tablename_maker(?)";
-			my $makername = fetch1_sql($SQL,$dbh,$schema.'_'.$table);
-			## Create this table if needed, with one column per PK columns
-			$sth = $sth{haztable};
-			my $delta_table = "delta_$makername";
+            $SQL = "SELECT bucardo.bucardo_tablename_maker(?)";
+            my $makername = fetch1_sql($SQL,$dbh,$schema.'_'.$table);
+            ## Create this table if needed, with one column per PK columns
+            $sth = $sth{haztable};
+            my $delta_table = "delta_$makername";
             $count = $sth->execute('bucardo',$delta_table);
             if ($count < 1) {
-			   ## Create that table!
+               ## Create that table!
                my $pkcols = join ',' => map { qq{"$_"} } split (/\|/ => $tinfo->{pkey});
-			   $SQL = qq{
-			       CREATE TABLE bucardo."$delta_table"
+               $SQL = qq{
+                   CREATE TABLE bucardo."$delta_table"
                      AS SELECT $pkcols, now()::TIMESTAMPTZ AS txntime
                         FROM $schema.$table LIMIT 0
                };
-			   run_sql($SQL,$dbh);
-			   $SQL = qq{
+               run_sql($SQL,$dbh);
+               $SQL = qq{
                    ALTER TABLE bucardo."$delta_table"
                      ALTER txntime SET NOT NULL,
                      ALTER txntime SET DEFAULT now()
@@ -1987,42 +1987,42 @@ SELECT 'Fixme'::TEXT;
                run_sql($SQL, $dbh);
             }
 
-			## Need an index on the txntime column
-			my $index1_name = "dex1_$makername";
-			$sth = $sth{hazindex};
+            ## Need an index on the txntime column
+            my $index1_name = "dex1_$makername";
+            $sth = $sth{hazindex};
             $count = $sth->execute('bucardo',$index1_name);
             $sth->finish();
             if ($count < 1) {
-			    $SQL = qq{CREATE INDEX $index1_name ON bucardo.$delta_table(txntime)};
+                $SQL = qq{CREATE INDEX $index1_name ON bucardo.$delta_table(txntime)};
                 run_sql($SQL, $dbh);
             }
 
-			## Need an index on all other columns
-			my $index2_name = "dex2_$makername";
-			$sth = $sth{hazindex};
+            ## Need an index on all other columns
+            my $index2_name = "dex2_$makername";
+            $sth = $sth{hazindex};
             $count = $sth->execute('bucardo',$index2_name);
             $sth->finish();
             if ($count < 1) {
-			    my $pkcols = join ',' => map { qq{"$_"} } split (/\|/ => $tinfo->{pkey});
-			    $SQL = qq{CREATE INDEX $index2_name ON bucardo.$delta_table($pkcols)};
+                my $pkcols = join ',' => map { qq{"$_"} } split (/\|/ => $tinfo->{pkey});
+                $SQL = qq{CREATE INDEX $index2_name ON bucardo.$delta_table($pkcols)};
                 run_sql($SQL, $dbh);
             }
 
             ## Track any change (insert/update/delete) with an entry in bucardo_delta
 
-			## Trigger function to add any changed primary key rows to this new table
-			## TODO: Check for too long of a name
-			## Function is same as the table name?
-			my $deltafunc = "delta_$makername";
+            ## Trigger function to add any changed primary key rows to this new table
+            ## TODO: Check for too long of a name
+            ## Function is same as the table name?
+            my $deltafunc = "delta_$makername";
 
-			my @pkeys = split (/\|/ => $tinfo->{pkey});
+            my @pkeys = split (/\|/ => $tinfo->{pkey});
 
             $sth = $sth{hazfunc};
             $count = $sth->execute('bucardo', $deltafunc);
             $sth->finish();
             if ($count < 1) {
-			     my $new = join ',' => map { qq{NEW."$_"} } @pkeys;
-				 my $old = join ',' => map { qq{OLD."$_"} } @pkeys;
+                 my $new = join ',' => map { qq{NEW."$_"} } @pkeys;
+                 my $old = join ',' => map { qq{OLD."$_"} } @pkeys;
                  my $clause = join ' OR ' => map { qq{OLD."$_" <> NEW."$_"} } @pkeys;
                 $SQL = qq{
         CREATE OR REPLACE FUNCTION bucardo."$deltafunc"()
@@ -2094,46 +2094,46 @@ SELECT 'Fixme'::TEXT;
             }
 
 
-			## Now the 'track' table
-			my $track_table = "track_$makername";
+            ## Now the 'track' table
+            my $track_table = "track_$makername";
             $sth = $sth{haztable};
             $count = $sth->execute('bucardo',$track_table);
             $sth->finish();
             if ($count < 1) {
-				$SQL = qq{
+                $SQL = qq{
                    CREATE TABLE bucardo."$track_table" (
                       txntime    TIMESTAMPTZ,
                       target     TEXT
                    );
                 };
-				run_sql($SQL,$dbh);
+                run_sql($SQL,$dbh);
             }
 
-			## Need to index both columns of the txntime table
-			$sth = $sth{hazindex};
-			my $index3_name = "dex3_$makername";
-			$count = $sth->execute('bucardo', $index3_name);
+            ## Need to index both columns of the txntime table
+            $sth = $sth{hazindex};
+            my $index3_name = "dex3_$makername";
+            $count = $sth->execute('bucardo', $index3_name);
             $sth->finish();
             if ($count < 1) {
-				$SQL = qq{CREATE INDEX $index3_name ON bucardo.$track_table(target, txntime)};
-			    run_sql($SQL,$dbh);
+                $SQL = qq{CREATE INDEX $index3_name ON bucardo.$track_table(target, txntime)};
+                run_sql($SQL,$dbh);
             }
 
-			## The 'stage' table, which feeds 'track' once targets have committed
-			my $stage_table = "stage_$makername";
+            ## The 'stage' table, which feeds 'track' once targets have committed
+            my $stage_table = "stage_$makername";
             $sth = $sth{haztable};
             $count = $sth->execute('bucardo',$stage_table);
             $sth->finish();
             if ($count < 1) {
                 my $unlogged = $dbh->{pg_server_version} >= 90100 ? 'UNLOGGED' : '';
-				$unlogged = ''; ## Until the truncate bug is fixed.
-				$SQL = qq{
+                $unlogged = ''; ## Until the truncate bug is fixed.
+                $SQL = qq{
                    CREATE $unlogged TABLE bucardo."$stage_table" (
                       txntime    TIMESTAMPTZ,
                       target     TEXT
                    );
                 };
-				run_sql($SQL,$dbh);
+                run_sql($SQL,$dbh);
             }
 
             $count = $sth->execute('bucardo','bucardo_delta_target_unique');
@@ -2169,6 +2169,8 @@ SELECT 'Fixme'::TEXT;
             }
 
             ## Add in the ping triggers as needed
+            ## Skip if ping is false
+            $info->{ping} eq 'f' and next TABLE;
             $sth = $sth{haztrig};
             $count = $sth->execute("$schema.$table", $kickfunc);
             $sth->finish();
@@ -2178,24 +2180,24 @@ SELECT 'Fixme'::TEXT;
                 my $custom_function_name = '';
                 if ($custom_trigger_level && $custom_function_name) {
                     $SQL = qq{
-               CREATE TRIGGER "$kickfunc" FIXMENAME
-               AFTER INSERT OR UPDATE OR DELETE$ttrig ON $safeschema.$safetable
-               FOR EACH $custom_trigger_level EXECUTE PROCEDURE bucardo."$custom_function_name"()
-        };
-                } else {
+                    CREATE TRIGGER "$kickfunc" FIXMENAME
+                    AFTER INSERT OR UPDATE OR DELETE$ttrig ON $safeschema.$safetable
+                    FOR EACH $custom_trigger_level EXECUTE PROCEDURE bucardo."$custom_function_name"()
+                    };
+                }
+                else {
                     $SQL = qq{
-               CREATE TRIGGER "$kickfunc"
-               AFTER INSERT OR UPDATE OR DELETE$ttrig ON $safeschema.$safetable
-               FOR EACH STATEMENT EXECUTE PROCEDURE bucardo."$kickfunc"()
-        };
+                    CREATE TRIGGER "$kickfunc"
+                    AFTER INSERT OR UPDATE OR DELETE$ttrig ON $safeschema.$safetable
+                    FOR EACH STATEMENT EXECUTE PROCEDURE bucardo."$kickfunc"()
+                    };
                 }
                 run_sql($SQL,$dbh);
             }
-
         } ## end each TABLE
     }     ## end each SCHEMA
 
-	$dbh->commit();
+    $dbh->commit();
 
 }         ## end connecting to each database
 
@@ -2329,7 +2331,7 @@ AS $bc$
     $SQL = qq{SELECT 1 FROM herd WHERE name = '$herd'};
     $rv = spi_exec_query($SQL);
     if (!$rv->{processed}) {
-	   #elog(ERROR, "Cannot delete: sync refers to an invalid herd: $herd");
+       #elog(ERROR, "Cannot delete: sync refers to an invalid herd: $herd");
     }
 
     $SQL = qq{
