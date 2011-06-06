@@ -11,7 +11,7 @@ use lib 't','.';
 use Test::More;
 use BucardoTesting;
 
-my @important_files = qw{Bucardo.pm bucardo_ctl };
+my @important_files = qw{Bucardo.pm bucardo };
 
 opendir my $dh, 't' or die qq{Could not open the 't' directory: are you running this from the right place?\n};
 my @test_files = grep { /\.t$/ } readdir $dh;

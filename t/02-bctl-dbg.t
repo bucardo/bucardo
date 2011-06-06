@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 # -*-mode:cperl; indent-tabs-mode: nil-*-
 
-## Test adding, dropping, and changing database groups via bucardo_ctl
+## Test adding, dropping, and changing database groups via bucardo
 ## Tests the main subs: add_dbgroup, remove_dbgroup, update_dbgroup, list_dbgroups
 
 use 5.008003;
@@ -33,104 +33,104 @@ my ($dbuserB,$dbportB,$dbhostB) = $bct->add_db_args('B');
 ## Tests of basic 'add dbgroup' usage
 
 $t = 'Add database group with no argument gives expected help message';
-$res = $bct->ctl('bucardo_ctl add dbg');
+$res = $bct->ctl('bucardo add dbg');
 like ($res, qr/Usage: add dbgroup/, $t);
 
 $t = q{Add database group accepts both 'add dbg' and 'add dbgroup'};
-$res = $bct->ctl('bucardo_ctl add dbgroup');
+$res = $bct->ctl('bucardo add dbgroup');
 like ($res, qr/Usage: add dbgroup/, $t);
 
 $t = q{Add database group fails with invalid characters};
-$res = $bct->ctl('bucardo_ctl add dbgroup foo^barz');
+$res = $bct->ctl('bucardo add dbgroup foo^barz');
 like ($res, qr/Invalid characters/, $t);
 
 $t = 'Add database group works';
-$res = $bct->ctl('bucardo_ctl add dbg foobar');
+$res = $bct->ctl('bucardo add dbg foobar');
 like ($res, qr/Created database group "foobar"/, $t);
 
 $t = q{Adding a database group with the same name fails};
-$res = $bct->ctl('bucardo_ctl add dbg foobar');
+$res = $bct->ctl('bucardo add dbg foobar');
 is ($res, '', $t);
 
 $t = 'Listing of database groups looks correct';
-$res = $bct->ctl('bucardo_ctl list dbgroups');
+$res = $bct->ctl('bucardo list dbgroups');
 chomp $res;
 is ($res, 'Database group: foobar', $t);
 
 $t = q{Listing of database groups with the 'dbg' alias works};
-$res = $bct->ctl('bucardo_ctl list dbg');
+$res = $bct->ctl('bucardo list dbg');
 chomp $res;
 is ($res, 'Database group: foobar', $t);
 
 $t = q{Adding an invalid database via add dbgroup gives expected message};
-$res = $bct->ctl('bucardo_ctl add dbgroup foobar A');
+$res = $bct->ctl('bucardo add dbgroup foobar A');
 like ($res, qr/"A" does not exist/, $t);
 
 $t = q{Adding a database via add dbgroup gives expected message};
-$bct->ctl("bucardo_ctl add db bucardo_test name=A user=$dbuserA port=$dbportA host=$dbhostA");
-$res = $bct->ctl('bucardo_ctl add dbgroup foobar A');
+$bct->ctl("bucardo add db bucardo_test name=A user=$dbuserA port=$dbportA host=$dbhostA");
+$res = $bct->ctl('bucardo add dbgroup foobar A');
 like ($res, qr/Added database "A" to group "foobar" as target/, $t);
 
 $t = q{Adding a database in source role via add dbgroup gives expected message};
-$bct->ctl("bucardo_ctl add db bucardo_test name=B user=$dbuserB port=$dbportB host=$dbhostB");
-$res = $bct->ctl('bucardo_ctl add dbgroup foobar B:master');
+$bct->ctl("bucardo add db bucardo_test name=B user=$dbuserB port=$dbportB host=$dbhostB");
+$res = $bct->ctl('bucardo add dbgroup foobar B:master');
 like ($res, qr/Added database "B" to group "foobar" as source/, $t);
 
 $t = 'Listing of database groups looks correct';
-$res = $bct->ctl('bucardo_ctl list dbgroups');
+$res = $bct->ctl('bucardo list dbgroups');
 chomp $res;
 is ($res, 'Database group: foobar  Members: A:target B:source', $t);
 
 ## Remove
 
 $t = 'Removal of non-existent database group gives expected message';
-$res = $bct->ctl('bucardo_ctl remove dbgroup bunko');
+$res = $bct->ctl('bucardo remove dbgroup bunko');
 like ($res, qr/No such database group: bunko/, $t);
 
 $t = 'Removal of a database group works';
-$res = $bct->ctl('bucardo_ctl remove dbgroup foobar');
+$res = $bct->ctl('bucardo remove dbgroup foobar');
 like ($res, qr/Removed database group "foobar"/, $t);
 
 $t = 'Removal of two database groups works';
-$bct->ctl('bucardo_ctl add dbgroup foobar1');
-$bct->ctl('bucardo_ctl add dbgroup foobar2');
-$res = $bct->ctl('bucardo_ctl remove dbgroup foobar1 foobar2');
+$bct->ctl('bucardo add dbgroup foobar1');
+$bct->ctl('bucardo add dbgroup foobar2');
+$res = $bct->ctl('bucardo remove dbgroup foobar1 foobar2');
 like ($res, qr/Removed database group "foobar1".*Removed database group "foobar2"/s, $t);
 
 ## Update
 
-$bct->ctl('bucardo_ctl add dbgroup foobar');
+$bct->ctl('bucardo add dbgroup foobar');
 
 $t = 'Update dbgroup with no arguments gives expected message';
-$res = $bct->ctl('bucardo_ctl update dbgroup foobar');
+$res = $bct->ctl('bucardo update dbgroup foobar');
 like ($res, qr/Usage: update/, $t);
 
 $t = 'Update dbgroup with invalid group gives expected message';
-$res = $bct->ctl('bucardo_ctl update dbgroup foobar3 baz');
+$res = $bct->ctl('bucardo update dbgroup foobar3 baz');
 like ($res, qr/Could not find a database group named "foobar3"/, $t);
 
 $t = 'Update dbgroup works with adding a single database';
-$res = $bct->ctl('bucardo_ctl update dbgroup foobar A');
+$res = $bct->ctl('bucardo update dbgroup foobar A');
 like ($res, qr/Added database "A" to group "foobar" as target/, $t);
 
 $t = 'Update dbgroup works with adding multiple databases';
-$res = $bct->ctl('bucardo_ctl update dbgroup foobar A:master B:master');
+$res = $bct->ctl('bucardo update dbgroup foobar A:master B:master');
 like ($res, qr/Changed role of database "A" in group "foobar" from target to source.*Added database "B" to group "foobar" as source/s, $t);
 
 $t = 'Update dbgroup fails when new name is invalid';
-$res = $bct->ctl('bucardo_ctl update dbgroup foobar newname=foobaz#');
+$res = $bct->ctl('bucardo update dbgroup foobar newname=foobaz#');
 like ($res, qr/Invalid database group name "foobaz#"/, $t);
 
 $t = 'Update dbgroup works when changing the name';
-$res = $bct->ctl('bucardo_ctl update dbgroup foobar name=foobaz');
+$res = $bct->ctl('bucardo update dbgroup foobar name=foobaz');
 like ($res, qr/Changed database group name from "foobar" to "foobaz"/, $t);
 
 $t = q{Removing all database groups};
-$res = $bct->ctl('bucardo_ctl remove dbg foobaz');
+$res = $bct->ctl('bucardo remove dbg foobaz');
 like ($res, qr/Removed database group "foobaz"/, $t);
 
 $t = q{List database returns correct information};
-$res = $bct->ctl('bucardo_ctl list dbgroups');
+$res = $bct->ctl('bucardo list dbgroups');
 like ($res, qr/No database groups/, $t);
 
 exit;

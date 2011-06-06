@@ -27,8 +27,8 @@ WriteMakefile(
     NO_META      => 1,
     NEEDS_LINKING => 0,
     VERSION_FROM => 'Bucardo.pm',
-    EXE_FILES    => ['bucardo_ctl'],
-    MAN1PODS     => { 'bucardo_ctl' => 'blib/man1/bucardo_ctl.1pm' },
+    EXE_FILES    => ['bucardo'],
+    MAN1PODS     => { 'bucardo' => 'blib/man1/bucardo.1pm' },
     NORECURS     => 1,
 );
 
@@ -39,11 +39,11 @@ sub clean {
 	$string =~ s{\t}{\tperl t/98-cleanup\.t\n\t};
 	$string .= qq{\n\nhtml : \n\t};
     $string .= qq{\t\$(NOECHO) pod2html Bucardo.pm > Bucardo.pm.html\n};
-    $string .= qq{\t\$(NOECHO) pod2html bucardo_ctl > bucardo_ctl.html\n};
+    $string .= qq{\t\$(NOECHO) pod2html bucardo > bucardo.html\n};
     $string .= qq{\t\$(NOECHO) \$(RM_F) pod*.tmp pm_to_blib\n};
-    $string .= qq{\t\$(NOECHO) \$(PERL) -pi -e "s/<link.*?>//" Bucardo.pm.html bucardo_ctl.html\n};
-    $string .= qq{\t\$(NOECHO) \$(PERL) -pi -e "s~\\`\\`(.+?)''~&quot;\\1&quot;~g" Bucardo.pm.html bucardo_ctl.html\n};
-    $string .= qq{\t\$(NOECHO) \$(ECHO) Created Bucardo.pm.html and bucardo_ctl.html\n};
+    $string .= qq{\t\$(NOECHO) \$(PERL) -pi -e "s/<link.*?>//" Bucardo.pm.html bucardo.html\n};
+    $string .= qq{\t\$(NOECHO) \$(PERL) -pi -e "s~\\`\\`(.+?)''~&quot;\\1&quot;~g" Bucardo.pm.html bucardo.html\n};
+    $string .= qq{\t\$(NOECHO) \$(ECHO) Created Bucardo.pm.html and bucardo.html\n};
 	return $string;
 }
 

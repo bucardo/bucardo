@@ -25,11 +25,11 @@ else {
 
 	@textfiles = qw{README Changes TODO README.dev INSTALL UPGRADE META.yml scripts/README};
 
-	@podfiles = qw{Bucardo.pm bucardo_ctl};
+	@podfiles = qw{Bucardo.pm bucardo};
 
-	@commentfiles = qw{Makefile.PL Bucardo.pm bucardo_ctl};
+	@commentfiles = qw{Makefile.PL Bucardo.pm bucardo};
 
-	push @commentfiles => qw{scripts/bucardo_rrd scripts/bucardo-report scripts/check_bucardo_sync scripts/bucardo_ctl.rc};
+	push @commentfiles => qw{scripts/bucardo_rrd scripts/bucardo-report scripts/check_bucardo_sync scripts/bucardo.rc};
 
 	plan tests => @textfiles + @testfiles + @podfiles + @commentfiles;
 }
@@ -158,8 +158,8 @@ subdirectory
 ## Changes
 
 
-- Allow multiple item updates, e.g. bucardo_ctl update sync s1 s2 s3 ping=true
-- Allow wildcards in item updates, e.g. bucardo_ctl update sync s* ping=true
+- Allow multiple item updates, e.g. bucardo update sync s1 s2 s3 ping=true
+- Allow wildcards in item updates, e.g. bucardo update sync s* ping=true
 Aolmezov
 Backcountry
 Bahlai
@@ -264,7 +264,7 @@ synctypes
 timeslices
 wildcard
 
-## bucardo_ctl
+## bucardo
 
 args
 bucardo

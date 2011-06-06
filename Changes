@@ -2,6 +2,8 @@
 
 Bucardo version 5.0.0, released ??, 2011
 
+  - Rename bucardo_ctl to simply bucardo [Jon Jensen, GSM]
+
   - Change the way that swap syncs work: should be much faster [GSM]
 
   - Use asynchronous queries when possible [GSM]
@@ -32,7 +34,7 @@ Bucardo version 5.0.0, released ??, 2011
 
   - Fix bug in bucardo_purge_q_table in index detection logic. [Aolmezov]
 
-  - Show the reason why a sync failed on a failed bucardo_ctl kick. [GSM]
+  - Show the reason why a sync failed on a failed bucardo kick. [GSM]
 
   - Fix errors with bytea and swap syncs. [GSM]
 
@@ -44,11 +46,11 @@ Bucardo version 5.0.0, released ??, 2011
   - Add a log_level parameter, and classify all messages inside Bucardo.pm
     with a log_level of TERSE, NORMAL, VERBOSE, or DEBUG. [Rosser Schwarz and GSM]
 
-  - Relax SELECT version() regex in bucardo_ctl, to let modified versions 
+  - Relax SELECT version() regex in bucardo, to let modified versions 
     of Postgres tell us their version. [GSM]
 
-  - Fix incorrect automatic population of database when using bucardo_ctl 
-    add database and only one database exists. [GSM]
+  - Fix incorrect automatic population of database when using 
+    'bucardo add database' and only one database exists. [GSM]
 
   - Fix failing makedelta when using multi-column primary keys. 
     [GSM, reported by Michelle Sullivan]
@@ -61,37 +63,37 @@ Bucardo version 5.0.0, released ??, 2011
     and kidsalive. [GSM, idea from Andrew Spencer]
 
   - Refuse to start if the bucardo database version does not match that of 
-    bucardo_ctl (the former is set by 'bucardo_ctl upgrade') [GSM]
+    bucardo (the former is set by 'bucardo upgrade') [GSM]
 
   - Set the search_path to prevent bogus warnings on startup about sequence 
     mismatches based on schema names. [GSM] (Bug #17)
 
-  - Add a --force option so we can remove databases via 'bucardo_ctl remove db'
+  - Add a --force option so we can remove databases via 'bucardo remove db'
     along with all related goats and syncs. [GSM]
 
   - Remove race condition from bucardo_purge_q_table() [GSM]
 
-  - Add new options for 'bucardo_ctl add db': addalltables and addallsequences [GSM]
+  - Add new options for 'bucardo add db': addalltables and addallsequences [GSM]
 
-  - Allow 'bucardo_ctl status' to run even if piddir is not available. [GSM]
+  - Allow 'bucardo status' to run even if piddir is not available. [GSM]
 
   - Don't bother comparing the 'log_cnt' field of sequences. [Rosser Schwarz]
 
-  - Allow "schema.table" format for bucardo_ctl list tables [GSM]
+  - Allow "schema.table" format for 'bucardo list tables' [GSM]
 
   - Add new option "log_microsecond" to show sub-second output in logs. [GSM]
 
   - Make sure we update bucardo_config.bucardo_current_version when doing 
-    a bucardo_ctl upgrade [GSM] (Bug #5)
+    a 'bucardo upgrade' [GSM] (Bug #5)
 
   - Automatically create the bucardo (superuser) if we can connect as 'postgres'. [GSM]
 
-  - Allow removal of tables from herds via bucardo_ctl. [GSM]
+  - Allow removal of tables from herds via bucardo. [GSM]
 
   - Add create_child_q_table() function. [GSM]
 
-  - Allow 'bucardo_ctl update herd foo remove <table(s)>'
-    and 'bucardo_ctl update herd foo add <table(s)>' [GSM]
+  - Allow 'bucardo update herd foo remove <table(s)>'
+    and 'bucardo update herd foo add <table(s)>' [GSM]
 
   - Better formatting of bucardo.reason.log, and log startup failures. [GSM]
 
@@ -101,9 +103,9 @@ Bucardo version 5.0.0, released ??, 2011
 
   - Remove unused 'kick_sleep' config variable. [GSM]
 
-  - Show the database name when listing herds via bucardo_ctl. [GSM]
+  - Show the database name when listing herds via bucardo. [GSM]
 
-  - Show the database name when listing sequences via bucardo_ctl. [Douglas Tan]
+  - Show the database name when listing sequences via bucardo. [Douglas Tan]
 
   - Show each target's Postgres version, time, and timezone on first connect. [GSM]
 

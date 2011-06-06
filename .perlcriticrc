@@ -69,7 +69,7 @@ profile-strictness = quiet
 [-Editor::RequireEmacsFileVariables]
 [-Lax::ProhibitEmptyQuotes::ExceptAsFallback]
 ## This one really ought to be removed entirely:
-## Giving too many false positives in bucardo_ctl:
+## Giving too many false positives in bucardo:
 [-Miscellanea::ProhibitUselessNoCritic]
 [-Miscellanea::RequireRcsKeywords]
 [-References::ProhibitDoubleSigils]

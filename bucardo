@@ -7,7 +7,7 @@
 ##
 ## Please see http://bucardo.org/ for full documentation
 
-package bucardo_ctl;
+package bucardo;
 use strict;
 no strict 'refs';
 use warnings;
@@ -21,7 +21,7 @@ use POSIX qw/ceil setsid localeconv/;
 use Data::Dumper 'Dumper';
 $Data::Dumper::Indent = 1;
 
-return 1 if $ENV{BUCARDO_CTL_TEST};
+return 1 if $ENV{BUCARDO_TEST};
 
 our $VERSION = '5.0.0';
 
@@ -166,7 +166,7 @@ my $QUIET = delete $bcargs->{quiet};
 help() if $bcargs->{help};
 
 if ($bcargs->{version}) {
-    print "bucardo_ctl version $VERSION\n";
+    print "bucardo version $VERSION\n";
     exit 0;
 }
 
@@ -429,7 +429,7 @@ sub help {
 
   reload_config   ** Force a running Bucardo to reload the bucardo_config table
 
-For more details, try 'man bucardo_ctl'
+For more details, try 'man bucardo'
 } unless $QUIET; ## Mostly for the test suite
     exit 0;
 }
@@ -652,10 +652,10 @@ sub start {
 
     my $dbversion = get_config('bucardo_current_version') or die "Could not find Bucardo version!\n";
     if ($dbversion ne $VERSION) {
-        $nouns = "Version mismatch: bucardo_ctl is $VERSION, but bucardo database is $dbversion\n";
+        $nouns = "Version mismatch: bucardo is $VERSION, but bucardo database is $dbversion\n";
         append_reason_file('fail');
         warn $nouns;
-        warn "Perhaps you need to run 'bucardo_ctl upgrade' ?\n";
+        warn "Perhaps you need to run 'bucardo upgrade' ?\n";
         exit 1;
     }
 
@@ -665,7 +665,7 @@ sub start {
 
     my $pm_version = $bc->{version} || 'unknown';
     if ($VERSION ne $pm_version) {
-        $nouns = "Version mismatch: bucardo_ctl is $VERSION, but Bucardo.pm is $pm_version\n";
+        $nouns = "Version mismatch: bucardo is $VERSION, but Bucardo.pm is $pm_version\n";
         append_reason_file('fail');
         die $nouns;
     }
@@ -722,7 +722,7 @@ sub add_database {
     ## 1. The name of the database we connect to
     ## 2+ name=value parameters, dash-dash arguments
     ## Returns: undef
-    ## Example: bucardo_ctl add db qpf name=nyc1 host=nyc1.example.com group=sales
+    ## Example: bucardo add db qpf name=nyc1 host=nyc1.example.com group=sales
 
     ## Grab our generic usage message
     my $usage = usage('add_database');
@@ -969,7 +969,7 @@ sub remove_database {
     ## Arguments: one or more
     ## 1+ Name of a database
     ## Returns: undef
-    ## Example: bucardo_ctl remove db nyc1 nyc2 --force
+    ## Example: bucardo remove db nyc1 nyc2 --force
 
     ## Grab our generic usage message
     my $usage = usage('remove_database');
@@ -1038,7 +1038,7 @@ sub update_database {
     ## 1. Name of the database to update. Can be "all" and can have wildcards
     ## 2+ What exactly we are updating.
     ## Returns: undef
-    ## Example: bucardo_ctl update db nyc1 port=6543 group=nycservers:source,globals
+    ## Example: bucardo update db nyc1 port=6543 group=nycservers:source,globals
 
     ## Grab our generic usage message
     my $usage = usage('update_database');
@@ -1222,7 +1222,7 @@ sub list_databases {
     ## Arguments: zero or more
     ## 1+ Databases to view. Can be "all" and can have wildcards
     ## Returns: undef
-    ## Example: bucardo_ctl list db sale%
+    ## Example: bucardo list db sale%
 
     ## Grab our generic usage message
     my $usage = usage('list_databases');
@@ -1376,7 +1376,7 @@ sub add_dbgroup {
     ## 1. The name of the group we are creating
     ## 2+ Databases to add to this group, with optional role information attached
     ## Returns: undef
-    ## Example: bucardo_ctl add dbgroup nycservers nyc1:source nyc2:source lax1
+    ## Example: bucardo add dbgroup nycservers nyc1:source nyc2:source lax1
     ## TODO: Wildcards?
 
     ## Grab our generic usage message
@@ -1425,7 +1425,7 @@ sub remove_dbgroup {
     ## Arguments: one or more
     ## 1+ Name of a database group
     ## Returns: undef
-    ## Example: bucardo_ctl remove dbgroup sales
+    ## Example: bucardo remove dbgroup sales
     ## TODO: --force argument needed
 
     ## Grab our generic usage message
@@ -1478,7 +1478,7 @@ sub update_dbgroup {
     ## 1. Group to be updated
     ## 2. Databases to be adjusted, or name change request (name=newname)
     ## Returns: undef
-    ## Example: bucardo_ctl update dbgroup sales A:slave
+    ## Example: bucardo update dbgroup sales A:slave
 
     ## Grab our generic usage message
     my $usage = usage('update_dbgroup');
@@ -1581,7 +1581,7 @@ sub list_dbgroups {
     ## Arguments: zero or more
     ## 1+ Groups to view. Can be "all" and can have wildcards
     ## Returns: undef
-    ## Example: bucardo_ctl list dbgroups
+    ## Example: bucardo list dbgroups
 
     ## Grab our generic usage message
     my $usage = usage('list_dbgroups');
@@ -1676,7 +1676,7 @@ sub add_herd {
     ## 1. Name of the herd
     ## 2+ Names of tables or sequences to add. Can have wildcards
     ## Returns: undef
-    ## Example: bucardo_ctl add herd foobar tab1 tab2
+    ## Example: bucardo add herd foobar tab1 tab2
 
     ## Grab our generic usage message
     my $usage = usage('add_herd');
@@ -2084,8 +2084,8 @@ sub validate {
 sub update {
 
     ## Update some object in the database
-    ## e.g. bucardo_ctl update sync foobar onetimecopy=2
-    ## e.g. bucardo_ctl update sync foobar add tab1
+    ## e.g. bucardo update sync foobar onetimecopy=2
+    ## e.g. bucardo update sync foobar add tab1
 
     my $usage = usage('update');
 
@@ -2367,7 +2367,7 @@ exit;
         }
 
         if ($validate_msg) {
-            print qq{Don't forget to run bucardo_ctl validate $name\n};
+            print qq{Don't forget to run bucardo validate $name\n};
         }
 
         $dbh->commit();
@@ -6357,7 +6357,7 @@ sub upgrade {
         die qq{Could not find version number in the file "$schema_file"!\n};
     }
     if ($schema_version ne $VERSION) {
-        die qq{Cannot continue: bucardo_ctl is version $VERSION, but $schema_file is version $schema_version\n};
+        die qq{Cannot continue: bucardo is version $VERSION, but $schema_file is version $schema_version\n};
     }
 
     $dbh->do(q{SET escape_string_warning = 'OFF'});
@@ -6849,6 +6849,8 @@ sub upgrade {
         }
         my $condef = constraint_definition($cname);
         if ($condef ne $cdef) {
+        warn "cdef from bucardo.schema: $cdef\n";
+        warn "con  from live  database: $condef\n";
             upgrade_and_log("ALTER TABLE $tcname DROP CONSTRAINT $cname");
             upgrade_and_log("ALTER TABLE $tcname ADD CONSTRAINT $cname $cdef");
             clog "Altered constraint $cname on $tcname";
@@ -7373,7 +7375,7 @@ sub message {
     ## Note: If no MCP processes are listening, the message will hang out until an MCP processes it
 
     if (! length($nouns)) {
-        die qq{Usage: bucardo_ctl message "Some message to send to the logs"\n};
+        die qq{Usage: bucardo message "Some message to send to the logs"\n};
     }
 
     $SQL = 'INSERT INTO bucardo.bucardo_log_message(msg) VALUES (?)';
@@ -7624,7 +7626,7 @@ sub install {
 
     if ($res =~ /relation .* already exists/) {
         warn "\nINSTALLATION FAILED! Looks like you already have Bucardo installed there.\n";
-        warn "Try running 'bucardo_ctl upgrade' instead\n\n";
+        warn "Try running 'bucardo upgrade' instead\n\n";
         exit 1;
     }
 
@@ -8405,64 +8407,64 @@ __END__
 
 =head1 NAME
 
-bucardo_ctl - utility script for controlling the Bucardo program
+bucardo - utility script for controlling the Bucardo program
 
 =head1 VERSION
 
-This document describes version 4.5.0 of bucardo_ctl
+This document describes version 4.5.0 of bucardo
 
 =head1 SYNOPSIS
 
-  ./bucardo_ctl install
+  ./bucardo install
 
-  ./bucardo_ctl list dbs
+  ./bucardo list dbs
 
-  ./bucardo_ctl add sync testsync source=herd1 type=pushdelta targetdb=B
+  ./bucardo add sync testsync source=herd1 type=pushdelta targetdb=B
 
-  ./bucardo_ctl add sync testsync source=herd1 type=pushdelta targetdb=B tables=tab1,tab2,tab3
+  ./bucardo add sync testsync source=herd1 type=pushdelta targetdb=B tables=tab1,tab2,tab3
 
-  ./bucardo_ctl add database newdb name=internal_name port=5432 host=myserver
+  ./bucardo add database newdb name=internal_name port=5432 host=myserver
 
-  ./bucardo_ctl add all tables db=foo [herd=x] [pkonly]
+  ./bucardo add all tables db=foo [herd=x] [pkonly]
 
-  ./bucardo_ctl add all sequences db=foo [herd=x]
+  ./bucardo add all sequences db=foo [herd=x]
 
-  ./bucardo_ctl add herd newherd table1 table2 table3 ...
+  ./bucardo add herd newherd table1 table2 table3 ...
 
-  ./bucardo_ctl add dbgroup name db1 db2 db3 ...
+  ./bucardo add dbgroup name db1 db2 db3 ...
 
-  ./bucardo_ctl start "Starting up - Greg"
+  ./bucardo start "Starting up - Greg"
 
-  ./bucardo_ctl stop "Bringing down for debugging - Raul E."
+  ./bucardo stop "Bringing down for debugging - Raul E."
 
-  ./bucardo_ctl ping
+  ./bucardo ping
 
-  ./bucardo_ctl status
+  ./bucardo status
 
-  ./bucardo_ctl status sync1 sync2
+  ./bucardo status sync1 sync2
 
-  ./bucardo_ctl kick sync1 sync2
+  ./bucardo kick sync1 sync2
 
-  ./bucardo_ctl kick sync1 0
+  ./bucardo kick sync1 0
 
-  ./bucardo_ctl reload_config
+  ./bucardo reload_config
 
-  ./bucardo_ctl upgrade
+  ./bucardo upgrade
 
-  ./bucardo_ctl reload sync
+  ./bucardo reload sync
 
-  ./bucardo_ctl validate sync
+  ./bucardo validate sync
 
-  ./bucardo_ctl message "Your message here"
+  ./bucardo message "Your message here"
 
-  ./bucardo_ctl config show
+  ./bucardo config show
 
-  ./bucardo_ctl config set foo=bar baz=123
+  ./bucardo config set foo=bar baz=123
 
 
 =head1 DESCRIPTION
 
-The bucardo_ctl script is the main interaction to a running Bucardo instance. It can 
+The bucardo script is the main interaction to a running Bucardo instance. It can 
 be used to start and stop Bucardo, add new items, kick syncs, and even install and 
 upgrade Bucardo itself. For more complete documentation, please view the wiki at:
 
@@ -8474,7 +8476,7 @@ http://bucardo.org/
 
 =item B<install>
 
-Usage: ./bucardo_ctl install
+Usage: ./bucardo install
 
 Attempts to install the Bucardo schema from the file 'bucardo.schema' into an existing 
 Postgres cluster. The user 'bucardo' and database 'bucardo' will be created first as needed.
@@ -8495,16 +8497,16 @@ line:
 
 =item B<upgrade>
 
-Usage: ./bucardo_ctl upgrade
+Usage: ./bucardo upgrade
 
-Upgrades an existing Bucardo installation to the current version of the bucardo_ctl script. 
-Requires that the bucardo_ctl script and the bucardo.schema file be the same version. All 
+Upgrades an existing Bucardo installation to the current version of the bucardo script. 
+Requires that the bucardo script and the bucardo.schema file be the same version. All 
 changes should be backwards compatible, but you may need to re-validate existing scripts 
 to make sure changes get propagated to all databases.
 
 =item B<start>
 
-Usage: ./bucardo_ctl start "Reason --name"
+Usage: ./bucardo start "Reason --name"
 
 Restarts Bucardo cleanly by first issuing the equivalent of a stop to ask any existing Bucardo 
 processes to exit, and then starting a new Bucardo MCP process. A short reason and name should 
@@ -8517,7 +8519,7 @@ exit with a return value of 2.
 
 =item B<stop>
 
-Usage: ./bucardo_ctl stop "Reason --name"
+Usage: ./bucardo stop "Reason --name"
 
 Forces Bucardo to quit by creating a stop file which all MCP, CTL, and KID processes should 
 detect and cause them to exit. Note that active syncs will not exit right away, as they 
@@ -8529,7 +8531,7 @@ is also used by Bucardo when it exits and sends out mail about its death.
 
 =item B<list>
 
-Usage: ./bucardo_ctl list <type> <regex>
+Usage: ./bucardo list <type> <regex>
 
 Lists summary information about databases, tables, sequences, syncs, or herds. Adding anything 
 after the type will look up all matching entries.
@@ -8567,12 +8569,12 @@ dbgroup, herd, sync, table, and sequence.
 
 =item B<kick>
 
-Usage: ./bucardo_ctl kick <syncname(s)> [timeout]
+Usage: ./bucardo kick <syncname(s)> [timeout]
 
 Tells one or more named syncs to fire as soon as possible. Note that this simply sends a request that 
 the sync fire: it may not start right away if the same sync is already running, or if the source or 
 target database has exceeded the number of allowed Bucardo connections. If the final argument is a 
-number, it is treated as a timeout. If this number is zero, the bucardo_ctl command will not return 
+number, it is treated as a timeout. If this number is zero, the bucardo command will not return 
 until the sync has finished. For any other number, the sync will wait at most that number of seconds. 
 If any sync has not finished before the timeout, a false value is returned. In all other cases, a 
 true value is returned.
@@ -8588,14 +8590,14 @@ information is loaded.
 
 =item B<show>
 
-Usage: ./bucardo_ctl show <all|setting1> [setting2..]
+Usage: ./bucardo show <all|setting1> [setting2..]
 
 Shows the current values in the bucardo_config table. Use the keyword 'all' to see all the settings, or 
 specify one or more search terms.
 
 =item B<set>
 
-Usage: ./bucardo_ctl set setting1=value [setting2=value]
+Usage: ./bucardo set setting1=value [setting2=value]
 
 Sets one or more items inside the bucardo_config table. Setting names are case-insensitive.
 
@@ -8607,7 +8609,7 @@ was returned, the program will exit with a value of 0. If it times out, the valu
 
 =item B<status>
 
-Usage: ./bucardo_ctl status [syncname(s)] [--sort=#] [--daysback=#] [--showdays]
+Usage: ./bucardo status [syncname(s)] [--sort=#] [--daysback=#] [--showdays]
 
 Shows the current status of all known syncs in a tabular format. If given one or more syncnames, 
 shows detailed information for each one.
@@ -8700,15 +8702,15 @@ The port, host, and name of the Bucardo database, the user to connect as, and th
 
 =item B<--verbose>
 
-Makes bucardo_ctl run verbosely. Default is off.
+Makes bucardo run verbosely. Default is off.
 
 =item B<--quiet>
 
-Tells bucardo_ctl to be as quiet as possible. Default is off.
+Tells bucardo to be as quiet as possible. Default is off.
 
 =item B<--help>
 
-Shows a brief summary of usage for bucardo_ctl.
+Shows a brief summary of usage for bucardo.
 
 =back
 
@@ -8770,7 +8772,7 @@ The following arguments are only applicable when using the "start" command:
 =item B<--sendmail>
 
 Tells Bucardo whether or not to send mail on interesting events: startup, shutdown, and errors. Default is on.
-Only applicable when using ./bucardo_ctl start.
+Only applicable when using ./bucardo start.
 
 =item B<--extraname=string>
 
@@ -8813,12 +8815,12 @@ the current directory will be used if found. If not found, then the file F<~/.bu
 the file /etc/bucardorc will be used if available. The format of the file is option = value, one per line. Any 
 line starting with a '#' will be skipped. Any values loaded from a bucardorc file will be overwritten by 
 command-line options. All bucardorc files can be ignored by supplying a C<--no-bucardorc> argument. A specific 
-file can be forced with the C<--bucardorc=file> option; if this option is set, bucardo_ctl will refuse to run 
+file can be forced with the C<--bucardorc=file> option; if this option is set, bucardo will refuse to run 
 unless that file can be read.
 
 =head1 ENVIRONMENT VARIABLES
 
-The bucardo_ctl script uses I<$ENV{HOME}> to look for a F<.bucardorc> file.
+The bucardo script uses I<$ENV{HOME}> to look for a F<.bucardorc> file.
 
 =head1 BUGS
 

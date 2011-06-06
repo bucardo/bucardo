@@ -161,8 +161,8 @@ for my $name ('A'..'Z') {
 # Set a semi-unique name to make killing old tests easier
 my $xname = "bctest_$ENV{USER}";
 
-## Maximum time to wait for bucardo_ctl to return
-my $ALARM_BUCARDO_CTL = 5;
+## Maximum time to wait for bucardo to return
+my $ALARM_BUCARDO = 5;
 ## Maximum time to wait for a kid to appear via pg_listener
 my $ALARM_WAIT4KID = 3;
 ## How long to wait for most syncs to take effect?
@@ -172,15 +172,15 @@ my $TIMEOUT_SLEEP = 0.1;
 ## How long to wait for a notice to be issued?
 my $TIMEOUT_NOTICE = 2;
 
-## Bail if the bucardo_ctl file does not exist / does not compile
-for my $file (qw/bucardo_ctl Bucardo.pm/) {
+## Bail if the bucardo file does not exist / does not compile
+for my $file (qw/bucardo Bucardo.pm/) {
     if (! -e $file) {
         die "Cannot run without file $file\n";
     }
     eval {
-        $ENV{BUCARDO_CTL_TEST} = 1;
+        $ENV{BUCARDO_TEST} = 1;
         require $file;
-        $ENV{BUCARDO_CTL_TEST} = 0;
+        $ENV{BUCARDO_TEST} = 0;
     };
     if ($@) {
         die "Cannot run unless $file compiles cleanly\n";
@@ -229,21 +229,21 @@ sub new {
     ## Name of the test schema
     $self->{schema} = 'bucardo_schema';
 
-    ## Let's find out where bucardo_ctl is. Prefer the blib ones, which are shebang adjusted
-    if (-e 'blib/script/bucardo_ctl') {
-        $self->{bucardo_ctl} = 'blib/script/bucardo_ctl';
+    ## Let's find out where bucardo is. Prefer the blib ones, which are shebang adjusted
+    if (-e 'blib/script/bucardo') {
+        $self->{bucardo} = 'blib/script/bucardo';
     }
-    elsif (-e '../blib/script/bucardo_ctl') {
-        $self->{bucardo_ctl} = '../blib/script/bucardo_ctl';
+    elsif (-e '../blib/script/bucardo') {
+        $self->{bucardo} = '../blib/script/bucardo';
     }
-    elsif (-e './bucardo_ctl') {
-        $self->{bucardo_ctl} = './bucardo_ctl';
+    elsif (-e './bucardo') {
+        $self->{bucardo} = './bucardo';
     }
-    elsif (-e '../bucardo_ctl') {
-        $self->{bucardo_ctl} = '../bucardo_ctl';
+    elsif (-e '../bucardo') {
+        $self->{bucardo} = '../bucardo';
     }
     else {
-        die qq{Could not find bucardo_ctl\n};
+        die qq{Could not find bucardo\n};
     }
 
     return $self;
@@ -705,6 +705,17 @@ sub add_test_schema {
         $dbh->do($SQL);
     }
 
+    ## Create the foreign key tables
+    #$dbh->do('CREATE TABLE bucardo_fkey1 (fkid INTEGER NOT NULL PRIMARY KEY, data2 TEXT)');
+    $SQL = q{
+ALTER TABLE bucardo_fkey1
+  ADD CONSTRAINT "bucardo_fkey1"
+  FOREIGN KEY (fkid)
+  REFERENCES bucardo_test1 (id)
+  ON DELETE CASCADE ON UPDATE CASCADE
+};
+    #$dbh->do($SQL);
+
     ## Create one sequence for each table type
     for my $seq (sort keys %sequences) {
 
@@ -777,7 +788,7 @@ sub add_db_args {
 
 sub stop_bucardo {
 
-    ## Stops Bucardo via a bucardo_ctl request
+    ## Stops Bucardo via a bucardo request
     ## Arguments: none
     ## Returns: 1
 
@@ -794,16 +805,16 @@ sub stop_bucardo {
 
 sub ctl {
 
-    ## Run a simple non-forking command against bucardo_ctl
+    ## Run a simple non-forking command against bucardo
     ## Emulates a command-line invocation
     ## Arguments:
-    ## 1. String to pass to bucardo_ctl
+    ## 1. String to pass to bucardo
     ## Returns: answer as a string
 
     my ($self,$args) = @_;
 
     my $info;
-    my $ctl = $self->{bucardo_ctl};
+    my $ctl = $self->{bucardo};
 
     ## Build the connection options
     my $bc = $self->{bcinfo};
@@ -826,27 +837,27 @@ sub ctl {
     $args =~ s/^\s+//s;
 
     ## Allow the caller to look better
-    $args =~ s/^bucardo_ctl//;
+    $args =~ s/^bucardo//;
 
     ## Set a timeout
     alarm 0;
     eval {
         local $SIG{ALRM} = sub { die "Alarum!\n"; };
-        alarm $ALARM_BUCARDO_CTL;
+        alarm $ALARM_BUCARDO;
         debug("Connection options: $connopts Args: $args", 3);
         $info = qx{$ctl $connopts $args 2>&1};
         alarm 0;
     };
 
     if ($@ =~ /Alarum/ or $info =~ /Alarum/) {
-        warn "bucardo_ctl timed out: $args\n";
+        warn "bucardo timed out: $args\n";
         exit;
     }
     if ($@) {
-        return "Error running bucardo_ctl: $@\n";
+        return "Error running bucardo: $@\n";
     }
 
-    debug("bucardo_ctl said: $info", 3);
+    debug("bucardo said: $info", 3);
 
     return $info;
 
@@ -908,7 +919,7 @@ sub restart_bucardo {
 
 sub setup_bucardo {
 
-    ## Installs bucardo via "bucardo_ctl install" into a database
+    ## Installs bucardo via "bucardo install" into a database
     ## The database will be emptied out first if it already exists
     ## If it does not exist, it will be created
     ## If the cluster does not exist, it will be created
@@ -943,7 +954,7 @@ sub setup_bucardo {
     }
 
     ## Now run the install. Timeout after a few seconds
-    debug(qq{Running bucardo_ctl install on cluster $clustername});
+    debug(qq{Running bucardo install on cluster $clustername});
     my $info;
     eval {
         local $SIG{ALRM} = sub { die "Alarum!\n"; };
@@ -952,7 +963,7 @@ sub setup_bucardo {
         alarm 0;
     };
     if ($@ =~ /Alarum/ or $info =~ /Alarum/) {
-        warn "bucardo_ctl install never finished!\n";
+        warn "bucardo install never finished!\n";
         exit;
     }
     $@ and die $@;

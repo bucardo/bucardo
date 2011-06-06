@@ -975,7 +975,7 @@ sub make_bucardo_init {
             name => $name,
             conninfo => $conninfo,
         };
-        print "./bucardo_ctl add db $name dbname=$dbname $conn\n";
+        print "./bucardo add db $name dbname=$dbname $conn\n";
     }
 
     for my $set (@{ get_ordered_subscribes($info->{sub}, $info->{set}, $info->{node}) }) {
@@ -988,20 +988,20 @@ sub make_bucardo_init {
                 map {
                     my $name = $info->{table}{$_}{FQN};
                     if ($info->{table}{$_}{set} == $set_num) {
-                        print "./bucardo_ctl add table $name db=$db ping=true standard_conflict=source herd=$herd\n";
+                        print "./bucardo add table $name db=$db ping=true standard_conflict=source herd=$herd\n";
                     }
                 } keys %{$info->{table}};
                 map {
                     my $name = $info->{sequence}{$_}{FQN};
                     if ($info->{sequence}{$_}{set} == $set_num) {
-                        print "./bucardo_ctl add sequence $name db=$db ping=true standard_conflict=source herd=$herd\n";
+                        print "./bucardo add sequence $name db=$db ping=true standard_conflict=source herd=$herd\n";
                     }
                 } keys %{$info->{sequence}};
                 for my $child (@{$node->{children}}) {
                     my $targetdbname = $cluster_name . '_' . $child;
                     my $syncname = $cluster_name . '_set' . $set_num . '_node' . $node->{num} . '_to_node' . $child;
                     my $childnode = $set->{$child};
-                    print "./bucardo_ctl add sync $syncname source=$herd targetdb=$targetdbname type=pushdelta";
+                    print "./bucardo add sync $syncname source=$herd targetdb=$targetdbname type=pushdelta";
                     print " target_makedelta=on"
                         if (exists $childnode->{children} and $#{$childnode->{children}} > -1);
                     print "\n";
@@ -1137,7 +1137,7 @@ Slony-to-Bucardo migration scripts (the --bucardo option).
 
 Connects to a running Slony cluster and provides one of the following: A
 summary of the sets and nodes involved in the cluster, a slonik script to
-rebuild the cluster from scratch, or bucardo_ctl commands to build the same
+rebuild the cluster from scratch, or bucardo commands to build the same
 cluster based on Bucardo. This last will allow migration from Slony to Bucardo.
 
 =head1 OPTIONS FOR PRINCIPLE FUNCTIONS
@@ -1146,9 +1146,9 @@ cluster based on Bucardo. This last will allow migration from Slony to Bucardo.
 
 =item B<--bucardo>
 
-Returns a list of bucardo_ctl commands which will allow migration of a Slony
+Returns a list of bucardo commands which will allow migration of a Slony
 cluster off of Slony and on to Bucardo. After installing Bucardo with
-I<bucardo_ctl install>, these scripts will tell Bucardo about all the tables
+I<bucardo install>, these scripts will tell Bucardo about all the tables
 and sequences in the Slony sets, each node in the Slony cluster, and configure
 Bucardo to replicate those objects in the same way Slony does. This includes
 the use of cascaded replication.

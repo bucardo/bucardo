@@ -26,7 +26,7 @@ step should be done on some systems as:
 
 sudo make install
 
-This will replace the existing Bucardo.pm file, the bucardo_ctl script, the 
+This will replace the existing Bucardo.pm file, the bucardo script, the 
 bucardo.schema file, and the associated man pages.
 
 
@@ -35,15 +35,15 @@ bucardo.schema file, and the associated man pages.
 Because we may be making schema changes, it is safest to stop Bucardo while 
 the upgrade is performed. This can be done by running:
 
-./bucardo_ctl stop
+./bucardo stop
 
 
 3. Upgrade the Bucardo database
 
-The bucardo_ctl script has an 'upgrade' command that connects to the 
+The bucardo script has an 'upgrade' command that connects to the 
 existing Bucardo database and upgrades the schema as needed. 
 
-./bucardo_ctl upgrade
+./bucardo upgrade
 
 Note:
 * This must be run on every Bucardo instance you have (most sites only use one)
@@ -63,18 +63,18 @@ will connect to each remote database and do things like verify that all
 bucardo-related functions and tables are installed correctly. The easiest way to 
 do this is by running:
 
-./bucardo_ctl validate all
+./bucardo validate all
 
 Alternatively, you can specify one or more syncs like so:
 
-./bucardo_ctl validate sync1 sync2
+./bucardo validate sync1 sync2
 
 
 5. Restart Bucardo
 
 The final step is to restart Bucardo:
 
-./bucardo_ctl start "Upgrade"
+./bucardo start "Upgrade"
 
 It's probably a good idea to check out the Bucardo log at this point and make 
 sure everything is working properly.

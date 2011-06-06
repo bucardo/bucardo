@@ -83,42 +83,42 @@ $dbhX = $bct->setup_bucardo('A');
 for my $name (qw/ A B C /) {
     $t = "Adding database from cluster $name works";
     my ($dbuser,$dbport,$dbhost) = $bct->add_db_args($name);
-    $command = "bucardo_ctl add db bucardo_test name=$name user=$dbuser port=$dbport host=$dbhost";
+    $command = "bucardo add db bucardo_test name=$name user=$dbuser port=$dbport host=$dbhost";
     $res = $bct->ctl($command);
     like ($res, qr/Added database "$name"/, $t);
 }
 
 $t = 'Adding mongo database M works';
 $command =
-"bucardo_ctl add db $dbname name=M type=mongo";
+"bucardo add db $dbname name=M type=mongo";
 $res = $bct->ctl($command);
 like ($res, qr/Added database "M"/, $t);
 
 ## Teach Bucardo about all pushable tables, adding them to a new herd named "therd"
 $t = q{Adding all tables on the master works};
 $command =
-"bucardo_ctl add tables all db=A herd=therd pkonly";
+"bucardo add tables all db=A herd=therd pkonly";
 $res = $bct->ctl($command);
 like ($res, qr/Creating herd: therd.*New tables added: \d/s, $t);
 
 ## Add all sequences, and add them to the newly created herd
 $t = q{Adding all sequences on the master works};
 $command =
-"bucardo_ctl add sequences all db=A herd=therd";
+"bucardo add sequences all db=A herd=therd";
 $res = $bct->ctl($command);
 like ($res, qr/New sequences added: \d/, $t);
 
 ## Create a new database group
 $t = q{Created a new database group};
 $command =
-"bucardo_ctl add dbgroup md A:source B:source C M";
+"bucardo add dbgroup md A:source B:source C M";
 $res = $bct->ctl($command);
 like ($res, qr/Created database group "md"/, $t);
 
 ## Create a new sync
 $t = q{Created a new sync};
 $command =
-"bucardo_ctl add sync mongo herd=therd dbs=md ping=false";
+"bucardo add sync mongo herd=therd dbs=md ping=false";
 $res = $bct->ctl($command);
 like ($res, qr/Added sync "mongo"/, $t);
 
@@ -179,8 +179,8 @@ for my $table (sort keys %tabletype) {
 
 ## Commit, then kick off the sync
 $dbhA->commit();
-$bct->ctl('bucardo_ctl kick mongo 0');
-$bct->ctl('bucardo_ctl kick mongo 0');
+$bct->ctl('bucardo kick mongo 0');
+$bct->ctl('bucardo kick mongo 0');
 
 ## Check B and C for the new rows
 for my $table (sort keys %tabletype) {
@@ -243,7 +243,7 @@ for my $table (keys %tabletype) {
     $sth{update}{$table}{A}->execute(42);
 }
 $dbhA->commit();
-$bct->ctl('bucardo_ctl kick mongo 0');
+$bct->ctl('bucardo kick mongo 0');
 
 for my $table (keys %tabletype) {
     $t = "Mongo collection $table has correct number of rows after update";
@@ -261,7 +261,7 @@ for my $table (keys %tabletype) {
     $sth{deleteall}{$table}{A}->execute();
 }
 $dbhA->commit();
-$bct->ctl('bucardo_ctl kick mongo 0');
+$bct->ctl('bucardo kick mongo 0');
 
 for my $table (keys %tabletype) {
     $t = "Mongo collection $table has correct number of rows after delete";
@@ -281,7 +281,7 @@ for my $table (keys %tabletype) {
     $sth{insert}{2}{$table}{A}->execute($val2);
 }
 $dbhA->commit();
-$bct->ctl('bucardo_ctl kick mongo 0');
+$bct->ctl('bucardo kick mongo 0');
 
 for my $table (keys %tabletype) {
     $t = "Mongo collection $table has correct number of rows after double insert";
@@ -296,7 +296,7 @@ for my $table (keys %tabletype) {
     $sth{deleteone}{$table}{A}->execute(2); ## inty = 2
 }
 $dbhA->commit();
-$bct->ctl('bucardo_ctl kick mongo 0');
+$bct->ctl('bucardo kick mongo 0');
 
 for my $table (keys %tabletype) {
     $t = "Mongo collection $table has correct number of rows after single deletion";
@@ -315,7 +315,7 @@ for my $table (keys %tabletype) {
     $sth{insert}{4}{$table}{A}->execute($val4);
 }
 $dbhA->commit();
-$bct->ctl('bucardo_ctl kick mongo 0');
+$bct->ctl('bucardo kick mongo 0');
 
 for my $table (keys %tabletype) {
     $t = "Mongo collection $table has correct number of rows after more inserts";
@@ -329,7 +329,7 @@ for my $table (keys %tabletype) {
     $sth{truncate}{$table}{A}->execute();
 }
 $dbhA->commit();
-$bct->ctl('bucardo_ctl kick mongo 0');
+$bct->ctl('bucardo kick mongo 0');
 
 for my $table (keys %tabletype) {
     $t = "Mongo collection $table has correct number of rows after trunacte";

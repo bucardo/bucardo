@@ -3,7 +3,7 @@
 
 ## The main Bucardo program
 ##
-## This script should only be called via the 'bucardo_ctl' program
+## This script should only be called via the 'bucardo' program
 ##
 ## Copyright 2006-2011 Greg Sabino Mullane <greg@endpoint.com>
 ##
@@ -297,7 +297,7 @@ sub new {
             warn qq{Cannot start: configured to only run on "$osafe". This is "$hostname"\n};
             warn qq{  This is usually done to prevent a configured Bucardo from running\n};
             warn qq{  on the wrong host. Please verify the 'db' settings by doing:\n};
-            warn qq{bucardo_ctl list dbs\n};
+            warn qq{bucardo list dbs\n};
             warn qq{  Once you are sure the bucardo.db table has the correct values,\n};
             warn qq{  you can adjust the 'host_safety_check' value\n};
             exit 2;
@@ -311,7 +311,7 @@ sub new {
 
 sub start_mcp {
 
-    ## Start the Bucardo daemon. Called by bucardo_ctl after setsid()
+    ## Start the Bucardo daemon. Called by bucardo after setsid()
     ## Arguments: one
     ## 1. Hashref of startup arguments
     ## Returns: never (exit 0 or exit 1)
@@ -462,7 +462,7 @@ sub start_mcp {
     $self->glog("PID: $$", LOG_WARN);
     $self->glog("Postgres backend PID: $self->{mcp_backend}", LOG_WARN);
     $self->glog('Postgres library version: ' . $masterdbh->{pg_lib_version}, LOG_WARN);
-    $self->glog("bucardo_ctl: $old0", LOG_WARN);
+    $self->glog("bucardo: $old0", LOG_WARN);
     $self->glog('Bucardo.pm: ' . $INC{'Bucardo.pm'}, LOG_WARN);
     $self->glog((sprintf 'OS: %s  Perl: %s %vd', $^O, $^X, $^V), LOG_WARN);
     ## Get a integer version of the DBD::Pg version, for later comparisons
@@ -602,7 +602,7 @@ sub start_mcp {
         $self->glog("Sleep time: $config{mcp_dbproblem_sleep}", LOG_TERSE);
         sleep($config{mcp_dbproblem_sleep});
 
-        ## We assume this is bucardo_ctl, and that we are in same directory as when called
+        ## We assume this is bucardo, and that we are in same directory as when called
         my $RUNME = $old0;
         ## Check to see if $RUNME is executable as is, before we assume we're in the same directory
         if (! -x $RUNME) {
@@ -7396,7 +7396,7 @@ of Perl, a custom database schema, Pl/Perlu, and Pl/Pgsql.
 Bucardo is unapologetically extremely verbose in its logging.
 
 Full documentation can be found on the website, or in the files that came with 
-this distribution. See also the documentation for the bucardo_ctl program.
+this distribution. See also the documentation for the bucardo program.
 
 =head1 DEPENDENCIES
 

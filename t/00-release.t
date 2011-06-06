@@ -72,14 +72,14 @@ while (<$fh>) {
 }
 close $fh or warn qq{Could not close "$file": $!\n};
 
-$file = 'bucardo_ctl';
+$file = 'bucardo';
 open $fh, '<', $file or die qq{Could not open "$file": $!\n};
 while (<$fh>) {
 	push @{$v{$file}} => [$1,$.] if (/VERSION = '$vre'/ or /document describes version $vre/);
 }
 close $fh or warn qq{Could not close "$file": $!\n};
 
-$file = 'bucardo_ctl.html';
+$file = 'bucardo.html';
 open $fh, '<', $file or die qq{Could not open "$file": $!\n};
 while (<$fh>) {
 	push @{$v{$file}} => [$1,$.] if /document describes version $vre/;

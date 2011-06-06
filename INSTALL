@@ -32,7 +32,7 @@ recommended before installing.
 Once the above has been run, you will need to create a Bucardo database. 
 This can be done by running:
 
-bucardo_ctl install
+bucardo install
 
 There should be no errors: if there are, please report them to 
 bucardo-general@bucardo.org or ask on IRC for help.
