@@ -172,7 +172,7 @@ if ($bcargs->{version}) {
 
 $bcargs->{vv} and $bcargs->{verbose} = 2;
 my $VERBOSE    = delete $bcargs->{verbose};
-my $DEBUG      = delete $bcargs->{debug} || 0;
+my $DEBUG      = delete $bcargs->{debug} || $ENV{BUCARDO_DEBUG} || 0;
 my $DAYSBACK   = delete $bcargs->{daysback} || $DEFAULT_DAYSBACK;
 my $COMPRESS   = delete $bcargs->{compress};
 my $SHOWDAYS   = delete $bcargs->{showdays} || 1;
@@ -719,15 +719,15 @@ sub add_database {
     ## Add one or more databases. Inserts to the bucardo.db table
     ## By default, we do a test connection as well (turn off with the --force argument)
     ## Arguments: two or more
-    ## 1. The name of the database we connect to
+    ## 1. The internal name Bucardo uses to refer to this database
     ## 2+ name=value parameters, dash-dash arguments
     ## Returns: undef
-    ## Example: bucardo add db qpf name=nyc1 host=nyc1.example.com group=sales
+    ## Example: bucardo add db nyc1 dbname=nyc1 host=nyc1.example.com group=sales
 
     ## Grab our generic usage message
     my $usage = usage('add_database');
 
-    ## The first word is the name of the database we connect to (bucardo.db.dbname)
+    ## The first word is the internal name (bucardo.db.name)
     my $item_name = shift @nouns || '';
 
     ## No name is a problem
@@ -738,9 +738,9 @@ sub add_database {
 
     ## Inputs and aliases, database column name, flags, default
     my $validcols = qq{
-        name                     name                 0                $item_name
         type                     dbtype               0                postgres
-        dbname                   dbname               0                $item_name
+        name                     name                 0                $item_name
+        db|dbname                dbname               0                $item_name
         user|dbuser|pguser       dbuser               0                bucardo
         host|dbhost|pghost       dbhost               0                ENV:PGHOSTADDR|PGHOST
         port|dbport|pgport       dbport               numeric          ENV:PGPORT
@@ -762,15 +762,14 @@ sub add_database {
     my ($dbcols,$cols,$phs,$vals,$extra)
         = process_simple_args({cols => $validcols, list => \@nouns, usage => $usage});
 
-    my $newname = $dbcols->{name} or die qq{Must provide a database name\n};
-
     ## Cannot add if already there
-    if (exists $DB->{$newname}) {
-        print qq{Cannot add database: the name "$newname" already exists\n};
+    if (exists $DB->{$item_name}) {
+        print qq{Cannot add database: the name "$item_name" already exists\n};
         exit 1;
     }
 
     ## Clean up and standardize the names
+    $vals->{dbtype} = lc $vals->{dbtype};
     $vals->{dbtype} =~ s/postgres.*/postgres/io;
     $vals->{dbtype} =~ s/mongo.*/mongo/io;
     $vals->{dbtype} =~ s/mysql.*/mysql/io;
@@ -793,29 +792,21 @@ sub add_database {
     ## Store certain messages so we can output them in a desired order
     my $finalmsg = '';
 
+    ## May want to do a test connection to the database
   TESTCONN: {
 
         ## Nothing else to do for flatfiles
-        if ($vals->{dbtype} eq 'flatfile') {
-            last TESTCONN;
-        }
-        elsif ($vals->{dbtype} eq 'postgres') {
-            ## All is good, proceed below
-        }
-        elsif ($vals->{dbtype} eq 'mongo') {
-            ## Proceed
-        }
-        elsif ($vals->{dbtype} eq 'mysql') {
-            ## Proceed
-        }
-        else {
+        last TESTCONN if 'flatfile' eq $vals->{dbtype};
+
+        ## Must have a valid type
+        if ($vals->{dbtype} !~ /^(?:postgres|mongo|mysql)$/) {
             die qq{Unknown database type: $vals->{dbtype}\n};
         }
 
         ## Before going any further, do a test connection
         $SQL = 'SELECT bucardo.db_getconn(?)';
         $sth = $dbh->prepare($SQL);
-        $count = $sth->execute($newname);
+        $count = $sth->execute($item_name);
         my $dbconn = $sth->fetchall_arrayref()->[0][0];
 
         if ('mongo' eq $vals->{dbtype}) {
@@ -885,7 +876,7 @@ sub add_database {
                                 $testdbh->do(qq{CREATE USER $realuser SUPERUSER ENCRYPTED PASSWORD '$encpass'});
                                 $testdbh->commit();
                                 my $extra = length $pass ? '' : " with password $newpass";
-                    warn "Created superuser '$realuser'$extra\n";
+                                warn "Created superuser '$realuser'$extra\n";
                             };
                             if ($@) {
                                 warn "Unable to create superuser $realuser: $@\n";
@@ -926,23 +917,23 @@ sub add_database {
 
         } ## end mysql
 
-        ## If we got a group, process that as well
-        if (exists $extra->{dbgroup}) {
-            my $gname = $extra->{dbgroup};
-            ## We need to store this away as the function below changes the global hash
-            my $isnew = exists $DBGROUP->{$gname};
-
-            my ($newgroup, $newrole) = add_db_to_group($newname, $gname);
-            if (! $isnew) {
-                $finalmsg .= qq{Created database group "$newgroup"\n};
-            }
-            $finalmsg .= qq{Added database "$newname" to group "$newgroup" as $newrole\n};
-        }
-
     } ## end of TESTCONN
 
+    ## If we got a group, process that as well
+    if (exists $extra->{dbgroup}) {
+        my $gname = $extra->{dbgroup};
+        ## We need to store this away as the function below changes the global hash
+        my $isnew = exists $DBGROUP->{$gname};
+
+        my ($newgroup, $newrole) = add_db_to_group($item_name, $gname);
+        if (! $isnew) {
+            $finalmsg .= qq{Created database group "$newgroup"\n};
+        }
+        $finalmsg .= qq{Added database "$item_name" to group "$newgroup" as $newrole\n};
+    }
+
     ## Adjust the db name so add_all_* can use it
-    $bcargs->{db} = $newname;
+    $bcargs->{db} = $item_name;
 
     ## Add in all tables for this database
     $finalmsg .= add_all_tables() if grep /addalltab/i, @nouns;
@@ -951,7 +942,7 @@ sub add_database {
     $finalmsg .= add_all_sequences() if grep /addallseq/i, @nouns;
 
     if (!$QUIET) {
-        print qq{Added database "$newname"\n};
+        print qq{Added database "$item_name"\n};
         $finalmsg and print $finalmsg;
     }
 
@@ -983,7 +974,8 @@ sub remove_database {
     ## Make sure all named databases exist
     for my $name (@nouns) {
         if (! exists $DB->{$name}) {
-            die qq{No such database: $name\n};
+            my $foo = Dumper $DB;
+            die qq{No such database: $name ($foo)\n};
         }
     }
 
@@ -991,6 +983,7 @@ sub remove_database {
     $SQL = 'DELETE FROM bucardo.db WHERE name = ?';
     $sth = $dbh->prepare($SQL);
 
+    ## Loop through and attempt to delete each given database
     for my $name (@nouns) {
         ## Wrap in an eval so we can handle known exceptions
         eval {

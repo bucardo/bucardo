@@ -196,8 +196,8 @@ COMMENT ON TABLE bucardo.db IS $$Holds information about each database used in r
 
 ALTER TABLE bucardo.db ADD CONSTRAINT db_status CHECK (status IN ('active','inactive'));
 
-CREATE UNIQUE INDEX db_dsn_unique ON bucardo.db(dbhost,dbport,dbname,dbuser) WHERE NOT name ~ '^bctest' AND dbport <> '';
-
+CREATE UNIQUE INDEX db_dsn_unique ON bucardo.db(dbtype,dbhost,dbport,dbname,dbuser)
+  WHERE NOT name ~ '^bctest' AND dbport <> '';
 
 --
 -- Databases can belong to zero or more named groups

@@ -61,19 +61,19 @@ $res = $bct->ctl('bucardo add database foobarz --force');
 like ($res, qr/add anyway.*Added database "foobarz"/s, $t);
 
 $t = 'Add database works for cluster A';
-$res = $bct->ctl("bucardo add db bucardo_test name=A user=$dbuserA port=$dbportA host=$dbhostA");
+$res = $bct->ctl("bucardo add db A dbname=bucardo_test user=$dbuserA port=$dbportA host=$dbhostA");
 is ($res, qq{Added database "A"\n}, $t);
 
 $t = q{Add database fails if using the same internal name};
-$res = $bct->ctl("bucardo add db postgres name=A user=$dbuserA port=$dbportA host=$dbhostA");
+$res = $bct->ctl("bucardo add db A dbname=postgres user=$dbuserA port=$dbportA host=$dbhostA");
 like ($res, qr/Cannot add database: the name "A" already exists/, $t);
 
 $t = q{Add database fails if same paramters given};
-$res = $bct->ctl("bucardo add db bucardo_test name=A2 user=$dbuserA port=$dbportA host=$dbhostA");
+$res = $bct->ctl("bucardo add db A2 dbname=bucardo_test user=$dbuserA port=$dbportA host=$dbhostA");
 like ($res, qr/same parameters/, $t);
 
 $t = 'Add database works for cluster B works with ssp=false';
-$res = $bct->ctl("bucardo add db bucardo_test name=B user=$dbuserB port=$dbportB host=$dbhostB ssp=0");
+$res = $bct->ctl("bucardo add db B dbname=bucardo_test user=$dbuserB port=$dbportB host=$dbhostB ssp=0");
 like ($res, qr/Added database "B"/, $t);
 
 $t = 'List databases gives expected results';
@@ -92,21 +92,21 @@ is ($res, qq{Removed database "A"\nRemoved database "B"\n}, $t);
 ## Tests of add database with group modifier
 
 $t = 'Add database works when adding to a new dbgroup';
-$res = $bct->ctl("bucardo add db bucardo_test name=A user=$dbuserA port=$dbportA host=$dbhostA group=group1");
+$res = $bct->ctl("bucardo add db A dbname=bucardo_test user=$dbuserA port=$dbportA host=$dbhostA group=group1");
 like ($res, qr/Added database "A".*Created database group "group1".*Added database "A" to group "group1" as target/s, $t);
 
 $t = 'Add database works when adding to an existing dbgroup';
-$res = $bct->ctl("bucardo add db bucardo_test name=B user=$dbuserB port=$dbportB host=$dbhostB group=group1");
+$res = $bct->ctl("bucardo add db B dbname=bucardo_test user=$dbuserB port=$dbportB host=$dbhostB group=group1");
 like ($res, qr/Added database "B" to group "group1" as target/s, $t);
 
 $t = 'Add database works when adding to an existing dbgroup as role source';
 $bct->ctl('bucardo remove db B');
-$res = $bct->ctl("bucardo add db bucardo_test name=B user=$dbuserB port=$dbportB host=$dbhostB group=group1:source");
+$res = $bct->ctl("bucardo add db B dbname=bucardo_test user=$dbuserB port=$dbportB host=$dbhostB group=group1:source");
 like ($res, qr/Added database "B" to group "group1" as source/s, $t);
 
 $t = q{Adding a database into a new group works with 'dbgroup'};
 $bct->ctl('bucardo remove db B');
-$res = $bct->ctl("bucardo add db bucardo_test name=B user=$dbuserB port=$dbportB host=$dbhostB dbgroup=group1:replica");
+$res = $bct->ctl("bucardo add db B dbname=bucardo_test user=$dbuserB port=$dbportB host=$dbhostB dbgroup=group1:replica");
 like ($res, qr/Added database "B" to group "group1" as target/s, $t);
 
 ## Tests for 'remove database'
@@ -120,7 +120,7 @@ $res = $bct->ctl('bucardo remove db B');
 like ($res, qr/Removed database "B"/, $t);
 
 $t = q{Able to remove more than one database at a time};
-$bct->ctl("bucardo add db bucardo_test name=B user=$dbuserB port=$dbportB host=$dbhostB");
+$bct->ctl("bucardo add db B dbname=bucardo_test user=$dbuserB port=$dbportB host=$dbhostB");
 $res = $bct->ctl('bucardo remove db A B foobarz');
 like ($res, qr/Removed database "A"\nRemoved database "B"/ms, $t);
 
@@ -130,7 +130,7 @@ $t = q{List database returns correct message when no databases};
 $res = $bct->ctl('bucardo list db');
 like ($res, qr/No databases/, $t);
 
-$bct->ctl("bucardo add db bucardo_test name=B user=$dbuserB port=$dbportB host=$dbhostB ssp=1");
+$bct->ctl("bucardo add db B dbname=bucardo_test user=$dbuserB port=$dbportB host=$dbhostB ssp=1");
 $t = q{List databases shows the server_side_prepare setting};
 $res = $bct->ctl('bucardo list database B -vv');
 like ($res, qr/server_side_prepares = 1/s, $t);
@@ -143,7 +143,7 @@ like ($res, qr/Database: B/, $t);
 
 $t = q{Add database works with 'addalltables'};
 $command =
-"bucardo add db bucardo_test name=A user=$dbuserA port=$dbportA host=$dbhostA addalltables";
+"bucardo add db A dbname=bucardo_test user=$dbuserA port=$dbportA host=$dbhostA addalltables";
 $res = $bct->ctl($command);
 like ($res, qr/Added database "A"\nNew tables added: \d/s, $t);
 
@@ -158,7 +158,7 @@ like ($res, qr/that reference database "A".*Removed database "A"/s, $t);
 $t = q{Add database with 'addallsequences' works};
 $res = $bct->ctl("bucardo remove dbgroup abc");
 $command =
-"bucardo add db bucardo_test name=A user=$dbuserA port=$dbportA host=$dbhostA addallsequences";
+"bucardo add db A dbname=bucardo_test user=$dbuserA port=$dbportA host=$dbhostA addallsequences";
 $res = $bct->ctl($command);
 like ($res, qr/Added database "A"\nNew sequences added: \d/s, $t);
 
@@ -168,7 +168,7 @@ is ($res, '', $t);
 
 $t = q{Add database respects the --quiet flag};
 $command =
-"bucardo add db bucardo_test name=B user=$dbuserB port=$dbportB host=$dbhostB --quiet";
+"bucardo add db B dbname=bucardo_test user=$dbuserB port=$dbportB host=$dbhostB --quiet";
 $res = $bct->ctl($command);
 is ($res, '', $t);
 
