@@ -10,7 +10,7 @@ use warnings;
 use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 22;
+use Test::More tests => 24;
 
 use vars qw/$t $res $command $dbhX $dbhA $dbhB/;
 
@@ -96,6 +96,18 @@ $bct->ctl('bucardo add dbgroup foobar1');
 $bct->ctl('bucardo add dbgroup foobar2');
 $res = $bct->ctl('bucardo remove dbgroup foobar1 foobar2');
 like ($res, qr/Removed database group "foobar1".*Removed database group "foobar2"/s, $t);
+
+$t = 'Removal of dbgroup fails if used in a sync';
+$bct->ctl('bucardo add herd therd bucardo_test1');
+$bct->ctl('bucardo add dbgroup foobar3 A:source B');
+$bct->ctl('bucardo add sync mysync herd=therd dbs=foobar3');
+$res = $bct->ctl('bucardo remove dbgroup foobar3');
+chomp $res;
+is ($res, q/Cannot remove database group "foobar3": it is being used by one or more syncs/, $t);
+
+$t = 'Removal of dbgroup works if used in a sync and the --force argument used';
+$res = $bct->ctl('bucardo remove dbgroup foobar3 --force');
+like ($res, qr/Dropping all syncs that reference the dbgroup "foobar3".*Removed database group "foobar3"/s, $t);
 
 ## Update
 

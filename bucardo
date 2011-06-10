@@ -1370,7 +1370,6 @@ sub add_dbgroup {
     ## 2+ Databases to add to this group, with optional role information attached
     ## Returns: undef
     ## Example: bucardo add dbgroup nycservers nyc1:source nyc2:source lax1
-    ## TODO: Wildcards?
 
     ## Grab our generic usage message
     my $usage = usage('add_dbgroup');
@@ -1389,8 +1388,9 @@ sub add_dbgroup {
         $QUIET or print qq{Created database group "$name"\n};
     }
 
-    ## Everything else is databases to add to this group
+    ## Add all these databases to the group
     for my $fulldb (@nouns) {
+
         ## Figure out the optional role
         my ($db,$role) = extract_name_and_role($fulldb);
 
@@ -1419,7 +1419,6 @@ sub remove_dbgroup {
     ## 1+ Name of a database group
     ## Returns: undef
     ## Example: bucardo remove dbgroup sales
-    ## TODO: --force argument needed
 
     ## Grab our generic usage message
     my $usage = usage('remove_dbgroup');
@@ -1447,12 +1446,23 @@ sub remove_dbgroup {
             $sth->execute($name);
         };
         if ($@) {
-            if ($@ =~ /"sync_targetgroup_fk"/) {
-                die qq{Cannot remove database group "$name": it is being used by one or more syncs\n};
+            if ($@ =~ /"sync_dbs_fk"/) {
+                if ($bcargs->{force}) {
+                    $QUIET or warn qq{Dropping all syncs that reference the dbgroup "$name"\n};
+                    $dbh->rollback();
+                    $dbh->do('DELETE FROM bucardo.sync WHERE dbs = ' . $dbh->quote($name));
+                    eval {
+                        $sth->execute($name);
+                    };
+                    goto NEND if ! $@;
+                }
+                else {
+                    die qq{Cannot remove database group "$name": it is being used by one or more syncs\n};
+                }
             }
             die qq{Could not delete database group "$name"\n$@\n};
         }
-
+          NEND:
         $QUIET or print qq{Removed database group "$name"\n};
     }
 
