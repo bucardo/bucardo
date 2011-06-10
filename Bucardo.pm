@@ -723,7 +723,7 @@ sub mcp_main {
 
                 if (! $x->{dbh}->ping) {
                     ## Database is not reachable, so we'll try and reconnect
-                    $self->glog("Ping failed for database $dbname, trying to reconnect");
+                    $self->glog("Ping failed for database $dbname, trying to reconnect", LOG_NORMAL);
 
                     ## Sleep a hair so we don't reloop constantly
                     sleep 0.5;
@@ -1841,7 +1841,7 @@ sub start_kid {
         ## Update the dbrun table as needed
         $SQL = q{DELETE FROM bucardo.dbrun WHERE sync = ?};
         $sth = $finaldbh->prepare($SQL);
-		$sth->execute($syncname);
+        $sth->execute($syncname);
 
         ## Let anyone listening know that this target sync aborted. Global message.
         $self->db_notify($finaldbh, "synckill_${syncname}");
@@ -2341,7 +2341,7 @@ sub start_kid {
         for my $dbname (@dbs_connectable) {
             $x = $sync->{db}{$dbname};
 
-			$sth{dbrun_insert}->execute($syncname, $dbname, $x->{backend});
+            $sth{dbrun_insert}->execute($syncname, $dbname, $x->{backend});
             $maindbh->commit();
         }
 
@@ -2709,7 +2709,7 @@ sub start_kid {
                         my $dbname = $self->{truncateinfo}{$s}{$t}{maxdb};
                         $x = $sync->{db}{$dbname};
                         $x->{truncatewinner}{$s}{$t} = 1;
-                        $self->glog("Truncate winner for $s.$t is database $dbname");
+                        $self->glog("Truncate winner for $s.$t is database $dbname", LOG_DEBUG);
                     }
                 }
                 ## Set the truncate count
@@ -4659,49 +4659,49 @@ sub db_get_notices {
 
 sub send_signal_to_PID {
 
-	## Send a USR1 to one or more PIDs
-	## Arguments: one
-	## 1. Hashref of info, including:
-	##    sync => name of a sync to filter PID files with
-	## Returns: number of signals sucessfully sent
+    ## Send a USR1 to one or more PIDs
+    ## Arguments: one
+    ## 1. Hashref of info, including:
+    ##    sync => name of a sync to filter PID files with
+    ## Returns: number of signals sucessfully sent
 
-	my ($self, $arg) = @_;
+    my ($self, $arg) = @_;
 
-	my $total = 0;
+    my $total = 0;
 
-	## Slurp in all the files from the PID directory
-	my $piddir = $config{piddir};
-	opendir my $dh, $piddir or die qq{Could not opendir "$piddir" $!\n};
-	my @pidfiles = grep { /^bucardo.*\.pid$/ } readdir $dh;
-	closedir $dh or warn qq{Could not closedir "$piddir": $!\n};
+    ## Slurp in all the files from the PID directory
+    my $piddir = $config{piddir};
+    opendir my $dh, $piddir or die qq{Could not opendir "$piddir" $!\n};
+    my @pidfiles = grep { /^bucardo.*\.pid$/ } readdir $dh;
+    closedir $dh or warn qq{Could not closedir "$piddir": $!\n};
 
-	## Send a signal to the ones we care about
-	for my $pidfile (sort @pidfiles) {
+    ## Send a signal to the ones we care about
+    for my $pidfile (sort @pidfiles) {
 
-		next if $arg->{sync} and $pidfile !~ /\bsync\.$arg->{sync}\b/;
+        next if $arg->{sync} and $pidfile !~ /\bsync\.$arg->{sync}\b/;
 
-		my $pfile = "$piddir/$pidfile";
-		if (open my $fh, '<', $pfile) {
-			my $pid = <$fh>;
-			close $fh or warn qq{Could not close "$pfile": $!\n};
-			if (! defined $pid or $pid !~ /^\d+$/) {
-				$self->glog("Warning: No PID found in file, so removing $pfile", LOG_TERSE);
-				unlink $pfile;
-			}
-			elsif ($pid == $$) {
-			}
-			else {
-				$total += kill $signumber{'USR1'} => $pid;
-				$self->glog("Sent USR1 signal to process $pid", LOG_VERBOSE);
-			}
-		}
-		else {
-			$self->glog("Warning: Could not open file, so removing $pfile", LOG_TERSE);
-			unlink $pfile;
-		}
-	}
+        my $pfile = "$piddir/$pidfile";
+        if (open my $fh, '<', $pfile) {
+            my $pid = <$fh>;
+            close $fh or warn qq{Could not close "$pfile": $!\n};
+            if (! defined $pid or $pid !~ /^\d+$/) {
+                $self->glog("Warning: No PID found in file, so removing $pfile", LOG_TERSE);
+                unlink $pfile;
+            }
+            elsif ($pid == $$) {
+            }
+            else {
+                $total += kill $signumber{'USR1'} => $pid;
+                $self->glog("Sent USR1 signal to process $pid", LOG_VERBOSE);
+            }
+        }
+        else {
+            $self->glog("Warning: Could not open file, so removing $pfile", LOG_TERSE);
+            unlink $pfile;
+        }
+    }
 
-	return $total;
+    return $total;
 
 } ## end of send_signal_to_PID
 
