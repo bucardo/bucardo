@@ -2318,14 +2318,11 @@ AS $bc$
 
     my $old = $_TD->{old};
 
-    ## If this sync was fullcopy, we don't need to worry about it
-    return if $old->{synctype} eq 'fullcopy';
-
     my ($SQL, $rv, $sth, $count);
 
     ## Gather up a list of tables used in this sync, as well as the source database handle
 
-    (my $herd = $old->{source}) =~ s/'/''/go;
+    (my $herd = $old->{herd}) =~ s/'/''/go;
 
     ## Does this herd exist?
     $SQL = qq{SELECT 1 FROM herd WHERE name = '$herd'};
@@ -2346,71 +2343,8 @@ AS $bc$
       elog(DEBUG, 'Herd has no members, so no further work needed');
       return;
     }
-    my $sourcedb = $rv->{rows}[0]{db};
-    elog(DEBUG, "Got a sourcedb of $sourcedb for herd of $herd");
-    my %relation;
-    for (@{$rv->{rows}}) {
-        $relation{$_->{safeschema}}{$_->{safetable}} = $_;
-    }
-    $rv = spi_exec_query("SELECT bucardo.db_getconn('$sourcedb') AS conn");
-    $rv->{processed} or die qq{Could not find a database named "$sourcedb"};
-    my ($dbtype,$dsn,$user,$pass,$ssp) = split /\n/ => $rv->{rows}[0]{conn};
-    elog(DEBUG, "Connecting to $dsn as $user inside bucardo_delete_sync");
-    my $sdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
-    $ssp or $sdbh->{pg_server_prepare} = 0;
 
-    ## Get the list of target databases
-
-    my %target;
-    if ($old->{targetdb}) {
-       $target{$old->{targetdb}} = 1;
-    }
-    else {
-        my $group = $old->{targetgroup};
-        $group =~ s/'/''/g;
-        $SQL = "SELECT db FROM dbmap WHERE dbgroup = '$group'";
-        $rv = spi_exec_query($SQL);
-        $rv->{processed} or die qq{Could not find the dbgroup $group};
-        for (@{$rv->{rows}}) {
-            $target{$_->{db}} = 1;
-        }
-    }
-
-    ## Try and delete each combo
-    $SQL = "DELETE FROM bucardo.bucardo_delta_targets WHERE target = ? AND tablename = ".
-        "(SELECT c.oid FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n WHERE c.relname = ? ".
-        "AND c.relnamespace = n.oid AND n.nspname = ?)";
-    $sth = $sdbh->prepare($SQL);
-    for my $schema (sort keys %relation) {
-        for my $table (sort keys %{$relation{$schema}}) {
-            for my $target (keys %target) {
-                $count = $sth->execute($target,$table,$schema);
-                elog(DEBUG,"Tried to remove $schema:$table for $target, got $count");
-            }
-        }
-    }
-    $sdbh->commit();
-
-    return if $old->{synctype} eq 'pushdelta';
-
-    ## Finally, remove from the target database
-    (my $targetdb = $old->{targetdb}) =~ s/'/''/go;
-    $rv = spi_exec_query("SELECT bucardo.db_getconn('$targetdb') AS conn");
-    $rv->{processed} or die qq{Could not find a database named "$targetdb"};
-    ($dbtype,$dsn,$user,$pass,$ssp) = split /\n/ => $rv->{rows}[0]{conn};
-    elog(DEBUG, "Connecting to $dsn as $user inside bucardo_delete_sync");
-    my $tdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0, RaiseError=>1, PrintError=>0});
-    $ssp or $tdbh->{pg_server_prepare} = 0;
-
-
-    $sth = $tdbh->prepare($SQL);
-    for my $schema (sort keys %relation) {
-        for my $table (sort keys %{$relation{$schema}}) {
-            $count = $sth->execute($sourcedb,$table,$schema);
-            elog(DEBUG,"Tried to remove $schema:$table for $sourcedb, got $count");
-        }
-    }
-    $tdbh->commit();
+	## TODO: Reach out and clean up remote databases as before if needed
 
     return;
 
