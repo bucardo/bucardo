@@ -229,7 +229,7 @@ our %alias = (
 );
 
 my %column_no_change = (
-	'cdate' => 1,
+    'cdate' => 1,
 );
 
 ## Regular expressions
@@ -1072,26 +1072,26 @@ sub update_database {
     my $args = process_args(join ' ' => @actions);
 
     ## Track what changes we made
-	my %change;
+    my %change;
 
-	## Walk through and handle each argument pair
+    ## Walk through and handle each argument pair
     for my $setting (sort keys %$args) {
 
-		## Change the name to a more standard form, to better figure out what they really mean
-		## This also excludes all non-alpha characters
-		my $newname = transform_name($setting);
+        ## Change the name to a more standard form, to better figure out what they really mean
+        ## This also excludes all non-alpha characters
+        my $newname = transform_name($setting);
 
-		## Exclude ones that cannot / should not be changed (e.g. cdate)
-		if (exists $column_no_change{$newname}) {
+        ## Exclude ones that cannot / should not be changed (e.g. cdate)
+        if (exists $column_no_change{$newname}) {
             print "Sorry, the value of $setting cannot be changed\n";
             exit 1;
-		}
+        }
 
-		## Standardize the values as well
+        ## Standardize the values as well
         my $value = $args->{$setting};
-		my $newvalue = transform_value($value);
+        my $newvalue = transform_value($value);
 
-		## Handle all the non-standard columns
+        ## Handle all the non-standard columns
         if ($newname =~ /^group/) {
 
             ## Track the changes and publish at the end
@@ -1169,49 +1169,49 @@ sub update_database {
 
         } ## end of 'group' adjustments
 
-		## This must exist in our hash
-		if (! exists $DB->{$name}{$newname}) {
-			print qq{Cannot change "$newname"\n};
-			next;
-		}
-		my $oldvalue = $DB->{$name}{$newname};
+        ## This must exist in our hash
+        if (! exists $DB->{$name}{$newname}) {
+            print qq{Cannot change "$newname"\n};
+            next;
+        }
+        my $oldvalue = $DB->{$name}{$newname};
 
-		## Has this really changed?
-		if ($oldvalue eq $newvalue) {
-			print "No change needed for $newname\n";
-			next;
-		}
+        ## Has this really changed?
+        if ($oldvalue eq $newvalue) {
+            print "No change needed for $newname\n";
+            next;
+        }
 
-		## Add to the queue. Overwrites previous ones
-		$change{$newname} = [$oldvalue, $newvalue];
+        ## Add to the queue. Overwrites previous ones
+        $change{$newname} = [$oldvalue, $newvalue];
 
     } ## end each setting
 
-	## If we have any changes, attempt to make them all at once
-	if (%change) {
-		my $SQL = 'UPDATE bucardo.db SET ';
-		$SQL .= join ',' => map { "$_=?" } sort keys %change;
-		$SQL .= ' WHERE name = ?';
-		my $sth = $dbh->prepare($SQL);
-		eval {
-			$sth->execute((map { $change{$_}[1] } sort keys %change), $name);
-		};
-		if ($@) {
-			$dbh->rollback();
-			$dbh->disconnect();
-			print "Sorry, failed to update the bucardo.db table. Error was:\n$@\n";
-			exit 1;
-		}
+    ## If we have any changes, attempt to make them all at once
+    if (%change) {
+        my $SQL = 'UPDATE bucardo.db SET ';
+        $SQL .= join ',' => map { "$_=?" } sort keys %change;
+        $SQL .= ' WHERE name = ?';
+        my $sth = $dbh->prepare($SQL);
+        eval {
+            $sth->execute((map { $change{$_}[1] } sort keys %change), $name);
+        };
+        if ($@) {
+            $dbh->rollback();
+            $dbh->disconnect();
+            print "Sorry, failed to update the bucardo.db table. Error was:\n$@\n";
+            exit 1;
+        }
 
-		for my $item (sort keys %change) {
-			my ($old,$new) = @{ $change{$item} };
-			print "Changed bucardo.db $item from $old to $new\n";
-		}
+        for my $item (sort keys %change) {
+            my ($old,$new) = @{ $change{$item} };
+            print "Changed bucardo.db $item from $old to $new\n";
+        }
 
-		confirm_commit();
-	}
+        confirm_commit();
+    }
 
-	return;
+    return;
 
 } ## end of update_database
 
@@ -1503,11 +1503,11 @@ sub update_dbgroup {
     ## 1. A rename request
     ## 2. A database to add/modify
 
-	## Track dbs and roles
-	my %dblist;
+    ## Track dbs and roles
+    my %dblist;
 
-	## Track if we call confirm_commit or not
-	my $changes = 0;
+    ## Track if we call confirm_commit or not
+    my $changes = 0;
 
 
     for my $action (@actions) {
@@ -1517,60 +1517,60 @@ sub update_dbgroup {
             if ($newname !~ /^$re_dbgroupname$/) {
                 die qq{Invalid database group name "$newname"\n};
             }
-			next if $name eq $newname; ## Duh
-			$SQL = 'UPDATE bucardo.dbgroup SET name=? WHERE name=?';
-			$sth = $dbh->prepare($SQL);
-			$sth->execute($newname, $name);
-			$QUIET or print qq{Changed database group name from "$name" to "$newname"\n};
-			$changes++;
-			next;
+            next if $name eq $newname; ## Duh
+            $SQL = 'UPDATE bucardo.dbgroup SET name=? WHERE name=?';
+            $sth = $dbh->prepare($SQL);
+            $sth->execute($newname, $name);
+            $QUIET or print qq{Changed database group name from "$name" to "$newname"\n};
+            $changes++;
+            next;
         }
 
-		## Assume the rest is databases to modify
+        ## Assume the rest is databases to modify
 
-		## Default role is always target
-		my ($db,$role) = extract_name_and_role($action);
-		$dblist{$db} = $role;
+        ## Default role is always target
+        my ($db,$role) = extract_name_and_role($action);
+        $dblist{$db} = $role;
     }
 
-	## Leave now if no databases to handle
-	if (! %dblist) {
-		$changes and confirm_commit();
-		exit 0;
-	}
+    ## Leave now if no databases to handle
+    if (! %dblist) {
+        $changes and confirm_commit();
+        exit 0;
+    }
 
-	## The old list of databases:
-	my $oldlist = $DBGROUP->{$name}{db} || {};
+    ## The old list of databases:
+    my $oldlist = $DBGROUP->{$name}{db} || {};
 
-	## Walk through the old and see if any were changed or removed
-	for my $db (sort keys %$oldlist) {
-		if (! exists $dblist{$db}) {
-			remove_db_from_group($db, $name);
-			$QUIET or print qq{Removed database "$db" from group "$name"\n};
-			$changes++;
-			next;
-		}
-		my $oldrole = $oldlist->{$db}{role};
-		my $newrole = $dblist{$db};
-		if ($oldrole ne $newrole) {
-			change_db_role($newrole, $db, $name);
-			$QUIET or print qq{Changed role of database "$db" in group "$name" from $oldrole to $newrole\n};
-			$changes++;
-		}
-	}
+    ## Walk through the old and see if any were changed or removed
+    for my $db (sort keys %$oldlist) {
+        if (! exists $dblist{$db}) {
+            remove_db_from_group($db, $name);
+            $QUIET or print qq{Removed database "$db" from group "$name"\n};
+            $changes++;
+            next;
+        }
+        my $oldrole = $oldlist->{$db}{role};
+        my $newrole = $dblist{$db};
+        if ($oldrole ne $newrole) {
+            change_db_role($newrole, $db, $name);
+            $QUIET or print qq{Changed role of database "$db" in group "$name" from $oldrole to $newrole\n};
+            $changes++;
+        }
+    }
 
-	## Walk through the new and see if any are truly new
-	for my $db (sort keys %dblist) {
-		next if exists $oldlist->{$db};
-		my $role = $dblist{$db};
-		add_db_to_group($db, "$name:$role");
-		$QUIET or print qq{Added database "$db" to group "$name" as $role\n};
-		$changes++;
-	}
+    ## Walk through the new and see if any are truly new
+    for my $db (sort keys %dblist) {
+        next if exists $oldlist->{$db};
+        my $role = $dblist{$db};
+        add_db_to_group($db, "$name:$role");
+        $QUIET or print qq{Added database "$db" to group "$name" as $role\n};
+        $changes++;
+    }
 
-	confirm_commit() if $changes;
+    confirm_commit() if $changes;
 
-	return;
+    return;
 
 } ## end of update_dbgroup
 
@@ -1722,67 +1722,67 @@ sub add_herd {
     my $goatnumber = keys %{ $goatlist->{relations} };
 
     if ($nonstrictnames or $nouncount != $goatnumber) {
-		## Which database do we perform the searches against?
+        ## Which database do we perform the searches against?
         my $bestdb = find_best_db_for_searching();
         if (! defined $bestdb) {
             die "No databases have been added yet, so we cannot add tables!\n";
         }
 
-		## Build a new list which excludes and that matched AND were in "x.y" form
-		my @newnouns;
-		for my $nam (@nouns) {
+        ## Build a new list which excludes and that matched AND were in "x.y" form
+        my @newnouns;
+        for my $nam (@nouns) {
             next if exists $goatlist->{match}{$nam} and $nam =~ /^\w+\.\w+$/o;
-			push @newnouns => $nam;
-		}
-		my $livelist = get_live_goat_ids($bestdb, @newnouns);
+            push @newnouns => $nam;
+        }
+        my $livelist = get_live_goat_ids($bestdb, @newnouns);
 
-		## Move these new ones to the existing goatlist hash
-		for my $nam (keys %{ $livelist->{relations} }) {
-			$goatlist->{relations}{$nam} ||= $livelist->{relations}{$nam};
-		}
+        ## Move these new ones to the existing goatlist hash
+        for my $nam (keys %{ $livelist->{relations} }) {
+            $goatlist->{relations}{$nam} ||= $livelist->{relations}{$nam};
+        }
 
-		## Copy the 'nomatch' hash as well
-		for my $nam (keys %{ $livelist->{nomatch} }) {
-			## Clobbering is okay here
+        ## Copy the 'nomatch' hash as well
+        for my $nam (keys %{ $livelist->{nomatch} }) {
+            ## Clobbering is okay here
             warn "About to set nomatch for $nam\n";
             warn Dumper $goatlist->{relations}{$nam};
             warn "DONE with $nam\n";
-			$goatlist->{nomatch}{$nam} = $livelist->{nomatch}{$nam}
+            $goatlist->{nomatch}{$nam} = $livelist->{nomatch}{$nam}
                 unless exists $goatlist->{match}{$name};
-		}
+        }
 
     } ## end searching live database for matching relations
 
-	## Output a message for all nouns that produced no matches at all
+    ## Output a message for all nouns that produced no matches at all
     my %goat2add;
     for my $nam (@nouns) {
-		if (exists $goatlist->{nomatch}{$nam}) {
+        if (exists $goatlist->{nomatch}{$nam}) {
             ## XXX Fixme, giving output even when there is a match
-			#warn qq{No match found for: $nam\n};
+            #warn qq{No match found for: $nam\n};
         }
     }
 
-	## Add each goat to the herdmap table
-	$SQL = q{INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,?)};
-	my $addrow = $dbh->prepare($SQL);
-	for my $nam (sort keys %{ $goatlist->{relations} }) {
-		my $id = $GOAT->{$nam}{id}; #goatlist->{relations}{$nam}{goat}{id};
+    ## Add each goat to the herdmap table
+    $SQL = q{INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,?)};
+    my $addrow = $dbh->prepare($SQL);
+    for my $nam (sort keys %{ $goatlist->{relations} }) {
+        my $id = $GOAT->{$nam}{id}; #goatlist->{relations}{$nam}{goat}{id};
 
-		if (exists $HERD->{$name}{goat}{$nam}) {
-			printf qq{%s "%s" already a part of this herd\n},
-				ucfirst ($GOAT->{$id}{reltype}), $name;
-			next;
-		}
+        if (exists $HERD->{$name}{goat}{$nam}) {
+            printf qq{%s "%s" already a part of this herd\n},
+                ucfirst ($GOAT->{$id}{reltype}), $name;
+            next;
+        }
 
-		eval {
-			$addrow->execute($name,$id);
-		};
-		if ($@) {
-			die qq{Failed to add relation "$nam" to herd "$name"\n$@};
-		}
-		printf qq{Added %s "%s" to the herd\n},
-			$GOAT->{$id}{reltype}, $nam;
-	}
+        eval {
+            $addrow->execute($name,$id);
+        };
+        if ($@) {
+            die qq{Failed to add relation "$nam" to herd "$name"\n$@};
+        }
+        printf qq{Added %s "%s" to the herd\n},
+            $GOAT->{$id}{reltype}, $nam;
+    }
 
     confirm_commit();
 
@@ -8086,18 +8086,18 @@ sub load_bucardo_info {
 
 sub transform_name {
 
-	## Change a given word to a more standard form
-	## Generally used for database column names, which follow some simple rules
-	## Arguments: one
-	## 1. Name to transform
-	## Returns: transformed name
+    ## Change a given word to a more standard form
+    ## Generally used for database column names, which follow some simple rules
+    ## Arguments: one
+    ## 1. Name to transform
+    ## Returns: transformed name
 
     my $name = shift;
 
-	## Complain right away if these are not standard characters
-	if ($name !~ /^([\w ]+)$/) {
-		die "Invalid name: $name\n";
-	}
+    ## Complain right away if these are not standard characters
+    if ($name !~ /^([\w ]+)$/) {
+        die "Invalid name: $name\n";
+    }
 
     ## Change to lowercase
     $name = lc $name;
@@ -8123,22 +8123,22 @@ sub transform_name {
 
 sub transform_value {
 
-	## Change a value to a more standard form
+    ## Change a value to a more standard form
     ## Used for database column SET actions
-	## Arguments: one
-	## 1. Value
-	## Returns: transformed value
+    ## Arguments: one
+    ## 1. Value
+    ## Returns: transformed value
 
-	my $value = shift;
+    my $value = shift;
 
-	## Remove all whitespace on borders
-	$value =~ s/^\s*(\S+)\s*$/$1/;
+    ## Remove all whitespace on borders
+    $value =~ s/^\s*(\S+)\s*$/$1/;
 
-	## Change booleans to 0/1
-	$value =~ s/^(?:t|true)$/1/io;
-	$value =~ s/^(?:f|false)$/0/io;
+    ## Change booleans to 0/1
+    $value =~ s/^(?:t|true)$/1/io;
+    $value =~ s/^(?:f|false)$/0/io;
 
-	return $value;
+    return $value;
 
 } ## end of transform_value
 
@@ -8329,7 +8329,7 @@ sub change_db_role {
     ## Changes the role of a database: updates bucardo.dbmap
     ## Does not commit
     ## Arguments: four
-	## 1. New role
+    ## 1. New role
     ## 2. Name of the dbgroup
     ## 3. Name of the database
     ## 4. Boolean: if true, prevents the reload
@@ -8337,14 +8337,14 @@ sub change_db_role {
 
     my ($role,$group,$db,$noreload) = @_;
 
-	$SQL = 'UPDATE bucardo.dbmap SET role=? WHERE dbgroup=? AND db=?';
-	$sth = $dbh->prepare_cached($SQL);
-	$sth->execute($role,$group,$db);
+    $SQL = 'UPDATE bucardo.dbmap SET role=? WHERE dbgroup=? AND db=?';
+    $sth = $dbh->prepare_cached($SQL);
+    $sth->execute($role,$group,$db);
 
     ## Reload our hashes
     $noreload or load_bucardo_info(1);
 
-	return;
+    return;
 
 } ## end of change_db_role
 
