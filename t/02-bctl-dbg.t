@@ -67,12 +67,12 @@ $res = $bct->ctl('bucardo add dbgroup foobar A');
 like ($res, qr/"A" does not exist/, $t);
 
 $t = q{Adding a database via add dbgroup gives expected message};
-$bct->ctl("bucardo add db bucardo_test name=A user=$dbuserA port=$dbportA host=$dbhostA");
+$bct->ctl("bucardo add db A dbname=bucardo_test user=$dbuserA port=$dbportA host=$dbhostA");
 $res = $bct->ctl('bucardo add dbgroup foobar A');
 like ($res, qr/Added database "A" to group "foobar" as target/, $t);
 
 $t = q{Adding a database in source role via add dbgroup gives expected message};
-$bct->ctl("bucardo add db bucardo_test name=B user=$dbuserB port=$dbportB host=$dbhostB");
+$bct->ctl("bucardo add db B dbname=bucardo_test user=$dbuserB port=$dbportB host=$dbhostB");
 $res = $bct->ctl('bucardo add dbgroup foobar B:master');
 like ($res, qr/Added database "B" to group "foobar" as source/, $t);
 
