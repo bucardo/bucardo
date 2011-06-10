@@ -8293,7 +8293,16 @@ sub add_db_to_group {
 
     $SQL = 'INSERT INTO bucardo.dbmap(db,dbgroup,role) VALUES (?,?,?)';
     $sth = $dbh->prepare($SQL);
-    $sth->execute($db,$group,$role);
+    eval {
+        $sth->execute($db,$group,$role);
+    };
+    if ($@) {
+        my $msg = qq{Cannot add database "$db" to group "$group"};
+        if ($@ =~ /"db_dsn_unique"/) {
+            die qq{$msg: already have that entry\n};
+        }
+        die qq{$msg: $@\n};
+    }
 
     ## Reload our hashes
     load_bucardo_info(1);
