@@ -811,6 +811,13 @@ sub mcp_main {
                 ## Echo out to anyone listening
                 $self->db_notify($maindbh, $name, 1);
             }
+            ## A sync has been killed
+            elsif ($name =~ /^synckill_(.+)/o) {
+                my $syncdone = $1;
+                $self->glog("Sync $syncdone has been killed", LOG_DEBUG);
+                ## Echo out to anyone listening
+                $self->db_notify($maindbh, $name, 1);
+            }
             ## Request to reload the configuration file
             elsif ('reload_config' eq $name) {
                 $self->glog('Reloading configuration table', LOG_TERSE);
