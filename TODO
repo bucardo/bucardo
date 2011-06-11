@@ -3,7 +3,7 @@ TODO list for Bucardo
 
 These range the gamut from wildly speculative ideas to must-have features.
 
-- Fix the insert/foreign key prolem for conflict resolution.
+- Fix the insert/foreign key problem for conflict resolution.
 - Have Bucardo do the cleanups based on PG version, rather than cronjobs
   (e.g. vacuum pg_listener, purge_bucardo_delta)
 - Death-level custom code hooks
@@ -27,14 +27,13 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Put this list into a bug tracker
 - Consider failover strategies
 - Log validate_sync changes somewhere, add rollback statements
-- Add support for manual DDL changes (in progress)
-- Add support for automatic DDL changes (in progress)
+- Add support for manual DDL changes
+- Add support for automatic DDL changes
 - Cascading slaves: makedelta should create infrastructure as necessary
 - Use polling not sleep for loop notificationa
 - Remove large src_code sections from the kid output when dieing
 - Force to C locale until we get i18n in place
-- Use C triggers for the delta stuff if we can
+- Use C triggers for the delta stuff if we can (and time them!)
 
-- Mongo: map to data types as best we can, especially numbers
 - Mongo: fix escaped data from COPY TO STDOUT
 - Flatfiles: same escaped data as above for non-PG output
