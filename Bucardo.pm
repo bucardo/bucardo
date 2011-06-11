@@ -7098,27 +7098,27 @@ sub push_rows {
         for my $t (@$todb) {
             my $type = $t->{dbtype};
 
+            chomp $buffer;
+
             ## For Postgres, we simply do COPY to COPY
             if ('postgres' eq $type) {
-                $t->{dbh}->pg_putcopydata($buffer);
+                $t->{dbh}->pg_putcopydata("$buffer\n");
             }
             ## For flat files destined for Postgres, just do a tab-delimited dump
             elsif ('flatpg' eq $type) {
-                print {$t->{filehandle}} $buffer;
+                print {$t->{filehandle}} "$buffer\n";
             }
             ## For other flat files, make a standard VALUES list
             elsif ('flatsql' eq $type) {
                 if ($multirow++) {
                     print {$t->{filehandle}} ",\n";
                 }
-                chomp $buffer;
                 print {$t->{filehandle}} '(' .
                     (join ',' => map { $self->{masterdbh}->quote($_) } split /\t/ => $buffer) . ')';
             }
             ## For Mongo, do some mongomagic
             elsif ('mongo' eq $type) {
                 ## Have to map these values back to their names
-                chomp $buffer;
                 my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
 
                 ## Our object consists of the primary keys, plus all other fields
@@ -7133,7 +7133,6 @@ sub push_rows {
             }
             ## For MySQL, so some basic INSERTs
             elsif ('mysql' eq $type) {
-                chomp $buffer;
                 my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
                 $count += $t->{sth}->execute(@cols);
             }
