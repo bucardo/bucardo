@@ -6800,8 +6800,6 @@ sub delete_rows {
             if ('mongo' eq $type) {
                 $self->{collection} = $t->{dbh}->get_collection($T);
                 my $result = $self->{collection}->remove({}, { safe => 1} );
-                #$self->glog("Results of removing collection $T:", LOG_VERBOSE);
-                #$self->glog((Dumper $result), LOG_VERBOSE);
                 next;
             }
 
@@ -6957,11 +6955,23 @@ sub delete_rows {
                 }
             }
             else {
-                $delkeys = [keys %$rows];
+                ## Need to make sure we send non-strings as the correct type
+                if ($goat->{columnhash}{$pkcolsraw}{ftype} =~ /smallint|integer|bigint/o) {
+                    $delkeys = [ map { int $_ } keys %$rows ];
+                }
+                elsif ($goat->{columnhash}{$pkcolsraw}{ftype} eq 'boolean') {
+                    $delkeys = [ map { $_ eq 't' ? true : false } keys %$rows ];
+                }
+                elsif ($goat->{columnhash}{$pkcolsraw}{ftype} =~ /real|double|numeric/o) {
+                    $delkeys = [ map { strtod $_ } keys %$rows ];
+                }
+                else {
+                    $delkeys = [keys %$rows];
+                }
             }
 
             my $result = $self->{collection}->remove
-                ({$pkcolsraw => { '$in' => [keys %$rows] }}, { safe => 1 } );
+                ({$pkcolsraw => { '$in' => $delkeys }}, { safe => 1 } );
             next;
         }
 
