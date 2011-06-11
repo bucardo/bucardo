@@ -17,6 +17,10 @@ requires:
   Sys::Hostname     : 1.11
   Sys::Syslog       : 0.13
   Net::SMTP         : 0
+  MIME::Base64      : 0
+  boolean           : 0
+  File::Spec        : 0
+  Time::HiRes       : 0
 build_requires:
   Test::Harness     : 2.03
   Test::More        : 0.61

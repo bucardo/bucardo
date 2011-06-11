@@ -24,11 +24,12 @@ use sigtrap       qw( die normal-signals ); ## Call die() on HUP, INT, PIPE, or 
 use Config        qw( %Config            ); ## Used to map signal names
 use File::Spec    qw( catfile            ); ## For portable file operations
 use Data::Dumper  qw( Dumper             ); ## Used to dump information in email alerts
-use POSIX         qw( strftime           ); ## For grabbing the local timezone
+use POSIX         qw( strftime strtod    ); ## For grabbing the local timezone, and forcing to NV
 use Sys::Hostname qw( hostname           ); ## Used for debugging/mail sending
 use IO::Handle    qw( autoflush          ); ## Used to prevent stdout/stderr buffering
 use Sys::Syslog   qw( openlog syslog     ); ## In case we are logging via syslog()
 use Net::SMTP     qw(                    ); ## Used to send out email alerts
+use boolean       qw( true false         ); ## Used to send truthiness to MongoDB
 use MIME::Base64  qw( encode_base64
                       decode_base64      ); ## For making text versions of bytea primary keys
 
@@ -1696,7 +1697,8 @@ sub start_kid {
     };
 
     ## Set up some common groupings of databases inside sync->{db}
-    my (@dbs, @dbs_postgres, @dbs_mysql, @dbs_source, @dbs_target, @dbs_dbi, @dbs_connectable);
+    my (@dbs, @dbs_postgres, @dbs_mysql, @dbs_mongo,
+        @dbs_source, @dbs_target, @dbs_dbi, @dbs_connectable);
     for my $dbname (sort keys %{ $sync->{db} }) {
         $x = $sync->{db}{$dbname};
 
@@ -1707,6 +1709,9 @@ sub start_kid {
 
         push @dbs_mysql => $dbname
             if $x->{dbtype} eq 'mysql';
+
+        push @dbs_mongo => $dbname
+            if $x->{dbtype} eq 'mongo';
 
         push @dbs_source => $dbname
             if $x->{role} eq 'source';
@@ -7128,6 +7133,18 @@ sub push_rows {
                 }
                 for my $cname (@{ $goat->{cols} }) {
                     $object->{$cname} = shift @cols;
+                }
+                ## Coerce non-strings into different objects
+                for my $key (keys %$object) {
+                    if ($goat->{columnhash}{$key}{ftype} =~ /smallint|integer|bigint/o) {
+                        $object->{$key} = int $object->{$key};
+                    }
+                    elsif ($goat->{columnhash}{$key}{ftype} eq 'boolean') {
+                        $object->{$key} = $object->{$key} eq 't' ? true : false;
+                    }
+                    elsif ($goat->{columnhash}{$key}{ftype} =~ /real|double|numeric/o) {
+                        $object->{$key} = strtod($object->{$key});
+                    }
                 }
                 $self->{collection}->insert($object, { safe => 1 });
             }
