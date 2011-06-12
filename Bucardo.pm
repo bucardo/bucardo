@@ -6972,6 +6972,8 @@ sub delete_rows {
 
             my $result = $self->{collection}->remove
                 ({$pkcolsraw => { '$in' => $delkeys }}, { safe => 1 } );
+            $count{$t} = $result->{n};
+            $self->glog("Mongo objects removed from $T: $count{$t}", LOG_VERBOSE);
             next;
         }
 
