@@ -13,7 +13,7 @@ use 5.008003;
 use strict;
 use warnings;
 
-our $VERSION = '4.4.4';
+our $VERSION = '4.4.5';
 
 use sigtrap qw( die normal-signals ); ## Call die() on HUP, INT, PIPE, or TERM
 use Config;                           ## Used to map signal names
@@ -4924,7 +4924,7 @@ sub start_kid {
                             my $buffer = '';
                             $self->glog(qq{Begin COPY to $S.$T});
 
-							my $rows_copied = 0;
+                            my $rows_copied = 0;
                             if ($source_modern_copy and @delchunks) {
                                 my $dcount = 1;
                                 for my $chunk (@delchunks) {
@@ -4934,7 +4934,7 @@ sub start_kid {
                                     $dcount++;
                                     while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
                                         $targetdbh->pg_putcopydata($buffer);
-										$rows_copied++;
+                                        $rows_copied++;
                                     }
                                 }
                             }
@@ -4942,7 +4942,7 @@ sub start_kid {
                                 $sourcedbh->do($srccmd);
                                 while ($sourcedbh->pg_getcopydata($buffer) >= 0) {
                                     $targetdbh->pg_putcopydata($buffer);
-									$rows_copied++;
+                                    $rows_copied++;
                                 }
                             }
 
@@ -5493,7 +5493,7 @@ sub start_kid {
                         }
                         else {
                             (my $safepkval = $pkval) =~ s/\'/''/go;
-							$safepkval =~ s{\\}{\\\\}go;
+                            $safepkval =~ s{\\}{\\\\}go;
                             push @safepk => qq{'$safepkval'};
                         }
                     }
@@ -5505,7 +5505,7 @@ sub start_kid {
                             }
                             else {
                                 (my $safepkval = $pk) =~ s/\'/''/go;
-								$safepkval =~ s{\\}{\\\\}go;
+                                $safepkval =~ s{\\}{\\\\}go;
                                 push @safepk => qq{'$safepkval'};
                             }
                         }
@@ -6237,7 +6237,7 @@ Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This document describes version 4.4.4 of Bucardo
+This document describes version 4.4.5 of Bucardo
 
 =head1 WEBSITE
 

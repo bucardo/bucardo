@@ -1,5 +1,9 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
+Bucardo version 4.4.5, released June 18, 2011
+
+  - Set SECURITY DEFINER on triggerkick functions. [GSM]
+
 Bucardo version 4.4.4, released May 14, 2011
 
   - Make sure we escape backslashes when building the 
