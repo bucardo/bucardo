@@ -1,6 +1,6 @@
 
 -- Schema for the main Bucardo database
--- Version 4.4.4
+-- Version 4.4.5
 
 -- Should be run as a superuser
 
@@ -134,8 +134,8 @@ warning_file|bucardo.warning.log|File containing all log lines starting with "Wa
 COPY bucardo.bucardo_config(setting,value,about)
 FROM STDIN
 WITH DELIMITER '|';
-bucardo_version|4.4.4|Bucardo version this schema was created with
-bucardo_current_version|4.4.4|Current version of Bucardo
+bucardo_version|4.4.5|Bucardo version this schema was created with
+bucardo_current_version|4.4.5|Current version of Bucardo
 \.
 
 -- Other settings:
@@ -1553,6 +1553,7 @@ $bc$
                         CREATE OR REPLACE FUNCTION bucardo."$custom_function_name"()
                         RETURNS TRIGGER 
                         LANGUAGE $rv->{rows}[0]{trigger_language}
+                        SECURITY DEFINER
                         AS \$notify\$
                     };
                     $SQL .= qq{ $rv->{rows}[0]{trigger_body} };
@@ -1563,6 +1564,7 @@ $bc$
                         CREATE OR REPLACE FUNCTION bucardo."$func0"()
                         RETURNS TRIGGER 
                         LANGUAGE plpgsql
+                        SECURITY DEFINER
                         AS \$notify\$
                         BEGIN
                           EXECUTE 'NOTIFY "bucardo_kick_sync_$syncname"';
