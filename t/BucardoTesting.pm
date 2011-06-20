@@ -19,9 +19,16 @@ my $DEBUG = $ENV{BUCARDO_DEBUG} || 0;
 
 use base 'Exporter';
 our @EXPORT = qw/%tabletype %tabletypemysql %sequences %val compare_tables bc_deeply clear_notices 
-                 wait_for_notice $location is_deeply like pass is isa_ok ok/;
+                 wait_for_notice $location is_deeply like pass is isa_ok ok
+                 $oldherd_msg $newherd_msg $addtable_msg $nomatch_msg/;
 
 my $dbname = 'bucardo_test';
+
+## Shortcuts for ease of changes and smaller text:
+our $addtable_msg = 'Added the following tables';
+our $nomatch_msg = 'Did not find matches for the following terms';
+our $oldherd_msg = 'The following tables are now part of the herd';
+our $newherd_msg = 'The following tables are now part of the herd';
 
 our $location = 'setup';
 my $testmsg  = ' ?';
@@ -996,6 +1003,10 @@ sub setup_bucardo {
 sub thing_exists {
     my ($dbh,$name,$table,$column) = @_;
     my $SQL = "SELECT 1 FROM $table WHERE $column = ?";
+    ## Only want tables from the public schema for now
+    if ($table eq 'pg_class') {
+        $SQL .= qq{ AND relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')};
+    }
     my $sth = $dbh->prepare($SQL);
     $count = $sth->execute($name);
     $sth->finish();
@@ -1361,7 +1372,6 @@ sub add_bucardo_schema_to_database {
 
 
 
-
 sub add_test_tables_to_herd {
 
     ## Add all of the test tables (and sequences) to a herd
@@ -1492,8 +1502,8 @@ sub like($$;$) {
     if ($bail_on_error and ++$total_errors => $bail_on_error) {
         my $line = (caller)[2];
         my $time = time;
-        Test::More::diag("GOT: ".Dumper $_[0]);
-        Test::More::diag("EXPECTED: ".Dumper $_[1]);
+#        Test::More::diag("GOT: ".Dumper $_[0]);
+#        Test::More::diag("EXPECTED: ".Dumper $_[1]);
         Test::More::BAIL_OUT "Stopping on a failed 'like' test from line $line. Time: $time";
     }
 } ## end of like
@@ -1505,6 +1515,27 @@ sub is($$;$) {
     t($_[2],(caller)[2]);
     my $rv = Test::More::is($_[0],$_[1],$testmsg);
     return $rv if $rv;
+    ## Where exactly did this fail?
+    my $char = 0;
+    my $onelen = length $_[0];
+    my $twolen = length $_[1];
+    my $line = 1;
+    my $lchar = 1;
+    for ($char = 0; $char < $onelen and $char < $twolen; $char++) {
+        my $one = ord(substr($_[0],$char,1));
+        my $two = ord(substr($_[1],$char,1));
+        if ($one != $two) {
+            Test::More::diag("First difference at character $char ($one vs $two) (line $line, char $lchar)");
+            last;
+        }
+        if (10 == $one) {
+            $line++;
+            $lchar = 1;
+        }
+        else {
+            $lchar++;
+        }
+    }
     if ($bail_on_error and ++$total_errors => $bail_on_error) {
         my $line = (caller)[2];
         my $time = time;

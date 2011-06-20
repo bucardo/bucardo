@@ -1668,6 +1668,124 @@ sub list_dbgroups {
 
 
 ##
+## Table-related subroutines: add, remove, update, list
+##
+
+sub add_table {
+
+    ## Add one or more tables. Inserts to the bucardo.goat table
+    ## May also update the bucardo.herd and bucardo.herdmap tables
+    ## Arguments: one or more
+    ## 1+ Names of tables to be added
+    ## Returns: undef
+    ## Example: bucardo add table pgbench_accounts foo% myschema.abc
+
+    ## Grab our generic usage message
+    my $usage = usage('add_table');
+
+    ## Must have at least one table
+    if (! @nouns) {
+        warn "$usage\n";
+        exit 1;
+    }
+
+    ## Inputs and aliases, database column name, flags, default
+    my $validcols = q{
+        db                       db                   0                null
+        ping                     ping                 TF               null
+        rebuild_index            rebuild_index        numeric          null
+        standard_conflict        standard_conflict    0                null
+        analyze_after_copy       analyze_after_copy   TF               null
+        herd                     herd                 0                skip
+    };
+
+    my ($dbcols,$cols,$phs,$vals,$extra)
+        = process_simple_args({cols => $validcols, list => \@nouns, usage => $usage});
+
+    ## Loop through all the args and attempt to add the tables
+    ## This returns a hash with the following keys: relations, match, nomatch
+    my $goatlist = get_goat_ids({args => \@nouns, dbcols => $dbcols});
+
+    ## The final output. Store it up all at once for a single QUIET check
+    my $msg = '';
+
+    ## We will be nice and indicate anything that did not match
+    if (keys %{ $goatlist->{nomatch} }) {
+        $msg .= "Did not find matches for the following terms:\n";
+        for (sort keys %{ $goatlist->{nomatch} }) {
+            $msg .= "  $_\n";
+        }
+    }
+
+    ## Now we need to output which ones were recently added
+    if (keys %{ $goatlist->{new} }) {
+        $msg .= "Added the following tables:\n";
+        for (sort keys %{ $goatlist->{new} }) {
+            $msg .= "  $_\n";
+        }
+    }
+
+    ## If they requested a herd and it does not exist, create it
+    if (exists $extra->{herd}) {
+        my $herdname = $extra->{herd};
+        if (! exists $HERD->{$herdname}) {
+            $SQL = 'INSERT INTO bucardo.herd(name) VALUES(?)';
+            $sth = $dbh->prepare($SQL);
+            $sth->execute($herdname);
+            $msg .= qq{Created the herd named "$herdname"\n};
+        }
+        ## Now load all of these tables into this herd
+        $SQL = 'INSERT INTO bucardo.herdmap (herd,priority,goat) VALUES (?,?,'
+            . q{ (SELECT id FROM goat WHERE schemaname||'.'||tablename=? AND db=?))};
+
+        $sth = $dbh->prepare($SQL);
+
+        ## Which tables were already in the herd, and which were just added
+        my (@oldnames,@newnames);
+
+        for my $name (sort keys %{ $goatlist->{relations} }) {
+            ## Is it already part of this herd?
+            if (exists $HERD->{goat}{$name}) {
+                push @oldnames => $name;
+                next;
+            }
+            my $db = $goatlist->{relations}{$name}{goat}{db};
+
+            my $pri = 0;
+
+            $count = $sth->execute($herdname,$pri,$name, $db);
+
+            push @newnames => $name;
+        }
+
+        if (@oldnames) {
+            $msg .= qq{The following tables were already in the herd "$herdname":\n};
+            for (@oldnames) {
+                $msg .= "  $_\n";
+            }
+        }
+
+        if (@newnames) {
+            $msg .= qq{The following tables are now part of the herd "$herdname":\n};
+            for (@newnames) {
+                $msg .= "  $_\n";
+            }
+        }
+
+    } ## end if herd
+
+    if (!$QUIET) {
+        print $msg;
+    }
+
+    confirm_commit();
+
+    return;
+
+} ## end of add_table
+
+
+##
 ## Herd-related subroutines: add, remove, update, list
 ##
 
@@ -1684,21 +1802,21 @@ sub add_herd {
     ## Grab our generic usage message
     my $usage = usage('add_herd');
 
-    my $name = shift @nouns || '';
+    my $herdname = shift @nouns || '';
 
     ## Must have a name
-    if (!length $name) {
+    if (!length $herdname) {
         warn "$usage\n";
         exit 1;
     }
 
     ## Create the herd if it does not exist
-    if (exists $HERD->{$name}) {
-        print qq{Herd "$name" already exists\n};
+    if (exists $HERD->{$herdname}) {
+        print qq{Herd "$herdname" already exists\n};
     }
     else {
-        create_herd($name);
-        $QUIET or print qq{Created herd "$name"\n};
+        create_herd($herdname);
+        $QUIET or print qq{Created herd "$herdname"\n};
     }
 
     ## Everything else is tables or sequences to add to this herd
@@ -1712,79 +1830,68 @@ sub add_herd {
         return undef;
     }
 
-    ## First, see if we can find matches for known goats
-    ## We may be able to avoid a live db lookup if we find all the matches here
-    ## This returns a hash with the following keys: relations, match, nomatch
-    my $goatlist = get_goat_ids(@nouns);
+    ## Get the list of all requested tables, adding as needed
+    my $goatlist = get_goat_ids({args => \@nouns});
 
-    ## Figure out if we need to hit the live database to add potential tables
-    ## We generally do unless both of these conditions are met:
-    ## 1) Every search term is in the format "a.b" with no wildcards
-    my $nonstrictnames = grep { ! /^\w+\.\w+$/ } @nouns;
-    ## 2) We found a match in the goat table for every one of the above
-    my $goatnumber = keys %{ $goatlist->{relations} };
+    ## The final output. Store it up all at once for a single QUIET check
+    my $msg = '';
 
-    if ($nonstrictnames or $nouncount != $goatnumber) {
-        ## Which database do we perform the searches against?
-        my $bestdb = find_best_db_for_searching();
-        if (! defined $bestdb) {
-            die "No databases have been added yet, so we cannot add tables!\n";
-        }
-
-        ## Build a new list which excludes and that matched AND were in "x.y" form
-        my @newnouns;
-        for my $nam (@nouns) {
-            next if exists $goatlist->{match}{$nam} and $nam =~ /^\w+\.\w+$/o;
-            push @newnouns => $nam;
-        }
-        my $livelist = get_live_goat_ids($bestdb, @newnouns);
-
-        ## Move these new ones to the existing goatlist hash
-        for my $nam (keys %{ $livelist->{relations} }) {
-            $goatlist->{relations}{$nam} ||= $livelist->{relations}{$nam};
-        }
-
-        ## Copy the 'nomatch' hash as well
-        for my $nam (keys %{ $livelist->{nomatch} }) {
-            ## Clobbering is okay here
-            warn "About to set nomatch for $nam\n";
-            warn Dumper $goatlist->{relations}{$nam};
-            warn "DONE with $nam\n";
-            $goatlist->{nomatch}{$nam} = $livelist->{nomatch}{$nam}
-                unless exists $goatlist->{match}{$name};
-        }
-
-    } ## end searching live database for matching relations
-
-    ## Output a message for all nouns that produced no matches at all
-    my %goat2add;
-    for my $nam (@nouns) {
-        if (exists $goatlist->{nomatch}{$nam}) {
-            ## XXX Fixme, giving output even when there is a match
-            #warn qq{No match found for: $nam\n};
+    ## We will be nice and indicate anything that did not match
+    if (keys %{ $goatlist->{nomatch} }) {
+        $msg .= "Did not find matches for the following terms:\n";
+        for (sort keys %{ $goatlist->{nomatch} }) {
+            $msg .= "  $_\n";
         }
     }
 
-    ## Add each goat to the herdmap table
-    $SQL = q{INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,?)};
-    my $addrow = $dbh->prepare($SQL);
-    for my $nam (sort keys %{ $goatlist->{relations} }) {
-        my $id = $GOAT->{$nam}{id}; #goatlist->{relations}{$nam}{goat}{id};
+    ## Now we need to output which ones were recently added
+    if (keys %{ $goatlist->{new} }) {
+        $msg .= "Added the following tables:\n";
+        for (sort keys %{ $goatlist->{new} }) {
+            $msg .= "  $_\n";
+        }
+    }
 
-        if (exists $HERD->{$name}{goat}{$nam}) {
-            printf qq{%s "%s" already a part of this herd\n},
-                ucfirst ($GOAT->{$id}{reltype}), $name;
+
+    ## Now load all of these tables into this herd
+    $SQL = 'INSERT INTO bucardo.herdmap (herd,priority,goat) VALUES (?,?,'
+        . q{ (SELECT id FROM goat WHERE schemaname||'.'||tablename=? AND db=?))};
+
+    $sth = $dbh->prepare($SQL);
+
+    my (@oldnames, @newnames);
+
+    for my $name (sort keys %{ $goatlist->{relations} }) {
+        ## Is it already part of this herd?
+        if (exists $HERD->{goat}{$name}) {
+            push @oldnames => $name;
             next;
         }
+        my $db = $goatlist->{relations}{$name}{goat}{db};
 
-        eval {
-            $addrow->execute($name,$id);
-        };
-        if ($@) {
-            die qq{Failed to add relation "$nam" to herd "$name"\n$@};
+        my $pri = 0;
+
+        $count = $sth->execute($herdname,$pri,$name, $db);
+
+        push @newnames => $name;
+    }
+
+    if (@oldnames) {
+        $msg .= qq{The following tables were already in the herd "$herdname":\n};
+        for (@oldnames) {
+            $msg .= "  $_\n";
         }
-        printf qq{Added %s "%s" to the herd\n},
-            $GOAT->{$id}{reltype}, $nam;
+    }
+
+    if (@newnames) {
+        $msg .= qq{The following tables are now part of the herd "$herdname":\n};
+        for (@newnames) {
+            $msg .= "  $_\n";
+        }
+    }
+
+    if (!$QUIET) {
+        print $msg;
     }
 
     confirm_commit();
@@ -2245,13 +2352,6 @@ sub update {
         ## Do not report on the same one twice.
         ## Report all success, then all failures
 
-        ## Rethink: do this in two stages
-        ## First, find any matches for tables we already know about, in $global{goat}
-        ## Then, if needed, check the live database (add them as well)
-        ## At the end of the day we have a list of ids
-        ## Add those that are not already there
-        ## Complain if they don't fit (e.g. need PKs)
-        ## gregstop implement above
 
         ## First, find any matches for tables we already know about, in $global{goat}
         my $goatlist = get_goat_ids(@nouns);
@@ -3044,235 +3144,201 @@ sub add_goat_to_herd {
 sub get_goat_ids {
 
     ## Returns the ids from the goat table for matching relations
-    ## Arguments: variable  - names to match against
+    ## Also checks the live database and adds tables to the goat table as needed.
+    ## Arguments: single hashref:
+    ##  - args: arrayref of names to match against. Can have wildcards.
+    ##  - dbcols: optionl hashref of fields to populate goat table with (e.g. ping=1)
     ## Returns a hash with:
     ##  - relations: hash of goat objects, key is the fully qualified name
     ##    - original: hash of search term(s) used to find this
     ##    - goat: the goat object
     ##  - nomatch: hash of non-matching terms
     ##  - match: hash of matching terms
+    ##  - new: hash of newly added tables
 
-    my (%relation, %nomatch, %match, %seenit);
+    my $arg = shift || {};
+    my $names = $arg->{args} or die;
+    my $dbcols = $arg->{dbcols} || {};
 
-    for my $item (@_) {
+    ## The final hash we return
+    my %relation;
 
-        next if $seenit{$item}++;
+    ## Args that produced a match
+    my %match;
 
-        my $hasadot = index($item,'.') >= 0 ? 1 : 0;
-        my $hasstar = (index($item,'*') >= 0 or index($item,'%') >= 0) ? 1 : 0;
+    ## Args that produced no matches at all
+    my %nomatch;
 
-        ## Count the matches so we can return non-matching terms
-        my $found = 0;
+    ## Keep track of which args we've already done, just in case there are dupes
+    my %seenit;
 
-        ## Wildcards?
-        if ($hasstar) {
+    ## Which tables we added to the goat table
+    my %new;
 
-            ## Change to a regexier form
-            my $original_item = $item;
-            $item =~ s/\./\\./g;
-            $item =~ s/[*%]/\.\*/g;
+    ## Figure out which database to search in
+    my $bestdb = find_best_db_for_searching();
 
-            for my $fullname (grep { /\./ } keys %{ $GOAT }) {
-                ## If it has a dot, match the whole thing
-                if ($hasadot) {
-                    if ($fullname =~ /^$item$/) {
-                        $found++;
-                        $relation{$fullname}{original}{$original_item}++;
-                        $relation{$fullname}{goat} ||= $GOAT->{$fullname};
-                        $match{$item}++;
-                    }
-                    next;
-                }
+    ## This check still makes sense: if no databases, there should be nothing in $GOAT!
+    if (! defined $bestdb) {
+        die "No databases have been added yet, so we cannot add tables!\n";
+    }
 
-                ## No dot, so match table part only
-                my ($schema,$table) = split /\./ => $fullname;
-                if ($table =~ /^$item$/) {
-                    $found++;
-                    $relation{$fullname}{original}{$original_item}++;
-                    $relation{$fullname}{goat} ||= $GOAT->{$fullname};
-                    $match{$item}++;
-                }
-            }
+    my $rdbh = connect_database({name => $bestdb}) or die;
 
-            if (! $found) {
-                $nomatch{$original_item}++;
-            }
-
-            next;
-
-        } ## end wildcards
-
-        ## If it has a dot, it must match exactly
-        if ($hasadot) {
-            if (exists $GOAT->{$item}) {
-                $relation{$item}{original}{$item}++;
-                $relation{$item}{goat} ||= $GOAT->{$item};
-                $match{$item}++;
-            }
-            else {
-                $nomatch{$item}++;
-            }
-
-            next;
-        }
-
-        ## No dot, so we match all tables regardless of the schema
-        for my $fullname (grep { /\./ } keys %{ $GOAT }) {
-            my ($schema,$table) = split /\./ => $fullname;
-            if ($table eq $item) {
-                $found++;
-                $relation{$fullname}{original}{$item}++;
-                $relation{$fullname}{goat} ||= $GOAT->{$fullname};
-                $match{$item}++;
-            }
-        }
-
-        if (! $found) {
-            $nomatch{$item}++;
-        }
-
-    } ## end each given needle
-
-    return { relations => \%relation, nomatch => \%nomatch, match => \%match };
-
-} ## end of get_relation_ids
-
-
-sub get_live_goat_ids {
-
-    ## Searches a source database for any matching goats not already known
-    ## If found, adds them to the goat table
-    ## Arguments: two or more
-    ## 1. Name of the source database to get items from
-    ## 2. One or more names to match against
-    ## Returns a hash with:
-    ##  - relations: hash of goat objects, key is the fully qualified name
-    ##    - original: hash of search term(s) used to find this
-    ##    - goat: the goat object
-    ##  - nomatch: hash of non-matching terms
-    ##  - match: hash of matching terms
-
-    my $dbname = shift;
-
-    my (%relation, %nomatch, %seenit, %match);
-
-    ## Tables that are not yet in the goat table: add in bulk
-    ## Keys are the "schema.table" name, values is hash with dbname and reltype
-    my %addtable;
-
-    my $rdbh = connect_database({name => $dbname}) or die;
-
+    ## SQL to find a table or a sequence
+    ## We do not want pg_table_is_visible(c.oid) here
     my $BASESQL = q{
 SELECT nspname||'.'||relname AS name, relkind, c.oid
 FROM pg_class c
 JOIN pg_namespace n ON (n.oid = c.relnamespace)
-WHERE relkind IN ('S','r')
-AND pg_table_is_visible(c.oid)
+WHERE relkind IN ('r')
 AND nspname <> 'information_schema'
 AND nspname !~ '^pg_'
 };
 
-    for my $item (@_) {
+    ## Loop through each argument, and try and find matching goats
+  ITEM: for my $item (@$names) {
 
+        ## In case someone entered duplicate arguments
         next if $seenit{$item}++;
 
-        debug("Checking live db $dbname for $item");
+        ## Skip if this is not a tablename, but an arguement of the form x=y
+        next if index($item, '=') >= 0;
 
+        ## Determine if this item has a dot in it, and/or it is using wildcards
         my $hasadot = index($item,'.') >= 0 ? 1 : 0;
         my $hasstar = (index($item,'*') >= 0 or index($item,'%') >= 0) ? 1 : 0;
 
-        ## Count the matches so we can return non-matching terms
-        my $found = 0;
+        ## Temporary list of matching items
+        my @matches;
+
+        ## A list of tables to be bulk added to the goat table
+        my %addtable;
+
+        ## We may mutate the arg, so stow away the original
+        my $original_item = $item;
+
+        ## On the first pass, we look for matches in the existing $GOAT hash
+        ## We may also check the live database afterwards
 
         ## Wildcards?
         if ($hasstar) {
 
             ## Change to a regexier form
-            my $original_item = $item;
             $item =~ s/\./\\./g;
             $item =~ s/[*%]/\.\*/g;
+            $item = "^$item" if $item !~ /^[\^\.\%]/;
+            $item .= '$' if $item !~ /[\$\*]$/;
 
-            $SQL = $BASESQL . $hasadot ? "AND nspname||'.'||relname ~ ?" : "AND relname ~ ?";
+            ## Pull back all items from the GOAT hash that have a dot in them
+            for my $fullname (grep { /\./ } keys %{ $GOAT }) {
 
-            $sth = $rdbh->prepare($SQL);
-            $count = $sth->execute($item);
-            debug("Wildcard scan: $item. Count: $count");
-            for my $row (@{ $sth->fetchall_arrayref({}) }) {
-                my $name = $row->{name};
-                next if exists $GOAT->{$name};
-                $relation{$name}{original}{$original_item}++;
-                $match{$item}++;
-                $addtable{$name} = {db => $dbname, reltype => $row->{relkind}};
-                $found++;
+                ## We match against the whole thing if we have a dot
+                ## in our search term, otherwise we only match the table
+                my $searchname = $fullname;
+                if (! $hasadot) {
+                    (undef,$searchname) = split /\./ => $fullname;
+                }
+
+                ## Id we got a match, store the item from the GOAT that caused it
+                if ($searchname =~ /^$item$/) {
+                    push @matches => $fullname;
+                }
             }
 
-            if (! $found) {
-                $nomatch{$original_item}++;
-            }
-
-            next;
+            ## Setup the SQL to search the live database
+            $SQL = $BASESQL . ($hasadot
+                ? "AND nspname||'.'||relname ~ ?"
+                : "AND relname ~ ?");
 
         } ## end wildcards
 
-        ## If it has a dot, it must match exactly
-        if ($hasadot) {
-            next if exists $GOAT->{$item};
+        ## A dot with no wildcards: exact match
+        ## TODO: Allow foobar. to mean foobar.% ??
+        elsif ($hasadot) {
 
-            $SQL = $BASESQL . "AND nspname||'.'||relname = ?";
-            $sth = $rdbh->prepare($SQL);
-            $count = $sth->execute($item);
-            debug("Exact match $item. count is $count");
-            for my $row (@{ $sth->fetchall_arrayref({}) }) {
-                my $name = $row->{name};
-                next if exists $GOAT->{$name};
-                $relation{$name}{original}{$item}++;
-                $match{$item}++;
-                $addtable{$name} = {db => $dbname, reltype => $row->{relkind}};
-                $found++;
+            if (exists $GOAT->{$item}) {
+                push @matches => $item;
             }
 
-            if (! $found) {
-                $nomatch{$item}++;
-            }
+            ## No need to check live if we found a match
+            next ITEM if @matches;
 
-            next;
+            ## Setup the SQL to search the live database
+            $SQL = $BASESQL . q{AND nspname||'.'||relname = ?};
         }
 
-        ## No dot, so we match all tables regardless of the schema
+        ## No wildcards and no dot, so we match all tables regardless of the schema
+        else {
 
-        $SQL = $BASESQL . 'AND relname = ?';
+            ## Pull back all items from the GOAT hash that have a dot in them
+            for my $fullname (grep { /\./ } keys %{ $GOAT }) {
+                my ($schema,$table) = split /\./ => $fullname;
+                if ($table eq $item) {
+                    push @matches => $fullname;
+                }
+            }
+
+            ## Setup the SQL to search the live database
+            $SQL = $BASESQL . 'AND relname = ?';
+        }
+
+        ## Search the live database for matches
         $sth = $rdbh->prepare($SQL);
-        $count = $sth->execute($item);
-        debug("Table only $item, count is $count");
+        ($count = $sth->execute($item)) =~ s/0E0/0/;
+        debug(qq{Searched live database "$bestdb" for arg "$item", count was $count});
         for my $row (@{ $sth->fetchall_arrayref({}) }) {
+
+            ## The 'name' is combined "schema.relname"
             my $name = $row->{name};
+
+            ## Don't bother if we have already added this!
             next if exists $GOAT->{$name};
+
+            ## Document the string that led us to this one
             $relation{$name}{original}{$item}++;
+
+            ## Document the fact that we found this on a database
+            $new{$name}++;
+
+            ## Mark this item as having produced a match
             $match{$item}++;
-            $addtable{$name} = {db => $dbname, reltype => $row->{relkind}};
-            $found++;
+
+            ## Set this table to be added to the goat table below
+            $addtable{$name} = {db => $bestdb, reltype => $row->{relkind}, dbcols => $dbcols};
+
+            ## Add this to our matching list
+            push @matches => $name;
+
         }
 
-        if (! $found) {
-            $nomatch{$item}++;
+        ## Add all the tables we just found from searching the live database
+        if (keys %addtable) {
+            add_items_to_goat_table(\%addtable);
+        }
+
+        ## Populate the final hashes based on the match list
+        for my $name (@matches) {
+            $relation{$name}{original}{$original_item}++;
+            $relation{$name}{goat} ||= $GOAT->{$name};
+            $match{$item}++;
+        }
+
+        ## If this item did not match anything, note that as well
+        if (! @matches) {
+            $nomatch{$original_item}++;
         }
 
     } ## end each given needle
 
-    ## Add all the tables we just found
-    my $newlist = add_items_to_goat_table(\%addtable);
+    return {
+        relations  => \%relation,
+        nomatch    => \%nomatch,
+        match      => \%match,
+        new        => \%new,
+    };
 
-    ## Populate the newly added ones back into our hash
-    for my $name (keys %relation) {
-        if (! exists $GOAT->{$name}) {
-            die 'Something went wrong!';
-        }
-        $match{$name}{goat} ||= $GOAT->{$name};
-    }
-
-    return { relations => \%relation, nomatch => \%nomatch, match => \%match };
-
-} ## end of get_live_goat_ids
+} ## end of get_goat_ids
 
 
 sub add_items_to_goat_table {
@@ -3280,8 +3346,9 @@ sub add_items_to_goat_table {
     ## Given a list of tables, add them to the goat table as needed
     ## Arguments: 1
     ## 1. Hashref where keys are the relnames, and values are additional info:
-    ##   db: the database name (mandatory)
-    ##   reltype: table or sequence (optional, defaults to table)
+    ##   - db: the database name (mandatory)
+    ##   - reltype: table or sequence (optional, defaults to table)
+    ##   - dbcols: optional hashref of goat columns to set
     ## Returns: arrayref with all the new goat.ids
 
     my $info = shift or die;
@@ -3291,8 +3358,7 @@ sub add_items_to_goat_table {
     my $isthere = $dbh->prepare($SQL);
 
     ## SQL to add this new entry in
-    $SQL = "INSERT INTO bucardo.goat (schemaname,tablename,reltype,db) VALUES (?,?,?,?) RETURNING id";
-    my $newgoat = $dbh->prepare($SQL);
+    my $NEWGOATSQL = "INSERT INTO bucardo.goat (schemaname,tablename,reltype,db) VALUES (?,?,?,?) RETURNING id";
 
     my @newid;
 
@@ -3307,8 +3373,22 @@ sub add_items_to_goat_table {
         my $reltype = $info->{$name}{reltype} || 't';
         $reltype = $reltype =~ /s/i ? 'sequence' : 'table';
 
-        $newgoat->execute($schema,$table,$reltype,$db);
-        push @newid => $newgoat->fetchall_arrayref()->[0][0];
+        ## Adjust the SQL as necessary for this goat
+        $SQL = $NEWGOATSQL;
+        my @args = ($schema, $table, $reltype, $db);
+        if (exists $info->{$name}{dbcols}) {
+            for my $newcol (sort keys %{ $info->{$name}{dbcols} }) {
+                $SQL =~ s/\)/,$newcol)/;
+                $SQL =~ s/\?,/?,?,/;
+                push @args => $info->{$name}{dbcols}{$newcol};
+            }
+        }
+        $sth = $dbh->prepare($SQL);
+        ($count = $sth->execute(@args)) =~ s/0E0/0/;
+
+        debug(qq{Added "$schema.$table" to goat table with db "$db", count was $count});
+
+        push @newid => $sth->fetchall_arrayref()->[0][0];
     }
 
     ## Update the global
@@ -4294,17 +4374,17 @@ sub process_args {
     my %arg;
 
     while ($string =~ m/(\w+)\s*=\s*"(.+?)" /g) {
-        $arg{$1} = $2;
+        $arg{lc $1} = $2;
     }
     $string =~ s/\w+\s*=\s*".+?" / /g;
 
     while ($string =~ m/(\w+)\s*=\s*'(.+?)' /g) {
-        $arg{$1} = $2;
+        $arg{lc $1} = $2;
     }
     $string =~ s/\w+\s*=\s*'.+?' / /g;
 
     while ($string =~ m/(\w+)\s*=\s*(\S+)/g) {
-        $arg{$1} = $2;
+        $arg{lc $1} = $2;
     }
     $string =~ s/\w+\s*=\s*\S+/ /g;
 
@@ -4564,11 +4644,38 @@ sub list_tables {
         $maxdb = length $row->{db} if length $row->{db} > $maxdb;
    }
 
-    for my $row (@$info) {
-        printf "Table: %-*s  DB: %-*s  PK: %s\n",
+    for my $row (
+        map { $_->[0] }
+        sort {
+          $a->[1] cmp $b->[1]    ## Base schema name
+          or $a->[2] <=> $b->[2] ## Numeric schema name tail
+          or $a->[3] cmp $b->[3] ## Base table name
+          or $a->[4] <=> $b->[4] ## Numeric table name tail
+        }
+        map {
+          my $numerics = 0;
+          my $schemabase = $_->{schemaname};
+          $schemabase =~ s/(\d+)$// and $numerics = $1;
+          my $numerict = 0;
+          my $tablebase = $_->{tablename};
+          $tablebase =~ s/(\d+)$// and $numerict = $1;
+          [$_, $schemabase, $numerics, $tablebase, $numerict]
+        }
+    @$info) {
+        ## Extra information of note to tack on the end
+        my $extra = '';
+        if (defined $row->{ping}) {
+            $extra .= sprintf ' ping:%s', $row->{ping} ? 'true' : 'false';
+        }
+        if ($row->{rebuild_index} != 0) {
+            $extra .= " rebuild_index:$row->{rebuild_index}";
+        }
+
+        printf "Table: %-*s  DB: %-*s  PK: %s%s\n",
             $maxtable, "$row->{schemaname}.$row->{tablename}",
             $maxdb, $row->{db},
-            $row->{pk};
+            $row->{pk},
+            $extra;
         if ($VERBOSE) {
             my $g = $global{goat}->{$row->{id}};
             if (exists $g->{herd}) {
@@ -5298,180 +5405,6 @@ sub add_sync {
 
 } ## end of add_sync
 
-
-sub add_table {
-
-    ## Usage: add table [schema].table [options]
-
-    my $type = shift || 'table';
-
-    my $usage = usage("add_$type");
-
-    if (! @nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
-
-    my $DEFAULT_SCHEMA = 'public';
-
-    ## Inputs and aliases, database column name, flags, default
-    my $validcols = q{
-        db                       db                   0                null
-        has_delta                has_delta            TF               null
-        ping                     ping                 TF               null
-        customselect             customselect         0                null
-        source_makedelta         source_makedelta     =inherits|on|off null
-        target_makedelta         target_makedelta     =inherits|on|off null
-        rebuild_index            rebuild_index        numeric          null
-        standard_conflict        standard_conflict    0                null
-        analyze_after_copy       analyze_after_copy   TF               null
-        delta_bypass             delta_bypass         TF               null
-        delta_bypass_min         delta_bypass_min     numeric          null
-        delta_bypass_count       delta_bypass_count   numeric          null
-        delta_bypass_percent     delta_bypass_percent numeric          null
-        delta_bypass             delta_bypass         TF               null
-        herd                     herd                 0                skip
-    };
-
-    my ($dbcols,$cols,$phs,$vals)
-        = process_simple_args({cols => $validcols, list => \@nouns, usage => $usage});
-
-    ## Any single words are table names.
-    my @tables;
-    for (@nouns) {
-        if (/(\w+)=(.+)/) {
-            $dbcols->{$1} = $2;
-        }
-        next if /=/;
-        if (/^(\w*?)?\.?(\w+)$/) {
-            push @tables => length $1 ? [$1,$2] : [$DEFAULT_SCHEMA,$2];
-        }
-        else {
-            warn "Invalid $type name: $_\n";
-            exit 1;
-        }
-    }
-
-    if (! @tables) {
-        warn "$usage\n";
-        exit 1;
-    }
-
-    if (! exists $dbcols->{db}) {
-        my $winner;
-        my $count = keys %$DB;
-        ## If we only have one database, we can use that
-        if ($count == 1) {
-            ($winner) = keys %{$global{db}};
-        }
-        else {
-            ## Since they did not provide one, pick the oldest postgres database
-            #die Dumper $DB->{mydb2};
-            for my $db (sort
-                        { $DB->{$a}{epoch} <=> $DB->{$b}{epoch} or $a cmp $b }
-                        grep { $DB->{$_}{dbtype} eq 'postgres' }
-                        keys %$DB) {
-                $winner = $db;
-                last;
-            }
-            if (! defined $winner) {
-                warn "Please specify a database with db=<name>\n";
-                _list_databases();
-                exit 1;
-            }
-        }
-
-        $dbcols->{db} = $winner;
-
-        ## Replace any existing database
-        if ($cols =~ s/\bdb\b//) {
-            $phs =~ s/\?//;
-            $phs =~ s/,,/,/;
-        }
-        ## Add this in to the start of the list
-        $cols = "db,$cols";
-        $vals->{db} = $dbcols->{db};
-        $phs .= ',?';
-        ## Cleanups
-        $cols =~ s/,,/,/;
-        $cols =~ s/,$//;
-        $phs =~ s/^,//;
-    }
-    my $db = $dbcols->{db};
-
-    if (! exists $global{db}{$db}) {
-        warn qq{Invalid database: "$db"\n};
-        _list_databases();
-        exit 1;
-    }
-
-    my $finalmsg = '';
-
-    ## If they requested a herd and it does not exist, create it
-    if (exists $dbcols->{herd}) {
-        my $herd = $dbcols->{herd};
-        if (! exists $global{herd}{$herd}) {
-            $SQL = 'INSERT INTO bucardo.herd(name) VALUES(?)';
-            $sth = $dbh->prepare($SQL);
-            $sth->execute($herd);
-            load_bucardo_info(1);
-            $finalmsg .= qq{Created herd "$herd"\n};
-        }
-    }
-
-    ## Attempt to insert these tables into the database if they don't already exist
-    $SQL = 'SELECT id FROM bucardo.goat WHERE schemaname=? AND tablename=? AND db=?';
-    my $sthf = $dbh->prepare($SQL);
-    $SQL = "INSERT INTO bucardo.goat (schemaname,tablename,reltype,$cols) VALUES (?,?,?,$phs)";
-    $DEBUG and warn "SQL: $SQL\n";
-    $DEBUG and warn Dumper $vals;
-    $sth = $dbh->prepare($SQL);
-    my $additions = '';
-    my %oldtable;
-    for my $row (@tables) {
-        my ($s,$t) = @$row;
-        $count = $sthf->execute($s,$t,$db);
-        if ($count >= 1) {
-            $oldtable{"$s.$t"}++;
-            next;
-        }
-        eval {
-            $sth->execute($s,$t,$type,$db);
-        };
-        if ($@) {
-            die qq{Failed to add $type "$s.$t": $@\n};
-        }
-        $additions .= qq{Added $type "$s.$t"\n};
-    }
-
-    ## Add them to the herd if it was specificed and they are new tables
-    if (exists $dbcols->{herd}) {
-        my $herd = $dbcols->{herd};
-        $SQL = 'INSERT INTO bucardo.herdmap (herd,priority,goat) VALUES (?,?,'
-            . ' (SELECT id FROM goat WHERE schemaname=? AND tablename=? AND db=?))';
-        $sth = $dbh->prepare($SQL);
-        for my $row (@tables) {
-            my ($s,$t) = @$row;
-            next if exists $oldtable{"$s.$t"};
-            eval {
-                $sth->execute($herd,0,$s,$t,$db);
-            };
-            if ($@) {
-                die qq{Failed to add $type "$s.$t" to herd "$herd": $@\n};
-            }
-        }
-    }
-
-    $dbh->commit();
-
-    if (!$QUIET) {
-        $finalmsg and print "$finalmsg";
-        print "$additions";
-    }
-
-    return;
-
-} ## end of add_table
 
 
 sub find_goats_in_db {
@@ -7754,6 +7687,7 @@ sub process_simple_args {
     }
 
     for my $arg (sort keys %$xyargs) {
+
         next if $arg eq 'extraargs';
 
         if (! exists $item{$arg}) {

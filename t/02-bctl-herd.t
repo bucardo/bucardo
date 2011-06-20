@@ -44,14 +44,14 @@ $t = q{Add herd gives expected message if herd already exists};
 $res = $bct->ctl('bucardo add herd foobar');
 like ($res, qr/Herd "foobar" already exists/, $t);
 
-$t = q{Add herd works when adding a single table that does not exist};
+$t = q{Add herd gives expected message when adding a single table that does not exist};
 $res = $bct->ctl('bucardo add herd foobar nosuchtable');
 like ($res, qr/No databases have been added yet/, $t);
 
 $t = q{Add herd works when adding a single table};
 $bct->ctl("bucardo add database bucardo_test user=$dbuserA port=$dbportA host=$dbhostA addalltables");
 $res = $bct->ctl('bucardo add herd foobar bucardo_test1');
-like ($res, qr/Herd "foobar" already exists .*Added table "public.bucardo_test1" to the herd plus/, $t);
+is ($res, qq{Herd "foobar" already exists\n$newherd_msg "foobar":\n  public.bucardo_test1\n}, $t);
 
 $t = q{Add herd works when adding multiple tables};
 

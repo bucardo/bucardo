@@ -339,6 +339,19 @@ for my $table (keys %tabletype) {
     is ($count, 0, $t);
 }
 
+## Test of customselect options
+
+$t=q{Using customselect, we can force a text string to an int};
+my $CS = 'SELECT id, data1 AS data2inty::INTEGER, inty, email FROM bucardo.bucardo_test2';
+## Set this one for this db and this sync
+$bct->ctl('bucardo add cs db=M sync=mongo table=ttable');
+
+$t=q{Using customselect, we can restrict the columns sent};
+
+$t=q{Using customselect, we can add new columns and modify others};
+## Set this one for all syncs
+
+
 pass('Done with mongo testing');
 
 exit;
