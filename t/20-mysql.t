@@ -42,9 +42,6 @@ use BucardoTesting;
 ## For now, remove the bytea table type as we don't have full MySQL support yet
 delete $tabletype{bucardo_test8};
 
-## Also cannot handle multi-column primary keys
-#delete $tabletype{bucardo_test2};
-
 my $numtabletypes = keys %tabletype;
 plan tests => 119;
 
@@ -151,7 +148,11 @@ $command =
 $res = $bct->ctl($command);
 like ($res, qr/Added sync "mysql"/, $t);
 
-## Start up Bucardo with this new sync
+## Create a second sync, solely for multi-sync interaction issues
+$bct->ctl('bucardo add dbgroup t1 A:source B C');
+$bct->ctl('bucardo add sync tsync1 herd=therd dbs=t1 ping=true');
+
+## Start up Bucardo with these new syncs
 $bct->restart_bucardo($dbhX);
 
 ## Get the statement handles ready for each table type

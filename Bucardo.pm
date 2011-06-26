@@ -2392,6 +2392,7 @@ sub start_kid {
             $x->{dbh}->rollback();
 
             $x->{dbh}->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE');
+            $self->glog(qq{Set db "$dbname" to serializable}, LOG_DEBUG);
         }
 
         ## We may want to lock all the tables
@@ -2776,7 +2777,7 @@ sub start_kid {
                     }
                 }
 
-                $self->glog("Sequence from db $g->{winning_db} is the highest", LOG_DEBUG);
+                $self->glog("Sequence $S.$T from db $g->{winning_db} is the highest", LOG_DEBUG);
 
                 ## Now that we have a winner, apply the changes to every other PG database
                 $deltacount{sequences} += $self->adjust_sequence($g, $sync, $S, $T, $syncname);
