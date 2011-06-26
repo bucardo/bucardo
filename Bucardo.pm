@@ -1294,7 +1294,7 @@ sub start_controller {
         AND       ended IS NULL
         RETURNING started
     };
-    $sth{syncrun_end_now} = $maindbh->prepare($SQL);
+    $sth{ctl_syncrun_end_now} = $maindbh->prepare($SQL);
 
     ## At this point, this controller must be authoritative for its sync
     ## Thus, we want to stop/kill any other CTL or KID processes that exist for this sync
@@ -1318,7 +1318,7 @@ sub start_controller {
     $self->terminate_old_goats($syncname) and sleep 1;
 
     ## Clear out any old entries in the syncrun table
-    $sth = $sth{syncrun_end_now};
+    $sth = $sth{ctl_syncrun_end_now};
     $count = $sth->execute("Old entry ended (CTL $$)", $syncname);
     if (1 == $count) {
         $info = $sth->fetchall_arrayref()->[0][0];
@@ -1515,23 +1515,6 @@ sub start_controller {
             ## Let anyone listening know that this sync is complete. Global message
             my $notifymsg = "syncdone_$syncname";
             $self->db_notify($maindbh, $notifymsg);
-
-            ## Remove any existing 'lastgood' entry for this sync, and close out the current one
-            ## This is not used anymore, but again, no harm in leaving it in for now
-            $SQL = 'SELECT truncates,deletes,inserts FROM bucardo.syncrun WHERE sync = ? AND ended IS NULL';
-            $sth = $maindbh->prepare($SQL);
-            $count = $sth->execute($syncname);
-            if ($count < 1) {
-                #$self->glog("Did not find a valid row in the syncrun table for $syncname!", LOG_NORMAL);
-                $sth->finish();
-            }
-            else {
-                my $row = $sth->fetchall_arrayref({})->[0];
-                my $action = ($row->{truncates} or $row->{deletes} or $row->{inserts})
-                    ? 'good' : 'empty';
-                $self->end_syncrun($maindbh, $action, $syncname, "Complete (CTL $$)");
-                $maindbh->commit();
-            }
 
             ## If we are not a stayalive, this is a good time to leave
             if (! $sync->{stayalive} and ! $kidsalive) {
