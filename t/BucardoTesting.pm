@@ -20,12 +20,13 @@ my $DEBUG = $ENV{BUCARDO_DEBUG} || 0;
 use base 'Exporter';
 our @EXPORT = qw/%tabletype %tabletypemysql %sequences %val compare_tables bc_deeply clear_notices 
                  wait_for_notice $location is_deeply like pass is isa_ok ok
-                 $oldherd_msg $newherd_msg $addtable_msg $nomatch_msg/;
+                 $oldherd_msg $newherd_msg $addtable_msg $deltable_msg $nomatch_msg/;
 
 my $dbname = 'bucardo_test';
 
 ## Shortcuts for ease of changes and smaller text:
 our $addtable_msg = 'Added the following tables';
+our $deltable_msg = 'Removed the following tables';
 our $nomatch_msg = 'Did not find matches for the following terms';
 our $oldherd_msg = 'The following tables are now part of the herd';
 our $newherd_msg = 'The following tables are now part of the herd';

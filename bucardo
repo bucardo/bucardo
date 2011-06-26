@@ -372,6 +372,38 @@ kick() if $verb eq 'kick';
 
 help();
 
+sub numbered_relations {
+
+    ## Return relations of the form schema.table in a sorted order
+    ## in which we do alphabetical but switch to numeric order
+    ## for any numbers at the end of the schema or the table
+
+    my $uno = ref $a ? "$a->{schemaname}.$a->{tablename}" : $a;
+    my $dos = ref $b ? "$b->{schemaname}.$b->{tablename}" : $b;
+
+    ## Gather information for the first item
+    die if $uno !~ /(.+)\.(.+)/;
+    my ($schema1,$sbase1,$table1,$tbase1) = ($1,$1,$2,$2);
+    my ($snum1, $tnum1) = (0,0);
+    $sbase1 =~ s/(\d+)$// and $snum1 = $1;
+    $tbase1 =~ s/(\d+)$// and $tnum1 = $1;
+
+    ## Gather information for the second item
+    die if $dos !~ /(.+)\.(.+)/;
+    my ($schema2,$sbase2,$table2,$tbase2) = ($1,$1,$2,$2);
+    my ($snum2, $tnum2) = (0,0);
+    $sbase2 =~ s/(\d+)$// and $snum2 = $1;
+    $tbase2 =~ s/(\d+)$// and $tnum2 = $1;
+
+    return (
+        $sbase1 cmp $sbase2
+     or $snum1 <=> $snum2
+     or $tbase1 cmp $tbase2
+     or $tnum1 <=> $tnum2);
+
+} ## end of numbered_relations
+
+
 sub check_version {
     my $dbh = shift;
     my $res = $dbh->selectall_arrayref('SELECT version()')->[0][0];
@@ -1767,7 +1799,7 @@ sub add_table {
 
         if (@newnames) {
             $msg .= qq{The following tables are now part of the herd "$herdname":\n};
-            for (@newnames) {
+            for (sort numbered_relations @newnames) {
                 $msg .= "  $_\n";
             }
         }
@@ -1783,6 +1815,51 @@ sub add_table {
     return;
 
 } ## end of add_table
+
+
+sub remove_table {
+
+    ## Usage: remove table tablename [t2 t3 ...]
+    ## Wildcards?
+
+    my $usage = usage('remove_table');
+
+    if (!@nouns) {
+        warn "$usage\n";
+        exit 1;
+    }
+
+    ## Prepare our SQL
+    $SQL = q{DELETE FROM bucardo.goat WHERE schemaname||'.'||tablename = ?};
+    $sth = $dbh->prepare($SQL);
+
+    for my $name (@nouns) {
+        if ($name =~ /^\w[\w\d]*\.\w[\w\d]*$/) {
+            if (! exists $GOAT->{$name}) {
+                print qq{No such table: $name\n};
+            }
+            eval {
+                $sth->execute($name);
+            };
+            if ($@) {
+                die qq{Could not delete goat "$name"\n$@\n};
+            }
+        }
+        else {
+            die qq{Please use the full schema.table name\n};
+        }
+    }
+
+    print "Removed the following tables:\n";
+    for my $name (sort numbered_relations @nouns) {
+        print qq{  $name\n};
+    }
+
+    confirm_commit();
+
+    exit 0;
+
+} ## end of remove_table
 
 
 ##
@@ -4642,26 +4719,10 @@ sub list_tables {
         $name = $row->{pk} = $row->{pkey} ? "$row->{pkey} ($row->{pkeytype})" : 'none';
         $maxpkey = length $name if length $name > $maxpkey;
         $maxdb = length $row->{db} if length $row->{db} > $maxdb;
-   }
+    }
 
-    for my $row (
-        map { $_->[0] }
-        sort {
-          $a->[1] cmp $b->[1]    ## Base schema name
-          or $a->[2] <=> $b->[2] ## Numeric schema name tail
-          or $a->[3] cmp $b->[3] ## Base table name
-          or $a->[4] <=> $b->[4] ## Numeric table name tail
-        }
-        map {
-          my $numerics = 0;
-          my $schemabase = $_->{schemaname};
-          $schemabase =~ s/(\d+)$// and $numerics = $1;
-          my $numerict = 0;
-          my $tablebase = $_->{tablename};
-          $tablebase =~ s/(\d+)$// and $numerict = $1;
-          [$_, $schemabase, $numerics, $tablebase, $numerict]
-        }
-    @$info) {
+    for my $row (sort numbered_relations @$info) {
+
         ## Extra information of note to tack on the end
         my $extra = '';
         if (defined $row->{ping}) {
@@ -5845,62 +5906,6 @@ sub remove_sync {
 } ## end of remove_sync
 
 
-sub remove_table {
-
-    ## Usage: remove table name [name2 name3 ...]
-
-    my $type = shift || 'table';
-
-    my $usage = usage("remove_$type");
-
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
-
-    ## Make sure all named tables exist
-    my $goat = $global{goat};
-    my @id;
-    my %seenit;
-    for my $name (@nouns) {
-        if (! exists $goat->{$name}) {
-            die qq{No such $type: $name\n};
-        }
-        my $g = $goat->{$name};
-        if (ref $g eq 'ARRAY') { ## More than one match, remove them all
-            for my $row (@{$goat->{$name}}) {
-                next if $seenit{$row->{id}}++;
-                push @id => [$row->{id}, "$row->{schemaname}.$row->{tablename}", $row->{reltype}];
-            }
-        }
-        else {
-            next if $seenit{$g->{id}}++;
-            push @id => [$g->{id}, "$g->{schemaname}.$g->{tablename}", $g->{reltype}];
-        }
-    }
-
-    $SQL = 'DELETE FROM bucardo.goat WHERE id = ?';
-    $sth = $dbh->prepare($SQL);
-    for my $i (@id) {
-        my ($id,$name,$typ) = @$i;
-        eval {
-            $sth->execute($id);
-        };
-        if ($@) {
-            die qq{Could not delete $typ "$name"\n$@\n};
-        }
-    }
-
-    for my $i (@id) {
-        my ($id,$name,$typ) = @$i;
-        print qq{Removed $typ "$name"\n};
-    }
-
-    $dbh->commit();
-
-    exit 0;
-
-} ## end of remove_table
 
 
 sub clog {

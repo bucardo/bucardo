@@ -10,7 +10,7 @@ use warnings;
 use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 30;
+use Test::More tests => 32;
 
 use vars qw/$t $res $expected $command $dbhX $dbhA $dbhB $SQL/;
 
@@ -222,6 +222,26 @@ $newherd_msg "foobar2":
   public.bucardo_test6
 };
 is ($res, $expected, $t);
+
+## Tests of basic 'delete table' usage
+
+$t = q{Delete table works for a single entry};
+$res = $bct->ctl('bucardo remove table public.bucardo_test4');
+$expected =
+qq{$deltable_msg:
+  public.bucardo_test4
+};
+is ($res, $expected, $t);
+
+$t = q{Delete table works for multiple entries};
+$res = $bct->ctl('bucardo remove table public.bucardo_test3 public.bucardo_test2');
+$expected =
+qq{$deltable_msg:
+  public.bucardo_test2
+  public.bucardo_test3
+};
+is ($res, $expected, $t);
+
 
 END {
     $bct->stop_bucardo($dbhX);
