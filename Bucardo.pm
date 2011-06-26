@@ -962,7 +962,7 @@ sub mcp_main {
 
             ## Should not happen, but let's at least log it
             else {
-                $self->glog("Received unknown message $name from $npid!", LOG_TERSE);
+                $self->glog("Warning: received unknown message $name from $npid!", LOG_TERSE);
             }
 
         } ## end each notice
@@ -1468,8 +1468,16 @@ sub start_controller {
                 next NOTICE;
             }
 
+            ## Someone else's sync is getting kicked, finishing up, or stopping
+            next NOTICE if
+                (index($name, 'kick_') == 0)
+                or
+                (index($name, 'syncdone_') == 0)
+                or
+                (index($name, 'stopsync_') == 0);
+
             ## Should not happen, but let's at least log it
-            $self->glog("Received unknown message $name from $npid!", LOG_TERSE);
+            $self->glog("Warning: received unknown message $name from $npid!", LOG_TERSE);
 
         } ## end of each notification
 
@@ -2279,9 +2287,19 @@ sub start_kid {
                     $self->db_notify($maindbh, "kid_${$}_pong");
                 }
 
+                ## Someone else's sync is running
+                elsif (index($name, 'run_') == 0) {
+                }
+                ## Someone else's sync is stopping
+                elsif (index($name, 'stopsync_') == 0) {
+                }
+                ## Someone else's kid is getting pinged
+                elsif (index($name, '_ping') > 0) {
+                }
+
                 ## Should not happen, but let's at least log it
                 else {
-                    $self->glog("Received unknown message $name from $npid!", LOG_TERSE);
+                    $self->glog("Warning: received unknown message $name from $npid!", LOG_TERSE);
                 }
 
             } ## end each notice
