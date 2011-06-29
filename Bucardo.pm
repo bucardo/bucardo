@@ -1735,10 +1735,9 @@ sub start_kid {
 
     ## A single kid, in charge of doing a sync between two or more databases
     ## aka the KID process
-    ## Arguments: two
+    ## Arguments: one
     ## 1. Hashref of sync information
-    ## 2. The gang number
-    ## Returns: never
+    ## Returns: never (exits)
 
     my ($self,$sync) = @_;
 
@@ -1769,7 +1768,7 @@ sub start_kid {
         die "CTL request\n";
     };
 
-    ## Set up some common groupings of databases inside sync->{db}
+    ## Set up some common groupings of the databases inside sync->{db}
     my (@dbs, @dbs_postgres, @dbs_mysql, @dbs_mongo,
         @dbs_source, @dbs_target, @dbs_dbi, @dbs_connectable);
     for my $dbname (sort keys %{ $sync->{db} }) {
@@ -1847,7 +1846,7 @@ sub start_kid {
         if ($msg =~ /DBD::Pg/) {
            $msg .= "\nMain DB state: " . ($maindbh->state || '?');
            $msg .= " Error: " . ($maindbh->err || 'none');
-           for my $dbname (@dbs_postgres) {
+           for my $dbname (@dbs_dbi) {
                $x = $sync->{db}{$dbname};
 
                my $dbh = $x->{dbh};
@@ -1855,7 +1854,7 @@ sub start_kid {
                   $msg .= "\nDB $dbname state: $state";
                $msg .= " Error: " . ($dbh->err || 'none');
                ## If this was a deadlock problem, try and gather more information
-               if ($state eq '40P01') {
+               if ($state eq '40P01' and $x->{dbtype} eq 'postgres') {
                    $msg .= $self->get_deadlock_details($dbh, $msg);
                    $moresub = ' (deadlock)';
                }
