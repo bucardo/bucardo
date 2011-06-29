@@ -150,7 +150,7 @@ like ($res, qr/Added sync "mysql"/, $t);
 
 ## Create a second sync, solely for multi-sync interaction issues
 $bct->ctl('bucardo add dbgroup t1 A:source B C');
-$bct->ctl('bucardo add sync tsync1 herd=therd dbs=t1 ping=true');
+$bct->ctl('bucardo add sync tsync1 herd=therd dbs=t1 ping=false status=inactive');
 
 ## Start up Bucardo with these new syncs
 $bct->restart_bucardo($dbhX);

@@ -21,7 +21,7 @@ eval {
     $evalok = 1;
 };
 if (!$evalok) {
-	plan (skip_all =>  'Cannot test mongo unless the Perl module MongoDB is installed');
+    plan (skip_all =>  'Cannot test mongo unless the Perl module MongoDB is installed');
 }
 
 ## MongoDB must be up and running
@@ -32,7 +32,7 @@ eval {
     $evalok = 1;
 };
 if (!$evalok) {
-	plan (skip_all =>  'Cannot test mongo as we cannot connect to a running Mongo db');
+    plan (skip_all =>  'Cannot test mongo as we cannot connect to a running Mongo db');
 }
 
 use BucardoTesting;
@@ -45,7 +45,7 @@ delete $tabletype{bucardo_test2};
 
 
 my $numtabletypes = keys %tabletype;
-plan tests => 125;
+plan tests => 133;
 
 ## Make sure we start clean by dropping the test database
 my $dbname = 'bucardotest';
@@ -100,6 +100,11 @@ $command =
 "bucardo add tables all db=A herd=therd pkonly";
 $res = $bct->ctl($command);
 like ($res, qr/Creating herd: therd.*New tables added: \d/s, $t);
+
+## Add a suffix to the end of each mongo target table
+$SQL = q{INSERT INTO bucardo.customname(goat,newname,db) 
+SELECT id,tablename||'_pg','M' FROM goat};
+$dbhX->do($SQL);
 
 ## Add all sequences, and add them to the newly created herd
 $t = q{Adding all sequences on the master works};
@@ -200,13 +205,20 @@ for (@names) {
     $col{$_} = 1;
 }
 
-for my $table (sort keys %tabletype) {
+## Set the modified table names
+my %tabletype2;
+for my $table (keys %tabletype) {
+    my $newname = $table.'_pg';
+    $tabletype2{$newname} = $tabletype{$table};
+}
+
+for my $table (sort keys %tabletype2) {
     $t = "Table $table has a mongodb collection";
     ok(exists $col{$table}, $t);
 }
 
 ## Check that mongo has the new rows
-for my $table (sort keys %tabletype) {
+for my $table (sort keys %tabletype2) {
     $t = "Mongo collection $table has correct number of rows after insert";
     my $col = $db->get_collection($table);
     my @rows = $col->find->all;
@@ -217,7 +229,7 @@ for my $table (sort keys %tabletype) {
     delete $rows[0]->{_id};
 
     $t = "Mongo collection $table has correct entries";
-    my $type = $tabletype{$table};
+    my $type = $tabletype2{$table};
     my $id = $val{$type}{1};
     my $pkeyname = $table =~ /test5/ ? 'id space' : 'id';
 
@@ -245,7 +257,7 @@ for my $table (keys %tabletype) {
 $dbhA->commit();
 $bct->ctl('bucardo kick mongo 0');
 
-for my $table (keys %tabletype) {
+for my $table (keys %tabletype2) {
     $t = "Mongo collection $table has correct number of rows after update";
     my $col = $db->get_collection($table);
     my @rows = $col->find->all;
@@ -263,7 +275,7 @@ for my $table (keys %tabletype) {
 $dbhA->commit();
 $bct->ctl('bucardo kick mongo 0');
 
-for my $table (keys %tabletype) {
+for my $table (keys %tabletype2) {
     $t = "Mongo collection $table has correct number of rows after delete";
     my $col = $db->get_collection($table);
     my @rows = $col->find->all;
@@ -283,7 +295,7 @@ for my $table (keys %tabletype) {
 $dbhA->commit();
 $bct->ctl('bucardo kick mongo 0');
 
-for my $table (keys %tabletype) {
+for my $table (keys %tabletype2) {
     $t = "Mongo collection $table has correct number of rows after double insert";
     my $col = $db->get_collection($table);
     my @rows = $col->find->all;
@@ -298,7 +310,7 @@ for my $table (keys %tabletype) {
 $dbhA->commit();
 $bct->ctl('bucardo kick mongo 0');
 
-for my $table (keys %tabletype) {
+for my $table (keys %tabletype2) {
     $t = "Mongo collection $table has correct number of rows after single deletion";
     my $col = $db->get_collection($table);
     my @rows = $col->find->all;
@@ -317,7 +329,7 @@ for my $table (keys %tabletype) {
 $dbhA->commit();
 $bct->ctl('bucardo kick mongo 0');
 
-for my $table (keys %tabletype) {
+for my $table (keys %tabletype2) {
     $t = "Mongo collection $table has correct number of rows after more inserts";
     my $col = $db->get_collection($table);
     my @rows = $col->find->all;
@@ -331,15 +343,52 @@ for my $table (keys %tabletype) {
 $dbhA->commit();
 $bct->ctl('bucardo kick mongo 0');
 
-for my $table (keys %tabletype) {
-    $t = "Mongo collection $table has correct number of rows after trunacte";
+for my $table (keys %tabletype2) {
+    $t = "Mongo collection $table has correct number of rows after truncate";
     my $col = $db->get_collection($table);
     my @rows = $col->find->all;
     my $count = @rows;
     is ($count, 0, $t);
 }
 
+## Test customname again
+undef %tabletype2;
+for my $table (keys %tabletype) {
+    my $newname = $table.'_pg2';
+    $tabletype2{$newname} = $tabletype{$table};
+}
+
+
 ## Test of customselect options
+$dbhX->do('DELETE FROM bucardo.customname');
+
+## Add a new suffix to the end of each table in this sync for mongo
+$SQL = q{INSERT INTO bucardo.customname(goat,newname,db,sync)
+SELECT id,tablename||'_pg2','M','mongo' FROM goat};
+$dbhX->do($SQL);
+$dbhX->commit();
+
+$bct->ctl('reload sync mongo');
+
+## Insert two rows
+for my $table (keys %tabletype) {
+    my $type = $tabletype{$table};
+    my $val3 = $val{$type}{3};
+    $sth{insert}{3}{$table}{A}->execute($val3);
+    my $val4 = $val{$type}{4};
+    $sth{insert}{4}{$table}{A}->execute($val4);
+}
+$dbhA->commit();
+$bct->ctl('bucardo kick mongo 0');
+
+for my $table (keys %tabletype2) {
+    $t = "Mongo collection $table has correct number of rows after insert";
+    my $col = $db->get_collection($table);
+    my @rows = $col->find->all;
+    my $count = @rows;
+    is ($count, 2, $t);
+}
+
 
 $t=q{Using customselect, we can force a text string to an int};
 my $CS = 'SELECT id, data1 AS data2inty::INTEGER, inty, email FROM bucardo.bucardo_test2';
@@ -350,7 +399,6 @@ $t=q{Using customselect, we can restrict the columns sent};
 
 $t=q{Using customselect, we can add new columns and modify others};
 ## Set this one for all syncs
-
 
 pass('Done with mongo testing');
 

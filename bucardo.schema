@@ -426,8 +426,6 @@ ALTER TABLE bucardo.dbgroup ADD CONSTRAINT dbgroup_name_sane CHECK (name ~ E'^[a
 ALTER TABLE bucardo.sync    ADD CONSTRAINT sync_name_sane
   CHECK (name ~ E'^[a-zA-Z]\\w*$' AND lower(name) NOT IN ('pushdelta','fullcopy','swap'));
 
--- XXX Separate standard_conflict for sequences?
-
 CREATE SEQUENCE bucardo.customcode_id_seq;
 CREATE TABLE bucardo.customcode (
   id        INTEGER     NOT NULL DEFAULT nextval('customcode_id_seq'),
@@ -475,6 +473,36 @@ ALTER TABLE bucardo.customcode_map ADD CONSTRAINT customcode_map_syncgoat
 
 CREATE UNIQUE INDEX customcode_map_unique_sync ON bucardo.customcode_map(code,sync) WHERE sync IS NOT NULL;
 CREATE UNIQUE INDEX customcode_map_unique_goat ON bucardo.customcode_map(code,goat) WHERE goat IS NOT NULL;
+
+--
+-- Allow the target's names to differ from the source
+--
+CREATE TABLE bucardo.customname (
+  newname  TEXT             NULL,
+  db       TEXT             NULL,
+  sync     TEXT             NULL,
+  goat     INTEGER      NOT NULL,
+  cdate    TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+ALTER TABLE bucardo.customname ADD CONSTRAINT customname_sanename
+  CHECK (newname ~ E'^[a-zA-Z0-9_\.~]+$');
+
+ALTER TABLE bucardo.customname
+  ADD CONSTRAINT customname_db_fk
+  FOREIGN KEY (db) REFERENCES bucardo.db (name)
+  ON UPDATE CASCADE ON DELETE CASCADE;
+
+ALTER TABLE bucardo.customname
+  ADD CONSTRAINT customname_sync_fk
+  FOREIGN KEY (sync) REFERENCES bucardo.sync (name)
+  ON UPDATE CASCADE ON DELETE CASCADE;
+
+ALTER TABLE bucardo.customname
+  ADD CONSTRAINT customname_goat_fk
+  FOREIGN KEY (goat) REFERENCES bucardo.goat (id)
+  ON UPDATE CASCADE ON DELETE CASCADE;
+
 
 --
 -- Keep track of syncs as they run: provides instant and historical status information

@@ -1395,6 +1395,88 @@ sub start_controller {
         $self->{pidmap}{$x->{backend}} = "DB $dbname";
     }
 
+    ## Adjust the target table names as needed and store in the goat hash
+
+    ## New table name regardless of syncs or databases
+    $SQL = 'SELECT newname FROM bucardo.customname WHERE goat=? AND db IS NULL and sync IS NULL';
+    my $sth_custom1 = $maindbh->prepare($SQL);
+    ## New table name for this sync only
+    $SQL = 'SELECT newname FROM bucardo.customname WHERE goat=? AND sync=? AND db IS NULL';
+    my $sth_custom2 = $maindbh->prepare($SQL);
+    ## New table name for a specific database only
+    $SQL = 'SELECT newname FROM bucardo.customname WHERE goat=? AND db=? AND sync IS NULL';
+    my $sth_custom3 = $maindbh->prepare($SQL);
+    ## New table name for this sync and a specific database
+    $SQL = 'SELECT newname FROM bucardo.customname WHERE goat=? AND sync=? AND db=?';
+    my $sth_custom4 = $maindbh->prepare($SQL);
+
+    for my $g (@{ $sync->{goatlist} }) {
+
+        next if $g->{reltype} ne 'table';
+
+        my ($S,$T) = ($g->{safeschema},$g->{safetable});
+
+        ## See if we have any custom names. Each level overrides the last
+        my $customname = '';
+
+        ## Just this goat
+        $count = $sth_custom1->execute($g->{id});
+        if ($count < 1) {
+            $sth_custom1->finish();
+        }
+        else {
+            $customname = $sth_custom1->fetchall_arrayref()->[0][0];
+        }
+
+        ## Just this goat and this sync
+        $count = $sth_custom2->execute($g->{id}, $syncname);
+        if ($count < 1) {
+            $sth_custom2->finish();
+        }
+        else {
+            $customname = $sth_custom2->fetchall_arrayref()->[0][0];
+        }
+
+        ## Set for each target db
+        $g->{newname}{$syncname} = {};
+        for my $dbname (sort keys %{ $sync->{db} }) {
+            $x = $sync->{db}{$dbname};
+            my $type= $x->{dbtype};
+
+            ## Save a local copy for this database only
+            my $cname = $customname;
+
+            ## Anything for this goat and this database?
+            $count = $sth_custom3->execute($g->{id}, $dbname);
+            if ($count < 1) {
+                $sth_custom3->finish();
+            }
+            else {
+                $cname = $sth_custom3->fetchall_arrayref()->[0][0];
+            }
+
+            ## Anything for this goat, this sync, and this database?
+            $count = $sth_custom4->execute($g->{id}, $syncname, $dbname);
+            if ($count < 1) {
+                $sth_custom4->finish();
+            }
+            else {
+                $cname = $sth_custom4->fetchall_arrayref()->[0][0];
+            }
+
+            ## Got a match? Just use that for everything
+            if ($cname) {
+                $g->{newname}{$syncname}{$dbname} = $cname;
+            }
+            elsif ($x->{dbtype} eq 'postgres' or $x->{dbtype} eq 'flatpg') {
+                $g->{newname}{$syncname}{$dbname} = "$S.$T";
+            }
+            else {
+                $g->{newname}{$syncname}{$dbname} = $T;
+            }
+        }
+    }
+
     ## Set to true if we determine the kid(s) should make a run
     ## Can be set by:
     ##   kick notice from the MCP for this sync
@@ -3843,6 +3925,8 @@ sub start_kid {
                         next if ! $g->{vacuum_after_copy} or $g->{reltype} ne 'table';
                         ($S,$T) = ($g->{safeschema},$g->{safetable});
                         my $total_time = sprintf '%.2f', tv_interval($kid_start_time);
+
+                        ## XXX Adjust for customname
                         $self->glog("Vacuuming $dbname.$S.$T. Time: $total_time", LOG_VERBOSE);
                         $x->{dbh}->commit();
                         $x->{dbh}->{AutoCommit} = 1;
@@ -3869,6 +3953,7 @@ sub start_kid {
                         }
                         ($S,$T) = ($g->{safeschema},$g->{safetable});
                         my $total_time = sprintf '%.2f', tv_interval($kid_start_time);
+                        ## XXX Adjust for customname
                         $self->glog("Analyzing $dbname.$S.$T. Time: $total_time", LOG_VERBOSE);
                         $x->{dbh}->do("ANALYZE $S.$T");
                         $x->{dbh}->commit();
@@ -6782,25 +6867,30 @@ sub delete_rows {
         $deldb = [$deldb];
     }
 
+    my $newname = $goat->{newname}{$self->{syncname}};
+
     ## Are we truncating?
     if (exists $self->{truncateinfo}{$S}{$T}) {
 
         ## Try and truncate each target
         for my $t (@$deldb) {
+
             my $type = $t->{dbtype};
+
+            my $tname = $newname->{$t->{name}};
 
             ## Postgres is a plain and simple TRUNCATE
             ## TRUNCATE CASCADE is not needed as everything should be in one
             ## sync (herd), and we have turned all FKs off
             if ('postgres' eq $type) {
                 my $tdbh = $t->{dbh};
-                $tdbh->do("TRUNCATE TABLE $S.$T", { pg_async => PG_ASYNC });
+                $tdbh->do("TRUNCATE TABLE $tname", { pg_async => PG_ASYNC });
             } ## end postgres database
 
             ## For MongoDB, we simply remove everything from the collection
             ## This keeps the indexes around (which is why we don't "drop")
             if ('mongo' eq $type) {
-                $self->{collection} = $t->{dbh}->get_collection($T);
+                $self->{collection} = $t->{dbh}->get_collection($tname);
                 my $result = $self->{collection}->remove({}, { safe => 1} );
                 next;
             }
@@ -6808,13 +6898,13 @@ sub delete_rows {
             ## For MySQL, we simply truncate the table name without the schema
             if ('mysql' eq $type) {
                 my $tdbh = $t->{dbh};
-                $tdbh->do("TRUNCATE TABLE $T");
+                $tdbh->do("TRUNCATE TABLE $tname");
             }
 
             ## For flatfiles, write out a basic truncate statement
             if ($type =~ /flat/o) {
                 printf {$t->{filehandle}} qq{TRUNCATE TABLE %S;\n\n},
-                    'flatpg' eq $type ? "$S.$T" : $T;
+                    'flatpg' eq $type ? $tname : $tname;
                 $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
             }
 
@@ -6836,13 +6926,11 @@ sub delete_rows {
     ## Setup our deletion SQL as needed
     my %SQL;
     for my $t (@$deldb) {
+
         my $type = $t->{dbtype};
 
         ## No special preparation for mongo
         next if 'mongo' eq $type;
-
-        ## Not everything has a schema
-        my $useschema = ($type =~ /postgres/ or $type =~ /pg/) ? 1 : 0;
 
         ## Set the type of SQL we are using: IN vs ANY
         my $sqltype = '';
@@ -6860,9 +6948,11 @@ sub delete_rows {
             $sqltype = 'IN';
         }
 
+        my $tname = $newname->{$t->{name}};
+
         ## Postgres-specific optimization for a single primary key:
         if ($sqltype eq 'ANY') {
-            $SQL{ANY} ||= "$self->{sqlprefix}DELETE FROM $S.$T WHERE $pkcols = ANY(?)";
+            $SQL{ANY} ||= "$self->{sqlprefix}DELETE FROM $tname WHERE $pkcols = ANY(?)";
             my @delq;
             for my $key (keys %$rows) {
                 push @delq => [split '\0' => $key];
@@ -6873,7 +6963,7 @@ sub delete_rows {
         elsif ($sqltype eq 'IN') {
             $SQL = sprintf '%sDELETE FROM %s WHERE %s IN (',
                 $self->{sqlprefix},
-                $T,
+                $tname,
                 $pkcols;
             my @delq;
             for my $key (keys %$rows) {
@@ -6889,7 +6979,7 @@ sub delete_rows {
             (my $safepk = $pkcols) =~ s/\"/`/go;
             $SQL = sprintf '%sDELETE FROM %s WHERE %s IN (',
                 $self->{sqlprefix},
-                $T,
+                $tname,
                 $safepk;
             my @delq;
             ## Quick workaround for a more standard timestamp
@@ -6913,7 +7003,7 @@ sub delete_rows {
         elsif ($sqltype eq 'PGIN') {
             $SQL = sprintf '%sDELETE FROM %s WHERE %s IN (',
                 $self->{sqlprefix},
-                "$S.$T",
+                $tname,
                 $pkcols;
             my @delq;
             for my $key (keys %$rows) {
@@ -6928,7 +7018,10 @@ sub delete_rows {
 
     ## Do each target in turn
     for my $t (@$deldb) {
+
         my $type = $t->{dbtype};
+
+        my $tname = $newname->{$t->{name}};
 
         if ('postgres' eq $type) {
             my $tdbh = $t->{dbh};
@@ -6944,7 +7037,7 @@ sub delete_rows {
         } ## end postgres database
 
         if ('mongo' eq $type) {
-            $self->{collection} = $t->{dbh}->get_collection($T);
+            $self->{collection} = $t->{dbh}->get_collection($tname);
 
             ## We want the 'raw' versions of the primary keys
             my $pkcolsraw = $goat->{pkeycolsraw};
@@ -6975,7 +7068,7 @@ sub delete_rows {
             my $result = $self->{collection}->remove
                 ({$pkcolsraw => { '$in' => $delkeys }}, { safe => 1 } );
             $count{$t} = $result->{n};
-            $self->glog("Mongo objects removed from $T: $count{$t}", LOG_VERBOSE);
+            $self->glog("Mongo objects removed from $tname: $count{$t}", LOG_VERBOSE);
             next;
         }
 
@@ -7055,6 +7148,8 @@ sub push_rows {
     ## Total number of rows written
     $count = 0;
 
+    my $newname = $goat->{newname}{$self->{syncname}};
+
     ## Build a list of all PK values to feed to IN clauses
     my $pkvals = '';
     for my $key (keys %$rows) {
@@ -7071,7 +7166,7 @@ sub push_rows {
     }
 
     ## This can happen if we truncated but had no delta activity
-    return if ! defined $pkvals or ! length $pkvals;
+    return 0 if ! defined $pkvals or ! length $pkvals;
 
     ## Get ready to export from the source
     my $srccmd = "$self->{sqlprefix}COPY (SELECT * FROM $S.$T WHERE $pkcols IN ($pkvals)) TO STDOUT";
@@ -7079,25 +7174,28 @@ sub push_rows {
 
     ## Prepare each target in turn
     for my $t (@$todb) {
+
         my $type = $t->{dbtype};
 
+        my $tname = $newname->{$t->{name}};
+
         if ('postgres' eq $type) {
-            my $tgtcmd = "$self->{sqlprefix}COPY $S.$T FROM STDIN";
+            my $tgtcmd = "$self->{sqlprefix}COPY $tname FROM STDIN";
             $t->{dbh}->do($tgtcmd);
         }
         elsif ('flatpg' eq $type) {
-            print {$t->{filehandle}} "COPY $S.$T FROM STDIN;\n";
+            print {$t->{filehandle}} "COPY $tname FROM STDIN;\n";
             $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
         }
         elsif ('flatsql' eq $type) {
-            print {$t->{filehandle}} "INSERT INTO $T ($pkcols) VALUES\n";
+            print {$t->{filehandle}} "INSERT INTO $tname ($pkcols) VALUES\n";
             $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
         }
         elsif ('mongo' eq $type) {
-            $self->{collection} = $t->{dbh}->get_collection($T);
+            $self->{collection} = $t->{dbh}->get_collection($tname);
         }
         elsif ('mysql' eq $type) {
-            my $tgtcmd = "INSERT INTO $T VALUES (";
+            my $tgtcmd = "INSERT INTO $tname VALUES (";
             $tgtcmd .= '?,' x keys %{ $goat->{columnhash} };
             $tgtcmd =~ s/,$/)/o;
             $t->{sth} = $t->{dbh}->prepare($tgtcmd);
@@ -7178,7 +7276,10 @@ sub push_rows {
 
     ## Perform final cleanups for each target
     for my $t (@$todb) {
+
         my $type = $t->{dbtype};
+
+        my $tname = $newname->{$t->{name}};
 
         if ('postgres' eq $type) {
             $t->{dbh}->pg_putcopyend();
@@ -7186,7 +7287,7 @@ sub push_rows {
             if ($self->{dbdpgversion} < 21801) {
                 $t->{dbh}->do('SELECT 1');
             }
-            $self->glog(qq{Rows copied to $t->{name}.$S.$T: $total}, LOG_VERBOSE);
+            $self->glog(qq{Rows copied to $t->{name}.$tname: $total}, LOG_VERBOSE);
             $count += $total;
         }
         elsif ('flatpg' eq $type) {
