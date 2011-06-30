@@ -609,8 +609,9 @@ AS $bc$
 
 ## Given the name of a db, return the type, plus type-specific connection information
 ## Postgres: a connection string, username, password, and attribs
-## Mongo: foo: bar connection information, one per line
+## Mongo: "foo: bar" style connection information, one per line
 ## MySQL: a connection string, username, and password
+## Oracle: a connection string, username, and password
 
 use strict;
 use warnings;
@@ -689,6 +690,23 @@ if ($dbtype eq 'mysql') {
     return "$dbtype\n$connstring\n$db{user}\n$db{pass}";
 
 } ## end mysql
+
+if ($dbtype eq 'oracle') {
+
+    ## We should loosen this up somewhere
+    length $db{name} or elog(ERROR, qq{Database name is mandatory\n});
+    length $db{user} or elog(ERROR, qq{Database username is mandatory\n});
+
+	## TODO: Support SID, other forms
+    my $connstring = "dbi:Oracle:$db{name}";
+    $db{host} ||= ''; $db{port} ||= ''; $db{pass} ||= '';
+    length $db{host} and $connstring .= ";host=$db{host}";
+    length $db{port} and $connstring .= ";port=$db{port}";
+    length $db{conn} and $connstring .= ";$db{conn}";
+
+    return "$dbtype\n$connstring\n$db{user}\n$db{pass}";
+
+} ## end oracle
 
 if ($dbtype eq 'mongo') {
    my $connstring = "$dbtype\n";
@@ -1191,6 +1209,9 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
 
     ## Skip if this is mysql
     next if $db{$dbname}{dbtype} eq 'mysql';
+
+    ## Skip if this is oracle
+    next if $db{$dbname}{dbtype} eq 'oracle';
 
     ## Figure out how to connect to this database
     my $rv = spi_exec_query("SELECT bucardo.db_getconn('$dbname') AS conn");

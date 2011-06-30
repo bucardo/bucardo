@@ -805,6 +805,7 @@ sub add_database {
     $vals->{dbtype} =~ s/postgres.*/postgres/io;
     $vals->{dbtype} =~ s/mongo.*/mongo/io;
     $vals->{dbtype} =~ s/mysql.*/mysql/io;
+    $vals->{dbtype} =~ s/oracle.*/oracle/io;
 
     ## Attempt to insert this into the database
     $SQL = "INSERT INTO bucardo.db ($cols) VALUES ($phs)";
@@ -831,7 +832,7 @@ sub add_database {
         last TESTCONN if 'flatfile' eq $vals->{dbtype};
 
         ## Must have a valid type
-        if ($vals->{dbtype} !~ /^(?:postgres|mongo|mysql)$/) {
+        if ($vals->{dbtype} !~ /^(?:postgres|mongo|mysql|oracle)$/) {
             die qq{Unknown database type: $vals->{dbtype}\n};
         }
 
@@ -948,6 +949,33 @@ sub add_database {
             $testdbh->disconnect();
 
         } ## end mysql
+
+        if ('oracle' eq $vals->{dbtype}) {
+
+            my ($type,$dsn,$user,$pass) = split /\n/ => $dbconn;
+
+            my $found = 0;
+            eval {
+                require DBD::Oracle;
+                $found = 1;
+            };
+            if (!$found) {
+                die "Cannot add unless the DBD::Oracle module is available\n";
+            }
+
+            my $testdbh;
+            $found = 0;
+            eval {
+                $testdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+                $found = 1;
+            };
+            if (! $found) {
+                die "Oracle connection test failed. You can force add it with the --force argument. Error was: $@\n\n";
+            }
+
+            $testdbh->disconnect();
+
+        } ## end oracle
 
     } ## end of TESTCONN
 
@@ -1351,6 +1379,12 @@ sub list_databases {
                 $showhost,
                 $showport;
         }
+        if ($dbtype eq 'oracle') {
+            printf "Conn: sqlplus %s%s",
+                $info->{dbuser},
+                $showhost ? qq{\@$showhost} : '';
+        }
+
         print "\n";
 
         if ($VERBOSE) {
@@ -4475,6 +4509,7 @@ sub process_args {
         $arg{type} =~ s/postgres.*/postgres/io;
         $arg{type} =~ s/mongo.*/mongo/io;
         $arg{type} =~ s/mysql.*/mysql/io;
+        $arg{type} =~ s/oracle.*/oracle/io;
     }
 
     return \%arg;

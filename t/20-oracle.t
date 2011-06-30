@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 # -*-mode:cperl; indent-tabs-mode: nil-*-
 
-## Test using MySQL as a database target
+## Test using Oracle as a database target
 
 use 5.008003;
 use strict;
@@ -14,27 +14,27 @@ use MIME::Base64;
 
 use vars qw/ $bct $dbhX $dbhA $dbhB $dbhC $dbhD $res $command $t %pkey $SQL %sth %sql/;
 
-## Must have the DBD::mysql module
+## Must have the DBD::Oracle module
 my $evalok = 0;
 eval {
-    require DBD::mysql;
+    require DBD::Oracle;
     $evalok = 1;
 };
 if (!$evalok) {
-	plan (skip_all =>  'Cannot test MySQL unless the Perl module DBD::mysql is installed');
+	plan (skip_all =>  'Cannot test Oracle unless the Perl module DBD::Oracle is installed');
 }
 
-## MySQL must be up and running
+## Oracle must be up and running
 $evalok = 0;
 my $dbh;
 my $dbuser = 'root';
 eval {
-    $dbh = DBI->connect('dbi:mysql:database=test', $dbuser, '',
+    $dbh = DBI->connect('dbi:Oracle:test', $dbuser, '',
                          {AutoCommit=>1, PrintError=>0, RaiseError=>1});
     $evalok = 1;
 };
 if (!$evalok) {
-	plan (skip_all =>  "Cannot test MySQL as we cannot connect to a running MySQL database: $@");
+	plan (skip_all =>  "Cannot test Oracle as we cannot connect to a running Oracle database: $@");
 }
 
 use BucardoTesting;
@@ -45,16 +45,16 @@ delete $tabletype{bucardo_test8};
 my $numtabletypes = keys %tabletype;
 plan tests => 119;
 
-## Drop the MySQL database if it exists
+## Drop the test database if it exists
 my $dbname = 'bucardo_test';
 eval {
     $dbh->do("DROP DATABASE $dbname");
 };
-## Create the MySQL database
+## Create the test database
 $dbh->do("CREATE DATABASE $dbname");
 
 ## Reconnect to the new database
-$dbh = DBI->connect("dbi:mysql:database=$dbname", $dbuser, '',
+$dbh = DBI->connect("dbi:Oracle:$dbname", $dbuser, '',
                     {AutoCommit=>1, PrintError=>0, RaiseError=>1});
 
 ## Create one table for each table type
@@ -66,11 +66,11 @@ for my $table (sort keys %tabletype) {
             CREATE TABLE $table (
                 $pkeyname    $tabletypemysql{$table} NOT NULL $pkindex};
     $SQL .= $table =~ /X/ ? "\n)" : qq{,
-                data1 VARCHAR(100)           NULL,
-                inty  SMALLINT               NULL,
-                bite1 VARBINARY(999)         NULL,
-                bite2 VARBINARY(999)         NULL,
-                email VARCHAR(100)           NULL UNIQUE
+                data1 NVARCHAR2(100)  NULL,
+                inty  SMALLINT        NULL,
+                bite1 BLOB            NULL,
+                bite2 BLOB            NULL,
+                email NVARCHAR2(100)  NULL UNIQUE
             )
             };
 
@@ -83,7 +83,7 @@ for my $table (sort keys %tabletype) {
 }
 
 $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object failed\n";
-$location = 'mysql';
+$location = 'oracle';
 
 pass("*** Beginning mysql tests");
 
@@ -114,9 +114,9 @@ for my $name (qw/ A B C /) {
     like ($res, qr/Added database "$name"/, $t);
 }
 
-$t = 'Adding mysql database Q works';
+$t = 'Adding oracle database Q works';
 $command =
-"bucardo add db Q dbname=$dbname type=mysql dbuser=$dbuser";
+"bucardo add db Q dbname=$dbname type=oracle dbuser=$dbuser";
 $res = $bct->ctl($command);
 like ($res, qr/Added database "Q"/, $t);
 
@@ -144,9 +144,9 @@ like ($res, qr/Created database group "qx"/, $t);
 ## Create a new sync
 $t = q{Created a new sync};
 $command =
-"bucardo add sync mysql herd=therd dbs=qx ping=false";
+"bucardo add sync oracle herd=therd dbs=qx ping=false";
 $res = $bct->ctl($command);
-like ($res, qr/Added sync "mysql"/, $t);
+like ($res, qr/Added sync "oracle"/, $t);
 
 ## Create a second sync, solely for multi-sync interaction issues
 $bct->ctl('bucardo add dbgroup t1 A:source B C');
@@ -209,8 +209,8 @@ for my $table (sort keys %tabletype) {
 
 ## Commit, then kick off the sync
 $dbhA->commit();
-$bct->ctl('bucardo kick mysql 0');
-$bct->ctl('bucardo kick mysql 0');
+$bct->ctl('bucardo kick oracle 0');
+$bct->ctl('bucardo kick oracle 0');
 
 ## Check B and C for the new rows
 for my $table (sort keys %tabletype) {
@@ -223,15 +223,15 @@ for my $table (sort keys %tabletype) {
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 }
 
-## Check that MySQL has the new rows
+## Check that Oracle has the new rows
 for my $table (sort keys %tabletype) {
-    $t = "MySQL table $table has correct number of rows after insert";
+    $t = "Oracle table $table has correct number of rows after insert";
     $SQL = "SELECT * FROM $table";
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
     is ($count, 1, $t);
 
-    $t = "MySQL table $table has correct entries";
+    $t = "Oracle table $table has correct entries";
     my $info = $sth->fetchall_arrayref({})->[0];
     my $type = $tabletype{$table};
     my $id = $val{$type}{1};
@@ -241,7 +241,7 @@ for my $table (sort keys %tabletype) {
     next if $table =~ /test8/;
 
     ## Datetime has no time zone thingy at the end
-    $tabletypemysql{$table} =~ /DATETIME/ and $id =~ s/\+.*//;
+    $tabletypeoracle{$table} =~ /DATETIME/ and $id =~ s/\+.*//;
 
     is_deeply(
         $info,
@@ -262,16 +262,16 @@ for my $table (keys %tabletype) {
     $sth{update}{$table}{A}->execute(42);
 }
 $dbhA->commit();
-$bct->ctl('bucardo kick mysql 0');
+$bct->ctl('bucardo kick oracle 0');
 
 for my $table (keys %tabletype) {
-    $t = "MySQL table $table has correct number of rows after update";
+    $t = "Oracle table $table has correct number of rows after update";
     $SQL = "SELECT * FROM $table";
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
     is ($count, 1, $t);
 
-    $t = "MySQL table $table has updated value";
+    $t = "Oracle table $table has updated value";
     my $info = $sth->fetchall_arrayref({})->[0];
     is ($info->{inty}, 42, $t);
 }
@@ -281,10 +281,10 @@ for my $table (keys %tabletype) {
     $sth{deleteall}{$table}{A}->execute();
 }
 $dbhA->commit();
-$bct->ctl('bucardo kick mysql 0');
+$bct->ctl('bucardo kick oracle 0');
 
 for my $table (keys %tabletype) {
-    $t = "MySQL table $table has correct number of rows after delete";
+    $t = "Oracle table $table has correct number of rows after delete";
     $SQL = "SELECT * FROM $table";
     my $sth = $dbh->prepare($SQL);
     (my $count = $sth->execute()) =~ s/0E0/0/;
@@ -302,10 +302,10 @@ for my $table (keys %tabletype) {
     $sth{insert}{2}{$table}{A}->execute($val2);
 }
 $dbhA->commit();
-$bct->ctl('bucardo kick mysql 0');
+$bct->ctl('bucardo kick oracle 0');
 
 for my $table (keys %tabletype) {
-    $t = "MySQL table $table has correct number of rows after double insert";
+    $t = "Oracle table $table has correct number of rows after double insert";
     $SQL = "SELECT * FROM $table";
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
@@ -318,10 +318,10 @@ for my $table (keys %tabletype) {
     $sth{deleteone}{$table}{A}->execute(2); ## inty = 2
 }
 $dbhA->commit();
-$bct->ctl('bucardo kick mysql 0');
+$bct->ctl('bucardo kick oracle 0');
 
 for my $table (keys %tabletype) {
-    $t = "MySQL table $table has correct number of rows after single deletion";
+    $t = "Oracle table $table has correct number of rows after single deletion";
     $SQL = "SELECT * FROM $table";
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
@@ -338,10 +338,10 @@ for my $table (keys %tabletype) {
     $sth{insert}{4}{$table}{A}->execute($val4);
 }
 $dbhA->commit();
-$bct->ctl('bucardo kick mysql 0');
+$bct->ctl('bucardo kick oracle 0');
 
 for my $table (keys %tabletype) {
-    $t = "MySQL table $table has correct number of rows after more inserts";
+    $t = "Oracle table $table has correct number of rows after more inserts";
     $SQL = "SELECT * FROM $table";
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
@@ -350,3 +350,4 @@ for my $table (keys %tabletype) {
 }
 
 exit;
+

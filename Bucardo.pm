@@ -1468,7 +1468,10 @@ sub start_controller {
             if ($cname) {
                 $g->{newname}{$syncname}{$dbname} = $cname;
             }
-            elsif ($x->{dbtype} eq 'postgres' or $x->{dbtype} eq 'flatpg') {
+            ## Only a few use schemas:
+            elsif ($x->{dbtype} eq 'postgres'
+                   or $x->{dbtype} eq 'flatpg'
+                   or $x->{dbtype} eq 'oracle') {
                 $g->{newname}{$syncname}{$dbname} = "$S.$T";
             }
             else {
@@ -1793,7 +1796,8 @@ sub start_kid {
 
         push @dbs_dbi => $dbname
             if $x->{dbtype} eq 'postgres'
-            or $x->{dbtype} eq 'mysql';
+            or $x->{dbtype} eq 'mysql'
+            or $x->{dbtype} eq 'oracle';
 
         push @dbs_connectable => $dbname
             if $x->{dbtype} !~ /flat/;
@@ -2464,6 +2468,12 @@ sub start_kid {
                 $x->{dbh}->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE');
                 $self->glog(qq{Set db "$dbname" to serializable}, LOG_DEBUG);
             }
+
+            if ($x->{dbtype} eq 'oracle') {
+                $x->{dbh}->do('SET TRANSACTION READ WRITE');
+                $x->{dbh}->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE');
+                $self->glog(qq{Set db "$dbname" to serializable and read write}, LOG_DEBUG);
+            }
         }
 
         ## We may want to lock all the tables. Use sparingly
@@ -2502,6 +2512,12 @@ sub start_kid {
 
                     if ($x->{dbtype} eq 'mysql') {
                         my $com = "$g->{safetable} WRITE";
+                        $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
+                        $x->{dbh}->do("LOCK TABLE $com");
+                    }
+
+                    if ($x->{dbtype} eq 'oracle') {
+                        my $com = "$g->{safeschema}.$g->{safetable} IN EXCLUSIVE MODE";
                         $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
                         $x->{dbh}->do("LOCK TABLE $com");
                     }
@@ -4101,6 +4117,9 @@ sub connect_database {
         elsif ('mysql' eq $dbtype) {
             $dsn = "dbi:mysql:database=$d->{dbname}";
         }
+        elsif ('oracle' eq $dbtype) {
+            $dsn = "dbi:Oracle:$d->{dbname}";
+        }
         else {
             die qq{Cannot handle databases of type "$dbtype"\n};
         }
@@ -5200,6 +5219,9 @@ sub validate_sync {
 
             ## MySQL is skipped for now, but should be added later
             next if $self->{sdb}{$dbname}{dbtype} =~ /mysql/o;
+
+            ## Oracle is skipped for now, but should be added later
+            next if $self->{sdb}{$dbname}{dbtype} =~ /oracle/o;
 
             ## Respond to ping here and now for very impatient watchdog programs
             $maindbh->commit();
@@ -6920,6 +6942,12 @@ sub delete_rows {
                 $tdbh->do("TRUNCATE TABLE $tname");
             }
 
+            ## Oracle is a simple schema and table truncate
+            if ('oracle' eq $type) {
+                my $tdbh = $t->{dbh};
+                $tdbh->do("TRUNCATE TABLE $tname");
+            }
+
             ## For flatfiles, write out a basic truncate statement
             if ($type =~ /flat/o) {
                 printf {$t->{filehandle}} qq{TRUNCATE TABLE %S;\n\n},
@@ -6958,6 +6986,9 @@ sub delete_rows {
         }
         elsif ('mysql' eq $type) {
             $sqltype = 'MYIN';
+        }
+        elsif ('oracle' eq $type) {
+            $sqltype = 'PGIN';
         }
         elsif ($type =~ /flatpg/o) {
             ## XXX Worth the trouble to allow building an ANY someday for flatpg?
@@ -7097,6 +7128,12 @@ sub delete_rows {
             next;
         }
 
+        if ('oracle' eq $type) {
+            my $tdbh = $t->{dbh};
+            ($count{$t} = $tdbh->do($SQL{PGIN})) =~ s/0E0/0/o;
+            next;
+        }
+
         if ($type =~ /flatpg/o) {
             print {$t->{filehandle}} qq{$SQL{PGIN};\n\n};
             $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
@@ -7115,11 +7152,10 @@ sub delete_rows {
     ## Final cleanup as needed (e.g. process async results)
     for my $t (@$deldb) {
         my $type = $t->{dbtype};
-        next if 'mongo' eq $type;
-        next if 'mysql' eq $type;
 
-        my $tdbh = $t->{dbh};
         if ('postgres' eq $type) {
+
+            my $tdbh = $t->{dbh};
 
             ## Wrap up all the async queries
             ($count{$t} = $tdbh->pg_result()) =~ s/0E0/0/o;
@@ -7219,6 +7255,12 @@ sub push_rows {
             $tgtcmd =~ s/,$/)/o;
             $t->{sth} = $t->{dbh}->prepare($tgtcmd);
         }
+        elsif ('oracle' eq $type) {
+            my $tgtcmd = "INSERT INTO $tname VALUES (";
+            $tgtcmd .= '?,' x keys %{ $goat->{columnhash} };
+            $tgtcmd =~ s/,$/)/o;
+            $t->{sth} = $t->{dbh}->prepare($tgtcmd);
+        }
         else {
             die qq{No support for database type "$type" yet!};
         }
@@ -7279,8 +7321,8 @@ sub push_rows {
                 }
                 $self->{collection}->insert($object, { safe => 1 });
             }
-            ## For MySQL, so some basic INSERTs
-            elsif ('mysql' eq $type) {
+            ## For MySQL and Oracle, do some basic INSERTs
+            elsif ('mysql' eq $type or 'oracle' eq $type) {
                 my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
                 $count += $t->{sth}->execute(@cols);
             }
@@ -7314,12 +7356,6 @@ sub push_rows {
         }
         elsif ('flatsql' eq $type) {
             print {$t->{filehandle}} ";\n\n";
-        }
-        elsif ('mongo' eq $type) {
-            ## Nothing special needed
-        }
-        elsif ('mysql' eq $type) {
-            ## Nothing special needed
         }
     }
 

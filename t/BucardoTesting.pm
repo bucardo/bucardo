@@ -18,7 +18,7 @@ use vars qw/$SQL $sth $count $COM %dbh/;
 my $DEBUG = $ENV{BUCARDO_DEBUG} || 0;
 
 use base 'Exporter';
-our @EXPORT = qw/%tabletype %tabletypemysql %sequences %val compare_tables bc_deeply clear_notices 
+our @EXPORT = qw/%tabletype %tabletypemysql %tabletypeoracle %sequences %val compare_tables bc_deeply clear_notices 
                  wait_for_notice $location is_deeply like pass is isa_ok ok
                  $oldherd_msg $newherd_msg $addtable_msg $deltable_msg $nomatch_msg/;
 
@@ -84,6 +84,19 @@ our %tabletypemysql =
      'bucardo_test10' => 'DATETIME',
      );
 
+our %tabletypeoracle =
+    (
+     'bucardo_test1'  => 'SMALLINT',
+     'bucardo_test2'  => 'INT',
+     'bucardo_test3'  => 'BIGINT',
+     'bucardo_test4'  => 'NVARCHAR2(1000)',
+     'bucardo_test5'  => 'DATE',
+     'bucardo_test6'  => 'TIMESTAMP',
+     'bucardo_test7'  => 'NUMERIC(5,1)',
+     'bucardo_test8'  => 'BLOB',
+     'bucardo_test9'  => 'INTEGER',
+     'bucardo_test10' => 'TIMESTAMP WITH TIME ZONE',
+     );
 
 our @tables2empty = (qw/droptest/);
 

@@ -33,6 +33,9 @@ t/02-bctl-db.t
 t/02-bctl-dbg.t
 t/09-uniqueconstraint.t
 t/15-star.t
+t/20-mongo.t
+t/20-mysql.t
+t/20-oracle.t
 t/98-cleanup.t
 t/99-signature.t
 t/BucardoTesting.pm
