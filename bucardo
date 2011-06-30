@@ -805,6 +805,7 @@ sub add_database {
     $vals->{dbtype} =~ s/postgres.*/postgres/io;
     $vals->{dbtype} =~ s/mongo.*/mongo/io;
     $vals->{dbtype} =~ s/mysql.*/mysql/io;
+    $vals->{dbtype} =~ s/drizzle.*/drizzle/io;
     $vals->{dbtype} =~ s/oracle.*/oracle/io;
 
     ## Attempt to insert this into the database
@@ -832,7 +833,7 @@ sub add_database {
         last TESTCONN if 'flatfile' eq $vals->{dbtype};
 
         ## Must have a valid type
-        if ($vals->{dbtype} !~ /^(?:postgres|mongo|mysql|oracle)$/) {
+        if ($vals->{dbtype} !~ /^(?:postgres|mongo|mysql|drizzle|oracle)$/) {
             die qq{Unknown database type: $vals->{dbtype}\n};
         }
 
@@ -949,6 +950,33 @@ sub add_database {
             $testdbh->disconnect();
 
         } ## end mysql
+
+        if ('drizzle' eq $vals->{dbtype}) {
+
+            my ($type,$dsn,$user,$pass) = split /\n/ => $dbconn;
+
+            my $found = 0;
+            eval {
+                require DBD::drizzle;
+                $found = 1;
+            };
+            if (!$found) {
+                die "Cannot add unless the DBD::drizzle module is available\n";
+            }
+
+            my $testdbh;
+            $found = 0;
+            eval {
+                $testdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+                $found = 1;
+            };
+            if (! $found) {
+                die "Drizzle connection test failed. You can force add it with the --force argument. Error was: $@\n\n";
+            }
+
+            $testdbh->disconnect();
+
+        } ## end drizzle
 
         if ('oracle' eq $vals->{dbtype}) {
 
@@ -1374,6 +1402,15 @@ sub list_databases {
             my $showport = (length $info->{dbport} and $info->{dbport} != 3306)
                 ? " --port $info->{dbport}" : '';
             printf "Conn: mysql -u %s -D %s%s%s",
+                $info->{dbuser},
+                $info->{dbname},
+                $showhost,
+                $showport;
+        }
+        if ($dbtype eq 'drizzle') {
+            my $showport = (length $info->{dbport} and $info->{dbport} != 3306)
+                ? " --port $info->{dbport}" : '';
+            printf "Conn: drizzle -u %s -D %s%s%s",
                 $info->{dbuser},
                 $info->{dbname},
                 $showhost,
@@ -4509,6 +4546,7 @@ sub process_args {
         $arg{type} =~ s/postgres.*/postgres/io;
         $arg{type} =~ s/mongo.*/mongo/io;
         $arg{type} =~ s/mysql.*/mysql/io;
+        $arg{type} =~ s/drizzle.*/drizzle/io;
         $arg{type} =~ s/oracle.*/oracle/io;
     }
 

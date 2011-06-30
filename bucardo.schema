@@ -611,6 +611,7 @@ AS $bc$
 ## Postgres: a connection string, username, password, and attribs
 ## Mongo: "foo: bar" style connection information, one per line
 ## MySQL: a connection string, username, and password
+## Drizzle: a connection string, username, and password
 ## Oracle: a connection string, username, and password
 
 use strict;
@@ -690,6 +691,21 @@ if ($dbtype eq 'mysql') {
     return "$dbtype\n$connstring\n$db{user}\n$db{pass}";
 
 } ## end mysql
+
+if ($dbtype eq 'drizzle') {
+
+    length $db{name} or elog(ERROR, qq{Database name is mandatory\n});
+    length $db{user} or elog(ERROR, qq{Database username is mandatory\n});
+
+    my $connstring = "dbi:drizzle:database=$db{name}";
+    $db{host} ||= ''; $db{port} ||= ''; $db{pass} ||= '';
+    length $db{host} and $connstring .= ";host=$db{host}";
+    length $db{port} and $connstring .= ";port=$db{port}";
+    length $db{conn} and $connstring .= ";$db{conn}";
+
+    return "$dbtype\n$connstring\n$db{user}\n$db{pass}";
+
+} ## end drizzle
 
 if ($dbtype eq 'oracle') {
 
@@ -1209,6 +1225,9 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
 
     ## Skip if this is mysql
     next if $db{$dbname}{dbtype} eq 'mysql';
+
+    ## Skip if this is drizzle
+    next if $db{$dbname}{dbtype} eq 'drizzle';
 
     ## Skip if this is oracle
     next if $db{$dbname}{dbtype} eq 'oracle';

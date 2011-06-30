@@ -1797,6 +1797,7 @@ sub start_kid {
         push @dbs_dbi => $dbname
             if $x->{dbtype} eq 'postgres'
             or $x->{dbtype} eq 'mysql'
+            or $x->{dbtype} eq 'drizzle'
             or $x->{dbtype} eq 'oracle';
 
         push @dbs_connectable => $dbname
@@ -2469,6 +2470,10 @@ sub start_kid {
                 $self->glog(qq{Set db "$dbname" to serializable}, LOG_DEBUG);
             }
 
+            if ($x->{dbtype} eq 'drizzle') {
+                ## Drizzle does not appear to have anything to control this yet
+            }
+
             if ($x->{dbtype} eq 'oracle') {
                 $x->{dbh}->do('SET TRANSACTION READ WRITE');
                 $x->{dbh}->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE');
@@ -2511,6 +2516,12 @@ sub start_kid {
                     }
 
                     if ($x->{dbtype} eq 'mysql') {
+                        my $com = "$g->{safetable} WRITE";
+                        $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
+                        $x->{dbh}->do("LOCK TABLE $com");
+                    }
+
+                    if ($x->{dbtype} eq 'drizzle') {
                         my $com = "$g->{safetable} WRITE";
                         $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
                         $x->{dbh}->do("LOCK TABLE $com");
@@ -4117,6 +4128,9 @@ sub connect_database {
         elsif ('mysql' eq $dbtype) {
             $dsn = "dbi:mysql:database=$d->{dbname}";
         }
+        elsif ('drizzle' eq $dbtype) {
+            $dsn = "dbi:drizzle:database=$d->{dbname}";
+        }
         elsif ('oracle' eq $dbtype) {
             $dsn = "dbi:Oracle:$d->{dbname}";
         }
@@ -5217,11 +5231,8 @@ sub validate_sync {
             ## Mongo is skipped because it can create things on the fly
             next if $self->{sdb}{$dbname}{dbtype} =~ /mongo/o;
 
-            ## MySQL is skipped for now, but should be added later
-            next if $self->{sdb}{$dbname}{dbtype} =~ /mysql/o;
-
-            ## Oracle is skipped for now, but should be added later
-            next if $self->{sdb}{$dbname}{dbtype} =~ /oracle/o;
+            ## MySQL/Drizzle/Oracle is skipped for now, but should be added later
+            next if $self->{sdb}{$dbname}{dbtype} =~ /mysql|drizzle|oracle/o;
 
             ## Respond to ping here and now for very impatient watchdog programs
             $maindbh->commit();
@@ -6936,8 +6947,8 @@ sub delete_rows {
                 next;
             }
 
-            ## For MySQL, we simply truncate the table name without the schema
-            if ('mysql' eq $type) {
+            ## For MySQL and Drizzle, we simply truncate the table name without the schema
+            if ('mysql' eq $type or 'drizzle' eq $type) {
                 my $tdbh = $t->{dbh};
                 $tdbh->do("TRUNCATE TABLE $tname");
             }
@@ -6984,7 +6995,7 @@ sub delete_rows {
         if ('postgres' eq $type) {
             $sqltype = (1 == $numpks) ? 'ANY' : 'PGIN';
         }
-        elsif ('mysql' eq $type) {
+        elsif ('mysql' eq $type or 'drizzle' eq $type) {
             $sqltype = 'MYIN';
         }
         elsif ('oracle' eq $type) {
@@ -7122,7 +7133,7 @@ sub delete_rows {
             next;
         }
 
-        if ('mysql' eq $type) {
+        if ('mysql' eq $type or 'drizzle' eq $type) {
             my $tdbh = $t->{dbh};
             ($count{$t} = $tdbh->do($SQL{IN})) =~ s/0E0/0/o;
             next;
@@ -7249,7 +7260,7 @@ sub push_rows {
         elsif ('mongo' eq $type) {
             $self->{collection} = $t->{dbh}->get_collection($tname);
         }
-        elsif ('mysql' eq $type) {
+        elsif ('mysql' eq $type or 'drizzle' eq $type) {
             my $tgtcmd = "INSERT INTO $tname VALUES (";
             $tgtcmd .= '?,' x keys %{ $goat->{columnhash} };
             $tgtcmd =~ s/,$/)/o;
@@ -7321,8 +7332,8 @@ sub push_rows {
                 }
                 $self->{collection}->insert($object, { safe => 1 });
             }
-            ## For MySQL and Oracle, do some basic INSERTs
-            elsif ('mysql' eq $type or 'oracle' eq $type) {
+            ## For MySQL, Drizzle, and Oracle, do some basic INSERTs
+            elsif ('mysql' eq $type or 'drizzle' eq $type or 'oracle' eq $type) {
                 my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
                 $count += $t->{sth}->execute(@cols);
             }
