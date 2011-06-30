@@ -1443,29 +1443,35 @@ sub start_controller {
             $x = $sync->{db}{$dbname};
             my $type= $x->{dbtype};
 
-            ## Save a local copy for this database only
-            my $cname = $customname;
+            my $cname;
 
-            ## Anything for this goat and this database?
-            $count = $sth_custom3->execute($g->{id}, $dbname);
-            if ($count < 1) {
-                $sth_custom3->finish();
-            }
-            else {
-                $cname = $sth_custom3->fetchall_arrayref()->[0][0];
-            }
+            ## We only ever change table names for true targets
+            if ($x->{role} ne 'source') {
 
-            ## Anything for this goat, this sync, and this database?
-            $count = $sth_custom4->execute($g->{id}, $syncname, $dbname);
-            if ($count < 1) {
-                $sth_custom4->finish();
-            }
-            else {
-                $cname = $sth_custom4->fetchall_arrayref()->[0][0];
+                ## Save a local copy for this database only
+                $cname = $customname;
+
+                ## Anything for this goat and this database?
+                $count = $sth_custom3->execute($g->{id}, $dbname);
+                if ($count < 1) {
+                    $sth_custom3->finish();
+                }
+                else {
+                    $cname = $sth_custom3->fetchall_arrayref()->[0][0];
+                }
+
+                ## Anything for this goat, this sync, and this database?
+                $count = $sth_custom4->execute($g->{id}, $syncname, $dbname);
+                if ($count < 1) {
+                    $sth_custom4->finish();
+                }
+                else {
+                    $cname = $sth_custom4->fetchall_arrayref()->[0][0];
+                }
             }
 
             ## Got a match? Just use that for everything
-            if ($cname) {
+            if (defined $cname and $cname) {
                 $g->{newname}{$syncname}{$dbname} = $cname;
             }
             ## Only a few use schemas:
@@ -2505,30 +2511,32 @@ sub start_kid {
                 next if $g->{reltype} ne 'table';
 
                 for my $dbname (@dbs_dbi) {
+
                     $x = $sync->{db}{$dbname};
 
-                    ## XXX customname
+                    ## Figure out which table name to use
+                    my $tname = $g->{newname}{$syncname}{$dbname};
 
                     if ($x->{dbtype} eq 'postgres') {
-                        my $com = "$g->{safeschema}.$g->{safetable} IN $lock_table_mode MODE";
+                        my $com = "$tname IN $lock_table_mode MODE";
                         $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
                         $x->{dbh}->do("LOCK TABLE $com");
                     }
 
                     if ($x->{dbtype} eq 'mysql') {
-                        my $com = "$g->{safetable} WRITE";
+                        my $com = "$tname WRITE";
                         $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
                         $x->{dbh}->do("LOCK TABLE $com");
                     }
 
                     if ($x->{dbtype} eq 'drizzle') {
-                        my $com = "$g->{safetable} WRITE";
+                        my $com = "$tname WRITE";
                         $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
                         $x->{dbh}->do("LOCK TABLE $com");
                     }
 
                     if ($x->{dbtype} eq 'oracle') {
-                        my $com = "$g->{safeschema}.$g->{safetable} IN EXCLUSIVE MODE";
+                        my $com = "$tname IN EXCLUSIVE MODE";
                         $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
                         $x->{dbh}->do("LOCK TABLE $com");
                     }
@@ -3972,11 +3980,12 @@ sub start_kid {
                         ($S,$T) = ($g->{safeschema},$g->{safetable});
                         my $total_time = sprintf '%.2f', tv_interval($kid_start_time);
 
-                        ## XXX Adjust for customname
-                        $self->glog("Vacuuming $dbname.$S.$T. Time: $total_time", LOG_VERBOSE);
+                        my $tname = $g->{newname}{$syncname}{$dbname};
+
+                        $self->glog("Vacuuming $dbname.$tname. Time: $total_time", LOG_VERBOSE);
                         $x->{dbh}->commit();
                         $x->{dbh}->{AutoCommit} = 1;
-                        $x->{dbh}->do("VACUUM $S.$T");
+                        $x->{dbh}->do("VACUUM $tname");
                         $x->{dbh}->{AutoCommit} = 0;
                         $total_time = sprintf '%.2f', tv_interval($kid_start_time);
                         $self->glog("Vacuum complete. Time: $total_time", LOG_VERBOSE);
@@ -3997,11 +4006,11 @@ sub start_kid {
                             $g->{onetimecopy_ifempty} = 0;
                             next;
                         }
-                        ($S,$T) = ($g->{safeschema},$g->{safetable});
+                        my $tname = $g->{newname}{$syncname}{$dbname};
                         my $total_time = sprintf '%.2f', tv_interval($kid_start_time);
-                        ## XXX Adjust for customname
-                        $self->glog("Analyzing $dbname.$S.$T. Time: $total_time", LOG_VERBOSE);
-                        $x->{dbh}->do("ANALYZE $S.$T");
+
+                        $self->glog("Analyzing $dbname.$tname. Time: $total_time", LOG_VERBOSE);
+                        $x->{dbh}->do("ANALYZE $tname");
                         $x->{dbh}->commit();
                         $total_time = sprintf '%.2f', tv_interval($kid_start_time);
                         $self->glog("Analyze complete. Time: $total_time", LOG_VERBOSE);
