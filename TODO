@@ -34,6 +34,8 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Remove large src_code sections from the kid output when dieing
 - Force to C locale until we get i18n in place
 - Use C triggers for the delta stuff if we can (and time them!)
+- Find alternate ways for the kids to lock the tables other than $force_lock_file
+
 
 - Mongo: fix escaped data from COPY TO STDOUT
 - Flatfiles: same escaped data as above for non-PG output
