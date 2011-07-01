@@ -2185,6 +2185,10 @@ sub start_kid {
     ## We don't both building these statements unless we need to
     if ($anyone_does_pgclass) {
 
+        ## TODO: Ideally, we would also adjust for "newname"
+        ## For now, we do not and thus have a restriction of no
+        ## customnames on Postgres databases older than 8.2
+
         ## The SQL to disable all triggers and rules for the tables in this sync
         $SQL = q{
             UPDATE pg_class c
@@ -2555,19 +2559,16 @@ sub start_kid {
         }
 
         ## FULLCOPY XXX: not working yet
-        if ($synctype eq 'fullcopy' or $deltacount{truncates}) {
-
-            if ($deltacount{truncates}) {
-                $self->glog('Switching to fullcopy mode to handle truncate', LOG_DEBUG);
-            }
+        if ($synctype eq 'fullcopy') {
 
             ## We only need one of the sources, so pull out the first one
-            my ($sourcename, $sourcedbh);
+            my ($sourcename, $sourcedbh, $sourcex);
             for my $dbname (@dbs_source) {
                 $x = $sync->{db}{$dbname};
 
                 $sourcename = $dbname;
                 $sourcedbh = $x->{dbh};
+                $sourcex = $x;
                 last;
             }
 
@@ -2576,72 +2577,80 @@ sub start_kid {
 
           GOAT: for my $g (@$goatlist) {
 
+                ($S,$T) = ($g->{safeschema},$g->{safetable});
+
                 ## Handle sequences first
-                ## XXX Steal from delta
                 if ($g->{reltype} eq 'sequence') {
+                    $SQL = "SELECT * FROM $S.$T";
+                    $sth = $sourcedbh->prepare($SQL);
+                    $sth->execute();
+                    $g->{sequenceinfo}{$sourcename} =$sth->fetchall_arrayref({})->[0];
+                    $g->{winning_db} = $sourcename;
+                    $self->adjust_sequence($g, $sync, $S, $T, $syncname);
                     next;
                 }
-
-                ($S,$T) = ($g->{safeschema},$g->{safetable});
 
                 if ($g->{ghost}) {
                     $self->glog("Skipping ghost table $S.$T", LOG_VERBOSE);
                     next;
                 }
 
-                ## FIXME: Where are these coming from?
-                next if $deltacount{truncates} and ! $g->{source}{needstruncation};
-
                 ## If doing a one-time-copy and using empty mode, skip this table if it has rows
                 ## This is done on a per table / per target basis
-                if ($sync->{onetimecopy} == 2) {
-
-                    $SQL = "SELECT 1 FROM $S.$T LIMIT 1";
+                if (2 == $sync->{onetimecopy}) {
 
                     ## Check each target to see if it is empty and thus ready to COPY
                     for my $dbname (@dbs_target) {
                         $x = $sync->{db}{$dbname};
 
-                        ## For now, Postgres only
-                        next if $x->{dbtype} ne 'postgres';
+                        my $tname = $g->{newname}{$syncname}{$dbname};
 
-                        $sth = $x->{dbh}->prepare($SQL);
-                        $count = $sth->execute();
-                        $sth->finish();
-                        if ($count >= 1) {
-                            ## Mark this database as skippable
+                        ## Is this target empty or not?
+                        if ($self->table_has_rows($x, $tname)) {
                             $sync->{otc}{skip}{$dbname} = 1;
-                            $self->glog(qq{Target table "$dbname.$S.$T" has rows and we are in onetimecopy if empty mode, so we will not COPY}, LOG_NORMAL);
-                            next; ## Go to the next target database
+                            $self->glog(qq{Target table "$dbname.$tname" has rows and we are in onetimecopy if empty mode, so we will not COPY}, LOG_NORMAL);
                         }
                     }
 
                     ## Also make sure we have at least one row on the source
-                    $sth = $sourcedbh->prepare($SQL);
-                    $count = $sth->execute();
-                    $sth->finish();
-                    if ($count < 1) {
+                    my $tname = $g->{newname}{$syncname}{$sourcename};
+                    if (! $self->table_has_rows($sourcex, $tname)) {
                         $self->glog(qq{Source table "$sourcename.$S.$T" has no rows and we are in onetimecopy if empty mode, so we will not COPY}, LOG_NORMAL);
                         ## No sense in going any further
                         next GOAT;
                     }
                 }
 
+                ## If requested, disable the indexes before we copy
                 if ($g->{rebuild_index}) {
-                    ## XXX TODO: Cache this information earlier if feasible
-                    for my $dbname (@dbs_postgres) {
+                    for my $dbname (@dbs_target) {
                         $x = $sync->{db}{$dbname};
 
-                        next if $x->{role} eq 'source';
+                        ## Skip if onetimecopy was two and this target had rows
+                        next if exists $sync->{otc}{skip}{$dbname};
 
-                        $SQL = "SELECT relhasindex FROM pg_class WHERE oid = '$S.$T'::regclass";
-                        if ($x->{dbh}->selectall_arrayref($SQL)->[0][0]) {
-                            $self->glog("Turning off indexes for $S.$T on $dbname", LOG_NORMAL);
-                            ## XXX TODO: Do this without pg_class manipulation when Postgres supports that
-                            $SQL = "UPDATE pg_class SET relhasindex = 'f' WHERE oid = '$S.$T'::regclass";
+                        my $tname = $g->{newname}{$syncname}{$dbname};
+
+                        if ($x->{dbtype} eq 'postgres') {
+                            ## TODO: Cache this information earlier
+                            $SQL = "SELECT relhasindex FROM pg_class WHERE oid = '$tname'::regclass";
+                            if ($x->{dbh}->selectall_arrayref($SQL)->[0][0]) {
+                                $self->glog("Turning off indexes for $tname on $dbname", LOG_NORMAL);
+                                ## Do this without pg_class manipulation when Postgres supports that
+                                $SQL = "UPDATE pg_class SET relhasindex = 'f' WHERE oid = '$S.$T'::regclass";
+                                $x->{dbh}->do($SQL);
+                                $x->{index_disabled} = 1;
+                            }
+                        }
+
+                        if ($x->{dbtype} eq 'mysql') {
+                            $SQL = "ALTER TABLE $tname DISABLE KEYS";
+                            $self->glog("Disabling keys for $tname on $dbname", LOG_NORMAL);
                             $x->{dbh}->do($SQL);
                             $x->{index_disabled} = 1;
                         }
+
+                        ## TODO: Disable for other dbtypes
                     }
                 }
 
@@ -2649,66 +2658,76 @@ sub start_kid {
                 my $disabled_via_pg_class = 0;
 
                 ## Truncate the table on all target databases, and fallback to delete if that fails
-                for my $dbname (@dbs_postgres) {
+                for my $dbname (@dbs_target) {
 
                     $x = $sync->{db}{$dbname};
-                    next if $x->{role} eq 'source';
 
                     ## Skip if onetimecopy was two and this target had rows
                     next if exists $sync->{otc}{skip}{$dbname};
 
-                    ## Disable triggers and rules the 'old way'
-                    if ($x->{disable_trigrules} eq 'pg_class' and ! $disabled_via_pg_class) {
+                    ## Skip if this is a flatfile
+                    next if $x->{dbtype} =~ /flat/;
 
-                        ## Run all 'before_trigger_disable' code
-                        if (exists $sync->{code_before_trigger_disable}) {
-                            $sth{kid_syncrun_update_status}->execute("Code before_trigger_disable (KID $$)", $syncname);
-                            $maindbh->commit();
-                            for my $code (@{$sync->{code_before_trigger_disable}}) {
-                                last if 'last' eq $self->run_kid_custom_code($sync, $code);
+                    my $tname = $g->{newname}{$syncname}{$dbname};
+
+                    if ($x->{dbtype} eq 'postgres') {
+                        ## Disable triggers and rules the 'old way'
+                        if ($x->{disable_trigrules} eq 'pg_class' and ! $disabled_via_pg_class) {
+
+                            ## Run all 'before_trigger_disable' code
+                            if (exists $sync->{code_before_trigger_disable}) {
+                                $sth{kid_syncrun_update_status}->execute("Code before_trigger_disable (KID $$)", $syncname);
+                                $maindbh->commit();
+                                for my $code (@{$sync->{code_before_trigger_disable}}) {
+                                    last if 'last' eq $self->run_kid_custom_code($sync, $code);
+                                }
                             }
+
+                            $self->glog(qq{Disabling triggers and rules on db "$dbname" via pg_class}, LOG_VERBOSE);
+                            $x->{dbh}->do($SQL{disable_trigrules});
+
+                            ## Run all 'after_trigger_disable' code
+                            if (exists $sync->{code_after_trigger_disable}) {
+                                $sth{kid_syncrun_update_status}->execute("Code after_trigger_disable (KID $$)", $syncname);
+                                $maindbh->commit();
+                                for my $code (@{$sync->{code_after_trigger_disable}}) {
+                                    last if 'last' eq $self->run_kid_custom_code($sync, $code);
+                                }
+                            }
+
+                            ## Because this disables all tables in this sync, we only want to do it once
+                            $disabled_via_pg_class = 1;
                         }
 
-                        $self->glog(qq{Disabling triggers and rules on db "$dbname" via pg_class}, LOG_VERBOSE);
-                        $x->{dbh}->do($SQL{disable_trigrules});
-
-                        ## Run all 'after_trigger_disable' code
-                        if (exists $sync->{code_after_trigger_disable}) {
-                            $sth{kid_syncrun_update_status}->execute("Code after_trigger_disable (KID $$)", $syncname);
-                            $maindbh->commit();
-                            for my $code (@{$sync->{code_after_trigger_disable}}) {
-                                last if 'last' eq $self->run_kid_custom_code($sync, $code);
-                            }
-                        }
-
-                        ## Because this disables all tables in this sync, we only want to do it once
-                        $disabled_via_pg_class = 1;
                     }
 
-                    $self->glog(qq{Emptying out "$dbname.$S.$T" using $sync->{deletemethod}}, LOG_VERBOSE);
+                    $self->glog(qq{Emptying out "$dbname.$tname" using $sync->{deletemethod}}, LOG_VERBOSE);
                     my $use_delete = 1;
 
                     ## By hook or by crook (okay, by truncate or delete), empty this table
 
                     if ($sync->{deletemethod} =~ /truncate/io) {
                         my $do_cascade = $sync->{deletemethod} =~ /cascade/io ? 1 : 0;
-                        if ($self->truncate_table($S, $T, $x->{dbh}, $do_cascade)) {
-                            $self->glog("Truncated table $S.$T", LOG_VERBOSE);
+                        if ($self->truncate_table($x, $tname, $do_cascade)) {
+                            $self->glog("Truncated table $tname", LOG_VERBOSE);
                             $use_delete = 0;
                         }
                         else {
-                            $self->glog("Truncation of table $S.$T failed, so we will try a delete", LOG_VERBOSE);
+                            $self->glog("Truncation of table $tname failed, so we will try a delete", LOG_VERBOSE);
                         }
                     }
 
                     if ($use_delete) {
-                        $sth{kid_syncrun_update_status}->execute("DELETE $S.$T (KID $$)", $syncname);
-                        $maindbh->commit();
-                        $dmlcount{D}{target}{$S}{$T} = $self->delete_table($S, $T, $x->{dbh});
-                        $dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
-                        $self->glog("Rows deleted from $S.$T: $dmlcount{D}{target}{$S}{$T}", LOG_VERBOSE);
-                    }
 
+                        ## This may take a while, so we update syncrun
+                        $sth{kid_syncrun_update_status}->execute("DELETE $tname (KID $$)", $syncname);
+                        $maindbh->commit();
+
+                        ## Note: even though $tname is the actual name, we still track stats with $S.$T
+                        $dmlcount{D}{target}{$S}{$T} = $self->delete_table($x, $tname);
+                        $dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
+                        $self->glog("Rows deleted from $tname: $dmlcount{D}{target}{$S}{$T}", LOG_VERBOSE);
+                    }
 
                 } ## end each database to be truncated/deleted
 
@@ -2738,6 +2757,9 @@ sub start_kid {
 
                 ## Store a list of target database handles for ease below
                 my @targetdbh;
+
+                ## TODO: Make this use push_rows instead
+                ## Probably should meld the above with delete_rows as well
 
                 ## Prepare each target for receiving data
                 for my $dbname (@dbs_postgres) {
@@ -2772,24 +2794,38 @@ sub start_kid {
                 $dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
 
                 ## Restore the indexes and run REINDEX where needed
-                for my $dbname (@dbs_postgres) {
+                for my $dbname (@dbs_target) {
                     $x = $sync->{db}{$dbname};
 
                     next if ! $x->{index_disabled};
 
-                    $sth{kid_syncrun_update_status}->execute("REINDEX $S.$T (KID $$)", $syncname);
+                    my $tname = $g->{newname}{$syncname}{$dbname};
+
+                    ## May be slow, so update syncrun
+                    $sth{kid_syncrun_update_status}->execute("REINDEX $tname (KID $$)", $syncname);
                     $maindbh->commit();
-                    $SQL = "UPDATE pg_class SET relhasindex = 't' WHERE oid = '$S.$T'::regclass";
-                    $x->{dbh}->do($SQL);
+
+                    if ($x->{dbtype} eq 'postgres') {
+                        $SQL = "UPDATE pg_class SET relhasindex = 't' WHERE oid = '$tname'::regclass";
+                        $x->{dbh}->do($SQL);
+
+                        ## Do the reindex, and time how long it takes
+                        my $t0 = [gettimeofday];
+                        $self->glog("Reindexing table $dbname.$tname", LOG_NORMAL);
+                        $x->{dbh}->do("REINDEX TABLE $tname");
+                        $self->glog((sprintf(qq{(OTC: %s) REINDEX TABLE %s},
+                            $self->pretty_time(tv_interval($t0), 'day'), $tname)), LOG_NORMAL);
+                    }
+
+                    if ($x->{dbtype} eq 'mysql') {
+                        $SQL = "ALTER TABLE $tname DISABLE KEYS";
+                        $self->glog("Disabling keys for $tname on $dbname", LOG_NORMAL);
+                        $x->{dbh}->do($SQL);
+                    }
+
                     $x->{index_disabled} = 0;
 
-                    ## Do the reindex, and time how long it takes
-                    my $t0 = [gettimeofday];
-                    $self->glog("Reindexing table $dbname.$S.$T", LOG_NORMAL);
-                    $x->{dbh}->do("REINDEX TABLE $S.$T");
-                    $self->glog((sprintf(qq{(OTC: %s) REINDEX TABLE %s},
-                                         $self->pretty_time(tv_interval($t0), 'day'), "$S.$T")), LOG_NORMAL);
-                }
+                } ## end each target to be reindexed
 
                 ## If we just did a fullcopy, but the table is pushdelta or swap,
                 ## we can clean out any older bucardo_delta entries
@@ -6568,6 +6604,48 @@ sub store_pid {
 } ## end of store_pid
 
 
+sub table_has_rows {
+
+    ## See if the given table has any rows or not
+    ## Arguments: two
+    ## 1. Target database object (contains dbtype and possibly dbh)
+    ## 2. Name of the table
+    ## Returns: true or false
+
+    my ($x,$tname) = @_;
+
+    ## Some types do not have a count
+    if ($x->{dbtype} =~ /flat/) {
+        return 0;
+    }
+    elsif ($x->{dbtype} =~ /postgres|mysql|drizzle/) {
+        $SQL = "SELECT 1 FROM $tname LIMIT 1";
+        $sth = $x->{dbh}->prepare($SQL);
+        $count = $sth->execute();
+        $sth->finish();
+        return $count >= 1 ? 1 : 0;
+    }
+    elsif ('oracle' eq $x->{dbtype}) {
+        $SQL = "SELECT 1 FROM $tname WHERE rownum > 1";
+        $sth = $x->{dbh}->prepare($SQL);
+        $count = $sth->execute();
+        $sth->finish();
+        return $count >= 1 ? 1 : 0;
+    }
+    elsif ('mongo' eq $x->{dbtype}) {
+        my $collection = $x->{dbh}->get_collection($tname);
+        $count = $collection->count({});
+        return $count >= 1 ? 1 : 0;
+    }
+    else {
+        die "Cannot handle database type $x->{dbtype} yet!";
+    }
+
+    return 0;
+
+} ## end of table_has_rows
+
+
 sub get_sequence_info {
 
     ## Get sequence information
@@ -6628,14 +6706,18 @@ sub adjust_sequence {
     my $sourceinfo = $g->{sequenceinfo}{$winner};
 
     ## Walk through all Postgres databases and set the sequence
-    for my $dbname (sort keys %{ $g->{sequenceinfo} }) { ## same as @dbs_postgres
+    for my $dbname (sort keys %{ $sync->{db} }) {
         next if $dbname eq $winner; ## Natch
-        my $targetinfo = $g->{sequenceinfo}{$dbname};
 
         $x = $sync->{db}{$dbname};
+        next if $x->{dbtype} ne 'postgres';
+
+        my $targetinfo = $g->{sequenceinfo}{$dbname} || {};
 
         ## First, change things up via SETVAL if needed
-        if ($sourceinfo->{last_value} != $targetinfo->{last_value}
+        if (! exists $targetinfo->{last_value}
+            or
+            $sourceinfo->{last_value} != $targetinfo->{last_value}
             or
             $sourceinfo->{is_called} != $targetinfo->{is_called}) {
             $self->glog("Set sequence $dbname.$S.$T to $sourceinfo->{last_value} (is_called to $sourceinfo->{is_called})",
@@ -6654,7 +6736,7 @@ sub adjust_sequence {
             next if ! $syntax;
 
             ## Skip if these items are the exact same
-            next if $sourceinfo->{$name} eq $targetinfo->{$name};
+            next if exists $targetinfo->{last_value} and $sourceinfo->{$name} eq $targetinfo->{$name};
 
             $self->glog("Sequence $S.$T has a different $name value: was $targetinfo->{$name}, now $sourceinfo->{$name}", LOG_VERBOSE);
 
@@ -6855,33 +6937,51 @@ sub custom_conflict {
 sub truncate_table {
 
     ## Given a table, attempt to truncate it
-    ## Arguments: four
-    ## 1. Schema name
+    ## Arguments: three
+    ## 1. Database object
     ## 2. Table name
-    ## 3. Database handle we are performing the truncate with
-    ## 4. Boolean if we should CASCADE the truncate or not
+    ## 3. Boolean if we should CASCADE the truncate or not
     ## Returns: true if the truncate succeeded without error, false otherwise
 
-    my ($self, $schema, $table, $ldbh, $cascade) = @_;
+    my ($self, $x, $tname, $cascade) = @_;
 
     ## Override any existing handlers so we can cleanly catch the eval
     local $SIG{__DIE__} = sub {};
 
-    $ldbh->do('SAVEPOINT truncate_attempt');
-    $SQL = sprintf 'TRUNCATE TABLE %s%s',
-        "$schema.$table",
-        $cascade ? ' CASCADE' : '';
-    eval {
-        $ldbh->do($SQL);
-    };
-    if ($@) {
-        $ldbh->do('ROLLBACK TO truncate_attempt');
-        return 0;
+    ## Todo: Move these attribs elsewhere
+    my $does_savepoints = ($x->{dbtype} =~ /postgres|mysql|drizzle|oracle/) ? 1 : 0;
+
+    my $does_cascade = ($x->{dbtype} =~ /postgres/) ? 1 : 0;
+
+    my $does_sql = ($x->{dbtype} =~ /postgres|mysql|drizzle|oracle/) ? 1 : 0;
+
+    if ($does_sql) {
+        if ($does_savepoints) {
+            $x->{dbh}->do('SAVEPOINT truncate_attempt');
+        }
+        $SQL = sprintf 'TRUNCATE TABLE %s%s',
+        $tname,
+        ($cascade and $does_cascade) ? ' CASCADE' : '';
+        eval {
+            $x->{dbh}->do($SQL);
+        };
+        if ($@) {
+            $does_savepoints and $x->{dbh}->do('ROLLBACK TO truncate_attempt');
+            return 0;
+        }
+        else {
+            $does_savepoints and $x->{dbh}->do('RELEASE truncate_attempt');
+            return 1;
+        }
     }
-    else {
-        $ldbh->do('RELEASE truncate_attempt');
+
+    if ('mongo' eq $x->{dbtype}) {
+        my $collection = $x->{dbh}->get_collection($tname);
+        $collection->remove({}, { safe => 1} );
         return 1;
     }
+
+    return undef;
 
 } ## end of truncate_table
 
@@ -6889,15 +6989,27 @@ sub truncate_table {
 sub delete_table {
 
     ## Given a table, attempt to unconditionally delete rows from it
-    ## Arguments: three
-    ## 1. Schema name
+    ## Arguments: two
+    ## 1. Database object
     ## 2. Table name
-    ## 3. Database handle we are performing the truncate with
     ## Returns: number of rows deleted
 
-    my ($self, $schema, $table, $ldbh) = @_;
+    my ($self, $x, $tname) = @_;
 
-    ($count = $ldbh->do("DELETE FROM $schema.$table")) =~ s/0E0/0/o;
+    my $count = 0;
+
+    if ($x->{dbtype} =~ /postgres|mysql|oracle|drizzle/) {
+        ($count = $x->{dbh}->do("DELETE FROM $tname")) =~ s/0E0/0/o;
+    }
+    elsif ('mongo' eq $x->{dbtype}) {
+        ## Same as truncate, really, except we return the number of rows
+        my $collection = $x->{dbh}->get_collection($tname);
+        my $res = $collection->remove({}, { safe => 1} );
+        $count = $res->{n};
+    }
+    else {
+        die "Do not know how to delete a dbtype of $x->{dbtype}";
+    }
 
     return $count;
 
@@ -6952,7 +7064,7 @@ sub delete_rows {
             ## This keeps the indexes around (which is why we don't "drop")
             if ('mongo' eq $type) {
                 $self->{collection} = $t->{dbh}->get_collection($tname);
-                my $result = $self->{collection}->remove({}, { safe => 1} );
+                $self->{collection}->remove({}, { safe => 1} );
                 next;
             }
 
