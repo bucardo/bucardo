@@ -1778,32 +1778,92 @@ sub start_kid {
     };
 
     ## Set up some common groupings of the databases inside sync->{db}
-    my (@dbs, @dbs_postgres, @dbs_mysql, @dbs_mongo,
-        @dbs_source, @dbs_target, @dbs_dbi, @dbs_connectable);
+    ## Also setup common attributes
+    my (@dbs, @dbs_source, @dbs_target, @dbs_connectable, @dbs_dbi,
+        @dbs_postgres, @dbs_drizzle, @dbs_mongo, @dbs_mysql, @dbs_oracle);
     for my $dbname (sort keys %{ $sync->{db} }) {
         $x = $sync->{db}{$dbname};
 
+        ## Is this a SQL database?
+        $x->{does_sql} = 0;
+
+        ## Can they do truncate?
+        $x->{does_truncate} = 0;
+
+        ## Can they do savepoints (and roll them back)?
+        $x->{does_savepoints} = 0;
+
+        ## Do they support truncate cascade?
+        $x->{does_cascade} = 0;
+
+        ## Do they support a LIMIT clause?
+        $x->{does_limit} = 0;
+
+        ## Can they be queried?
+        $x->{does_append_only} = 0;
+
+        ## Postgres
+        if ('postgres' eq $x->{dbtype}) {
+            push @dbs_postgres => $dbname;
+            $x->{does_sql}        = 1;
+            $x->{does_truncate}   = 1;
+            $x->{does_savepoints} = 1;
+            $x->{does_cascade}    = 1;
+            $x->{does_limit}      = 1;
+        }
+
+        ## Drizzle
+        if ('drizzle' eq $x->{dbtype}) {
+            push @dbs_drizzle => $dbname;
+            $x->{does_sql}        = 1;
+            $x->{does_truncate}   = 1;
+            $x->{does_savepoints} = 1;
+            $x->{does_limit}      = 1;
+        }
+
+        ## MongoDB
+        if ('mongo' eq $x->{dbtype}) {
+            push @dbs_mongo => $dbname;
+        }
+
+        ## MySQL
+        if ('postgres' eq $x->{dbtype}) {
+            push @dbs_mysql => $dbname;
+            $x->{does_sql}        = 1;
+            $x->{does_truncate}   = 1;
+            $x->{does_savepoints} = 1;
+            $x->{does_limit}      = 1;
+        }
+
+        ## Oracle
+        if ('oracle' eq $x->{dbtype}) {
+            push @dbs_oracle => $dbname;
+            $x->{does_sql}        = 1;
+            $x->{does_truncate}   = 1;
+            $x->{does_savepoints} = 1;
+        }
+
+        ## Flat files
+        if ($x->{dbtype} =~ /flat/) {
+            $x->{does_append_only} = 1;
+        }
+
+        ## Everyone goes into this bucket
         push @dbs => $dbname;
 
-        push @dbs_postgres => $dbname
-            if $x->{dbtype} eq 'postgres';
-
-        push @dbs_mysql => $dbname
-            if $x->{dbtype} eq 'mysql';
-
-        push @dbs_mongo => $dbname
-            if $x->{dbtype} eq 'mongo';
-
+        ## Databases we read data from
         push @dbs_source => $dbname
             if $x->{role} eq 'source';
 
+        ## Databases we only write to
         push @dbs_target => $dbname
             if $x->{role} ne 'source';
 
+        ## Databases with Perl DBI support
         push @dbs_dbi => $dbname
             if $x->{dbtype} eq 'postgres'
-            or $x->{dbtype} eq 'mysql'
             or $x->{dbtype} eq 'drizzle'
+            or $x->{dbtype} eq 'mysql'
             or $x->{dbtype} eq 'oracle';
 
         push @dbs_connectable => $dbname
@@ -2276,6 +2336,8 @@ sub start_kid {
         $x->{dbh}->commit();
     }
 
+    ## TODO: Other dbtypes bulk loading modes
+
     ## How long it has been since we last ran a ping against our databases
     my $lastpingcheck = 0;
 
@@ -2521,25 +2583,17 @@ sub start_kid {
                     ## Figure out which table name to use
                     my $tname = $g->{newname}{$syncname}{$dbname};
 
-                    if ($x->{dbtype} eq 'postgres') {
+                    if ('postgres' eq $x->{dbtype}) {
                         my $com = "$tname IN $lock_table_mode MODE";
                         $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
                         $x->{dbh}->do("LOCK TABLE $com");
                     }
-
-                    if ($x->{dbtype} eq 'mysql') {
+                    elsif ('mysql' eq $x->{dbtype} or 'drizzle' eq $x->{dbtype}) {
                         my $com = "$tname WRITE";
                         $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
                         $x->{dbh}->do("LOCK TABLE $com");
                     }
-
-                    if ($x->{dbtype} eq 'drizzle') {
-                        my $com = "$tname WRITE";
-                        $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
-                        $x->{dbh}->do("LOCK TABLE $com");
-                    }
-
-                    if ($x->{dbtype} eq 'oracle') {
+                    elsif ('oracle' eq $x->{dbtype}) {
                         my $com = "$tname IN EXCLUSIVE MODE";
                         $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
                         $x->{dbh}->do("LOCK TABLE $com");
@@ -2565,7 +2619,6 @@ sub start_kid {
             my ($sourcename, $sourcedbh, $sourcex);
             for my $dbname (@dbs_source) {
                 $x = $sync->{db}{$dbname};
-
                 $sourcename = $dbname;
                 $sourcedbh = $x->{dbh};
                 $sourcex = $x;
@@ -2666,11 +2719,11 @@ sub start_kid {
                     next if exists $sync->{otc}{skip}{$dbname};
 
                     ## Skip if this is a flatfile
-                    next if $x->{dbtype} =~ /flat/;
+                    next if $x->{does_append_only};
 
                     my $tname = $g->{newname}{$syncname}{$dbname};
 
-                    if ($x->{dbtype} eq 'postgres') {
+                    if ('postgres' eq $x->{dbtype}) {
                         ## Disable triggers and rules the 'old way'
                         if ($x->{disable_trigrules} eq 'pg_class' and ! $disabled_via_pg_class) {
 
@@ -6615,10 +6668,9 @@ sub table_has_rows {
     my ($x,$tname) = @_;
 
     ## Some types do not have a count
-    if ($x->{dbtype} =~ /flat/) {
-        return 0;
-    }
-    elsif ($x->{dbtype} =~ /postgres|mysql|drizzle/) {
+    return 0 if $x->{does_append_only};
+
+    if ($x->{does_limit}) {
         $SQL = "SELECT 1 FROM $tname LIMIT 1";
         $sth = $x->{dbh}->prepare($SQL);
         $count = $sth->execute();
@@ -6933,7 +6985,6 @@ sub custom_conflict {
 } ## end of custom_conflict
 
 
-
 sub truncate_table {
 
     ## Given a table, attempt to truncate it
@@ -6948,29 +6999,22 @@ sub truncate_table {
     ## Override any existing handlers so we can cleanly catch the eval
     local $SIG{__DIE__} = sub {};
 
-    ## Todo: Move these attribs elsewhere
-    my $does_savepoints = ($x->{dbtype} =~ /postgres|mysql|drizzle|oracle/) ? 1 : 0;
-
-    my $does_cascade = ($x->{dbtype} =~ /postgres/) ? 1 : 0;
-
-    my $does_sql = ($x->{dbtype} =~ /postgres|mysql|drizzle|oracle/) ? 1 : 0;
-
-    if ($does_sql) {
-        if ($does_savepoints) {
+    if ($x->{does_sql}) {
+        if ($x->{does_savepoints}) {
             $x->{dbh}->do('SAVEPOINT truncate_attempt');
         }
         $SQL = sprintf 'TRUNCATE TABLE %s%s',
         $tname,
-        ($cascade and $does_cascade) ? ' CASCADE' : '';
+        ($cascade and $x->{does_cascade}) ? ' CASCADE' : '';
         eval {
             $x->{dbh}->do($SQL);
         };
         if ($@) {
-            $does_savepoints and $x->{dbh}->do('ROLLBACK TO truncate_attempt');
+            $x->{does_savepoints} and $x->{dbh}->do('ROLLBACK TO truncate_attempt');
             return 0;
         }
         else {
-            $does_savepoints and $x->{dbh}->do('RELEASE truncate_attempt');
+            $x->{does_savepoints} and $x->{dbh}->do('RELEASE truncate_attempt');
             return 1;
         }
     }
@@ -6998,7 +7042,7 @@ sub delete_table {
 
     my $count = 0;
 
-    if ($x->{dbtype} =~ /postgres|mysql|oracle|drizzle/) {
+    if ($x->{does_sql}) {
         ($count = $x->{dbh}->do("DELETE FROM $tname")) =~ s/0E0/0/o;
     }
     elsif ('mongo' eq $x->{dbtype}) {
@@ -7052,36 +7096,26 @@ sub delete_rows {
 
             my $tname = $newname->{$t->{name}};
 
-            ## Postgres is a plain and simple TRUNCATE
+            ## Postgres is a plain and simple TRUNCATE, with an async flag
             ## TRUNCATE CASCADE is not needed as everything should be in one
             ## sync (herd), and we have turned all FKs off
             if ('postgres' eq $type) {
                 my $tdbh = $t->{dbh};
                 $tdbh->do("TRUNCATE TABLE $tname", { pg_async => PG_ASYNC });
             } ## end postgres database
-
+            ## For all other SQL databases, we simply truncate
+            elsif ($x->{does_sql}) {
+                $t->{dbh}->do("TRUNCATE TABLE $tname");
+            }
             ## For MongoDB, we simply remove everything from the collection
             ## This keeps the indexes around (which is why we don't "drop")
-            if ('mongo' eq $type) {
+            elsif ('mongo' eq $type) {
                 $self->{collection} = $t->{dbh}->get_collection($tname);
                 $self->{collection}->remove({}, { safe => 1} );
                 next;
             }
-
-            ## For MySQL and Drizzle, we simply truncate the table name without the schema
-            if ('mysql' eq $type or 'drizzle' eq $type) {
-                my $tdbh = $t->{dbh};
-                $tdbh->do("TRUNCATE TABLE $tname");
-            }
-
-            ## Oracle is a simple schema and table truncate
-            if ('oracle' eq $type) {
-                my $tdbh = $t->{dbh};
-                $tdbh->do("TRUNCATE TABLE $tname");
-            }
-
             ## For flatfiles, write out a basic truncate statement
-            if ($type =~ /flat/o) {
+            elsif ($type =~ /flat/o) {
                 printf {$t->{filehandle}} qq{TRUNCATE TABLE %S;\n\n},
                     'flatpg' eq $type ? $tname : $tname;
                 $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
