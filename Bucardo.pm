@@ -718,9 +718,7 @@ sub mcp_main {
             for my $dbname (keys %{ $self->{sdb} }) {
                 $x = $self->{sdb}{$dbname};
 
-                next if $x->{dbtype} =~ /flat/o;
-
-                next if $x->{dbtype} =~ /mongo/o;
+                next if $x->{dbtype} =~ /flat|mongo|redis/o;
 
                 if (! $x->{dbh}->ping) {
                     ## Database is not reachable, so we'll try and reconnect
@@ -1780,7 +1778,7 @@ sub start_kid {
     ## Set up some common groupings of the databases inside sync->{db}
     ## Also setup common attributes
     my (@dbs, @dbs_source, @dbs_target, @dbs_connectable, @dbs_dbi,
-        @dbs_postgres, @dbs_drizzle, @dbs_mongo, @dbs_mysql, @dbs_oracle);
+        @dbs_postgres, @dbs_drizzle, @dbs_mongo, @dbs_mysql, @dbs_oracle, @dbs_redis);
     for my $dbname (sort keys %{ $sync->{db} }) {
         $x = $sync->{db}{$dbname};
 
@@ -1827,7 +1825,7 @@ sub start_kid {
         }
 
         ## MySQL
-        if ('postgres' eq $x->{dbtype}) {
+        if ('mysql' eq $x->{dbtype}) {
             push @dbs_mysql => $dbname;
             $x->{does_sql}        = 1;
             $x->{does_truncate}   = 1;
@@ -1841,6 +1839,11 @@ sub start_kid {
             $x->{does_sql}        = 1;
             $x->{does_truncate}   = 1;
             $x->{does_savepoints} = 1;
+        }
+
+        ## Redis
+        if ('redis' eq $x->{dbtype}) {
+            push @dbs_redis => $dbname;
         }
 
         ## Flat files
@@ -4206,7 +4209,13 @@ sub connect_database {
             return 0, 'flat';
         }
 
-        if ('mongo' eq $dbtype) {
+        if ('postgres' eq $dbtype) {
+            $dsn = "dbi:Pg:dbname=$d->{dbname}";
+        }
+        elsif ('drizzle' eq $dbtype) {
+            $dsn = "dbi:drizzle:database=$d->{dbname}";
+        }
+        elsif ('mongo' eq $dbtype) {
             my $dsn = {};
             for my $name (qw/ dbhost dbport dbuser dbpass /) {
                 defined $d->{$name} and length $d->{$name} and $dsn->{$name} = $d->{$name};
@@ -4219,18 +4228,35 @@ sub connect_database {
 
             return $backend, $dbh;
         }
-
-        if ('postgres' eq $dbtype) {
-            $dsn = "dbi:Pg:dbname=$d->{dbname}";
-        }
         elsif ('mysql' eq $dbtype) {
             $dsn = "dbi:mysql:database=$d->{dbname}";
         }
-        elsif ('drizzle' eq $dbtype) {
-            $dsn = "dbi:drizzle:database=$d->{dbname}";
-        }
         elsif ('oracle' eq $dbtype) {
             $dsn = "dbi:Oracle:$d->{dbname}";
+        }
+        elsif ('redis' eq $dbtype) {
+            my $dsn = {};
+            for my $name (qw/ dbhost dbport dbuser dbpass /) {
+                defined $d->{$name} and length $d->{$name} and $dsn->{$name} = $d->{$name};
+            }
+            my @dsn;
+            my $server = '';
+            if (defined $d->{host} and length $d->{host}) {
+                $server = $d->{host};
+            }
+            if (defined $d->{port} and length $d->{port}) {
+                $server = ":$d->{port}";
+            }
+            if ($server) {
+                push @dsn => 'server', $server;
+            }
+
+            ## For now, we simply require it
+            require Redis;
+            $dbh = Redis->new(@dsn);
+            my $backend = 0;
+
+            return $backend, $dbh;
         }
         else {
             die qq{Cannot handle databases of type "$dbtype"\n};
@@ -5326,8 +5352,11 @@ sub validate_sync {
             ## Flat files are obviously skipped as we create them de novo
             next if $self->{sdb}{$dbname}{dbtype} =~ /flat/o;
 
-            ## Mongo is skipped because it can create things on the fly
+            ## Mongo is skipped because it can create schemas on the fly
             next if $self->{sdb}{$dbname}{dbtype} =~ /mongo/o;
+
+            ## Redis is skipped because we can create keys on the fly
+            next if $self->{sdb}{$dbname}{dbtype} =~ /redis/o;
 
             ## MySQL/Drizzle/Oracle is skipped for now, but should be added later
             next if $self->{sdb}{$dbname}{dbtype} =~ /mysql|drizzle|oracle/o;
@@ -5726,8 +5755,7 @@ sub fork_controller {
 
     for my $dbname (keys %{ $self->{sdb} }) {
         $x = $self->{sdb}{$dbname};
-        next if $x->{dbtype} =~ /flat/o;
-        next if $x->{dbtype} =~ /mongo/o;
+        next if $x->{dbtype} =~ /flat|mongo|redis/o;
         $x->{dbh}->{InactiveDestroy} = 1;
     }
 
@@ -6677,6 +6705,11 @@ sub table_has_rows {
         $sth->finish();
         return $count >= 1 ? 1 : 0;
     }
+    elsif ('mongo' eq $x->{dbtype}) {
+        my $collection = $x->{dbh}->get_collection($tname);
+        $count = $collection->count({});
+        return $count >= 1 ? 1 : 0;
+    }
     elsif ('oracle' eq $x->{dbtype}) {
         $SQL = "SELECT 1 FROM $tname WHERE rownum > 1";
         $sth = $x->{dbh}->prepare($SQL);
@@ -6684,10 +6717,9 @@ sub table_has_rows {
         $sth->finish();
         return $count >= 1 ? 1 : 0;
     }
-    elsif ('mongo' eq $x->{dbtype}) {
-        my $collection = $x->{dbh}->get_collection($tname);
-        $count = $collection->count({});
-        return $count >= 1 ? 1 : 0;
+    elsif ('redis' eq $x->{dbtype}) {
+        ## No sense in returning anything here
+        return 0;
     }
     else {
         die "Cannot handle database type $x->{dbtype} yet!";
@@ -7051,6 +7083,9 @@ sub delete_table {
         my $res = $collection->remove({}, { safe => 1} );
         $count = $res->{n};
     }
+    elsif ('redis' eq $x->{dbtype}) {
+        ## Do nothing here yet
+    }
     else {
         die "Do not know how to delete a dbtype of $x->{dbtype}";
     }
@@ -7114,6 +7149,10 @@ sub delete_rows {
                 $self->{collection}->remove({}, { safe => 1} );
                 next;
             }
+            ## For Redis, do nothing
+            elsif ('redis' eq $type) {
+                next;
+            }
             ## For flatfiles, write out a basic truncate statement
             elsif ($type =~ /flat/o) {
                 printf {$t->{filehandle}} qq{TRUNCATE TABLE %S;\n\n},
@@ -7142,8 +7181,8 @@ sub delete_rows {
 
         my $type = $t->{dbtype};
 
-        ## No special preparation for mongo
-        next if 'mongo' eq $type;
+        ## No special preparation for mongo or redis
+        next if $type =~ /mongo|redis/;
 
         ## Set the type of SQL we are using: IN vs ANY
         my $sqltype = '';
@@ -7300,6 +7339,11 @@ sub delete_rows {
             next;
         }
 
+        if ('redis' eq $type) {
+            ## TODO
+            next;
+        }
+
         if ($type =~ /flatpg/o) {
             print {$t->{filehandle}} qq{$SQL{PGIN};\n\n};
             $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
@@ -7336,7 +7380,7 @@ sub delete_rows {
 
     $count = 0;
     for my $t (@$deldb) {
-        next if $t->{dbtype} =~ /mongo|flat/o;
+        next if $t->{dbtype} =~ /mongo|flat|redis/o;
         $count += $count{$t};
         $self->glog(qq{Rows deleted from $t->{name}.$S.$T: $count{$t}}, LOG_VERBOSE);
     }
@@ -7415,6 +7459,9 @@ sub push_rows {
         elsif ('mongo' eq $type) {
             $self->{collection} = $t->{dbh}->get_collection($tname);
         }
+        elsif ('redis' eq $type) {
+            ## TODO
+        }
         elsif ('mysql' eq $type or 'drizzle' eq $type) {
             my $tgtcmd = "INSERT INTO $tname VALUES (";
             $tgtcmd .= '?,' x keys %{ $goat->{columnhash} };
@@ -7491,6 +7538,9 @@ sub push_rows {
             elsif ('mysql' eq $type or 'drizzle' eq $type or 'oracle' eq $type) {
                 my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
                 $count += $t->{sth}->execute(@cols);
+            }
+            elsif ('redis' eq $type) {
+                ## TODO
             }
         }
     }

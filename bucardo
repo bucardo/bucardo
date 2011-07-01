@@ -803,10 +803,11 @@ sub add_database {
     ## Clean up and standardize the names
     $vals->{dbtype} = lc $vals->{dbtype};
     $vals->{dbtype} =~ s/postgres.*/postgres/io;
+    $vals->{dbtype} =~ s/drizzle.*/drizzle/io;
     $vals->{dbtype} =~ s/mongo.*/mongo/io;
     $vals->{dbtype} =~ s/mysql.*/mysql/io;
-    $vals->{dbtype} =~ s/drizzle.*/drizzle/io;
     $vals->{dbtype} =~ s/oracle.*/oracle/io;
+    $vals->{dbtype} =~ s/redis.*/redis/io;
 
     ## Attempt to insert this into the database
     $SQL = "INSERT INTO bucardo.db ($cols) VALUES ($phs)";
@@ -833,7 +834,7 @@ sub add_database {
         last TESTCONN if 'flatfile' eq $vals->{dbtype};
 
         ## Must have a valid type
-        if ($vals->{dbtype} !~ /^(?:postgres|mongo|mysql|drizzle|oracle)$/) {
+        if ($vals->{dbtype} !~ /^(?:postgres|drizzle|mongo|mysql|oracle|redis)$/) {
             die qq{Unknown database type: $vals->{dbtype}\n};
         }
 
@@ -842,34 +843,6 @@ sub add_database {
         $sth = $dbh->prepare($SQL);
         $count = $sth->execute($item_name);
         my $dbconn = $sth->fetchall_arrayref()->[0][0];
-
-        if ('mongo' eq $vals->{dbtype}) {
-            my $found = 0;
-            eval {
-                require MongoDB;
-                $found = 1;
-            };
-            if (!$found) {
-                die "Cannot add unless the MongoDB perl driver is available\n";
-            }
-
-            my $testdbh;
-            $found = 0;
-            my $dsn = {};
-            eval {
-                for my $line (split /\n/ => $dbconn) {
-                    next if $line !~ /(\w+):\s+(.+)/;
-                    $dsn->{$1} = $2;
-                }
-                $testdbh = MongoDB::Connection->new($dsn);
-                $found = 1;
-            };
-            if (! $found) {
-                warn Dumper $dsn;
-                die qq{Connection to mongodb failed: $@\n};
-            }
-
-        } ## end of mongo
 
         if ('postgres' eq $vals->{dbtype}) {
 
@@ -924,33 +897,6 @@ sub add_database {
 
         } ## end postgres
 
-        if ('mysql' eq $vals->{dbtype}) {
-
-            my ($type,$dsn,$user,$pass) = split /\n/ => $dbconn;
-
-            my $found = 0;
-            eval {
-                require DBD::mysql;
-                $found = 1;
-            };
-            if (!$found) {
-                die "Cannot add unless the DBD::mysql module is available\n";
-            }
-
-            my $testdbh;
-            $found = 0;
-            eval {
-                $testdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
-                $found = 1;
-            };
-            if (! $found) {
-                die "MySQL connection test failed. You can force add it with the --force argument. Error was: $@\n\n";
-            }
-
-            $testdbh->disconnect();
-
-        } ## end mysql
-
         if ('drizzle' eq $vals->{dbtype}) {
 
             my ($type,$dsn,$user,$pass) = split /\n/ => $dbconn;
@@ -978,6 +924,61 @@ sub add_database {
 
         } ## end drizzle
 
+        if ('mongo' eq $vals->{dbtype}) {
+            my $found = 0;
+            eval {
+                require MongoDB;
+                $found = 1;
+            };
+            if (!$found) {
+                die "Cannot add unless the MongoDB perl driver is available\n";
+            }
+
+            my $testdbh;
+            $found = 0;
+            my $dsn = {};
+            for my $line (split /\n/ => $dbconn) {
+                next if $line !~ /(\w+):\s+(.+)/;
+                $dsn->{$1} = $2;
+            }
+            eval {
+                $testdbh = MongoDB::Connection->new($dsn);
+                $found = 1;
+            };
+            if (! $found) {
+                warn Dumper $dsn;
+                die qq{Connection to mongodb failed: $@\n};
+            }
+
+        } ## end of mongo
+
+        if ('mysql' eq $vals->{dbtype}) {
+
+            my ($type,$dsn,$user,$pass) = split /\n/ => $dbconn;
+
+            my $found = 0;
+            eval {
+                require DBD::mysql;
+                $found = 1;
+            };
+            if (!$found) {
+                die "Cannot add unless the DBD::mysql module is available\n";
+            }
+
+            my $testdbh;
+            $found = 0;
+            eval {
+                $testdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+                $found = 1;
+            };
+            if (! $found) {
+                die "MySQL connection test failed. You can force add it with the --force argument. Error was: $@\n\n";
+            }
+
+            $testdbh->disconnect();
+
+        } ## end mysql
+
         if ('oracle' eq $vals->{dbtype}) {
 
             my ($type,$dsn,$user,$pass) = split /\n/ => $dbconn;
@@ -1004,6 +1005,45 @@ sub add_database {
             $testdbh->disconnect();
 
         } ## end oracle
+
+        if ('redis' eq $vals->{dbtype}) {
+            my $found = 0;
+            eval {
+                require Redis;
+                $found = 1;
+            };
+            if (!$found) {
+                die "Cannot add unless the Redis perl driver is available\n";
+            }
+
+            my $testdbh;
+            $found = 0;
+            my $tempdsn = {};
+            for my $line (split /\n/ => $dbconn) {
+                next if $line !~ /(\w+):\s+(.+)/;
+                $tempdsn->{$1} = $2;
+            }
+            my $server;
+            if (exists $tempdsn->{host}) {
+                $server = $tempdsn->{host};
+            }
+            if (exists $tempdsn->{port}) {
+                $server .= ":$tempdsn->{port}";
+            }
+            my @dsn;
+            if (defined $server) {
+                push @dsn => 'server', $server;
+            }
+            eval {
+                $testdbh = Redis->new(@dsn);
+                $found = 1;
+            };
+            if (! $found) {
+                warn Dumper \@dsn;
+                die qq{Connection to redis failed: $@\n};
+            }
+
+        } ## end of redis
 
     } ## end of TESTCONN
 
@@ -1390,6 +1430,15 @@ sub list_databases {
                 print ' (SSP is off)';
             }
         }
+        if ($dbtype eq 'drizzle') {
+            my $showport = (length $info->{dbport} and $info->{dbport} != 3306)
+                ? " --port $info->{dbport}" : '';
+            printf "Conn: drizzle -u %s -D %s%s%s",
+                $info->{dbuser},
+                $info->{dbname},
+                $showhost,
+                $showport;
+        }
         if ($dbtype eq 'flatfile') {
             print "Prefix: $info->{dbname}";
         }
@@ -1407,19 +1456,23 @@ sub list_databases {
                 $showhost,
                 $showport;
         }
-        if ($dbtype eq 'drizzle') {
-            my $showport = (length $info->{dbport} and $info->{dbport} != 3306)
-                ? " --port $info->{dbport}" : '';
-            printf "Conn: drizzle -u %s -D %s%s%s",
-                $info->{dbuser},
-                $info->{dbname},
-                $showhost,
-                $showport;
-        }
         if ($dbtype eq 'oracle') {
             printf "Conn: sqlplus %s%s",
                 $info->{dbuser},
                 $showhost ? qq{\@$showhost} : '';
+        }
+        if ($dbtype eq 'redis') {
+            my $server = '';
+            if (length $info->{dbhost}) {
+                $server .= $info->{dbhost};
+            }
+            if (length $info->{dbport}) {
+                $server .= ":$info->{dbport}";
+            }
+            if ($server) {
+                $server = "server=$server";
+                print "Conn: $server";
+            }
         }
 
         print "\n";
@@ -4544,10 +4597,11 @@ sub process_args {
     ## Clean up and standardize the names
     if (exists $arg{type}) {
         $arg{type} =~ s/postgres.*/postgres/io;
+        $arg{type} =~ s/drizzle.*/drizzle/io;
         $arg{type} =~ s/mongo.*/mongo/io;
         $arg{type} =~ s/mysql.*/mysql/io;
-        $arg{type} =~ s/drizzle.*/drizzle/io;
         $arg{type} =~ s/oracle.*/oracle/io;
+        $arg{type} =~ s/redis.*/redis/io;
     }
 
     return \%arg;
@@ -6604,6 +6658,15 @@ sub upgrade {
         $changes++;
     }
 
+    ## Check for any added tables
+    for my $row (@tablelist) {
+        my ($name,$body) = @$row;
+        next if relation_exists('bucardo', $name);
+        upgrade_and_log($body);
+        clog "Created table $name";
+        $changes++;
+    }
+
     ## Add new columns as needed from the schema
     for my $row (@collist) {
         my ($schema,$table,$column,$def) = @$row;
@@ -6815,15 +6878,6 @@ sub upgrade {
         next if relation_exists('bucardo', $sname);
         upgrade_and_log($body);
         clog "Created sequence $sname";
-        $changes++;
-    }
-
-    ## Check for any added tables
-    for my $row (@tablelist) {
-        my ($name,$body) = @$row;
-        next if relation_exists('bucardo', $name);
-        upgrade_and_log($body);
-        clog "Created table $name";
         $changes++;
     }
 
