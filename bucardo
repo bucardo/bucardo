@@ -4766,7 +4766,7 @@ sub list_syncs {
         my $s = $syncs->{$name};
         $maxname = length $name if length $name > $maxname;
         $maxherd = length $s->{herd}{name} if length $s->{herd}{name} > $maxherd;
-        $s->{d} = 'DBs:';
+        $s->{d} = "DB group $s->{dbs}:";
         for (sort keys %{ $s->{dblist} }) {
             $s->{d} .= " $_ ($s->{dblist}{$_}{role})";
         }
