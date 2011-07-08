@@ -771,7 +771,6 @@ sub add_database {
     ## Inputs and aliases, database column name, flags, default
     my $validcols = qq{
         type                     dbtype               0                postgres
-        name                     name                 0                $item_name
         db|dbname                dbname               0                $item_name
         user|dbuser|pguser       dbuser               0                bucardo
         host|dbhost|pghost       dbhost               0                ENV:PGHOSTADDR|PGHOST
@@ -7057,7 +7056,6 @@ Adds a database
 
 Optional information:
  type=type of database
- name=internal_name (defaults to the database name)
  host=hostname      (defaults to none: Unix socket)
  user=username      (defaults to 'bucardo')
  port=#             (defaults to system default, usually 5432)
@@ -8501,7 +8499,7 @@ This document describes version 5.0.0 of bucardo
 
   ./bucardo add sync testsync source=herd1 type=pushdelta targetdb=B tables=tab1,tab2,tab3
 
-  ./bucardo add database newdb name=internal_name port=5432 host=myserver
+  ./bucardo add database newdb dbname=internal_name port=5432 host=myserver
 
   ./bucardo add all tables db=foo [herd=x] [pkonly]
 
@@ -8618,7 +8616,7 @@ after the type will look up all matching entries.
 
 Usage:  add <item_type> <item_name>
 
-Usage:  add database <dbname> name=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx ssp=1/0
+Usage:  add database <dbname> dbname=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx ssp=1/0
 
 Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx herd=xxx
 
