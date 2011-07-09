@@ -478,10 +478,10 @@ CREATE UNIQUE INDEX customcode_map_unique_goat ON bucardo.customcode_map(code,go
 -- Allow the target's names to differ from the source
 --
 CREATE TABLE bucardo.customname (
+  goat     INTEGER      NOT NULL,
   newname  TEXT             NULL,
   db       TEXT             NULL,
   sync     TEXT             NULL,
-  goat     INTEGER      NOT NULL,
   cdate    TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
