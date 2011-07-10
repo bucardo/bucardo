@@ -14,7 +14,7 @@ use Data::Dumper;
 
 use vars qw/$SQL $sth $count $COM %dbh/;
 
-my $DEBUG = 2;
+my $DEBUG = 0;
 
 use base 'Exporter';
 our @EXPORT = qw/%tabletype %sequences %val compare_tables bc_deeply wait_for_notice $location/;
@@ -241,7 +241,7 @@ sub blank_database {
     my $dbh = $self->fresh_database($name);
 
     ## Populate a test database
-    $self->add_test_schema($dbh,'foo');
+    $self->add_test_schema($dbh);
 
     return $dbh;
 
