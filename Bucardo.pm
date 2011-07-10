@@ -13,7 +13,7 @@ use 5.008003;
 use strict;
 use warnings;
 
-our $VERSION = '4.4.5';
+our $VERSION = '4.4.6';
 
 use sigtrap qw( die normal-signals ); ## Call die() on HUP, INT, PIPE, or TERM
 use Config;                           ## Used to map signal names
@@ -5488,7 +5488,7 @@ sub start_kid {
                     ## We are manually building lists, so we may need to escape the pkeys
                     my @safepk;
                     if ($g->{pkcols} <= 1) {
-                        if ($g->{pkeytype}[0] =~ /int$/o) {
+                        if ($g->{pkeytype}[0] =~ /int\d?$/o) {
                             push @safepk => $pkval;
                         }
                         else {
@@ -5500,7 +5500,7 @@ sub start_kid {
                     else {
                         $x=0;
                         for my $pk (@{$info1->{$pkval}{BUCARDO_PKVALS}}) {
-                            if ($g->{pkeytype}[0] =~ /int$/o) {
+                            if ($g->{pkeytype}[0] =~ /int\d?$/o) {
                                 push @safepk => $pk;
                             }
                             else {
@@ -6237,7 +6237,7 @@ Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This document describes version 4.4.5 of Bucardo
+This document describes version 4.4.6 of Bucardo
 
 =head1 WEBSITE
 
