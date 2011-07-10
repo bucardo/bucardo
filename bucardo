@@ -770,6 +770,7 @@ sub add_database {
 
     ## Inputs and aliases, database column name, flags, default
     my $validcols = qq{
+        null                     name                 0                $item_name
         type                     dbtype               0                postgres
         db|dbname                dbname               0                $item_name
         user|dbuser|pguser       dbuser               0                bucardo
