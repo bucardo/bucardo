@@ -5345,21 +5345,23 @@ sub validate_sync {
         ## Verify sequences or tables+columns on remote databases
         my $maindbh = $self->{masterdbh};
 
-        for my $dbname (sort keys %{ $self->{sdb} }) {
+        for my $dbname (sort keys %{ $s->{db} }) {
 
-            next if $self->{sdb}{$dbname}{role} eq 'source';
+            $x = $s->{db}{$dbname};
+
+            next if $x->{role} eq 'source';
 
             ## Flat files are obviously skipped as we create them de novo
-            next if $self->{sdb}{$dbname}{dbtype} =~ /flat/o;
+            next if $x->{dbtype} =~ /flat/o;
 
             ## Mongo is skipped because it can create schemas on the fly
-            next if $self->{sdb}{$dbname}{dbtype} =~ /mongo/o;
+            next if $x->{dbtype} =~ /mongo/o;
 
             ## Redis is skipped because we can create keys on the fly
-            next if $self->{sdb}{$dbname}{dbtype} =~ /redis/o;
+            next if $x->{dbtype} =~ /redis/o;
 
             ## MySQL/Drizzle/Oracle is skipped for now, but should be added later
-            next if $self->{sdb}{$dbname}{dbtype} =~ /mysql|drizzle|oracle/o;
+            next if $x->{dbtype} =~ /mysql|drizzle|oracle/o;
 
             ## Respond to ping here and now for very impatient watchdog programs
             $maindbh->commit();
@@ -5379,7 +5381,7 @@ sub validate_sync {
             }
 
             ## Get a handle for the remote database
-            my $dbh = $self->{sdb}{$dbname}{dbh};
+            my $dbh = $x->{dbh};
 
             ## If a sequence, verify the information and move on
             if ($g->{reltype} eq 'sequenceSKIP') {
@@ -5583,8 +5585,8 @@ sub validate_sync {
     ## If pinging, listen for a triggerkick on all source databases
     if ($s->{ping} or $s->{do_listen}) {
         my $l = "kick_sync_$syncname";
-        for my $dbname (sort keys %{ $self->{sdb} }) {
-            $x = $self->{sdb}{$dbname};
+        for my $dbname (sort keys %{ $s->{db} }) {
+            $x = $s->{db}{$dbname};
             next if $x->{role} ne 'source';
 
             $self->db_listen($x->{dbh}, $l, $dbname);
