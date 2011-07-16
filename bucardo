@@ -6783,6 +6783,7 @@ sub upgrade {
     }
 
     $dbh->do(q{SET escape_string_warning = 'OFF'});
+    $dbh->do(q{SET standard_conforming_strings = 'ON'});
 
     my $changes = 0;
 

@@ -34,6 +34,7 @@ SET CLIENT_MIN_MESSAGES = 'WARNING';
 SET search_path TO bucardo;
 SET client_min_messages   = 'WARNING';
 SET escape_string_warning = 'OFF';
+SET standard_conforming_strings = 'ON';
 
 -- Try and create a plperlu function, then call it
 CREATE OR REPLACE FUNCTION bucardo.plperlu_test()
@@ -419,12 +420,12 @@ COMMENT ON TABLE bucardo.sync IS $$Defines a single replication event from a her
 ALTER TABLE bucardo.sync ADD CONSTRAINT sync_deletemethod CHECK (deletemethod IN ('truncate', 'delete', 'truncate_cascade'));
 
 -- Because NOTIFY is broke, make sure our names are simple:
-ALTER TABLE bucardo.db      ADD CONSTRAINT db_name_sane      CHECK (name ~ E'^[a-zA-Z]\\w*$');
+ALTER TABLE bucardo.db      ADD CONSTRAINT db_name_sane      CHECK (name ~ E'^[a-zA-Z]\w*$');
 
-ALTER TABLE bucardo.dbgroup ADD CONSTRAINT dbgroup_name_sane CHECK (name ~ E'^[a-zA-Z]\\w*$');
+ALTER TABLE bucardo.dbgroup ADD CONSTRAINT dbgroup_name_sane CHECK (name ~ E'^[a-zA-Z]\w*$');
 
 ALTER TABLE bucardo.sync    ADD CONSTRAINT sync_name_sane
-  CHECK (name ~ E'^[a-zA-Z]\\w*$' AND lower(name) NOT IN ('pushdelta','fullcopy','swap'));
+  CHECK (name ~ E'^[a-zA-Z]\w*$' AND lower(name) NOT IN ('pushdelta','fullcopy','swap'));
 
 CREATE SEQUENCE bucardo.customcode_id_seq;
 CREATE TABLE bucardo.customcode (
@@ -488,8 +489,8 @@ CREATE TABLE bucardo.customname (
   cdate    TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
-ALTER TABLE bucardo.customname ADD CONSTRAINT customname_sanename
-  CHECK (newname ~ E'^[a-zA-Z0-9_\.~]+$');
+ALTER TABLE bucardo.customname ADD CONSTRAINT customname_sane_name
+  CHECK (newname ~ E'^[a-zA-Z0-9_.~]+$');
 
 ALTER TABLE bucardo.customname
   ADD CONSTRAINT customname_db_fk
