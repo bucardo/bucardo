@@ -241,6 +241,8 @@ my $re_dbname = qr{\w[\w\d]*};
 ping()          if $verb eq 'ping';
 superhelp()     if $verb eq 'help';
 
+upgrade()       if $verb eq 'upgrade' or $verb eq 'uprgade';
+
 ## Handle all the verbs that may require us to load information
 load_bucardo_info();
 status_all()    if $verb eq 'status' and ! @nouns;
@@ -252,7 +254,6 @@ reload_config() if $verb eq 'reload_config';
 reload()        if $verb eq 'reload';
 add_item()      if $verb eq 'add';
 remove_item()   if $verb eq 'remove' or $verb eq 'delete';
-upgrade()       if $verb eq 'upgrade' or $verb eq 'uprgade';
 message()       if $verb eq 'message';
 list()          if $verb eq 'list' or $verb eq 'l' or $verb eq 'lsit';;
 config()        if $verb eq 'set' or $verb eq 'show' or $verb eq 'config';
@@ -1821,6 +1822,349 @@ sub list_dbgroups {
     exit 0;
 
 } ## end of list_dbgroups
+
+
+##
+## Customname-related subroutines: add, exists, remove, list
+##
+
+sub add_customname {
+
+    ## Add an item to the customname table
+    ## Arguments:
+    ## tablename or goatid
+    ## Optional: syncname, database name
+    ## Examples:
+    ## bucardo add customname public.foobar new=foobarz
+    ## bucardo add customname public.foobar new=foobarz sync=bee
+    ## bucardo add customname public.foobar new=foobarz db=baz
+    ## bucardo add customname public.foobar new=foobarz db=baz sync=bee
+
+    my $item_name = shift @nouns || '';
+
+    my $usage = usage('add_customname');
+
+    ## Must have a second name as well
+    my $newname = shift @nouns || '';
+
+    if (!length $item_name or ! length $newname) {
+        warn "$usage\n";
+        exit 1;
+    }
+
+    ## Does this number or name exist?
+    if (! exists $GOAT->{$item_name}) {
+        print qq{Could not find a matching table for "$item_name"\n};
+        exit 1;
+    }
+
+    ## Gather the name variations
+    my $goat = $GOAT->{$item_name};
+    ## If this is a ref due to it being an unqualified name, just use the first one
+    $goat = $goat->[0] if ref $goat eq 'ARRAY';
+    my ($sname,$tname) = ($goat->{schemaname},$goat->{tablename});
+
+    ## The new name can have a schema. If it does not, use the "old" one
+    my $Sname;
+    my $Tname = $newname;
+    if ($Tname =~ /(.+)\.(.+)/) {
+        ($Sname,$Tname) = ($1,$2);
+    }
+    else {
+        $Sname = $sname;
+    }
+
+    ## If the new name contains an equal sign, treat as an error
+    if ($Tname =~ /=/) {
+        warn "$usage\n";
+        exit 1;
+    }
+
+    ## Names cannot be the same
+    if ($sname eq $Sname and $tname eq $Tname) {
+        print qq{The new name cannot be the same as the old\n};
+        exit 1;
+    }
+
+    ## Parse the rest of the arguments
+    my (@sync,@db);
+    for my $arg (@nouns) {
+        ## Name of a sync
+        if ($arg =~ /^sync\s*=\s*(.+)/) {
+            my $sync = $1;
+            if (! exists $SYNC->{$sync}) {
+                print qq{No such sync: "$sync"\n};
+                exit 1;
+            }
+            push @sync => $sync;
+        }
+        elsif ($arg =~ /^(?:db|database)\s*=\s*(.+)/) {
+            my $db = $1;
+            if (! exists $DB->{$db}) {
+                print qq{No such database: "$db"\n};
+                exit 1;
+            }
+            push @db => $db;
+        }
+        else {
+            warn "$usage\n";
+            exit 1;
+        }
+    }
+
+    ## Loop through and start adding rows to customname
+    my $goatid = $goat->{id};
+
+    $SQL = "INSERT INTO bucardo.customname(goat,newname,db,sync) VALUES ($goatid,?,?,?)";
+    $sth = $dbh->prepare($SQL);
+
+    ## We may have multiple syncs or databases, so loop through
+    my $x = 0;
+    my @msg;
+    {
+        ## Skip if this exact entry already exists
+        next if customname_exists($goatid,$newname,$db[$x],$sync[$x]);
+
+        $sth->execute($newname, $db[$x], $sync[$x]);
+        my $msg = "Transformed $sname.$tname to $newname";
+        defined $db[$x] and $msg .= " (for database $db[$x])";
+        defined $sync[$x] and $msg .= " (for sync $sync[$x])";
+        push @msg => $msg;
+
+        ## Always go at least one round
+        ## We go a second time if there is another sync or db waiting
+        $x++;
+        redo if defined $db[$x] or defined $sync[$x];
+        last;
+    }
+
+    if (!$QUIET) {
+        for (@msg) {
+            chomp; ## Just in case we forgot above
+            print "$_\n";
+        }
+    }
+
+    confirm_commit();
+
+    exit;
+
+} ## end of add_customname
+
+
+sub remove_customname {
+
+    ## Remove one or more entries from the bucardo.customname table
+    ## Arguments: one or more
+    ## 1+ IDs to be deleted
+    ## Returns: undef
+    ## Example: bucardo remove customname 7
+
+    ## Grab our generic usage message
+    my $usage = usage('remove_customname');
+
+    ## Must have at least one name
+    if (!@nouns) {
+        warn "$usage\n";
+        exit 1;
+    }
+
+    ## Make sure each argument is a number
+    for my $name (@nouns) {
+        if ($name !~ /^\d+$/) {
+            warn "$usage\n";
+            exit 1;
+        }
+    }
+
+    ## We want the per-id hash here
+    my $cn = $CUSTOMNAME->{id};
+
+    ## Give a warning if a number does not exist
+    for my $name (@nouns) {
+        if (! exists $cn->{$name}) {
+            $QUIET or warn qq{Customname number $name does not exist\n};
+        }
+    }
+
+    ## Prepare the SQL to delete each customname
+    $SQL = 'DELETE FROM bucardo.customname WHERE id = ?';
+    $sth = $dbh->prepare($SQL);
+
+
+    ## Go through and delete any that exist
+    for my $name (@nouns) {
+
+        ## We've already handled these in the loop above
+        next if ! exists $cn->{$name};
+
+        ## Unlike other items, we do not need an eval,
+        ## because it has no cascading dependencies
+        $sth->execute($name);
+
+        my $cc = sprintf '%s => %s%s%s',
+            $cn->{$name}{tname},
+            $cn->{$name}{newname},
+            (length $cn->{$name}{sync} ? " Sync: $cn->{$name}{sync}" : ''),
+            (length $cn->{$name}{db} ? " Database: $cn->{$name}{db}" : '');
+
+        $QUIET or print qq{Removed customcode $name: $cc\n};
+
+    }
+
+    confirm_commit();
+
+    return;
+
+} ## end of remove_customname
+
+
+sub customname_exists {
+
+    ## See if an entry already exists in the bucardo.customname table
+    ## Arguments: four
+    ## 1. Goat id
+    ## 2. New name
+    ## 3. Database name (can be null)
+    ## 4. Sync name (can be null)
+    ## Returns: true or false (1 or 0)
+
+    my ($id,$newname,$db,$sync) = @_;
+
+    ## Easy if there are no entries yet!
+    return 0 if ! keys %$CUSTOMNAME;
+
+    my $cn = $CUSTOMNAME->{goat};
+
+    ## Quick filtering by the goatid
+    return 0 if ! exists $cn->{$id};
+
+    ## And by the newname therein
+    return 0 if ! exists $cn->{$id}{$newname};
+
+    ## Is there a match for this db and sync combo?
+    for my $row (@{ $cn->{$id}{$newname} }) {
+        if (defined $db) {
+            next if (! defined $row->{db} or $row->{db} ne $db);
+        }
+        else {
+            next if defined $row->{db};
+        }
+        if (defined $sync) {
+            next if (! defined $row->{sync} or $row->{sync} ne $sync);
+        }
+        else {
+            next if defined $row->{sync};
+        }
+
+        ## Complete match!
+        return 1;
+    }
+
+    return 0;
+
+} ## end of customname_exists
+
+
+sub list_customnames {
+
+    ## Show information about all or some subset of the bucardo.customname table
+    ## Arguments: zero or more
+    ## 1+ Names to view. Can be "all" and can have wildcards
+    ## Returns: undef
+    ## Example: bucardo list customname
+
+    ## Grab our generic usage message
+    my $usage = usage('list_customname');
+
+    ## Might be no entries yet
+    if (! keys %$CUSTOMNAME) {
+        print "No customnames have been added yet\n";
+        exit 1;
+    }
+
+    my $cn = $CUSTOMNAME->{list};
+
+    ## If not doing all, keep track of which to show
+    my $matches = 0;
+
+    for my $term (@nouns) {
+
+        ## Special case for all: same as no nouns at all, so simply remove them!
+        if ($term =~ /\ball\b/i) {
+            undef @nouns;
+            last;
+        }
+
+        ## Check for wildcards
+        if ($term =~ s/[*%]/.*/) {
+            for my $row (@$cn) {
+                if ($row->{tname} =~ /$term/) {
+                    $matches++;
+                    $row->{match} = 1;
+                }
+            }
+            next;
+        }
+
+        ## Must be an exact match
+        for my $row (@$cn) {
+            if ($row->{tname} eq $term) {
+                $matches++;
+                $row->{match} = 1;
+            }
+        }
+
+    } ## end each term
+
+    ## No matches?
+    if (@nouns and ! $matches) {
+        print "No matching customnames found\n";
+        exit 1;
+    }
+
+    ## Figure out the length of each item for a pretty display
+    my ($maxid,$maxname,$maxnew,$maxsync,$maxdb) = (1,1,1,1,1);
+    for my $row (@$cn) {
+        next if @nouns and ! exists $row->{match};
+        $maxid   = length $row->{id}      if length $row->{id}      > $maxid;
+        $maxname = length $row->{tname}   if length $row->{tname}   > $maxname;
+        $maxnew  = length $row->{newname} if length $row->{newname} > $maxnew;
+        $maxsync = length $row->{sync}    if length $row->{sync}    > $maxsync;
+        $maxdb   = length $row->{db}      if length $row->{db}      > $maxdb;
+    }
+
+    ## Now do the actual printing
+    ## Sort by tablename, then newname, then sync, then db
+    for my $row (sort {
+        $a->{tname} cmp $b->{tname}
+        or
+        $a->{newname} cmp $b->{newname}
+        or
+        $a->{sync} cmp $b->{sync}
+        or
+        $a->{db} cmp $b->{db}
+        } @$cn) {
+        next if @nouns and ! exists $row->{match};
+        printf '%-*s Table: %-*s => %-*s',
+            1+$maxid, "$row->{id}.",
+            $maxname, $row->{tname},
+            $maxnew, $row->{newname};
+        if ($row->{sync}) {
+            printf ' Sync: %-*s',
+                $maxsync, $row->{sync};
+        }
+        if ($row->{db}) {
+            printf ' Database: %-*s',
+                $maxsync, $row->{db};
+        }
+        print "\n";
+
+    }
+
+    exit 0;
+
+} ## end of list_customnames
 
 
 ##
@@ -4620,7 +4964,8 @@ sub list {
     }
     my $thing = shift @nouns;
 
-    list_customcodes() if $thing =~ /^code/i or $thing =~ /^custom/i;
+    list_customcodes() if $thing =~ /^code/i or $thing =~ /^customco/i;
+    list_customnames() if $thing =~ /^customname/i;
     list_dbgroups()    if $thing =~ /^dbg/i; ## Must come before the db check!
     list_databases()   if $thing =~ /^db/i or $thing =~ /^datab/i;
     list_herds()       if $thing =~ /^h/i;
@@ -5191,170 +5536,9 @@ sub add_item {
 
 
 
-sub add_customname {
-
-    ## Add an item to the customname table
-    ## Arguments:
-    ## tablename or goatid
-    ## Optional: syncname, database name
-    ## Examples:
-    ## bucardo add customname public.foobar new=foobarz
-    ## bucardo add customname public.foobar new=foobarz sync=bee
-    ## bucardo add customname public.foobar new=foobarz db=baz
-    ## bucardo add customname public.foobar new=foobarz db=baz sync=bee
-
-    my $item_name = shift @nouns || '';
-
-    my $usage = usage('add_customname');
-
-    ## Must have a second name as well
-    my $newname = shift @nouns || '';
-
-    if (!length $item_name or ! length $newname) {
-        warn "$usage\n";
-        exit 1;
-    }
-
-    ## Does this number or name exist?
-    if (! exists $GOAT->{$item_name}) {
-        print qq{Could not find a matching table for "$item_name"\n};
-        exit 1;
-    }
-
-    ## Gather the name variations
-    my $goat = $GOAT->{$item_name};
-    ## If this is a ref due to it being an unqualified name, just use the first one
-    $goat = $goat->[0] if ref $goat eq 'ARRAY';
-    my ($sname,$tname) = ($goat->{schemaname},$goat->{tablename});
-
-    ## The new name can have a schema. If it does not, use the "old" one
-    my $Sname;
-    my $Tname = $newname;
-    if ($Tname =~ /(.+)\.(.+)/) {
-        ($Sname,$Tname) = ($1,$2);
-    }
-    else {
-        $Sname = $sname;
-    }
-
-    ## If the new name contains an equal sign, treat as an error
-    if ($Tname =~ /=/) {
-        warn "$usage\n";
-        exit 1;
-    }
-
-    ## Names cannot be the same
-    if ($sname eq $Sname and $tname eq $Tname) {
-        print qq{The new name cannot be the same as the old\n};
-        exit 1;
-    }
-
-    ## Parse the rest of the arguments
-    my (@sync,@db);
-    for my $arg (@nouns) {
-        ## Name of a sync
-        if ($arg =~ /^sync\s*=\s*(.+)/) {
-            my $sync = $1;
-            if (! exists $SYNC->{$sync}) {
-                print qq{No such sync: "$sync"\n};
-                exit 1;
-            }
-            push @sync => $sync;
-        }
-        elsif ($arg =~ /^(?:db|database)\s*=\s*(.+)/) {
-            my $db = $1;
-            if (! exists $DB->{$db}) {
-                print qq{No such database: "$db"\n};
-                exit 1;
-            }
-            push @db => $db;
-        }
-        else {
-            warn "$usage\n";
-            exit 1;
-        }
-    }
-
-    ## Loop through and start adding rows to customname
-    my $goatid = $goat->{id};
-
-    $SQL = "INSERT INTO bucardo.customname(goat,newname,db,sync) VALUES ($goatid,?,?,?)";
-    $sth = $dbh->prepare($SQL);
-
-    ## We may have multiple syncs or databases, so loop through
-    my $x = 0;
-    my @msg;
-    {
-        ## Skip if this exact entry already exists
-        next if customname_exists($goatid,$newname,$db[$x],$sync[$x]);
-
-        $sth->execute($newname, $db[$x], $sync[$x]);
-        my $msg = "Transformed $sname.$tname to $newname";
-        defined $db[$x] and $msg .= " (for database $db[$x])";
-        defined $sync[$x] and $msg .= " (for sync $sync[$x])";
-        push @msg => $msg;
-
-        ## Always go at least one round
-        ## We go a second time if there is another sync or db waiting
-        $x++;
-        redo if defined $db[$x] or defined $sync[$x];
-        last;
-    }
-
-    if (!$QUIET) {
-        for (@msg) {
-            chomp; ## Just in case we forgot above
-            print "$_\n";
-        }
-    }
-
-    confirm_commit();
-
-    exit;
-
-} ## end of add_customname
 
 
-sub customname_exists {
 
-    ## See if an entry already exists in the bucardo.customname table
-    ## Arguments: four
-    ## 1. Goat id
-    ## 2. New name
-    ## 3. Database name (can be null)
-    ## 4. Sync name (can be null)
-    ## Returns: true or false (1 or 0)
-
-    my ($id,$newname,$db,$sync) = @_;
-
-    ## Quick filtering by the goatid
-    return 0 if ! exists $CUSTOMNAME->{$id};
-
-    ## And by the newname therein
-    return 0 if ! exists $CUSTOMNAME->{$id}{$newname};
-
-    ## Is there a match for this db and sync combo?
-    for my $row (@{ $CUSTOMNAME->{$id}{$newname} }) {
-        if (defined $db) {
-            next if (! defined $row->{db} or $row->{db} ne $db);
-        }
-        else {
-            next if defined $row->{db};
-        }
-        if (defined $sync) {
-            next if (! defined $row->{sync} or $row->{sync} ne $sync);
-        }
-        else {
-            next if defined $row->{sync};
-        }
-
-        ## Complete match!
-        return 1;
-    }
-
-    return 0;
-
-} ## end of customname_exists
 
 
 sub add_customcode {
@@ -6075,6 +6259,9 @@ sub remove_item {
 
     if ($type eq 'code' or $type eq 'customcode' or $type eq 'custom_code') {
         remove_customcode();
+    }
+    elsif ($type eq 'customname' or $type eq 'custom_name') {
+        remove_customname();
     }
     elsif ($type eq 'd' or $type eq 'db' or $type eq 'database') {
         remove_database();
@@ -6825,6 +7012,15 @@ sub upgrade {
         $changes++;
     }
 
+    ## Check for any added sequences
+    for my $row (@slist) {
+        my ($sname,$body) = @$row;
+        next if relation_exists('bucardo', $sname);
+        upgrade_and_log($body);
+        clog "Created sequence $sname";
+        $changes++;
+    }
+
     ## Check for any added tables
     for my $row (@tablelist) {
         my ($name,$body) = @$row;
@@ -7036,15 +7232,6 @@ sub upgrade {
             $dbh->do('RELEASE bucardo_upgrade');
         }
         clog "Updated function: $name($arg)";
-        $changes++;
-    }
-
-    ## Check for any added sequences
-    for my $row (@slist) {
-        my ($sname,$body) = @$row;
-        next if relation_exists('bucardo', $sname);
-        upgrade_and_log($body);
-        clog "Created sequence $sname";
         $changes++;
     }
 
@@ -7402,7 +7589,11 @@ For more information, run: $progname help remove <type>};
         return qq{Usage: $verb customcode <name> [name2 name3 ...]
 Removes one or more customcodes.};
     }
-if ('remove_database' eq $name) {
+    if ('remove_customname' eq $name) {
+        return qq{Usage: $verb customname number [number2 number3 ...]
+Removes one or more customnames.};
+    }
+    if ('remove_database' eq $name) {
         return qq{Usage: $verb db <name> [name2 name3 ...]
 Removes one or more databases.};
     }
@@ -8311,14 +8502,23 @@ sub load_bucardo_info {
     }
 
     ## Grab all customname information
-    $SQL = 'SELECT * FROM bucardo.customname';
+    $SQL = q{SELECT c.id, c.goat, c.newname,
+COALESCE(c.sync, '') AS sync,
+COALESCE(c.db, '') AS db,
+g.schemaname || '.' || g.tablename AS tname
+FROM bucardo.customname c
+JOIN goat g ON (g.id = c.goat)
+};
     $sth = $dbh->prepare($SQL);
     $sth->execute();
-    my $customname;
+    $CUSTOMNAME = {};
     for my $row (@{ $sth->fetchall_arrayref({}) }) {
-        push @{ $customname->{$row->{goat}}{$row->{newname}} } => $row;
+        ## We store three versions: one for quick per-goat lookup,
+        ## one by the assigned id, and one just a big list
+        push @{ $CUSTOMNAME->{goat}{$row->{goat}}{$row->{newname}} } => $row;
+        $CUSTOMNAME->{id}{$row->{id}} = $row;
+        push @{ $CUSTOMNAME->{list} } => $row;
     }
-
 
     $global{cc} = $cc;
     $global{dbgroup} = $DBGROUP = $dbgroup;
@@ -8326,7 +8526,6 @@ sub load_bucardo_info {
     $global{goat}    = $GOAT = $goat;
     $global{herd}    = $HERD = $herd;
     $global{sync}    = $SYNC = $sync;
-    $global{customname} = $CUSTOMNAME = $customname;
 
     return;
 

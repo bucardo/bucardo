@@ -1289,7 +1289,7 @@ sub tt {
 
 sub t {
 
-    $testmsg = shift;
+    $testmsg = shift || '';
     $testline = shift || (caller)[2];
     $testmsg =~ s/^\s+//;
     if ($location) {

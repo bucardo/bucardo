@@ -477,7 +477,10 @@ CREATE UNIQUE INDEX customcode_map_unique_goat ON bucardo.customcode_map(code,go
 --
 -- Allow the target's names to differ from the source
 --
+CREATE SEQUENCE bucardo.customname_id_seq;
 CREATE TABLE bucardo.customname (
+  id       INTEGER      NOT NULL DEFAULT nextval('customname_id_seq'),
+                          CONSTRAINT customname_id_pk PRIMARY KEY (id),
   goat     INTEGER      NOT NULL,
   newname  TEXT             NULL,
   db       TEXT             NULL,
