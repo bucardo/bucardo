@@ -6,10 +6,11 @@
 ## Copyright 2006-2011 Greg Sabino Mullane <greg@endpoint.com>
 ##
 ## Please see http://bucardo.org/ for full documentation
+##
+## Run as bucardo --help for some basic instructions
 
 package bucardo;
 use strict;
-no strict 'refs';
 use warnings;
 use 5.008003;
 use DBI;
@@ -21,21 +22,28 @@ use POSIX qw/ceil setsid localeconv/;
 use Data::Dumper 'Dumper';
 $Data::Dumper::Indent = 1;
 
-return 1 if $ENV{BUCARDO_TEST};
-
 our $VERSION = '5.0.0';
 
+## For the tests, we want to check that it compiles without actually doing anything
+return 1 if $ENV{BUCARDO_TEST};
+
+## No buffering on the standard output streams
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
 
+## All the variables we use often and want to declare here without 'my'
 use vars qw/$dbh $SQL $sth %sth $count $info %global $SYNC $GOAT $DB $DBGROUP $HERD $CUSTOMNAME /;
 
+## How to show dates from the database, e.g. start time of a sync
 my $DATEFORMAT       = q{Mon DD, YYYY HH24:MI:SS};
 my $SHORTDATEFORMAT  = q{HH24:MI:SS};
-my $DEFAULT_DAYSBACK = 3;
-my $WAITSLEEP        = 1;
-my $PROGRESS         = 1;
 
+## How long we hang out between checks after a kick or when waiting for notices
+my $WAITSLEEP        = 1;
+
+## Determine how we were called
+## If we were called from a different directory, and the base directory is in our path,
+## we strip out the directory part
 my $progname = $0;
 if (exists $ENV{PATH} and $progname =~ m{(.+)/(.+)}) {
     my ($base, $name) = ($1,$2);
@@ -47,6 +55,7 @@ if (exists $ENV{PATH} and $progname =~ m{(.+)/(.+)}) {
     }
 }
 
+## We must have at least one argument to do anything
 help() unless @ARGV;
 
 ## Default arguments - most are for the bc constructor
@@ -102,7 +111,11 @@ if (! $bcargs->{'no-bucardorc'}) {
 if (defined $file) {
     open my $rc, '<', $file or die qq{Could not open "$file": $!\n};
     while (<$rc>) {
+
+        ## Skip any lines starting with a hash
         next if /^\s*#/;
+
+        ## Format is foo=bar, with whitespace allowed
         next unless /^\s*(\w+)\s*=\s*(.+?)\s*$/o;
         my ($name,$value) = ($1,$2); ## no critic (ProhibitCaptureWithoutTest)
         $bcargs->{$name} = $value;
@@ -161,57 +174,86 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
 
 ) or die "\n";
 
-my $QUIET = delete $bcargs->{quiet};
-
+## If --help is set, ignore everything else, show help, then exit
 help() if $bcargs->{help};
 
+## If --version is set, ignore everything else, show it, and exit
 if ($bcargs->{version}) {
-    print "bucardo version $VERSION\n";
+    print "$progname version $VERSION\n";
     exit 0;
 }
 
+## Sometimes we want to be as quiet as possible
+my $QUIET = delete $bcargs->{quiet};
+
+## Quick shortcut for lots of verbosity
 $bcargs->{vv} and $bcargs->{verbose} = 2;
+
+## Set some global arguments
 my $VERBOSE    = delete $bcargs->{verbose};
 my $DEBUG      = delete $bcargs->{debug} || $ENV{BUCARDO_DEBUG} || 0;
-my $DAYSBACK   = delete $bcargs->{daysback} || $DEFAULT_DAYSBACK;
-my $COMPRESS   = delete $bcargs->{compress};
-my $SHOWDAYS   = delete $bcargs->{showdays} || 1;
+
+## Do we compress time outputs by stripping out whitespace?
+my $COMPRESS   = delete $bcargs->{compress} || 0;
+
+## Do we retry after a sleep period on failed kicks?
 my $RETRY      = delete $bcargs->{retry} || 0;
 my $RETRYSLEEP = delete $bcargs->{retrysleep} || 0;
+
+## Allow people to turn off the cool timer when kicking syncs
 my $NOTIMER    = delete $bcargs->{notimer} || 0;
 
-my $DBCONN = "User: $bcargs->{dbuser}  Database: $bcargs->{dbname}";
-$bcargs->{dbhost} and length $bcargs->{dbhost} and $DBCONN .= "  Host: $bcargs->{dbhost}";
-$bcargs->{dbport} and length $bcargs->{dbport} and $DBCONN .= "  Port: $bcargs->{dbport}";
-
 ## Anything left over is the verb and noun(s)
-
 my $verb = shift || '';
+
+## No verb? Help message and exit
 help() unless $verb;
+
+## Standardize the verb as lowercase, and grab the rest of the args as the "nouns"
 $verb = lc $verb;
 my @nouns = @ARGV;
+## Make a single string version, mostly for output in logs
 my $nouns = join ' ' => @nouns;
 
 ## Installation must happen before we try to connect!
 install() if $verb eq 'install';
 
-## Grab current information from the bucardo_config file
+## For everything else, we need to connect to a previously installed Bucardo database
+
 my $DSN = "dbi:Pg:dbname=$bcargs->{dbname}";
 $bcargs->{dbhost} and length $bcargs->{dbhost} and $DSN .= ";host=$bcargs->{dbhost}";
 $bcargs->{dbport} and length $bcargs->{dbport} and $DSN .= ";port=$bcargs->{dbport}";
+
+## Connect to the database
 $dbh = DBI->connect($DSN, $bcargs->{dbuser}, $bcargs->{dbpass}, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+
+## We only want to concern ourselves with things in the bucardo schema
 $dbh->do('SET search_path = bucardo');
-check_version($dbh);
+
+## Make sure we find a valid Postgres version
+## Why check this afterwards? In case they get pg_dumped to a different (older) database
+## It's happened :)
+check_version($dbh); ## dies on invalid version
+
+## Listen for the MCP. Not needed for old-school non-payload LISTEN/NOTIFY, but does no harm
 $dbh->do('LISTEN bucardo');
 $dbh->commit();
 
-my $REASONFILE = get_config('reason_file') or die "Invalid reason_file!\n";
-my $PIDDIR     = get_config('piddir') or die "Invalid piddir!\n";
-my $pidfile    = 'bucardo.mcp.pid';
-my $stopfile   = get_config('stopfile') or die "Invalid stopfile!\n";
+## Set some global variables based on information from the bucardo_config table
 
-my $PIDFILE        = "$PIDDIR/$pidfile";
+## The reason file that records startups and shutdowns
+my $REASONFILE = get_config('reason_file') or die "Invalid reason_file!\n";
 my $REASONFILE_LOG = "$REASONFILE.log";
+
+## The directory Bucardo.pm writes PID and other information to
+my $PIDDIR     = get_config('piddir') or die "Invalid piddir!\n";
+
+## PID of the master control file (MCP)
+## If this exists, it is a good bet that Bucardo is currently running
+my $PIDFILE = "$PIDDIR/bucardo.mcp.pid";
+
+## File whose existence tells all Bucardo processes to exit immediately
+my $stopfile   = get_config('stopfile') or die "Invalid stopfile!\n";
 my $STOPFILE       = "$PIDDIR/$stopfile";
 
 ## Aliases for terms people may shorten, misspell, etc.
@@ -228,6 +270,7 @@ our %alias = (
     'service'             => 'dbservice',
 );
 
+## Columns that cannot be changed: used in the update_* subroutines
 my %column_no_change = (
     'cdate' => 1,
 );
@@ -677,17 +720,17 @@ sub start {
 
     my $oldpid = 0;
     if ($oldpid) {
-        $nouns = "Cannot start, process $oldpid is already running\n";
-        $QUIET or print $nouns;
+        my $msg = "Cannot start, process $oldpid is already running\n";
+        $QUIET or print $msg;
         append_reason_file('fail');
         exit 1;
     }
 
     my $dbversion = get_config('bucardo_current_version') or die "Could not find Bucardo version!\n";
     if ($dbversion ne $VERSION) {
-        $nouns = "Version mismatch: bucardo is $VERSION, but bucardo database is $dbversion\n";
+        my $msg = "Version mismatch: bucardo is $VERSION, but bucardo database is $dbversion\n";
         append_reason_file('fail');
-        warn $nouns;
+        warn $msg;
         warn "Perhaps you need to run 'bucardo upgrade' ?\n";
         exit 1;
     }
@@ -698,9 +741,9 @@ sub start {
 
     my $pm_version = $bc->{version} || 'unknown';
     if ($VERSION ne $pm_version) {
-        $nouns = "Version mismatch: bucardo is $VERSION, but Bucardo.pm is $pm_version\n";
+        my $msg = "Version mismatch: bucardo is $VERSION, but Bucardo.pm is $pm_version\n";
         append_reason_file('fail');
-        die $nouns;
+        die $msg;
     }
 
     stop_bucardo();
@@ -4127,7 +4170,7 @@ sub kick {
                 }
               WAITIN: {
                     my $lastwait = '';
-                    if ($PROGRESS and time - $time != $oldtime) {
+                    if (time - $time != $oldtime) {
                         $oldtime = time - $time;
                         if (!$QUIET and !$NOTIMER) {
                             print "\b" x length($printstring);
@@ -4199,12 +4242,8 @@ sub kick {
             }
             next SYNC if $QUIET;
 
-            if ($PROGRESS) {
-                print "\n";
-            }
-            else {
-                printf "(%ds)\n", ceil(time - $time);
-            }
+            print "\n";
+
         } ## end each sync
 
     } ## end RETRY
@@ -4555,9 +4594,14 @@ sub status_detail {
 
 sub get_config {
 
+    ## Given a name, return the matching value from the bucardo_config table
+    ## Arguments: one
+    ## 1. setting name
+    ## Returns: bucardo_config.value string
+
     my $name = shift;
 
-    $SQL = 'SELECT value FROM bucardo.bucardo_config WHERE lower(setting) = ?';
+    $SQL = 'SELECT value FROM bucardo.bucardo_config WHERE LOWER(setting) = ?';
     $sth = $dbh->prepare_cached($SQL);
     $count = $sth->execute(lc $name);
     if ($count < 1) {
