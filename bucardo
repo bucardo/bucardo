@@ -434,23 +434,30 @@ exit;
 
 ## Everything from here on out is subroutines
 
+
 sub numbered_relations {
 
-    ## Return relations of the form schema.table in a sorted order
-    ## in which we do alphabetical but switch to numeric order
+    ## Sorting function
+    ## Arguments: N/A (implicit $a / $b via Perl sorting)
+    ## Returns: winning value
+    ## Sorts relations of the form schema.table
+    ## in which we do alphabetical first, but switch to numeric order
     ## for any numbers at the end of the schema or the table
+    ## Thus, public.foobar1 will come before public.foobar10
 
+    ## Pull in the names to be sorted, dereference as needed
     my $uno = ref $a ? "$a->{schemaname}.$a->{tablename}" : $a;
     my $dos = ref $b ? "$b->{schemaname}.$b->{tablename}" : $b;
 
-    ## Gather information for the first item
+    ## Break apart the first item into schema and table
     die if $uno !~ /(.+)\.(.+)/;
     my ($schema1,$sbase1,$table1,$tbase1) = ($1,$1,$2,$2);
+    ## Store ending numbers if available: if not, use 0
     my ($snum1, $tnum1) = (0,0);
     $sbase1 =~ s/(\d+)$// and $snum1 = $1;
     $tbase1 =~ s/(\d+)$// and $tnum1 = $1;
 
-    ## Gather information for the second item
+    ## Break apart the second item into schema and table
     die if $dos !~ /(.+)\.(.+)/;
     my ($schema2,$sbase2,$table2,$tbase2) = ($1,$1,$2,$2);
     my ($snum2, $tnum2) = (0,0);
@@ -467,20 +474,37 @@ sub numbered_relations {
 
 
 sub check_version {
+
+    ## Quick check that we have the minumum supported version
+    ## This is for the bucardo database itself
+    ## Arguments: one
+    ## 1. Database handle
+    ## Returns: undef (may die if the version is not good)
+
     my $dbh = shift;
     my $res = $dbh->selectall_arrayref('SELECT version()')->[0][0];
-    if ($res !~ /(\d+)\.(\d+)(\S+)/) {
+    if ($res !~ /(\d+)\.(\d+)/) {
         die "Sorry, unable to determine the database version\n";
     }
-    my ($maj,$min,$rev) = ($1,$2,$3);
-    $rev =~ s/^\.//;
-    $rev =~ s/(\d+)\.\d+/$1/;
+    my ($maj,$min) = ($1,$2);
     if ($maj < 8 or (8 == $maj and $min < 1)) {
         die "Sorry, Bucardo requires Postgres version 8.1 or higher. This is only $maj.$min\n";
     }
-}
+
+    return;
+
+} ## end of check_version
+
 
 sub help {
+
+    ## Give detailed help about usage of this program
+    ## Arguments: none
+    ## Returns: never, always exits
+
+    ## Nothing to do if we are being quiet
+    exit 0 if $QUIET;
+
     warn qq{Usage: $progname args
   install         ** Install the Bucardo database
 
@@ -499,10 +523,10 @@ sub help {
 
   ping [timeout]  ** Ping the MCP process for a response, return a Nagios-friendly string
 
-  status [--sort=col#] [--daysback=#]
+  status [--sort=col#]
                   ** List information about all syncs
 
-  status syncname[s] [--daysback=#]
+  status syncname[s]
                   ** List detailed information about one or more syncs
 
   reload syncname[s]
@@ -524,16 +548,23 @@ sub help {
   reload_config   ** Force a running Bucardo to reload the bucardo_config table
 
 For more details, try 'man bucardo'
-} unless $QUIET; ## Mostly for the test suite
+};
+
     exit 0;
-}
+
+} ## end of help
 
 
 sub superhelp {
 
-    ## See if we can get more specific by looking at the nouns
+    ## Show detailed help by examining the verb and nouns
+    ## Arguments: none
+    ## Returns: never, always exits
+
+    ## If there are no nouns, we can only show the generic help
     help() if ! @nouns;
 
+    ## Grab the first two words and standardize them
     my $word1 = lc $nouns[0];
     my $word2 = lc $nouns[1];
 
@@ -542,6 +573,8 @@ sub superhelp {
 
     ## Allow plurals
     $word2 =~ s/s$//;
+
+    ## TODO: Write a test to ensure full coverage below
 
     if ('add' eq $word1) {
         if ('customcode' eq $word2 or 'custom_code' eq $word2 or 'code' eq $word2) {
@@ -717,34 +750,42 @@ sub superhelp {
 } ## end of superhelp
 
 
-sub restart {
-
-    stop();
-    sleep 1;
-    start();
-    return;
-
-} ## end of restart
-
-
 sub start {
 
-    ## Attempt to start Bucardo
+    ## Attempt to start the Bucardo daemon
+    ## Arguments: none
+    ## Returns: undef
 
+    ## Write a note to the 'reason' log file
+    ## This will automatically write any nouns in as well
     append_reason_file('start');
 
     ## Refuse to go on if we get a ping response within 5 seconds
     $QUIET or print "Checking for existing processes\n";
 
+    ## We refuse to start if the MCP PID file exists
     my $oldpid = 0;
-    if ($oldpid) {
-        my $msg = "Cannot start, process $oldpid is already running\n";
+    if (-e $PIDFILE) {
+        $msg = "Cannot start, PID file $PIDFILE exists\n";
+        open my $fh, '<', $PIDFILE or die qq{Could not open "$PIDFILE": $!\n};
+        if (<$fh> !~ /(\d+)/) {
+            warn qq{File "$PIDFILE" does not start with a PID!\n};
+        }
+        else {
+            $msg = "Cannot start, process $1 is already running\n";
+        }
+        close $fh;
+
         $QUIET or print $msg;
+
         append_reason_file('fail');
+
         exit 1;
     }
 
-    my $dbversion = get_config('bucardo_current_version') or die "Could not find Bucardo version!\n";
+    ## Verify that the version in the database matches our version
+    my $dbversion = get_config('bucardo_current_version')
+        or die "Could not find Bucardo version!\n";
     if ($dbversion ne $VERSION) {
         my $msg = "Version mismatch: bucardo is $VERSION, but bucardo database is $dbversion\n";
         append_reason_file('fail');
@@ -753,10 +794,11 @@ sub start {
         exit 1;
     }
 
-    ## Create a new Bucardo instance and connect to its database
+    ## Create a new Bucardo daemon
     require Bucardo;
     my $bc = Bucardo->new($bcargs);
 
+    ## Verify that the version of Bucardo.pm matches our version
     my $pm_version = $bc->{version} || 'unknown';
     if ($VERSION ne $pm_version) {
         my $msg = "Version mismatch: bucardo is $VERSION, but Bucardo.pm is $pm_version\n";
@@ -764,36 +806,341 @@ sub start {
         die $msg;
     }
 
+    ## Just in case, stop it
     stop_bucardo();
-
-    sleep 2; ## Give everyone a chance to notice it
-    ## TODO: be smarter about this by scanning PIDDIR
 
     if (-e $STOPFILE) {
         print "Removing $STOPFILE\n" unless $QUIET;
         unlink $STOPFILE;
     }
-    if (-e $PIDFILE) {
-        print "Removing $STOPFILE\n" unless $QUIET;
-        unlink $PIDFILE;
-    }
 
     $QUIET or print qq{Starting Bucardo\n};
 
+    ## Disconnect from our local connection before we fork
     $dbh->disconnect();
+
+    ## Fork and setsid to disassociate ourselves from the daemon
     if (fork) {
+        ## We are the kid, do nothing
     }
     else {
         close STDERR or warn "Could not close STDERR\n";
         close STDOUT or warn "Could not close STDOUT\n";
         setsid() or die;
+        ## Here we go!
         $bc->start_mcp();
     }
+
     exit 0;
 
 } ## end of start
 
 
+sub stop {
+
+    ## Attempt to stop the Bucardo daemon
+    ## Arguments: none
+    ## Returns: undef
+
+    ## Write a note to the 'reason' log file
+    append_reason_file('stop');
+
+    print "Creating $STOPFILE ... " unless $QUIET;
+    stop_bucardo();
+    print "Done\n" unless $QUIET;
+
+    ## If this was called directly, just exit now
+    exit 0 if $verb eq 'stop';
+
+    return;
+
+} ## end of stop
+
+
+sub stop_bucardo {
+
+    ## Create the semaphore that tells all Bucardo processes to exit
+    ## Arguments: none
+    ## Returns: undef
+
+    ## Create the file, and write some quick debug information into it
+    ## The only thing the processe care about is if the file exists
+    open my $stop, '>', $STOPFILE or die qq{Could not create "$STOPFILE": $!\n};
+    print {$stop} "Stopped by $progname on " . (scalar localtime) . "\n";
+    close $stop or warn qq{Could not close "$STOPFILE": $!\n};
+
+    return;
+
+} ## end of stop_bucardo
+
+
+sub restart {
+
+    ## Simple, really: stop, wait, start!
+    ## Arguments: none
+    ## Returns: undef
+
+    stop();
+    sleep 1;
+    start();
+
+    return;
+
+} ## end of restart
+
+
+sub reload_config {
+
+    ## Reload configuration settings from the bucardo database,
+    ## then restart all controllers and kids
+    ## Arguments: none directly (but processes the nouns to check for numeric arg)
+    ## Returns: never, exits
+
+    ## Scan the nouns for a numeric argument.
+    ## If found, set as the adverb.
+    ## This will cause us to wait for confirmation or reload before exiting
+    for (@nouns) {
+        if (/^\d+$/) {
+            $adverb = $1;
+            last;
+        }
+    }
+
+    $QUIET or print q{Forcing Bucardo to reload the bucardo_config table};
+
+    ## We may want to wait to hear from the MCP that it is done
+    my $done = 'bucardo_reload_config_finished';
+    $dbh->do('NOTIFY bucardo_reload_config');
+    if (defined $adverb) {
+        print '...';
+        $dbh->do("LISTEN $done");
+    }
+    $dbh->commit();
+
+    ## If we are not waiting around for a confirmation, just exit now
+    if (!defined $adverb) {
+        print "\n";
+        exit 0;
+    }
+
+    ## Wait a little bit, then scan for the confirmation message
+    sleep 0.1;
+    wait_for_notice($dbh, $done);
+    print "DONE!\n";
+
+    exit 0;
+
+} ## end of reload_config
+
+
+sub wait_for_notice {
+
+    ## Keep hanging out until we get the notice we are waiting for
+    ## Arguments: two
+    ## 1. Database handle
+    ## 2. String to listen for
+    ## Returns: undef
+
+    my ($ldbh, $string) = @_;
+
+  WAITIN: {
+        for my $notice (@{ db_get_notices($ldbh) }) {
+            my ($name) = @$notice;
+            last WAITIN if $name eq $string;
+        }
+        $dbh->commit();
+        sleep($WAITSLEEP);
+        redo;
+    }
+
+    return;
+
+} ## end of wait_for_notice
+
+
+sub reload {
+
+    ## Ask for one or more syncs to be reloaded
+    ## Arguments: none directly (but processes the nouns for a list of syncs)
+    ## Returns: never, exits
+
+    my $usage = usage('reload');
+
+    if (!@nouns) {
+        warn "$usage\n";
+        exit 1;
+    }
+
+    for my $syncname (@nouns) {
+
+        ## Be nice and allow things like $0 reload sync foobar
+        next if $syncname eq 'sync';
+
+        ## Make sure this sync exists, and grab its status
+        $SQL = 'SELECT status FROM bucardo.sync WHERE name = ?';
+        $sth = $dbh->prepare($SQL);
+        $count = $sth->execute($syncname);
+        if ($count != 1) {
+            warn "Invalid sync: $syncname\n";
+            $sth->finish();
+            next;
+        }
+        my $status = $sth->fetch()->[0];
+
+        ## Skip any syncs that are not active
+        if ($status ne 'active') {
+            warn qq{Cannot reload: status of sync "$syncname" is $status\n};
+            next;
+        }
+
+        ## We wait for the MCP to tell us that each sync is done reloading
+        my $done = "bucardo_reloaded_sync_$syncname";
+        print "Reloading sync $syncname...";
+        $dbh->do(qq{LISTEN "$done"});
+        $dbh->do(qq{NOTIFY "bucardo_reload_sync_$syncname"});
+        $dbh->commit();
+
+        ## Sleep a little, then wait until we hear a confirmation from the MCP
+        sleep 0.1;
+        wait_for_notice($dbh, $done);
+
+    } ## end each sync to be reloaded
+
+    exit 0;
+
+} ## end of reload
+
+
+sub validate {
+
+    ## Attempt to validate one or more syncs
+    ## Arguments: none directly (but processes the nouns for a list of syncs)
+    ## Returns: never, exits
+
+    my $usage = usage('validate');
+
+    if (!@nouns) {
+        warn "$usage\n";
+        exit 0;
+    }
+
+    ## Build the list of syncs to validate
+    my @synclist;
+
+    ## Nothing specific is the same as 'all'
+    if ($nouns[0] eq 'all' and ! defined $nouns[1]) {
+        @synclist = sort keys %$SYNC;
+        if (! @synclist) {
+            print "Sorry, there are no syncs to validate!\n";
+            exit 0;
+        }
+    }
+    else {
+        for my $name (@nouns) {
+
+            ## Be nice and allow things like $0 validate sync foobar
+            next if $name eq 'sync';
+
+            if (! exists $SYNC->{$name}) {
+                die qq{Sorry, there is no sync named "$name"\n};
+            }
+            push @synclist => $name;
+        }
+    }
+
+    ## Get the largest sync name so we can line up the dots all pretty
+    my $maxsize = 1;
+    for my $name (@synclist) {
+        $maxsize = length $name if length $name > $maxsize;
+    }
+    $maxsize += 3;
+
+    ## Loop through and validate each in turn,
+    ## waiting for a positive response from the MCP
+    for my $name (@synclist) {
+
+        printf "Validating sync $name%s",
+            '.' x ($maxsize - length $name);
+
+        my $done = "bucardo_validated_sync_$name";
+        $dbh->do(qq{LISTEN "$done"});
+
+        $SQL = 'SELECT validate_sync(?)';
+        $sth = $dbh->prepare($SQL);
+        $sth->execute($name);
+        $dbh->commit();
+
+        ## Wait a bit, then hang out until the MCP confirms the validation
+        sleep 0.1;
+        wait_for_notice($dbh, $done);
+        print "DONE!\n";
+    }
+
+    exit 0;
+
+} ## end of validate
+
+
+sub update {
+
+    ## Update some object in the database
+    ## This merely passes control on to the more specific update_ functions
+    ## Arguments: none (but parses nouns)
+    ## Returns: undef
+
+    my $usage = usage('update');
+
+    ## Must have at least two nouns
+    if ($#nouns < 2) {
+        warn "$usage\n";
+        exit 1;
+    }
+
+    ## What type of thing are we updating?
+    my $item = shift @nouns;
+
+    ## Updating a database:
+    if ($item =~ /^db/i or $item =~ /^datab/i) {
+        update_database(@nouns);
+        exit 0;
+    }
+
+    ## Updating a database group:
+    if ($item =~ /^dbg/i) {
+        update_dbgroup(@nouns);
+        exit 0;
+    }
+
+    ## Updating a table or sequence:
+    if ($item =~ /^tab/i or $item =~ /^seq/i) {
+        update_table(@nouns);
+        exit 0;
+    }
+
+    ## Updating a herd:
+    if ($item =~ /^herd/i) {
+        update_herd(@nouns);
+        exit 0;
+    }
+
+    ## Updating a sync:
+    if ($item =~ /^s[yi]n/i) {
+        update_sync(@nouns);
+        exit 0;
+    }
+
+    ## Updating customcode:
+    if ($item =~ /^code/i or $item =~ /^custom/i) {
+        update_customcode(@nouns);
+        exit 0;
+    }
+
+
+    ## If we got this far, we have an unknown item type
+    warn "$usage\n";
+    exit 1;
+
+} ## end of update
 
 
 
@@ -1226,7 +1573,6 @@ sub update_database {
     ## Grab our generic usage message
     my $usage = usage('update_database');
 
-    my $name = shift;
     my @actions = @_;
 
     if (! @actions) {
@@ -1234,12 +1580,14 @@ sub update_database {
         exit 1;
     }
 
+    my $name = shift @actions;
+
     ## Recursively call ourselves for wildcards and 'all'
     return if ! check_recurse($DB, $name, @actions);
 
     ## Make sure this database exists!
     if (! exists $DB->{$name}) {
-        die qq{Could not find a database named "$name"\nUse 'list dbs' to see all available.};
+        die qq{Could not find a database named "$name"\nUse 'list dbs' to see all available.\n};
     }
 
     ## Everything is a name=value setting after this point
@@ -2639,740 +2987,6 @@ sub list_herds {
 
 
 
-
-
-
-
-sub stop {
-
-    ## Attempt to stop Bucardo
-
-    append_reason_file('stop');
-
-    print "Creating $STOPFILE ... " unless $QUIET;
-    stop_bucardo();
-    print "Done\n" unless $QUIET;
-
-    exit 0 if $verb eq 'stop';
-
-    return;
-
-} ## end of stop
-
-
-sub reload_config {
-
-    ## Reload configuration settings from the DB, restart all controllers and kids
-    for (@nouns) {
-        if (/^\d+$/) {
-            $adverb = $1;
-            last;
-        }
-    }
-
-    $QUIET or print q{Forcing Bucardo to reload the bucardo_config table};
-
-    my $done = 'bucardo_reload_config_finished';
-    $dbh->do('NOTIFY bucardo_reload_config');
-    if (defined $adverb) {
-        print '...';
-        $dbh->do("LISTEN $done");
-    }
-    $dbh->commit();
-
-    if (!defined $adverb) {
-        print "\n";
-        exit 0;
-    }
-    sleep 0.1;
-    wait_for_notice($dbh, $done);
-    print "DONE!\n";
-
-    exit 0;
-
-} ## end of reload_config
-
-
-sub reload {
-
-    ## Ask for one or more syncs to be reloaded
-
-    my $usage = usage('reload');
-
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
-
-    for my $syncname (@nouns) {
-        next if $syncname eq 'sync'; ## Allows $0 reload sync foobar
-
-        ## Make sure this sync exists
-        $SQL = 'SELECT status FROM bucardo.sync WHERE name = ?';
-        $sth = $dbh->prepare($SQL);
-        $count = $sth->execute($syncname);
-        if ($count != 1) {
-            warn "Invalid sync: $syncname\n";
-            $sth->finish();
-            next;
-        }
-        my $status = $sth->fetch()->[0];
-        if ($status ne 'active') {
-            warn qq{Cannot reload: status of sync "$syncname" is $status\n};
-            next;
-        }
-
-        my $done = "bucardo_reloaded_sync_$syncname";
-        print "Reloading sync $syncname...";
-        $dbh->do(qq{LISTEN "$done"});
-        $dbh->do(qq{NOTIFY "bucardo_reload_sync_$syncname"});
-        $dbh->commit();
-
-        sleep 0.1;
-        wait_for_notice($dbh, $done);
-    }
-
-    exit 0;
-
-} ## end of reload
-
-
-
-
-sub validate {
-
-    ## Ask for one or more syncs to be validated
-
-    my $usage = usage('validate');
-
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 0;
-    }
-
-    my $synclist = $global{sync};
-
-    my @synclist;
-    if ($nouns[0] eq 'all' and ! defined $nouns[1]) {
-        @synclist = sort keys %$synclist;
-        if (! @synclist) {
-            print "Sorry, there are no syncs to validate!\n";
-            exit 0;
-        }
-    }
-    else {
-        for my $name (@nouns) {
-            next if $name eq 'sync'; ## Allows $0 validate sync foobar
-            if (! exists $synclist->{$name}) {
-                die qq{Sorry, there is no sync named "$name"\n};
-            }
-            push @synclist => $name;
-        }
-    }
-
-    ## Get the largest size to we can line up the dots all pretty
-    my $maxsize = 1;
-    for my $name (@synclist) {
-        $maxsize = length $name if length $name > $maxsize;
-    }
-    $maxsize += 3;
-
-    for my $name (@synclist) {
-        my $done = "bucardo_validated_sync_$name";
-        printf "Validating sync $name%s",
-            '.' x ($maxsize - length $name);
-        $dbh->do(qq{LISTEN "$done"});
-        $SQL = 'SELECT validate_sync(?)';
-        $sth = $dbh->prepare($SQL);
-        $sth->execute($name);
-        $dbh->commit();
-
-        sleep 0.1;
-        wait_for_notice($dbh, $done);
-        print "DONE!\n";
-    }
-
-    exit 0;
-
-} ## end of validate
-
-
-sub update {
-
-    ## Update some object in the database
-    ## e.g. bucardo update sync foobar onetimecopy=2
-    ## e.g. bucardo update sync foobar add tab1
-
-    my $usage = usage('update');
-
-    ## Must have at least two nouns
-    if ($#nouns < 2) {
-        warn "$usage\n";
-        exit 1;
-    }
-
-    ## What type of thing are we updating?
-    my $item = shift @nouns;
-
-    ## Which item are we updating?
-    my $name = shift @nouns;
-
-    if ($item =~ /^s[yi]n/i) {
-        update_sync($name, @nouns);
-        exit;
-    }
-
-    my $info;
-    my $lookupcol = 'name';
-    my $tabname;
-    if ($item =~ /^all$/i) {
-        $tabname = $item = $name;
-        $name = 'all';
-    }
-
-    if ($item =~ /^code/i or $item =~ /^custom/i) {
-        $tabname = $item = 'customcode';
-    }
-    elsif ($item =~ /^syn/i) {
-        update_sync($name, @nouns);
-        exit 0;
-    }
-    elsif ($item =~ /^tab/i or $item =~ /^seq/i) {
-        $tabname = 'goat';
-        $lookupcol = 'tablename';
-    }
-    elsif ($item =~ /^dbg/i) {
-        update_dbgroup($name, @nouns);
-        exit 0;
-    }
-    elsif ($item =~ /^db/i or $item =~ /^datab/i) {
-        update_database($name, @nouns);
-        exit 0;
-    }
-    elsif ($item =~ /^herd/i) {
-        $tabname = $item = 'herd';
-    }
-    else {
-        die "Invalid item: must be code, db, dbgroup, herd, sequence, sync, or table.\n";
-    }
-
-    $SQL = "SELECT * FROM $tabname WHERE $lookupcol = ?";
-    if ($tabname eq 'goat' and $name =~ /(.+)\.(.+)/) {
-        my ($sname,$tname) = ($1,$2);
-        $SQL = 'SELECT * FROM bucardo.goat WHERE schemaname=? AND tablename=?';
-        if ($sname =~ s/\*//) {
-            $SQL =~ s/=/~/;
-        }
-        if ($tname =~ s/\*//) {
-            $SQL =~ s/=\?$/~?/;
-        }
-        $sth = $dbh->prepare($SQL);
-        $count = $sth->execute($sname,$tname);
-    }
-    else {
-        if ($name =~ s/\*//) {
-            $SQL =~ s/=/~/;
-        }
-        $sth = $dbh->prepare($SQL);
-        $count = $sth->execute($name);
-    }
-
-    ## Because both 'table' and 'tables' are valid, but we want good output:
-    (my $single_item = $item) =~ s/s$//;
-
-    if ($count < 1 and $name ne 'all') {
-        $sth->finish();
-        die qq{No matches found for $single_item "$name"\n};
-    }
-
-    my $pkcol = $tabname eq 'goat' ? 'id' : 'name';
-
-    $dbh->{pg_bool_tf} = 1;
-    $info = $sth->fetchall_arrayref({});
-
-    my $validate_msg = 0;
-
-    if ('sync' eq $item and ($nouns[0] eq 'add' or $nouns[0] eq 'remove')) {
-        my $v = shift @nouns;
-        die "Can only $v to one sync at a time\n" if @$info > 1;
-        $info = $info->[0];
-        my $miniusage = "Usage: update sync $name $v table|sequence <name(s)>\n";
-        my $thing = shift @nouns or die $miniusage;
-        @nouns or die $miniusage;
-
-        my $sync = $global{sync}{$name};
-
-        ## Grab all tables used in this sync
-        my @tables = keys %{ $sync->{herd}{goat} };
-
-        if ($v eq 'remove') {
-            ## The list of tables to remove, fully qualified
-            my %remove;
-
-            ## Figure out which tables they really mean and verify they are part of the sync
-            my $matches = get_arg_items(\@tables, \@nouns);
-
-            if (! ref $matches) {
-                die qq{Did not find any matching tables for "$matches" for sync "$name"\n};
-            }
-
-            ## Did we get any matches? Just in case...
-            if (! keys %$matches) {
-                die qq{No matching tables found to remove\n};
-            }
-
-            ## Remove each table from the herd
-            my $herdname = $sync->{herd}{name};
-            $SQL = 'DELETE FROM bucardo.herdmap WHERE herd = ? AND goat = ?';
-            my $sth = $dbh->prepare($SQL);
-            for my $fullname (sort keys %$matches) {
-                my $goat = $global{goat}{$fullname}
-                    or die qq{Could not find an id for table "$fullname"!\n};
-                $sth->execute($herdname,$goat->{id});
-                print qq{Removed from sync "$name": $goat->{reltype} "$fullname"\n};
-            }
-            $dbh->commit();
-
-            ## Report if any other syncs are using these tables
-            my $synclist = $global{herd}{$herdname}{sync};
-            my @othersyncs = grep { $_ ne $name } keys %$synclist;
-            if (@othersyncs) {
-                print qq{Warning! The following syncs were also using items from the herd "$herdname":\n};
-                for my $s (sort @othersyncs) {
-                    print qq{  Sync "$s"\n};
-                }
-            }
-
-            exit 0;
-
-        } ## end of removing tables
-
-        ## 'add'
-        ## Must be valid known tables
-        ## Auto-add ones that are not already there?
-        ## Do we care if some do not match?
-        ## At any rate, build a list, then add in ones that are not already part of the sync
-
-        ## Build a list of tables we are adding.
-        ## Give output about each as we process it
-        ## Do not report on the same one twice.
-        ## Report all success, then all failures
-
-
-        ## First, find any matches for tables we already know about, in $global{goat}
-        my $goatlist = get_goat_ids(@nouns);
-        my $nouncount = @nouns;
-
-        ## Figure out if we need to hit the live database to add potential tables
-        ## We do not only if all nouns are of the format "a.b" and got a match
-        my $goatnumber = keys %{ $goatlist->{relations} };
-
-        ## Are there any not in the given format?
-        my $searchlivetables = grep { ! /^\w+\.\w+$/ } @nouns;
-
-
-        if (! $searchlivetables) {
-            ## All are in the x.y format, but did we match them all?
-            if ($nouncount != $goatnumber) {
-                $searchlivetables = 1;
-            }
-        }
-
-        my $livenumber = 0;
-        my $livelist;
-        if ($searchlivetables) {
-            print "Searching live tables for matches to the nouns\n";
-            ## Which database should we look in?
-            my $sourcedb = $sync->{herd}{db};
-            $livelist = get_live_goat_ids($sourcedb, @nouns);
-            $livenumber = keys %{ $livelist->{relations} };
-        }
-
-        print "Found goat matches: $goatnumber\n";
-        print "Found live matches: $livenumber\n";
-        print "Nouns to scan: $nouncount\n";
-
-        ## We now have two lists both containing hash with keys as the schema.table names
-        ## Values is the complete goat info, including the id
-
-        ## Let's add them to the sync as needed
-        ## Need to record each one as we add it in, so do this inline
-        for my $goat (sort keys %{ $goatlist->{relations} }, sort keys %{ $livelist->{relations} }) {
-            ## Okay, is this table part of the sync yet?
-            ## Which really means, is it part of the source herd yet?
-            my $herd = $sync->{herd}{name};
-            print "Is table $goat part of the $herd herd?\n";
-            my $result = add_goat_to_herd($herd, $goat);
-            print "Result: $result\n";
-        }
-
-
-## gregstop
-exit;
-
-        ## Grab all goats in the source herd for this sync
-        my $sourceherd = $info->{source};
-        $SQL = 'SELECT id, schemaname, tablename FROM bucardo.goat g'
-            . ' JOIN bucardo.herdmap h ON (h.goat = g.id) AND h.herd = ?';
-        $sth = $dbh->prepare($SQL);
-        $sth->execute($sourceherd);
-        my $herdlist = $sth->fetchall_hashref('id');
-
-        for my $tab (@nouns) {
-            ## All of these must be valid tables
-            my $t = $tab;
-            my $wild = ($t =~ s/\*//) ? 1 : 0;
-            my $find;
-            if ($t =~ s/(\w+)\.//) {
-                my $schema = $1;
-                $SQL = 'SELECT * FROM bucardo.goat WHERE tablename = ? AND schemaname = ? AND reltype = ?';
-                $wild and $SQL =~ s/=/~/;
-                $find = $dbh->prepare_cached($SQL);
-                $count = $find->execute($wild ? "^$t" : $t, $schema, $thing);
-            }
-            else {
-                $SQL = 'SELECT * FROM bucardo.goat WHERE tablename = ? AND reltype = ?';
-                $wild and $SQL =~ s/=/~/;
-                $find = $dbh->prepare($SQL);
-                $count = $find->execute($wild ? "^$t" : $t, $thing);
-            }
-            if ($count < 1) {
-                die qq{Unknown table: $tab\n};
-            }
-            elsif ($count > 1 and ! $wild) {
-                die qq{More than one table found for $tab: use wildcards or a schema\n};
-            }
-
-            my $tabinfo = $find->fetchall_arrayref({});
-            for my $tab2 (@$tabinfo) {
-                my $tabid = $tab2->{id};
-                my $tablename = "$tab2->{schemaname}.$tab2->{tablename}";
-                my $type = $tab2->{reltype};
-                if ($v eq 'add' and exists $herdlist->{$tabid}) {
-                    warn "Skipping $type $tablename: already part of that sync\n";
-                    next;
-                }
-                if ($v eq 'remove' and !exists $herdlist->{$tabid}) {
-                    warn "Skipping $type $tablename: does not belong to the sync\n";
-                    next;
-                }
-                if ($v eq 'add') {
-                    $SQL = 'INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,?)';
-                    my $add = $dbh->prepare($SQL);
-                    $add->execute($sourceherd,$tabid);
-                    my $lctype = lc $type;
-                    warn "Added $lctype $tablename to herd $sourceherd\n";
-                    if ($type eq 'table') {
-                        $validate_msg = 1;
-                    }
-                }
-                else {
-                    $SQL = 'DELETE FROM bucardo.herdmap WHERE herd = ? AND goat = ?';
-                    my $delete = $dbh->prepare($SQL);
-                    $delete->execute($sourceherd,$tabid);
-                    warn "Removed $type $tablename from herd $sourceherd\n";
-                }
-            }
-        }
-
-        if ($validate_msg) {
-            print qq{Don't forget to run bucardo validate $name\n};
-        }
-
-        $dbh->commit();
-        exit 0;
-    }
-
-    if ('dbgroup' eq $item and ($nouns[0] eq 'add' or $nouns[0] eq 'remove')) {
-        my $v = shift @nouns;
-        die "Can only $v to one dbgroup at a time\n" if @$info > 1;
-        $info = $info->[0];
-        my $miniusage = "Usage: update dbgroup $name $v <dbname(s)>\n";
-        @nouns or die $miniusage;
-
-        ## Grab all databases in this group
-        $SQL = 'SELECT db, priority FROM bucardo.dbmap WHERE dbgroup = ?';
-        $sth = $dbh->prepare($SQL);
-        $sth->execute($name);
-        my $dblist = $sth->fetchall_hashref('db');
-
-        for my $db (@nouns) {
-            ## All of these must be valid databases
-            my $d = $db;
-            my $wild = ($d =~ s/\*//) ? 1 : 0;
-            my $find;
-            $SQL = 'SELECT * FROM bucardo.db WHERE name = ?';
-            $wild and $SQL =~ s/=/~/;
-            $find = $dbh->prepare($SQL);
-            $count = $find->execute($wild ? "^$d" : $d);
-            if ($count < 1) {
-                die qq{Unknown database: $db\n};
-            }
-            elsif ($count > 1 and ! $wild) {
-                die qq{More than one database found for $db\n};
-            }
-
-            if ($v eq 'add' and exists $dblist->{$d}) {
-                warn "Skipping dbgroup $db: already part of that group\n";
-                next;
-            }
-            if ($v eq 'remove' and !exists $dblist->{$d}) {
-                warn "Skipping dbgroup $db: does not belong to that group\n";
-                next;
-            }
-            my $dbinfo = $find->fetchall_arrayref({});
-            for my $db2 (@$dbinfo) {
-                my $dbname = $db2->{name};
-                if ($v eq 'add') {
-                    $SQL = 'INSERT INTO bucardo.dbmap(db,dbgroup) VALUES (?,?)';
-                    my $add = $dbh->prepare($SQL);
-                    $add->execute($dbname,$name);
-                    warn qq{Added database "$dbname" to database group "$name"\n};
-                }
-                else {
-                    $SQL = 'DELETE FROM bucardo.dbmap WHERE db = ? AND dbgroup = ?';
-                    my $delete = $dbh->prepare($SQL);
-                    $delete->execute($dbname,$name);
-                    warn qq{Removed database "$dbname" from database group "$name"\n};
-                }
-            }
-        }
-
-        $dbh->commit();
-        exit 0;
-    }
-
-    if ('herd' eq $item and ($nouns[0] eq 'add' or $nouns[0] eq 'remove')) {
-        my $v = shift @nouns;
-        die "Can only $v to one herd at a time\n" if @$info > 1;
-        $info = $info->[0];
-        my $miniusage = "Usage: update herd $name $v <table(s)>\n";
-        @nouns or die $miniusage;
-
-        ## Grab all tables in this herd
-        $SQL = 'SELECT g.id, g.schemaname, g.tablename FROM bucardo.goat g '
-            . 'JOIN bucardo.herdmap h ON (h.goat = g.id) WHERE h.herd = ?';
-        $sth = $dbh->prepare($SQL);
-        $sth->execute($name);
-        my $tablist = $sth->fetchall_hashref('id');
-
-        my %found;
-
-        if ($v eq 'remove') {
-
-            for my $tab (@nouns) {
-                my $wild = ($tab =~ s/\*//) ? 1 : 0;
-                for my $id (keys %$tablist) {
-                    my ($sname,$tname) = ($tablist->{$id}{schemaname}, $tablist->{$id}{tablename});
-                    if ($wild) {
-                        if ($tname =~ /$tab/) {
-                            $found{$id} = [$sname,$tname];
-                        }
-                    }
-                    elsif ($tab =~ /(.+)\.(.+)/) {
-                        my ($s,$t) = ($1,$2);
-                        if ($s eq $sname and $t eq $tname) {
-                            $found{$id} = [$sname,$tname];
-                        }
-                    }
-                    elsif ($tname eq $tab) {
-                        $found{$id} = [$sname,$tname];
-                    }
-                }
-            }
-
-            if (keys %found) {
-                $SQL = 'DELETE FROM bucardo.herdmap WHERE herd = ? AND goat = ?';
-                $sth = $dbh->prepare($SQL);
-                for my $id (sort keys %found) {
-                    my ($sname,$tname) = @{$found{$id}};
-                    $count = $sth->execute($name,$id);
-                    if ($count >= 1) {
-                        print "  Removed from herd $name: $sname.$tname\n";
-                    }
-                    else {
-                        print "Could not remove from herd $name: $sname.$tname\n";
-                    }
-                }
-                $dbh->commit();
-            }
-
-            exit 0;
-
-        } ## end 'remove'
-
-        ## Must be 'add'
-        my $flatsql = 'SELECT id,schemaname,tablename FROM bucardo.goat WHERE tablename = ?';
-        my $wildsql = 'SELECT id,schemaname,tablename FROM bucardo.goat WHERE tablename ~ ?';
-
-        for my $tab (@nouns) {
-            my $wild = ($tab =~ s/\*//) ? 1 : 0;
-
-            $sth = $dbh->prepare($wild ? $wildsql : $flatsql);
-            $count = $sth->execute($tab);
-            next if $count < 1;
-
-            for my $row (@{$sth->fetchall_arrayref()}) {
-                $found{$row->[0]} = [$row->[1],$row->[2]];
-            }
-        }
-
-        if (keys %found) {
-
-            $SQL = 'INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,?)';
-            $sth = $dbh->prepare($SQL);
-            for my $id (sort keys %found) {
-                next if exists $tablist->{$id};
-                $tablist->{$id}++;
-                my ($sname,$tname) = @{$found{$id}};
-                $count = $sth->execute($name,$id);
-                if ($count >= 1) {
-                    print "  Added to herd $name: $sname.$tname\n";
-                }
-                else {
-                    print "Could not add to herd $name: $sname.$tname\n";
-                }
-            }
-            $dbh->commit();
-        }
-
-        exit 0;
-    }
-
-    ## Process each change in turn
-    ## Can be code, sync, dbgroup, table, schema, herd, or db
-    my %change;
-    for my $arg (@nouns) {
-        next if $arg eq 'set';
-        $arg =~ /(.+)=(.+)/ or die "Invalid argument: must be of form name=value\n";
-        my ($n,$v) = (lc $1,$2);
-        $n =~ /^\w+$/ or die "Invalid name\n";
-        $n = 'server_side_prepares' if $n eq 'ssp';
-
-        ## Special herd handling
-        if ('herd' eq $item and 'notable' eq $n) {
-            $SQL = 'DELETE FROM bucardo.herdmap WHERE herd = ? AND goat IN '
-                . '(SELECT id FROM bucardo.goat WHERE tablename ~ ?)';
-            $sth = $dbh->prepare($SQL);
-            $count = $sth->execute($name, $v);
-            if ($count >= 1) {
-                push @{$change{$name}} => ['DIRECT', "Tables removed from herd: $count"];
-            }
-            next;
-        }
-
-        ## Special table handling
-        if ('all' eq $name and 'table' eq $single_item) {
-            ## Can only change a few things globally
-            if ('standard_conflict' ne $n
-                 and 'analyze_after_copy' ne $n
-                     and 'vacuum_after_copy' ne $n) {
-                die qq{Sorry, cannot change that for all tables\n};
-            }
-            $SQL = "UPDATE bucardo.goat SET $n = ? WHERE reltype='table'";
-            $sth = $dbh->prepare($SQL);
-            $sth->execute($v);
-            push @{$change{'all tables'}} => [$n, 'N/A', $v];
-            next;
-        }
-
-        ## Special table handling
-        if ('all' eq $name and 'sequence' eq $single_item) {
-            ## Can only change a few things globally
-            if ('standard_conflict' ne $n) {
-                die qq{Sorry, cannot change that for all sequences\n};
-            }
-            $SQL = "UPDATE bucardo.goat SET $n = ? WHERE reltype='sequence'";
-            $sth = $dbh->prepare($SQL);
-            $sth->execute($v);
-            push @{$change{'all sequences'}} => [$n, 'N/A', $v];
-            next;
-        }
-
-        for my $row (@$info) {
-            my $localname = $tabname eq 'goat' ? "$row->{schemaname}.$row->{tablename}" : $row->{name};
-            my $localid = $tabname eq 'goat' ? $row->{id} : $row->{name};
-            if (! exists $row->{$n}) {
-                die qq{Sorry, cannot change "$n" for $single_item "$localname"\n};
-            }
-            if ($tabname eq 'db' and $n eq 'dbhost' and $v eq 'none') {
-                $SQL = "UPDATE bucardo.db SET dbhost = '' WHERE $pkcol = ?";
-                $sth = $dbh->prepare($SQL);
-                $sth->execute($localid);
-                push @{$change{$localname}} => [$n, $row->{$n}, 'NULL'];
-                next;
-            }
-            if ($tabname eq 'customcode' and $n eq 'src_code') {
-                my $tfile = $v;
-                if (! -e $tfile) {
-                    die qq{The 'src_file' value must be a file\n};
-                }
-                open my $fh, '<', $tfile or die qq{Could not open "$tfile": $!\n};
-                { local $/; $v = <$fh>; } ## no critic (RequireInitializationForLocalVars)
-                close $fh or warn qq{Could not close "$tfile": $!\n};
-            }
-
-            $SQL = "UPDATE bucardo.$tabname SET $n = ? WHERE $pkcol = ?";
-            ## Only one of targetdb and targetgroup can be set, no NULL the other one
-            if ($n eq 'targetgroup') {
-                $SQL =~ s/SET/SET targetdb=NULL,/;
-            }
-            elsif ($n eq 'targetdb') {
-                $SQL =~ s/SET/SET targetgroup=NULL,/;
-            }
-
-            $sth = $dbh->prepare($SQL);
-            if ($DEBUG) {
-                warn "SQL: $SQL\n";
-                warn "Args: $v, $localid\n";
-            }
-            $sth->execute($v, $localid);
-            push @{$change{$localname}} => [$n, $row->{$n}, $v];
-        }
-    }
-
-    if (! keys %change) {
-        print "No changes made\n";
-        exit 0;
-    }
-
-    my %maxcol;
-    for my $thing (keys %change) {
-        $maxcol{$thing} = 1;
-        for my $row (@{$change{$thing}}) {
-            $maxcol{$thing} = length($row->[0]) if length($row->[0]) > $maxcol{$thing};
-        }
-    }
-
-    for my $thing (sort keys %change) {
-        print qq{Changes made to $single_item "$thing":\n};
-        for my $row (@{$change{$thing}}) {
-            my $col = $row->[0];
-            if ($col eq 'DIRECT') {
-                print "$row->[1]\n";
-                next;
-            }
-            my $old = defined $row->[1] ? qq{"$row->[1]"} : '(null)';
-            my $new = qq{"$row->[2]"};
-            if ($tabname eq 'customcode' and $col eq 'src_code') {
-                my $lines = $old =~ tr/\n/\n/;
-                $old = "old source (lines: $lines)";
-                $lines = $new =~ tr/\n/\n/;
-                $new = "contents of file 'foo' (lines: $lines)";
-            }
-            printf qq{ * %-*s : changed from %s to %s\n},
-                $maxcol{$thing}, $col, $old, $new;
-        }
-    }
-
-    $dbh->commit();
-    $dbh->disconnect();
-
-    exit 0;
-
-} ## end of update
-
-
 sub update_sync {
 
     ## Update a sync
@@ -4648,14 +4262,6 @@ sub append_reason_file {
 } ## end of append_reason_file
 
 
-sub stop_bucardo {
-
-    open my $stop, '>', $STOPFILE or die qq{Could not create "$STOPFILE": $!\n};
-    print {$stop} "Stopped by $progname on " . (scalar localtime) . "\n";
-    close $stop or warn qq{Could not close "$STOPFILE": $!\n};
-    return;
-
-} ## end of stop_bucardo
 
 
 sub get_detailed_syncs {
@@ -7835,29 +7441,6 @@ sub db_get_notices {
 } ## end of db_get_notices
 
 
-sub wait_for_notice {
-
-    ## Keep hanging out until we get the notice we are waiting for
-    ## Arguments: two
-    ## 1. Database handle
-    ## 2. String to listen for
-    ## Returns: undef
-
-    my ($ldbh, $string) = @_;
-
-  WAITIN: {
-        for my $notice (@{ db_get_notices($ldbh) }) {
-            my ($name) = @$notice;
-            last WAITIN if $name eq $string;
-        }
-        $dbh->commit();
-        sleep($WAITSLEEP);
-        redo;
-    }
-
-    return;
-
-} ## end of wait_for_notice
 
 
 sub install {
