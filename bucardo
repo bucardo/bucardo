@@ -91,6 +91,7 @@ for my $arg (@ARGV) {
 }
 
 ## Values are first read from a .bucardorc, either in the current dir, or the home dir.
+## If those do not exist, check for a global rc file
 ## These will be overwritten by command-line args.
 my $file;
 if (! $bcargs->{'no-bucardorc'}) {
@@ -158,9 +159,9 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'debugdir=s',
      'debugfile=i',
      'cleandebugs=i',
-     'force',
 
      ## Used internally
+     'force',
      'schema|n=s@',
      'exclude-schema|N=s@',
      'table|t=s@',
@@ -177,7 +178,7 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
 ## If --help is set, ignore everything else, show help, then exit
 help() if $bcargs->{help};
 
-## If --version is set, ignore everything else, show it, and exit
+## If --version is set, ignore everything else, show the version, and exit
 if ($bcargs->{version}) {
     print "$progname version $VERSION\n";
     exit 0;
@@ -190,23 +191,23 @@ my $QUIET = delete $bcargs->{quiet};
 $bcargs->{vv} and $bcargs->{verbose} = 2;
 
 ## Set some global arguments
-my $VERBOSE    = delete $bcargs->{verbose};
-my $DEBUG      = delete $bcargs->{debug} || $ENV{BUCARDO_DEBUG} || 0;
+my $VERBOSE = delete $bcargs->{verbose};
+my $DEBUG   = delete $bcargs->{debug} || $ENV{BUCARDO_DEBUG} || 0;
 
 ## Do we compress time outputs by stripping out whitespace?
-my $COMPRESS   = delete $bcargs->{compress} || 0;
+my $COMPRESS = delete $bcargs->{compress} || 0;
 
 ## Do we retry after a sleep period on failed kicks?
 my $RETRY      = delete $bcargs->{retry} || 0;
 my $RETRYSLEEP = delete $bcargs->{retrysleep} || 0;
 
 ## Allow people to turn off the cool timer when kicking syncs
-my $NOTIMER    = delete $bcargs->{notimer} || 0;
+my $NOTIMER = delete $bcargs->{notimer} || 0;
 
 ## Anything left over is the verb and noun(s)
 my $verb = shift || '';
 
-## No verb? Help message and exit
+## No verb? Show a help message and exit
 help() unless $verb;
 
 ## Standardize the verb as lowercase, and grab the rest of the args as the "nouns"
@@ -214,12 +215,15 @@ $verb = lc $verb;
 my @nouns = @ARGV;
 ## Make a single string version, mostly for output in logs
 my $nouns = join ' ' => @nouns;
+## The verb may have a helper, usually a number
+my $adverb;
 
 ## Installation must happen before we try to connect!
 install() if $verb eq 'install';
 
 ## For everything else, we need to connect to a previously installed Bucardo database
 
+## Create a quick data source name
 my $DSN = "dbi:Pg:dbname=$bcargs->{dbname}";
 $bcargs->{dbhost} and length $bcargs->{dbhost} and $DSN .= ";host=$bcargs->{dbhost}";
 $bcargs->{dbport} and length $bcargs->{dbport} and $DSN .= ";port=$bcargs->{dbport}";
@@ -231,8 +235,8 @@ $dbh = DBI->connect($DSN, $bcargs->{dbuser}, $bcargs->{dbpass}, {AutoCommit=>0,R
 $dbh->do('SET search_path = bucardo');
 
 ## Make sure we find a valid Postgres version
-## Why check this afterwards? In case they get pg_dumped to a different (older) database
-## It's happened :)
+## Why do we check this after a successful install?
+## In case they get pg_dumped to a different (older) database. It has happened! :)
 check_version($dbh); ## dies on invalid version
 
 ## Listen for the MCP. Not needed for old-school non-payload LISTEN/NOTIFY, but does no harm
@@ -241,20 +245,20 @@ $dbh->commit();
 
 ## Set some global variables based on information from the bucardo_config table
 
-## The reason file that records startups and shutdowns
+## The reason file records startup and shutdown messages
 my $REASONFILE = get_config('reason_file') or die "Invalid reason_file!\n";
 my $REASONFILE_LOG = "$REASONFILE.log";
 
 ## The directory Bucardo.pm writes PID and other information to
-my $PIDDIR     = get_config('piddir') or die "Invalid piddir!\n";
+my $PIDDIR = get_config('piddir') or die "Invalid piddir!\n";
 
-## PID of the master control file (MCP)
+## The PID file of the master control file (MCP)
 ## If this exists, it is a good bet that Bucardo is currently running
 my $PIDFILE = "$PIDDIR/bucardo.mcp.pid";
 
-## File whose existence tells all Bucardo processes to exit immediately
-my $stopfile   = get_config('stopfile') or die "Invalid stopfile!\n";
-my $STOPFILE       = "$PIDDIR/$stopfile";
+## The stop file whose existence tells all Bucardo processes to exit immediately
+my $stopfile = get_config('stopfile') or die "Invalid stopfile!\n";
+my $STOPFILE = "$PIDDIR/$stopfile";
 
 ## Aliases for terms people may shorten, misspell, etc.
 ## Mostly used for database columns when doing an 'update'
@@ -275,146 +279,160 @@ my %column_no_change = (
     'cdate' => 1,
 );
 
-## Regular expressions
-
+## Regular expression for a valid database group name
 my $re_dbgroupname = qr{\w[\w\d]*};
+
+## Regular expression for a valid database name
 my $re_dbname = qr{\w[\w\d]*};
 
-## Handle all the simple verbs
-ping()          if $verb eq 'ping';
-superhelp()     if $verb eq 'help';
+## Send a ping to the MCP to make sure it is alive and responding
+ping() if $verb eq 'ping';
 
-upgrade()       if $verb eq 'upgrade' or $verb eq 'uprgade';
+## Display more detailed help than --help
+superhelp() if $verb eq 'help';
 
-## Handle all the verbs that may require us to load information
+## Make sure the Bucardo database has the latest schema
+upgrade() if $verb eq 'upgrade' or $verb eq 'uprgade';
+
+## All the rest of the verbs require use of global information
+## Thus, we load everything right now
 load_bucardo_info();
+
+## View the status of one or more syncs
 status_all()    if $verb eq 'status' and ! @nouns;
 status_detail() if $verb eq 'status';
-restart()       if $verb eq 'restart';
-start()         if $verb eq 'start';
+
+## Stop, start, or restart the main Bucardo daemon
 stop()          if $verb eq 'stop';
+start()         if $verb eq 'start';
+restart()       if $verb eq 'restart';
+
+## Reload the configuration file
 reload_config() if $verb eq 'reload_config';
+
+## Reload the whole daemon
 reload()        if $verb eq 'reload';
-add_item()      if $verb eq 'add';
-remove_item()   if $verb eq 'remove' or $verb eq 'delete';
-message()       if $verb eq 'message';
+
+## Show information about something: database, table, sync, etc.
 list()          if $verb eq 'list' or $verb eq 'l' or $verb eq 'lsit';;
-config()        if $verb eq 'set' or $verb eq 'show' or $verb eq 'config';
-validate()      if $verb eq 'validate';
+
+## Add something: database, table, sync, etc.
+add_item()      if $verb eq 'add';
+
+## Remove something
+remove_item()   if $verb eq 'remove' or $verb eq 'delete';
+
+## Update something
 update()        if $verb eq 'update';
+
+## Inspect something
 inspect()       if $verb eq 'inspect';
 
+## Inject a message into the Bucardo logs
+message()       if $verb eq 'message';
+
+## Show or set an item from the bucardo.config table
+config()        if $verb eq 'set' or $verb eq 'show' or $verb eq 'config';
+
+## Validate a sync
+validate()      if $verb eq 'validate';
+
+## There are only a few valid verbs left, so we check for them now
 if ($verb ne 'kick' and $verb ne 'activate' and $verb ne 'deactivate') {
+    ## Show help and exit
     help();
 }
 
-## For the rest, we expect a list of syncs with an optional decimal "timeout"
-my $adverb;
-my $syncs = get_syncs();
+## For all remaning verbs, we expect a list of syncs with an optional decimal "timeout"
+
+## If there are no syncs, no sense in going on!
+if (! keys %$SYNC) {
+    die qq{No syncs have been created yet!\n};
+}
+
+## The final list of syncs we are going to do something to
 my @syncs;
-my $gotall = 0;
-my @allvars;
+
+## The fail msg on a non-match
+my $msg;
+
+## Loop through each noun and handle it
 SYNCMATCH: for my $sync (@nouns) {
 
+    ## Quick skipping of noise word 'sync'
+    next if $sync eq 'sync';
+
+    ## If this is a number, it's a timeout, so set it and skip to the next noun
     if ($sync =~ /^\d+$/) {
         $adverb = $sync;
         next SYNCMATCH;
     }
 
-    if ($sync eq 'all') { ## All proceeding nouns are treated special!
-        $gotall = 1;
-        next SYNCMATCH;
-    }
-
-    if ($gotall) {
-        push @allvars => $sync;
-        next;
-    }
-
-    if ($sync =~ /%/) {
-        $SQL = qq{SELECT name FROM bucardo.sync WHERE name LIKE '$sync'};
-        my $tmp = $dbh->selectall_arrayref($SQL);
-        push @syncs, (map { $_->[0] } @$tmp);
-        next SYNCMATCH;
-    }
-    if ($sync =~ /^\*(\w+)\*$/) {
-        $SQL = qq{SELECT name FROM bucardo.sync WHERE name ~ '$1'};
-        my $tmp = $dbh->selectall_arrayref($SQL);
-        push @syncs => map { $_->[0] } @$tmp;
-        next SYNCMATCH;
-    }
-    if ($sync =~ /^\*(\w+)$/) {
-        $SQL = qq{SELECT name FROM bucardo.sync WHERE name ~ '$1\$'};
-        my $tmp = $dbh->selectall_arrayref($SQL);
-        push @syncs => map { $_->[0] } @$tmp;
-        next SYNCMATCH;
-    }
-    if ($sync =~ /^(\w+)\*$/) {
-        $SQL = qq{SELECT name FROM bucardo.sync WHERE name ~ '^$1'};
-        my $tmp = $dbh->selectall_arrayref($SQL);
-        push @syncs => map { $_->[0] } @$tmp;
-        next SYNCMATCH;
-    }
-    next if $sync eq 'sync';
-
-    if (! exists $syncs->{$sync}) {
-        ## Be nice and print a list of active syncs
-        my @goodsyncs;
-        for my $s (sort keys %$syncs) {
-            push @goodsyncs => $s if $syncs->{$s}{status} eq 'active';
+    ## If they want all syncs, grab them all and stop reading any more nouns
+    if ($sync eq 'all') {
+        undef @syncs;
+        for my $name (sort keys %$SYNC) {
+            push @syncs => $name;
         }
-        my $msg = qq{Sync "$sync" does not appear to exist\n};
-        if (@goodsyncs) {
-            $msg .= "Active syncs:\n";
-            $msg .= join "\n" => @goodsyncs;
-        }
-        die "$msg\n";
+        last SYNCMATCH;
     }
 
-    push @syncs, $sync;
+    ## The rest are all ways of finding the sync they want
+    ## Change the name to a Perl-regex friendly form
+    (my $term = $sync) =~ s/%/\*/g;
+    $term =~ s/([^\.])\*/$1.*/g;
+    $term =~ s/^\*/.*/;
+
+    if ($term =~ /\*/) {
+        for my $name (sort keys %$SYNC) {
+            push @syncs => $name if $name =~ /^$term$/;
+        }
+        next SYNCMATCH;
+    }
+
+    ## Now that wildcards are out, we must have an absolute match
+    if (! exists $SYNC->{$sync}) {
+        $msg = qq{Sync "$sync" does not appear to exist\n};
+        ## No sense in going on
+        last SYNCMATCH;
+    }
+
+    ## Got a direct match, so store it away
+    push @syncs => $sync;
 
 }
 
-if ($gotall) {
-    my @typelimit;
-    my $active = 0;
-    for my $v (@allvars) {
-        if ($v =~ /^(?:copy|fullcopy)$/i) {
-            push @typelimit => 'fullcopy';
-        }
-        elsif ($v =~ /^(?:delta|pushdelta)$/i) {
-            push @typelimit => 'pushdelta';
-        }
-        elsif ($v =~ /^swap$/i) {
-            push @typelimit => 'swap';
-        }
-        elsif ($v =~ /^active$/i) {
-            $active = 1;
-        }
-        else {
-            die "Usage: ... all [copy|delta|swap]\n";
-        }
-    }
-    my $WHERE = '';
-    if (@typelimit) {
-        $WHERE = 'WHERE ' . (join ' OR ' => map { "synctype = '$_'" } @typelimit);
-    }
-    if ($active) {
-        $WHERE
-            ? ($WHERE =~ s/WHERE /WHERE status = 'active' AND /)
-            : ($WHERE = q{WHERE status = 'active'});
-    }
-    $SQL = "SELECT name FROM sync $WHERE ORDER BY priority DESC, name ASC";
-    $sth = $dbh->prepare($SQL);
-    undef @syncs;
-    my $tmp = $dbh->selectall_arrayref($SQL);
-    push @syncs => map { $_->[0] } @$tmp;
+## If syncs is empty, a regular expression search failed
+if (!@syncs) {
+    $msg = qq{No matching syncs were found\n};
 }
 
+## If we have a message, something is wrong
+if (defined $msg) {
+    ## Be nice and print a list of active syncs
+    my @goodsyncs;
+    for my $s (sort keys %$SYNC) {
+        push @goodsyncs => $s if $SYNC->{$s}{status} eq 'active';
+    }
+    if (@goodsyncs) {
+        $msg .= "Active syncs:\n";
+        $msg .= join "\n" => map { " $_" } @goodsyncs;
+    }
+    die "$msg\n";
+}
+
+## Activate or deactivate one or more syncs
 vate_sync() if $verb eq 'activate' or $verb eq 'deactivate';
+
+## Kick one or more syncs
 kick() if $verb eq 'kick';
 
+## If we reach here (and we should not), display help and exit
 help();
+
+exit;
+
+## Everything from here on out is subroutines
 
 sub numbered_relations {
 
@@ -4133,7 +4151,7 @@ sub kick {
             my $relname = "bucardo_kick_sync_$sync";
 
             ## If this sync is not active, cowardly refuse to kick it
-            if ($syncs->{$sync}{status} ne 'active') {
+            if ($SYNC->{$sync}{status} ne 'active') {
                 print qq{Cannot kick inactive sync "$sync"\n};
                 next SYNC;
             }
@@ -4150,7 +4168,7 @@ sub kick {
             $QUIET or print qq{Kick $sync: };
             $dbh->do(qq{LISTEN "$done"});
             $dbh->do(qq{LISTEN "$killed"});
-            my $s = $syncs->{$sync};
+            my $s = $SYNC->{$sync};
             $dbh->do(qq{LISTEN "bucardo_syncdone_$sync"});
             $dbh->commit();
 
@@ -4644,7 +4662,9 @@ sub get_detailed_syncs {
 
     my $arg = shift || {};
 
-    my $synclist = get_syncs();
+    #my $synclist = get_syncs();
+
+    my $synclist = die 'fixme';
 
     ## View the details of the syncs via the syncrun table
 
@@ -5380,78 +5400,6 @@ sub pretty_number {
 } ## end of pretty_number
 
 
-sub get_syncs {
-
-    my %dbgroup;
-    $SQL = 'SELECT dbgroup, db FROM bucardo.dbmap ORDER BY priority, db';
-    for my $row (@{$dbh->selectall_arrayref($SQL)}) {
-        push @{$dbgroup{$row->[0]}}, $row->[1];
-    }
-
-    $SQL = q{
-        SELECT *,
-            COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs,
-            now()-overdue AS overdue_time,
-            now()-expired AS expired_time,
-            extract(epoch FROM overdue) AS overdue_secs,
-            extract(epoch FROM expired) AS expired_secs
-        FROM     bucardo.sync
-        ORDER BY priority DESC, name DESC
-    };
-    $sth = $dbh->prepare($SQL);
-    $sth->execute();
-    my $sync = $sth->fetchall_hashref('name');
-
-    ## Expand any targetgroups in use
-    for (keys %$sync) {
-        my $s = $sync->{$_};
-        if (defined $s->{targetgroup}) {
-            $s->{targets} = $dbgroup{$s->{targetgroup}};
-        }
-    }
-
-    ## Check what exists in the pid directory
-    opendir my $sdir, $PIDDIR or return $sync;
-
-    my $syncpidfile;
-    while (defined ($syncpidfile = readdir($sdir))) {
-        next if $syncpidfile =~ /^\.\.?$/
-            or "$PIDDIR/$syncpidfile" eq $STOPFILE
-            or "$PIDDIR/$syncpidfile" eq $PIDFILE;
-        if ($syncpidfile !~ /^bucardo\.ctl\.sync\.(.+)\.pid$/) {
-            next;
-        }
-        my $syncname = $1; ## no critic (ProhibitCaptureWithoutTest)
-
-        ## Is this a valid syncname?
-        if (! exists $sync->{$syncname}) {
-            warn qq{Invalid pid file found: $PIDDIR/$syncpidfile - removing it\n};
-            unlink "$PIDDIR/$syncpidfile";
-            next;
-        }
-
-        my $cdate = localtime ($^T - (-C "$PIDDIR/$syncpidfile")*24*60*60);
-        $sync->{$syncname}{PIDFILE} = "$PIDDIR/$syncpidfile";
-        $sync->{$syncname}{CREATED} = $cdate;
-
-        ## Does it contain a pid?
-        open my $fh, '<', "$PIDDIR/$syncpidfile" or die qq{Could not open "$PIDDIR/$syncpidfile": $!\n};
-        my $pid = <$fh>;
-        chomp $pid;
-        if (! defined $pid) { $pid = ''; }
-        close $fh or warn qq{Could not close $PIDDIR/$syncpidfile: $!\n};
-        if ($pid !~ /^\d+$/) {
-            $sync->{$syncname}{NOPID} = 1;
-        }
-        else {
-            $sync->{$syncname}{PID} = $pid;
-            $sync->{$syncname}{PIDPING} = kill 0, $pid;
-        }
-    }
-    return $sync;
-
-} ## end of get_syncs
-
 
 sub vate_sync {
 
@@ -5893,11 +5841,11 @@ sub add_sync {
                 die "No such database: $db\n";
             }
             ## Standardize and check the types
-            $type = 'source' if $type =~ /^s/i;
-            $type = 'target' if $type =~ /^t/i;
+            $type = 'source' if $type =~ /^s/i or $type =~ /^master/i;
+            $type = 'target' if $type =~ /^t/i or $type =~ /^rep/i;
             $type = 'fullcopy' if $type =~ /^f/i;
             if ($type !~ /^(source|target|fullcopy)$/) {
-                die "Invalid database type: must be source, target, or fullcopy\n";
+                die "Invalid database type: must be source, target, or fullcopy (not $type)\n";
             }
             $db{$db} = $type;
         }
