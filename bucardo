@@ -314,16 +314,16 @@ reload_config() if $verb eq 'reload_config';
 reload()        if $verb eq 'reload';
 
 ## Show information about something: database, table, sync, etc.
-list()          if $verb eq 'list' or $verb eq 'l' or $verb eq 'lsit';;
+list_item()     if $verb eq 'list' or $verb eq 'l' or $verb eq 'lsit';;
 
-## Add something: database, table, sync, etc.
+## Add something
 add_item()      if $verb eq 'add';
 
 ## Remove something
 remove_item()   if $verb eq 'remove' or $verb eq 'delete';
 
 ## Update something
-update()        if $verb eq 'update';
+update_item()   if $verb eq 'update';
 
 ## Inspect something
 inspect()       if $verb eq 'inspect';
@@ -433,6 +433,27 @@ help();
 exit;
 
 ## Everything from here on out is subroutines
+
+
+sub get_config {
+
+    ## Given a name, return the matching value from the bucardo_config table
+    ## Arguments: one
+    ## 1. setting name
+    ## Returns: bucardo_config.value string
+
+    my $name = shift;
+
+    $SQL = 'SELECT value FROM bucardo.bucardo_config WHERE LOWER(setting) = ?';
+    $sth = $dbh->prepare_cached($SQL);
+    $count = $sth->execute(lc $name);
+    if ($count < 1) {
+        $sth->finish();
+        die "Invalid bucardo_config setting: $name\n";
+    }
+    return $sth->fetchall_arrayref()->[0][0];
+
+} ## end of get_config
 
 
 sub numbered_relations {
@@ -748,6 +769,58 @@ sub superhelp {
     exit 0;
 
 } ## end of superhelp
+
+
+sub ping {
+
+    ## See if the MCP is alive and responds to pings
+    ## Default is to wait 15 seconds
+    ## Arguments: none, but looks in @nouns for a timeout
+    ## Returns: never, exits
+
+    ## Set the default timeout, but override if any remaining args start with a number
+    my $timeout = 15;
+    for (@nouns) {
+        if (/^(\d+)/) {
+            $timeout = $1;
+            last;
+        }
+    }
+
+    $VERBOSE and print "Pinging MCP, timeout = $timeout\n";
+    $dbh->do('LISTEN bucardo_mcp_pong');
+    $dbh->do('NOTIFY bucardo_mcp_ping');
+    $dbh->commit();
+    my $starttime = time;
+    sleep 0.1;
+
+    ## Loop until we timeout or get a confirmation from the MCP
+  P:{
+        ## Grab any notices that have come in
+        my $notify = $dbh->func('pg_notifies');
+        if (defined $notify) {
+            ## Extract the PID that sent this notice
+            my ($name, $pid, $payload) = @$notify;
+            ## We are done: ping successful
+            $QUIET or print "OK: Got response from PID $pid\n";
+            exit 0;
+        }
+
+        ## Rollback, sleep, and check for a timeout
+        $dbh->rollback();
+        sleep 0.5;
+        my $totaltime = time - $starttime;
+        if ($timeout and $totaltime >= $timeout) {
+            ## We are done: ping failed
+            $QUIET or print "CRITICAL: Timed out ($totaltime s), no ping response from MCP\n";
+            exit 1;
+        }
+        redo;
+    }
+
+    return;
+
+} ## end of ping
 
 
 sub start {
@@ -1081,7 +1154,95 @@ sub validate {
 } ## end of validate
 
 
-sub update {
+sub add_item {
+
+    ## Add an item to the internal bucardo database
+    ## Arguments: none directly (but processes the nouns)
+    ## Returns: never, exits
+
+    my $usage = usage('add');
+
+    if (!@nouns) {
+        warn "$usage\n";
+        exit 1;
+    }
+
+    ## First word is the type of thing we are adding
+    my $thing = shift @nouns;
+
+    ## All of these will exit and do not return
+    add_customcode() if $thing =~ /^c?code/i or $thing =~ /^custom_?code/i;
+    add_customname() if $thing =~ /^cname/i or $thing =~ /^custom_?name/i;
+    ## The dbgroup must be checked before the database (dbg vs db)
+    add_dbgroup()    if $thing =~ /^dbg/i or $thing =~ /^d.+group/i;
+    add_database()   if $thing =~ /^db/i or $thing =~ /^database/i;
+    add_herd()       if $thing =~ /^herd/i;
+    add_sync()       if $thing =~ /^s[yi]n[ck]/i;
+
+    ## The rest is tables and sequences
+    ## We need to support 'add table all' as well as 'add all tables'
+
+    my $second_arg = $nouns[0] || '';
+    my $third_arg  = $nouns[1] || '';
+
+    ## Rearrange the args as needed, and determine if we want 'all'
+    my $do_all = 0;
+    if (lc $second_arg eq 'all') {
+        shift @nouns;
+        $do_all = 1;
+        $thing = $third_arg;
+        shift @nouns;
+    }
+    elsif ($second_arg eq 'all') {
+        shift @nouns;
+        $do_all = 1;
+    }
+
+    ## Quick check in case someone thinks they should add a goat
+    if ($thing =~ /^goat/i) {
+        warn qq{Cannot add a goat: use add table or add sequence instead\n};
+        exit 1;
+    }
+
+    ## Add a table
+    if ($thing =~ /^tab/i) {
+        if ($do_all) {
+            ## Add all the tables, and return the output
+            print add_all_tables();
+            ## The above does not commit, so make sure we do it here
+            $dbh->commit();
+        }
+        else {
+            add_table('table');
+        }
+    }
+
+    ## Add a sequence
+    if ($thing =~ /^seq/i) {
+        if ($do_all) {
+            ## Add all the sequences, and return the output
+            print add_all_sequences();
+            ## The above does not commit, so make sure we do it here
+            $dbh->commit();
+        }
+        else {
+            add_table('sequence');
+        }
+    }
+
+    ## Anything past this point is an error
+    if ($do_all) {
+        warn qq{The 'all' option can only be used with 'table' and 'sequence'\n};
+        exit 1;
+    }
+
+    warn "$usage\n";
+    exit 1;
+
+} ## end of add_item
+
+
+sub update_item {
 
     ## Update some object in the database
     ## This merely passes control on to the more specific update_ functions
@@ -1097,58 +1258,91 @@ sub update {
     }
 
     ## What type of thing are we updating?
-    my $item = shift @nouns;
+    my $thing = shift @nouns;
 
-    ## Updating a database:
-    if ($item =~ /^db/i or $item =~ /^datab/i) {
-        update_database(@nouns);
-        exit 0;
-    }
+    ## All of these will exit and do not return
+    update_customcode() if $thing =~ /^c?code/i or $thing =~ /^custom_?code/i;
+    ## We do not update customname
+    ## The dbgroup must be checked before the database (dbg vs db)
+    update_dbgroup()    if $thing =~ /^dbg/i or $thing =~ /^d.+group/i;
+    update_database()   if $thing =~ /^db/i or $thing =~ /^database/i;
+    update_herd()       if $thing =~ /^herd/i;
+    update_sync()       if $thing =~ /^s[yi]n[ck]/i;
+    update_table()      if $thing =~ /^tab/i or $thing =~ /^seq/i;
 
-    ## Updating a database group:
-    if ($item =~ /^dbg/i) {
-        update_dbgroup(@nouns);
-        exit 0;
-    }
-
-    ## Updating a table or sequence:
-    if ($item =~ /^tab/i or $item =~ /^seq/i) {
-        update_table(@nouns);
-        exit 0;
-    }
-
-    ## Updating a herd:
-    if ($item =~ /^herd/i) {
-        update_herd(@nouns);
-        exit 0;
-    }
-
-    ## Updating a sync:
-    if ($item =~ /^s[yi]n/i) {
-        update_sync(@nouns);
-        exit 0;
-    }
-
-    ## Updating customcode:
-    if ($item =~ /^code/i or $item =~ /^custom/i) {
-        update_customcode(@nouns);
-        exit 0;
-    }
-
-
-    ## If we got this far, we have an unknown item type
+    ## If we got this far, we have an unknown thing
     warn "$usage\n";
     exit 1;
 
-} ## end of update
+} ## end of update_item
 
 
+sub list_item {
+
+    ## Show information about one or more items in the bucardo database
+    ## Arguments: none, but parses nouns
+    ## Returns: never, exits
+
+    my $usage = usage('list');
+
+    if (!@nouns) {
+        warn "$usage\n";
+        exit 1;
+    }
+
+    ## First word is the type if thing we are listing
+    my $thing = shift @nouns;
+
+    ## All of these will exit and do not return
+    list_customcodes() if $thing =~ /^c?code/i or $thing =~ /^custom_?code/i;
+    list_customnames() if $thing =~ /^cname/i or $thing =~ /^custom_?name/i;
+    ## The dbgroup must be checked before the database (dbg vs db)
+    list_dbgroups()    if $thing =~ /^dbg/i or $thing =~ /^d.+group/i;
+    list_databases()   if $thing =~ /^db/i or $thing =~ /^database/i;
+    list_herds()       if $thing =~ /^herd/i;
+    list_syncs()       if $thing =~ /^s[yi]n[ck]/i;
+    list_tables()      if $thing =~ /^tab/i;
+    list_sequences()   if $thing =~ /^seq/i;
+
+    ## Cannot list anything else
+    warn "$usage\n";
+    exit 1;
+
+} ## end of list_item
 
 
+sub remove_item {
 
+    ## Delete from the bucardo database
+    ## Arguments: none, but parses nouns
+    ## Returns: never, exits
 
+    my $usage = usage('remove');
 
+    if (!@nouns) {
+        warn "$usage\n";
+        exit 1;
+    }
 
+    ## First word is the type if thing we are removing
+    my $thing = shift @nouns;
+
+    ## All of these will exit and do not return
+    remove_customcode() if $thing =~ /^c?code/i or $thing =~ /^custom_?code/i;
+    remove_customname() if $thing =~ /^cname/i or $thing =~ /^custom_?name/i;
+    ## The dbgroup must be checked before the database (dbg vs db)
+    remove_dbgroup()    if $thing =~ /^dbg/i or $thing =~ /^d.+group/i;
+    remove_database()   if $thing =~ /^db/i or $thing =~ /^database/i;
+    remove_herd()       if $thing =~ /^herd/i;
+    remove_sync()       if $thing =~ /^s[yi]n[ck]/i;
+    remove_table()      if $thing =~ /^tab/i;
+    remove_sequence()   if $thing =~ /^seq/i;
+
+    ## Do not know how to remove anything else
+    warn "$usage\n";
+    exit 1;
+
+} ## end of remove_item
 
 
 ##
@@ -1181,10 +1375,10 @@ sub add_database {
     my $validcols = qq{
         null                     name                 0                $item_name
         type                     dbtype               0                postgres
-        db|dbname                dbname               0                $item_name
-        user|dbuser|pguser       dbuser               0                bucardo
+        db|dbname                dbname               0                null
         host|dbhost|pghost       dbhost               0                ENV:PGHOSTADDR|PGHOST
         port|dbport|pgport       dbport               numeric          ENV:PGPORT
+        user|dbuser|pguser       dbuser               0                bucardo
         pass|dbpass              dbpass               0                null
         conn|dbconn|pgconn       dbconn               0                null
         stat|status              status               =active|inactive null
@@ -1193,7 +1387,6 @@ sub add_database {
         sourcelimit              sourcelimit          numeric          null
         targetlimit              targetlimit          numeric          null
         makedelta                makedelta            =on|off          null
-        makedelta_triggers       makedelta_triggers   TF               null
         server_side_prepares|ssp server_side_prepares TF               null
         group|dbgroup            none                 0                skip
         addalltables             none                 0                skip
@@ -1212,7 +1405,8 @@ sub add_database {
     ## Clean up and standardize the names
     $vals->{dbtype} = lc $vals->{dbtype};
     $vals->{dbtype} =~ s/postgres.*/postgres/io;
-    $vals->{dbtype} =~ s/drizzle.*/drizzle/io;
+    $vals->{dbtype} =~ s/pg.*/postgres/io;
+    $vals->{dbtype} =~ s/driz?zle.*/drizzle/io;
     $vals->{dbtype} =~ s/mongo.*/mongo/io;
     $vals->{dbtype} =~ s/mysql.*/mysql/io;
     $vals->{dbtype} =~ s/oracle.*/oracle/io;
@@ -1779,7 +1973,7 @@ sub list_databases {
         ## Check for wildcards
         if ($term =~ s/[*%]/.*/) {
             for my $name (keys %$DB) {
-                $matchdb{$name} = 1 if $name =~ /$term/;
+                $matchdb{$name} = 1 if $name =~ /^$term$/;
             }
             next;
         }
@@ -1797,7 +1991,7 @@ sub list_databases {
         exit 1;
     }
 
-    ## We only show the type if they are different
+    ## We only show the type if they are different from each othera
     my %typecount;
 
     ## Figure out the length of each item for a pretty display
@@ -2052,13 +2246,14 @@ sub update_dbgroup {
     ## Grab our generic usage message
     my $usage = usage('update_dbgroup');
 
-    my $name = shift;
     my @actions = @_;
 
     if (! @actions) {
         print "$usage\n";
         exit 1;
     }
+
+    my $name = shift @actions;
 
     ## Recursively call ourselves for wildcards and 'all'
     return if ! check_recurse($DBGROUP, $name, @actions);
@@ -2995,8 +3190,8 @@ sub update_sync {
     ## 2. What exactly we are updating.
     ## Returns: undef
 
-    my $name = shift or die;
     my @actions = @_;
+    my $name = shift @actions;
 
     ## Recursively call ourselves for wildcards and 'all'
     return if ! check_recurse($SYNC, $name, @actions);
@@ -3702,49 +3897,6 @@ sub get_arg_items {
 } ## end of get_arg_items
 
 
-sub ping {
-
-    ## See if the MCP is alive and responds to pings
-    ## Default is to wait 15 seconds
-
-    my $arg = shift || {};
-
-    my $timeout = $arg->{timeout} || $ARGV[0] || 15;
-    my $quiet = $arg->{quiet} || $ARGV[1] || 0;
-
-    if (defined $nouns[0] and $nouns[0] =~ /^\d+$/) {
-        $timeout = $nouns[0];
-    }
-
-    $VERBOSE and print "Pinging MCP, timeout = $timeout\n";
-    $dbh->do('LISTEN bucardo_mcp_pong');
-    $dbh->do('NOTIFY bucardo_mcp_ping');
-    $dbh->commit();
-    my $starttime = time;
-    sleep 0.1;
-
-  P:{
-        my $notify = $dbh->func('pg_notifies');
-        if (defined $notify) {
-            my ($name, $pid, $payload) = @$notify;
-            $quiet or print "OK: Got response from PID $pid\n";
-            return $pid if $arg->{noexit};
-            exit 0;
-        }
-        $dbh->rollback();
-        sleep 0.5;
-        my $totaltime = time - $starttime;
-        if ($timeout and $totaltime >= $timeout) {
-            $quiet or print "CRITICAL: Timed out ($totaltime s), no ping response from MCP\n";
-            return 0 if $arg->{noexit};
-            exit 1;
-        }
-        redo;
-    }
-
-    return;
-
-} ## end of ping
 
 
 sub kick {
@@ -4224,25 +4376,6 @@ sub status_detail {
 } ## end of status_detail
 
 
-sub get_config {
-
-    ## Given a name, return the matching value from the bucardo_config table
-    ## Arguments: one
-    ## 1. setting name
-    ## Returns: bucardo_config.value string
-
-    my $name = shift;
-
-    $SQL = 'SELECT value FROM bucardo.bucardo_config WHERE LOWER(setting) = ?';
-    $sth = $dbh->prepare_cached($SQL);
-    $count = $sth->execute(lc $name);
-    if ($count < 1) {
-        $sth->finish();
-        die "Invalid bucardo_config setting: $name\n";
-    }
-    return $sth->fetchall_arrayref()->[0][0];
-
-} ## end of get_config
 
 
 sub append_reason_file {
@@ -4624,29 +4757,6 @@ sub process_args {
 
 
 
-sub list {
-
-    my $usage = usage('list');
-
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
-    my $thing = shift @nouns;
-
-    list_customcodes() if $thing =~ /^code/i or $thing =~ /^customco/i;
-    list_customnames() if $thing =~ /^customname/i;
-    list_dbgroups()    if $thing =~ /^dbg/i; ## Must come before the db check!
-    list_databases()   if $thing =~ /^db/i or $thing =~ /^datab/i;
-    list_herds()       if $thing =~ /^h/i;
-    list_syncs()       if $thing =~ /^sy/i;
-    list_tables()      if $thing =~ /^t/i;
-    list_sequences()   if $thing =~ /^seq/i;
-
-    warn "$usage\n";
-    exit 1;
-
-} ## end of list
 
 
 sub list_customcodes {
@@ -5037,90 +5147,6 @@ sub vate_sync {
 } ## end of vate_sync
 
 
-sub add_item {
-
-    my $self = shift;
-
-    my $usage = usage('add');
-
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
-
-    ## First word must be a type we know about
-    my $type = shift @nouns;
-    $type = lc $type;
-
-    ## Allow plurals
-    $type =~ s/s$//;
-
-    ## In case we used 'all'
-    my $type2 = $nouns[0] || '';
-
-    if ($type eq 'code' or $type eq 'customcode' or $type eq 'custom_code') {
-        add_customcode();
-    }
-    elsif ($type eq 'customname') {
-        add_customname();
-    }
-    elsif ($type eq 'db' or $type eq 'database') {
-        add_database();
-    }
-    elsif ($type eq 'dbgroup' or $type eq 'dbg') {
-        add_dbgroup();
-    }
-    elsif ($type eq 'herd') {
-        add_herd();
-    }
-    elsif ($type eq 'table') {
-        if ($type2 eq 'all') {
-            shift @nouns;
-            print add_all_tables();
-            $dbh->commit();
-        }
-        else {
-            add_table('table');
-        }
-    }
-    elsif ($type eq 'sequence') {
-        if ($type2 eq 'all') {
-            shift @nouns;
-            print add_all_sequences();
-            $dbh->commit();
-        }
-        else {
-            add_table('sequence');
-        }
-    }
-    elsif ($type eq 'sync') {
-        add_sync();
-    }
-    elsif ($type eq 'all') {
-        if ($type2 =~ /table/i) {
-            shift @nouns;
-            print add_all_tables();
-            $dbh->commit();
-            exit 0;
-        }
-        elsif ($type2 =~ /sequence/i) {
-            shift @nouns;
-            print add_all_sequences();
-            $dbh->commit();
-            exit 0;
-        }
-        else {
-            warn qq{The 'all' option can only be used with 'table' and 'sequence'\n};
-            exit 1;
-        }
-    }
-    else {
-        warn usage('add') . "\n";
-        exit 1;
-    }
-    exit 0;
-
-} ## end of add_item
 
 
 
@@ -5840,52 +5866,6 @@ sub add_all_goats {
 } ## end of add_all_goats
 
 
-sub remove_item {
-
-    my $self = shift;
-
-    my $usage = usage('remove');
-
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
-
-    ## First word must be a type we know about
-    my $type = shift @nouns;
-    $type = lc $type;
-
-    if ($type eq 'code' or $type eq 'customcode' or $type eq 'custom_code') {
-        remove_customcode();
-    }
-    elsif ($type eq 'customname' or $type eq 'custom_name') {
-        remove_customname();
-    }
-    elsif ($type eq 'd' or $type eq 'db' or $type eq 'database') {
-        remove_database();
-    }
-    elsif ($type eq 'herd') {
-        remove_herd();
-    }
-    elsif ($type eq 'table') {
-        remove_table();
-    }
-    elsif ($type eq 'sequence') {
-        remove_table('sequence');
-    }
-    elsif ($type eq 'sync') {
-        remove_sync();
-    }
-    elsif ($type eq 'dbgroup' or $type eq 'dbg') {
-        remove_dbgroup();
-    }
-    else {
-        warn "Cannot remove: unknown type\n";
-        exit 1;
-    }
-    exit 0;
-
-} ## end of remove_item
 
 
 sub remove_customcode {
@@ -6998,7 +6978,7 @@ sub usage {
     if ('add' eq $name) {
         return qq{Usage: add <type> <name> [options]
 Adds an item to the internal Bucardo database.
-The type is one of: code, db, dbgroup, herd, sync, table, or sequence
+The type is one of: db, dbgroup, herd, sync, table, sequence, customname, or customcode
 For more information, run: $progname help add <type>};
     }
     if ('add_customcode' eq $name) {
@@ -7012,19 +6992,21 @@ For more information, run: $progname help add <type>};
 Adds a database
 
 Optional information:
- type=type of database
- host=hostname      (defaults to none: Unix socket)
+ type=type of database (defaults to postgres. Others: drizzle,mongo,mysql,oracle,redis)
+ db=name            (database name to connect to)
+ host=hostname      (defaults to none - which is Unix socket for some types)
+ port=#             (defaults to type default, e.g. 5432 for postgres)
  user=username      (defaults to 'bucardo')
- port=#             (defaults to system default, usually 5432)
- group=groupname    (database group, will be created if needed)
+ pass=name          (avoid if possible and use .pgpass or equivalent instead)
+ addalltables       (automatically adds all tables in the database)
+ addallsequences    (automatically adds all sequences in the database)
+ group=groupname    (database group to use - will be created if needed)
  conn=string        (extra connection parameters, e.g. "sslmode=require")
  status=status      (active or inactive, defaults to 'active')
- sourcelimit=#      (maximum concurrent reads from this database. Default is 0 (no limit))
- targetlimit=#      (maximum concurrent writes from this database. Default is 0 (no limit))
- ssp=#              (if server-side prepares are used, defaults to 1 (on))
+ sourcelimit=#      (maximum concurrent reads from this database. Default is 0 or no limit)
+ targetlimit=#      (maximum concurrent writes from this database. Default is 0 or no limit)
  makedelta=onoff    (whether this database needs makedelta magic)
- addalltables       (automatically adds all tables in the database)
- addallsequences    (automatically adds all sequences in the database)};
+ ssp=#              (if server-side prepares are used, defaults to 1 (on) - postgres only)};
     }
     if ('add_dbgroup' eq $name) {
         return q{Usage: add dbgroup <name> [database1 database2 ...]
@@ -7095,9 +7077,9 @@ If the number 0 is given, we wait as long as it takes.
 By default a graphical timer is given: this can be turned off with the --notimer option.};
     }
     if ('list' eq $name) {
-        return q{Usage: list <type> [options]
+        return qq{Usage: list <type> [options]
 Shows information about items in the internal Bucardo database.
-The type is one of: code, db, dbgroup, table, sequence, herd, sync, customcode
+The type is one of: db, dbgroup, table, sequence, herd, sync, customcode, or customname
 For more information, run: $progname help list <type>};
     }
     if ('list_customcode' eq $name) {
@@ -7111,7 +7093,7 @@ If '--verbose --verbose' is added, the internal database columns for the 'custom
 Lists information about each database Bucardo knows about.
 
 Without a name, all databases are listed.
-The name can have wildcards with a '*' at the start and/or end.
+The name can have wildcards with '%'
 If '--verbose' is added, information is shown about which groups and syncs are involved.
 If a second '--verbose' is added, the internal database columns for the 'db' table are shown.};
     }
@@ -7181,7 +7163,7 @@ Instructs the Bucardo daemon to reload its configuration file and restart.};
     if ('remove' eq $name or 'delete' eq $name) {
         return qq{Usage: remove <type> <name> [options]
 Removes an item from the internal Bucardo database.
-The type is one of: code, db, dbgroup, table, sequence, herd, sync
+The type is one of: db, dbgroup, table, sequence, herd, sync, customcode, or customname
 For more information, run: $progname help remove <type>};
     }
     if ('remove_customcode' eq $name) {
@@ -7242,7 +7224,7 @@ Active children will not stop until they have finished their current task.};
     if ('update' eq $name) {
         return q{Usage: update <type> <name> col1=val [col2=val2 col3=val3 ...]
 Updates an item from the internal Bucardo database.
-The type is one of: code, db, dbgroup, table, sequence, herd, sync.};
+The type is one of: db, dbgroup, table, sequence, herd, sync, customcode, or customname};
     }
     if ('update_database' eq $name) {
         return q{Usage: update database <name> col1=val [col2=val2 col3=val3 ...]
@@ -7689,8 +7671,8 @@ sub debug {
 
     ## Print a debug line if needed
     ## Arguments: one
-    ## 1. Srting to be printed
-    ## Returns: nothing
+    ## 1. String to be printed
+    ## Returns: undef
 
     return if ! $DEBUG;
 
