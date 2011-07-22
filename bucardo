@@ -314,16 +314,16 @@ reload_config() if $verb eq 'reload_config';
 reload()        if $verb eq 'reload';
 
 ## Show information about something: database, table, sync, etc.
-list_item()     if $verb eq 'list' or $verb eq 'l' or $verb eq 'lsit';;
+list_item()     if $verb eq 'list' or $verb eq 'l' or $verb eq 'lsit';
 
 ## Add something
 add_item()      if $verb eq 'add';
 
 ## Remove something
-remove_item()   if $verb eq 'remove' or $verb eq 'delete';
+remove_item()   if $verb eq 'remove' or $verb eq 'delete' or $verb eq 'del';
 
 ## Update something
-update_item()   if $verb eq 'update';
+update_item()   if $verb eq 'update' or $verb eq 'upd';
 
 ## Inspect something
 inspect()       if $verb eq 'inspect';
@@ -1260,15 +1260,15 @@ sub update_item {
     ## What type of thing are we updating?
     my $thing = shift @nouns;
 
-    ## All of these will exit and do not return
-    update_customcode() if $thing =~ /^c?code/i or $thing =~ /^custom_?code/i;
+    ## These do return due to recursion, so we must exit afterwards
+    (update_customcode() or exit 1) if $thing =~ /^c?code/i or $thing =~ /^custom_?code/i;
     ## We do not update customname
     ## The dbgroup must be checked before the database (dbg vs db)
-    update_dbgroup()    if $thing =~ /^dbg/i or $thing =~ /^d.+group/i;
-    update_database()   if $thing =~ /^db/i or $thing =~ /^database/i;
-    update_herd()       if $thing =~ /^herd/i;
-    update_sync()       if $thing =~ /^s[yi]n[ck]/i;
-    update_table()      if $thing =~ /^tab/i or $thing =~ /^seq/i;
+    (update_dbgroup()    or exit 1) if $thing =~ /^dbg/i or $thing =~ /^d.+group/i;
+    (update_database()   or exit 1) if $thing =~ /^db/i or $thing =~ /^database/i;
+    (update_herd()       or exit 1) if $thing =~ /^herd/i;
+    (update_sync()       or exit 1) if $thing =~ /^s[yi]n[ck]/i;
+    (update_table()      or exit 1) if $thing =~ /^tab/i or $thing =~ /^seq/i;
 
     ## If we got this far, we have an unknown thing
     warn "$usage\n";
@@ -1380,6 +1380,8 @@ sub add_database {
         port|dbport|pgport       dbport               numeric          ENV:PGPORT
         user|dbuser|pguser       dbuser               0                bucardo
         pass|dbpass              dbpass               0                null
+        addalltables             none                 0                skip
+        addallsequences          none                 0                skip
         conn|dbconn|pgconn       dbconn               0                null
         stat|status              status               =active|inactive null
         service|dbservice        dbservice            0                null
@@ -1389,8 +1391,6 @@ sub add_database {
         makedelta                makedelta            =on|off          null
         server_side_prepares|ssp server_side_prepares TF               null
         group|dbgroup            none                 0                skip
-        addalltables             none                 0                skip
-        addallsequences          none                 0                skip
     };
 
     my ($dbcols,$cols,$phs,$vals,$extra)
@@ -1403,7 +1403,6 @@ sub add_database {
     }
 
     ## Clean up and standardize the names
-    $vals->{dbtype} = lc $vals->{dbtype};
     $vals->{dbtype} =~ s/postgres.*/postgres/io;
     $vals->{dbtype} =~ s/pg.*/postgres/io;
     $vals->{dbtype} =~ s/driz?zle.*/drizzle/io;
@@ -1411,6 +1410,12 @@ sub add_database {
     $vals->{dbtype} =~ s/mysql.*/mysql/io;
     $vals->{dbtype} =~ s/oracle.*/oracle/io;
     $vals->{dbtype} =~ s/redis.*/redis/io;
+
+    ## Must have a database name
+    if (! exists $vals->{dbname}) {
+        print qq{Cannot add database: must supply a database name to connect to\n};
+        exit 1;
+    }
 
     ## Attempt to insert this into the database
     $SQL = "INSERT INTO bucardo.db ($cols) VALUES ($phs)";
@@ -1441,13 +1446,17 @@ sub add_database {
             die qq{Unknown database type: $vals->{dbtype}\n};
         }
 
-        ## Before going any further, do a test connection
+        ## Gather connection information from the database via db_getconn
         $SQL = 'SELECT bucardo.db_getconn(?)';
         $sth = $dbh->prepare($SQL);
         $count = $sth->execute($item_name);
         my $dbconn = $sth->fetchall_arrayref()->[0][0];
 
         if ('postgres' eq $vals->{dbtype}) {
+
+            ## For Postgres, we get a little fancy and try to account for instances
+            ## where the bucardo user may not exist yet, by reconnecting and 
+            ## creating said user if needed.
 
             my ($type,$dsn,$user,$pass,$ssp) = split /\n/ => $dbconn;
             my $testdbh;
@@ -1464,10 +1473,10 @@ sub add_database {
                         redo CONNLOOP;
                     }
                     if ($bcargs->{force}) {
-                        print "Connection test failed, but will add anyway. Error was: $@\n\n";
+                        print "Connection test failed, but will add anyway.\nError was: $@\n\n";
                     }
                     else {
-                        die "Connection test failed. You can force add it with the --force argument. Error was: $@\n\n";
+                        die "Connection test failed. You can force add it with the --force argument.\nError was: $@\n\n";
                     }
                 }
                 else {
@@ -1479,8 +1488,7 @@ sub add_database {
                             eval {
                                 my $newpass = $pass;
                                 if (! length $pass) {
-                                    my @chars = split // => q!ABCDEFGHJKMNPQRSTWXYZabcdefghjkmnpqrstwxyz23456789@#$%^&*(){}[];<>./?!;
-                                    $newpass = join '' => @chars[map{ rand @chars }(1..42)];
+                                    $newpass = generate_password();
                                 }
                                 my $encpass = Digest::MD5::md5_hex($newpass);
                                 $testdbh->do(qq{CREATE USER $realuser SUPERUSER ENCRYPTED PASSWORD '$encpass'});
@@ -1679,7 +1687,7 @@ sub add_database {
 
     confirm_commit();
 
-    return;
+    exit 0;
 
 } ## end of add_database
 
@@ -1749,7 +1757,7 @@ sub remove_database {
 
     confirm_commit();
 
-    return;
+    exit 0;
 
 } ## end of remove_database
 
@@ -1767,7 +1775,7 @@ sub update_database {
     ## Grab our generic usage message
     my $usage = usage('update_database');
 
-    my @actions = @_;
+    my @actions = @nouns;
 
     if (! @actions) {
         print "$usage\n";
@@ -2167,7 +2175,7 @@ sub add_dbgroup {
 
     confirm_commit();
 
-    return;
+    exit 0;
 
 } ## end of add_dbgroup
 
@@ -2228,7 +2236,7 @@ sub remove_dbgroup {
 
     confirm_commit();
 
-    return;
+    exit 0;
 
 } ## end of remove_dbgroup
 
@@ -2256,7 +2264,7 @@ sub update_dbgroup {
     my $name = shift @actions;
 
     ## Recursively call ourselves for wildcards and 'all'
-    return if ! check_recurse($DBGROUP, $name, @actions);
+    exit 0 if ! check_recurse($DBGROUP, $name, @actions);
 
     ## Make sure this database group exists!
     if (! exists $DBGROUP->{$name}) {
@@ -2551,7 +2559,7 @@ sub add_customname {
 
     confirm_commit();
 
-    exit;
+    exit 0;
 
 } ## end of add_customname
 
@@ -2618,7 +2626,7 @@ sub remove_customname {
 
     confirm_commit();
 
-    return;
+    exit 0;
 
 } ## end of remove_customname
 
@@ -2884,7 +2892,7 @@ sub add_table {
 
     confirm_commit();
 
-    return;
+    exit 0;
 
 } ## end of add_table
 
@@ -3045,7 +3053,7 @@ sub add_herd {
 
     confirm_commit();
 
-    return;
+    exit 0;
 
 } ## end of add_herd
 
@@ -3148,243 +3156,6 @@ sub list_herds {
     exit 0;
 
 } ## end of list_herds
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-sub update_sync {
-
-    ## Update a sync
-    ## Arguments: two plus
-    ## 1. Name of the sync to update. Can be "all" and can have wildcards
-    ## 2. What exactly we are updating.
-    ## Returns: undef
-
-    my @actions = @_;
-    my $name = shift @actions;
-
-    ## Recursively call ourselves for wildcards and 'all'
-    return if ! check_recurse($SYNC, $name, @actions);
-
-    ## Make sure this sync exists!
-    if (! exists $SYNC->{$name}) {
-        die qq{Could not find a sync named "$name"\nUse 'list syncs' to see all available.};
-    }
-
-    ## Adding something to this sync
-    if ('add' eq $verb or 'insert' eq $verb) {
-
-        ## Grab the first word after the verb
-        my $noun = lc shift @actions || '';
-
-        ## No noun? Bail out
-        if (! length $noun) {
-            die qq{Have not indicated what to $verb\n};
-        }
-
-        ## Basic choices: table and database
-        if ($noun eq 'table' or $noun eq 'goat' or $noun eq 'sequence') {
-            my $count = add_tables_to_sync($name, @actions);
-        }
-        elsif ($noun eq 'db' or $noun eq 'database') {
-            add_dbs_to_sync($name, @actions);
-        }
-        else {
-            ## Maybe they want to leave out the specifier.
-            ## We'll try to guess by looking at the first item
-
-            ## Perhaps it is a table or sequence?
-            if (exists $GOAT->{$noun}) {
-                add_tables_to_sync($name, $noun, @actions);
-            }
-            ## How about a database?
-            elsif (exists $DB->{$noun}) {
-                add_dbs_to_sync($name, $noun, @actions);
-            }
-            ## Maybe a table we do not know about yet?
-            elsif (add_table_as_goat($noun)) {
-                add_tables_to_sync($name, $noun, @actions);
-            }
-            else {
-                die qq{Invalid update command\n};
-            }
-        }
-        return;
-
-    } ## end of 'add'
-
-    ## Removing something from this sync
-    if ('remove' eq $verb or 'delete' eq $verb or 'drop' eq $verb) {
-        return;
-    }
-
-    ## Changing something about this sync
-    if ('update' eq $verb or 'change' eq $verb) {
-        for my $n (@nouns) {
-            if ($n =~ /status=(.+)/) {
-                my $onoff = $1;
-                my $status = $onoff =~ /^active|on/ ? 'active' : 'inactive';
-                $SQL = 'UPDATE sync SET status = ? WHERE name = ?';
-                $sth = $dbh->prepare($SQL);
-                $sth->execute($status, $name);
-                $dbh->commit();
-            }
-        }
-        return;
-    }
-
-    die qq{Unknown action "$verb": must be add, remove, or update\n};
-
-    my $sync = $global{sync}{$name};
-
-    ## Grab all tables used in this sync
-    my @tables = keys %{ $sync->{herd}{goat} };
-    
-    if ($verb eq 'remove') {
-        ## The list of tables to remove, fully qualified
-        my %remove;
-        
-        ## Figure out which tables they really mean and verify they are part of the sync
-        my $matches = get_arg_items(\@tables, \@nouns);
-        
-        if (! ref $matches) {
-            die qq{Did not find any matching tables for "$matches" for sync "$name"\n};
-        }
-
-        ## Did we get any matches? Just in case...
-        if (! keys %$matches) {
-            die qq{No matching tables found to remove\n};
-        }
-
-        ## Remove each table from the herd
-        my $herdname = $sync->{herd}{name};
-        $SQL = 'DELETE FROM bucardo.herdmap WHERE herd = ? AND goat = ?';
-        my $sth = $dbh->prepare($SQL);
-        for my $fullname (sort keys %$matches) {
-            my $goat = $global{goat}{$fullname}
-                or die qq{Could not find an id for table "$fullname"!\n};
-            $sth->execute($herdname,$goat->{id});
-            print qq{Removed from sync "$name": $goat->{reltype} "$fullname"\n};
-        }
-        $dbh->commit();
-
-        ## Report if any other syncs are using these tables
-        my $synclist = $global{herd}{$herdname}{sync};
-        my @othersyncs = grep { $_ ne $name } keys %$synclist;
-        if (@othersyncs) {
-            print qq{Warning! The following syncs were also using items from the herd "$herdname":\n};
-            for my $s (sort @othersyncs) {
-                print qq{  Sync "$s"\n};
-            }
-        }
-
-        exit 0;
-
-    } ## end of removing tables
-
-    ## 'add'
-    ## Must be valid known tables
-    ## Auto-add ones that are not already there?
-    ## Do we care if some do not match?
-    ## At any rate, build a list, then add in ones that are not already part of the sync
-
-    ## Build a list of tables we are adding.
-    ## Give output about each as we process it
-    ## Do not report on the same one twice.
-    ## Report all success, then all failures
-    
-    ## Rethink: do this in two stages
-    ## First, find any matches for tables we already know about, in $global{goat}
-    ## Then, if needed, check the live database (add them as well)
-    ## At the end of the day we have a list of ids
-    ## Add those that are not already there
-    ## Complain if they don't fit (e.g. need PKs)
-    ## gregstop implement above
-
-    ## First, find any matches for tables we already know about, in $global{goat}
-    my $goatlist = get_goat_ids(@nouns);
-    my $nouncount = @nouns;
-
-    ## Figure out if we need to hit the live database to add potential tables
-    ## We do not only if all nouns are of the format "a.b" and got a match
-    my $goatnumber = keys %{ $goatlist->{relations} };
-
-    ## Are there any not in the given format?
-    my $searchlivetables = grep { ! /^\w+\.\w+$/ } @nouns;
-
-
-    if (! $searchlivetables) {
-        ## All are in the x.y format, but did we match them all?
-        if ($nouncount != $goatnumber) {
-            $searchlivetables = 1;
-        }
-    }
-    
-    my $livenumber = 0;
-    my $livelist;
-    if ($searchlivetables) {
-        print "Searching live tables for matches to the nouns\n";
-        ## Which database should we look in?
-        my $sourcedb = $sync->{herd}{db};
-        $livelist = get_live_goat_ids($sourcedb, @nouns);
-        $livenumber = keys %{ $livelist->{relations} };
-    }
-
-    print "Found goat matches: $goatnumber\n";
-    print "Found live matches: $livenumber\n";
-    print "Nouns to scan: $nouncount\n";
-
-    ## We now have two lists both containing hash with keys as the schema.table names
-    ## Values is the complete goat info, including the id
-
-    ## Let's add them to the sync as needed
-    ## Need to record each one as we add it in, so do this inline
-    for my $goat (sort keys %{ $goatlist->{relations} }, sort keys %{ $livelist->{relations} }) {
-        ## Okay, is this table part of the sync yet?
-        ## Which really means, is it part of the source herd yet?
-        my $herd = $sync->{herd}{name};
-        print "Is table $goat part of the $herd herd?\n";
-        my $result = add_goat_to_herd($herd, $goat);
-        print "Result: $result\n";
-    }
-
-
-    ## gregstop
-    exit;
-} ## end of update_sync
-
-
-
 
 
 
@@ -5662,6 +5433,7 @@ sub add_all_goats {
     }
 
     ## Grab the list of databases. If none, cowardly refuse to continue
+    ## TODO: Use $DB
     my $dbs = get_dbs();
     if (! keys %$dbs) {
         die "Sorry, cannot add any ${type}s until at least one database has been added\n";
@@ -5969,6 +5741,11 @@ sub remove_sync {
 
 sub clog {
 
+    ## Output a message to stderr
+    ## Arguments: one
+    ## 1. Message
+    ## Returns: undef
+
     my $msg = shift;
     chomp $msg;
 
@@ -5981,11 +5758,18 @@ sub clog {
 
 sub schema_exists {
 
-    my ($schema) = @_;
+    ## Determine if a named schema exists
+    ## Arguments: one
+    ## 1. Schema name
+    ## Returns: 0 or 1
+
+    my $schema = shift;
+
     my $SQL = 'SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname = ?';
     my $sth = $dbh->prepare_cached($SQL);
     my $count = $sth->execute($schema);
     $sth->finish();
+
     return $count < 1 ? 0 : 1;
 
 } ## end of schema_exists
@@ -5993,8 +5777,14 @@ sub schema_exists {
 
 sub relation_exists {
 
-    ## Checks if a relation exists. Returns the oid or 0
+    ## Determine if a named relation exists
+    ## Arguments: two
+    ## 1. Schema name
+    ## 2. Relation name
+    ## Returns: OID of the relation, or 0 if it does not exist
+
     my ($schema,$name) = @_;
+
     my $SQL = 'SELECT c.oid FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n '.
         'WHERE n.oid=c.relnamespace AND n.nspname = ? AND c.relname = ?';
     my $sth = $dbh->prepare_cached($SQL);
@@ -6003,6 +5793,7 @@ sub relation_exists {
         return $sth->fetchall_arrayref()->[0][0];
     }
     $sth->finish();
+
     return 0;
 
 } ## end of relation_exists
@@ -6010,41 +5801,63 @@ sub relation_exists {
 
 sub domain_exists {
 
-    ## Checks if a domain exists. Returns 0 or 1
+    ## Determine if a named domain exists
+    ## Arguments: two
+    ## 1. Schema name
+    ## 2. Domain name
+    ## Returns: 0 or 1
+
     my ($schema,$name) = @_;
+
     my $SQL =
-          q{SELECT count(*) FROM pg_catalog.pg_type t }
+          q{SELECT 1 FROM pg_catalog.pg_type t }
         . q{JOIN pg_namespace n ON (n.oid = t.typnamespace) }
         . q{WHERE t.typtype = 'd' AND n.nspname = ? AND t.typname = ?};
     my $sth = $dbh->prepare_cached($SQL);
     $count = $sth->execute($schema,$name);
-    return $sth->fetchall_arrayref()->[0][0];
+    $sth->finish();
 
-} ## end of relation_exists
+    return $count < 1 ? 0 : 1;
+
+} ## end of domain_exists
 
 
 sub config_exists {
 
-    ## Checks if a configuration settings exists. Returns 1 or 0
+    ## Checks if a configuration settings exists
+    ## Arguments: one
+    ## 1. Name of the setting
+    ## Returns: 0 or 1
+
     my $name = shift;
 
     my $SQL = 'SELECT 1 FROM bucardo.bucardo_config WHERE setting = ?';
     my $sth = $dbh->prepare_cached($SQL);
     my $count = $sth->execute($name);
     $sth->finish();
-    return $count>=1 ? 1 : 0;
+
+    return $count < 1 ? 0 : 1;
 
 } ## end of config_exists
 
 
 sub constraint_exists {
 
+    ## Determine if a named constraint exists
+    ## Arguments: three
+    ## 1. Schema name
+    ## 2. Table name
+    ## 3. Constraint name
+    ## Returns: 0 or 1
+
     my ($schema,$table,$constraint) = @_;
+
     my $SQL = 'SELECT 1 FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n, pg_catalog.pg_constraint o '.
         'WHERE n.oid=c.relnamespace AND c.oid=o.conrelid AND n.nspname = ? AND c.relname = ? AND o.conname = ?';
     my $sth = $dbh->prepare_cached($SQL);
     my $count = $sth->execute($schema,$table,$constraint);
     $sth->finish();
+
     return $count < 1 ? 0 : 1;
 
 } ## end of constraint_exists
@@ -6052,19 +5865,33 @@ sub constraint_exists {
 
 sub column_exists {
 
+    ## Determine if a named column exists
+    ## Arguments: three
+    ## 1. Schema name
+    ## 2. Table name
+    ## 3. Column name
+    ## Returns: 0 or 1
+
     my ($schema,$table,$column) = @_;
+
     my $SQL = 'SELECT 1 FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n, '.
         'pg_catalog.pg_attribute a WHERE n.oid=c.relnamespace AND n.nspname = ? AND c.relname = ? '.
         'AND a.attname = ? AND a.attrelid = c.oid';
     my $sth = $dbh->prepare_cached($SQL);
     my $count = $sth->execute($schema,$table,$column);
     $sth->finish();
+
     return $count < 1 ? 0 : 1;
 
 } ## end of column_exists
 
 
 sub trigger_exists {
+
+    ## Determine if a named trigger exists
+    ## Arguments: one
+    ## 1. Trigger name
+    ## Returns: 0 or 1
 
     my $name = shift;
     my $SQL = 'SELECT 1 FROM pg_catalog.pg_trigger WHERE tgname = ?';
@@ -6078,22 +5905,38 @@ sub trigger_exists {
 
 sub function_exists {
 
+    ## Determine if a named function exists
+    ## Arguments: three
+    ## 1. Schema name
+    ## 2. Function name
+    ## 3. Function arguments (as one CSV string)
+    ## Returns: MD5 of the function source if found, otherwise an empty string
+
     my ($schema,$name,$args) = @_;
+
     $name = lc $name;
     $SQL = 'SELECT md5(prosrc) FROM pg_proc p, pg_language l '.
         'WHERE p.prolang = l.oid AND proname = ? AND oidvectortypes(proargtypes) = ?';
     $sth = $dbh->prepare($SQL);
     $count = $sth->execute($name,$args);
-    if ($count eq '0E0') {
+    if ($count < 1) {
         $sth->finish();
         return '';
     }
+
     return $sth->fetchall_arrayref()->[0][0];
 
 } ## end of function_exists
 
 
 sub column_default {
+
+    ## Return the default value for a column in a table
+    ## Arguments: three
+    ## 1. Schema name
+    ## 2. Table name
+    ## 3. Column name
+    ## Returns: default value if available, otherwise an empty string
 
     my ($schema,$table,$column) = @_;
     my $SQL = 'SELECT pg_get_expr(adbin,adrelid) FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n, '.
@@ -6102,7 +5945,7 @@ sub column_default {
         'AND a.attname = ? AND a.attrelid = c.oid AND d.adnum = a.attnum AND d.adrelid = a.attrelid';
     my $sth = $dbh->prepare_cached($SQL);
     my $count = $sth->execute($schema,$table,$column);
-    if ($count eq '0E0') {
+    if ($count < 1) {
         $sth->finish();
         return '';
     }
@@ -6113,7 +5956,16 @@ sub column_default {
 
 sub column_value {
 
+    ## Return the value of a table's column
+    ## Arguments: four
+    ## 1. Schema name
+    ## 2. Table name
+    ## 3. Column name
+    ## 4. Where clause
+    ## Returns: value if available, otherwise an empty string
+
     my ($schema,$table,$column,$where) = @_;
+
     my $SQL = "SELECT $column FROM $schema.$table WHERE $where";
     return $dbh->selectall_arrayref($SQL)->[0][0];
 
@@ -6121,6 +5973,13 @@ sub column_value {
 
 
 sub column_type {
+
+    ## Return the data type of a table column
+    ## Arguments: three
+    ## 1. Schema name
+    ## 2. Table name
+    ## 3. Column name
+    ## Returns: data type if available, otherwise an empty string
 
     my ($schema,$table,$column) = @_;
     my $SQL = 'SELECT  pg_catalog.format_type(a.atttypid, a.atttypmod) '.
@@ -6141,13 +6000,20 @@ sub column_type {
 
 sub constraint_definition {
 
+    ## Return the definition for a constraint
+    ## Arguments: one
+    ## 1. Constraint name
+    ## Returns: definition if found, otherwise an empty string
+
     my $name = shift;
 
     my $SQL = qq{SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = '$name'};
     my $def = $dbh->selectall_arrayref($SQL)->[0][0];
 
+    ## Nothing found? Just return an empty string
     return '' if ! defined $def;
 
+    ## Do some cleanups to standardize across versions and match bucardo.schema cleanly
     $def =~ s/\((\(.+\))\)/$1/;
     $def =~ s/\"?(\w+)\"? = ANY \(ARRAY\[(.+)\]\)/$1 IN ($2)/;
     $def =~ s/<> ALL \(ARRAY\[(.+)\]\)/NOT IN ($1)/;
@@ -6161,6 +6027,12 @@ sub constraint_definition {
 
 
 sub table_comment {
+
+    ## Return the comment of a table
+    ## Arguments: two
+    ## 1. Schema name
+    ## 2. Table name
+    ## Returns: comment if available, otherwise an empty string
 
     my ($schema,$relation) = @_;
 
@@ -6180,6 +6052,12 @@ sub table_comment {
 
 
 sub domain_comment {
+
+    ## Return the comment of a domain
+    ## Arguments: two
+    ## 1. Schema name
+    ## 2. Domain name
+    ## Returns: comment if available, otherwise an empty string
 
     my ($schema,$relation) = @_;
 
@@ -6201,6 +6079,8 @@ sub domain_comment {
 sub find_bucardo_schema {
 
     ## Locate the best bucardo.schema file and return a file handle and name for it
+    ## Arguments: none
+    ## Returns: file handle and location of the file
 
     my $fh;
 
@@ -6225,6 +6105,9 @@ sub table_definition {
 
     ## Pull the complete table definition from the bucardo.schema file
     ## Returns an arrayref of sequences, and the textual table def
+    ## Arguments: one
+    ## 1. Name of the table
+    ## Returns: arrayref of sequences used, table definition
 
     my $name = shift;
 
@@ -6260,6 +6143,9 @@ sub table_definition {
 sub generate_clause {
 
     ## Generate a snippet of SQL for a WHERE clause
+    ## Arguments: one
+    ## 1. Hashref of information
+    ## Returns: new clause
 
     my $arg = shift or die;
     return '' if ! $arg->{items} or ! defined $arg->{items}[0];
@@ -6329,9 +6215,15 @@ sub generate_clause {
 
 sub qquote {
 
-    ## Quick quote
+    ## Quick SQL quoting
+    ## Arguments: one
+    ## 1. String to be quoted
+    ## Returns: modified string
+
     my $thing = shift;
+
     $thing =~ s/'/''/g;
+
     return qq{'$thing'};
 
 } ## end of qquote
@@ -6340,8 +6232,8 @@ sub qquote {
 sub upgrade {
 
     ## Make upgrades to an existing Bucardo schema to match the current version
-
-    my $self = shift;
+    ## Arguments: none
+    ## Returns: never, exits
 
     ## Ensure the bucardo.schema file is available and the correct version
     my ($fh, $schema_file) = find_bucardo_schema();
@@ -6937,12 +6829,18 @@ sub upgrade {
 
     print "Don't forget to run '$progname validate all' as well: see the UPGRADE file for details\n";
 
-    exit 1;
+    exit 0;
 
 } ## end of upgrade
 
 
 sub upgrade_and_log {
+
+    ## Put an entry in the bucardo.upgrade_log table
+    ## Arguments: two
+    ## 1. Type of action
+    ## 2. Optional message
+    ## Returns: undef
 
     my $action = shift;
     my $short = shift || $action;
@@ -6971,6 +6869,11 @@ sub upgrade_and_log {
 
 
 sub usage {
+
+    ## Grab the help string for a specific item
+    ## Arguments: one
+    ## 1. The thing we want help on
+    ## Returns: help string or an empty string for no matches
 
     my $name = shift or die;
 
@@ -7176,7 +7079,8 @@ Removes one or more customnames.};
     }
     if ('remove_database' eq $name) {
         return qq{Usage: $verb db <name> [name2 name3 ...]
-Removes one or more databases.};
+Removes one or more databases.
+Use the --force option to remove all related tables};
     }
     if ('remove_dbgroup' eq $name) {
         return qq{Usage: $verb dbgroup <name> [name2 name3 ...]
@@ -7248,22 +7152,12 @@ Use 'all' to validate all known syncs at once};
 } ## end of usage
 
 
-sub get_dbs {
-
-    ## Grab information about all entries in the 'db' table
-
-    $SQL = 'SELECT * FROM bucardo.db ORDER BY name';
-    $sth = $dbh->prepare($SQL);
-    $sth->execute();
-    my $info = $sth->fetchall_hashref('name');
-    return $info;
-
-} ## end of get_dbs
-
-
 sub connect_database {
 
     ## Connect to a datbase and return a dbh
+    ## Arguments: one
+    ## 1. Hashref of connection arguments (optional)
+    ## Returns: database handle
 
     my $dbh2;
 
@@ -7307,6 +7201,8 @@ sub connect_database {
 sub config {
 
     ## View or change a value inside the bucardo_config table
+    ## Arguments: none, reads nouns
+    ## Returns: never, exits
 
     my $setusage = "Usage: $progname set setting=value [setting=value ...]\n";
 
@@ -7382,6 +7278,8 @@ sub message {
 
     ## Add a message to the Bucardo logs, via the bucardo_log_message table
     ## Note: If no MCP processes are listening, the message will hang out until an MCP processes it
+    ## Arguments: none (reads in nouns)
+    ## Returns: never, exits
 
     if (! length($nouns)) {
         die qq{Usage: bucardo message "Some message to send to the logs"\n};
@@ -7392,6 +7290,7 @@ sub message {
     $sth->execute($nouns);
     $dbh->commit();
     $VERBOSE and print "Message added\n";
+
     exit 0;
 
 } ## end of message
@@ -7423,9 +7322,11 @@ sub db_get_notices {
 } ## end of db_get_notices
 
 
-
-
 sub install {
+
+    ## Install Bucardo into a database
+    ## Arguments: none
+    ## Returns: never, exits
 
     print "This will install the bucardo database into an existing Postgres cluster.\n";
     print "Postgres must have been compiled with Perl support,\n";
@@ -7687,6 +7588,20 @@ sub debug {
 } ## end of debug
 
 
+sub generate_password {
+
+    ## Generate a random 42 character password
+    ## Arguments: none
+    ## Returns: new password
+
+    my @chars = split // => q!ABCDEFGHJKMNPQRSTWXYZabcdefghjkmnpqrstwxyz23456789@#$%^&*(){}[];<>./?!;
+    my $pass = join '' => @chars[map{ rand @chars }(1..42)];
+
+    return $pass;
+
+} ## end of generate_password
+
+
 sub process_simple_args {
 
     ## Process args to an inner function in the style of a=b
@@ -7844,6 +7759,11 @@ sub process_simple_args {
 sub check_recurse {
 
     ## Call a sub recursively depending on first argument
+    ## Arguments: 3+
+    ## 1. Type of thing (e.g. database)
+    ## 2. Name of the thing
+    ## 3. Any additional actions
+    ## Returns: 0 or 1
 
     my ($thing, $name, @actions) = @_;
 
