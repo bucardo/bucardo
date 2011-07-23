@@ -420,12 +420,12 @@ COMMENT ON TABLE bucardo.sync IS $$Defines a single replication event from a her
 ALTER TABLE bucardo.sync ADD CONSTRAINT sync_deletemethod CHECK (deletemethod IN ('truncate', 'delete', 'truncate_cascade'));
 
 -- Because NOTIFY is broke, make sure our names are simple:
-ALTER TABLE bucardo.db      ADD CONSTRAINT db_name_sane      CHECK (name ~ E'^[a-zA-Z]\w*$');
+ALTER TABLE bucardo.db      ADD CONSTRAINT db_name_sane      CHECK (name ~ E'^[a-zA-Z]\\w*$');
 
-ALTER TABLE bucardo.dbgroup ADD CONSTRAINT dbgroup_name_sane CHECK (name ~ E'^[a-zA-Z]\w*$');
+ALTER TABLE bucardo.dbgroup ADD CONSTRAINT dbgroup_name_sane CHECK (name ~ E'^[a-zA-Z]\\w*$');
 
 ALTER TABLE bucardo.sync    ADD CONSTRAINT sync_name_sane
-  CHECK (name ~ E'^[a-zA-Z]\w*$' AND lower(name) NOT IN ('pushdelta','fullcopy','swap'));
+  CHECK (name ~ E'^[a-zA-Z]\\w*$' AND lower(name) NOT IN ('pushdelta','fullcopy','swap'));
 
 CREATE SEQUENCE bucardo.customcode_id_seq;
 CREATE TABLE bucardo.customcode (
