@@ -509,6 +509,36 @@ ALTER TABLE bucardo.customname
 
 
 --
+-- Allow the target's columns to differ from the source
+--
+CREATE SEQUENCE bucardo.customcols_id_seq;
+CREATE TABLE bucardo.customcols (
+  id       INTEGER      NOT NULL DEFAULT nextval('customcols_id_seq'),
+                          CONSTRAINT customcols_id_pk PRIMARY KEY (id),
+  goat     INTEGER      NOT NULL,
+  clause   TEXT             NULL,
+  db       TEXT             NULL,
+  sync     TEXT             NULL,
+  cdate    TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+ALTER TABLE bucardo.customcols
+  ADD CONSTRAINT customcols_db_fk
+  FOREIGN KEY (db) REFERENCES bucardo.db (name)
+  ON UPDATE CASCADE ON DELETE CASCADE;
+
+ALTER TABLE bucardo.customcols
+  ADD CONSTRAINT customcols_sync_fk
+  FOREIGN KEY (sync) REFERENCES bucardo.sync (name)
+  ON UPDATE CASCADE ON DELETE CASCADE;
+
+ALTER TABLE bucardo.customcols
+  ADD CONSTRAINT customcols_goat_fk
+  FOREIGN KEY (goat) REFERENCES bucardo.goat (id)
+  ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
 -- Keep track of syncs as they run: provides instant and historical status information
 --
 CREATE TABLE bucardo.syncrun (

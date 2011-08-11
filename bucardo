@@ -32,7 +32,8 @@ return 1 if $ENV{BUCARDO_TEST};
 *STDERR->autoflush(1);
 
 ## All the variables we use often and want to declare here without 'my'
-use vars qw/$dbh $SQL $sth %sth $count $info %global $SYNC $GOAT $DB $DBGROUP $HERD $CUSTOMNAME /;
+use vars qw/$dbh $SQL $sth %sth $count $info %global $SYNC $GOAT $DB $DBGROUP $HERD
+            $CUSTOMCODE $CUSTOMNAME $CUSTOMCOLS /;
 
 ## How to show dates from the database, e.g. start time of a sync
 my $DATEFORMAT       = q{Mon DD, YYYY HH24:MI:SS};
@@ -588,25 +589,39 @@ sub superhelp {
     ## Grab the first two words and standardize them
     my $word1 = lc $nouns[0];
     my $word2 = lc $nouns[1];
+    my $word3 = lc $nouns[2];
+
+    ## Swap them out if the second one is 'all' and the third exists
+    if (defined $word2 and $word2 eq 'all' and defined $word3) {
+        $word2 = $word3;
+    }
 
     ## Because usage() sometimes relies on the verb
     $verb = $word1;
 
-    ## Allow plurals
-    $word2 =~ s/s$//;
+    ## Standardize the 'thing' argument
+    $word2 = standardize_name($word2);
 
     ## TODO: Write a test to ensure full coverage below
 
     if ('add' eq $word1) {
-        if ('customcode' eq $word2 or 'custom_code' eq $word2 or 'code' eq $word2) {
+        if ('customcode' eq $word2) {
             warn usage('add_customcode') . "\n";
             exit 0;
         }
-        if ('db' eq $word2 or 'database' eq $word2) {
+        if ('customname' eq $word2) {
+            warn usage('add_customname') . "\n";
+            exit 0;
+        }
+        if ('customcols' eq $word2) {
+            warn usage('add_customcols') . "\n";
+            exit 0;
+        }
+        if ('database' eq $word2) {
             warn usage('add_database') . "\n";
             exit 0;
         }
-        if ('dbg' eq $word2 or 'dbgroup' eq $word2) {
+        if ('dbgroup' eq $word2) {
             warn usage('add_dbgroup') . "\n";
             exit 0;
         }
@@ -618,11 +633,11 @@ sub superhelp {
             warn usage('add_sync') . "\n";
             exit 0;
         }
-        if ('table' eq $word2 or 'tab' eq $word2) {
+        if ('table' eq $word2) {
             warn usage('add_table') . "\n";
             exit 0;
         }
-        if ('sequence' eq $word2 or 'seq' eq $word2) {
+        if ('sequence' eq $word2) {
             warn usage('add_sequence') . "\n";
             exit 0;
         }
@@ -1207,14 +1222,17 @@ sub add_item {
     ## First word is the type of thing we are adding
     my $thing = shift @nouns;
 
+    ## Account for variations and abbreviations
+    $thing = standardize_name($thing);
+
     ## All of these will exit and do not return
-    add_customcode() if $thing =~ /^c?code/i or $thing =~ /^custom_?code/i;
-    add_customname() if $thing =~ /^cname/i or $thing =~ /^custom_?name/i;
-    ## The dbgroup must be checked before the database (dbg vs db)
-    add_dbgroup()    if $thing =~ /^dbg/i or $thing =~ /^d.+group/i;
-    add_database()   if $thing =~ /^db/i or $thing =~ /^database/i;
-    add_herd()       if $thing =~ /^herd/i;
-    add_sync()       if $thing =~ /^s[yi]n[ck]/i;
+    add_customcode() if $thing eq 'customcode';
+    add_customname() if $thing eq 'customname';
+    add_customcols() if $thing eq 'customcols';
+    add_database()   if $thing eq 'database';
+    add_dbgroup()    if $thing eq 'dbgroup';
+    add_herd()       if $thing eq 'herd';
+    add_sync()       if $thing eq 'sync';
 
     ## The rest is tables and sequences
     ## We need to support 'add table all' as well as 'add all tables'
@@ -1227,6 +1245,7 @@ sub add_item {
     if ($thing eq 'all') {
         $do_all = 1;
         $thing = shift @nouns;
+        $thing = standardize_name($thing);
     }
     elsif (lc $second_arg eq 'all') {
         $do_all = 1;
@@ -1240,7 +1259,7 @@ sub add_item {
     }
 
     ## Add a table
-    if ($thing =~ /^tab/i) {
+    if ($thing eq 'table') {
         if ($do_all) {
             ## Add all the tables, and return the output
             print add_all_tables();
@@ -1254,7 +1273,7 @@ sub add_item {
     }
 
     ## Add a sequence
-    if ($thing =~ /^seq/i) {
+    if ($thing eq 'sequence') {
         if ($do_all) {
             ## Add all the sequences, and return the output
             print add_all_sequences();
@@ -1297,15 +1316,18 @@ sub update_item {
     ## What type of thing are we updating?
     my $thing = shift @nouns;
 
+    ## Account for variations and abbreviations
+    $thing = standardize_name($thing);
+
     ## These do return due to recursion, so we must exit afterwards
-    (update_customcode() or exit 1) if $thing =~ /^c?code/i or $thing =~ /^custom_?code/i;
-    ## We do not update customname
+    (update_customcode() or exit 1) if $thing eq 'customcode';
+    ## We do not update customname or customcols
     ## The dbgroup must be checked before the database (dbg vs db)
-    (update_dbgroup()    or exit 1) if $thing =~ /^dbg/i or $thing =~ /^d.+group/i;
-    (update_database()   or exit 1) if $thing =~ /^db/i or $thing =~ /^database/i;
-    (update_herd()       or exit 1) if $thing =~ /^herd/i;
-    (update_sync()       or exit 1) if $thing =~ /^s[yi]n[ck]/i;
-    (update_table()      or exit 1) if $thing =~ /^tab/i or $thing =~ /^seq/i;
+    (update_database()   or exit 1) if $thing eq 'database';
+    (update_dbgroup()    or exit 1) if $thing eq 'dbgroup';
+    (update_herd()       or exit 1) if $thing eq 'herd';
+    (update_sync()       or exit 1) if $thing eq 'sync';
+    (update_table()      or exit 1) if $thing eq 'table' or $thing eq 'sequence';
 
     ## If we got this far, we have an unknown thing
     warn "$usage\n";
@@ -1330,16 +1352,20 @@ sub list_item {
     ## First word is the type if thing we are listing
     my $thing = shift @nouns;
 
+    ## Account for variations and abbreviations
+    $thing = standardize_name($thing);
+
     ## All of these will exit and do not return
-    list_customcodes() if $thing =~ /^c?code/i or $thing =~ /^custom_?code/i;
-    list_customnames() if $thing =~ /^cname/i or $thing =~ /^custom_?name/i;
+    list_customcodes() if $thing eq 'customcode';
+    list_customnames() if $thing eq 'customname';
+    list_customcols()  if $thing eq 'customcols';
     ## The dbgroup must be checked before the database (dbg vs db)
-    list_dbgroups()    if $thing =~ /^dbg/i or $thing =~ /^d.+group/i;
-    list_databases()   if $thing =~ /^db/i or $thing =~ /^database/i;
-    list_herds()       if $thing =~ /^herd/i;
-    list_syncs()       if $thing =~ /^s[yi]n[ck]/i;
-    list_tables()      if $thing =~ /^tab/i;
-    list_sequences()   if $thing =~ /^seq/i;
+    list_dbgroups()    if $thing eq 'dbgroup';
+    list_databases()   if $thing eq 'database';
+    list_herds()       if $thing eq 'herd';
+    list_syncs()       if $thing eq 'sync';
+    list_tables()      if $thing eq 'table';
+    list_sequences()   if $thing eq 'sequence';
 
     ## Cannot list anything else
     warn "$usage\n";
@@ -1364,16 +1390,20 @@ sub remove_item {
     ## First word is the type if thing we are removing
     my $thing = shift @nouns;
 
+    ## Account for variations and abbreviations
+    $thing = standardize_name($thing);
+
     ## All of these will exit and do not return
-    remove_customcode() if $thing =~ /^c?code/i or $thing =~ /^custom_?code/i;
-    remove_customname() if $thing =~ /^cname/i or $thing =~ /^custom_?name/i;
+    remove_customcode() if $thing eq 'customcode';
+    remove_customname() if $thing eq 'customname';
+    remove_customcols() if $thing eq 'customcols';
     ## The dbgroup must be checked before the database (dbg vs db)
-    remove_dbgroup()    if $thing =~ /^dbg/i or $thing =~ /^d.+group/i;
-    remove_database()   if $thing =~ /^db/i or $thing =~ /^database/i;
-    remove_herd()       if $thing =~ /^herd/i;
-    remove_sync()       if $thing =~ /^s[yi]n[ck]/i;
-    remove_table()      if $thing =~ /^tab/i;
-    remove_sequence()   if $thing =~ /^seq/i;
+    remove_database()   if $thing eq 'database';
+    remove_dbgroup()    if $thing eq 'dbgroup';
+    remove_herd()       if $thing eq 'herd';
+    remove_sync()       if $thing eq 'sync';
+    remove_table()      if $thing eq 'table';
+    remove_sequence()   if $thing eq 'sequence';
 
     ## Do not know how to remove anything else
     warn "$usage\n";
@@ -2483,10 +2513,10 @@ sub add_customname {
     ## Arguments: none, parses nouns for tablename|goatid, syncname, database name
     ## Returns: never, exits
     ## Examples:
-    ## bucardo add customname public.foobar new=foobarz
-    ## bucardo add customname public.foobar new=foobarz sync=bee
-    ## bucardo add customname public.foobar new=foobarz db=baz
-    ## bucardo add customname public.foobar new=foobarz db=baz sync=bee
+    ## bucardo add customname public.foobar foobarz
+    ## bucardo add customname public.foobar foobarz sync=bee
+    ## bucardo add customname public.foobar foobarz db=baz
+    ## bucardo add customname public.foobar foobarz db=baz sync=bee
 
     my $item_name = shift @nouns || '';
 
@@ -2693,16 +2723,16 @@ sub customname_exists {
     ## Is there a match for this db and sync combo?
     for my $row (@{ $cn->{$id}{$newname} }) {
         if (defined $db) {
-            next if (! defined $row->{db} or $row->{db} ne $db);
+            next if (! length $row->{db} or $row->{db} ne $db);
         }
         else {
-            next if defined $row->{db};
+            next if length $row->{db};
         }
         if (defined $sync) {
-            next if (! defined $row->{sync} or $row->{sync} ne $sync);
+            next if (! length $row->{sync} or $row->{sync} ne $sync);
         }
         else {
-            next if defined $row->{sync};
+            next if length $row->{sync};
         }
 
         ## Complete match!
@@ -2813,6 +2843,330 @@ sub list_customnames {
     exit 0;
 
 } ## end of list_customnames
+
+
+##
+## Customcols-related subroutines: add, exists, remove, list
+##
+
+sub add_customcols {
+
+    ## Add an item to the customcols table
+    ## Arguments: none, parses nouns for tablename|goatid, syncname, database name
+    ## Returns: never, exits
+    ## Examples:
+    ## bucardo add customcols public.foobar "select a,b,c"
+    ## bucardo add customcols public.foobar "select a,b,c" db=foo
+    ## bucardo add customcols public.foobar "select a,b,c" db=foo sync=abc
+
+    my $item_name = shift @nouns || '';
+
+    my $usage = usage('add_customcols');
+
+    ## Must have a clause as well
+    my $clause = shift @nouns || '';
+
+    if (!length $item_name or ! length $clause) {
+        warn "$usage\n";
+        exit 1;
+    }
+
+    ## Does this number or name exist?
+    if (! exists $GOAT->{$item_name}) {
+        print qq{Could not find a matching table for "$item_name"\n};
+        exit 1;
+    }
+
+    ## Gather the name variations
+    my $goat = $GOAT->{$item_name};
+    ## If this is a ref due to it being an unqualified name, just use the first one
+    $goat = $goat->[0] if ref $goat eq 'ARRAY';
+    my ($sname,$tname) = ($goat->{schemaname},$goat->{tablename});
+
+    ## Make sure the clause looks sane
+    if ($clause !~ /^\s*SELECT /i) {
+        warn "$usage\nThe clause must start with SELECT\n";
+        exit 1;
+    }
+
+    ## Parse the rest of the arguments
+    my (@sync,@db);
+    for my $arg (@nouns) {
+        ## Name of a sync
+        if ($arg =~ /^sync\s*=\s*(.+)/) {
+            my $sync = $1;
+            if (! exists $SYNC->{$sync}) {
+                print qq{No such sync: "$sync"\n};
+                exit 1;
+            }
+            push @sync => $sync;
+        }
+        elsif ($arg =~ /^(?:db|database)\s*=\s*(.+)/) {
+            my $db = $1;
+            if (! exists $DB->{$db}) {
+                print qq{No such database: "$db"\n};
+                exit 1;
+            }
+            push @db => $db;
+        }
+        else {
+            warn "$usage\n";
+            exit 1;
+        }
+    }
+
+    ## Loop through and start adding rows to customcols
+    my $goatid = $goat->{id};
+
+    $SQL = "INSERT INTO bucardo.customcols(goat,clause,db,sync) VALUES ($goatid,?,?,?)";
+    $sth = $dbh->prepare($SQL);
+
+    ## We may have multiple syncs or databases, so loop through
+    my $x = 0;
+    my @msg;
+    {
+        ## Skip if this exact entry already exists
+        next if customcols_exists($goatid,$clause,$db[$x],$sync[$x]);
+
+        $count = $sth->execute($clause, $db[$x], $sync[$x]);
+        my $msg = qq{New columns for $sname.$tname: "$clause"};
+        defined $db[$x] and $msg .= " (for database $db[$x])";
+        defined $sync[$x] and $msg .= " (for sync $sync[$x])";
+        push @msg => $msg;
+
+        ## Always go at least one round
+        ## We go a second time if there is another sync or db waiting
+        $x++;
+        redo if defined $db[$x] or defined $sync[$x];
+        last;
+    }
+
+    if (!$QUIET) {
+        for (@msg) {
+            chomp; ## Just in case we forgot above
+            print "$_\n";
+        }
+    }
+
+    confirm_commit();
+
+    exit 0;
+
+} ## end of add_customcols
+
+
+sub remove_customcols {
+
+    ## Remove one or more entries from the bucardo.customcols table
+    ## Arguments: one or more
+    ## 1+ IDs to be deleted
+    ## Returns: undef
+    ## Example: bucardo remove customcols 7
+
+    ## Grab our generic usage message
+    my $usage = usage('remove_customcols');
+
+    ## Must have at least one name
+    if (!@nouns) {
+        warn "$usage\n";
+        exit 1;
+    }
+
+    ## Make sure each argument is a number
+    for my $name (@nouns) {
+        if ($name !~ /^\d+$/) {
+            warn "$usage\n";
+            exit 1;
+        }
+    }
+
+    ## We want the per-id hash here
+    my $cc = $CUSTOMCOLS->{id};
+
+    ## Give a warning if a number does not exist
+    for my $name (@nouns) {
+        if (! exists $cc->{$name}) {
+            $QUIET or warn qq{Customcols number $name does not exist\n};
+        }
+    }
+
+    ## Prepare the SQL to delete each customcols
+    $SQL = 'DELETE FROM bucardo.customcols WHERE id = ?';
+    $sth = $dbh->prepare($SQL);
+
+    ## Go through and delete any that exist
+    for my $name (@nouns) {
+
+        ## We've already handled these in the loop above
+        next if ! exists $cc->{$name};
+
+        ## Unlike other items, we do not need an eval,
+        ## because it has no cascading dependencies
+        $sth->execute($name);
+
+        my $cc = sprintf '%s => %s%s%s',
+            $cc->{$name}{tname},
+            $cc->{$name}{clause},
+            (length $cc->{$name}{sync} ? " Sync: $cc->{$name}{sync}" : ''),
+            (length $cc->{$name}{db} ? " Database: $cc->{$name}{db}" : '');
+
+        $QUIET or print qq{Removed customcols $name: $cc\n};
+
+    }
+
+    confirm_commit();
+
+    exit 0;
+
+} ## end of remove_customcols
+
+
+sub customcols_exists {
+
+    ## See if an entry already exists in the bucardo.customcols table
+    ## Arguments: four
+    ## 1. Goat id
+    ## 2. Clause
+    ## 3. Database name (can be null)
+    ## 4. Sync name (can be null)
+    ## Returns: true or false (1 or 0)
+
+    my ($id,$clause,$db,$sync) = @_;
+
+    ## Easy if there are no entries yet!
+    return 0 if ! keys %$CUSTOMCOLS;
+
+    my $cc = $CUSTOMCOLS->{goat};
+
+    ## Quick filtering by the goatid
+    return 0 if ! exists $cc->{$id};
+
+    ## And by the clause therein
+    return 0 if ! exists $cc->{$id}{$clause};
+
+    ## Is there a match for this db and sync combo?
+    for my $row (@{ $cc->{$id}{$clause} }) {
+        if (defined $db) {
+            next if (! length $row->{db} or $row->{db} ne $db);
+        }
+        else {
+            next if length $row->{db};
+        }
+        if (defined $sync) {
+            next if (! length $row->{sync} or $row->{sync} ne $sync);
+        }
+        else {
+            next if length $row->{sync};
+        }
+
+        ## Complete match!
+        return 1;
+    }
+
+    return 0;
+
+} ## end of customcols_exists
+
+
+sub list_customcols {
+
+    ## Show information about all or some subset of the bucardo.customcols table
+    ## Arguments: zero or more
+    ## 1+ Names to view. Can be "all" and can have wildcards
+    ## Returns: undef
+    ## Example: bucardo list customcols
+
+    ## Grab our generic usage message
+    my $usage = usage('list_customcols');
+
+    ## Might be no entries yet
+    if (! keys %$CUSTOMCOLS) {
+        print "No customcols have been added yet\n";
+        exit 1;
+    }
+
+    my $cc = $CUSTOMCOLS->{list};
+
+    ## If not doing all, keep track of which to show
+    my $matches = 0;
+
+    for my $term (@nouns) {
+
+        ## Special case for all: same as no nouns at all, so simply remove them!
+        if ($term =~ /\ball\b/i) {
+            undef @nouns;
+            last;
+        }
+
+        ## Check for wildcards
+        if ($term =~ s/[*%]/.*/) {
+            for my $row (@$cc) {
+                if ($row->{tname} =~ /$term/) {
+                    $matches++;
+                    $row->{match} = 1;
+                }
+            }
+            next;
+        }
+
+        ## Must be an exact match
+        for my $row (@$cc) {
+            if ($row->{tname} eq $term) {
+                $matches++;
+                $row->{match} = 1;
+            }
+        }
+
+    } ## end each term
+
+    ## No matches?
+    if (@nouns and ! $matches) {
+        print "No matching customcols found\n";
+        exit 1;
+    }
+
+    ## Figure out the length of each item for a pretty display
+    my ($maxid,$maxname,$maxnew,$maxsync,$maxdb) = (1,1,1,1,1);
+    for my $row (@$cc) {
+        next if @nouns and ! exists $row->{match};
+        $maxid   = length $row->{id}     if length $row->{id}      > $maxid;
+        $maxname = length $row->{tname}  if length $row->{tname}   > $maxname;
+        $maxnew  = length $row->{clause} if length $row->{clause}  > $maxnew;
+        $maxsync = length $row->{sync}   if length $row->{sync}    > $maxsync;
+        $maxdb   = length $row->{db}     if length $row->{db}      > $maxdb;
+    }
+
+    ## Now do the actual printing
+    ## Sort by tablename, then newname, then sync, then db
+    for my $row (sort {
+        $a->{tname} cmp $b->{tname}
+        or
+        $a->{clause} cmp $b->{clause}
+        or
+        $a->{sync} cmp $b->{sync}
+        or
+        $a->{db} cmp $b->{db}
+        } @$cc) {
+        next if @nouns and ! exists $row->{match};
+        printf '%-*s Table: %-*s => %-*s',
+            1+$maxid, "$row->{id}.",
+            $maxname, $row->{tname},
+            $maxnew, $row->{clause};
+        if ($row->{sync}) {
+            printf ' Sync: %-*s',
+                $maxsync, $row->{sync};
+        }
+        if ($row->{db}) {
+            printf ' Database: %-*s',
+                $maxsync, $row->{db};
+        }
+        print "\n";
+
+    }
+
+    exit 0;
+
+} ## end of list_customcols
 
 
 ##
@@ -5099,7 +5453,7 @@ sub add_customcode {
     my $newname = $dbcols->{name};
 
     ## Does this already exist?
-    if (exists $global{cc}{$newname}) {
+    if (exists $CUSTOMCODE->{$newname}) {
         warn qq{Cannot create: customcode "$newname" already exists\n};
         exit 2;
     }
@@ -6992,7 +7346,8 @@ sub usage {
     if ('add' eq $name) {
         return qq{Usage: add <type> <name> [options]
 Adds an item to the internal Bucardo database.
-The type is one of: db, dbgroup, herd, sync, table, sequence, customname, or customcode
+The type is one of: db, dbgroup, herd, sync, table, sequence,
+  customname, customcols, or customcode
 For more information, run: $progname help add <type>};
     }
     if ('add_customcode' eq $name) {
@@ -7000,6 +7355,9 @@ For more information, run: $progname help add <type>};
     }
     if ('add_customname' eq $name) {
         return q{Usage: add customname tablename newtablename [sync=x db=x]};
+    }
+    if ('add_customcols' eq $name) {
+        return q{Usage: add customcols tablename select_clause [sync=x db=x]};
     }
     if ('add_database' eq $name) {
         return q{Usage: add db <name> [optional information]
@@ -7096,7 +7454,8 @@ By default a graphical timer is given: this can be turned off with the --notimer
     if ('list' eq $name) {
         return qq{Usage: list <type> [options]
 Shows information about items in the internal Bucardo database.
-The type is one of: db, dbgroup, table, sequence, herd, sync, customcode, or customname
+The type is one of: db, dbgroup, table, sequence, herd, sync,
+  customcode, customcols, or customname
 For more information, run: $progname help list <type>};
     }
     if ('list_customcode' eq $name) {
@@ -7180,7 +7539,8 @@ Instructs the Bucardo daemon to reload its configuration file and restart.};
     if ('remove' eq $name or 'delete' eq $name) {
         return qq{Usage: remove <type> <name> [options]
 Removes an item from the internal Bucardo database.
-The type is one of: db, dbgroup, table, sequence, herd, sync, customcode, or customname
+The type is one of: db, dbgroup, table, sequence, herd, sync,
+  customcode, customcols, or customname
 For more information, run: $progname help remove <type>};
     }
     if ('remove_customcode' eq $name) {
@@ -7189,7 +7549,11 @@ Removes one or more customcodes.};
     }
     if ('remove_customname' eq $name) {
         return qq{Usage: $verb customname number [number2 number3 ...]
-Removes one or more customnames.};
+Removes one or more customnames. Determine the numbers with list customnames};
+    }
+    if ('remove_customcols' eq $name) {
+        return qq{Usage: $verb customcols number [number2 number3 ...]
+Removes one or more customcols. Determine the numbers with list customcols};
     }
     if ('remove_database' eq $name) {
         return qq{Usage: $verb db <name> [name2 name3 ...]
@@ -7242,7 +7606,7 @@ Active children will not stop until they have finished their current task.};
     if ('update' eq $name) {
         return q{Usage: update <type> <name> col1=val [col2=val2 col3=val3 ...]
 Updates an item from the internal Bucardo database.
-The type is one of: db, dbgroup, table, sequence, herd, sync, customcode, or customname};
+The type is one of: db, dbgroup, table, sequence, herd, sync, or customname};
     }
     if ('update_database' eq $name) {
         return q{Usage: update database <name> col1=val [col2=val2 col3=val3 ...]
@@ -7702,6 +8066,39 @@ sub debug {
 } ## end of debug
 
 
+sub standardize_name {
+
+    ## Return canonical version of certain names
+    ## Normalizes abbreviations, misspelling, plurals, case, etc.
+    ## Arguments: one
+    ## 1. Name
+    ## Returns: canonical name
+
+    my $name = shift;
+
+    return 'customcode' if $name =~ /^c?code/i or $name =~ /^custom_?code/i;
+
+    return 'customname' if $name =~ /^cname/i or $name =~ /^custom_?name/i;
+
+    return 'customcols' if $name =~ /^ccol/i or $name =~ /^custom_?col/i;
+
+    return 'dbgroup'    if $name =~ /^dbg/i or $name =~ /^d.+group/i;
+
+    return 'database'   if $name =~ /^db/i or $name =~ /^database/i;
+
+    return 'herd'       if $name =~ /^herd/i;
+
+    return 'sync'       if $name =~ /^s[yi]n[ck]/i;
+
+    return 'table'      if $name =~ /^tab/i;
+
+    return 'sequence'   if $name =~ /^seq/i;
+
+    return '';
+
+} ## end of standardize_name
+
+
 sub generate_password {
 
     ## Generate a random 42 character password
@@ -8112,7 +8509,26 @@ JOIN goat g ON (g.id = c.goat)
         push @{ $CUSTOMNAME->{list} } => $row;
     }
 
-    $global{cc} = $cc;
+    ## Grab all customcols information
+    $SQL = q{SELECT c.id, c.goat, c.clause,
+COALESCE(c.sync, '') AS sync,
+COALESCE(c.db, '') AS db,
+g.schemaname || '.' || g.tablename AS tname
+FROM bucardo.customcols c
+JOIN goat g ON (g.id = c.goat)
+};
+    $sth = $dbh->prepare($SQL);
+    $sth->execute();
+    $CUSTOMCOLS = {};
+    for my $row (@{ $sth->fetchall_arrayref({}) }) {
+        ## We store three versions: one for quick per-goat lookup,
+        ## one by the assigned id, and one just a big list
+        push @{ $CUSTOMCOLS->{goat}{$row->{goat}}{$row->{clause}} } => $row;
+        $CUSTOMCOLS->{id}{$row->{id}} = $row;
+        push @{ $CUSTOMCOLS->{list} } => $row;
+    }
+
+    $global{cc}      = $CUSTOMCODE = $cc;
     $global{dbgroup} = $DBGROUP = $dbgroup;
     $global{db}      = $DB   = $db;
     $global{goat}    = $GOAT = $goat;

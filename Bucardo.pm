@@ -1408,14 +1408,31 @@ sub start_controller {
     $SQL = 'SELECT newname FROM bucardo.customname WHERE goat=? AND sync=? AND db=?';
     my $sth_custom4 = $maindbh->prepare($SQL);
 
+    ## Adjust the target table columns as needed and store in the goat hash
+
+    ## New table cols regardless of syncs or databases
+    $SQL = 'SELECT clause FROM bucardo.customcols WHERE goat=? AND db IS NULL and sync IS NULL';
+    my $sth_customc1 = $maindbh->prepare($SQL);
+    ## New table cols for this sync only
+    $SQL = 'SELECT clause FROM bucardo.customcols WHERE goat=? AND sync=? AND db IS NULL';
+    my $sth_customc2 = $maindbh->prepare($SQL);
+    ## New table cols for a specific database only
+    $SQL = 'SELECT clause FROM bucardo.customcols WHERE goat=? AND db=? AND sync IS NULL';
+    my $sth_customc3 = $maindbh->prepare($SQL);
+    ## New table cols for this sync and a specific database
+    $SQL = 'SELECT clause FROM bucardo.customcols WHERE goat=? AND sync=? AND db=?';
+    my $sth_customc4 = $maindbh->prepare($SQL);
+
     for my $g (@{ $sync->{goatlist} }) {
 
+        ## We only transform tables for now
         next if $g->{reltype} ne 'table';
 
         my ($S,$T) = ($g->{safeschema},$g->{safetable});
 
-        ## See if we have any custom names. Each level overrides the last
+        ## See if we have any custom names or columns. Each level overrides the last
         my $customname = '';
+        my $customcols = '';
 
         ## Just this goat
         $count = $sth_custom1->execute($g->{id});
@@ -1424,6 +1441,13 @@ sub start_controller {
         }
         else {
             $customname = $sth_custom1->fetchall_arrayref()->[0][0];
+        }
+        $count = $sth_customc1->execute($g->{id});
+        if ($count < 1) {
+            $sth_customc1->finish();
+        }
+        else {
+            $customcols = $sth_customc1->fetchall_arrayref()->[0][0];
         }
 
         ## Just this goat and this sync
@@ -1434,20 +1458,33 @@ sub start_controller {
         else {
             $customname = $sth_custom2->fetchall_arrayref()->[0][0];
         }
+        $count = $sth_customc2->execute($g->{id}, $syncname);
+        if ($count < 1) {
+            $sth_customc2->finish();
+        }
+        else {
+            $customcols = $sth_customc2->fetchall_arrayref()->[0][0];
+        }
+
+        ## Need to pick one source at random to extract the list of columns from
+        my $saved_sourcedbh = '';
 
         ## Set for each target db
         $g->{newname}{$syncname} = {};
+        $g->{newcols}{$syncname} = {};
         for my $dbname (sort keys %{ $sync->{db} }) {
             $x = $sync->{db}{$dbname};
             my $type= $x->{dbtype};
 
             my $cname;
+            my $ccols = '';
 
-            ## We only ever change table names for true targets
+            ## We only ever change table names (or cols) for true targets
             if ($x->{role} ne 'source') {
 
-                ## Save a local copy for this database only
+                ## Save local copies for this database only
                 $cname = $customname;
+                $ccols = $customcols;
 
                 ## Anything for this goat and this database?
                 $count = $sth_custom3->execute($g->{id}, $dbname);
@@ -1456,6 +1493,13 @@ sub start_controller {
                 }
                 else {
                     $cname = $sth_custom3->fetchall_arrayref()->[0][0];
+                }
+                $count = $sth_customc3->execute($g->{id}, $dbname);
+                if ($count < 1) {
+                    $sth_customc3->finish();
+                }
+                else {
+                    $ccols = $sth_customc3->fetchall_arrayref()->[0][0];
                 }
 
                 ## Anything for this goat, this sync, and this database?
@@ -1466,9 +1510,16 @@ sub start_controller {
                 else {
                     $cname = $sth_custom4->fetchall_arrayref()->[0][0];
                 }
+                $count = $sth_customc4->execute($g->{id}, $syncname, $dbname);
+                if ($count < 1) {
+                    $sth_customc4->finish();
+                }
+                else {
+                    $ccols = $sth_customc4->fetchall_arrayref()->[0][0];
+                }
             }
 
-            ## Got a match? Just use that for everything
+            ## Got a new name match? Just use that for everything
             if (defined $cname and $cname) {
                 $g->{newname}{$syncname}{$dbname} = $cname;
             }
@@ -1481,6 +1532,57 @@ sub start_controller {
             else {
                 $g->{newname}{$syncname}{$dbname} = $T;
             }
+
+            ## Set the columns for this combo: empty for no change
+            $g->{newcols}{$syncname}{$dbname} = $ccols;
+
+            ## If we do not have a source database handle yet, grab one
+            if (! $saved_sourcedbh) {
+                for my $dbname (sort keys %{ $sync->{db} }) {
+
+                    next if $sync->{db}{$dbname}{role} ne 'source';
+
+                    ## All we need is the handle, nothing more
+                    $saved_sourcedbh = $sync->{db}{$dbname}{dbh};
+
+                    ## Leave this loop, we got what we came for
+                    last;
+                }
+            }
+
+            ## We either get the specific columns, or use a '*' if no customcols
+            my $SELECT = $ccols || 'SELECT *';
+
+            ## Run a dummy query against the source to pull back the column names
+            ## This is particularly important for customcols of course!
+            $sth = $saved_sourcedbh->prepare("SELECT * FROM ($SELECT FROM $S.$T LIMIT 0) AS foo LIMIT 0");
+            $sth->execute();
+
+            ## Store the arrayref of column names for this goat and this select clause
+            $g->{tcolumns}{$SELECT} = $sth->{NAME};
+            $sth->finish();
+            $saved_sourcedbh->rollback();
+
+            ## Now fetch the safely quoted version of each
+            $SQL = 'SELECT quote_ident(?)';
+            my $sth2 = $saved_sourcedbh->prepare($SQL);
+            my @columns;
+            for my $colname (@{ $g->{tcolumns}{$SELECT} }) {
+                $sth2->execute($colname);
+                push @columns => $sth2->fetchall_arrayref()->[0][0];
+            }
+            $saved_sourcedbh->rollback();
+
+            ## Store a flattened version of the above for adding to SQL queries
+            $g->{tcolumnlist}{$SELECT} = '(' . (join ',' => @columns) . ')';
+
+            ## Make sure none of them are un-named, which Postgres outputs as ?column?
+            if ($ccols) {
+                if ($g->{tcolumnlist}{$SELECT} =~ /\?/) {
+                    die "Invalid customcols given: must give an alias to all columns!\n";
+                }
+            }
+
         }
     }
 
@@ -3619,11 +3721,11 @@ sub start_kid {
 
                                 ## For this table, delete all rows that may exist on the target(s)
                                 $dmlcount{deletes} += $self->delete_rows(
-                                    $deltabin{$dbname1}, $S, $T, $g, \@pushdbs);
+                                    $deltabin{$dbname1}, $S, $T, $g, $syncname, \@pushdbs);
 
                                 ## For this table, copy all rows from source to target(s)
                                 $dmlcount{inserts} += $self->push_rows(
-                                    $deltabin{$dbname1}, $S, $T, $g, $sdbh, $dbname1, \@pushdbs);
+                                    $deltabin{$dbname1}, $S, $T, $g, $syncname, $sdbh, $dbname1, \@pushdbs);
 
                             } ## end source database
 
@@ -6284,6 +6386,11 @@ sub cleanup_controller {
 
     ## Disconnect from the master database
     if ($self->{masterdbh}) {
+        # Quick debug to find active statement handles
+        # for my $s (@{$self->{masterdbh}{ChildHandles}}) {
+        #    next if ! ref $s or ! $s->{Active};
+        #    $self->glog(Dumper $s->{Statement});
+        #}
         $self->{masterdbh}->rollback();
         $self->{masterdbh}->disconnect();
     }
@@ -7100,15 +7207,16 @@ sub delete_table {
 sub delete_rows {
 
     ## Given a list of rows, delete them from a database
-    ## Arguments: five
+    ## Arguments: six
     ## 1. Hash of rows, where the key is \0 joined pkeys
     ## 2. Schema name
     ## 3. Table name
     ## 4. Goat object
-    ## 5. Target database object, or arrayref of the same
+    ## 5. Sync name
+    ## 6. Target database object, or arrayref of the same
     ## Returns: number of rows deleted
 
-    my ($self,$rows,$S,$T,$goat,$deldb) = @_;
+    my ($self,$rows,$S,$T,$goat,$syncname,$deldb) = @_;
 
     my $pkcols = $goat->{pkeycols};
     my $numpks = $goat->{numpkcols};
@@ -7395,17 +7503,18 @@ sub delete_rows {
 sub push_rows {
 
     ## Copy rows from one database to another
-    ## Arguments: seven
+    ## Arguments: eight
     ## 1. Hash of rows, where the key is \0 joined pkeys
     ## 2. Schema name
     ## 3. Table name
     ## 4. Goat object
-    ## 5. Database handle we are copying from
-    ## 6. Database name we are copying from
-    ## 7. Target database object, or arrayref of the same
+    ## 5. Sync name
+    ## 6. Database handle we are copying from
+    ## 7. Database name we are copying from
+    ## 8. Target database object, or arrayref of the same
     ## Returns: number of rows copied
 
-    my ($self,$rows,$S,$T,$goat,$fromdbh,$fromname,$todb) = @_;
+    my ($self,$rows,$S,$T,$goat,$syncname,$fromdbh,$fromname,$todb) = @_;
 
     my $pkcols = $goat->{pkeycols};
     my $numpks = $goat->{numpkcols};
@@ -7436,146 +7545,180 @@ sub push_rows {
     return 0 if ! defined $pkvals or ! length $pkvals;
 
     ## Get ready to export from the source
-    my $srccmd = "$self->{sqlprefix}COPY (SELECT * FROM $S.$T WHERE $pkcols IN ($pkvals)) TO STDOUT";
-    $fromdbh->do($srccmd);
+    ## This may have multiple versions depending on the customcols table
+    my $newcols = $goat->{newcols}{$syncname} || {};
 
-    ## Prepare each target in turn
+    ## Walk through and grab which SQL is needed for each target
+    ## Cache this earlier on - controller?
+    my %srccmd;
     for my $t (@$todb) {
 
-        my $type = $t->{dbtype};
+        ## The SELECT clause we use (may be empty)
+        my $clause = $newcols->{$t->{name}};
 
-        my $tname = $newname->{$t->{name}};
-
-        if ('postgres' eq $type) {
-            my $tgtcmd = "$self->{sqlprefix}COPY $tname FROM STDIN";
-            $t->{dbh}->do($tgtcmd);
-        }
-        elsif ('flatpg' eq $type) {
-            print {$t->{filehandle}} "COPY $tname FROM STDIN;\n";
-            $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
-        }
-        elsif ('flatsql' eq $type) {
-            print {$t->{filehandle}} "INSERT INTO $tname ($pkcols) VALUES\n";
-            $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
-        }
-        elsif ('mongo' eq $type) {
-            $self->{collection} = $t->{dbh}->get_collection($tname);
-        }
-        elsif ('redis' eq $type) {
-            ## TODO
-        }
-        elsif ('mysql' eq $type or 'drizzle' eq $type) {
-            my $tgtcmd = "INSERT INTO $tname VALUES (";
-            $tgtcmd .= '?,' x keys %{ $goat->{columnhash} };
-            $tgtcmd =~ s/,$/)/o;
-            $t->{sth} = $t->{dbh}->prepare($tgtcmd);
-        }
-        elsif ('oracle' eq $type) {
-            my $tgtcmd = "INSERT INTO $tname VALUES (";
-            $tgtcmd .= '?,' x keys %{ $goat->{columnhash} };
-            $tgtcmd =~ s/,$/)/o;
-            $t->{sth} = $t->{dbh}->prepare($tgtcmd);
-        }
-        else {
-            die qq{No support for database type "$type" yet!};
-        }
+        ## Associate this target with this clause
+        push @{$srccmd{$clause}} => $t;
     }
 
-    my $buffer = '';
-    $self->glog(qq{Begin push of $S.$T rows from database "$fromname"}, LOG_VERBOSE);
+    ## Loop through each source command and push it out to all targets
+    ## that are associated with it
+    for my $clause (sort keys %srccmd) {
 
-    ## Loop through all changed rows on the source, and push to the target(s)
-    my $multirow = 0;
+        ## Build the clause (cache) and kick it off
+        my $SELECT = $clause || 'SELECT *';
+        my $srccmd = "$self->{sqlprefix}COPY ($SELECT FROM $S.$T WHERE $pkcols IN ($pkvals)) TO STDOUT";
+        $fromdbh->do($srccmd);
 
-    while ($fromdbh->pg_getcopydata($buffer) >= 0) {
-        for my $t (@$todb) {
+        ## Prepare each target in turn
+        for my $t (@{ $srccmd{$clause} }) {
+
+            ## Internal name of this target
+            my $targetname = $t->{name};
+
+            ## Name of the table we are pushing to on this target
+            my $tname = $newname->{$targetname};
+
+            ## The columns we are pushing to, both as an arrayref and a CSV:
+            my $cols = $goat->{tcolumns}{$SELECT};
+            my $columnlist = $goat->{tcolumnlist}{$SELECT};
+
             my $type = $t->{dbtype};
 
-            chomp $buffer;
-
-            ## For Postgres, we simply do COPY to COPY
             if ('postgres' eq $type) {
-                $t->{dbh}->pg_putcopydata("$buffer\n");
+                my $tgtcmd = "$self->{sqlprefix}COPY $tname$columnlist FROM STDIN";
+                $t->{dbh}->do($tgtcmd);
             }
-            ## For flat files destined for Postgres, just do a tab-delimited dump
             elsif ('flatpg' eq $type) {
-                print {$t->{filehandle}} "$buffer\n";
+                print {$t->{filehandle}} "COPY $tname$columnlist FROM STDIN;\n";
+                $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
             }
-            ## For other flat files, make a standard VALUES list
             elsif ('flatsql' eq $type) {
-                if ($multirow++) {
-                    print {$t->{filehandle}} ",\n";
-                }
-                print {$t->{filehandle}} '(' .
-                    (join ',' => map { $self->{masterdbh}->quote($_) } split /\t/ => $buffer) . ')';
+                print {$t->{filehandle}} "INSERT INTO $tname$columnlist VALUES\n";
+                $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
             }
-            ## For Mongo, do some mongomagic
             elsif ('mongo' eq $type) {
-                ## Have to map these values back to their names
-                my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
-
-                ## Our object consists of the primary keys, plus all other fields
-                my $object = {};
-                for my $pkname (@{ $goat->{pkey} }) {
-                    $object->{$pkname} = shift @cols;
-                }
-                for my $cname (@{ $goat->{cols} }) {
-                    $object->{$cname} = shift @cols;
-                }
-                ## Coerce non-strings into different objects
-                for my $key (keys %$object) {
-                    if ($goat->{columnhash}{$key}{ftype} =~ /smallint|integer|bigint/o) {
-                        $object->{$key} = int $object->{$key};
-                    }
-                    elsif ($goat->{columnhash}{$key}{ftype} eq 'boolean') {
-                        $object->{$key} = $object->{$key} eq 't' ? true : false;
-                    }
-                    elsif ($goat->{columnhash}{$key}{ftype} =~ /real|double|numeric/o) {
-                        $object->{$key} = strtod($object->{$key});
-                    }
-                }
-                $self->{collection}->insert($object, { safe => 1 });
-            }
-            ## For MySQL, Drizzle, and Oracle, do some basic INSERTs
-            elsif ('mysql' eq $type or 'drizzle' eq $type or 'oracle' eq $type) {
-                my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
-                $count += $t->{sth}->execute(@cols);
+                $self->{collection} = $t->{dbh}->get_collection($tname);
             }
             elsif ('redis' eq $type) {
                 ## TODO
             }
-        }
-    }
-
-    ## Workaround for DBD::Pg bug
-    ## Once we require a minimum version of 2.18.1 or better, we can remove this!
-    if ($self->{dbdpgversion} < 21801) {
-        $fromdbh->do('SELECT 1');
-    }
-
-    ## Perform final cleanups for each target
-    for my $t (@$todb) {
-
-        my $type = $t->{dbtype};
-
-        my $tname = $newname->{$t->{name}};
-
-        if ('postgres' eq $type) {
-            $t->{dbh}->pg_putcopyend();
-            ## Same bug as above
-            if ($self->{dbdpgversion} < 21801) {
-                $t->{dbh}->do('SELECT 1');
+            elsif ('mysql' eq $type or 'drizzle' eq $type) {
+                ## Use columnlist here so we never have to worry about the order?
+                my $tgtcmd = "INSERT INTO $tname$columnlist VALUES (";
+                $tgtcmd .= '?,' x @$cols;
+                $tgtcmd =~ s/,$/)/o;
+                $t->{sth} = $t->{dbh}->prepare($tgtcmd);
             }
-            $self->glog(qq{Rows copied to $t->{name}.$tname: $total}, LOG_VERBOSE);
-            $count += $total;
+            elsif ('oracle' eq $type) {
+                my $tgtcmd = "INSERT INTO $tname$columnlist VALUES (";
+                $tgtcmd .= '?,' x @$cols;
+                $tgtcmd =~ s/,$/)/o;
+                $t->{sth} = $t->{dbh}->prepare($tgtcmd);
+            }
+            else {
+                die qq{No support for database type "$type" yet!};
+            }
+
+        } ## end preparing each target for this clause
+
+        my $buffer = '';
+        $self->glog(qq{Begin push of $S.$T rows from database "$fromname"}, LOG_VERBOSE);
+
+        ## Loop through all changed rows on the source, and push to the target(s)
+        my $multirow = 0;
+
+        while ($fromdbh->pg_getcopydata($buffer) >= 0) {
+
+            for my $t (@{ $srccmd{$clause} }) {
+
+                my $type = $t->{dbtype};
+
+                my $cols = $t->{tcolumns};
+
+                chomp $buffer;
+
+                ## For Postgres, we simply do COPY to COPY
+                if ('postgres' eq $type) {
+                    $t->{dbh}->pg_putcopydata("$buffer\n");
+                }
+                ## For flat files destined for Postgres, just do a tab-delimited dump
+                elsif ('flatpg' eq $type) {
+                    print {$t->{filehandle}} "$buffer\n";
+                }
+                ## For other flat files, make a standard VALUES list
+                elsif ('flatsql' eq $type) {
+                    if ($multirow++) {
+                        print {$t->{filehandle}} ",\n";
+                    }
+                    print {$t->{filehandle}} '(' .
+                        (join ',' => map { $self->{masterdbh}->quote($_) } split /\t/ => $buffer) . ')';
+                }
+                ## For Mongo, do some mongomagic
+                elsif ('mongo' eq $type) {
+                    ## Have to map these values back to their names
+                    my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
+
+                    ## Our object consists of the primary keys, plus all other fields
+                    my $object = {};
+                    for my $cname (@{ $cols }) {
+                        $object->{$cname} = shift @cols;
+                    }
+                    ## Coerce non-strings into different objects
+                    for my $key (keys %$object) {
+                        if ($goat->{columnhash}{$key}{ftype} =~ /smallint|integer|bigint/o) {
+                            $object->{$key} = int $object->{$key};
+                        }
+                        elsif ($goat->{columnhash}{$key}{ftype} eq 'boolean') {
+                            $object->{$key} = $object->{$key} eq 't' ? true : false;
+                        }
+                        elsif ($goat->{columnhash}{$key}{ftype} =~ /real|double|numeric/o) {
+                            $object->{$key} = strtod($object->{$key});
+                        }
+                    }
+                    $self->{collection}->insert($object, { safe => 1 });
+                }
+                ## For MySQL, Drizzle, and Oracle, do some basic INSERTs
+                elsif ('mysql' eq $type or 'drizzle' eq $type or 'oracle' eq $type) {
+                    my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
+                    $count += $t->{sth}->execute(@cols);
+                }
+                elsif ('redis' eq $type) {
+                    ## TODO
+                }
+            }
         }
-        elsif ('flatpg' eq $type) {
-            print {$t->{filehandle}} "\\\.\n\n";
+
+        ## Workaround for DBD::Pg bug
+        ## Once we require a minimum version of 2.18.1 or better, we can remove this!
+        if ($self->{dbdpgversion} < 21801) {
+            $fromdbh->do('SELECT 1');
         }
-        elsif ('flatsql' eq $type) {
-            print {$t->{filehandle}} ";\n\n";
+
+        ## Perform final cleanups for each target
+        for my $t (@{ $srccmd{$clause} }) {
+
+            my $type = $t->{dbtype};
+
+            my $tname = $newname->{$t->{name}};
+
+            if ('postgres' eq $type) {
+                $t->{dbh}->pg_putcopyend();
+                ## Same bug as above
+                if ($self->{dbdpgversion} < 21801) {
+                    $t->{dbh}->do('SELECT 1');
+                }
+                $self->glog(qq{Rows copied to $t->{name}.$tname: $total}, LOG_VERBOSE);
+                $count += $total;
+            }
+            elsif ('flatpg' eq $type) {
+                print {$t->{filehandle}} "\\\.\n\n";
+            }
+            elsif ('flatsql' eq $type) {
+                print {$t->{filehandle}} ";\n\n";
+            }
         }
-    }
+
+    } ## end of each clause in the source command list
 
     return $count;
 

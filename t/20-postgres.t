@@ -127,7 +127,7 @@ for my $table (keys %tabletype) {
     $sth{insert}{1}{$table}{A}->execute($val1);
 }
 
-## Before the commit on A, B, C, and D should be empty
+## Before the commit on A ... B, C, and D should be empty
 for my $table (sort keys %tabletype) {
     my $type = $tabletype{$table};
 
@@ -290,5 +290,44 @@ for my $table (keys %tabletype) {
     bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
 
 }
+
+## Tests of customcols
+$t = q{add customcols returns expected message};
+$res = $bct->ctl('bucardo add customcols bucardo_test1 "SELECT id, data1, inty*3 AS inty"');
+like($res, qr/\QNew columns for public.bucardo_test1: "SELECT id, data1, inty*3 AS inty"/, $t);
+
+## Restart the sync
+$bct->ctl('bucardo reload sync');
+
+## Add a new row to A
+for my $table (sort keys %tabletype) {
+    my $type = $tabletype{$table};
+    my $val1 = $val{$type}{1};
+    $count = $sth{insert}{1}{$table}{A}->execute($val1);
+    last;
+}
+
+## Commit, then kick off the sync
+$dbhA->commit();
+$bct->ctl('bucardo kick pgtest 0');
+
+## Check targets for the new rows
+for my $table (sort keys %tabletype) {
+
+    my $type = $tabletype{$table};
+    $res = [[3]];
+
+    $t = qq{Row with pkey of type $type gets copied to C with customcol};
+    bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
+
+    $t = qq{Row with pkey of type $type gets copied to D with customcol};
+    bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
+
+    last;
+
+}
+
+
+
 
 exit;
