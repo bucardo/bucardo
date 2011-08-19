@@ -624,6 +624,7 @@ sub start_mcp {
     if (!$active_syncs) {
         $self->glog('No active syncs were found, so we are exiting', LOG_WARN);
         $self->db_notify($masterdbh, 'nosyncs', 1);
+        $self->cleanup_mcp('No active syncs');
         exit 1;
     }
 
