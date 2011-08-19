@@ -861,7 +861,7 @@ sub start {
             warn qq{File "$PIDFILE" does not start with a PID!\n};
         }
         else {
-            $msg = "Cannot start, process $1 is already running\n";
+            $msg = "Cannot start, process $1 is already running (file=$PIDFILE)\n";
         }
         close $fh;
 
