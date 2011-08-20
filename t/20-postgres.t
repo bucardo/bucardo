@@ -20,7 +20,7 @@ $location = '';
 
 my $numtabletypes = keys %tabletype;
 my $numsequences = keys %sequences;
-plan tests => 221;
+plan tests => 226;
 
 pass("*** Beginning postgres tests");
 
@@ -297,7 +297,7 @@ $res = $bct->ctl('bucardo add customcols bucardo_test1 "SELECT id, data1, inty*3
 like($res, qr/\QNew columns for public.bucardo_test1: "SELECT id, data1, inty*3 AS inty"/, $t);
 
 ## Restart the sync
-$bct->ctl('bucardo reload sync');
+$bct->restart_bucardo($dbhX);
 
 ## Add a new row to A
 for my $table (sort keys %tabletype) {

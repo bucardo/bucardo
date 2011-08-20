@@ -901,6 +901,9 @@ sub restart_bucardo {
 
     $self->stop_bucardo();
 
+    ## Because the stop signal arrives before the PID is removed, sleep a bit
+    sleep 2;
+
     pass('Starting up Bucardo');
     if ($dbh->{pg_server_version} >= 999990000) {
         $dbh->do('LISTEN bucardo');
@@ -914,7 +917,7 @@ sub restart_bucardo {
 
     $self->ctl('start testing');
 
-    my $bail = 10;
+    my $bail = 30;
     my $n;
   WAITFORIT: {
         if ($bail--<0) {
