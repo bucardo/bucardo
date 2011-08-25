@@ -1745,12 +1745,14 @@ SELECT 'Fixme'::TEXT;
                         COUNT(*)
                         FROM bucardo.bucardo_delta_targets
                         WHERE tablename::regclass::text = \$2;
+
+					RESET search_path;
                     
                       -- If no syncs, no point in going on, as we will never purge anything
                       IF drows < 1 THEN
                         RETURN 'No syncs are using table '||\$2||', according to bucardo_delta_targets';
                       END IF;
-                    
+
                       -- Figure out the names of the delta and track tables for this relation
                       SELECT INTO maker
                         bucardo.bucardo_tablename_maker(\$2);
@@ -1830,7 +1832,9 @@ SELECT 'Fixme'::TEXT;
                         RAISE NOTICE '%', myrez;
                         total = total + 1;
                       END LOOP;
-                    
+
+					  RESET search_path;                    
+
                     RETURN 'Tables processed: ' || total;
                     END;
                     \$clone\$;

@@ -338,6 +338,9 @@ config()        if $verb eq 'set' or $verb eq 'show' or $verb eq 'config';
 ## Validate a sync
 validate()      if $verb eq 'validate';
 
+## Purge the delta/track tables
+purge()         if $verb eq 'purge';
+
 ## There are only a few valid verbs left, so we check for them now
 if ($verb ne 'kick' and $verb ne 'activate' and $verb ne 'deactivate') {
     ## Show help and exit
@@ -556,6 +559,9 @@ sub help {
 
   validate syncname[s]
                  ** Validate a sync
+
+  purge [database]
+                 ** Purge the delta and track tables
 
   upgrade
                  ** Upgrade Bucardo to the current version
@@ -776,6 +782,10 @@ sub superhelp {
     }
     if ('validate' eq $word1) {
         warn usage('validate') . "\n";
+        exit 0;
+    }
+    if ('purge' eq $word1) {
+        warn usage('purge') . "\n";
         exit 0;
     }
 
@@ -1168,6 +1178,63 @@ sub validate {
     exit 0;
 
 } ## end of validate
+
+
+sub purge {
+
+    ## Purge the delta and track tables for one or more tables, for one or more databases
+    ## Arguments: variable
+    ## Returns: never, exits
+
+    ## TODO: databases, tables, timeslices
+
+    my $usage = usage('purge');
+
+    ## Nothing specific is the same as 'all'
+    my $doall = 0;
+    if (!@nouns or ($nouns[0] eq 'all' and ! defined $nouns[1])) {
+        $doall = 1;
+        for my $dbname (sort keys %$DB) {
+            my $db = $DB->{$dbname};
+            ## Do not purge inactive databases
+            next if $db->{status} ne 'active';
+
+            ## Do not purge unless they are a source
+            next if ! $db->{issource};
+
+            print "Checking db $dbname\n";
+
+            ## Make sure it has a bucardo schema.
+            ## May not if validate_sync has never been run!
+            my $dbh = connect_database($dbname);
+
+            if (! schema_exists('bucardo')) {
+                warn "Cannot purge database $dbname: no bucardo schema!\n";
+                next;
+            }
+
+            ## Run the purge_delta on this database
+            $SQL = 'SELECT bucardo.bucardo_purge_delta(?)';
+            $sth = $dbh->prepare($SQL);
+            $sth->execute('1 second');
+            my $results = $sth->fetchall_arrayref()->[0][0];
+            ## Dump the resulting message back to the user
+            ## Should be like this: Tables processed: 3
+            print "$dbname: $results\n";
+
+            $dbh->commit();
+
+        }
+    }
+    if (! $doall) {
+        for my $name (@nouns) {
+            die "Purging name $name\n";
+        }
+    }
+
+    exit 0;
+
+} ## end of purge
 
 
 sub create_dbgroup {
@@ -7621,6 +7688,11 @@ Upgrades an existing Bucardo database to the current version.};
         return q{Usage: validate [all] [sync1 sync2]
 Validates one or more named syncs.
 Use 'all' to validate all known syncs at once};
+    }
+    if ('purge' eq $name) {
+        return q{Usage: purge [all] [database] [database.table]
+Purges one or more tables in one or more databases
+Use 'all' to validate all known tables};
     }
 
     ## use critic
