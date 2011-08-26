@@ -4515,7 +4515,7 @@ sub glog { ## no critic (RequireArgUnpacking)
     ## Return and do nothing, if we have not met the minimum log level
     return if $loglevel > $config{log_level_number};
 
-    ## We should always have a prefix, either BC!, MCP, CTL, or KID
+    ## We should always have a prefix, either BC!, MCP, CTL, KID, or VAC
     ## Prepend it to our message
     my $prefix = $self->{logprefix} || '???';
     $msg = "$prefix $msg";
@@ -5309,10 +5309,24 @@ sub validate_sync {
         $s->{track_rates} = 0;
     }
 
+    ## Build our customname hash for use below when checking remote database tables
+    my %customname;
+    $SQL = q{SELECT goat,newname,db,COALESCE(db,'') AS db, COALESCE(sync,'') AS sync FROM bucardo.customname};
+    my $maindbh = $self->{masterdbh};
+    $sth = $maindbh->prepare($SQL);
+    $sth->execute();
+    for my $row (@{$sth->fetchall_arrayref({})}) {
+        ## Ignore if this is for some other sync
+        next if length $row->{sync} and $row->{sync} ne $syncname;
+
+        $customname{$row->{goat}}{$row->{db}} = $row->{newname};
+    }
+
+
     ## Go through each table and make sure it exists and matches everywhere
     for my $g (@{$s->{goatlist}}) {
 
-        ## SKIP, now done in validate_sync()
+        ## TODO: refactor with work in validate_sync()
 
         $self->glog(qq{  Inspecting source $g->{reltype} "$g->{schemaname}.$g->{tablename}" on database "$sourcename"}, LOG_NORMAL);
         ## Check the source table, save escaped versions of the names
@@ -5446,8 +5460,6 @@ sub validate_sync {
         }
 
         ## Verify sequences or tables+columns on remote databases
-        my $maindbh = $self->{masterdbh};
-
         for my $dbname (sort keys %{ $s->{db} }) {
 
             $x = $s->{db}{$dbname};
@@ -5519,7 +5531,26 @@ sub validate_sync {
 
             ## Grab column information about this table
             $sth = $dbh->prepare($SQL{checkcols});
-            $sth->execute("$S.$T");
+
+            ## Change to the customname if needed
+            my ($RS,$RT) = ($S,$T);
+
+            ## We don't need to check if this is a source: this is already targets only
+            if (exists $customname{$g->{id}}) {
+                ## If there is an entry for this particular database, use that
+                ## Otherwise, use the default one
+                $RT = $customname{$g->{id}}{$dbname} || $customname{$g->{id}}{''};
+
+                ## If this has a dot, change the schema as well
+                ## Otherwise, we simply use the existing schema
+                if ($RT =~ s/(.+)\.//) {
+                    $RS = $1;
+                }
+            }
+
+            $self->glog(qq{    Inspecting target $g->{reltype} "$RS.$RT" on database "$dbname"}, LOG_NORMAL);
+
+            $sth->execute("$RS.$RT");
             my $targetcolinfo = $sth->fetchall_hashref('attname');
             ## Allow for 'dead' columns in the attnum ordering
             $x=1;

@@ -757,7 +757,7 @@ if ($dbtype eq 'oracle') {
     length $db{name} or elog(ERROR, qq{Database name is mandatory\n});
     length $db{user} or elog(ERROR, qq{Database username is mandatory\n});
 
-	## TODO: Support SID, other forms
+    ## TODO: Support SID, other forms
     my $connstring = "dbi:Oracle:$db{name}";
     $db{host} ||= ''; $db{port} ||= ''; $db{pass} ||= '';
     length $db{host} and $connstring .= ";host=$db{host}";
@@ -1089,16 +1089,7 @@ CREATE TRIGGER validate_goat
 
 
 
-
-
-
-
-
-
-
-
-
--- this is spaced so the func starts at line 1000 for debugging help
+-- this is spaced so the func starts at at at even lint for debugging help
 
 CREATE OR REPLACE FUNCTION bucardo.validate_sync(text,integer)
 RETURNS TEXT
@@ -1165,6 +1156,17 @@ if (!$rv->{processed}) {
 my %goat;
 for my $x (@{$rv->{rows}}) {
     $goat{$x->{schemaname}}{$x->{tablename}} = $x;
+}
+
+## Map to the actual table names used by looking at the customname table
+my %customname;
+$SQL = q{SELECT goat,newname,db,COALESCE(db,'') AS db, COALESCE(sync,'') AS sync FROM bucardo.customname};
+$rv = spi_exec_query($SQL);
+for my $x (@{$rv->{rows}}) {
+    ## Ignore if this is for some other sync
+    next if length $x->{sync} and $x->{sync} ne $syncname;
+
+    $customname{$x->{goat}}{$x->{db}} = $x->{newname};
 }
 
 ## Grab information from each of the databases
@@ -1746,7 +1748,7 @@ SELECT 'Fixme'::TEXT;
                         FROM bucardo.bucardo_delta_targets
                         WHERE tablename::regclass::text = \$2;
 
-					RESET search_path;
+                      RESET search_path;
                     
                       -- If no syncs, no point in going on, as we will never purge anything
                       IF drows < 1 THEN
@@ -1833,7 +1835,7 @@ SELECT 'Fixme'::TEXT;
                         total = total + 1;
                       END LOOP;
 
-					  RESET search_path;                    
+                    RESET search_path;                    
 
                     RETURN 'Tables processed: ' || total;
                     END;
@@ -1904,10 +1906,32 @@ SELECT 'Fixme'::TEXT;
 
       TABLE: for my $table (sort keys %{$goat{$schema}}) {
 
+         ## Map to the actual table name used, via the customname table
+         my ($remoteschema,$remotetable) = ($schema,$table);
+
+         ## The internal ID for this table
+         my $id = $goat{$schema}{$table}{id};
+
+         ## Is this a source or target database?
+         ## Only pure targets can have a customname
+         my $is_target = $role eq 'target';
+
+         if ($is_target and exists $customname{$id}) {
+           ## If there is an entry for this particular database, use that
+           ## Otherwise, use the default one
+           $remotetable = $customname{$id}{$dbname} || $customname{$id}{''};
+
+           ## If this has a dot, change the schema as well
+           ## Otherwise, we simply use the existing schema
+           if ($remotetable =~ s/(.+)\.//) {
+             $remoteschema = $1;
+           }
+         }
+
             $sth = $sth{haztable};
-            $count = $sth->execute($schema,$table);
+            $count = $sth->execute($remoteschema,$remotetable);
             if ($count < 1) {
-                die qq{Could not find "$table" inside the "$schema" schema on database "$dbname"!\n};
+                die qq{Could not find "$remotetable" inside the "$remoteschema" schema on database "$dbname"!\n};
             }
             my ($relkind,$oid) = @{$sth->fetchall_arrayref()->[0]};
 
@@ -1915,14 +1939,14 @@ SELECT 'Fixme'::TEXT;
             my $tinfo = $goat{$schema}{$table};
             if ('r' eq $relkind) {
                 if ('table' ne $tinfo->{reltype}) {
-                    die qq{Found "$schema.$table" on database "$dbname", but it's a table, not a $tinfo->{reltype}!};
+                    die qq{Found "$remoteschema.$remotetable" on database "$dbname", but it's a table, not a $tinfo->{reltype}!};
                 }
             } elsif ('S' eq $relkind) {
                 if ('sequence' ne $tinfo->{reltype}) {
-                    die qq{Found "$schema.$table" on database "$dbname", but it's a sequence, not a $tinfo->{reltype}!};
+                    die qq{Found "$remoteschema.$remotetable" on database "$dbname", but it's a sequence, not a $tinfo->{reltype}!};
                 }
             } else {
-                die qq{Found "$schema.$table" on database "$dbname", but it's neither a table nor a sequence!};
+                die qq{Found "$remoteschema.$remotetable" on database "$dbname", but it's neither a table nor a sequence!};
             }
 
             ## Nothing further needed if it's a sequence
@@ -1934,12 +1958,11 @@ SELECT 'Fixme'::TEXT;
 
             ## Go through each column in the tables to check against the other databases
 
-
             $sth = $sth{hazcols};
             $count = $sth->execute($oid);
             if ($count < 1) {
                 $sth->finish();
-                die qq{Could not determine column information for table "$schema.$table"!\n};
+                die qq{Could not determine column information for table "$remoteschema.$remotetable"!\n};
             }
 
             $dbh->do('RESET search_path');
@@ -2451,7 +2474,7 @@ AS $bc$
       return;
     }
 
-	## TODO: Reach out and clean up remote databases as before if needed
+    ## TODO: Reach out and clean up remote databases as before if needed
 
     return;
 
