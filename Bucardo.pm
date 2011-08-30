@@ -7522,9 +7522,14 @@ sub delete_rows {
 
     $count = 0;
     for my $t (@$deldb) {
+
+        ## We do not delete from certain types of targets
         next if $t->{dbtype} =~ /mongo|flat|redis/o;
+
+        my $tname = $newname->{$t->{name}};
+
         $count += $count{$t};
-        $self->glog(qq{Rows deleted from $t->{name}.$S.$T: $count{$t}}, LOG_VERBOSE);
+        $self->glog(qq{Rows deleted from $t->{name}.$tname: $count{$t}}, LOG_VERBOSE);
     }
 
     return $count;
