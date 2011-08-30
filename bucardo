@@ -2667,14 +2667,23 @@ sub add_customname {
     my $x = 0;
     my @msg;
     {
-        ## Skip if this exact entry already exists
-        next if customname_exists($goatid,$newname,$db[$x],$sync[$x]);
 
-        $sth->execute($newname, $db[$x], $sync[$x]);
-        my $msg = "Transformed $sname.$tname to $newname";
+        ## Setup common message post scripts
+        my $msg = '';
         defined $db[$x] and $msg .= " (for database $db[$x])";
         defined $sync[$x] and $msg .= " (for sync $sync[$x])";
-        push @msg => $msg;
+
+        ## Skip if this exact entry already exists
+        if (customname_exists($goatid,$newname,$db[$x],$sync[$x])) {
+            if (!$QUIET) {
+                printf "Already have an entry for %s to %s%s\n",
+                    $item_name, $newname, $msg;
+            }
+            next;
+        }
+
+        $sth->execute($newname, $db[$x], $sync[$x]);
+        push @msg => "Transformed $sname.$tname to $newname$msg";
 
         ## Always go at least one round
         ## We go a second time if there is another sync or db waiting
