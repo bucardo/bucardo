@@ -315,7 +315,7 @@ reload_config() if $verb eq 'reload_config';
 reload()        if $verb eq 'reload';
 
 ## Show information about something: database, table, sync, etc.
-list_item()     if $verb eq 'list' or $verb eq 'l' or $verb eq 'lsit';
+list_item()     if $verb eq 'list' or $verb eq 'l' or $verb eq 'lsit' or $verb eq 'liast';
 
 ## Add something
 add_item()      if $verb eq 'add';
@@ -675,7 +675,7 @@ sub superhelp {
         warn usage('kick') . "\n";
         exit 0;
     }
-    if ('list' eq $word1 or 'l' eq $word1) {
+    if ('list' eq $word1 or 'l' eq $word1 or 'liast' eq $word1) {
         if ('customcode' eq $word2 or 'custom_code' eq $word2) {
             warn usage('list_customcode') . "\n";
             exit 0;
@@ -2736,24 +2736,23 @@ sub remove_customname {
     $SQL = 'DELETE FROM bucardo.customname WHERE id = ?';
     $sth = $dbh->prepare($SQL);
 
-
     ## Go through and delete any that exist
-    for my $name (@nouns) {
+    for my $number (@nouns) {
 
         ## We've already handled these in the loop above
-        next if ! exists $cn->{$name};
+        next if ! exists $cn->{$number};
 
         ## Unlike other items, we do not need an eval,
         ## because it has no cascading dependencies
-        $sth->execute($name);
+        $sth->execute($number);
 
         my $cc = sprintf '%s => %s%s%s',
-            $cn->{$name}{tname},
-            $cn->{$name}{newname},
-            (length $cn->{$name}{sync} ? " Sync: $cn->{$name}{sync}" : ''),
-            (length $cn->{$name}{db} ? " Database: $cn->{$name}{db}" : '');
+            $cn->{$number}{tname},
+            $cn->{$number}{newname},
+            (length $cn->{$number}{sync} ? " Sync: $cn->{$number}{sync}" : ''),
+            (length $cn->{$number}{db} ? " Database: $cn->{$number}{db}" : '');
 
-        $QUIET or print qq{Removed customcode $name: $cc\n};
+        $QUIET or print qq{Removed customcode $number: $cc\n};
 
     }
 
@@ -2784,29 +2783,10 @@ sub customname_exists {
     ## Quick filtering by the goatid
     return 0 if ! exists $cn->{$id};
 
-    ## And by the newname therein
-    return 0 if ! exists $cn->{$id}{$newname};
+    my $matchdb = defined $db ? $db : '';
+    my $matchsync = defined $sync ? $sync : '';
 
-    ## Is there a match for this db and sync combo?
-    for my $row (@{ $cn->{$id}{$newname} }) {
-        if (defined $db) {
-            next if (! length $row->{db} or $row->{db} ne $db);
-        }
-        else {
-            next if length $row->{db};
-        }
-        if (defined $sync) {
-            next if (! length $row->{sync} or $row->{sync} ne $sync);
-        }
-        else {
-            next if length $row->{sync};
-        }
-
-        ## Complete match!
-        return 1;
-    }
-
-    return 0;
+    return exists $cn->{$id}{$matchdb}{$matchsync};
 
 } ## end of customname_exists
 
@@ -8574,10 +8554,17 @@ JOIN goat g ON (g.id = c.goat)
     $sth->execute();
     $CUSTOMNAME = {};
     for my $row (@{ $sth->fetchall_arrayref({}) }) {
-        ## We store three versions: one for quick per-goat lookup,
-        ## one by the assigned id, and one just a big list
-        push @{ $CUSTOMNAME->{goat}{$row->{goat}}{$row->{newname}} } => $row;
+        ## We store three versions
+
+        ## Look things up by the internal customname id: used for 'delete customname'
+        ## Only one entry per id
         $CUSTOMNAME->{id}{$row->{id}} = $row;
+
+        ## Look things up by the goat id: used to check for existing entries
+        ## Can have multiple entries per goat
+        $CUSTOMNAME->{goat}{$row->{goat}}{$row->{db}}{$row->{sync}} = $row;
+
+        ## A simple list of all rows: used for 'list customnames'
         push @{ $CUSTOMNAME->{list} } => $row;
     }
 
