@@ -3882,7 +3882,7 @@ sub start_kid {
             } ## end each goat
 
             $self->glog("Totals: deletes=$dmlcount{deletes} inserts=$dmlcount{inserts} conflicts=$dmlcount{conflicts}",
-                        LOG_NORMAL);
+                        ($dmlcount{deletes} or $dmlcount{inserts} or $dmlcount{conflicts}) ? LOG_NORMAL : LOG_VERBOSE);
 
             ## Update bucardo_track table so that the bucardo_delta rows we just processed
             ##  are marked as "done" and ignored by subsequent runs
