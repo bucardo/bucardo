@@ -14,7 +14,7 @@ use 5.008003;
 use strict;
 use warnings;
 
-our $VERSION = '5.0.0';
+our $VERSION = '4.99.0';
 
 use DBI 1.51;                               ## How Perl talks to databases
 use DBD::Pg 2.0   qw( :async             ); ## How Perl talks to Postgres databases
@@ -6421,7 +6421,7 @@ sub cleanup_controller {
         # Quick debug to find active statement handles
         # for my $s (@{$self->{masterdbh}{ChildHandles}}) {
         #    next if ! ref $s or ! $s->{Active};
-        #    $self->glog(Dumper $s->{Statement});
+        #    $self->glog(Dumper $s->{Statement}, LOG_NORMAL);
         #}
         $self->{masterdbh}->rollback();
         $self->{masterdbh}->disconnect();
@@ -7971,7 +7971,7 @@ Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This document describes version 5.0.0 of Bucardo
+This document describes version 4.99.0 of Bucardo
 
 =head1 WEBSITE
 
