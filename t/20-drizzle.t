@@ -21,7 +21,7 @@ eval {
     $evalok = 1;
 };
 if (!$evalok) {
-	plan (skip_all =>  'Cannot test Drizzle unless the Perl module DBD::drizzle is installed');
+    plan (skip_all =>  'Cannot test Drizzle unless the Perl module DBD::drizzle is installed');
 }
 
 ## Drizzle must be up and running
@@ -34,7 +34,7 @@ eval {
     $evalok = 1;
 };
 if (!$evalok) {
-	plan (skip_all =>  "Cannot test Drizzle as we cannot connect to a running Drizzle database: $@");
+    plan (skip_all =>  "Cannot test Drizzle as we cannot connect to a running Drizzle database: $@");
 }
 
 use BucardoTesting;

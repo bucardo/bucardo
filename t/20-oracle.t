@@ -21,7 +21,7 @@ eval {
     $evalok = 1;
 };
 if (!$evalok) {
-	plan (skip_all =>  'Cannot test Oracle unless the Perl module DBD::Oracle is installed');
+    plan (skip_all =>  'Cannot test Oracle unless the Perl module DBD::Oracle is installed');
 }
 
 ## Oracle must be up and running
@@ -34,7 +34,7 @@ eval {
     $evalok = 1;
 };
 if (!$evalok) {
-	plan (skip_all =>  "Cannot test Oracle as we cannot connect to a running Oracle database: $@");
+    plan (skip_all =>  "Cannot test Oracle as we cannot connect to a running Oracle database: $@");
 }
 
 use BucardoTesting;

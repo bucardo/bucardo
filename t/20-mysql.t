@@ -21,7 +21,7 @@ eval {
     $evalok = 1;
 };
 if (!$evalok) {
-	plan (skip_all =>  'Cannot test MySQL unless the Perl module DBD::mysql is installed');
+    plan (skip_all =>  'Cannot test MySQL unless the Perl module DBD::mysql is installed');
 }
 
 ## MySQL must be up and running
@@ -34,7 +34,7 @@ eval {
     $evalok = 1;
 };
 if (!$evalok) {
-	plan (skip_all =>  "Cannot test MySQL as we cannot connect to a running MySQL database: $@");
+    plan (skip_all =>  "Cannot test MySQL as we cannot connect to a running MySQL database: $@");
 }
 
 use BucardoTesting;
