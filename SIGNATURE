@@ -1,5 +1,5 @@
 This file contains message digests of all files listed in MANIFEST,
-signed via the Module::Signature module, version 0.55.
+signed via the Module::Signature module, version 0.66.
 
 To verify the content in this distribution, first make sure you have
 Module::Signature installed, then type:
@@ -14,55 +14,45 @@ not run its Makefile.PL or Build.PL.
 -----BEGIN PGP SIGNED MESSAGE-----
 Hash: RIPEMD160
 
-SHA1 d23b57fb6410679d181581840a979956ec6ead6a .gitignore
-SHA1 580657cd48d147637a3a924f436e269f228f7a33 .perlcriticrc
-SHA1 88a1e42bcb87b7f1091ceb9fd9798ee503a801bc Bucardo.pm
-SHA1 140ca6a1c7cb9d01cd80b7dfaadaec802ee99d29 Bucardo.pm.html
-SHA1 0fd6d2bab6b62811e16f54336f88245a6f9a4dda Changes
-SHA1 1f0f70bd74872837da0b48c83df3800cf4c7e0b0 INSTALL
-SHA1 cc635573c435dc62f581c3891de8b017274f411f LICENSE
-SHA1 dd9d853831655baf69639a2455eb5c55606fca3d MANIFEST
-SHA1 b8daeb8ec60c2bff1a99b5081f9ba46c255dc339 MANIFEST.SKIP
-SHA1 510073a9bc572f125be2b20cfa7564fabb0bd79e META.yml
-SHA1 19dd87b2d45de6eafc68131dba15f9c245c0ceda Makefile.PL
-SHA1 8a47fb0dfaa9ea98c871ac776ad42c2dccec2f48 README
-SHA1 3b779cfc55716d1023d2cf56e4179e32eede431c README.dev
-SHA1 412cc86f8a9119349cfb9416286c48be702c9016 TODO
-SHA1 11dee45376376dd58a27beb74d5ef284735b59fe UPGRADE
-SHA1 c8833ec87880e1b6365bb884250fc6d4734d3d8f bucardo.schema
-SHA1 c577b8d657926bcf8665185bfe62230cb84cb26a bucardo_ctl
-SHA1 3330b3b218ede43791a14017792d430fafec96a8 bucardo_ctl.html
-SHA1 059acdd6381de8cbded6b901f70ee2a986817930 scripts/README
-SHA1 6c46d97034f12f4cd91916fc332207d4ca5f4189 scripts/bucardo-report
-SHA1 3ac8c28b0d013f76e5e99738911d64b77944c65e scripts/bucardo_ctl.rc
-SHA1 13fa21e81efbe00c5b646aae719cf0e8ae387809 scripts/bucardo_rrd
-SHA1 2b22ff4568837f86548b785ef259fa0c91d7af7a scripts/check_bucardo_sync
-SHA1 0bdabbc26bfe133c2db5f01f154f33e135fcfe40 t/01-basic.t
-SHA1 c371b42f9ad9abd8f60b3bb9b56065c8794e579d t/02-monkey_with_db_table.t
-SHA1 e886fbeee1d0bf0826cfda5256e2a8582382cd0e t/02-monkey_with_goat_table.t
-SHA1 791f4db9e572be6b2d78dbdeb0a32dd5bf829246 t/02-monkey_with_herd.t
-SHA1 6f258a4db24c21b0b021dc1f786c73d577ecc550 t/02-monkey_with_sync_table.t
-SHA1 ccacd73522ad318de945c39660b5a4af0070fc05 t/02-simple.t
-SHA1 2298e4a3aefd682a3de1988b059b96f144cdcb88 t/03-goat.t
-SHA1 b7fb55574b923e40f43f17d0bb7fb379c013ede4 t/04-pushdelta.t
-SHA1 88e6c5c23c5f483a357ff49ed4c0110c271835c3 t/05-fullcopy.t
-SHA1 a9494b7fc38b90319328d67704d75e9d3f85ca90 t/06-multicolpk.t
-SHA1 c0196da55b65a43313a670e79495fef3ee814f72 t/06-multicolpushdelta.t
-SHA1 875aa3ef88bcaaaefb3242c9e9de9fa225f12b1b t/07-multicolswap.t
-SHA1 205367f8191023d1d07b0ff8db8085b632c7a05a t/08-wildkick.t
-SHA1 2edf963d5f92dd40a6c32f37d5042493096a67c8 t/09-uniqueconstraint.t
-SHA1 a0699f62ade7db2286aa4fb1ae2898181f454782 t/10-makedelta.t
-SHA1 7d575a5c219de97aeb76347ce9fbfd21bb0f5ba1 t/11-customselect.t
-SHA1 47728914e73c98c9a46983324f779aca1e0c86bd t/12-addtable.t
-SHA1 2055c858d3fcd2e7cecc2e4b691f77af2e0639f2 t/13-ddl.t
-SHA1 3c4e5541cbc819cb536283c70195e075ba9ea633 t/14-truncate.t
-SHA1 f2cff5825800d152539281e0a26278b38cd40657 t/15-star.t
-SHA1 bae30dabcee7f567c2de57b7c0e1c052dd63b5f1 t/98-cleanup.t
-SHA1 f78346e817f9c5ec8eb99ba738ecb47dbebf3df1 t/99-signature.t
-SHA1 eea74ec204142e5ece72dddebf8af1c3dc50bd87 t/BucardoTesting.pm
+SHA1 8023cedaf4f6e8a9a48ca20dd5bbb9d416b457e6 .gitignore
+SHA1 2b4d25ff16053a345ed315d37fff8f6d7bc92b99 .perlcriticrc
+SHA1 bd540efd1d98a243503256b3ca556b035a859fe6 Bucardo.pm
+SHA1 9bd814c69855cf7781f52ad5f1c05e7678fb85d4 Bucardo.pm.html
+SHA1 466f3222e093464f9c2a86e7c26dba178d624dfd Changes
+SHA1 39ab30574117e0cf08161bea36e89e73f892034d INSTALL
+SHA1 bf81be749492fdcc2506046d75892c5c20286fb2 LICENSE
+SHA1 5d1a5bee6da79a59ac2d008646bb51277edab027 MANIFEST
+SHA1 927417899d01f6a8188d0d86672cf101093d9437 MANIFEST.SKIP
+SHA1 61c1133007a0334791c606252b339ae6bfb54b6b META.yml
+SHA1 ec9d83759eedc29416bb05c996e547d283e4b923 Makefile.PL
+SHA1 463138a5f150e96bf85c1e9874a2f8e91b4e7860 README
+SHA1 5b0f4163d5336a9cc5607271d3f465c02f84c739 README.dev
+SHA1 2bf2918b64b6d79d99cab58d4fc22471a26c345f TODO
+SHA1 31609418af80896bd4e853c36aecff8747e103da UPGRADE
+SHA1 d89315f17d2c0b62c213381337364eb0a77a7a35 bucardo
+SHA1 6f308e8f1c5313fe1a12a5c520bbf1820b610ea8 bucardo.html
+SHA1 d9e502cba8f375bf935234a087bc81bcb5106834 bucardo.schema
+SHA1 1984de6dfc2727e75f178b07500f55e715c0281c scripts/README
+SHA1 376e1fd0bb653ad76afe8072414bb96a6e3cf362 scripts/bucardo-report
+SHA1 a3dc67e2a474d9aa26fd766a3d56944e31b75e76 scripts/bucardo.rc
+SHA1 81a5c4bdc0550d2d70087d2e82c1403caf5a202a scripts/bucardo_rrd
+SHA1 8233a545068fa32b70878e42286218977812cbb9 scripts/check_bucardo_sync
+SHA1 890f52f0e9beb33aad048cba1d9db7b38f917948 scripts/slony_migrator.pl
+SHA1 e6ac0e91c90313ef8d496c5ee7ebc769b5b83be9 t/01-basic.t
+SHA1 4ee25268190dcda04a99f22225e759ee9c58903f t/02-bctl-db.t
+SHA1 99d163e3d97f01624bb83cfdeb758325812a1e90 t/02-bctl-dbg.t
+SHA1 8d4fee4eff622006bfeb70dcabda3e10f872a691 t/09-uniqueconstraint.t
+SHA1 dfcf601e25d46e2c3786e335c26d4868427d5e9a t/15-star.t
+SHA1 31fae0e27ff9493bffff501f6e9f9a278cb2faa1 t/20-drizzle.t
+SHA1 4f24f7def2c6e36819c146e1a850bb7240849a39 t/20-mongo.t
+SHA1 61a582b96e0e0621ea7833ae8b97b246c70c8bb8 t/20-mysql.t
+SHA1 ab0f37db2e813fa16704f8338724d9b2869366c8 t/20-oracle.t
+SHA1 5af80965369a3cbe3eebba76cfb439c17626e4fa t/98-cleanup.t
+SHA1 14e82dad75a2ef2e261f9cb3c07c0e87d9ef8651 t/99-signature.t
+SHA1 3dd0e0cfe8d2b59555789be8ae25bf060688903d t/BucardoTesting.pm
 -----BEGIN PGP SIGNATURE-----
 
-iEYEAREDAAYFAkrWBLYACgkQvJuQZxSWSsjG9gCfQDUv1XubjH7Zj52UpkyQ9ju3
-aJgAnRWhX54T8gZAJLTg8i2aVFhgwJ2r
-=Eyii
+iEYEAREDAAYFAk5eoEAACgkQvJuQZxSWSsiPhwCg7HJuSG2EWULuv4yt6IcMpFYu
+JB8AoL5u3nYffskKuqH4ZzG7GQsGqsWv
+=lO/m
 -----END PGP SIGNATURE-----
