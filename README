@@ -22,10 +22,11 @@ at your option, any later version of Perl 5 you may have available.
 REQUIREMENTS:
 -------------
 
-    build, test, and install Perl 5             (at least 5.8.3)
-    build, test, and install Postgres           (at least 8.1)
-    build, test, and install the DBI module     (at least 1.51)
-    build, test, and install the DBD::Pg module (at least 2.0.0)
+    build, test, and install Perl 5                (at least 5.8.3)
+    build, test, and install Postgres              (at least 8.1)
+    build, test, and install the DBI module        (at least 1.51)
+    build, test, and install the DBD::Pg module    (at least 2.0.0)
+    build, test, and install the DBIx::Safe module (at least 1.2.4)
     
     You must have at least one database that has Pl/Pgsql and Pl/Perl installed.
     Target databases may need Pl/Pgsql.
