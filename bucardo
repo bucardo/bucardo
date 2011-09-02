@@ -8103,8 +8103,7 @@ sub install {
     my $BDSN  = 'dbi:Pg:dbname=bucardo';
     $host and $host ne '<none>' and $BDSN .= ";host=$host";
     $port and $BDSN .= ";port=$port";
-    my $default_bucardo_password = 'goat';
-    $dbh = DBI->connect($BDSN, 'bucardo', $default_bucardo_password, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+    $dbh = DBI->connect($BDSN, 'bucardo', '', {AutoCommit=>0,RaiseError=>1,PrintError=>0});
     $dbh->do('SET search_path = bucardo');
 
     $SQL = 'UPDATE bucardo.bucardo_config SET value = ? WHERE setting = ?';
