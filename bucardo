@@ -8184,6 +8184,8 @@ sub standardize_name {
 
     return 'sequence'   if $name =~ /^seq/i;
 
+    return 'all'        if $name =~ /^all$/i;
+
     return '';
 
 } ## end of standardize_name
