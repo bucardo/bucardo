@@ -1589,7 +1589,7 @@ sub add_database {
         if ('postgres' eq $vals->{dbtype}) {
 
             ## For Postgres, we get a little fancy and try to account for instances
-            ## where the bucardo user may not exist yet, by reconnecting and 
+            ## where the bucardo user may not exist yet, by reconnecting and
             ## creating said user if needed.
 
             my ($type,$dsn,$user,$pass,$ssp) = split /\n/ => $dbconn;
@@ -8042,8 +8042,38 @@ sub install {
         die "Sorry, Bucardo requires Postgres version 8.1 or higher. This is only $maj.$min\n";
     }
 
+    ## Create the bucardo user if needed
+    $COM = qq{$PSQL -c "SELECT 1 FROM pg_user WHERE usename = 'bucardo'"};
+    $res = qx{$COM 2>&1};
+
+    if ($res !~ /1/) {
+      print "Creating user 'bucardo'\n";
+      my $pass = generate_password();
+      $SQL = qq{CREATE USER bucardo SUPERUSER PASSWORD '$pass'},
+      $COM = qq{$PSQL -c "$SQL"};
+      $res = qx{$COM 2>&1};
+
+      ## Put the password into the .pgpass file
+      my $file = "$ENV{HOME}/.pgpass";
+      my $fh;
+      if (open my $fh, '>>', $file) {
+        printf {$fh} "%s:%s:%s:%s:%s\n",
+          $host =~ /^\w/ ? $host : '*',
+          $port =~ /^\d/ ? $port : '*',
+          '*',
+          'bucardo',
+          $pass;
+        close $fh or warn qq{Could not close file "$file": $!\n};
+        chmod 0600, $file;
+      }
+      else {
+        print qq{Could not append password information to file "$file"\n};
+        print qq{Password for user bucardo is: $pass\n};
+        print qq{You probably want to change it or put it in a .pgpass file\n};
+      }
+    }
+
     $COM = "$PSQL -AX -qt -f $schema_file 2>&1";
-    #print "COM=$COM\n";
 
     print "Attempting to create and populate the bucardo database and schema\n";
 
@@ -8166,7 +8196,7 @@ sub generate_password {
     ## Arguments: none
     ## Returns: new password
 
-    my @chars = split // => q!ABCDEFGHJKMNPQRSTWXYZabcdefghjkmnpqrstwxyz23456789@#$%^&*(){}[];<>./?!;
+    my @chars = split // => q!ABCDEFGHJKMNPQRSTWXYZabcdefghjkmnpqrstwxyz23456789@#%^&(){}[];./!;
     my $pass = join '' => @chars[map{ rand @chars }(1..42)];
 
     return $pass;
