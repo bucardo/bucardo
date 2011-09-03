@@ -5974,8 +5974,15 @@ sub add_all_goats {
         ($db) = values %$DB;
     }
     else {
-        warn "Please specify which database to use with the db=<name> option\n";
-        $showdbs = 1;
+        ## Grab the most likely candidate
+        my $bestdb = find_best_db_for_searching();
+        if (! $bestdb) {
+            warn "Please specify which database to use with the db=<name> option\n";
+            $showdbs = 1;
+        }
+        else {
+            $db = $DB->{$bestdb};
+        }
     }
 
     if ($showdbs) {
