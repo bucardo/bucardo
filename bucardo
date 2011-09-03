@@ -1102,6 +1102,7 @@ sub reload {
         ## Sleep a little, then wait until we hear a confirmation from the MCP
         sleep 0.1;
         wait_for_notice($dbh, $done);
+        print "\n";
 
     } ## end each sync to be reloaded
 
