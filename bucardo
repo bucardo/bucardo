@@ -22,7 +22,7 @@ use POSIX qw/ceil setsid localeconv/;
 use Data::Dumper 'Dumper';
 $Data::Dumper::Indent = 1;
 
-our $VERSION = '4.99.0';
+our $VERSION = '4.99.1';
 
 ## For the tests, we want to check that it compiles without actually doing anything
 return 1 if $ENV{BUCARDO_TEST};
@@ -8942,7 +8942,7 @@ bucardo - utility script for controlling the Bucardo program
 
 =head1 VERSION
 
-This document describes version 4.99.0 of bucardo
+This document describes version 4.99.1 of bucardo
 
 =head1 SYNOPSIS
 
