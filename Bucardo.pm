@@ -5460,9 +5460,9 @@ sub validate_sync {
         }
 
         ## Verify sequences or tables+columns on remote databases
-        for my $dbname (sort keys %{ $s->{db} }) {
+        for my $dbname (sort keys %{ $self->{sdb} }) {
 
-            $x = $s->{db}{$dbname};
+            $x = $self->{sdb}{$dbname};
 
             next if $x->{role} eq 'source';
 
@@ -5719,8 +5719,8 @@ sub validate_sync {
     ## If pinging, listen for a triggerkick on all source databases
     if ($s->{ping} or $s->{do_listen}) {
         my $l = "kick_sync_$syncname";
-        for my $dbname (sort keys %{ $s->{db} }) {
-            $x = $s->{db}{$dbname};
+        for my $dbname (sort keys %{ $self->{sdb} }) {
+            $x = $self->{sdb}{$dbname};
             next if $x->{role} ne 'source';
 
             $self->db_listen($x->{dbh}, $l, $dbname);
