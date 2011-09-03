@@ -4859,19 +4859,23 @@ sub db_listen {
 sub db_unlisten {
 
     ## Stop listening for specific messages
-    ## Arguments: three or more
+    ## Arguments: four
     ## 1. Database handle
     ## 2. String to stop listening to
     ## 3. Short name of the database (for debug output)
+    ## 4. Whether to skip payloads. Optional boolean, defaults to false
     ## Returns: undef
 
     my $self = shift;
     my $ldbh = shift;
     my $string = shift;
     my $name = shift || 'bucardo';
+    my $skip_payload = shift || 0;
 
     ## If we are 9.0 or greater, we never stop listening
-    return if $ldbh->{pg_server_version} >= 90000;
+    if ($ldbh->{pg_server_version} >= 90000 and ! $skip_payload) {
+        return;
+    }
 
     $string = "bucardo_$string";
 
@@ -5765,7 +5769,7 @@ sub activate_sync {
     ## Let any listeners know we are done
     $self->db_notify($maindbh, "activated_sync_$syncname");
     ## We don't need to listen for activation requests anymore
-    $self->db_unlisten($maindbh, "activate_sync_$syncname");
+    $self->db_unlisten($maindbh, "activate_sync_$syncname", '', 1);
     ## But we do need to listen for deactivate and kick requests
     $self->db_listen($maindbh, "deactivate_sync_$syncname", '', 1);
     $self->db_listen($maindbh, "kick_sync_$syncname", '', 1);
@@ -5815,8 +5819,8 @@ sub deactivate_sync {
     ## Let any listeners know we are done
     $self->db_notify($maindbh, "deactivated_sync_$syncname");
     ## We don't need to listen for deactivation or kick requests
-    $self->db_unlisten($maindbh, "deactivate_sync_$syncname");
-    $self->db_unlisten($maindbh, "kick_sync_$syncname");
+    $self->db_unlisten($maindbh, "deactivate_sync_$syncname", '', 1);
+    $self->db_unlisten($maindbh, "kick_sync_$syncname", '', 1);
     ## But we do need to listen for an activation request
     $self->db_listen($maindbh, "activate_sync_$syncname", '', 1);
     $maindbh->commit();
@@ -5830,7 +5834,7 @@ sub deactivate_sync {
         $x->{dbh}->commit();
         if ($s->{ping} or $s->{do_listen}) {
             my $l = "kick_sync_$syncname";
-            $self->db_unlisten($x->{dbh}, $l, $dbname);
+            $self->db_unlisten($x->{dbh}, $l, $dbname, 1);
             $x->{dbh}->commit();
         }
     }
