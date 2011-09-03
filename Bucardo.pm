@@ -7353,7 +7353,7 @@ sub delete_rows {
 
         ## Postgres-specific optimization for a single primary key:
         if ($sqltype eq 'ANY') {
-            $SQL{ANY} ||= "$self->{sqlprefix}DELETE FROM $tname WHERE $pkcols = ANY(?)";
+            $SQL{ANY}{$tname} ||= "$self->{sqlprefix}DELETE FROM $tname WHERE $pkcols = ANY(?)";
             my @delq;
             for my $key (keys %$rows) {
                 push @delq => [split '\0' => $key];
@@ -7427,7 +7427,7 @@ sub delete_rows {
         if ('postgres' eq $type) {
             my $tdbh = $t->{dbh};
             if (1 == $numpks) {
-                $t->{deletesth} = $tdbh->prepare($SQL{ANY}, {pg_async => PG_ASYNC});
+                $t->{deletesth} = $tdbh->prepare($SQL{ANY}{$tname}, {pg_async => PG_ASYNC});
                 $t->{deletesth}->execute($SQL{ANYargs});
             }
             else {
