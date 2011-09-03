@@ -6152,7 +6152,12 @@ sub add_all_goats {
         }
     }
 
-    return "New ${type}s added: $count{added}\nAlready added: $count{seenit}\n";
+    my $msg = "New ${type}s added: $count{added}\n";
+    if ($count{seenit}) {
+        $msg .= "Already added: $count{seenit}\n";
+    }
+
+    return $msg;
 
 } ## end of add_all_goats
 
