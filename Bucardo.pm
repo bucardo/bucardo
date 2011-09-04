@@ -5543,12 +5543,14 @@ sub validate_sync {
             if (exists $customname{$g->{id}}) {
                 ## If there is an entry for this particular database, use that
                 ## Otherwise, use the default one
-                $RT = $customname{$g->{id}}{$dbname} || $customname{$g->{id}}{''};
+                if (exists $customname{$g->{id}}{$dbname} or exists $customname{$g->{id}}{''}) {
+                    $RT = $customname{$g->{id}}{$dbname} || $customname{$g->{id}}{''};
 
-                ## If this has a dot, change the schema as well
-                ## Otherwise, we simply use the existing schema
-                if ($RT =~ s/(.+)\.//) {
-                    $RS = $1;
+                    ## If this has a dot, change the schema as well
+                    ## Otherwise, we simply use the existing schema
+                    if ($RT =~ s/(.+)\.//) {
+                        $RS = $1;
+                    }
                 }
             }
 

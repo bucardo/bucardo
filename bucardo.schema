@@ -1918,13 +1918,15 @@ SELECT 'Fixme'::TEXT;
 
          if ($is_target and exists $customname{$id}) {
            ## If there is an entry for this particular database, use that
-           ## Otherwise, use the default one
-           $remotetable = $customname{$id}{$dbname} || $customname{$id}{''};
+           ## Otherwise, if there is a database-wide one, use that
+           if (exists $customname{$id}{$dbname} or exists $customname{$id}{''}) {
+             $remotetable = $customname{$id}{$dbname} || $customname{$id}{''};
 
-           ## If this has a dot, change the schema as well
-           ## Otherwise, we simply use the existing schema
-           if ($remotetable =~ s/(.+)\.//) {
-             $remoteschema = $1;
+             ## If this has a dot, change the schema as well
+             ## Otherwise, we simply use the existing schema
+             if ($remotetable =~ s/(.+)\.//) {
+               $remoteschema = $1;
+             }
            }
          }
 
@@ -1941,11 +1943,13 @@ SELECT 'Fixme'::TEXT;
                 if ('table' ne $tinfo->{reltype}) {
                     die qq{Found "$remoteschema.$remotetable" on database "$dbname", but it's a table, not a $tinfo->{reltype}!};
                 }
-            } elsif ('S' eq $relkind) {
+            }
+            elsif ('S' eq $relkind) {
                 if ('sequence' ne $tinfo->{reltype}) {
                     die qq{Found "$remoteschema.$remotetable" on database "$dbname", but it's a sequence, not a $tinfo->{reltype}!};
                 }
-            } else {
+            }
+            else {
                 die qq{Found "$remoteschema.$remotetable" on database "$dbname", but it's neither a table nor a sequence!};
             }
 
