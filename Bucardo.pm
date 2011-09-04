@@ -4877,14 +4877,20 @@ sub db_unlisten {
         return;
     }
 
+    my $original_string = $string;
+
     $string = "bucardo_$string";
 
-    $self->glog(qq{UNLISTEN for "$string" on DB $name}, LOG_DEBUG);
+    ## If log level low enough, show which line this call came from
+    if ($config{log_level_number} <= LOG_DEBUG) {
+        my $line = (caller)[2];
+        $self->glog(qq{UNLISTEN for "$string" on "$name" (line $line)}, LOG_DEBUG);
+    }
 
     ## We'll unlisten even if the hash indicates we are not
     $ldbh->do(qq{UNLISTEN "$string"});
 
-    delete $self->{listening}{$ldbh}{$string};
+    delete $self->{listening}{$ldbh}{$original_string};
 
     return;
 
@@ -4909,6 +4915,8 @@ sub db_unlisten_all {
 
     ## Do the deed
     $ldbh->do('UNLISTEN *');
+
+    delete $self->{listening}{$ldbh};
 
     return;
 
@@ -5540,11 +5548,13 @@ sub validate_sync {
             my ($RS,$RT) = ($S,$T);
 
             ## We don't need to check if this is a source: this is already targets only
+            my $using_customname = 0;
             if (exists $customname{$g->{id}}) {
                 ## If there is an entry for this particular database, use that
                 ## Otherwise, use the default one
                 if (exists $customname{$g->{id}}{$dbname} or exists $customname{$g->{id}}{''}) {
                     $RT = $customname{$g->{id}}{$dbname} || $customname{$g->{id}}{''};
+                    $using_customname = 1;
 
                     ## If this has a dot, change the schema as well
                     ## Otherwise, we simply use the existing schema
@@ -5613,7 +5623,6 @@ sub validate_sync {
                 my $scol = $colinfo->{$colname};
 
                 $self->glog(qq{    Checking column on target database "$dbname": "$colname" ($scol->{ftype})}, LOG_VERBOSE);
-
                 ## Always fatal: column on source but not target
                 if (! exists $targetcolinfo->{$colname}) {
                     $column_problems = 2;
@@ -5714,6 +5723,10 @@ sub validate_sync {
             ## Real serious problems always bail out
             return 0 if $column_problems >= 2;
 
+            ## If this is a minor problem, and we are using a customname,
+            ## allow it to pass
+            $column_problems = 0 if $using_customname;
+
             ## If other problems, only bail if strict checking is on both sync and goat
             ## This allows us to make a sync strict, but carve out exceptions for goats
             return 0 if $column_problems and $s->{strict_checking} and $g->{strict_checking};
@@ -5729,7 +5742,7 @@ sub validate_sync {
             $x = $self->{sdb}{$dbname};
             next if $x->{role} ne 'source';
 
-            $self->db_listen($x->{dbh}, $l, $dbname);
+            $self->db_listen($x->{dbh}, $l, $dbname, 1);
             $x->{dbh}->commit();
         }
     }
@@ -5831,6 +5844,8 @@ sub deactivate_sync {
     for my $dbname (sort keys %{ $self->{sdb} }) {
         $x = $self->{sdb}{$dbname};
         next if $x->{dbtype} ne 'postgres';
+
+        next if $x->{role} ne 'source';
 
         $x->{dbh} ||= $self->connect_database($dbname);
         $x->{dbh}->commit();
