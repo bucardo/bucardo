@@ -979,18 +979,7 @@ sub setup_bucardo {
 
     ## Now run the install. Timeout after a few seconds
     debug(qq{Running bucardo install on cluster $clustername});
-    my $info;
-    eval {
-        local $SIG{ALRM} = sub { die "Alarum!\n"; };
-        alarm 5;
-        $info = $self->ctl('install --batch');
-        alarm 0;
-    };
-    if ($@ =~ /Alarum/ or $info =~ /Alarum/) {
-        warn "bucardo install never finished!\n";
-        exit;
-    }
-    $@ and die $@;
+    my $info = $self->ctl('install --batch');
 
     if ($info !~ /Installation is now complete/) {
         die "Installation failed: $info\n";
