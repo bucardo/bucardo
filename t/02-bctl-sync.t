@@ -10,7 +10,7 @@ use warnings;
 use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 47;
+use Test::More tests => 1;
 
 use vars qw/$t $res $command $dbhX $dbhA $dbhB/;
 
@@ -29,6 +29,8 @@ $dbhX = $bct->setup_bucardo('A');
 ## Grab connection information for each database
 my ($dbuserA,$dbportA,$dbhostA) = $bct->add_db_args('A');
 my ($dbuserB,$dbportB,$dbhostB) = $bct->add_db_args('B');
+
+pass('No tests for this yet');
 
 exit;
 
