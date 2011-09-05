@@ -1391,11 +1391,11 @@ sub update_item {
     (update_customcode() or exit 1) if $thing eq 'customcode';
     ## We do not update customname or customcols
     ## The dbgroup must be checked before the database (dbg vs db)
-    (update_database()   or exit 1) if $thing eq 'database';
-    (update_dbgroup()    or exit 1) if $thing eq 'dbgroup';
-    (update_herd()       or exit 1) if $thing eq 'herd';
-    (update_sync()       or exit 1) if $thing eq 'sync';
-    (update_table()      or exit 1) if $thing eq 'table' or $thing eq 'sequence';
+    (update_database(@nouns) or exit 1) if $thing eq 'database';
+    (update_dbgroup(@nouns)  or exit 1) if $thing eq 'dbgroup';
+    (update_herd(@nouns)     or exit 1) if $thing eq 'herd';
+    (update_sync(@nouns)     or exit 1) if $thing eq 'sync';
+    (update_table(@nouns)    or exit 1) if $thing eq 'table' or $thing eq 'sequence';
 
     ## If we got this far, we have an unknown thing
     warn "$usage\n";
@@ -1913,7 +1913,7 @@ sub update_database {
     ## Grab our generic usage message
     my $usage = usage('update_database');
 
-    my @actions = @nouns;
+    my @actions = @_;
 
     if (! @actions) {
         print "$usage\n";
