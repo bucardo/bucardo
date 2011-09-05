@@ -183,7 +183,7 @@ for my $name ('A'..'Z') {
 my $xname = "bctest_$ENV{USER}";
 
 ## Maximum time to wait for bucardo to return
-my $ALARM_BUCARDO = 5;
+my $ALARM_BUCARDO = 15;
 ## Maximum time to wait for a kid to appear via pg_listener
 my $ALARM_WAIT4KID = 3;
 ## How long to wait for most syncs to take effect?
