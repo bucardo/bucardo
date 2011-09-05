@@ -1809,6 +1809,9 @@ sub add_database {
     ## Adjust the db name so add_all_* can use it
     $bcargs->{db} = $item_name;
 
+    ## Make sure $DB gets repopulated for the add_all_* calls below
+    load_bucardo_info(1);
+
     ## Add in all tables for this database
     $finalmsg .= add_all_tables() if grep /addalltab/i, @nouns;
 
