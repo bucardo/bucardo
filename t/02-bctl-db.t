@@ -41,24 +41,24 @@ $res = $bct->ctl('bucardo add database');
 like ($res, qr/Usage: add db/, $t);
 
 $t = q{Add database fails for a non-existent cluster};
-$res = $bct->ctl('bucardo add database foobarz dbport=1');
-like ($res, qr/Connection test failed.*could not connect to server/, $t);
+$res = $bct->ctl('bucardo add database foo dbname=bar dbport=1');
+like ($res, qr/Connection test failed.*could not connect to server/s, $t);
 
 $t = q{Add database fails for non-existent database};
-$res = $bct->ctl("bucardo add database foobarz user=$dbuserA port=$dbportA host=$dbhostA");
-like ($res, qr/Connection test failed.*database "foobarz" does not exist/, $t);
+$res = $bct->ctl("bucardo add database foo dbname=bar user=$dbuserA port=$dbportA host=$dbhostA");
+like ($res, qr/Connection test failed.*database "bar" does not exist/s, $t);
 
 $t = q{Add database fails for non-existent user};
-$res = $bct->ctl("bucardo add database bucardo_test user=nobob port=$dbportA host=$dbhostA");
-like ($res, qr/Connection test failed.* "nobob" does not exist/, $t);
+$res = $bct->ctl("bucardo add database bucardo_test dbname=bucardo_test user=nobob port=$dbportA host=$dbhostA");
+like ($res, qr/Connection test failed.* "nobob" does not exist/s, $t);
 
 $t = q{Add database fails for non-existent host};
-$res = $bct->ctl("bucardo add database bucardo_test user=$dbuserA port=$dbportA host=badbucardohost");
-like ($res, qr/Connection test failed.*could not translate host name/, $t);
+$res = $bct->ctl("bucardo add database bucardo_test dbname=bucardo_test user=$dbuserA port=$dbportA host=badbucardohost");
+like ($res, qr/Connection test failed.*could not translate host name/s, $t);
 
 $t = q{Add database works for non-existent cluster with --force flag};
-$res = $bct->ctl('bucardo add database foobarz --force');
-like ($res, qr/add anyway.*Added database "foobarz"/s, $t);
+$res = $bct->ctl('bucardo add database foo dbname=bar --force');
+like ($res, qr/add anyway.*Added database "foo"/s, $t);
 
 $t = 'Add database works for cluster A';
 $res = $bct->ctl("bucardo add db A dbname=bucardo_test user=$dbuserA port=$dbportA host=$dbhostA");
@@ -80,7 +80,7 @@ $t = 'List databases gives expected results';
 $res = $bct->ctl('bucardo list databases');
 my $statA = qq{Database: A\\s+Status: active\\s+Conn: psql -p $dbportA -U $dbuserA -d bucardo_test -h $dbhostA};
 my $statB = qq{Database: B\\s+Status: active\\s+Conn: psql -p $dbportB -U $dbuserB -d bucardo_test -h $dbhostB \\(SSP is off\\)};
-my $statz = qq{Database: foobarz\\s+Status: active\\s+Conn: psql .*-d foobarz};
+my $statz = qq{Database: foo\\s+Status: active\\s+Conn: psql .*-d bar};
 my $regex = qr{$statA\n$statB\n$statz$}s;
 like ($res, $regex, $t);
 
@@ -121,7 +121,7 @@ like ($res, qr/Removed database "B"/, $t);
 
 $t = q{Able to remove more than one database at a time};
 $bct->ctl("bucardo add db B dbname=bucardo_test user=$dbuserB port=$dbportB host=$dbhostB");
-$res = $bct->ctl('bucardo remove db A B foobarz');
+$res = $bct->ctl('bucardo remove db A B foo');
 like ($res, qr/Removed database "A"\nRemoved database "B"/ms, $t);
 
 ## Tests for 'list databases'
