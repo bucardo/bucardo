@@ -22,7 +22,7 @@ use DBIx::Safe '1.2.4';                     ## Filter out what DB calls customco
 
 use sigtrap       qw( die normal-signals ); ## Call die() on HUP, INT, PIPE, or TERM
 use Config        qw( %Config            ); ## Used to map signal names
-use File::Spec    qw( catfile            ); ## For portable file operations
+use File::Spec    qw(                    ); ## For portable file operations
 use Data::Dumper  qw( Dumper             ); ## Used to dump information in email alerts
 use POSIX         qw( strftime strtod    ); ## For grabbing the local timezone, and forcing to NV
 use Sys::Hostname qw( hostname           ); ## Used for debugging/mail sending
