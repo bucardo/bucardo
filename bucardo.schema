@@ -758,8 +758,8 @@ if ($dbtype eq 'oracle') {
     length $db{user} or elog(ERROR, qq{Database username is mandatory\n});
 
     ## TODO: Support SID, other forms
-    my $connstring = "dbi:Oracle:$db{name}";
-    $db{host} ||= ''; $db{port} ||= ''; $db{pass} ||= '';
+    my $connstring = "dbi:Oracle:dbname=$db{name}";
+    $db{host} ||= ''; $db{port} ||= ''; $db{conn} ||= ''; $db{pass} ||= '';
     length $db{host} and $connstring .= ";host=$db{host}";
     length $db{port} and $connstring .= ";port=$db{port}";
     length $db{conn} and $connstring .= ";$db{conn}";

@@ -1526,8 +1526,7 @@ sub start_controller {
             }
             ## Only a few use schemas:
             elsif ($x->{dbtype} eq 'postgres'
-                   or $x->{dbtype} eq 'flatpg'
-                   or $x->{dbtype} eq 'oracle') {
+                   or $x->{dbtype} eq 'flatpg') {
                 $g->{newname}{$syncname}{$dbname} = "$S.$T";
             }
             else {
@@ -2653,8 +2652,8 @@ sub start_kid {
             }
 
             if ($x->{dbtype} eq 'oracle') {
-                $x->{dbh}->do('SET TRANSACTION READ WRITE');
                 $x->{dbh}->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE');
+                ## READ WRITE
                 $self->glog(qq{Set db "$dbname" to serializable and read write}, LOG_DEBUG);
             }
         }
@@ -4335,7 +4334,11 @@ sub connect_database {
             $dsn = "dbi:mysql:database=$d->{dbname}";
         }
         elsif ('oracle' eq $dbtype) {
-            $dsn = "dbi:Oracle:$d->{dbname}";
+            $dsn = "dbi:Oracle:dbname=$d->{dbname}";
+            $d->{dbhost} ||= ''; $d->{dbport} ||= ''; $d->{conn} ||= '';
+            defined $d->{dbhost} and length $d->{dbhost} and $dsn .= ";host=$d->{dbhost}";
+            defined $d->{dbport} and length $d->{dbport} and $dsn .= ";port=$d->{dbport}";
+            defined $d->{dbconn} and length $d->{dbconn} and $dsn .= ";$d->{dbconn}";
         }
         elsif ('redis' eq $dbtype) {
             my $dsn = {};
@@ -7356,7 +7359,7 @@ sub delete_rows {
             $sqltype = 'MYIN';
         }
         elsif ('oracle' eq $type) {
-            $sqltype = 'PGIN';
+            $sqltype = 'IN';
         }
         elsif ($type =~ /flatpg/o) {
             ## XXX Worth the trouble to allow building an ANY someday for flatpg?
@@ -7498,7 +7501,7 @@ sub delete_rows {
 
         if ('oracle' eq $type) {
             my $tdbh = $t->{dbh};
-            ($count{$t} = $tdbh->do($SQL{PGIN})) =~ s/0E0/0/o;
+            ($count{$t} = $tdbh->do($SQL{IN})) =~ s/0E0/0/o;
             next;
         }
 
