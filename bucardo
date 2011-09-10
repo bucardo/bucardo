@@ -4334,18 +4334,18 @@ sub status_all {
     }
     print "\n";
 
+    if (! keys %$SYNC) {
+        print "No syncs have been created yet.\n";
+        exit 0;
+    }
+
     my $orderby = $bcargs->{sort} || '1';
     if ($orderby !~ /^\+?\-?\d$/) {
         die "Invalid sort option, must be +- 1 through 9\n";
     }
 
-    our ($synclist,$max);
-    ($synclist,$max) = get_detailed_syncs();
-
-    if (! keys %$synclist) {
-        print "No syncs have been created yet.\n";
-        exit 0;
-    }
+    ## Set the status for each sync if possible
+    my $max = set_sync_status();
 
     ## The titles
     my %title = (
@@ -4373,6 +4373,7 @@ sub status_all {
         $var += 2;
     }
 
+    ## Print the column headers
     printf qq{%-*s %-*s %-*s %-*s %-*s %-*s %-*s\n},
         $max->{name},     $title{name},
         $max->{state},    $title{state},
@@ -4382,6 +4383,7 @@ sub status_all {
         $max->{lastbad},  $title{lastbad},
         $max->{timebad},  $title{timebad};
 
+    ## Print a fancy dividing line
     printf qq{%s+%s+%s+%s+%s+%s+%s\n},
         '=' x $max->{name},
         '=' x $max->{state},
@@ -4398,7 +4400,7 @@ sub status_all {
         +1 == $sortcol and return $a cmp $b;
         -1 == $sortcol and return $b cmp $a;
 
-        my ($uno,$dos) = ($synclist->{$a}, $synclist->{$b});
+        my ($uno,$dos) = ($SYNC->{$a}, $SYNC->{$b});
 
         ## State
         +3 == $sortcol and return ($uno->{state} cmp $dos->{state} or $a cmp $b);
@@ -4439,9 +4441,12 @@ sub status_all {
 
     }
 
-    for my $sync (sort sortme keys %$synclist) {
-        my $s = $synclist->{$sync};
-        next if ! exists $s->{state}; ## e.g. has been filtered out by args
+    for my $sync (sort sortme keys %$SYNC) {
+
+        my $s = $SYNC->{$sync};
+
+        ## If this has been filtered out, skip it entirely
+        next if $s->{filtered};
 
         ## Populate any missing fields with an empty string
         for my $name (keys %title) {
@@ -4473,13 +4478,13 @@ sub status_detail {
     ## Returns: never, exits
 
     ## Verify that all named syncs exist
-    my ($synclist,$max) = get_detailed_syncs({syncs => \@nouns});
+    my $max = set_sync_status({syncs => \@nouns});
 
     my @synclist;
-    for my $sync (sort @nouns) {
+    for my $sync (@nouns) {
         $DEBUG and warn "Verify sync: $sync\n";
         next if $sync eq 'sync';
-        if (!exists $synclist->{$sync}) {
+        if (!exists $SYNC->{$sync}) {
             ## If a number, skip for ease of "kick name #" toggling
             $sync !~ /^\d+$/ and die "No such sync: $sync\n";
         }
@@ -4488,35 +4493,26 @@ sub status_detail {
         }
     }
 
-    ## Grab the mappings from herd to database
-    ## We only need one from each herd!
-    $SQL = 'SELECT name FROM bucardo.herd';
-    $sth = $dbh->prepare($SQL);
-    $sth->execute();
-    my $herdmap = $sth->fetchall_hashref('name');
-    for my $herdname (keys %$herdmap) {
-        $SQL = 'SELECT db FROM bucardo.goat WHERE id = (SELECT goat FROM bucardo.herdmap WHERE herd = ? LIMIT 1)';
-        $sth = $dbh->prepare($SQL);
-        $sth->execute($herdname);
-        my $goatinfo = $sth->fetchall_arrayref({})->[0];
-        $herdmap->{$herdname}{database} = $goatinfo->{db};
-    }
+    ## Present each in the order they gave
+    my $loops = 0;
+    for my $sync (@synclist) {
 
-    ## Present each ordered by name
-    for my $sync (sort { lc $a cmp lc $b } @synclist) {
+        my $s = $SYNC->{$sync};
+
+        ## Skip if it has been filtered out
+        next if $s->{filtered};
+
+        ## Put a space between multiple entries
+        if ($loops++) {
+            print "\n";
+        }
+
         print '=' x 70; print "\n";
-        my $s = $synclist->{$sync};
 
         my @items;
+        my $numtables = keys %{$s->{herd}{goat}};
 
-        ## The source database we get the tables from
-        my $sourcedb = $herdmap->{$s->{herd}}{database} || '?';
-
-        ## Determine how many tables are in this sync
-        $SQL = 'SELECT count(*) FROM bucardo.herdmap WHERE herd = ?';
-        $sth = $dbh->prepare($SQL);
-        $sth->execute($s->{herd});
-        my $numtables = $sth->fetch()->[0];
+        my $sourcedb = $s->{herd}{db};
 
         ## Last good time, and number of rows affected
         if (exists $s->{rowgood}) {
@@ -4571,16 +4567,16 @@ sub status_detail {
         ## Build the display list
         push @items => ['Sync name'            => $sync];
         push @items => ['Current state'        => $s->{state}];
-        push @items => ['Source herd/database' => "$s->{herd} / $sourcedb"];
+        push @items => ['Source herd/database' => "$s->{herd}{name} / $sourcedb"];
         push @items => ['Tables in sync'       => $numtables];
         push @items => ['Status'               => $s->{status}];
         push @items => ['Check time'           => $s->{checktime}];
         push @items => ['Overdue time'         => $s->{overdue}];
         push @items => ['Expired time'         => $s->{expired}];
         push @items => ['Stayalive/Kidsalive'  => "$s->{stayalive} / $s->{kidsalive}"];
-        push @items => ['Rebuild index'        => $s->{rebuild_index}];
+        push @items => ['Rebuild index'        => $s->{rebuild_index} ? 'Yes' : 'No'];
         push @items => ['Ping'                 => $s->{ping}];
-        push @items => ['Onetimecopy'          => $s->{onetimecopy}];
+        push @items => ['Onetimecopy'          => $s->{onetimecopy} ? 'Yes' : 'No'];
 
         ## Only show these if enabled
         if ($s->{usecustomselect} eq 'yes') {
@@ -4607,6 +4603,8 @@ sub status_detail {
             printf "%-*s : %s\n",
                 $leftmax, $_->[0], $_->[1];
         }
+        print '=' x 70; print "\n";
+
 
     }
     exit 0;
@@ -4641,18 +4639,15 @@ sub append_reason_file {
 
 
 
-sub get_detailed_syncs {
+sub set_sync_status {
 
-    ## Get detailed information about a sync
-    ## NOT WORKING
-    ## Arguments: some
-    ## Returns: something
+    ## Set detailed information about syncs from the synrun table
+    ## Arguments: zero or one (hashref)
+    ## 1. Hashref containing a. syncs=arrarref of syncnames
+    ## Returns: hashref indicating maximum lengths of inner information
+    ## If a sync is filtered out via the 'syncs' argument, it is set to $s->{filtered} = 1
 
     my $arg = shift || {};
-
-    #my $synclist = get_syncs();
-
-    my $synclist = die 'fixme';
 
     ## View the details of the syncs via the syncrun table
 
@@ -4686,13 +4681,16 @@ AND (   lastgood  IS TRUE
         timebad   => 1,
     );
 
-    for my $sync (keys %$synclist) {
+    for my $sync (keys %$SYNC) {
 
-        my $s = $synclist->{$sync};
+        my $s = $SYNC->{$sync};
 
         ## Sometimes we only want some of them
         if ($arg->{syncs}) {
-            next unless grep { $_ eq $sync } @{$arg->{syncs}}; ## no critic (ProhibitBooleanGrep)
+            if (! grep { $_ eq $sync } @{$arg->{syncs}}) { ## no critic (ProhibitBooleanGrep)
+                $s->{filtered} = 1;
+                next;
+            }
         }
 
         $max{name} = length($sync) if length($sync) > $max{name};
@@ -4770,12 +4768,11 @@ AND (   lastgood  IS TRUE
         for my $var (qw/ state dit lastgood timegood lastbad timebad /) {
             $max{$var} = length($s->{$var}) if length($s->{$var}) > $max{$var};
         }
-
     }
 
-    return $synclist, \%max;
+    return \%max;
 
-} ## end of get_detailed_syncs
+} ## end of set_sync_status
 
 
 sub inspect {
