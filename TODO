@@ -1,6 +1,13 @@
 TODO list for Bucardo
 =====================
 
+Version 5:
+
+* Finish auto-vacuum/purge daemon
+* Get onetimecopy working again
+* Get fullcopy syncs working again
+
+
 These range the gamut from wildly speculative ideas to must-have features.
 
 - Fix the insert/foreign key problem for conflict resolution.
