@@ -4477,13 +4477,28 @@ sub status_detail {
     ## Arguments: none, parses nouns
     ## Returns: never, exits
 
-    ## Verify that all named syncs exist
-    my $max = set_sync_status({syncs => \@nouns});
+    ## Walk through and check each given sync
+    ## It must either exist, or be a special key word
 
     my @synclist;
     for my $sync (@nouns) {
-        $DEBUG and warn "Verify sync: $sync\n";
+
+        ## Allow a special noise word: 'sync'
         next if $sync eq 'sync';
+
+        ## Add everything if we find the special word 'all'
+        if ($sync eq 'all') {
+            undef @synclist;
+            for my $sync (keys %$SYNC) {
+                ## Turn off the filtering that set_sync_status may have added
+                $SYNC->{$sync}{filtered} = 0;
+                push @synclist => $sync;
+            }
+            last;
+        }
+
+        ## If we don't know about this particular sync, give a warning
+        ## We allow another special word: 'all'
         if (!exists $SYNC->{$sync}) {
             ## If a number, skip for ease of "kick name #" toggling
             $sync !~ /^\d+$/ and die "No such sync: $sync\n";
@@ -4492,6 +4507,10 @@ sub status_detail {
             push @synclist => $sync;
         }
     }
+
+
+    ## Verify that all named syncs exist
+    my $max = set_sync_status({syncs => \@synclist});
 
     ## Present each in the order they gave
     my $loops = 0;
@@ -9367,9 +9386,6 @@ unless that file can be read.
 The bucardo script uses I<$ENV{HOME}> to look for a F<.bucardorc> file.
 
 =head1 BUGS
-
-The 'status' command does not yet return current information, and the start time in particular should be 
-taken with a grain of salt.
 
 Bug reports and feature requests are always welcome, please visit http://bucardo.org or email bucardo-general@bucardo.org.
 
