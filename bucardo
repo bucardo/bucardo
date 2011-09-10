@@ -134,7 +134,6 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'help',
      'debug',
      'version',
-     'daysback=i',
      'sort=i',
      'showdays',
      'compress',
@@ -9172,12 +9171,13 @@ was returned, the program will exit with a value of 0. If it times out, the valu
 
 =item B<status>
 
-Usage: ./bucardo status [syncname(s)] [--sort=#] [--daysback=#] [--showdays]
+Usage: ./bucardo status [syncname(s)] [--sort=#] [--showdays] [--compress]
 
-Shows the current status of all known syncs in a tabular format. If given one or more syncnames, 
-shows detailed information for each one.
+Shows the brief status of all known syncs in a tabular format. If given one or more syncnames, 
+shows detailed information for each one. To see detailed information for all syncs, simply 
+use 'status all'.
 
-When showing all syncs, the columns are:
+When showing brief information, the columns are:
 
 =over 8
 
@@ -9185,43 +9185,30 @@ When showing all syncs, the columns are:
 
 The name of the sync
 
-=item 2. B<Type>
+=item 2. B<State>
 
-The type of the sync. C<F> = fullcopy, C<S> = swap, C<P> = pushdelta. In addition, if a sync is overdue, a C<O!> will 
-appear, and if it is expired, a C<E!> will appear.
+The state of the sync. Can be 'Good', 'Bad', 'Empty', or 'No records found'
 
-=item 3. B<State>
+=item 3. B<Last good>
 
-The current status of this sync. If no sync is running, C<idle> will appear. If a sync has been requested, but has not 
-started yet, C<WAIT> will appear, along with how long since the sync was requested. If a sync is 
-currently running, C<RUN> will appear, followed by the amount of time the sync has been running, followed by which 
-target the sync is running against. Note that syncs running to more than one database at a time will only show 
-the one most recently started.
+When the sync last successfully ran.
 
-=item 4. B<PID>
+=item 4. B<Time>
 
-The PID of the current sync's controller (CTL). Note that if this is not a persistent sync and the state is C<idle>, 
-this is merely a historical record and does not represent an active process.
+How long it has been since the last sync success
 
-=item 5. B<Last_good>
+=item 5. B<Last I/U>
 
-How long since this sync last ran successfully. Remember that this is affected by the --daysback parameter.
+The number of insert and deletes performed by the last successful sync. May also show 
+the number of rows truncated (T) or conflicted (C), if applicable.
 
-=item 6. B<Time>
+=item 6. B<Last bad>
 
-The amount of time the last successful sync took to run.
+When the sync last failed.
 
-=item 7. B<I/U/D>
+=item 7. B<Time>
 
-The number of inserts. updates, and deletes performed by the last successful sync.
-
-=item 8. B<Last_bad>
-
-How long since this sync failed to run successfully. Strongly affected by the --daysback parameter.
-
-=item 9. B<Time>
-
-The amount of time the last failed sync took before it was aborted.
+How long it has been since the last sync failure
 
 =back
 
@@ -9304,10 +9291,6 @@ via a cronjob, so turning --notimer on will simply print the entire message with
 The following arguments are only used with the 'status' command:
 
 =over 4
-
-=item B<--daysback=#>
-
-Sets how many days backwards to search the old 'q' logs for information. Defaults to 3 days.
 
 =item B<--showdays>
 

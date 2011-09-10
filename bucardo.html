@@ -238,52 +238,40 @@ was returned, the program will exit with a value of 0. If it times out, the valu
 <dt><strong><a name="status" class="item"><strong>status</strong></a></strong></dt>
 
 <dd>
-<p>Usage: ./bucardo status [syncname(s)] [--sort=#] [--daysback=#] [--showdays]</p>
-<p>Shows the current status of all known syncs in a tabular format. If given one or more syncnames, 
-shows detailed information for each one.</p>
-<p>When showing all syncs, the columns are:</p>
+<p>Usage: ./bucardo status [syncname(s)] [--sort=#] [--showdays] [--compress]</p>
+<p>Shows the brief status of all known syncs in a tabular format. If given one or more syncnames, 
+shows detailed information for each one. To see detailed information for all syncs, simply 
+use 'status all'.</p>
+<p>When showing brief information, the columns are:</p>
 <ol>
 <li><strong><a name="name" class="item"><strong>Name</strong></a></strong>
 
 <p>The name of the sync</p>
 </li>
-<li><strong><a name="type" class="item"><strong>Type</strong></a></strong>
-
-<p>The type of the sync. <code>F</code> = fullcopy, <code>S</code> = swap, <code>P</code> = pushdelta. In addition, if a sync is overdue, a <code>O!</code> will 
-appear, and if it is expired, a <code>E!</code> will appear.</p>
-</li>
 <li><strong><a name="state" class="item"><strong>State</strong></a></strong>
 
-<p>The current status of this sync. If no sync is running, <code>idle</code> will appear. If a sync has been requested, but has not 
-started yet, <code>WAIT</code> will appear, along with how long since the sync was requested. If a sync is 
-currently running, <code>RUN</code> will appear, followed by the amount of time the sync has been running, followed by which 
-target the sync is running against. Note that syncs running to more than one database at a time will only show 
-the one most recently started.</p>
+<p>The state of the sync. Can be 'Good', 'Bad', 'Empty', or 'No records found'</p>
 </li>
-<li><strong><a name="pid" class="item"><strong>PID</strong></a></strong>
+<li><strong><a name="last_good" class="item"><strong>Last good</strong></a></strong>
 
-<p>The PID of the current sync's controller (CTL). Note that if this is not a persistent sync and the state is <code>idle</code>, 
-this is merely a historical record and does not represent an active process.</p>
-</li>
-<li><strong><a name="last_good" class="item"><strong>Last_good</strong></a></strong>
-
-<p>How long since this sync last ran successfully. Remember that this is affected by the --daysback parameter.</p>
+<p>When the sync last successfully ran.</p>
 </li>
 <li><strong><a name="time" class="item"><strong>Time</strong></a></strong>
 
-<p>The amount of time the last successful sync took to run.</p>
+<p>How long it has been since the last sync success</p>
 </li>
-<li><strong><a name="i_" class="item"><strong>I/U/D</strong></a></strong>
+<li><strong><a name="last_i_u" class="item"><strong>Last I/U</strong></a></strong>
 
-<p>The number of inserts. updates, and deletes performed by the last successful sync.</p>
+<p>The number of insert and deletes performed by the last successful sync. May also show 
+the number of rows truncated (T) or conflicted (C), if applicable.</p>
 </li>
-<li><strong><a name="last_bad" class="item"><strong>Last_bad</strong></a></strong>
+<li><strong><a name="last_bad" class="item"><strong>Last bad</strong></a></strong>
 
-<p>How long since this sync failed to run successfully. Strongly affected by the --daysback parameter.</p>
+<p>When the sync last failed.</p>
 </li>
 <li><strong><a name="time2" class="item"><strong>Time</strong></a></strong>
 
-<p>The amount of time the last failed sync took before it was aborted.</p>
+<p>How long it has been since the last sync failure</p>
 </li>
 </ol>
 </dd>
@@ -371,11 +359,6 @@ via a cronjob, so turning --notimer on will simply print the entire message with
 <h2><a name="status_arguments">Status arguments</a></h2>
 <p>The following arguments are only used with the 'status' command:</p>
 <dl>
-<dt><strong><a name="daysback" class="item"><strong>--daysback=#</strong></a></strong></dt>
-
-<dd>
-<p>Sets how many days backwards to search the old 'q' logs for information. Defaults to 3 days.</p>
-</dd>
 <dt><strong><a name="showdays" class="item"><strong>--showdays</strong></a></strong></dt>
 
 <dd>
@@ -466,8 +449,6 @@ unless that file can be read.</p>
 </p>
 <hr />
 <h1><a name="bugs">BUGS</a></h1>
-<p>The 'status' command does not yet return current information, and the start time in particular should be 
-taken with a grain of salt.</p>
 <p>Bug reports and feature requests are always welcome, please visit <a href="http://bucardo.org">http://bucardo.org</a> or email <a href="mailto:bucardo-general@bucardo.org.">bucardo-general@bucardo.org.</a></p>
 <p>
 </p>
