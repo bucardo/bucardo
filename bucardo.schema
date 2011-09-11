@@ -648,6 +648,7 @@ AS $bc$
 ## MySQL: a connection string, username, and password
 ## Oracle: a connection string, username, and password
 ## Redis: "foo: bar" style connection information, one per line
+## SQLite: a database file name
 
 use strict;
 use warnings;
@@ -768,6 +769,7 @@ if ($dbtype eq 'oracle') {
 
 } ## end oracle
 
+
 if ($dbtype eq 'redis') {
    my $connstring = "$dbtype\n";
    for my $name (qw/ host port user pass /) {
@@ -776,6 +778,18 @@ if ($dbtype eq 'redis') {
    chomp $connstring;
    return $connstring;
 }
+
+if ($dbtype eq 'sqlite') {
+
+    ## We should loosen this up somewhere
+    length $db{name} or elog(ERROR, qq{Database name is mandatory\n});
+
+    ## TODO: Support SID, other forms
+    my $connstring = "dbi:SQLite:dbname=$db{name}";
+
+    return "$dbtype\n$connstring";
+
+} ## end sqlite
 
 return "Unknown database type: $dbtype";
 
@@ -1267,7 +1281,7 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
     next if $db{$dbname}{dbtype} =~ /flat/;
 
     ## Skip if this is a non-supported database
-    next if $db{$dbname}{dbtype} =~ /drizzle|mongo|mysql|oracle|redis/;
+    next if $db{$dbname}{dbtype} =~ /drizzle|mongo|mysql|oracle|redis|sqlite/;
 
     ## Figure out how to connect to this database
     my $rv = spi_exec_query("SELECT bucardo.db_getconn('$dbname') AS conn");

@@ -1880,7 +1880,8 @@ sub start_kid {
     ## Set up some common groupings of the databases inside sync->{db}
     ## Also setup common attributes
     my (@dbs, @dbs_source, @dbs_target, @dbs_connectable, @dbs_dbi,
-        @dbs_postgres, @dbs_drizzle, @dbs_mongo, @dbs_mysql, @dbs_oracle, @dbs_redis);
+        @dbs_postgres, @dbs_drizzle, @dbs_mongo, @dbs_mysql, @dbs_oracle,
+        @dbs_redis, @dbs_sqlite);
     for my $dbname (sort keys %{ $sync->{db} }) {
         $x = $sync->{db}{$dbname};
 
@@ -1948,6 +1949,15 @@ sub start_kid {
             push @dbs_redis => $dbname;
         }
 
+        ## SQLite
+        if ('sqlite' eq $x->{dbtype}) {
+            push @dbs_sqlite => $dbname;
+            $x->{does_sql}        = 1;
+            $x->{does_truncate}   = 1;
+            $x->{does_savepoints} = 1;
+            $x->{does_limit}      = 1;
+        }
+
         ## Flat files
         if ($x->{dbtype} =~ /flat/) {
             $x->{does_append_only} = 1;
@@ -1969,7 +1979,8 @@ sub start_kid {
             if $x->{dbtype} eq 'postgres'
             or $x->{dbtype} eq 'drizzle'
             or $x->{dbtype} eq 'mysql'
-            or $x->{dbtype} eq 'oracle';
+            or $x->{dbtype} eq 'oracle'
+            or $x->{dbtype} eq 'sqlite';
 
         push @dbs_connectable => $dbname
             if $x->{dbtype} !~ /flat/;
@@ -2656,6 +2667,10 @@ sub start_kid {
                 ## READ WRITE
                 $self->glog(qq{Set db "$dbname" to serializable and read write}, LOG_DEBUG);
             }
+
+            if ($x->{dbtype} eq 'sqlite') {
+                ## Nothing needed here, the default seems okay
+            }
         }
 
         ## We may want to lock all the tables. Use sparingly
@@ -2702,6 +2717,9 @@ sub start_kid {
                         my $com = "$tname IN EXCLUSIVE MODE";
                         $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
                         $x->{dbh}->do("LOCK TABLE $com");
+                    }
+                    elsif ('sqlite' eq $x->{dbtype}) {
+                        ## BEGIN EXCLUSIVE? May not be needed...
                     }
                 }
             }
@@ -2804,6 +2822,14 @@ sub start_kid {
                         if ($x->{dbtype} eq 'mysql') {
                             $SQL = "ALTER TABLE $tname DISABLE KEYS";
                             $self->glog("Disabling keys for $tname on $dbname", LOG_NORMAL);
+                            $x->{dbh}->do($SQL);
+                            $x->{index_disabled} = 1;
+                        }
+
+                        if ($x->{dbtype} eq 'sqlite') {
+                            ## May be too late to do this here
+                            $SQL = q{PRAGMA foreign_keys = OFF};
+                            $self->glog("Disabling foreign keys on $dbname", LOG_NORMAL);
                             $x->{dbh}->do($SQL);
                             $x->{index_disabled} = 1;
                         }
@@ -2976,8 +3002,14 @@ sub start_kid {
                     }
 
                     if ($x->{dbtype} eq 'mysql') {
-                        $SQL = "ALTER TABLE $tname DISABLE KEYS";
-                        $self->glog("Disabling keys for $tname on $dbname", LOG_NORMAL);
+                        $SQL = "ALTER TABLE $tname ENABLE KEYS";
+                        $self->glog("Enabling keys for $tname on $dbname", LOG_NORMAL);
+                        $x->{dbh}->do($SQL);
+                    }
+
+                    if ($x->{dbtype} eq 'sqlite') {
+                        $SQL = q{PRAGMA foreign_keys = ON};
+                        $self->glog("Enabling keys on $dbname", LOG_NORMAL);
                         $x->{dbh}->do($SQL);
                     }
 
@@ -4364,6 +4396,9 @@ sub connect_database {
 
             return $backend, $dbh;
         }
+        elsif ('sqlite' eq $dbtype) {
+            $dsn = "dbi:SQLite:dbname=$d->{dbname}";
+        }
         else {
             die qq{Cannot handle databases of type "$dbtype"\n};
         }
@@ -5490,8 +5525,8 @@ sub validate_sync {
             ## Redis is skipped because we can create keys on the fly
             next if $x->{dbtype} =~ /redis/o;
 
-            ## MySQL/Drizzle/Oracle is skipped for now, but should be added later
-            next if $x->{dbtype} =~ /mysql|drizzle|oracle/o;
+            ## MySQL/Drizzle/Oracle/SQLite is skipped for now, but should be added later
+            next if $x->{dbtype} =~ /mysql|drizzle|oracle|sqlite/o;
 
             ## Respond to ping here and now for very impatient watchdog programs
             $maindbh->commit();
@@ -7275,6 +7310,7 @@ sub delete_rows {
     my ($self,$rows,$S,$T,$goat,$syncname,$deldb) = @_;
 
     my $pkcols = $goat->{pkeycols};
+    my $pkcolsraw = $goat->{pkeycolsraw};
     my $numpks = $goat->{numpkcols};
 
     ## Keep track of exact number of rows deleted from each target
@@ -7359,6 +7395,9 @@ sub delete_rows {
             $sqltype = 'MYIN';
         }
         elsif ('oracle' eq $type) {
+            $sqltype = 'IN';
+        }
+        elsif ('sqlite' eq $type) {
             $sqltype = 'IN';
         }
         elsif ($type =~ /flatpg/o) {
@@ -7461,7 +7500,6 @@ sub delete_rows {
             $self->{collection} = $t->{dbh}->get_collection($tname);
 
             ## We want the 'raw' versions of the primary keys
-            my $pkcolsraw = $goat->{pkeycolsraw};
 
             ## If this is a binary pkey, we need to decode it
             my $delkeys = [];
@@ -7507,6 +7545,12 @@ sub delete_rows {
 
         if ('redis' eq $type) {
             ## TODO
+            next;
+        }
+
+        if ('sqlite' eq $type) {
+            my $tdbh = $t->{dbh};
+            ($count{$t} = $tdbh->do($SQL{IN})) =~ s/0E0/0/o;
             next;
         }
 
@@ -7676,6 +7720,12 @@ sub push_rows {
                 $tgtcmd =~ s/,$/)/o;
                 $t->{sth} = $t->{dbh}->prepare($tgtcmd);
             }
+            elsif ('sqlite' eq $type) {
+                my $tgtcmd = "INSERT INTO $tname$columnlist VALUES (";
+                $tgtcmd .= '?,' x @$cols;
+                $tgtcmd =~ s/,$/)/o;
+                $t->{sth} = $t->{dbh}->prepare($tgtcmd);
+            }
             else {
                 die qq{No support for database type "$type" yet!};
             }
@@ -7738,8 +7788,11 @@ sub push_rows {
                     }
                     $self->{collection}->insert($object, { safe => 1 });
                 }
-                ## For MySQL, Drizzle, and Oracle, do some basic INSERTs
-                elsif ('mysql' eq $type or 'drizzle' eq $type or 'oracle' eq $type) {
+                ## For MySQL, Drizzle, Oracle, and SQLite, do some basic INSERTs
+                elsif ('mysql' eq $type
+                       or 'drizzle' eq $type
+                       or 'oracle' eq $type
+                       or 'sqlite' eq $type) {
                     my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
                     $count += $t->{sth}->execute(@cols);
                 }

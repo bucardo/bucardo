@@ -1537,13 +1537,7 @@ sub add_database {
     }
 
     ## Clean up and standardize the names
-    $vals->{dbtype} =~ s/postgres.*/postgres/io;
-    $vals->{dbtype} =~ s/pg.*/postgres/io;
-    $vals->{dbtype} =~ s/driz?zle.*/drizzle/io;
-    $vals->{dbtype} =~ s/mongo.*/mongo/io;
-    $vals->{dbtype} =~ s/mysql.*/mysql/io;
-    $vals->{dbtype} =~ s/oracle.*/oracle/io;
-    $vals->{dbtype} =~ s/redis.*/redis/io;
+    $vals->{dbtype} = standardize_rdbms_name($vals->{dbtype});
 
     ## Must have a database name
     if (! exists $vals->{dbname}) {
@@ -1576,7 +1570,7 @@ sub add_database {
         last TESTCONN if 'flatfile' eq $vals->{dbtype};
 
         ## Must have a valid type
-        if ($vals->{dbtype} !~ /^(?:postgres|drizzle|mongo|mysql|oracle|redis)$/) {
+        if ($vals->{dbtype} !~ /^(?:postgres|drizzle|mongo|mysql|oracle|redis|sqlite)$/) {
             die qq{Unknown database type: $vals->{dbtype}\n};
         }
 
@@ -1788,7 +1782,34 @@ sub add_database {
                 die qq{Connection to redis failed: $@\n};
             }
 
-        } ## end of redis
+        } ## end redis
+
+        if ('sqlite' eq $vals->{dbtype}) {
+
+            my ($type,$dsn) = split /\n/ => $dbconn;
+
+            my $found = 0;
+            eval {
+                require DBD::SQLite;
+                $found = 1;
+            };
+            if (!$found) {
+                die "Cannot add unless the DBD::SQLite module is available\n";
+            }
+
+            my $testdbh;
+            $found = 0;
+            eval {
+                $testdbh = DBI->connect($dsn, '', '', {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+                $found = 1;
+            };
+            if (! $found) {
+                die "SQLite connection test failed. You can force add it with the --force argument. Error was: $@\n\n";
+            }
+
+            $testdbh->disconnect();
+
+        } ## end sqlite
 
     } ## end of TESTCONN
 
@@ -2222,6 +2243,10 @@ sub list_databases {
                 $server = "server=$server";
                 print "Conn: $server";
             }
+        }
+        if ($dbtype eq 'sqlite') {
+            printf "Conn: sqlite3 %s",
+                $info->{dbname};
         }
 
         print "\n";
@@ -5039,12 +5064,7 @@ sub process_args {
 
     ## Clean up and standardize the names
     if (exists $arg{type}) {
-        $arg{type} =~ s/postgres.*/postgres/io;
-        $arg{type} =~ s/drizzle.*/drizzle/io;
-        $arg{type} =~ s/mongo.*/mongo/io;
-        $arg{type} =~ s/mysql.*/mysql/io;
-        $arg{type} =~ s/oracle.*/oracle/io;
-        $arg{type} =~ s/redis.*/redis/io;
+        $arg{type} = standardize_rdbms_name($arg{type});
     }
 
     return \%arg;
@@ -7451,7 +7471,7 @@ For more information, run: $progname help add <type>};
 Adds a database
 
 Optional information:
- type=type of database (defaults to postgres. Others: drizzle,mongo,mysql,oracle,redis)
+ type=type of database (defaults to postgres. Others: drizzle,mongo,mysql,oracle,redis,sqlite)
  db=name            (database name to connect to)
  host=hostname      (defaults to none - which is Unix socket for some types)
  port=#             (defaults to type default, e.g. 5432 for postgres)
@@ -8747,6 +8767,29 @@ sub make_boolean {
     die "Invalid value: must be 'true' of 'false'\n";
 
 } ## end of make_boolean
+
+
+sub standardize_rdbms_name {
+
+    ## Make the database types standard: account for misspellings, case, etc.
+    ## Arguments: one
+    ## 1. Name of a database type
+    ## Returns: modified name
+
+    my $name = shift;
+
+    $name =~ s/postgres.*/postgres/io;
+    $name =~ s/pg.*/postgres/io;
+    $name =~ s/driz?zle.*/drizzle/io;
+    $name =~ s/mongo.*/mongo/io;
+    $name =~ s/mysql.*/mysql/io;
+    $name =~ s/oracle.*/oracle/io;
+    $name =~ s/redis.*/redis/io;
+    $name =~ s/sqll?ite.*/sqlite/io;
+
+    return $name;
+
+} ## end of standardize_rdbms_name
 
 
 sub find_best_db_for_searching {
