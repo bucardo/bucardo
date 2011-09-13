@@ -2274,7 +2274,6 @@ SELECT 'Fixme'::TEXT;
             $sth->finish();
             if ($count < 1) {
                 my $unlogged = $dbh->{pg_server_version} >= 90100 ? 'UNLOGGED' : '';
-                $unlogged = ''; ## Until the truncate bug is fixed.
                 $SQL = qq{
                    CREATE $unlogged TABLE bucardo."$stage_table" (
                       txntime    TIMESTAMPTZ,
