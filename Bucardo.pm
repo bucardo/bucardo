@@ -7564,14 +7564,14 @@ sub delete_rows {
             my $count = 1==$numpks ? @{ $SQL{ANYargs} } : @{ $SQL{PGIN} };
             for my $loop (1..$count) {
                 my $async = $loop==$count ? PG_ASYNC : 0;
-                $self->glog("Loop is $loop, async is $async");
+                my $pre = $count > 1 ? "/* $loop of $count */ " : '';
                 if (1 == $numpks) {
-                    $t->{deletesth} = $tdbh->prepare($SQL{ANY}{$tname}, { pg_async => $async });
+                    $t->{deletesth} = $tdbh->prepare("$pre$SQL{ANY}{$tname}", { pg_async => $async });
                     my $res = $t->{deletesth}->execute($SQL{ANYargs}->[$loop-1]);
                     $count{$t} += $res unless $async;
                 }
                 else {
-                    $count{$t} += $tdbh->do($SQL{PGIN}->[$loop-1], { pg_direct => 1, pg_async => $async });
+                    $count{$t} += $tdbh->do($pre.$SQL{PGIN}->[$loop-1], { pg_direct => 1, pg_async => $async });
                     $t->{deletesth} = 0;
                 }
             }

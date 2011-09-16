@@ -81,6 +81,10 @@ $command =
 $res = $bct->ctl($command);
 like ($res, qr/Added sync "pgtest"/, $t);
 
+## Adjust the chunk size so we test both ways
+$res = $bct->ctl('bucardo set statement_chunk_size=2');
+diag $res;
+
 ## Start up Bucardo with this new sync
 $bct->restart_bucardo($dbhX);
 
@@ -194,19 +198,18 @@ for my $table (keys %tabletype) {
 $dbhA->commit();
 $bct->ctl('bucardo kick pgtest 0');
 
-
 for my $table (keys %tabletype) {
 
     my $type = $tabletype{$table};
     $res = [];
 
-    $t = qq{Row with pkey of type $type gets copied to B after delete};
+    $t = qq{Row with pkey of type $type gets removed from B after delete};
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets copied to C after delete};
+    $t = qq{Row with pkey of type $type gets removed from C after delete};
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets copied to D after delete};
+    $t = qq{Row with pkey of type $type gets removed from D after delete};
     bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
 
 }
@@ -264,7 +267,6 @@ for my $table (keys %tabletype) {
 }
 
 ## Insert three more rows, then truncate
-## TODO: Adjust the chunksize to 2 before calling this
 for my $table (keys %tabletype) {
     my $type = $tabletype{$table};
 
