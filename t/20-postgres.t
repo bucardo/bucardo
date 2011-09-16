@@ -20,7 +20,7 @@ $location = '';
 
 my $numtabletypes = keys %tabletype;
 my $numsequences = keys %sequences;
-plan tests => 226;
+plan tests => 256;
 
 pass("*** Beginning postgres tests");
 
@@ -90,7 +90,7 @@ for my $table (sort keys %tabletype) {
     $pkey{$table} = $table =~ /test5/ ? q{"id space"} : 'id';
 
     ## INSERT
-    for my $x (1..6) {
+    for my $x (1..7) {
         $SQL = $table =~ /X/
             ? "INSERT INTO $table($pkey{$table}) VALUES (?)"
                 : "INSERT INTO $table($pkey{$table},data1,inty) VALUES (?,'foo',$x)";
@@ -263,13 +263,45 @@ for my $table (keys %tabletype) {
 
 }
 
-## Insert two more rows, then truncate
+## Insert three more rows, then truncate
+## TODO: Adjust the chunksize to 2 before calling this
 for my $table (keys %tabletype) {
     my $type = $tabletype{$table};
+
     my $val3 = $val{$type}{3};
     $sth{insert}{3}{$table}{A}->execute($val3);
     my $val4 = $val{$type}{4};
     $sth{insert}{4}{$table}{A}->execute($val4);
+    my $val5 = $val{$type}{5};
+    $sth{insert}{5}{$table}{A}->execute($val5);
+}
+$dbhA->commit();
+$bct->ctl('bucardo kick pgtest 0');
+
+for my $table (keys %tabletype) {
+
+    my $type = $tabletype{$table};
+    $res = [[1],[3],[4],[5]];
+
+    $t = qq{Rows with pkey of type $type gets copied to B after multiple inserts};
+    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
+
+    $t = qq{Rows with pkey of type $type gets copied to C after multiple inserts};
+    bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
+
+    $t = qq{Rows with pkey of type $type gets copied to D after multiple inserts};
+    bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
+
+}
+
+
+## Insert two more rows, then truncate
+for my $table (keys %tabletype) {
+    my $type = $tabletype{$table};
+    my $val6 = $val{$type}{6};
+    $sth{insert}{6}{$table}{A}->execute($val6);
+    my $val7 = $val{$type}{7};
+    $sth{insert}{7}{$table}{A}->execute($val7);
     $dbhA->do("TRUNCATE TABLE $table");
 }
 $dbhA->commit();

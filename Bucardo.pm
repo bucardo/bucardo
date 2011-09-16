@@ -7410,14 +7410,29 @@ sub delete_rows {
 
         my $tname = $newname->{$t->{name}};
 
+        ## We may want to break this up into separate rounds if large
+        my $round = 0;
+
+        ## The number of items before we break it into a separate statement
+        ## This is inexact, as we don't know how large each key is,
+        ## but should be good enough as long as not set too high.
+        my $chunksize = 10_000;
+
+        ## Internal counter of how many items we've processed this round
+        my $total = 0;
+
         ## Postgres-specific optimization for a single primary key:
         if ($sqltype eq 'ANY') {
             $SQL{ANY}{$tname} ||= "$self->{sqlprefix}DELETE FROM $tname WHERE $pkcols = ANY(?)";
-            my @delq;
+            ## The array where we store each chunk
+            my @SQL;
             for my $key (keys %$rows) {
-                push @delq => [split '\0' => $key];
+                push @{$SQL[$round]} => [split '\0' => $key];
+                if (++$total > $chunksize) {
+                    $round++;
+                }
             }
-            $SQL{ANYargs} = \@delq;
+            $SQL{ANYargs} = \@SQL;
         }
         ## Normal DELETE call with IN() clause
         elsif ($sqltype eq 'IN') {
@@ -7425,14 +7440,29 @@ sub delete_rows {
                 $self->{sqlprefix},
                 $tname,
                 $pkcols;
-            my @delq;
+            ## The array where we store each chunk
+            my @SQL;
+            my $newrow = 1;
             for my $key (keys %$rows) {
+                if ($newrow) {
+                    $SQL[$round]  = $SQL;
+                    $newrow=0;
+                }
                 my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0' => $key;
-                $SQL .= "($inner),";
+                $SQL[$round] .= "($inner),";
+                if (++$total > $chunksize) {
+                    $total = 0;
+                    chop $SQL[$round];
+                    $SQL[$round] .= ')';
+                    $round++;
+                    $newrow = 1;
+                }
             }
-            chop $SQL;
-            $SQL .= ')';
-            $SQL{IN} = $SQL;
+            if (!$newrow) {
+                chop $SQL[$round];
+                $SQL[$round] .= ')';
+            }
+            $SQL{IN} = \@SQL;
         }
         ## MySQL IN clause
         elsif ($sqltype eq 'MYIN') {
@@ -7441,23 +7471,51 @@ sub delete_rows {
                 $self->{sqlprefix},
                 $tname,
                 $safepk;
-            my @delq;
+
+            ## The array where we store each chunk
+            my @SQL;
+            my $newrow = 1;
+
             ## Quick workaround for a more standard timestamp
             if ($goat->{pkeytype}[0] =~ /timestamptz/) {
                 for my $key (keys %$rows) {
+                    if ($newrow) {
+                        $SQL[$round]  = $SQL;
+                        $newrow=0;
+                    }
                     my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; s/\+\d\d$//; qq{'$_'}; } split '\0' => $key;
-                    $SQL .= "($inner),";
+                    $SQL[$round] .= "($inner),";
+                    if (++$total > $chunksize) {
+                        $total = 0;
+                        chop $SQL[$round];
+                        $SQL[$round] .= ')';
+                        $round++;
+                        $newrow = 1;
+                    }
                 }
             }
             else {
                 for my $key (keys %$rows) {
+                    if ($newrow) {
+                        $SQL[$round]  = $SQL;
+                        $newrow=0;
+                    }
                     my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0' => $key;
-                    $SQL .= "($inner),";
+                    $SQL[$round] .= "($inner),";
+                    if (++$total > $chunksize) {
+                        $total = 0;
+                        chop $SQL[$round];
+                        $SQL[$round] .= ')';
+                        $round++;
+                        $newrow = 1;
+                    }
                 }
             }
-            chop $SQL;
-            $SQL .= ')';
-            $SQL{IN} = $SQL;
+            if (!$newrow) {
+                chop $SQL[$round];
+                $SQL[$round] .= ')';
+            }
+            $SQL{MYIN} = \@SQL;
         }
         ## Postgres-specific IN clause (schemas)
         elsif ($sqltype eq 'PGIN') {
@@ -7465,14 +7523,29 @@ sub delete_rows {
                 $self->{sqlprefix},
                 $tname,
                 $pkcols;
-            my @delq;
+            ## The array where we store each chunk
+            my @SQL;
+            my $newrow = 1;
             for my $key (keys %$rows) {
+                if ($newrow) {
+                    $SQL[$round]  = $SQL;
+                    $newrow=0;
+                }
                 my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0' => $key;
-                $SQL .= "($inner),";
+                $SQL[$round] .= "($inner),";
+                if (++$total > $chunksize) {
+                    $total = 0;
+                    chop $SQL[$round];
+                    $SQL[$round] .= ')';
+                    $round++;
+                    $newrow = 1;
+                }
             }
-            chop $SQL;
-            $SQL .= ')';
-            $SQL{PGIN} = $SQL;
+            if (! $newrow) {
+                chop $SQL[$round];
+                $SQL[$round] .= ')';
+            }
+            $SQL{PGIN} = \@SQL;
         }
     }
 
@@ -7485,15 +7558,26 @@ sub delete_rows {
 
         if ('postgres' eq $type) {
             my $tdbh = $t->{dbh};
-            if (1 == $numpks) {
-                $t->{deletesth} = $tdbh->prepare($SQL{ANY}{$tname}, {pg_async => PG_ASYNC});
-                $t->{deletesth}->execute($SQL{ANYargs});
+
+            ## Only the last will be async
+            ## In most cases, this means always async
+            my $count = 1==$numpks ? @{ $SQL{ANYargs} } : @{ $SQL{PGIN} };
+            for my $loop (1..$count) {
+                my $async = $loop==$count ? PG_ASYNC : 0;
+                $self->glog("Loop is $loop, async is $async");
+                if (1 == $numpks) {
+                    $t->{deletesth} = $tdbh->prepare($SQL{ANY}{$tname}, { pg_async => $async });
+                    my $res = $t->{deletesth}->execute($SQL{ANYargs}->[$loop-1]);
+                    $count{$t} += $res unless $async;
+                }
+                else {
+                    $count{$t} += $tdbh->do($SQL{PGIN}->[$loop-1], { pg_direct => 1, pg_async => $async });
+                    $t->{deletesth} = 0;
+                }
             }
-            else {
-                $tdbh->do($SQL{PGIN}, { pg_direct => 1, pg_async => PG_ASYNC });
-                $t->{deletesth} = 0;
-            }
+
             next;
+
         } ## end postgres database
 
         if ('mongo' eq $type) {
@@ -7533,13 +7617,17 @@ sub delete_rows {
 
         if ('mysql' eq $type or 'drizzle' eq $type) {
             my $tdbh = $t->{dbh};
-            ($count{$t} = $tdbh->do($SQL{IN})) =~ s/0E0/0/o;
+            for (@{ $SQL{IN} }) {
+                ($count{$t} += $tdbh->do($_)) =~ s/0E0/0/o;
+            }
             next;
         }
 
         if ('oracle' eq $type) {
             my $tdbh = $t->{dbh};
-            ($count{$t} = $tdbh->do($SQL{IN})) =~ s/0E0/0/o;
+            for (@{ $SQL{IN} }) {
+                ($count{$t} += $tdbh->do($_)) =~ s/0E0/0/o;
+            }
             next;
         }
 
@@ -7550,18 +7638,24 @@ sub delete_rows {
 
         if ('sqlite' eq $type) {
             my $tdbh = $t->{dbh};
-            ($count{$t} = $tdbh->do($SQL{IN})) =~ s/0E0/0/o;
+            for (@{ $SQL{IN} }) {
+                ($count{$t} += $tdbh->do($_)) =~ s/0E0/0/o;
+            }
             next;
         }
 
         if ($type =~ /flatpg/o) {
-            print {$t->{filehandle}} qq{$SQL{PGIN};\n\n};
+            for (@{ $SQL{PGIN} }) {
+                print {$t->{filehandle}} qq{$_;\n\n};
+            }
             $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
             next;
         }
 
         if ($type =~ /flat/o) {
-            print {$t->{filehandle}} qq{$SQL{IN};\n\n};
+            for (@{ $SQL{IN} }) {
+                print {$t->{filehandle}} qq{$_;\n\n};
+            }
             $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
             next;
         }
@@ -7578,7 +7672,7 @@ sub delete_rows {
             my $tdbh = $t->{dbh};
 
             ## Wrap up all the async queries
-            ($count{$t} = $tdbh->pg_result()) =~ s/0E0/0/o;
+            ($count{$t} += $tdbh->pg_result()) =~ s/0E0/0/o;
 
             ## Call finish if this was a statement handle (as opposed to a do)
             if ($t->{deletesth}) {
