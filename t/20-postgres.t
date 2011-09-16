@@ -255,13 +255,13 @@ for my $table (keys %tabletype) {
     my $type = $tabletype{$table};
     $res = [[1]];
 
-    $t = qq{Row with pkey of type $type gets copied to B after single delete};
+    $t = qq{Row with pkey of type $type gets removed from B after single delete};
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets copied to C after single delete};
+    $t = qq{Row with pkey of type $type gets removed from C after single delete};
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets copied to D after single delete};
+    $t = qq{Row with pkey of type $type gets removed from D after single delete};
     bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
 
 }
