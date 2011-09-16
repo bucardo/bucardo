@@ -7416,7 +7416,7 @@ sub delete_rows {
         ## The number of items before we break it into a separate statement
         ## This is inexact, as we don't know how large each key is,
         ## but should be good enough as long as not set too high.
-        my $chunksize = 10_000;
+        my $chunksize = $config{statement_chunk_size} || 10_000;
 
         ## Internal counter of how many items we've processed this round
         my $total = 0;
