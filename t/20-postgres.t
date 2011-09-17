@@ -20,7 +20,7 @@ $location = '';
 
 my $numtabletypes = keys %tabletype;
 my $numsequences = keys %sequences;
-plan tests => 256;
+plan tests => 226;
 
 pass("*** Beginning postgres tests");
 
@@ -83,7 +83,6 @@ like ($res, qr/Added sync "pgtest"/, $t);
 
 ## Adjust the chunk size so we test both ways
 $res = $bct->ctl('bucardo set statement_chunk_size=2');
-diag $res;
 
 ## Start up Bucardo with this new sync
 $bct->restart_bucardo($dbhX);
@@ -214,15 +213,14 @@ for my $table (keys %tabletype) {
 
 }
 
-
-## Insert two rows, then delete one of them
-## Add one row per table type to A
+## Insert four rows, then delete three of them
+## We want the deletes and inserts to be > 2 to test statement_chunk_size
 for my $table (keys %tabletype) {
     my $type = $tabletype{$table};
-    my $val1 = $val{$type}{1};
-    $sth{insert}{1}{$table}{A}->execute($val1);
-    my $val2 = $val{$type}{2};
-    $sth{insert}{2}{$table}{A}->execute($val2);
+
+    for my $num (1..4) {
+        $sth{insert}{$num}{$table}{A}->execute( $val{$type}{$num} );
+    }
 }
 $dbhA->commit();
 $bct->ctl('bucardo kick pgtest 0');
@@ -230,22 +228,24 @@ $bct->ctl('bucardo kick pgtest 0');
 for my $table (keys %tabletype) {
 
     my $type = $tabletype{$table};
-    $res = [[1],[2]];
+    $res = [[1],[2],[3],[4]];
 
-    $t = qq{Row with pkey of type $type gets copied to B after double insert};
+    $t = qq{Row with pkey of type $type gets copied to B after triple insert};
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets copied to C after double insert};
+    $t = qq{Row with pkey of type $type gets copied to C after triple insert};
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets copied to D after double insert};
+    $t = qq{Row with pkey of type $type gets copied to D after triple insert};
     bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
 
 }
 
-## Delete one of the rows
+## Delete three of the rows
 for my $table (keys %tabletype) {
-    $sth{deleteone}{$table}{A}->execute(2); ## inty = 2
+    for my $num (2..4) {
+        $sth{deleteone}{$table}{A}->execute($num); ## using inty
+    }
 }
 $dbhA->commit();
 $bct->ctl('bucardo kick pgtest 0');
@@ -255,47 +255,16 @@ for my $table (keys %tabletype) {
     my $type = $tabletype{$table};
     $res = [[1]];
 
-    $t = qq{Row with pkey of type $type gets removed from B after single delete};
+    $t = qq{Row with pkey of type $type gets removed from B after triple delete};
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets removed from C after single delete};
+    $t = qq{Row with pkey of type $type gets removed from C after triple delete};
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets removed from D after single delete};
+    $t = qq{Row with pkey of type $type gets removed from D after triple delete};
     bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
 
 }
-
-## Insert three more rows, then truncate
-for my $table (keys %tabletype) {
-    my $type = $tabletype{$table};
-
-    my $val3 = $val{$type}{3};
-    $sth{insert}{3}{$table}{A}->execute($val3);
-    my $val4 = $val{$type}{4};
-    $sth{insert}{4}{$table}{A}->execute($val4);
-    my $val5 = $val{$type}{5};
-    $sth{insert}{5}{$table}{A}->execute($val5);
-}
-$dbhA->commit();
-$bct->ctl('bucardo kick pgtest 0');
-
-for my $table (keys %tabletype) {
-
-    my $type = $tabletype{$table};
-    $res = [[1],[3],[4],[5]];
-
-    $t = qq{Rows with pkey of type $type gets copied to B after multiple inserts};
-    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
-
-    $t = qq{Rows with pkey of type $type gets copied to C after multiple inserts};
-    bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
-
-    $t = qq{Rows with pkey of type $type gets copied to D after multiple inserts};
-    bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
-
-}
-
 
 ## Insert two more rows, then truncate
 for my $table (keys %tabletype) {

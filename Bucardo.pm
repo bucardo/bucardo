@@ -7419,7 +7419,7 @@ sub delete_rows {
         my $chunksize = $config{statement_chunk_size} || 10_000;
 
         ## Internal counter of how many items we've processed this round
-        my $total = 0;
+        my $roundtotal = 0;
 
         ## Postgres-specific optimization for a single primary key:
         if ($sqltype eq 'ANY') {
@@ -7428,7 +7428,8 @@ sub delete_rows {
             my @SQL;
             for my $key (keys %$rows) {
                 push @{$SQL[$round]} => [split '\0' => $key];
-                if (++$total > $chunksize) {
+                if (++$roundtotal >= $chunksize) {
+                    $roundtotal = 0;
                     $round++;
                 }
             }
@@ -7442,25 +7443,18 @@ sub delete_rows {
                 $pkcols;
             ## The array where we store each chunk
             my @SQL;
-            my $newrow = 1;
             for my $key (keys %$rows) {
-                if ($newrow) {
-                    $SQL[$round]  = $SQL;
-                    $newrow=0;
-                }
                 my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0' => $key;
                 $SQL[$round] .= "($inner),";
-                if (++$total > $chunksize) {
-                    $total = 0;
-                    chop $SQL[$round];
-                    $SQL[$round] .= ')';
+                if (++$roundtotal >= $chunksize) {
+                    $roundtotal = 0;
                     $round++;
-                    $newrow = 1;
                 }
             }
-            if (!$newrow) {
-                chop $SQL[$round];
-                $SQL[$round] .= ')';
+            ## Cleanup
+            for (@SQL) {
+                chop;
+                $_ = "$SQL $_)";
             }
             $SQL{IN} = \@SQL;
         }
@@ -7474,46 +7468,32 @@ sub delete_rows {
 
             ## The array where we store each chunk
             my @SQL;
-            my $newrow = 1;
 
             ## Quick workaround for a more standard timestamp
             if ($goat->{pkeytype}[0] =~ /timestamptz/) {
                 for my $key (keys %$rows) {
-                    if ($newrow) {
-                        $SQL[$round]  = $SQL;
-                        $newrow=0;
-                    }
                     my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; s/\+\d\d$//; qq{'$_'}; } split '\0' => $key;
                     $SQL[$round] .= "($inner),";
-                    if (++$total > $chunksize) {
-                        $total = 0;
-                        chop $SQL[$round];
-                        $SQL[$round] .= ')';
+                    if (++$roundtotal >= $chunksize) {
+                        $roundtotal = 0;
                         $round++;
-                        $newrow = 1;
                     }
                 }
             }
             else {
                 for my $key (keys %$rows) {
-                    if ($newrow) {
-                        $SQL[$round]  = $SQL;
-                        $newrow=0;
-                    }
                     my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0' => $key;
                     $SQL[$round] .= "($inner),";
-                    if (++$total > $chunksize) {
-                        $total = 0;
-                        chop $SQL[$round];
-                        $SQL[$round] .= ')';
+                    if (++$roundtotal >= $chunksize) {
+                        $roundtotal = 0;
                         $round++;
-                        $newrow = 1;
                     }
                 }
             }
-            if (!$newrow) {
-                chop $SQL[$round];
-                $SQL[$round] .= ')';
+            ## Cleanup
+            for (@SQL) {
+                chop;
+                $_ = "$SQL $_)";
             }
             $SQL{MYIN} = \@SQL;
         }
@@ -7525,25 +7505,18 @@ sub delete_rows {
                 $pkcols;
             ## The array where we store each chunk
             my @SQL;
-            my $newrow = 1;
             for my $key (keys %$rows) {
-                if ($newrow) {
-                    $SQL[$round]  = $SQL;
-                    $newrow=0;
-                }
                 my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0' => $key;
                 $SQL[$round] .= "($inner),";
-                if (++$total > $chunksize) {
-                    $total = 0;
-                    chop $SQL[$round];
-                    $SQL[$round] .= ')';
+                if (++$roundtotal >= $chunksize) {
+                    $roundtotal = 0;
                     $round++;
-                    $newrow = 1;
                 }
             }
-            if (! $newrow) {
-                chop $SQL[$round];
-                $SQL[$round] .= ')';
+            ## Cleanup
+            for (@SQL) {
+                chop;
+                $_ = "$SQL $_)";
             }
             $SQL{PGIN} = \@SQL;
         }
@@ -7725,13 +7698,28 @@ sub push_rows {
 
     my $newname = $goat->{newname}{$self->{syncname}};
 
+    ## As with delete, we may break this into more than one step
+    ## Should only be a factor for very large numbers of keys
+    my $chunksize = $config{statement_chunk_size} || 10_000;
+
     ## Build a list of all PK values to feed to IN clauses
-    my $pkvals = '';
+    my @pkvals;
+    my $round = 0;
+    my $roundtotal = 0;
     for my $key (keys %$rows) {
         my $inner = join ',' => map { s{\'}{''}go; s{\\}{\\\\}go; qq{'$_'}; } split '\0' => $key;
-        $pkvals .= $numpks > 1 ? "($inner)," : "$inner,";
+        $pkvals[$round] .= $numpks > 1 ? "($inner)," : "$inner,";
+        if (++$roundtotal >= $chunksize) {
+            $roundtotal = 0;
+            $round++;
+        }
     }
-    chop $pkvals;
+
+    ## Remove that final comma from each
+    for (@pkvals) {
+        chop;
+    }
+
     ## Example: 1234, 221
     ## Example MCPK: ('1234','Don''t Stop','2008-01-01'),('221','foobar','2008-11-01')
 
@@ -7741,7 +7729,7 @@ sub push_rows {
     }
 
     ## This can happen if we truncated but had no delta activity
-    return 0 if ! defined $pkvals or ! length $pkvals;
+    return 0 if ! defined $pkvals[0] or ! length $pkvals[0];
 
     ## Get ready to export from the source
     ## This may have multiple versions depending on the customcols table
@@ -7765,8 +7753,6 @@ sub push_rows {
 
         ## Build the clause (cache) and kick it off
         my $SELECT = $clause || 'SELECT *';
-        my $srccmd = "$self->{sqlprefix}COPY ($SELECT FROM $S.$T WHERE $pkcols IN ($pkvals)) TO STDOUT";
-        $fromdbh->do($srccmd);
 
         ## Prepare each target in turn
         for my $t (@{ $srccmd{$clause} }) {
@@ -7782,6 +7768,9 @@ sub push_rows {
             my $columnlist = $goat->{tcolumnlist}{$SELECT};
 
             my $type = $t->{dbtype};
+
+            ## Use columnlist below so we never have to worry about the order
+            ## of the columns on the target
 
             if ('postgres' eq $type) {
                 my $tgtcmd = "$self->{sqlprefix}COPY $tname$columnlist FROM STDIN";
@@ -7802,7 +7791,6 @@ sub push_rows {
                 ## TODO
             }
             elsif ('mysql' eq $type or 'drizzle' eq $type) {
-                ## Use columnlist here so we never have to worry about the order?
                 my $tgtcmd = "INSERT INTO $tname$columnlist VALUES (";
                 $tgtcmd .= '?,' x @$cols;
                 $tgtcmd =~ s/,$/)/o;
@@ -7826,75 +7814,95 @@ sub push_rows {
 
         } ## end preparing each target for this clause
 
-        my $buffer = '';
-        $self->glog(qq{Begin push of $S.$T rows from database "$fromname"}, LOG_VERBOSE);
+        my $loop = 1;
+        my $pcount = @pkvals;
 
-        ## Loop through all changed rows on the source, and push to the target(s)
-        my $multirow = 0;
+        ## Loop through each chunk of primary keys to copy over
+        for my $pkvs (@pkvals) {
 
-        while ($fromdbh->pg_getcopydata($buffer) >= 0) {
+            ## Message to prepend to the statement if chunking
+            my $pre = $pcount <= 1 ? '' : "/* $loop of $pcount */";
+            $loop++;
 
-            for my $t (@{ $srccmd{$clause} }) {
+            ## Kick off the copy on the source
+            my $srccmd = "$pre$self->{sqlprefix}COPY ($SELECT FROM $S.$T WHERE $pkcols IN ($pkvs)) TO STDOUT";
+            $fromdbh->do($srccmd);
 
-                my $type = $t->{dbtype};
+            my $buffer = '';
+            $self->glog(qq{Begin push of $S.$T rows from database "$fromname"}, LOG_VERBOSE);
 
-                my $cols = $t->{tcolumns};
+            ## Loop through all changed rows on the source, and push to the target(s)
+            my $multirow = 0;
 
-                chomp $buffer;
+            ## Loop through each row output from the source, storing it in $buffer
+            while ($fromdbh->pg_getcopydata($buffer) >= 0) {
 
-                ## For Postgres, we simply do COPY to COPY
-                if ('postgres' eq $type) {
-                    $t->{dbh}->pg_putcopydata("$buffer\n");
-                }
-                ## For flat files destined for Postgres, just do a tab-delimited dump
-                elsif ('flatpg' eq $type) {
-                    print {$t->{filehandle}} "$buffer\n";
-                }
-                ## For other flat files, make a standard VALUES list
-                elsif ('flatsql' eq $type) {
-                    if ($multirow++) {
-                        print {$t->{filehandle}} ",\n";
+                ## For each target using this particular COPY statement
+                for my $t (@{ $srccmd{$clause} }) {
+
+                    my $type = $t->{dbtype};
+
+                    my $cols = $t->{tcolumns};
+
+                    chomp $buffer;
+
+                    ## For Postgres, we simply do COPY to COPY
+                    if ('postgres' eq $type) {
+                        $t->{dbh}->pg_putcopydata("$buffer\n");
                     }
-                    print {$t->{filehandle}} '(' .
-                        (join ',' => map { $self->{masterdbh}->quote($_) } split /\t/ => $buffer) . ')';
-                }
-                ## For Mongo, do some mongomagic
-                elsif ('mongo' eq $type) {
-                    ## Have to map these values back to their names
-                    my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
+                    ## For flat files destined for Postgres, just do a tab-delimited dump
+                    elsif ('flatpg' eq $type) {
+                        print {$t->{filehandle}} "$buffer\n";
+                    }
+                    ## For other flat files, make a standard VALUES list
+                    elsif ('flatsql' eq $type) {
+                        if ($multirow++) {
+                            print {$t->{filehandle}} ",\n";
+                        }
+                        print {$t->{filehandle}} '(' .
+                            (join ',' => map { $self->{masterdbh}->quote($_) } split /\t/ => $buffer) . ')';
+                    }
+                    ## For Mongo, do some mongomagic
+                    elsif ('mongo' eq $type) {
+                        ## Have to map these values back to their names
+                        my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
 
-                    ## Our object consists of the primary keys, plus all other fields
-                    my $object = {};
-                    for my $cname (@{ $cols }) {
-                        $object->{$cname} = shift @cols;
+                        ## Our object consists of the primary keys, plus all other fields
+                        my $object = {};
+                        for my $cname (@{ $cols }) {
+                            $object->{$cname} = shift @cols;
+                        }
+                        ## Coerce non-strings into different objects
+                        for my $key (keys %$object) {
+                            if ($goat->{columnhash}{$key}{ftype} =~ /smallint|integer|bigint/o) {
+                                $object->{$key} = int $object->{$key};
+                            }
+                            elsif ($goat->{columnhash}{$key}{ftype} eq 'boolean') {
+                                $object->{$key} = $object->{$key} eq 't' ? true : false;
+                            }
+                            elsif ($goat->{columnhash}{$key}{ftype} =~ /real|double|numeric/o) {
+                                $object->{$key} = strtod($object->{$key});
+                            }
+                        }
+                        $self->{collection}->insert($object, { safe => 1 });
                     }
-                    ## Coerce non-strings into different objects
-                    for my $key (keys %$object) {
-                        if ($goat->{columnhash}{$key}{ftype} =~ /smallint|integer|bigint/o) {
-                            $object->{$key} = int $object->{$key};
-                        }
-                        elsif ($goat->{columnhash}{$key}{ftype} eq 'boolean') {
-                            $object->{$key} = $object->{$key} eq 't' ? true : false;
-                        }
-                        elsif ($goat->{columnhash}{$key}{ftype} =~ /real|double|numeric/o) {
-                            $object->{$key} = strtod($object->{$key});
-                        }
+                    ## For MySQL, Drizzle, Oracle, and SQLite, do some basic INSERTs
+                    elsif ('mysql' eq $type
+                            or 'drizzle' eq $type
+                            or 'oracle' eq $type
+                            or 'sqlite' eq $type) {
+                        my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
+                        $count += $t->{sth}->execute(@cols);
                     }
-                    $self->{collection}->insert($object, { safe => 1 });
-                }
-                ## For MySQL, Drizzle, Oracle, and SQLite, do some basic INSERTs
-                elsif ('mysql' eq $type
-                       or 'drizzle' eq $type
-                       or 'oracle' eq $type
-                       or 'sqlite' eq $type) {
-                    my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
-                    $count += $t->{sth}->execute(@cols);
-                }
-                elsif ('redis' eq $type) {
-                    ## TODO
-                }
-            }
-        }
+                    elsif ('redis' eq $type) {
+                        ## TODO
+                    }
+
+                } ## end each target
+
+            } ## end each row pulled from the source
+
+        } ## end each pklist
 
         ## Workaround for DBD::Pg bug
         ## Once we require a minimum version of 2.18.1 or better, we can remove this!
