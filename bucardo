@@ -5817,7 +5817,7 @@ sub add_sync {
         for my $db (sort @dbs) {
             ## Set the default type of database
             $type = $type eq '' ? 'source' : 'target';
-            if ($db =~ s/=(.+)//) {
+            if ($db =~ s/[=:](.+)//) {
                 $type = $1;
             }
             if (! exists $global{db}{$db}) {
