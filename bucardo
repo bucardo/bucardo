@@ -2443,7 +2443,6 @@ sub update_dbgroup {
     ## Track if we call confirm_commit or not
     my $changes = 0;
 
-
     for my $action (@actions) {
         ## New name for this group?
         if ($action =~ /name=(.+)/) {
@@ -3587,6 +3586,7 @@ sub update_herd {
 
 } ## end of update_herd
 
+
 sub list_herds {
 
     ## Show information about all or some subset of the 'herd' table
@@ -3638,6 +3638,536 @@ sub list_herds {
     exit 0;
 
 } ## end of list_herds
+
+##
+## Sync-related subroutines: add, remove, update, list
+##
+
+sub add_sync {
+
+    ## Add an item to the bucardo.sync table
+    ## Arguments: none (uses nouns)
+    ## Returns: never, exits
+
+    my $item_name = shift @nouns || '';
+
+    my $usage = usage('add_sync');
+
+    my $batch = 1;
+
+    if (!length $item_name) {
+        warn "$usage\n";
+        exit 1;
+    }
+
+    ## Inputs and aliases, database column name, flags, default
+    my $validcols = qq{
+        name                     name                 0                $item_name
+        herd                     herd                 0                null
+        dbs                      dbs                  0                null
+        stayalive                stayalive            TF               null
+        kidsalive                kidsalive            TF               null
+        limitdbs                 limitdbs             numeric          null
+        ping                     ping                 TF               null
+        do_listen                do_listen            TF               null
+        checktime                checktime            interval         null
+        status                   status               =active|inactive null
+        source_makedelta         source_makedelta     =inherits|on|off null
+        target_makedelta         target_makedelta     =inherits|on|off null
+        priority                 priority             numeric          null
+        analyze_after_copy       analyze_after_copy   TF               null
+        overdue                  overdue              interval         null
+        expired                  expired              interval         null
+        track_rates              track_rates          TF               null
+        onetimecopy              onetimecopy          =0|1|2           null
+        lifetime                 lifetime             interval         null
+        maxkicks                 maxkicks             numeric          null
+        rebuild_index|rebuildindex   rebuild_index    numeric          null
+        customselect|usecustomselect usecustomselect  TF               null
+        tables                   tables               0                skip
+    };
+
+    ## Fullcopy syncs get some of their defaults overriden
+    ## Because who wants ping on a fullcopy sync?
+
+    my $morph = [
+        {
+            field => 'synctype',
+            value => 'fullcopy',
+            new_defaults => 'ping|F stayalive|F kidsalive|F'
+        },
+    ];
+
+    my ($dbcols,$cols,$phs,$vals)
+        = process_simple_args({cols => $validcols, list => \@nouns, usage => $usage, morph => $morph});
+
+    if (! exists $dbcols->{herd}) {
+        ## But allow on-the-fly herd creation
+        die "Need to specify a herd for this sync\n";
+    }
+    if (! exists $dbcols->{dbs}) {
+        die "Need to specify which databases\n";
+    }
+
+    ## Already got a sync by this name?
+    if (exists $global{sync}{$item_name}) {
+        die qq{A sync with the name "$item_name" already exists\n};
+    }
+
+    ## If this is a list of tables, create them as a new herd
+    ## Ideally we also re-use the herd if it already exists
+    if ($dbcols->{herd} =~ /,/) {
+        my @tables = split /\s*,\s*/ => $dbcols->{herd};
+        for my $table (sort @tables) {
+            if (! exists $global{goat}{$table}) {
+                die "No such table or sequence: $table\n";
+            }
+        }
+    }
+    else {
+        my $name = $dbcols->{herd};
+        if (! exists $global{herd}{$name}) {
+            my $schema = 'public';
+
+            ## Maybe it's a table?
+            if (! exists $global{goat}{$name}) {
+                warn "No such herd or table: $name\n";
+                warn "To list all herds, use: list herds\n";
+                warn "To list all tables, use: list tables\n";
+                exit 1;
+            }
+
+            ## See if any existing herds match this one
+            for my $hname (sort keys %{$global{herd}}) {
+                my $number = keys %{$global{herd}{$hname}{hasgoat}{$schema}};
+                next unless 1 == $number;
+                print qq{Use existing herd "$hname"? Y/N };
+                my $ans = $batch ? 'Y' : <STDIN>;
+                if ($ans =~ /^y/i) {
+                    $dbcols->{herd} = $hname;
+                    $vals->{herd} = $hname;
+                    last;
+                }
+            }
+            ## If we aren't using an existing herd, create a new one
+            $name = $dbcols->{herd};
+            if (! exists $global{herd}{$name}) {
+                print "Create a new herd with table $name\n";
+
+                ## We will use the name of the sync if free
+                ## Otherwise, keep adding numbers to it until we get a free name
+                $SQL = 'SELECT 1 FROM bucardo.herd WHERE name = ?';
+                $sth = $dbh->prepare($SQL);
+                my $gname = $item_name;
+                my $x = 1;
+                {
+                    $count = $sth->execute($gname);
+                    $sth->finish();
+                    last if $count < 1;
+                    $gname  = "${item_name}_$x";
+                    $x++;
+                    redo;
+                }
+                $SQL = "INSERT INTO bucardo.herd (name) VALUES (?)";
+                $sth = $dbh->prepare($SQL);
+                $count = $sth->execute($gname);
+                if (1 != $count) {
+                    die qq{Unable to add new herd named "$gname"\n};
+                }
+                $SQL = 'INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,'
+                    . '(SELECT id FROM bucardo.goat WHERE schemaname = ? AND tablename = ?))';
+                $sth = $dbh->prepare($SQL);
+                $count = $sth->execute($gname, $schema, $name);
+                if (1 != $count) {
+                    die qq{Unable to add table "$name" to herd "$gname"\n};
+                }
+                print qq{Created herd "$gname"\n};
+                $dbcols->{herd} = $gname;
+
+            }
+        } ## end no herd name match
+
+    } ## end single word herd option
+
+    ## Next, the dbs
+
+    ## If this is a single database, turn into a "list" for below
+    if (exists $global{db}{$dbcols->{dbs}}) {
+        $dbcols->{dbs} .= ',';
+    }
+
+    ## Can be a database group, or a list of databases
+    if ($dbcols->{dbs} =~ /,/) {
+        my @dbs = split /\s*,\s*/ => $dbcols->{dbs};
+        my %db;
+        my $type = '';
+        for my $db (sort @dbs) {
+            ## Set the default type of database
+            $type = $type eq '' ? 'source' : 'target';
+            if ($db =~ s/[=:](.+)//) {
+                $type = $1;
+            }
+            if (! exists $global{db}{$db}) {
+                die "No such database: $db\n";
+            }
+            ## Standardize and check the types
+            $type = 'source' if $type =~ /^s/i or $type =~ /^master/i;
+            $type = 'target' if $type =~ /^t/i or $type =~ /^rep/i;
+            $type = 'fullcopy' if $type =~ /^f/i;
+            if ($type !~ /^(source|target|fullcopy)$/) {
+                die "Invalid database type: must be source, target, or fullcopy (not $type)\n";
+            }
+            $db{$db} = $type;
+        }
+        ## Do any existing groups match this list exactly?
+        my $newlist = join ',' => map { "$_=".$db{$_} } sort keys %db;
+        for my $gname (sort keys %{$global{dbgroup}}) {
+            my $innerjoin = join ',' => map { "$_=".$global{dbgroup}{$gname}{db}{$_} } sort keys %{$global{dbgroup}{$gname}{db}};
+            if ($innerjoin eq $newlist) {
+                print qq{That group of databases already exists as dbgroup "$gname"\n};
+                print qq{Do you wish to use that group instead? Y/N };
+                my $ans = $batch ? 'Y' : <STDIN>;
+                if ($ans =~ /^y/i) {
+                    $dbcols->{dbs} = $gname;
+                    $vals->{dbs} = $gname;
+                    last;
+                }
+                ## Don't ask again?
+                $newlist = '';
+            }
+        }
+
+        if ($dbcols->{dbs} =~ /,/) { ## Make sure we still have a list
+            ## We will use the name of the sync if free
+            ## Otherwise, keep adding numbers to it until we get a free name
+            $SQL = 'SELECT 1 FROM bucardo.dbgroup WHERE name = ?';
+            $sth = $dbh->prepare($SQL);
+            my $gname = $item_name;
+            my $x = 1;
+            {
+                $count = $sth->execute($gname);
+                $sth->finish();
+                last if $count < 1;
+                $gname  = "${item_name}_$x";
+                $x++;
+                redo;
+            }
+            $SQL = "INSERT INTO bucardo.dbgroup (name) VALUES (?)";
+            $sth = $dbh->prepare($SQL);
+            $count = $sth->execute($gname);
+            if (1 != $count) {
+                die qq{Unable to add new dbgroup named "$gname"\n};
+            }
+            $SQL = 'INSERT INTO bucardo.dbmap(dbgroup,db,role) VALUES (?,?,?)';
+            $sth = $dbh->prepare($SQL);
+            for my $db (sort keys %db) {
+                $count = $sth->execute($gname, $db, $db{$db});
+                if (1 != $count) {
+                    die qq{Unable to add database "$db" to group "$gname"\n};
+                }
+            }
+            print qq{Created database group "$gname"\n};
+            $dbcols->{dbs} = $gname;
+            $vals->{dbs} = $gname;
+        }
+    } ## end of multiple databases specified
+    else {
+        my $dbg = $dbcols->{dbs};
+        if (! exists $global{dbgroup}{$dbg}) {
+            warn "No such database group: $dbg\n";
+            warn "To list all database groups, use: list dbgroups\n";
+            exit 1;
+        }
+    }
+
+    $dbh->commit();
+
+    ## Attempt to insert this into the database
+    $SQL = "INSERT INTO bucardo.sync ($cols) VALUES ($phs)";
+    $DEBUG and warn "SQL: $SQL\n";
+    $DEBUG and warn Dumper $vals;
+    $sth = $dbh->prepare($SQL);
+    my @flatvals = map { $vals->{$_} } sort keys %$vals;
+    $DEBUG and warn Dumper \@flatvals;
+    eval {
+        $count = $sth->execute(@flatvals);
+    };
+    if ($@) {
+        die "Failed to add sync: $@\n";
+    }
+
+    $dbh->commit();
+
+    if (!$QUIET) {
+        print qq{Added sync "$item_name"\n};
+    }
+
+    exit 0;
+
+} ## end of add_sync
+
+
+sub remove_sync {
+
+    ## Usage: remove sync name [name2 name3 ...]
+    ## Arguments: none (uses nouns)
+    ## Returns: never, exits
+
+    my $usage = usage('remove_sync');
+
+    if (!@nouns) {
+        warn "$usage\n";
+        exit 1;
+    }
+
+    ## Make sure all named syncs exist
+    my $s = $global{sync};
+    for my $name (@nouns) {
+        if (! exists $s->{$name}) {
+            die qq{No such sync: $name\n};
+        }
+    }
+
+    ## Make sure none of the syncs are currently running
+    ## XXX Is there anything we can do to check that the sync is active?
+
+    $SQL = 'DELETE FROM bucardo.sync WHERE name = ?';
+    $sth = $dbh->prepare($SQL);
+
+    for my $name (@nouns) {
+        eval {
+            $sth->execute($name);
+        };
+        if ($@) {
+            if ($@ =~ /"goat_db_fk"/) {
+                die qq{Cannot delete sync "$name": must remove all tables that reference it first\n};
+            }
+            die qq{Could not delete sync "$name"\n$@\n};
+        }
+    }
+
+    for my $name (@nouns) {
+        print qq{Removed sync "$name"\n};
+        print "Note: table triggers (if any) are not automatically removed!\n";
+    }
+
+    $dbh->commit();
+
+    exit 0;
+
+} ## end of remove_sync
+
+sub update_sync {
+
+    ## Update one or more syncs
+    ## Arguments: none (reads nouns for a list of syncs)
+    ## Returns: never, exits
+
+    my $usage = usage('update_sync');
+
+    my @actions = @_;
+
+    if (! @actions) {
+        print "$usage\n";
+        exit 1;
+    }
+
+    my $name = shift @actions;
+
+    ## Recursively call ourselves for wildcards and 'all'
+    exit 0 if ! check_recurse($SYNC, $name, @actions);
+
+    ## Make sure this sync exists!
+    if (! exists $SYNC->{$name}) {
+        die qq{Could not find a sync named "$name"\nUse 'list syncs' to see all available.};
+    }
+
+
+    my $changes = 0;
+
+    ## Current information about this sync, including column names
+    my $syncinfo;
+
+    for my $action (@actions) {
+        ## Look for a standard foo=bar or foo:bar format
+        if ($action =~ /(.+?)\s*[=:]\s*(.+)/) {
+            my ($setting,$value) = (lc $1,$2);
+            print "Change request for sync $name for $setting to $value\n";
+
+            ## No funny characters please, just boring column names
+            $setting =~ /^[a-z]+$/ or die "Invalid setting: $setting\n";
+
+            ## If we have not already, grab the current information for this sync
+            ## We also use this to get the list of valid column names to modify
+            if (! defined $syncinfo) {
+                $SQL = 'SELECT * FROM sync WHERE name = ?';
+                $sth = $dbh->prepare($SQL);
+                $count = $sth->execute($name);
+                ## Check count
+                $syncinfo = $sth->fetchall_arrayref({})->[0];
+                for my $col (qw/ cdate /) {
+                    delete $syncinfo->{$col};
+                }
+            }
+
+            ## Is this a valid column?
+            if (! exists $syncinfo->{$setting}) {
+                die "Invalid setting: $setting\n";
+            }
+
+            ## Normalize things like t/f 0/1 others?
+
+            ## Try setting it
+            $SQL = "UPDATE sync SET $setting=? WHERE name = ?";
+            $sth = $dbh->prepare($SQL);
+            $sth->execute($value,$name);
+            $changes++;
+
+            next;
+        }
+
+        print "Unknown action: $action\n$usage\n";
+        exit 1;
+
+    }
+
+    confirm_commit() if $changes;
+
+    return;
+
+} ## end of update_sync
+
+
+sub list_syncs {
+
+    ## Show information about all or some subset of the 'sync' table
+    ## Arguments: none (reads nouns for a list of syncs)
+    ## Returns: never, exits
+
+    my $usage = usage('list_syncs');
+
+    my $syncs = $global{sync};
+
+    ## Do we have at least one name specified (if not, show all)
+    my $namefilter = 0;
+
+    for my $term (@nouns) {
+
+        ## Filter out by status: only show active or inactive syncs
+        if ($term =~ /^(active|inactive)$/i) {
+            my $stat = lc $1;
+            for my $name (keys %$syncs) {
+                delete $syncs->{$name} if $syncs->{$name}{status} ne $stat;
+            }
+            next;
+        }
+
+        ## Filter out by arbitrary attribute matches
+        if ($term =~ /(\w+)\s*=\s*(\w+)/) {
+            my ($attrib, $value) = (lc $1,$2);
+            for my $name (keys %$syncs) {
+                if (! exists $syncs->{$name}{$attrib}) {
+                    my $msg = "No such sync attribute: $attrib\n";
+                    $msg .= "Must be one of the following:\n";
+                    my $names = join ',' =>
+                        sort
+                        grep { $_ !~ /\b(?:cdate|name)\b/ }
+                        keys %{ $syncs->{$name} };
+                    $msg .= " $names\n";
+                    die $msg;
+                }
+                delete $syncs->{$name} if $syncs->{$name}{$attrib} ne $value;
+            }
+            next;
+        }
+
+        ## Everything else should be considered a sync name
+        $namefilter = 1;
+
+        ## Check for wildcards
+        if ($term =~ s/[*%]/.*/) {
+            for my $name (keys %$syncs) {
+                $syncs->{$name}{ok2show} = 1 if $name =~ /$term/;
+            }
+            next;
+        }
+
+        ## Must be an exact match
+        for my $name (keys %$syncs) {
+            $syncs->{$name}{ok2show} = 1 if $name eq $term;
+        }
+
+    }
+
+    ## If we filtered by name, remove all the non-matched ones
+    if ($namefilter) {
+        for my $name (keys %$syncs) {
+            delete $syncs->{$name} if ! exists $syncs->{$name}{ok2show};
+        }
+    }
+
+    ## Nothing found? We're out of here
+    if (! keys %$syncs) {
+        print "No syncs found\n";
+        exit 1;
+    }
+
+    ## Determine the size of the output strings for pretty aligning later
+    my ($maxname, $maxherd, $maxdbs) = (2,2,2);
+    for my $name (keys %$syncs) {
+        my $s = $syncs->{$name};
+        $maxname = length $name if length $name > $maxname;
+        $maxherd = length $s->{herd}{name} if length $s->{herd}{name} > $maxherd;
+        $s->{d} = "DB group $s->{dbs}:";
+        for (sort keys %{ $s->{dblist} }) {
+            $s->{d} .= " $_ ($s->{dblist}{$_}{role})";
+        }
+        $maxdbs = length $s->{d} if length $s->{d} > $maxdbs;
+    }
+
+    ## Now print them out in alphabetic order
+    ## TODO: Have a CSV like output
+    for my $name (sort keys %$syncs) {
+        my $s = $syncs->{$name};
+
+        ## Switch to multi-line if database info strings are over this
+        my $maxdbline = 50;
+
+        ## Show basic information
+        printf "Sync: %-*s  Herd: %-*s %s[%s]\n",
+            $maxname, $name,
+            $maxherd, $s->{herd}{name},
+            $maxdbs > $maxdbline ? '' : "$s->{d}  ",
+            ucfirst $s->{status};
+
+        ## Print the second line if needed
+        if ($maxdbs > $maxdbline) {
+            print "  $s->{d}\n";
+        }
+
+        ## Show associated tables if in verbose mode
+        if ($VERBOSE >= 1) {
+            if (exists $s->{herd}{goat}) {
+                my $goathash = $s->{herd}{goat};
+                for my $relname (sort {
+                                     $goathash->{$b}{priority} <=> $goathash->{$a}{priority}
+                                     or $a cmp $b
+                                   }
+                              keys %{ $goathash }) {
+                    printf "  %s %s\n",
+                        ucfirst($goathash->{$relname}{reltype}),$relname;
+                }
+            }
+        }
+
+        ## Show all the sync attributes
+        $VERBOSE >= 2 and show_all_columns($s);
+
+    } ## end of each sync
+
+    exit 0;
+
+} ## end of list_syncs
 
 
 sub add_tables_to_sync {
@@ -5127,136 +5657,6 @@ sub list_customcodes {
 
 
 
-sub list_syncs {
-
-    ## Show information about all or some subset of the 'sync' table
-    ## Arguments: none (reads nouns for a list of syncs)
-    ## Returns: never, exits
-
-    my $usage = usage('list_syncs');
-
-    my $syncs = $global{sync};
-
-    ## Do we have at least one name specified (if not, show all)
-    my $namefilter = 0;
-
-    for my $term (@nouns) {
-
-        ## Filter out by status: only show active or inactive syncs
-        if ($term =~ /^(active|inactive)$/i) {
-            my $stat = lc $1;
-            for my $name (keys %$syncs) {
-                delete $syncs->{$name} if $syncs->{$name}{status} ne $stat;
-            }
-            next;
-        }
-
-        ## Filter out by arbitrary attribute matches
-        if ($term =~ /(\w+)\s*=\s*(\w+)/) {
-            my ($attrib, $value) = (lc $1,$2);
-            for my $name (keys %$syncs) {
-                if (! exists $syncs->{$name}{$attrib}) {
-                    my $msg = "No such sync attribute: $attrib\n";
-                    $msg .= "Must be one of the following:\n";
-                    my $names = join ',' =>
-                        sort
-                        grep { $_ !~ /\b(?:cdate|name)\b/ }
-                        keys %{ $syncs->{$name} };
-                    $msg .= " $names\n";
-                    die $msg;
-                }
-                delete $syncs->{$name} if $syncs->{$name}{$attrib} ne $value;
-            }
-            next;
-        }
-
-        ## Everything else should be considered a sync name
-        $namefilter = 1;
-
-        ## Check for wildcards
-        if ($term =~ s/[*%]/.*/) {
-            for my $name (keys %$syncs) {
-                $syncs->{$name}{ok2show} = 1 if $name =~ /$term/;
-            }
-            next;
-        }
-
-        ## Must be an exact match
-        for my $name (keys %$syncs) {
-            $syncs->{$name}{ok2show} = 1 if $name eq $term;
-        }
-
-    }
-
-    ## If we filtered by name, remove all the non-matched ones
-    if ($namefilter) {
-        for my $name (keys %$syncs) {
-            delete $syncs->{$name} if ! exists $syncs->{$name}{ok2show};
-        }
-    }
-
-    ## Nothing found? We're out of here
-    if (! keys %$syncs) {
-        print "No syncs found\n";
-        exit 1;
-    }
-
-    ## Determine the size of the output strings for pretty aligning later
-    my ($maxname, $maxherd, $maxdbs) = (2,2,2);
-    for my $name (keys %$syncs) {
-        my $s = $syncs->{$name};
-        $maxname = length $name if length $name > $maxname;
-        $maxherd = length $s->{herd}{name} if length $s->{herd}{name} > $maxherd;
-        $s->{d} = "DB group $s->{dbs}:";
-        for (sort keys %{ $s->{dblist} }) {
-            $s->{d} .= " $_ ($s->{dblist}{$_}{role})";
-        }
-        $maxdbs = length $s->{d} if length $s->{d} > $maxdbs;
-    }
-
-    ## Now print them out in alphabetic order
-    ## TODO: Have a CSV like output
-    for my $name (sort keys %$syncs) {
-        my $s = $syncs->{$name};
-
-        ## Switch to multi-line if database info strings are over this
-        my $maxdbline = 50;
-
-        ## Show basic information
-        printf "Sync: %-*s  Herd: %-*s %s[%s]\n",
-            $maxname, $name,
-            $maxherd, $s->{herd}{name},
-            $maxdbs > $maxdbline ? '' : "$s->{d}  ",
-            ucfirst $s->{status};
-
-        ## Print the second line if needed
-        if ($maxdbs > $maxdbline) {
-            print "  $s->{d}\n";
-        }
-
-        ## Show associated tables if in verbose mode
-        if ($VERBOSE >= 1) {
-            if (exists $s->{herd}{goat}) {
-                my $goathash = $s->{herd}{goat};
-                for my $relname (sort {
-                                     $goathash->{$b}{priority} <=> $goathash->{$a}{priority}
-                                     or $a cmp $b
-                                   }
-                              keys %{ $goathash }) {
-                    printf "  %s %s\n",
-                        ucfirst($goathash->{$relname}{reltype}),$relname;
-                }
-            }
-        }
-
-        ## Show all the sync attributes
-        $VERBOSE >= 2 and show_all_columns($s);
-
-    } ## end of each sync
-
-    exit 0;
-
-} ## end of list_syncs
 
 
 sub list_tables {
@@ -5656,268 +6056,6 @@ sub add_customcode {
 
 
 
-sub add_sync {
-
-    ## Add an item to the bucardo.sync table
-    ## Arguments: none (uses nouns)
-    ## Returns: never, exits
-
-    my $item_name = shift @nouns || '';
-
-    my $usage = usage('add_sync');
-
-    my $batch = 1;
-
-    if (!length $item_name) {
-        warn "$usage\n";
-        exit 1;
-    }
-
-    ## Inputs and aliases, database column name, flags, default
-    my $validcols = qq{
-        name                     name                 0                $item_name
-        herd                     herd                 0                null
-        dbs                      dbs                  0                null
-        stayalive                stayalive            TF               null
-        kidsalive                kidsalive            TF               null
-        limitdbs                 limitdbs             numeric          null
-        ping                     ping                 TF               null
-        do_listen                do_listen            TF               null
-        checktime                checktime            interval         null
-        status                   status               =active|inactive null
-        source_makedelta         source_makedelta     =inherits|on|off null
-        target_makedelta         target_makedelta     =inherits|on|off null
-        priority                 priority             numeric          null
-        analyze_after_copy       analyze_after_copy   TF               null
-        overdue                  overdue              interval         null
-        expired                  expired              interval         null
-        track_rates              track_rates          TF               null
-        onetimecopy              onetimecopy          =0|1|2           null
-        lifetime                 lifetime             interval         null
-        maxkicks                 maxkicks             numeric          null
-        rebuild_index|rebuildindex   rebuild_index    numeric          null
-        customselect|usecustomselect usecustomselect  TF               null
-        tables                   tables               0                skip
-    };
-
-    ## Fullcopy syncs get some of their defaults overriden
-    ## Because who wants ping on a fullcopy sync?
-
-    my $morph = [
-        {
-            field => 'synctype',
-            value => 'fullcopy',
-            new_defaults => 'ping|F stayalive|F kidsalive|F'
-        },
-    ];
-
-    my ($dbcols,$cols,$phs,$vals)
-        = process_simple_args({cols => $validcols, list => \@nouns, usage => $usage, morph => $morph});
-
-    if (! exists $dbcols->{herd}) {
-        ## But allow on-the-fly herd creation
-        die "Need to specify a herd for this sync\n";
-    }
-    if (! exists $dbcols->{dbs}) {
-        die "Need to specify which databases\n";
-    }
-
-    ## Already got a sync by this name?
-    if (exists $global{sync}{$item_name}) {
-        die qq{A sync with the name "$item_name" already exists\n};
-    }
-
-    ## If this is a list of tables, create them as a new herd
-    ## Ideally we also re-use the herd if it already exists
-    if ($dbcols->{herd} =~ /,/) {
-        my @tables = split /\s*,\s*/ => $dbcols->{herd};
-        for my $table (sort @tables) {
-            if (! exists $global{goat}{$table}) {
-                die "No such table or sequence: $table\n";
-            }
-        }
-    }
-    else {
-        my $name = $dbcols->{herd};
-        if (! exists $global{herd}{$name}) {
-            my $schema = 'public';
-
-            ## Maybe it's a table?
-            if (! exists $global{goat}{$name}) {
-                warn "No such herd or table: $name\n";
-                warn "To list all herds, use: list herds\n";
-                warn "To list all tables, use: list tables\n";
-                exit 1;
-            }
-
-            ## See if any existing herds match this one
-            for my $hname (sort keys %{$global{herd}}) {
-                my $number = keys %{$global{herd}{$hname}{hasgoat}{$schema}};
-                next unless 1 == $number;
-                print qq{Use existing herd "$hname"? Y/N };
-                my $ans = $batch ? 'Y' : <STDIN>;
-                if ($ans =~ /^y/i) {
-                    $dbcols->{herd} = $hname;
-                    $vals->{herd} = $hname;
-                    last;
-                }
-            }
-            ## If we aren't using an existing herd, create a new one
-            $name = $dbcols->{herd};
-            if (! exists $global{herd}{$name}) {
-                print "Create a new herd with table $name\n";
-
-                ## We will use the name of the sync if free
-                ## Otherwise, keep adding numbers to it until we get a free name
-                $SQL = 'SELECT 1 FROM bucardo.herd WHERE name = ?';
-                $sth = $dbh->prepare($SQL);
-                my $gname = $item_name;
-                my $x = 1;
-                {
-                    $count = $sth->execute($gname);
-                    $sth->finish();
-                    last if $count < 1;
-                    $gname  = "${item_name}_$x";
-                    $x++;
-                    redo;
-                }
-                $SQL = "INSERT INTO bucardo.herd (name) VALUES (?)";
-                $sth = $dbh->prepare($SQL);
-                $count = $sth->execute($gname);
-                if (1 != $count) {
-                    die qq{Unable to add new herd named "$gname"\n};
-                }
-                $SQL = 'INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,'
-                    . '(SELECT id FROM bucardo.goat WHERE schemaname = ? AND tablename = ?))';
-                $sth = $dbh->prepare($SQL);
-                $count = $sth->execute($gname, $schema, $name);
-                if (1 != $count) {
-                    die qq{Unable to add table "$name" to herd "$gname"\n};
-                }
-                print qq{Created herd "$gname"\n};
-                $dbcols->{herd} = $gname;
-
-            }
-        } ## end no herd name match
-
-    } ## end single word herd option
-
-    ## Next, the dbs
-
-    ## If this is a single database, turn into a "list" for below
-    if (exists $global{db}{$dbcols->{dbs}}) {
-        $dbcols->{dbs} .= ',';
-    }
-
-    ## Can be a database group, or a list of databases
-    if ($dbcols->{dbs} =~ /,/) {
-        my @dbs = split /\s*,\s*/ => $dbcols->{dbs};
-        my %db;
-        my $type = '';
-        for my $db (sort @dbs) {
-            ## Set the default type of database
-            $type = $type eq '' ? 'source' : 'target';
-            if ($db =~ s/[=:](.+)//) {
-                $type = $1;
-            }
-            if (! exists $global{db}{$db}) {
-                die "No such database: $db\n";
-            }
-            ## Standardize and check the types
-            $type = 'source' if $type =~ /^s/i or $type =~ /^master/i;
-            $type = 'target' if $type =~ /^t/i or $type =~ /^rep/i;
-            $type = 'fullcopy' if $type =~ /^f/i;
-            if ($type !~ /^(source|target|fullcopy)$/) {
-                die "Invalid database type: must be source, target, or fullcopy (not $type)\n";
-            }
-            $db{$db} = $type;
-        }
-        ## Do any existing groups match this list exactly?
-        my $newlist = join ',' => map { "$_=".$db{$_} } sort keys %db;
-        for my $gname (sort keys %{$global{dbgroup}}) {
-            my $innerjoin = join ',' => map { "$_=".$global{dbgroup}{$gname}{db}{$_} } sort keys %{$global{dbgroup}{$gname}{db}};
-            if ($innerjoin eq $newlist) {
-                print qq{That group of databases already exists as dbgroup "$gname"\n};
-                print qq{Do you wish to use that group instead? Y/N };
-                my $ans = $batch ? 'Y' : <STDIN>;
-                if ($ans =~ /^y/i) {
-                    $dbcols->{dbs} = $gname;
-                    $vals->{dbs} = $gname;
-                    last;
-                }
-                ## Don't ask again?
-                $newlist = '';
-            }
-        }
-
-        if ($dbcols->{dbs} =~ /,/) { ## Make sure we still have a list
-            ## We will use the name of the sync if free
-            ## Otherwise, keep adding numbers to it until we get a free name
-            $SQL = 'SELECT 1 FROM bucardo.dbgroup WHERE name = ?';
-            $sth = $dbh->prepare($SQL);
-            my $gname = $item_name;
-            my $x = 1;
-            {
-                $count = $sth->execute($gname);
-                $sth->finish();
-                last if $count < 1;
-                $gname  = "${item_name}_$x";
-                $x++;
-                redo;
-            }
-            $SQL = "INSERT INTO bucardo.dbgroup (name) VALUES (?)";
-            $sth = $dbh->prepare($SQL);
-            $count = $sth->execute($gname);
-            if (1 != $count) {
-                die qq{Unable to add new dbgroup named "$gname"\n};
-            }
-            $SQL = 'INSERT INTO bucardo.dbmap(dbgroup,db,role) VALUES (?,?,?)';
-            $sth = $dbh->prepare($SQL);
-            for my $db (sort keys %db) {
-                $count = $sth->execute($gname, $db, $db{$db});
-                if (1 != $count) {
-                    die qq{Unable to add database "$db" to group "$gname"\n};
-                }
-            }
-            print qq{Created database group "$gname"\n};
-            $dbcols->{dbs} = $gname;
-            $vals->{dbs} = $gname;
-        }
-    } ## end of multiple databases specified
-    else {
-        my $dbg = $dbcols->{dbs};
-        if (! exists $global{dbgroup}{$dbg}) {
-            warn "No such database group: $dbg\n";
-            warn "To list all database groups, use: list dbgroups\n";
-            exit 1;
-        }
-    }
-
-    $dbh->commit();
-
-    ## Attempt to insert this into the database
-    $SQL = "INSERT INTO bucardo.sync ($cols) VALUES ($phs)";
-    $DEBUG and warn "SQL: $SQL\n";
-    $DEBUG and warn Dumper $vals;
-    $sth = $dbh->prepare($SQL);
-    my @flatvals = map { $vals->{$_} } sort keys %$vals;
-    $DEBUG and warn Dumper \@flatvals;
-    eval {
-        $count = $sth->execute(@flatvals);
-    };
-    if ($@) {
-        die "Failed to add sync: $@\n";
-    }
-
-    $dbh->commit();
-
-    if (!$QUIET) {
-        print qq{Added sync "$item_name"\n};
-    }
-
-    exit 0;
-
-} ## end of add_sync
 
 
 sub _list_databases {
@@ -6259,55 +6397,6 @@ sub remove_customcode {
 
 
 
-sub remove_sync {
-
-    ## Usage: remove sync name [name2 name3 ...]
-    ## Arguments: none (uses nouns)
-    ## Returns: never, exits
-
-    my $usage = usage('remove_sync');
-
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
-
-    ## Make sure all named syncs exist
-    my $s = $global{sync};
-    for my $name (@nouns) {
-        if (! exists $s->{$name}) {
-            die qq{No such sync: $name\n};
-        }
-    }
-
-    ## Make sure none of the syncs are currently running
-    ## XXX Is there anything we can do to check that the sync is active?
-
-    $SQL = 'DELETE FROM bucardo.sync WHERE name = ?';
-    $sth = $dbh->prepare($SQL);
-
-    for my $name (@nouns) {
-        eval {
-            $sth->execute($name);
-        };
-        if ($@) {
-            if ($@ =~ /"goat_db_fk"/) {
-                die qq{Cannot delete sync "$name": must remove all tables that reference it first\n};
-            }
-            die qq{Could not delete sync "$name"\n$@\n};
-        }
-    }
-
-    for my $name (@nouns) {
-        print qq{Removed sync "$name"\n};
-        print "Note: table triggers (if any) are not automatically removed!\n";
-    }
-
-    $dbh->commit();
-
-    exit 0;
-
-} ## end of remove_sync
 
 
 
