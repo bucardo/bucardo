@@ -26,7 +26,7 @@ pass("*** Beginning postgres tests");
 
 END {
     $bct and $bct->stop_bucardo($dbhX);
-    $dbhX and  $dbhX->disconnect();
+    $dbhX and $dbhX->disconnect();
     $dbhA and $dbhA->disconnect();
     $dbhB and $dbhB->disconnect();
     $dbhC and $dbhC->disconnect();
@@ -86,6 +86,7 @@ $res = $bct->ctl('bucardo set statement_chunk_size=2');
 
 ## Start up Bucardo with this new sync
 $bct->restart_bucardo($dbhX);
+$bct->ctl('bucardo kick pgtest 0');
 
 ## Get the statement handles ready for each table type
 for my $table (sort keys %tabletype) {
@@ -118,6 +119,7 @@ for my $table (sort keys %tabletype) {
     ## TRUNCATE
     $SQL = "TRUNCATE TABLE $table";
     $sth{truncate}{$table}{A} = $dbhA->prepare($SQL);
+
     ## UPDATE
     $SQL = "UPDATE $table SET inty = ?";
     $sth{update}{$table}{A} = $dbhA->prepare($SQL);
