@@ -9,7 +9,7 @@ Version 5:
 * Fix: [2011-09-13 17:08:56] <Elso> sometime if i start bucardo i get followed log message: KID Warning: received unknown message stop_sync_ms24ch from 1000!
 * Get bucardo-report working again
 * Note 8.2 minimum requirement somewhere (probably from COPY (select))
-
+* Fix redefined subroutine warnings seen on some platforms during make test
 
 These range the gamut from wildly speculative ideas to must-have features.
 
@@ -45,6 +45,7 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Force to C locale until we get i18n in place
 - Use C triggers for the delta stuff if we can (and time them!)
 - Find alternate ways for the kids to lock the tables other than $force_lock_file
+- Options to allow Bucardo to continue with unaffected syncs if a target is dead
 
 
 - Mongo: fix escaped data from COPY TO STDOUT
