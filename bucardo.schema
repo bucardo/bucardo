@@ -1615,10 +1615,10 @@ END;
                     idnum TEXT;
                   BEGIN
 
-                  -- Are we running in serializable mode?
+                  -- Are we running in a proper mode?
                   SELECT INTO mymode current_setting('transaction_isolation');
-                  IF (mymode <> 'serializable') THEN
-                    RAISE EXCEPTION 'This function must be run in serializable mode';
+                  IF (mymode <> 'serializable' AND mymode <> 'repeatable read') THEN
+                    RAISE EXCEPTION 'This function must be run in repeatable read mode';
                   END IF;
 
                   -- Grab the oid of this schema/table combo
