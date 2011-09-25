@@ -8583,7 +8583,7 @@ sub extract_name_and_role {
     }
 
     ## Valid role name?
-    if ($role !~ /^(?:master|target|slave|rep|replica|source)$/) {
+    if ($role !~ /^(?:master|target|slave|rep|replica|source|fullcopy)$/) {
         die "Invalid database role: $role\n";
     }
 

@@ -4,12 +4,11 @@ TODO list for Bucardo
 Version 5:
 
 * Finish auto-vacuum/purge daemon
-* Get onetimecopy working again
-* Get fullcopy syncs working again
 * Get pkonly working with 'bucardo add all tables'
 * Get Drizzle tests verified as working
 * Fix: [2011-09-13 17:08:56] <Elso> sometime if i start bucardo i get followed log message: KID Warning: received unknown message stop_sync_ms24ch from 1000!
 * Get bucardo-report working again
+* Note 8.2 minimum requirement somewhere (probably from COPY (select))
 
 
 These range the gamut from wildly speculative ideas to must-have features.
