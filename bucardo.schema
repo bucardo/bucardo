@@ -300,7 +300,7 @@ CREATE TABLE bucardo.bucardo_custom_trigger (
   status            TEXT        NOT NULL DEFAULT 'active',
   cdate             TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-COMMENT ON TABLE bucardo.bucardo_custom_trigger IS $$Used to override the default bucardo_add_delta trigger on a per-table basis$$;
+COMMENT ON TABLE bucardo.bucardo_custom_trigger IS $$Used to override the default bucardo_delta trigger on a per-table basis$$;
 
 ALTER TABLE bucardo.bucardo_custom_trigger ADD CONSTRAINT type_is_delta_or_trigger CHECK (trigger_type IN ('delta', 'triggerkick'));
 
@@ -2199,7 +2199,7 @@ SELECT 'Fixme'::TEXT;
                 run_sql($SQL,$dbh);
             }
 
-            ## Check if the bucardo_add_delta is a custom function, and create if needed
+            ## Check if the bucardo_delta is a custom function, and create if needed
             $SQL = qq{SELECT trigger_language,trigger_body FROM bucardo_custom_trigger 
               WHERE goat=$tinfo->{id} 
               AND status='active' 
@@ -2209,7 +2209,7 @@ SELECT 'Fixme'::TEXT;
             $rv = spi_exec_query($SQL);
             my $customdeltafunc = '';
             if ($rv->{processed}) {
-                my $customdeltafunc = "bucardo_add_delta_$tinfo->{id}";
+                my $customdeltafunc = "bucardo_delta_$tinfo->{id}";
                 $sth = $sth{hazfunc};
                 $count = $sth->execute('bucardo', $customdeltafunc);
                 $sth->finish();
@@ -2230,12 +2230,12 @@ SELECT 'Fixme'::TEXT;
             }
 
             $sth = $sth{haztrig};
-            $count = $sth->execute("$schema.$table", 'bucardo_add_delta');
+            $count = $sth->execute("$schema.$table", 'bucardo_delta');
             $sth->finish();
             my $func = $customdeltafunc || $deltafunc;
             if ($count < 1) {
                 $SQL = qq{
-        CREATE TRIGGER bucardo_add_delta
+        CREATE TRIGGER bucardo_delta
         AFTER INSERT OR UPDATE OR DELETE ON $schema.$table
         FOR EACH ROW EXECUTE PROCEDURE bucardo."$func"()
       };
