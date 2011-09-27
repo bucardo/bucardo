@@ -687,6 +687,9 @@ sub mcp_main {
     ## Used to keep track of the last time we pinged the databases
     my $lastpingcheck = 0;
 
+    ## Keep track of how long since we checked on the VAC daemon
+    my $lastvaccheck = 0;
+
     $self->glog('Entering main loop', LOG_TERSE);
 
   MCP: {
@@ -708,6 +711,24 @@ sub mcp_main {
             $self->glog('Exiting', LOG_WARN);
             exit 0;
         }
+
+        ## Startup the VAC daemon as needed
+        if ($config{bucardo_vac}) {
+
+            ## Check on it occasionally (different than the running time)
+            if (time() - $lastvaccheck >= $config{mcp_vactime}) {
+
+                ## Is it alive? If not, spawn
+                my $pidfile = "$config{piddir}/bucardo.vac.pid";
+                if (! -e $pidfile) {
+                    $self->fork_vac();
+                }
+
+                $lastvaccheck = time();
+
+            } ## end of time to check vac
+
+        } ## end if bucardo_vac
 
         ## Every once in a while, make sure our database connections are still there
         if (time() - $lastpingcheck >= $config{mcp_pingtime}) {
@@ -6035,8 +6056,6 @@ sub deactivate_sync {
 } ## end of deactivate_sync
 
 
-
-
 sub fork_controller {
 
     ## Fork off a controller process
@@ -6088,6 +6107,220 @@ sub fork_controller {
     exit 0;
 
 } ## end of fork_controller
+
+
+sub fork_vac {
+
+    ## Fork off a VAC process
+    ## Arguments: none
+    ## Returns: undef
+
+    my $self = shift;
+
+    ## Fork it off
+    my $newpid = fork;
+    if (!defined $newpid) {
+        die qq{Warning: Fork for VAC failed!\n};
+    }
+
+    ## Parent MCP just makes a note in the logs and returns
+    if ($newpid) { ## We are the parent
+        $self->glog(qq{Created VAC $newpid}, LOG_NORMAL);
+        $self->{vacpid} = $newpid;
+        return;
+    }
+
+    ## We are now a VAC daemon - get to work!
+
+    ## We don't want to mess with any existing MCP database connections
+    $self->{masterdbh}->{InactiveDestroy} = 1;
+    $self->{masterdbh} = 0;
+
+    for my $dbname (keys %{ $self->{sdb} }) {
+        $x = $self->{sdb}{$dbname};
+        next if $x->{dbtype} =~ /flat|mongo|redis/o;
+        $x->{dbh}->{InactiveDestroy} = 1;
+    }
+
+    ## Prefix all log lines with this TLA (was MCP)
+    $self->{logprefix} = 'VAC';
+
+    ## Set our process name
+    $0 = qq{Bucardo VAC.$self->{extraname}};
+
+    ## Store our PID into a file
+    ## Save the complete returned name for later cleanup
+    $self->{vacpidfile} = $self->store_pid( 'bucardo.vac.pid' );
+
+    ## Start normal log output for this controller: basic facts
+    my $msg = qq{New VAC daemon. PID=$$};
+    $self->glog($msg, LOG_TERSE);
+
+    ## Allow the MCP to signal us (request to exit)
+    $SIG{USR1} = sub {
+        ## Do not change this message: looked for in the controller DIE sub
+        die "MCP request\n";
+    };
+
+    ## From this point forward, we want to die gracefully
+    #$SIG{TERM} = 'IGNORE';
+
+    ## From this point forward, we want to die gracefully
+    $SIG{__DIE__} = sub {
+
+        ## Arguments: one
+        ## 1. Error message
+        ## Returns: never (exit 0)
+
+        my ($diemsg) = @_;
+
+        ## Store the line that did the actual exception
+        my $line = (caller)[2];
+
+        ## Don't issue a warning if this was simply a MCP request
+        my $warn = $diemsg =~ /MCP request/ ? '' : 'Warning! ';
+        $self->glog(qq{${warn}VAC was killed at line $line: $diemsg}, LOG_WARN);
+
+        ## Not a whole lot of cleanup to do on this one: just shut database connections and leave
+
+        ## TODO: Disconnect from all databases
+
+        ## Remove our pid file
+        unlink $self->{vacpidfile} or $self->glog("Warning! Failed to unlink $self->{vacpidfile}", LOG_WARN);
+
+        exit 0;
+
+    }; ## end SIG{__DIE_} handler sub
+
+    ## Connect to the master database (overwriting the pre-fork MCP connection)
+    ($self->{master_backend}, $self->{masterdbh}) = $self->connect_database();
+    my $maindbh = $self->{masterdbh};
+    $self->glog("Bucardo database backend PID: $self->{master_backend}", LOG_VERBOSE);
+
+    ## Map the PIDs to common names for better log output
+    $self->{pidmap}{$$} = 'VAC';
+    $self->{pidmap}{$self->{master_backend}} = 'Bucardo DB';
+
+    ## Listen for an exit request from the MCP
+    my $exitrequest = 'stop_vac';
+    $self->db_listen($maindbh, $exitrequest, 1); ## No payloads please
+
+    ## Commit so we start listening right away
+    $maindbh->commit();
+
+    ## Reconnect to all databases we care about: overwrites existing dbhs
+    for my $dbname (keys %{ $self->{sdb} }) {
+
+        $x = $self->{sdb}{$dbname};
+
+        ## Source only, of course: nobody else has delta and track tables
+        next if $x->{role} ne 'source';
+
+        ## Overwrites the MCP database handles
+        ($x->{backend}, $x->{dbh}) = $self->connect_database($dbname);
+        $self->glog(qq{Connected to database "$dbname" with backend PID of $x->{backend}}, LOG_NORMAL);
+        $self->{pidmap}{$x->{backend}} = "DB $dbname";
+    }
+
+    ## Track how long since we last came to life for vacuuming
+    my $lastvacrun = 0;
+
+    ## The main loop
+  VAC: {
+
+        ## Bail if the stopfile exists
+        if (-e $self->{stopfile}) {
+            $self->glog(qq{Found stopfile "$self->{stopfile}": exiting}, LOG_TERSE);
+            ## Do not change this message: looked for in the controller DIE sub
+            my $stopmsg = 'Found stopfile';
+
+            ## Grab the reason, if it exists, so we can propagate it onward
+            my $vacreason = get_reason(0);
+            if ($vacreason) {
+                $stopmsg .= ": $vacreason";
+            }
+
+            ## This exception is caught by the controller's __DIE__ sub above
+            die "$stopmsg\n";
+        }
+
+        ## Process any notifications from the main database
+        my $nlist = $self->db_get_notices($maindbh);
+      NOTICE: for my $name (sort keys %{ $nlist }) {
+
+            my $npid = $nlist->{$name}{firstpid};
+
+            ## Ignore things from ourselves
+            next if $npid == $self->{master_backend};
+
+            ## Strip prefix so we can easily use both pre and post 9.0 versions
+            $name =~ s/^vac_//o;
+
+            ## Exit request from the MCP?
+            if ($name eq $exitrequest) {
+                die "Process $npid requested we exit\n";
+            }
+
+            ## Should not happen, but let's at least log it
+            $self->glog("Warning: received unknown message $name from $npid!", LOG_TERSE);
+
+        } ## end of each notification
+
+        ## To ensure we can receive new notifications next time:
+        $maindbh->commit();
+
+        ## Should we attempt a vacuum?
+        if (time() - $lastvacrun >= $config{vac_run}) {
+
+            $lastvacrun = time();
+
+            ## Kick each one off async
+            for my $dbname (sort keys %{ $self->{sdb}} ) {
+
+                $x = $self->{sdb}{$dbname};
+
+                next if $x->{role} ne 'source';
+
+                my $xdbh = $x->{dbh};
+
+                ## Async please
+                $self->glog(qq{Running bucardo_purge_delta on database "$dbname"}, LOG_VERBOSE);
+                $SQL = q{SELECT bucardo.bucardo_purge_delta('45 seconds')};
+                $sth{"vac_$dbname"} = $xdbh->prepare($SQL, { pg_async => PG_ASYNC } );
+                $sth{"vac_$dbname"}->execute();
+
+            } ## end each source database
+
+            ## Kick each one off async
+            for my $dbname (sort keys %{ $self->{sdb}} ) {
+
+                $x = $self->{sdb}{$dbname};
+
+                next if $x->{role} ne 'source';
+
+                my $xdbh = $x->{dbh};
+
+                $self->glog(qq{Finish and fetch bucardo_purge_delta on database "$dbname"}, LOG_DEBUG);
+                $count = $sth{"vac_$dbname"}->pg_result();
+
+                my $info = $sth{"vac_$dbname"}->fetchall_arrayref()->[0][0];
+                $xdbh->commit();
+
+                $self->glog(qq{Purge on db "$dbname" gave: $info}, LOG_VERBOSE);
+
+            } ## end each source database
+
+        } ## end of attempting to vacuum
+
+        sleep $config{vac_sleep};
+
+        redo VAC;
+
+    } ## end of main VAC loop
+
+    exit 0;
+
+} ## end of fork_vac
 
 
 sub reset_mcp_listeners {

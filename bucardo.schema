@@ -104,8 +104,10 @@ kid_nodeltarows_sleep|0.5|How long do kids sleep if no delta rows are found?
 kid_serial_sleep|10|How long to sleep in seconds if we hit a serialization error
 kid_restart_sleep|1|How long to sleep in seconds when restarting a kid?
 endsync_sleep|1.0|How long do we sleep when custom code requests an endsync?
-vac_sleep|120|How long does VAC sleep between runs?
+vac_sleep|120|How long does VAC process sleep between runs?
+vac_run|30|How often does the VAC process run?
 \.
+
 
 
 -- Various timeouts (times are in seconds)
