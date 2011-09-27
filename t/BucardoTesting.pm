@@ -18,9 +18,9 @@ use vars qw/$SQL $sth $count $COM %dbh/;
 my $DEBUG = $ENV{BUCARDO_DEBUG} || 0;
 
 use base 'Exporter';
-our @EXPORT = qw/%tabletype %tabletypemysql %tabletypeoracle %tabletypesqlite %sequences %val compare_tables bc_deeply clear_notices 
-                 wait_for_notice $location is_deeply like pass is isa_ok ok
-                 $oldherd_msg $newherd_msg $addtable_msg $deltable_msg $nomatch_msg/;
+our @EXPORT = qw/%tabletype %tabletypemysql %tabletypeoracle %tabletypesqlite %sequences %val 
+                 compare_tables bc_deeply clear_notices wait_for_notice
+                 $location $oldherd_msg $newherd_msg $addtable_msg $deltable_msg $nomatch_msg/;
 
 my $dbname = 'bucardo_test';
 
