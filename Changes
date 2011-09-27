@@ -33,6 +33,8 @@ Bucardo version 5.0.0, released ??, 2011
 
   - Show the reason why a sync failed on a failed bucardo kick. [GSM]
 
+  - Add new subprocess (VAC) to run bucardo_purge_delta. [GSM]
+
   - Fix errors with bytea and swap syncs. [GSM]
 
   - Add 'default_standard_conflict' option, per idea from Franz Dürr. [GSM]
