@@ -97,12 +97,14 @@ FROM STDIN
 WITH DELIMITER '|';
 mcp_loop_sleep|0.5|How long does the main MCP daemon sleep between loops?
 mcp_dbproblem_sleep|15|How many seconds to sleep before trying to respawn
+mcp_vactime|60|How often in seconds do we check that a VAC is still running?
 ctl_sleep|0.5|How long does the controller loop sleep?
 kid_sleep|0.5|How long does a kid loop sleep?
 kid_nodeltarows_sleep|0.5|How long do kids sleep if no delta rows are found?
 kid_serial_sleep|10|How long to sleep in seconds if we hit a serialization error
 kid_restart_sleep|1|How long to sleep in seconds when restarting a kid?
 endsync_sleep|1.0|How long do we sleep when custom code requests an endsync?
+vac_sleep|120|How long does VAC sleep between runs?
 \.
 
 
@@ -146,6 +148,7 @@ bucardo_current_version|4.99.1|Current version of Bucardo
 COPY bucardo.bucardo_config(setting,value,about)
 FROM STDIN
 WITH DELIMITER '|';
+bucardo_vac|1|Do we want the automatic VAC daemon to run?
 default_email_from|nobody@example.com|Who the alert emails are sent as
 default_email_to|nobody@example.com|Who to send alert emails to
 default_email_host|localhost|Which host to send email through

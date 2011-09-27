@@ -4566,7 +4566,6 @@ sub connect_database {
     ## Also a nice check that everything is working properly
     $SQL = 'SELECT pg_backend_pid()';
 
-    ## XXX Getting a SIGTERM from this occasionally?
     my $backend = $dbh->selectall_arrayref($SQL)->[0][0];
     $dbh->rollback();
 
@@ -6396,7 +6395,7 @@ sub kill_bucardo_pidfile {
     ## Given a file, extract the PID and kill it
     ## Arguments: 2
     ## 1. File to be checked
-    ## 2. String either 'strict' or not. Strict does KILL in addition to TERM
+    ## 2. String either 'strict' or not. Strict does TERM and KILL in addition to USR1
     ## Returns: same as kill_bucardo_pid, plus:
     ## -100: File not found
     ## -101: Could not open the file
@@ -6439,13 +6438,13 @@ sub kill_bucardo_pid {
     ## Send a kill signal to a specific process
     ## Arguments: two
     ## 1. PID to be killed
-    ## 2. String either 'strict' or not. Strict does KILL in addition to TERM
+    ## 2. String either 'strict' or not. Strict does KILL and TERM in addition to USR1
     ## Returns: 1 on successful kill, < 0 otherwise
     ## 0: no such PID or not a 'bucardo' PID
     ## +1 : successful TERM
-    ## -1: Failed to signal with TERM
+    ## -1: Failed to signal with USR1
     ## +2: Successful KILL
-    ## -2: Failed to signal with KILL
+    ## -2: Failed to signal with TERM and KILL
     ## -3: Invalid PID (non-numeric)
     ## -4: PID does not exist
 
@@ -6492,7 +6491,21 @@ sub kill_bucardo_pid {
     } ## end of trying ps because not Windows
 
     ## At this point, we've done due diligence and can start killing this pid
-    ## Start with a TERM signal
+    ## Start with a USR1 signal
+    $self->glog("Sending signal $signumber{USR1} to pid $pid", LOG_DEBUG);
+    $count = kill $signumber{USR1} => $pid;
+
+    if ($count >= 1) {
+        $self->glog("Successfully signalled pid $pid with kill USR1", LOG_DEBUG);
+        return 1;
+    }
+
+    ## If we are not strict, we are done
+    if ($nice ne 'strict') {
+        $self->glog("Failed to USR1 signal pid $pid", LOG_TERSE);
+        return -1;
+    }
+
     $self->glog("Sending signal $signumber{TERM} to pid $pid", LOG_DEBUG);
     $count = kill $signumber{TERM} => $pid;
 
@@ -6501,11 +6514,7 @@ sub kill_bucardo_pid {
         return 1;
     }
 
-    ## If we are not strict, we are done
-    if ($nice ne 'strict') {
-        $self->glog("Failed to TERM signal pid $pid", LOG_TERSE);
-        return -1;
-    }
+    $self->glog("Failed to TERM signal pid $pid", LOG_TERSE);
 
     ## Raise the stakes and issue a KILL signal
     $self->glog("Sending signal $signumber{KILL} to pid $pid", LOG_DEBUG);
@@ -6615,8 +6624,7 @@ sub cleanup_controller {
     }
 
     ## Sleep a bit to let the processes clean up their own pid files
-    #sleep 0.5; ## TODO - this gives a SIGTERM sometimes?!
-    ##select(undef,undef,undef,0.5); ## HMMMM
+    sleep 0.5;
 
     ## Kill any kids who have a pid file for this sync
     ## By kill, we mean "send a friendly USR1 signal"
