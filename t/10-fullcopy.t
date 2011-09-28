@@ -229,15 +229,19 @@ $bct->ctl('bucardo update sync fctest onetimecopy=1');
 
 ## Reload it (which kicks it off, then kicks again post-onetimecopy)
 $bct->ctl('bucardo reload sync fctest');
+sleep 2;
 
-## A, C, and D should have the same information now
+## A, B, C, and D should have the same information now
 for my $table (sort keys %tabletype) {
 
     my $type = $tabletype{$table};
-    $res = [[42]];
+    $res = [[86]];
 
     $t = qq{Database A has expected rows for $table after onetimecopy};
     bc_deeply($res, $dbhA, $sql{select}{$table}, $t);
+
+    $t = qq{Database B has expected rows for $table after onetimecopy};
+    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 
     $t = qq{Database C has expected rows for $table after onetimecopy};
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
@@ -247,30 +251,24 @@ for my $table (sort keys %tabletype) {
 
 }
 
-## B should have unchanged information
-for my $table (sort keys %tabletype) {
-
-    my $type = $tabletype{$table};
-    $res = [[86]];
-
-    $t = qq{Database B has expected rows for $table after onetimecopy};
-    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
-
-}
-
-## Update the same row to create a conflict with B:
 for my $table (keys %tabletype) {
-    $sth{update}{$table}{A}->execute(85);
+    $sth{update}{$table}{A}->execute(80);
 }
 $dbhA->commit();
 
-## Kick it to get B back in sync with the rest. Should be onetimecopy=0 now
+## Update the same row to create a conflict with B:
+for my $table (keys %tabletype) {
+    $sth{update}{$table}{B}->execute(81);
+}
+$dbhB->commit();
+
+## Kick it to get everything synced
 $bct->ctl('bucardo kick fctest 0');
 
 for my $table (sort keys %tabletype) {
 
     my $type = $tabletype{$table};
-    $res = [[85]];
+    $res = [[81]];
 
     $t = qq{Database A has expected rows for $table after onetimecopy};
     bc_deeply($res, $dbhA, $sql{select}{$table}, $t);

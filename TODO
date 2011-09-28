@@ -5,7 +5,6 @@ Version 5:
 
 * Get pkonly working with 'bucardo add all tables'
 * Get Drizzle tests verified as working
-* Fix: [2011-09-13 17:08:56] <Elso> sometime if i start bucardo i get followed log message: KID Warning: received unknown message stop_sync_ms24ch from 1000!
 * Get bucardo-report working again
 * Note 8.2 minimum requirement somewhere (probably from COPY (select))
 
@@ -38,7 +37,7 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Add support for manual DDL changes
 - Add support for automatic DDL changes
 - Cascading slaves: makedelta should create infrastructure as necessary
-- Use polling not sleep for loop notificationa
+- Use polling not sleep for loop notifications
 - Remove large src_code sections from the kid output when dieing
 - Force to C locale until we get i18n in place
 - Use C triggers for the delta stuff if we can (and time them!)

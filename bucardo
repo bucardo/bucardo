@@ -346,7 +346,7 @@ if ($verb ne 'kick' and $verb ne 'activate' and $verb ne 'deactivate') {
     help();
 }
 
-## For all remaning verbs, we expect a list of syncs with an optional decimal "timeout"
+## For all remaining verbs, we expect a list of syncs with an optional decimal "timeout"
 
 ## If there are no syncs, no sense in going on!
 if (! keys %$SYNC) {

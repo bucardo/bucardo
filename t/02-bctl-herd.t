@@ -10,7 +10,7 @@ use warnings;
 use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 47;
+use Test::More tests => 7;
 
 use vars qw/$t $res $command $dbhX $dbhA $dbhB/;
 

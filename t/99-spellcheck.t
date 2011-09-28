@@ -136,17 +136,37 @@ __DATA__
 
 ## Common:
 
+addall
+arg
+args
+autostart
 Bucardo
-DDL
-DBIx
-LOGIN
-Sabino
-Mullane
 bucardorc
+customcols
+Customcols
+customname
+Customname
+customnames
 customselect
+DBIx
+dbmap
+DDL
 fullcopy
-pushdelta
+LOGIN
+mongo
+MongoDB
+Mullane
+mysql
+MySQL
 perl
+pushdelta
+rdbms
+recurse
+Sabino
+SQLite
+syncrun
+unlisten
+whitespace
 
 ## README
 
@@ -157,47 +177,21 @@ subdirectory
 
 ## Changes
 
-
-- Allow multiple item updates, e.g. bucardo update sync s1 s2 s3 ping=true
-- Allow wildcards in item updates, e.g. bucardo update sync s* ping=true
+addallsequences
+addalltables
 Aolmezov
+attnums
 Backcountry
 Bahlai
 Boes
+boolean
 BSD's
 BUCARDODIR
-Deckelmann
-Farmawan
-FreeBSD
-GSM
-Gugic
-Kebrt
-Machado
-Mathieu
-NAMEDATALEN
-PgBouncer's
-PID
-PIDCLEANUP
-PIDs
-Refactor
-Rosser
-Schwarz
-SMTP
-Sendmail
-Tolley
-UNLISTEN
-Vilem
-Wendt
-Yan
-addallsequences
-addalltables
-attnums
-boolean
 bytea
 checktime
 chunking
-config
 cnt
+config
 ctl
 customcode
 dbhost
@@ -206,39 +200,74 @@ dbproblem
 dbs
 debugstderr
 debugstdout
+Deckelmann
+DESTDIR
+Farmawan
+FreeBSD
 getconn
+GSM
+Gugic
 ident
 inactivedestroy
 intra
+Kaveh
+Kebrt
 kidsalive
 localtime
+Machado
+Mathieu
 maxkicks
+MAXVALUE
 mcp
 migrator
+Mousavi
 multi
+NAMEDATALEN
 onetimecopy
+param
 pgbouncer
+PgBouncer's
 pid
+PID
+PIDCLEANUP
 pidfile
 pids
+PIDs
 ppid
 rc
+Refactor
 respawn
+Rosser
 rowid
+rr
 schemas
+Schwarz
+Sendmail
+serializable
 slony
 smallint
+SMTP
 sourcedbh
 sourcelimit
+sqlstate
 src
 stayalive
+subprocess
 targetlimit
 tcp
 timestamp
 timestamptz
+Tolley
+triggerkick
 trigrules
+UNLISTEN
 upsert
+Vilem
+vv
+Wendt
 wildcards
+Yan
+Zamani
 
 ## TODO
 
@@ -246,12 +275,15 @@ CPAN
 PID
 Readonly
 STDIN
+STDOUT
 TODO
 async
 cronjobs
 ctl
 failover
+Flatfiles
 intra
+Mongo
 multi
 onetimecopy
 orderable
@@ -266,7 +298,6 @@ wildcard
 
 ## bucardo
 
-args
 bucardo
 cleandebugs
 cronjob
@@ -379,6 +410,9 @@ wiki
 
 Backcountry
 multi
+newkid
+signumber
+truthiness
 unapologetically
 
 ## Tests
@@ -439,6 +473,7 @@ untar
 
 ## META.yml
 
+HiRes
 Hostname
 MailingList
 Sys
