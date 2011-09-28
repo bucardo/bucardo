@@ -31,7 +31,6 @@ bucardo.html
 t/01-basic.t
 t/02-bctl-db.t
 t/02-bctl-dbg.t
-t/15-star.t
 t/20-drizzle.t
 t/20-mongo.t
 t/20-mysql.t
