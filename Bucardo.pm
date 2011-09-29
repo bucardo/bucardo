@@ -453,7 +453,7 @@ sub start_mcp {
     ## Store the function to use to generate clock timestamps
     ## We greatly prefer clock_timestamp,
     ## but fallback to timeofday() for 8.1 and older
-    $self->{mcp_clock_timestamp} = 
+    $self->{mcp_clock_timestamp} =
         $masterdbh->{pg_server_version} >= 80200
             ? 'clock_timestamp()'
             : 'timeofday()::timestamptz';
