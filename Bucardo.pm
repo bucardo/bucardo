@@ -665,7 +665,7 @@ sub start_mcp {
     ## Everything from this point forward in start_mcp is subroutines
     ##
 
-    return;
+    return; ## no critic
 
 } ## end of start_mcp
 
@@ -4510,7 +4510,7 @@ sub connect_database {
             }
             ## For now, we simply require it
             require MongoDB;
-            my $conn = MongoDB::Connection->new($dsn);
+            my $conn = MongoDB::Connection->new($dsn); ## no critic
             $dbh = $conn->get_database($d->{dbname});
             my $backend = 0;
 

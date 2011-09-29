@@ -866,13 +866,13 @@ sub start {
     if (-e $PIDFILE) {
         $msg = "Cannot start, PID file $PIDFILE exists\n";
         open my $fh, '<', $PIDFILE or die qq{Could not open "$PIDFILE": $!\n};
-        if (<$fh> !~ /(\d+)/) {
+        if (<$fh> !~ /(\d+)/) { ## no critic
             warn qq{File "$PIDFILE" does not start with a PID!\n};
         }
         else {
             $msg = "Cannot start, process $1 is already running (file=$PIDFILE)\n";
         }
-        close $fh;
+        close $fh or warn qq{Could not close $PIDFILE: $!\n};
 
         $QUIET or print $msg;
 
@@ -1681,7 +1681,7 @@ sub add_database {
                 $dsn->{$1} = $2;
             }
             eval {
-                $testdbh = MongoDB::Connection->new($dsn);
+                $testdbh = MongoDB::Connection->new($dsn); ## no critic
                 $found = 1;
             };
             if (! $found) {
@@ -1930,10 +1930,10 @@ sub update_database {
     ## Returns: undef
     ## Example: bucardo update db nyc1 port=6543 group=nycservers:source,globals
 
+    my @actions = @_;
+
     ## Grab our generic usage message
     my $usage = usage('update_database');
-
-    my @actions = @_;
 
     if (! @actions) {
         print "$usage\n";
@@ -2203,7 +2203,7 @@ sub list_databases {
         if ($dbtype eq 'drizzle') {
             my $showport = (length $info->{dbport} and $info->{dbport} != 3306)
                 ? " --port $info->{dbport}" : '';
-            printf "Conn: drizzle -u %s -D %s%s%s",
+            printf 'Conn: drizzle -u %s -D %s%s%s',
                 $info->{dbuser},
                 $info->{dbname},
                 $showhost,
@@ -2220,14 +2220,14 @@ sub list_databases {
         if ($dbtype eq 'mysql') {
             my $showport = (length $info->{dbport} and $info->{dbport} != 3306)
                 ? " --port $info->{dbport}" : '';
-            printf "Conn: mysql -u %s -D %s%s%s",
+            printf 'Conn: mysql -u %s -D %s%s%s',
                 $info->{dbuser},
                 $info->{dbname},
                 $showhost,
                 $showport;
         }
         if ($dbtype eq 'oracle') {
-            printf "Conn: sqlplus %s%s",
+            printf 'Conn: sqlplus %s%s',
                 $info->{dbuser},
                 $showhost ? qq{\@$showhost} : '';
         }
@@ -2245,7 +2245,7 @@ sub list_databases {
             }
         }
         if ($dbtype eq 'sqlite') {
-            printf "Conn: sqlite3 %s",
+            printf 'Conn: sqlite3 %s',
                 $info->{dbname};
         }
 
@@ -2413,10 +2413,10 @@ sub update_dbgroup {
     ## Returns: undef
     ## Example: bucardo update dbgroup sales A:slave
 
+    my @actions = @_;
+
     ## Grab our generic usage message
     my $usage = usage('update_dbgroup');
-
-    my @actions = @_;
 
     if (! @actions) {
         print "$usage\n";
@@ -3415,6 +3415,13 @@ sub remove_table {
 
 } ## end of remove_table
 
+sub remove_sequence {
+
+    die 'Write me';
+
+} ## end of remove_sequence
+
+
 
 ##
 ## Herd-related subroutines: add, remove, update, list
@@ -3768,7 +3775,7 @@ sub add_sync {
                     $x++;
                     redo;
                 }
-                $SQL = "INSERT INTO bucardo.herd (name) VALUES (?)";
+                $SQL = 'INSERT INTO bucardo.herd (name) VALUES (?)';
                 $sth = $dbh->prepare($SQL);
                 $count = $sth->execute($gname);
                 if (1 != $count) {
@@ -3825,7 +3832,7 @@ sub add_sync {
             my $innerjoin = join ',' => map { "$_=".$global{dbgroup}{$gname}{db}{$_} } sort keys %{$global{dbgroup}{$gname}{db}};
             if ($innerjoin eq $newlist) {
                 print qq{That group of databases already exists as dbgroup "$gname"\n};
-                print qq{Do you wish to use that group instead? Y/N };
+                print q{Do you wish to use that group instead? Y/N };
                 my $ans = $batch ? 'Y' : <STDIN>;
                 if ($ans =~ /^y/i) {
                     $dbcols->{dbs} = $gname;
@@ -3852,7 +3859,7 @@ sub add_sync {
                 $x++;
                 redo;
             }
-            $SQL = "INSERT INTO bucardo.dbgroup (name) VALUES (?)";
+            $SQL = 'INSERT INTO bucardo.dbgroup (name) VALUES (?)';
             $sth = $dbh->prepare($SQL);
             $count = $sth->execute($gname);
             if (1 != $count) {
@@ -3963,9 +3970,9 @@ sub update_sync {
     ## Arguments: none (reads nouns for a list of syncs)
     ## Returns: never, exits
 
-    my $usage = usage('update_sync');
-
     my @actions = @_;
+
+    my $usage = usage('update_sync');
 
     if (! @actions) {
         print "$usage\n";
@@ -4180,9 +4187,10 @@ sub add_tables_to_sync {
     ## Returns: unknown, not working yet
 
     my $syncname = shift or die;
-    my $sync = $SYNC->{$syncname} or die qq{Unknown sync: $syncname};
 
     my @names = @_;
+
+    my $sync = $SYNC->{$syncname} or die qq{Unknown sync: $syncname};
 
     ## How many items we got?
     my $nouncount = @names;
@@ -4235,10 +4243,7 @@ sub add_tables_to_sync {
         print "Result: $result\n";
     }
 
-
-
-
-    die "Complete me";
+    die 'Complete me';
 
     return;
 
@@ -4444,8 +4449,8 @@ AND nspname !~ '^pg_'
 
             ## Setup the SQL to search the live database
             $SQL = $BASESQL . ($hasadot
-                ? "AND nspname||'.'||relname ~ ?"
-                : "AND relname ~ ?");
+                ? 'AND nspname||'.'||relname ~ ?'
+                : 'AND relname ~ ?');
 
         } ## end wildcards
 
@@ -4554,7 +4559,7 @@ sub add_items_to_goat_table {
     my $isthere = $dbh->prepare($SQL);
 
     ## SQL to add this new entry in
-    my $NEWGOATSQL = "INSERT INTO bucardo.goat (schemaname,tablename,reltype,db) VALUES (?,?,?,?) RETURNING id";
+    my $NEWGOATSQL = 'INSERT INTO bucardo.goat (schemaname,tablename,reltype,db) VALUES (?,?,?,?) RETURNING id';
 
     my @newid;
 
@@ -4564,7 +4569,7 @@ sub add_items_to_goat_table {
         }
         my ($schema,$table) = ($1,$2);
 
-        my $db = $info->{$name}{db} or die qq{Must provide a database};
+        my $db = $info->{$name}{db} or die q{Must provide a database};
 
         my $reltype = $info->{$name}{reltype} || 't';
         $reltype = $reltype =~ /s/i ? 'sequence' : 'table';
@@ -5651,11 +5656,17 @@ sub list_customcodes {
 
 } ## end of list_customcodes
 
+sub update_customcode {
 
+    die 'Write me';
 
+} ## end of update_customcode
 
+sub update_table {
 
+    die 'Write me';
 
+} ## end of update_table
 
 
 
@@ -8189,7 +8200,7 @@ sub install {
     if ($res !~ /1/) {
       print "Creating user 'bucardo'\n";
       my $pass = generate_password();
-      $SQL = qq{CREATE USER bucardo SUPERUSER PASSWORD '$pass'},
+      $SQL = qq{CREATE USER bucardo SUPERUSER PASSWORD '$pass'};
       $COM = qq{$PSQL -c "$SQL"};
       $res = qx{$COM 2>&1};
 
@@ -8790,7 +8801,7 @@ sub transform_name {
     my $name = shift;
 
     ## Complain right away if these are not standard characters
-    if ($name !~ /^([\w ]+)$/) {
+    if ($name !~ /^[\w ]+$/) {
         die "Invalid name: $name\n";
     }
 
@@ -8909,6 +8920,7 @@ sub find_best_db_for_searching {
     }
 
     ## Probably an error, but let the caller handle it:
+
     return undef;
 
 } ## end of find_best_db_for_searching
@@ -8931,7 +8943,7 @@ sub confirm_commit {
     }
 
     if ($bcargs->{confirm}) {
-        print "Commit the changes? Y/N ";
+        print 'Commit the changes? Y/N ';
         if (<STDIN> !~ /Y/i) {
             $dbh->rollback();
             print "Changes have been rolled back\n";

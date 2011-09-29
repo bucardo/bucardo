@@ -13,6 +13,7 @@ profile-strictness = quiet
 [-ControlStructures::ProhibitMutatingListFunctions]
 [-Subroutines::ProhibitNestedSubs] 
 [-ValuesAndExpressions::ProhibitAccessOfPrivateData]
+[-Subroutines::ProhibitExplicitReturnUndef]
 
 ##
 ## Four:
@@ -48,6 +49,7 @@ profile-strictness = quiet
 [-ErrorHandling::RequireCheckingReturnValueOfEval]
 [-InputOutput::ProhibitBacktickOperators]
 [-Lax::ProhibitComplexMappings::LinesNotStatements]
+[-Miscellanea::ProhibitUnrestrictedNoCritic]
 [-Modules::ProhibitExcessMainComplexity]
 [-Modules::ProhibitUseQuotedVersion]
 [-RegularExpressions::ProhibitComplexRegexes]
@@ -61,6 +63,7 @@ profile-strictness = quiet
 ## Two:
 ##
 
+[-Bangs::ProhibitCommentedOutCode]
 [-Bangs::ProhibitFlagComments]
 [-BuiltinFunctions::ProhibitBooleanGrep]
 [-CodeLayout::ProhibitQuotedWordLists]
@@ -88,6 +91,7 @@ profile-strictness = quiet
 ## One:
 ##
 
+[-BuiltinFunctions::ProhibitReverseSortBlock]
 [-CodeLayout::ProhibitParensWithBuiltins]
 [-CodeLayout::RequireTidyCode]
 [-Documentation::PodSpelling]
