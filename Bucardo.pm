@@ -3896,7 +3896,16 @@ sub start_kid {
                 ## This is done on a per table / per target basis
                 if (2 == $sync->{onetimecopy}) {
 
+                    ## Also make sure we have at least one row on the source
+                    my $tname = $g->{newname}{$syncname}{$sourcename};
+                    if (! $self->table_has_rows($sourcex, $tname)) {
+                        $self->glog(qq{Source table "$sourcename.$S.$T" has no rows and we are in onetimecopy if empty mode, so we will not COPY}, LOG_NORMAL);
+                        ## No sense in going any further
+                        next GOAT;
+                    }
+
                     ## Check each fullcopy target to see if it is empty and thus ready to COPY
+                    my $have_targets = 0;
                     for my $dbname (@dbs_fullcopy) {
 
                         $x = $sync->{db}{$dbname};
@@ -3911,16 +3920,15 @@ sub start_kid {
                             $sync->{otc}{skip}{$dbname} = 1;
                             $self->glog(qq{Target table "$dbname.$tname" has rows and we are in onetimecopy if empty mode, so we will not COPY}, LOG_NORMAL);
                         }
+                        else {
+                            $have_targets = 1;
+                        }
                     }
 
-                    ## Also make sure we have at least one row on the source
-                    my $tname = $g->{newname}{$syncname}{$sourcename};
-                    if (! $self->table_has_rows($sourcex, $tname)) {
-                        $self->glog(qq{Source table "$sourcename.$S.$T" has no rows and we are in onetimecopy if empty mode, so we will not COPY}, LOG_NORMAL);
-                        ## No sense in going any further
-                        next GOAT;
-                    }
-                }
+                    ## If we have no valid targets at all, skip this goat
+                    next GOAT if ! $have_targets;
+
+                } ## end onetimecopy of 2
 
                 ## The list of targets we will be fullcopying to
                 ## This is a subset of dbs_fullcopy, and may be less due
