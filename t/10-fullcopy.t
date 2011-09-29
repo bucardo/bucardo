@@ -229,7 +229,8 @@ $bct->ctl('bucardo update sync fctest onetimecopy=1');
 
 ## Reload it (which kicks it off, then kicks again post-onetimecopy)
 $bct->ctl('bucardo reload sync fctest');
-sleep 2;
+## One more kick to clean out our messages
+$bct->ctl('bucardo kick fctest 0');
 
 ## A, B, C, and D should have the same information now
 for my $table (sort keys %tabletype) {
@@ -256,7 +257,8 @@ for my $table (keys %tabletype) {
 }
 $dbhA->commit();
 
-## Update the same row to create a conflict with B:
+## Update the same row to create a conflict with B
+## B should win, as is it 'latest'
 for my $table (keys %tabletype) {
     $sth{update}{$table}{B}->execute(81);
 }
@@ -306,7 +308,7 @@ $bct->ctl('bucardo update sync fctest onetimecopy=2');
 
 ## Reload it (which kicks it off)
 $bct->ctl('bucardo reload sync fctest');
-sleep 1;
+sleep 2;
 
 ## A and D should still be empty, as onetimecopy=2 will not run if source is empty
 for my $table (sort keys %tabletype) {
@@ -455,6 +457,8 @@ for my $table (sort keys %tabletype) {
 $dbhA->commit();
 $dbhB->commit();
 
+## Kick twice, just in case
+$bct->ctl('bucardo kick fctest3 0');
 $bct->ctl('bucardo kick fctest3 0');
 
 for my $table (sort keys %tabletype) {
