@@ -767,7 +767,8 @@ sub mcp_main {
         } ## end of checking database connections
 
         ## Add in any messages from the main database and reset the notice hash
-        $notice = $self->db_get_notices($maindbh);
+        ## Ignore things we may have sent ourselves
+        my $notice = $self->db_get_notices($maindbh, $self->{mcp_backend});
 
         ## Add in any messages from each remote database
         for my $dbname (keys %{ $self->{sdb} }) {
@@ -788,9 +789,6 @@ sub mcp_main {
         for my $name (sort keys %{ $notice }) {
 
             my $npid = $notice->{$name}{firstpid};
-
-            ## Ignore things sent from ourselves
-            next if $npid == $self->{mcp_backend};
 
             ## Request to stop everything
             if ('mcp_fullstop' eq $name) {
@@ -1648,13 +1646,12 @@ sub start_controller {
         }
 
         ## Process any notifications from the main database
-        my $nlist = $self->db_get_notices($maindbh);
+        ## Ignore things we may have sent ourselves
+        my $nlist = $self->db_get_notices($maindbh, $self->{master_backend});
+
       NOTICE: for my $name (sort keys %{ $nlist }) {
 
             my $npid = $nlist->{$name}{firstpid};
-
-            ## Ignore things from ourselves
-            next if $npid == $self->{master_backend};
 
             ## Strip prefix so we can easily use both pre and post 9.0 versions
             $name =~ s/^ctl_//o;
@@ -2628,7 +2625,9 @@ sub start_kid {
 
         ## If persistent, listen for messages and do an occasional ping of all databases
         if ($kidsalive) {
+
             my $nlist = $self->db_get_notices($maindbh);
+
             for my $name (sort keys %{ $nlist }) {
 
                 my $npid = $nlist->{$name}{firstpid};
@@ -5168,20 +5167,25 @@ sub db_notify {
 sub db_get_notices {
 
     ## Gather up and return a list of asynchronous notices received since the last check
-    ## Arguments: one
+    ## Arguments: one or two
     ## 1. Database handle
+    ## 2. PID that can be ignored (optional)
     ## Returns: hash of notices, with the key as the name and then another hash with:
     ##   count: total number received
     ##   firstpid: the first PID for this notice
     ##   pids: hashref of all pids
     ## If using 9.0 or greater, the payload becomes the name
 
-    my ($self, $ldbh) = @_;
+    my ($self, $ldbh, $selfpid) = @_;
 
     my ($n, %notice);
 
     while ($n = $ldbh->func('pg_notifies')) {
+
         my ($name, $pid, $payload) = @$n;
+
+        ## Ignore certain PIDs (e.g. from ourselves!)
+        next if defined $selfpid and $pid == $selfpid;
 
         if ($ldbh->{pg_server_version} >= 90000 and $payload) {
             $name = $payload; ## presto!
@@ -6253,13 +6257,12 @@ sub fork_vac {
         }
 
         ## Process any notifications from the main database
-        my $nlist = $self->db_get_notices($maindbh);
+        ## Ignore things we may have sent ourselves
+        my $nlist = $self->db_get_notices($maindbh, $self->{master_backend});
+
       NOTICE: for my $name (sort keys %{ $nlist }) {
 
             my $npid = $nlist->{$name}{firstpid};
-
-            ## Ignore things from ourselves
-            next if $npid == $self->{master_backend};
 
             ## Strip prefix so we can easily use both pre and post 9.0 versions
             $name =~ s/^vac_//o;
