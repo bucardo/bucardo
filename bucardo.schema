@@ -1,6 +1,6 @@
 
 -- Schema for the main Bucardo database
--- Version 4.99.1
+-- Version 4.99.2
 
 -- Should be run as a superuser
 
@@ -142,8 +142,8 @@ warning_file|bucardo.warning.log|File containing all log lines starting with "Wa
 COPY bucardo.bucardo_config(setting,value,about)
 FROM STDIN
 WITH DELIMITER '|';
-bucardo_version|4.99.1|Bucardo version this schema was created with
-bucardo_current_version|4.99.1|Current version of Bucardo
+bucardo_version|4.99.2|Bucardo version this schema was created with
+bucardo_current_version|4.99.2|Current version of Bucardo
 \.
 
 -- Other settings:
