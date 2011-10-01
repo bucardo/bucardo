@@ -219,7 +219,7 @@ my $nouns = join ' ' => @nouns;
 my $adverb;
 
 ## Installation must happen before we try to connect!
-install() if $verb eq 'install';
+install() if $verb =~ /instal/i;
 
 ## For everything else, we need to connect to a previously installed Bucardo database
 
@@ -7490,7 +7490,7 @@ sub upgrade {
 
     if ($changes) {
         printf "Okay to commit $changes %s? ", $changes==1 ? 'change' : 'changes';
-        #exit if <STDIN> !~ /Y/i;
+        exit if <STDIN> !~ /Y/i;
         $dbh->commit();
         print "Changes have been commited\n";
     }
@@ -7611,7 +7611,7 @@ Optional information:
   rebuild_index      (whether to rebuild indexes after every sync, defaults to 0 (off))
   lifetime=number    (how long a kid can live before being reaped, defaults to null (no limit))
   maxkicks=number    (how many kicks a kid can process before being reaped, defaults to 0 (no limit))
-  onetimecopy=number (for pushdelta syncs only, controls whether we switch to a fullcopy mode for one run,
+  onetimecopy=number (controls whether we switch to a fullcopy mode for one run,
                       0=off, 1=always full copy, 2=only copy tables which are empty on the target)
   tables=list        (list of tables to add to this new sync,
                       will create a herd with the same name as the sync)};
