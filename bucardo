@@ -8024,6 +8024,7 @@ sub install {
     print "We will create a new superuser named 'bucardo',\n";
     print "and make it the owner of a new database named 'bucardo'\n\n";
 
+    ## Setup our default arguments for the installation choices
     my $ans;
     my $host = $bcargs->{dbhost} || $ENV{PGHOST} || '<none>';
     my $port = $bcargs->{dbport} || $ENV{PGPORT} || 5432;
@@ -8047,19 +8048,23 @@ sub install {
         }
     }
 
+    ## If the PID directory was not provided on the command line,
+    ## use the value from the bucardo.schema file
     my $piddir = $bcargs->{piddir} || $confvar{piddir};
 
+    ## Keep looping until they are happy with the settings
   GOOEY:
     {
 
         print "Current connection settings:\n";
 
-        print "1. Host:          $host\n";
-        print "2. Port:          $port\n";
-        print "3. User:          $user\n";
-        print "4. Database:      $dbname\n";
-        print "5. PID directory: $piddir\n";
+        print "1. Host:           $host\n";
+        print "2. Port:           $port\n";
+        print "3. User:           $user\n";
+        print "4. Database:       $dbname\n";
+        print "5. PID directory:  $piddir\n";
 
+        ## If in batch mode, we accept everything right away and move on
         last GOOEY if $bcargs->{batch};
 
         print 'Enter a number to change it, P to proceed, or Q to quit: ';
@@ -8067,10 +8072,15 @@ sub install {
         $ans = <>;
         print "\n";
 
+        ## If the answer starts with a number, try and apply it
+        ## Can also provide the value right away
         if ($ans =~ /^\s*(\d+)(.*)/) {
             my ($num,$text) = (int $1,$2);
             $text =~ s/^\s*(\S+)\s*$/$1/;
             my $new = length $text ? $text : '';
+
+            ## Host: allow anything
+            ## Change empty string to '<none>';
             if (1 == $num) {
                 if (!length $new) {
                     print 'Change the host to: ';
@@ -8081,6 +8091,8 @@ sub install {
                 $host = length $new ? $new : '<none>';
                 print "Changed host to: $host\n";
             }
+
+            ## Port: only allow numbers
             elsif (2 == $num) {
                 if (!length $new) {
                     print 'Change the port to: ';
@@ -8095,6 +8107,8 @@ sub install {
                 $port = $new;
                 print "Changed port to: $port\n";
             }
+
+            ## User: allow anything except an empty string
             elsif (3 == $num) {
                 if (!length $new) {
                     print 'Change the user to: ';
@@ -8109,6 +8123,8 @@ sub install {
                 $user = $new;
                 print "Changed user to: $user\n";
             }
+
+            ## Database: allow anything except an empty string
             elsif (4 == $num) {
                 if (!length $new) {
                     print 'Change the database name to: ';
@@ -8123,6 +8139,8 @@ sub install {
                 $dbname = $new;
                 print "Changed database name to: $dbname\n";
             }
+
+            ## PID directory: allow anything, as long as it starts with a slash
             elsif (5 == $num) {
                 if (!length $new) {
                     print 'Change the PID directory to: ';
@@ -8150,6 +8168,8 @@ sub install {
             die "Goodbye!\n";
         }
         elsif ($ans =~ /^\s*P/i) {
+            ## Check on the PID directory before going any further
+            ## This is the only item that can be easily checked here
             if (! -d $piddir) {
                 print "-->Sorry, that is not a valid PID directory\n";
                 redo GOOEY;
@@ -8177,11 +8197,13 @@ sub install {
 
     ## Check for some common errors
     if ($res =~ /role ".+" does not exist/) {
-        die "Sorry, please try using a different user\n";
+        print "-->Sorry, please try using a different user\n\n";
+        goto GOOEY;
     }
 
     if ($res !~ /(\d+)\.(\d+)(\S+)/) {
-        die "Sorry, unable to connect to the database\n";
+        print "-->Sorry, unable to connect to the database\n\n";
+        goto GOOEY;
     }
     my ($maj,$min,$rev) = ($1,$2,$3);
     $rev =~ s/^\.//;
