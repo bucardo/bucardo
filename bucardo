@@ -4449,7 +4449,7 @@ AND nspname !~ '^pg_'
 
             ## Setup the SQL to search the live database
             $SQL = $BASESQL . ($hasadot
-                ? 'AND nspname||'.'||relname ~ ?'
+                ? q{AND nspname||'.'||relname ~ ?}
                 : 'AND relname ~ ?');
 
         } ## end wildcards
