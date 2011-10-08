@@ -530,7 +530,7 @@ sub help {
     exit 0 if $QUIET;
 
     warn qq{Usage: $progname args
-  install         ** Install the Bucardo database
+  install         ** Installs the Bucardo database
 
   start <reason>  ** Force any existing sync(s) to quit, then starts Bucardo
 
@@ -8021,11 +8021,8 @@ sub install {
     print "This will install the bucardo database into an existing Postgres cluster.\n";
     print "Postgres must have been compiled with Perl support,\n";
     print "and you must connect as a superuser\n\n";
-    print "We will create a new superuser named 'bucardo',\n";
-    print "and make it the owner of a new database named 'bucardo'\n\n";
 
     ## Setup our default arguments for the installation choices
-    my $ans;
     my $host = $bcargs->{dbhost} || $ENV{PGHOST} || '<none>';
     my $port = $bcargs->{dbport} || $ENV{PGPORT} || 5432;
     my $user = $ENV{DBUSER} || 'postgres';
@@ -8042,6 +8039,8 @@ sub install {
         }
     }
     close $fh or warn qq{Could not close "$schema_file": $!\n};
+
+    ## Make sure each item has a default value
     for my $key (keys %confvar) {
         if (!$confvar{$key}) {
             warn "Could not find default configuration for $key!\n";
@@ -8069,7 +8068,7 @@ sub install {
 
         print 'Enter a number to change it, P to proceed, or Q to quit: ';
 
-        $ans = <>;
+        my $ans = <>;
         print "\n";
 
         ## If the answer starts with a number, try and apply it
@@ -8184,13 +8183,16 @@ sub install {
 
     }
 
+    ## Try to connect
     my $PSQL = "psql -p $port -U $user -d $dbname";
     $host !~ /</ and $PSQL .= " --host=$host";
 
+    ## We also want the version, so we grab that as the initial connection test
     my $COM = "$PSQL -c 'SELECT version()'";
 
     my $res = qx{$COM 2>&1};
 
+    ## Dump any problems verbatim to stderr
     if ($res =~ /FATAL|ERROR/ or $res =~ /psql:/) {
         warn $res;
     }
@@ -8205,28 +8207,36 @@ sub install {
         print "-->Sorry, unable to connect to the database\n\n";
         goto GOOEY;
     }
+
+    ## At this point, we assume a good connection
+    ## Assign the version variables
     my ($maj,$min,$rev) = ($1,$2,$3);
+    ## We need to be able to handle things such as 9.2devel
     $rev =~ s/^\.//;
     $rev =~ s/(\d+)\.\d+/$1/;
 
     print "Postgres version is: $maj.$min\n";
 
+    ## Bare minimum for the install is 8.1
     if ($maj < 8 or (8 == $maj and $min < 1)) {
         die "Sorry, Bucardo requires Postgres version 8.1 or higher. This is only $maj.$min\n";
     }
 
-    ## Create the bucardo user if needed
+    ## Determine if we need to create the bucardo user
     $COM = qq{$PSQL -c "SELECT 1 FROM pg_user WHERE usename = 'bucardo'"};
     $res = qx{$COM 2>&1};
 
+    ## If no number 1 seen, no bucardo user, so create it
     if ($res !~ /1/) {
-      print "Creating user 'bucardo'\n";
+      print "Creating superuser 'bucardo'\n";
+
+      ## Generate a new random password
       my $pass = generate_password();
       $SQL = qq{CREATE USER bucardo SUPERUSER PASSWORD '$pass'};
       $COM = qq{$PSQL -c "$SQL"};
       $res = qx{$COM 2>&1};
 
-      ## Put the password into the .pgpass file
+      ## Put the new password into the .pgpass file
       my $file = "$ENV{HOME}/.pgpass";
       my $fh;
       if (open my $fh, '>>', $file) {
@@ -8242,10 +8252,11 @@ sub install {
       else {
         print qq{Could not append password information to file "$file"\n};
         print qq{Password for user bucardo is: $pass\n};
-        print qq{You probably want to change it or put it in a .pgpass file\n};
+        print qq{You probably want to change it or put into a .pgpass file\n};
       }
     }
 
+    ## Now we apply the bucardo.schema to the new database
     $COM = "$PSQL -AX -qt -f $schema_file 2>&1";
 
     print "Attempting to create and populate the bucardo database and schema\n";
@@ -8253,26 +8264,30 @@ sub install {
     $res= qx{$COM};
     chomp $res;
 
+    ## Detect case where bucardo is already there
+    ## This probably needs to be i18n safe
     if ($res =~ /relation .* already exists/) {
         warn "\nINSTALLATION FAILED! Looks like you already have Bucardo installed there.\n";
         warn "Try running 'bucardo upgrade' instead\n\n";
         exit 1;
     }
 
+    ## This can actually happen for many reasons: lack of this message
+    ## simply means something went wrong somewhere
+    ## TODO: Parse other errors more gracefully
     if ($res !~ m{Pl/PerlU was successfully installed}) {
         warn "\nINSTALLATION FAILED! ($res)\n\n";
-        warn "Installation cannot proceed unless the Pl/PerlU language is available\n";
+        warn "This is often caused by the Pl/PerlU language not being available\n";
         warn "This is usually available as a separate package\n";
         warn "For example, you might try: yum install postgresql-plperl\n";
         warn "If compiling from source, add the --with-perl option to your ./configure command\n\n";
         exit 1;
     }
 
+    ## We made it! All downhill from here
     print "Database creation is complete\n\n";
 
-    ## Whether or not we really need to, change the bucardo_config items:
-
-    print "Connecting to database 'bucardo' as user 'bucardo'\n";
+    ## Whether or not we really need to, change some bucardo_config items:
     my $BDSN  = 'dbi:Pg:dbname=bucardo';
     $host and $host ne '<none>' and $BDSN .= ";host=$host";
     $port and $BDSN .= ";port=$port";
@@ -8294,9 +8309,9 @@ sub install {
     $dbh->commit();
 
     print "Installation is now complete.\n\n";
-    print "If you see any unexpected errors above, please report them to bucardo-general\@bucardo.org\n\n";
+    print "If you see errors or need help, please email bucardo-general\@bucardo.org\n\n";
 
-    print "You should probably check over the configuration variables next, by running:\n";
+    print "You may want to check over the configuration variables next, by running:\n";
     print "$progname show all\n";
     print "Change any setting by using: $progname set foo=bar\n\n";
 
