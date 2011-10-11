@@ -2288,7 +2288,7 @@ sub list_databases {
                     my $role = $i->{role};
                     my $gang = $i->{gang};
                     my $pri = $i->{priority};
-                    print "  Belongs to database group $group ($role)  Gang:$gang";
+                    print "  Belongs to database group $group ($role)";
                     $pri and print "  Priority:$pri";
                     print "\n";
                 }
