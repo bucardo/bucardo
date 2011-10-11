@@ -2294,16 +2294,11 @@ sub list_databases {
                 }
             }
 
-            ## Which syncs are using it (source vs. target)
-            if (exists $info->{sourcesync}) {
-                print '  Used as source in syncs: ';
-                print join ', ' => sort keys %{ $info->{sourcesync} };
-                print "\n";
-            }
-            if (exists $info->{targetsync}) {
-                print '  Used as target in syncs: ';
-                print join ', ' => sort keys %{ $info->{targetsync} };
-                print "\n";
+            ## Which syncs are using it, and as what role
+            if (exists $info->{sync}) {
+                for my $syncname (sort keys %{ $info->{sync} }) {
+                    print "  Used in sync $syncname in a role of $info->{sync}{$syncname}{role}\n";
+                }
             }
 
             $VERBOSE >= 2 and show_all_columns($info);
