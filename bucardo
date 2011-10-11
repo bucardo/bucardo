@@ -1604,7 +1604,7 @@ sub add_database {
                         print "Connection test failed, but will add anyway.\nError was: $@\n\n";
                     }
                     else {
-                        die "Connection test failed. You can force add it with the --force argument.\nError was: $@\n\n";
+                        die "Connection test failed. You may force add it with the --force argument.\nError was: $@\n\n";
                     }
                 }
                 else {
@@ -1656,10 +1656,16 @@ sub add_database {
                 $found = 1;
             };
             if (! $found) {
-                die "Drizzle connection test failed. You can force add it with the --force argument. Error was: $@\n\n";
+                if ($bcargs->{force}) {
+                    print "Connection test failed, but will add anyway.\nError was: $@\n\n";
+                }
+                else {
+                    die "Drizzle connection test failed. You may force add it with the --force argument. Error was: $@\n\n";
+                }
             }
-
-            $testdbh->disconnect();
+            else {
+                $testdbh->disconnect();
+            }
 
         } ## end drizzle
 
@@ -1711,10 +1717,16 @@ sub add_database {
                 $found = 1;
             };
             if (! $found) {
-                die "MySQL connection test failed. You can force add it with the --force argument. Error was: $@\n\n";
+                if ($bcargs->{force}) {
+                    print "Connection test failed, but will add anyway.\nError was: $@\n\n";
+                }
+                else {
+                    die "MySQL connection test failed. You may force add it with the --force argument. Error was: $@\n\n";
+                }
             }
-
-            $testdbh->disconnect();
+            else {
+                $testdbh->disconnect();
+            }
 
         } ## end mysql
 
@@ -1738,10 +1750,16 @@ sub add_database {
                 $found = 1;
             };
             if (! $found) {
-                die "Oracle connection test failed. You can force add it with the --force argument. Error was: $@\n\n";
+                if ($bcargs->{force}) {
+                    print "Connection test failed, but will add anyway.\nError was: $@\n\n";
+                }
+                else {
+                    die "Oracle connection test failed. You may force add it with the --force argument. Error was: $@\n\n";
+                }
             }
-
-            $testdbh->disconnect();
+            else {
+                $testdbh->disconnect();
+            }
 
         } ## end oracle
 
@@ -1778,8 +1796,12 @@ sub add_database {
                 $found = 1;
             };
             if (! $found) {
-                warn Dumper \@dsn;
-                die qq{Connection to redis failed: $@\n};
+                if ($bcargs->{force}) {
+                    print "Connection test failed, but will add anyway.\nError was: $@\n\n";
+                }
+                else {
+                    die qq{Connection to redis failed: $@\n};
+                }
             }
 
         } ## end redis
@@ -1804,10 +1826,16 @@ sub add_database {
                 $found = 1;
             };
             if (! $found) {
-                die "SQLite connection test failed. You can force add it with the --force argument. Error was: $@\n\n";
+                if ($bcargs->{force}) {
+                    print "Connection test failed, but will add anyway.\nError was: $@\n\n";
+                }
+                else {
+                    die "SQLite connection test failed. You may force add it with the --force argument. Error was: $@\n\n";
+                }
             }
-
-            $testdbh->disconnect();
+            else {
+                $testdbh->disconnect();
+            }
 
         } ## end sqlite
 
