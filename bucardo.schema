@@ -29,7 +29,6 @@ CREATE SCHEMA freezer;
 \set ON_ERROR_STOP on
 
 BEGIN;
-
 SET CLIENT_MIN_MESSAGES = 'WARNING';
 SET search_path TO bucardo;
 SET client_min_messages   = 'WARNING';
@@ -1266,10 +1265,10 @@ sub fetch1_sql {
 
 ## Determine the name of some functions we may need
 my $namelen = length($syncname);
-my $kickfunc = $namelen <= 42
-    ? "bucardo_triggerkick_$syncname" : $namelen <= 56
+my $kickfunc = $namelen <= 48
+    ? "bucardo_kick_$syncname" : $namelen <= 62
     ? "bkick_$syncname"
-    : sprintf 'bucardo_triggerkick_%d', int (rand(88888) + 11111);
+    : sprintf 'bucardo_kick_%d', int (rand(88888) + 11111);
 
 ## Not used yet, but will allow for selective recreation of various items below
 my %force;
