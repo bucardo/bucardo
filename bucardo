@@ -3312,7 +3312,7 @@ sub add_table {
 
     ## Loop through all the args and attempt to add the tables
     ## This returns a hash with the following keys: relations, match, nomatch
-    my $goatlist = get_goat_ids({args => \@nouns, dbcols => $dbcols});
+    my $goatlist = get_goat_ids(args => \@nouns, dbcols => $dbcols);
 
     ## The final output. Store it up all at once for a single QUIET check
     my $msg = '';
@@ -3492,7 +3492,7 @@ sub add_herd {
     }
 
     ## Get the list of all requested tables, adding as needed
-    my $goatlist = get_goat_ids({args => \@nouns});
+    my $goatlist = get_goat_ids(args => \@nouns);
 
     ## The final output. Store it up all at once for a single QUIET check
     my $msg = '';
@@ -4219,7 +4219,7 @@ sub add_tables_to_sync {
     my $nouncount = @names;
 
     ## First, see if we can find matches for known goats
-    my $goatlist = get_goat_ids(@names);
+    my $goatlist = get_goat_ids(args => \@names);
 
     ## Figure out if we need to hit the live database to add potential tables
     ## We do not only if 1) all nouns are of the format "a.b" and 2) got a match
@@ -4369,9 +4369,9 @@ sub get_goat_ids {
 
     ## Returns the ids from the goat table for matching relations
     ## Also checks the live database and adds tables to the goat table as needed.
-    ## Arguments: single hashref:
+    ## Arguments: key-value pairs:
     ##  - args: arrayref of names to match against. Can have wildcards.
-    ##  - dbcols: optionl hashref of fields to populate goat table with (e.g. ping=1)
+    ##  - dbcols: optional hashref of fields to populate goat table with (e.g. ping=1)
     ## Returns: a hash with:
     ##  - relations: hash of goat objects, key is the fully qualified name
     ##    - original: hash of search term(s) used to find this
@@ -4380,9 +4380,9 @@ sub get_goat_ids {
     ##  - match: hash of matching terms
     ##  - new: hash of newly added tables
 
-    my $arg = shift || {};
-    my $names = $arg->{args} or die;
-    my $dbcols = $arg->{dbcols} || {};
+    my %arg = @_;
+    my $names = $arg{args} or die;
+    my $dbcols = $arg{dbcols} || {};
 
     ## The final hash we return
     my %relation;
