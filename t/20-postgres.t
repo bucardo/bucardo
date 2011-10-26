@@ -151,6 +151,7 @@ for my $table (sort keys %tabletype) {
 ## Commit, then kick off the sync
 $dbhA->commit();
 $bct->ctl('bucardo kick pgtest 0');
+$bct->ctl('bucardo kick pgtest 0');
 
 ## Check targets for the new rows
 for my $table (sort keys %tabletype) {
