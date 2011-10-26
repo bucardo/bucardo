@@ -4485,9 +4485,6 @@ AND nspname !~ '^pg_'
                 push @matches => $item;
             }
 
-            ## No need to check live if we found a match
-            next ITEM if @matches;
-
             ## Setup the SQL to search the live database
             $SQL = $BASESQL . q{AND nspname||'.'||relname = ?};
         }
@@ -4507,33 +4504,35 @@ AND nspname !~ '^pg_'
             $SQL = $BASESQL . 'AND relname = ?';
         }
 
-        ## Search the live database for matches
-        $sth = $rdbh->prepare($SQL);
-        ($count = $sth->execute($item)) =~ s/0E0/0/;
-        debug(qq{Searched live database "$bestdb" for arg "$item", count was $count});
-        for my $row (@{ $sth->fetchall_arrayref({}) }) {
-
-            ## The 'name' is combined "schema.relname"
-            my $name = $row->{name};
-
-            ## Don't bother if we have already added this!
-            next if exists $GOAT->{$name};
-
-            ## Document the string that led us to this one
-            $relation{$name}{original}{$item}++;
-
-            ## Document the fact that we found this on a database
-            $new{$name}++;
-
-            ## Mark this item as having produced a match
-            $match{$item}++;
-
-            ## Set this table to be added to the goat table below
-            $addtable{$name} = {db => $bestdb, reltype => $row->{relkind}, dbcols => $dbcols};
-
-            ## Add this to our matching list
-            push @matches => $name;
-
+        unless (@matches) {  # No need to check live if we found a match
+            ## Search the live database for matches
+            $sth = $rdbh->prepare($SQL);
+            ($count = $sth->execute($item)) =~ s/0E0/0/;
+            debug(qq{Searched live database "$bestdb" for arg "$item", count was $count});
+            for my $row (@{ $sth->fetchall_arrayref({}) }) {
+                
+                ## The 'name' is combined "schema.relname"
+                my $name = $row->{name};
+                
+                ## Don't bother if we have already added this!
+                next if exists $GOAT->{$name};
+                
+                ## Document the string that led us to this one
+                $relation{$name}{original}{$item}++;
+                
+                ## Document the fact that we found this on a database
+                $new{$name}++;
+                
+                ## Mark this item as having produced a match
+                $match{$item}++;
+                
+                ## Set this table to be added to the goat table below
+                $addtable{$name} = {db => $bestdb, reltype => $row->{relkind}, dbcols => $dbcols};
+                
+                ## Add this to our matching list
+                push @matches => $name;
+                
+            }
         }
 
         ## Add all the tables we just found from searching the live database
