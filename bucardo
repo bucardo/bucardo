@@ -3645,12 +3645,12 @@ sub list_herds {
         $maxlen = length $row->{name} if length $row->{name} > $maxlen;
     }
 
-    ## Figure out which goats are in each of these herds
     for my $row (@$info) {
         my $name = $row->{name};
         my $h = $global{herd}{$name};
-        printf 'Herd: %-*s  DB: %s ',
-            $maxlen, $name, $h->{db};
+        printf 'Herd: %-*s ',
+            $maxlen, $name;
+        printf ' DB: %s ', $h->{db} if $h->{db};
         ## Got goats?
         if (exists $h->{goat}) {
             print ' Members: ';
