@@ -276,6 +276,7 @@ our %alias = (
 
 ## Columns that cannot be changed: used in the update_* subroutines
 my %column_no_change = (
+    'id'    => 1,
     'cdate' => 1,
 );
 
@@ -1235,42 +1236,6 @@ sub purge {
     exit 0;
 
 } ## end of purge
-
-
-sub create_dbgroup {
-
-    ## Creates a new entry in the bucardo.dbgroup table
-    ## Caller should have alredy checked for existence
-    ## Does not commit
-    ## Arguments: two
-    ## 1. Name of the new group
-    ## 2. Boolean: if true, prevents the reload
-    ## Returns: undef
-
-    my ($name,$noreload) = @_;
-
-    $SQL = 'INSERT INTO bucardo.dbgroup(name) VALUES (?)';
-    $sth = $dbh->prepare($SQL);
-    eval {
-        $sth->execute($name);
-    };
-    if ($@) {
-        if ($@ =~ /dbgroup_name_sane/) {
-            print "Trying name $name\n";
-            print qq{Invalid characters in database group name "$name"\n};
-        }
-        else {
-            print qq{Failed to create database group "$name"\n$@\n};
-        }
-        exit 1;
-    }
-
-    ## Reload our hashes
-    $noreload or load_bucardo_info(1);
-
-    return;
-
-} ## end of create_dbgroup
 
 
 sub add_item {
@@ -3445,6 +3410,185 @@ sub remove_sequence {
 } ## end of remove_sequence
 
 
+sub update_table {
+
+    ## Update one or more tables
+    ## This may modify the bucardo.goat and bucardo.herdmap tables
+    ## Arguments: two or more
+    ## 1. Table to be updated
+    ## 2+. Items to be adjusted (name=value)
+    ## Returns: undef
+    ## Example: bucardo update table quad ping=false
+
+    my @actions = @_;
+
+    ## Grab our generic usage message
+    my $usage = usage('update_table');
+
+    if (! @actions) {
+        print "$usage\n";
+        exit 1;
+    }
+
+    my $name = shift @actions;
+
+    ## Recursively call ourselves for wildcards and 'all'
+    exit 0 if ! check_recurse($GOAT, $name, @actions);
+
+    ## Make sure this table exists!
+    if (! exists $GOAT->{$name}) {
+        die qq{Could not find a table named "$name"\nUse 'list tables' to see all available.};
+    }
+
+    ## Store the id so we work with that alone whenever possible
+    my $id = $GOAT->{$name}[0]{id};
+
+    ## Everything is a name=value setting after this point
+    ## We will ignore and allow noise word "set"
+    for my $arg (@actions) {
+        next if $arg =~ /set/i;
+        next if $arg =~ /\w+=\w+/o;
+        print "$usage\n";
+        exit 1;
+    }
+
+    ## Change the arguments into a hash
+    my $args = process_args(join ' ' => @actions);
+
+    ## Track what changes we made
+    my %change;
+
+    ## Walk through and handle each argument pair
+    for my $setting (sort keys %$args) {
+
+        ## Change the name to a more standard form, to better figure out what they really mean
+        ## This also excludes all non-alpha characters
+        my $newname = transform_name($setting);
+
+        ## Exclude ones that cannot / should not be changed (e.g. cdate)
+        if (exists $column_no_change{$newname}) {
+            print "Sorry, the value of $setting cannot be changed\n";
+            exit 1;
+        }
+
+        ## Standardize the values as well
+        my $value = $args->{$setting};
+        my $newvalue = transform_value($value);
+
+        ## Handle all the non-standard columns
+        if (lc $newname eq 'herd') {
+
+            ## Track the changes and publish at the end
+            my @herdchanges;
+
+            ## Grab the current hash of herds
+            my $oldherd = $GOAT->{$name}[0]{herd} || '';
+
+            ## Keep track of what groups they end up in, so we can remove as needed
+            my %doneherd;
+
+            ## Break apart into individual herds
+            for my $herd (split /\s*,\s*/ => $newvalue) {
+
+                ## Note that we've found this herd
+                $doneherd{$herd}++;
+
+                ## Does this herd exist?
+                if (! exists $HERD->{$herd}) {
+                    create_herd($herd);
+                    push @herdchanges => qq{Created herd "$herd"};
+                }
+
+                ## Are we a part of it already?
+                if ($oldherd and exists $oldherd->{$herd}) {
+                    $QUIET or print qq{No change: table "$name" already belongs to herd "$herd"\n};
+                }
+                else {
+                    ## We are not a part of this herd yet
+                    add_goat_to_herd($herd, $id);
+                    push @herdchanges => qq{Added table "$name" to herd "$herd"};
+                }
+
+            } ## end each herd specified
+
+            ## See if we are removing any herds
+            if ($oldherd) {
+                for my $old (sort keys %$oldherd) {
+                    next if exists $doneherd{$old};
+
+                    ## We do not want to remove herds here, but maybe in the future
+                    ## we can allow a syntax that does
+                    next;
+
+                    remove_table_from_herd($name, $old);
+                    push @herdchanges => qq{Removed table "$name" from herd "$old"};
+                }
+            }
+
+            if (@herdchanges) {
+                for (@herdchanges) {
+                    chomp;
+                    $QUIET or print "$_\n";
+                }
+                confirm_commit();
+            }
+
+            ## Go to the next setting
+            next;
+
+        } ## end of 'herd' adjustments
+
+        ## This must exist in our hash
+        ## We assume it is the first entry for now
+        ## Someday be more intelligent about walking and adjusting all matches
+        if (! exists $GOAT->{$name}[0]{$newname}) {
+            print qq{Cannot change "$newname"\n};
+            next;
+        }
+        my $oldvalue = $GOAT->{$name}[0]{$newname};
+
+        ## May be undef!
+        $oldvalue = 'NULL' if ! defined $oldvalue;
+
+        ## Has this really changed?
+        if ($oldvalue eq $newvalue) {
+            print "No change needed for $newname\n";
+            next;
+        }
+
+        ## Add to the queue. Overwrites previous ones
+        $change{$newname} = [$oldvalue, $newvalue];
+
+    } ## end each setting
+
+    ## If we have any changes, attempt to make them all at once
+    if (%change) {
+        my $SQL = 'UPDATE bucardo.goat SET ';
+        $SQL .= join ',' => map { "$_=?" } sort keys %change;
+        $SQL .= ' WHERE id = ?';
+        my $sth = $dbh->prepare($SQL);
+        eval {
+            $sth->execute((map { $change{$_}[1] } sort keys %change), $id);
+        };
+        if ($@) {
+            $dbh->rollback();
+            $dbh->disconnect();
+            print "Sorry, failed to update the bucardo.goat table. Error was:\n$@\n";
+            exit 1;
+        }
+
+        for my $item (sort keys %change) {
+            my ($old,$new) = @{ $change{$item} };
+            print "Changed bucardo.goat $item from $old to $new\n";
+        }
+
+        confirm_commit();
+    }
+
+    return;
+
+} ## end of update_table
+
 
 ##
 ## Herd-related subroutines: add, remove, update, list
@@ -4337,16 +4481,16 @@ sub add_goat_to_herd {
 
     ## Make sure the goat is in the form of an id and that it exists
     if ($goat =~ /^\d+$/o) {
-        exists $global{goat}{id}
+        exists $GOAT->{$goat}
             or die qq{Could not find a goat with id $goat};
     }
     else {
-        exists $global{goat}{$goat}
+        exists $GOAT->{$goat}
             or die qq{Could not find a goat with the name "$goat"};
-        $goat = $global{goat}{$goat}{id};
+        $goat = $GOAT->{$goat}{id};
     }
 
-    exists $global{herd}{$herd}
+    exists $HERD->{$herd}
         or die qq{Could not find a herd with the name "$herd"};
 
     $count = $sth->execute($herd,$goat);
@@ -4629,6 +4773,42 @@ sub add_items_to_goat_table {
 
 
 } ## end of add_items_to_goat_table
+
+
+sub create_dbgroup {
+
+    ## Creates a new entry in the bucardo.dbgroup table
+    ## Caller should have alredy checked for existence
+    ## Does not commit
+    ## Arguments: two
+    ## 1. Name of the new group
+    ## 2. Boolean: if true, prevents the reload
+    ## Returns: undef
+
+    my ($name,$noreload) = @_;
+
+    $SQL = 'INSERT INTO bucardo.dbgroup(name) VALUES (?)';
+    $sth = $dbh->prepare($SQL);
+    eval {
+        $sth->execute($name);
+    };
+    if ($@) {
+        if ($@ =~ /dbgroup_name_sane/) {
+            print "Trying name $name\n";
+            print qq{Invalid characters in database group name "$name"\n};
+        }
+        else {
+            print qq{Failed to create database group "$name"\n$@\n};
+        }
+        exit 1;
+    }
+
+    ## Reload our hashes
+    $noreload or load_bucardo_info(1);
+
+    return;
+
+} ## end of create_dbgroup
 
 
 sub get_arg_items {
@@ -5683,13 +5863,6 @@ sub update_customcode {
     die 'Write me';
 
 } ## end of update_customcode
-
-sub update_table {
-
-    die 'Write me';
-
-} ## end of update_table
-
 
 
 sub list_tables {
@@ -7840,6 +8013,11 @@ The type is one of: db, dbgroup, table, sequence, herd, sync, or customname};
     if ('update_database' eq $name) {
         return q{Usage: update database <name> col1=val [col2=val2 col3=val3 ...]
 Updates a database
+    };
+    }
+    if ('update_table' eq $name) {
+        return q{Usage: update table <name> col1=val [col2=val2 col3=val3 ...] herd=herd1,herd2
+Updates a table
     };
     }
     if ('upgrade' eq $name) {
