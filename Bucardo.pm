@@ -1591,24 +1591,9 @@ sub start_controller {
             $sth->finish();
             $saved_sourcedbh->rollback();
 
-            ## Now fetch the safely quoted version of each
-            $SQL = 'SELECT quote_ident(?)';
-            my $sth2 = $saved_sourcedbh->prepare($SQL);
-            my @columns;
-            for my $colname (@{ $g->{tcolumns}{$SELECT} }) {
-                $sth2->execute($colname);
-                push @columns => $sth2->fetchall_arrayref()->[0][0];
-            }
-            $saved_sourcedbh->rollback();
-
-            ## Store a flattened version of the above for adding to SQL queries
-            $g->{tcolumnlist}{$SELECT} = '(' . (join ',' => @columns) . ')';
-
             ## Make sure none of them are un-named, which Postgres outputs as ?column?
-            if ($ccols) {
-                if ($g->{tcolumnlist}{$SELECT} =~ /\?/) {
-                    die "Invalid customcols given: must give an alias to all columns!\n";
-                }
+            if (grep { /\?/ } @{ $g->{tcolumns}{$SELECT} }) {
+                die "Invalid customcols given: must give an alias to all columns!\n";
             }
 
         }
@@ -8182,7 +8167,7 @@ sub push_rows {
 
             ## The columns we are pushing to, both as an arrayref and a CSV:
             my $cols = $goat->{tcolumns}{$SELECT};
-            my $columnlist = $goat->{tcolumnlist}{$SELECT};
+            my $columnlist = '(' . (join ',', map { $t->{dbh}->quote_identifier($_) } @$cols) . ')';
 
             my $type = $t->{dbtype};
 
