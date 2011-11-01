@@ -2529,6 +2529,8 @@ sub start_kid {
 
             ## Serialize for this session
             $xdbh->do('SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE');
+            ## ANSI mode: mostly because we want ANSI_QUOTES
+            $xdbh->do(q{SET sql_mode = 'ANSI'});
             $xdbh->commit();
 
         } ## end mysql
