@@ -4323,17 +4323,7 @@ sub start_kid {
                     for my $g (@$goatlist) {
                         next if ! $g->{vacuum_after_copy} or $g->{reltype} ne 'table';
                         ($S,$T) = ($g->{safeschema},$g->{safetable});
-                        my $total_time = sprintf '%.2f', tv_interval($kid_start_time);
-
-                        my $tname = $g->{newname}{$syncname}{$dbname};
-
-                        $self->glog("Vacuuming $dbname.$tname. Time: $total_time", LOG_VERBOSE);
-                        $x->{dbh}->commit();
-                        $x->{dbh}->{AutoCommit} = 1;
-                        $x->{dbh}->do("VACUUM $tname");
-                        $x->{dbh}->{AutoCommit} = 0;
-                        $total_time = sprintf '%.2f', tv_interval($kid_start_time);
-                        $self->glog("Vacuum complete. Time: $total_time", LOG_VERBOSE);
+                        $self->vacuum_table($kid_start_time, $x, $g->{newname}{$syncname}{$dbname});
                     }
                 }
             }
@@ -4350,14 +4340,7 @@ sub start_kid {
                             $g->{onetimecopy_ifempty} = 0;
                             next;
                         }
-                        my $tname = $g->{newname}{$syncname}{$dbname};
-                        my $total_time = sprintf '%.2f', tv_interval($kid_start_time);
-
-                        $self->glog("Analyzing $dbname.$tname. Time: $total_time", LOG_VERBOSE);
-                        $x->{dbh}->do("ANALYZE $tname");
-                        $x->{dbh}->commit();
-                        $total_time = sprintf '%.2f', tv_interval($kid_start_time);
-                        $self->glog("Analyze complete. Time: $total_time", LOG_VERBOSE);
+                        $self->analyze_table($kid_start_time, $x, $g->{newname}{$syncname}{$dbname});
                     }
                 }
             }
@@ -8362,6 +8345,62 @@ sub push_rows {
 
 } ## end of push_rows
 
+sub vacuum_table {
+    ## Compact and/or optimize the table in the target database
+    my ($self, $kid_start_time, $db, $tname) = @_;
+    my $dbname = $db->{name};
+    my $dbtype = $db->{dbtype};
+    
+    my $total_time = sprintf '%.2f', tv_interval($kid_start_time);
+    $self->glog("Vacuuming $dbname.$tname. Time: $total_time", LOG_VERBOSE);
+    
+    if ('postgres' eq $dbtype) {
+        $db->{dbh}->commit();
+        $db->{dbh}->{AutoCommit} = 1;
+        $db->{dbh}->do("VACUUM $tname");
+        $db->{dbh}->{AutoCommit} = 0;
+    } elsif ('mysql' eq $dbtype or 'drizzle' eq $dbtype) {
+        $db->{dbh}->do("OPTIMIZE TABLE $tname");
+        # XXX MySQL returns an informational message from OPTIMIZE; log it?
+        $db->{dbh}->commit();
+    } elsif ('sqlite' eq $dbtype) {
+        # Note the SQLite command vacuums the entire database.
+        # Should probably avoid multi-vacuuming if several tables have changed.
+        $db->{dbh}->do("VACUUM");
+    } else {
+        # Redis: use BGWRITEAOF ?
+        # MongoDB: Use db.repairDatabase() ?
+        $self->glog("Cannot VACUUM $dbtype databases! ($dbname)", LOG_WARN);
+    }
+    
+    $total_time = sprintf '%.2f', tv_interval($kid_start_time);
+    $self->glog("Vacuum complete. Time: $total_time", LOG_VERBOSE);
+}
+sub analyze_table {
+    ## Update table statistics in the target database
+    my ($self, $kid_start_time, $db, $tname) = @_;
+    my $dbname = $db->{name};
+    my $dbtype = $db->{dbtype};
+
+    my $total_time = sprintf '%.2f', tv_interval($kid_start_time);
+    $self->glog("Analyzing $dbname.$tname. Time: $total_time", LOG_VERBOSE);
+
+    if ('postgres' eq $dbtype or 'sqlite' eq $dbtype) {
+        $db->{dbh}->do("ANALYZE $tname");
+        $db->{dbh}->commit();
+    } elsif ('mysql' eq $dbtype or 'drizzle' eq $dbtype) {
+        $db->{dbh}->do("ANALYZE TABLE $tname");
+        # XXX MySQL returns an informational message from ANALYZE; log it?
+        $db->{dbh}->commit();
+    } elsif ($dbtype =~ /mongo|flat|redis/) {
+        # These datbases don't have an ANALYZE equivalent.
+    } else {
+        $self->glog("Cannot ANALYZE $dbtype databases! ($dbname)", LOG_WARN);
+    }
+    
+    $total_time = sprintf '%.2f', tv_interval($kid_start_time);
+    $self->glog("Analyze complete. Time: $total_time", LOG_VERBOSE);
+}
 
 sub msg { ## no critic
 
