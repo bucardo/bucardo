@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# -*-mode:cperl; indent-tabs-mode: nil-*-
+# -*-mode:cperl; indent-tabs-mode: nil; cperl-indent-level: 4-*-
 
 ## The main Bucardo program
 ##
@@ -4463,7 +4463,7 @@ sub connect_database {
     ##   OR
     ## - the string 'inactive' if set as such in the db table
     ##   OR
-    ## - the string 'flat' if this is a f;atfile 'database'
+    ## - the string 'flat' if this is a flatfile 'database'
 
     my $self = shift;
 
@@ -7984,7 +7984,7 @@ sub delete_rows {
 
         if ('mysql' eq $type or 'drizzle' eq $type) {
             my $tdbh = $t->{dbh};
-            for (@{ $SQL{IN} }) {
+            for (@{ $SQL{MYIN} }) {
                 ($count{$t} += $tdbh->do($_)) =~ s/0E0/0/o;
             }
             next;
