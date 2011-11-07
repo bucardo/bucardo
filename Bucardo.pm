@@ -7631,6 +7631,7 @@ sub truncate_table {
         };
         if ($@) {
             $x->{does_savepoints} and $x->{dbh}->do('ROLLBACK TO truncate_attempt');
+            $self->glog("Truncate error: $@", LOG_NORMAL);
             return 0;
         }
         else {
