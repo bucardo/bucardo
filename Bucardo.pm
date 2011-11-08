@@ -420,11 +420,13 @@ sub start_mcp {
 
     ## Drop the existing database connection, fork, and get a new one
     ## This self-fork helps ensure our survival
+    my $disconnect_ok = 0;
     eval {
         ## This connection was set in new()
         $self->{masterdbh}->disconnect();
+        $disconnect_ok = 1;
     };
-    $@ and $self->glog("Warning! Disconnect failed $@", LOG_WARN);
+    $disconnect_ok or $self->glog("Warning! Disconnect failed $@", LOG_WARN);
 
     my $seeya = fork;
     if (! defined $seeya) {
@@ -7626,10 +7628,12 @@ sub truncate_table {
         $SQL = sprintf 'TRUNCATE TABLE %s%s',
         $tname,
         ($cascade and $x->{does_cascade}) ? ' CASCADE' : '';
+        my $truncate_ok = 0;
         eval {
             $x->{dbh}->do($SQL);
+            $truncate_ok = 1;
         };
-        if ($@) {
+        if (! $truncate_ok) {
             $x->{does_savepoints} and $x->{dbh}->do('ROLLBACK TO truncate_attempt');
             $self->glog("Truncate error: $@", LOG_NORMAL);
             return 0;
