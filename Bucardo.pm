@@ -4322,8 +4322,8 @@ sub start_kid {
 
                     for my $g (@$goatlist) {
                         next if ! $g->{vacuum_after_copy} or $g->{reltype} ne 'table';
-                        ($S,$T) = ($g->{safeschema},$g->{safetable});
-                        $self->vacuum_table($kid_start_time, $x, $g->{newname}{$syncname}{$dbname});
+                        my $tablename = $g->{newname}{$syncname}{$dbname};
+                        $self->vacuum_table($kid_start_time, $x->{dbtype}, $x->{dbh}, $x->{name}, $tablename);
                     }
                 }
             }
@@ -4340,7 +4340,8 @@ sub start_kid {
                             $g->{onetimecopy_ifempty} = 0;
                             next;
                         }
-                        $self->analyze_table($kid_start_time, $x, $g->{newname}{$syncname}{$dbname});
+                        my $tablename = $g->{newname}{$syncname}{$dbname};
+                        $self->analyze_table($kid_start_time, $x->{dbtype}, $x->{dbh}, $x->{name}, $tablename);
                     }
                 }
             }
@@ -8345,62 +8346,111 @@ sub push_rows {
 
 } ## end of push_rows
 
+
 sub vacuum_table {
+
     ## Compact and/or optimize the table in the target database
-    my ($self, $kid_start_time, $db, $tname) = @_;
-    my $dbname = $db->{name};
-    my $dbtype = $db->{dbtype};
-    
-    my $total_time = sprintf '%.2f', tv_interval($kid_start_time);
-    $self->glog("Vacuuming $dbname.$tname. Time: $total_time", LOG_VERBOSE);
-    
+    ## Argument: five
+    ## 1. Starting time for the kid, so we can output cumulative times
+    ## 2. Database type
+    ## 3. Database handle
+    ## 4. Database name
+    ## 5. Table name (may be in schema.table format)
+    ## Returns: undef
+
+    my ($self, $start_time, $dbtype, $ldbh, $dbname, $tablename) = @_;
+
+    ## XXX Return output from vacuum/optimize as a LOG_VERBOSE or LOG_DEBUG?
+
     if ('postgres' eq $dbtype) {
-        $db->{dbh}->commit();
-        $db->{dbh}->{AutoCommit} = 1;
-        $db->{dbh}->do("VACUUM $tname");
-        $db->{dbh}->{AutoCommit} = 0;
-    } elsif ('mysql' eq $dbtype or 'drizzle' eq $dbtype) {
-        $db->{dbh}->do("OPTIMIZE TABLE $tname");
-        # XXX MySQL returns an informational message from OPTIMIZE; log it?
-        $db->{dbh}->commit();
-    } elsif ('sqlite' eq $dbtype) {
+        ## Do a normal vacuum of the table
+        $ldbh->commit();
+        $ldbh->{AutoCommit} = 1;
+        $self->glog("Vacuuming $dbname.$tablename", LOG_VERBOSE);
+        $ldbh->do("VACUUM $tablename");
+        $ldbh->{AutoCommit} = 0;
+
+        my $total_time = sprintf '%.2f', tv_interval($start_time);
+        $self->glog("Vacuum complete. Time: $total_time", LOG_VERBOSE);
+    }
+    elsif ('mysql' eq $dbtype or 'drizzle' eq $dbtype) {
+        ## Optimize the table
+        $self->glog("Optimizing $tablename", LOG_VERBOSE);
+
+        $ldbh->do("OPTIMIZE TABLE $tablename");
+        $ldbh->commit();
+
+        my $total_time = sprintf '%.2f', tv_interval($start_time);
+        $self->glog("Optimization complete. Time: $total_time", LOG_VERBOSE);
+    }
+    elsif ('sqlite' eq $dbtype) {
         # Note the SQLite command vacuums the entire database.
         # Should probably avoid multi-vacuuming if several tables have changed.
-        $db->{dbh}->do("VACUUM");
-    } else {
-        # Redis: use BGWRITEAOF ?
-        # MongoDB: Use db.repairDatabase() ?
-        $self->glog("Cannot VACUUM $dbtype databases! ($dbname)", LOG_WARN);
+        $self->glog("Vacuuming the database", LOG_VERBOSE);
+        $ldbh->do('VACUUM');
+
+        my $total_time = sprintf '%.2f', tv_interval($start_time);
+        $self->glog("Vacuum complete. Time: $total_time", LOG_VERBOSE);
     }
-    
-    $total_time = sprintf '%.2f', tv_interval($kid_start_time);
-    $self->glog("Vacuum complete. Time: $total_time", LOG_VERBOSE);
-}
+    elsif ('redis' eq $dbtype) {
+        # Use BGWRITEAOF ?
+    }
+    elsif ('mongodb' eq $dbtype) {
+        # Use db.repairDatabase() ?
+    }
+    else {
+        ## Do nothing!
+    }
+
+    return;
+
+} ## end of vacuum_table
+
+
 sub analyze_table {
+
     ## Update table statistics in the target database
-    my ($self, $kid_start_time, $db, $tname) = @_;
-    my $dbname = $db->{name};
-    my $dbtype = $db->{dbtype};
+    ## Argument: five
+    ## 1. Starting time for the kid, so we can output cumulative times
+    ## 2. Database type
+    ## 3. Database handle
+    ## 4. Database name
+    ## 5. Table name (may be in schema.table format)
+    ## Returns: undef
 
-    my $total_time = sprintf '%.2f', tv_interval($kid_start_time);
-    $self->glog("Analyzing $dbname.$tname. Time: $total_time", LOG_VERBOSE);
+    my ($self, $start_time, $dbtype, $ldbh, $dbname, $tablename) = @_;
 
-    if ('postgres' eq $dbtype or 'sqlite' eq $dbtype) {
-        $db->{dbh}->do("ANALYZE $tname");
-        $db->{dbh}->commit();
-    } elsif ('mysql' eq $dbtype or 'drizzle' eq $dbtype) {
-        $db->{dbh}->do("ANALYZE TABLE $tname");
-        # XXX MySQL returns an informational message from ANALYZE; log it?
-        $db->{dbh}->commit();
-    } elsif ($dbtype =~ /mongo|flat|redis/) {
-        # These datbases don't have an ANALYZE equivalent.
-    } else {
-        $self->glog("Cannot ANALYZE $dbtype databases! ($dbname)", LOG_WARN);
+    ## XXX Return output from analyze as a LOG_VERBOSE or LOG_DEBUG?
+
+    if ('postgres' eq $dbtype) {
+        $self->glog("Analyzing $dbname.$tablename", LOG_VERBOSE);
+        $ldbh->do("ANALYZE $tablename");
+        my $total_time = sprintf '%.2f', tv_interval($start_time);
+        $self->glog("Analyze complete. Time: $total_time", LOG_VERBOSE);
+        $ldbh->commit();
     }
-    
-    $total_time = sprintf '%.2f', tv_interval($kid_start_time);
-    $self->glog("Analyze complete. Time: $total_time", LOG_VERBOSE);
-}
+    elsif ('sqlite' eq $dbtype) {
+        $self->glog("Analyzing $dbname.$tablename", LOG_VERBOSE);
+        $ldbh->do("ANALYZE $tablename");
+        my $total_time = sprintf '%.2f', tv_interval($start_time);
+        $self->glog("Analyze complete. Time: $total_time", LOG_VERBOSE);
+        $ldbh->commit();
+    }
+    elsif ('mysql' eq $dbtype or 'drizzle' eq $dbtype) {
+        $self->glog("Analyzing $tablename", LOG_VERBOSE);
+        $ldbh->do("ANALYZE TABLE $tablename");
+        my $total_time = sprintf '%.2f', tv_interval($start_time);
+        $self->glog("Analyze complete. Time: $total_time", LOG_VERBOSE);
+        $ldbh->commit();
+    }
+    else {
+        ## Nothing to do here
+    }
+
+    return undef;
+
+} ## end of analyze_table
+
 
 sub msg { ## no critic
 
