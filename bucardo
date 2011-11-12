@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# -*-mode:cperl; indent-tabs-mode: nil-*-
+# -*-mode:cperl; indent-tabs-mode: nil; cperl-indent-level: 4-*-
 
 ## Script to control Bucardo
 ##
@@ -32,7 +32,7 @@ return 1 if $ENV{BUCARDO_TEST};
 *STDERR->autoflush(1);
 
 ## All the variables we use often and want to declare here without 'my'
-use vars qw/$dbh $SQL $sth %sth $count $info %global $SYNC $GOAT $DB $DBGROUP $HERD
+use vars qw/$dbh $SQL $sth %sth $count $info %global $SYNC $GOAT $TABLE $SEQUENCE $DB $DBGROUP $HERD
             $CUSTOMCODE $CUSTOMNAME $CUSTOMCOLS /;
 
 ## How to show dates from the database, e.g. start time of a sync
@@ -3590,6 +3590,180 @@ sub update_table {
 } ## end of update_table
 
 
+sub list_tables {
+
+    ## Show information about all or some tables in the 'goat' table
+    ## Arguments: none (reads nouns for a list of tables)
+    ## Returns: never, exits
+    ## Example: bucardo list tables
+
+    ## Grab our generic usage message
+    my $usage = usage('list_tables');
+
+    ## Might be no tables yet
+    if (! keys %$TABLE) {
+        print "No tables have been added yet\n";
+        exit 1;
+    }
+
+    ## If not doing all, keep track of which to show
+    my %matchtable;
+
+    for my $term (@nouns) {
+
+        ## Special case for all: same as no nouns at all, so simply remove them!
+        if ($term =~ /\ball\b/i) {
+            undef %matchtable;
+            undef @nouns;
+            last;
+        }
+
+        ## Check for wildcards
+        if ($term =~ s/[*%]/.*/) {
+            for my $name (keys %$TABLE) {
+                $matchtable{$name} = 1 if $name =~ /^$term$/;
+            }
+            next;
+        }
+
+        ## Must be an exact match
+        for my $name (keys %$DB) {
+            $matchtable{$name} = 1 if $name eq $term;
+        }
+
+    } ## end each term
+
+    ## No matches?
+    if (@nouns and ! keys %matchtable) {
+        print "No matching databases found\n";
+        exit 1;
+    }
+
+    ## We only show the type if they are different from each othera
+    my %typecount;
+
+    ## Figure out the length of each item for a pretty display
+    my ($maxdb,$maxtype,$maxstat,$maxlim1,$maxlim2,$showlim) = (1,1,1,1,1,0);
+    for my $name (sort keys %$DB) {
+        next if @nouns and ! exists $matchtable{$name};
+        my $info = $DB->{$name};
+        $typecount{$info->{dbtype}}++;
+        $maxdb   = length $info->{name} if length $info->{name} > $maxdb;
+        $maxtype = length $info->{dbtype} if length $info->{dbtype} > $maxtype;
+        $maxstat = length $info->{status} if length $info->{status} > $maxstat;
+        $maxlim1 = length $info->{sourcelimit} if length $info->{sourcelimit} > $maxlim1;
+        $maxlim2 = length $info->{targetlimit} if length $info->{targetlimit} > $maxlim2;
+        $showlim = 1 if $info->{sourcelimit} or $info->{targetlimit};
+    }
+
+    ## Do we show types?
+    my $showtypes = keys %typecount > 1 ? 1 : 0;
+
+    ## Now do the actual printing
+    for my $name (sort keys %$DB) {
+        next if @nouns and ! exists $matchtable{$name};
+        my $info = $DB->{$name};
+        my $type = sprintf 'Type: %-*s  ',
+            $maxtype, $info->{dbtype};
+        printf 'Database: %-*s  %sStatus: %-*s  ',
+            $maxdb, $info->{name},
+            $showtypes ? $type : '',
+            $maxstat, $info->{status};
+        if ($showlim) {
+            printf 'Limits: %-*s/%-*s  ',
+                $maxlim1, $info->{sourcelimit},
+                $maxlim2, $info->{targetlimit},
+        }
+        my $showhost = length $info->{dbhost} ? " -h $info->{dbhost}" : '';
+        my $dbtype = $info->{dbtype};
+        if ($dbtype eq 'postgres') {
+            print "Conn: psql -p $info->{dbport} -U $info->{dbuser} -d $info->{dbname}$showhost";
+            if (! $info->{server_side_prepares}) {
+                print ' (SSP is off)';
+            }
+        }
+        if ($dbtype eq 'drizzle') {
+            my $showport = (length $info->{dbport} and $info->{dbport} != 3306)
+                ? " --port $info->{dbport}" : '';
+            printf 'Conn: drizzle -u %s -D %s%s%s',
+                $info->{dbuser},
+                $info->{dbname},
+                $showhost,
+                $showport;
+        }
+        if ($dbtype eq 'flatfile') {
+            print "Prefix: $info->{dbname}";
+        }
+        if ($dbtype eq 'mongo') {
+            if (length $info->{dbhost}) {
+                print "Host: $info->{dbhost}";
+            }
+        }
+        if ($dbtype eq 'mysql') {
+            my $showport = (length $info->{dbport} and $info->{dbport} != 3306)
+                ? " --port $info->{dbport}" : '';
+            printf 'Conn: mysql -u %s -D %s%s%s',
+                $info->{dbuser},
+                $info->{dbname},
+                $showhost,
+                $showport;
+        }
+        if ($dbtype eq 'oracle') {
+            printf 'Conn: sqlplus %s%s',
+                $info->{dbuser},
+                $showhost ? qq{\@$showhost} : '';
+        }
+        if ($dbtype eq 'redis') {
+            my $server = '';
+            if (length $info->{dbhost}) {
+                $server .= $info->{dbhost};
+            }
+            if (length $info->{dbport}) {
+                $server .= ":$info->{dbport}";
+            }
+            if ($server) {
+                $server = "server=$server";
+                print "Conn: $server";
+            }
+        }
+        if ($dbtype eq 'sqlite') {
+            printf 'Conn: sqlite3 %s',
+                $info->{dbname};
+        }
+
+        print "\n";
+
+        if ($VERBOSE) {
+
+            ## Which database groups is this a member of?
+            if (exists $info->{group}) {
+                for my $group (sort keys %{ $info->{group} }) {
+                    my $i = $info->{group}{$group};
+                    my $role = $i->{role};
+                    my $gang = $i->{gang};
+                    my $pri = $i->{priority};
+                    print "  Belongs to database group $group ($role)";
+                    $pri and print "  Priority:$pri";
+                    print "\n";
+                }
+            }
+
+            ## Which syncs are using it, and as what role
+            if (exists $info->{sync}) {
+                for my $syncname (sort keys %{ $info->{sync} }) {
+                    print "  Used in sync $syncname in a role of $info->{sync}{$syncname}{role}\n";
+                }
+            }
+
+            $VERBOSE >= 2 and show_all_columns($info);
+        }
+    }
+
+    exit 0;
+
+} ## end of list_tables
+
+
 ##
 ## Herd-related subroutines: add, remove, update, list
 ##
@@ -5865,82 +6039,6 @@ sub update_customcode {
 } ## end of update_customcode
 
 
-sub list_tables {
-
-    ## Show information about all or some tables in the 'goat' table
-    ## Arguments: none (reads nouns for a list of tables)
-    ## Returns: never, exits
-
-    my $usage = usage('list_tables');
-
-    my $clause = generate_clause({col => 'tablename', items => \@nouns});
-    my $WHERE = $clause ? "AND $clause" : '';
-    $SQL = "SELECT * FROM bucardo.goat WHERE reltype='table' $WHERE ORDER BY schemaname, tablename";
-    $sth = $dbh->prepare($SQL);
-    $count = $sth->execute();
-    if ($count < 1) {
-        $sth->finish();
-        printf "There are no%s entries in the 'goat' table.\n",
-            $WHERE ? ' matching' : '';
-        exit 1;
-    }
-
-    $info = $sth->fetchall_arrayref({});
-
-    ## Are we showing verbose information? Get matching herds
-    my ($maxtable,$maxdb,$maxpkey) = (1,1,1);
-    for my $row (@$info) {
-        my $name = "$row->{schemaname}.$row->{tablename}";
-        $maxtable = length $name if length $name > $maxtable;
-        $name = $row->{pk} = $row->{pkey} ? "$row->{pkey} ($row->{pkeytype})" : 'none';
-        $maxpkey = length $name if length $name > $maxpkey;
-        $maxdb = length $row->{db} if length $row->{db} > $maxdb;
-    }
-
-    for my $row (sort numbered_relations @$info) {
-
-        ## Extra information of note to tack on the end
-        my $extra = '';
-        if (defined $row->{ping}) {
-            $extra .= sprintf ' ping:%s', $row->{ping} ? 'true' : 'false';
-        }
-        if ($row->{rebuild_index} != 0) {
-            $extra .= " rebuild_index:$row->{rebuild_index}";
-        }
-
-        printf "Table: %-*s  DB: %-*s  PK: %s%s\n",
-            $maxtable, "$row->{schemaname}.$row->{tablename}",
-            $maxdb, $row->{db},
-            $row->{pk},
-            $extra;
-        if ($VERBOSE) {
-            my $g = $global{goat}->{$row->{id}};
-            if (exists $g->{herd}) {
-                print '  Belongs to herds: ';
-                print join ', ' => sort keys %{$g->{herd}};
-                print "\n";
-                my %syncs;
-                for my $herd (keys %{$g->{herd}}) {
-                    my $h = $global{herd}->{$herd};
-                    for my $s (keys %{$h->{sync}}) {
-                        $syncs{$s}++;
-                    }
-                }
-                if (keys %syncs) {
-                    print '  Belongs to syncs: ';
-                    print join ', ' => sort keys %syncs;
-                    print "\n";
-                }
-            }
-        }
-
-        $VERBOSE >= 2 and show_all_columns($row);
-
-    }
-
-    exit 0;
-
-} ## end of list_tables
 
 
 sub list_sequences {
@@ -9021,6 +9119,22 @@ JOIN goat g ON (g.id = c.goat)
     $global{goat}    = $GOAT = $goat;
     $global{herd}    = $HERD = $herd;
     $global{sync}    = $SYNC = $sync;
+
+    ## Separate goat into tables and sequences
+    for my $id (keys %$GOAT) {
+        ## Ids only please
+        next if $id !~ /^\d+$/;
+        my $type = $GOAT->{$id}{reltype};
+        if ($type eq 'table') {
+            $TABLE->{$id} = $GOAT->{$id};
+        }
+        elsif ($type eq 'sequence') {
+            $SEQUENCE->{$id} = $GOAT->{$id};
+        }
+        else {
+            die "Unknown goat type $type!";
+        }
+    }
 
     return;
 
