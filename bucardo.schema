@@ -585,7 +585,7 @@ CREATE INDEX syncrun_sync_lastempty ON syncrun(sync) WHERE lastempty IS TRUE;
 CREATE TABLE bucardo.dbrun (
   sync       TEXT         NOT NULL,
   dbname     TEXT         NOT NULL,
-  pgpid      SMALLINT     NOT NULL,
+  pgpid      INTEGER      NOT NULL,
   started    TIMESTAMPTZ  NOT NULL  DEFAULT now()
 );
 COMMENT ON TABLE bucardo.dbrun IS $$Information about which databases are being accessed$$;
