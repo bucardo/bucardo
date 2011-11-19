@@ -70,6 +70,8 @@ Bucardo version 5.0.0, released ??, 2011
   - Add a --force option so we can remove databases via 'bucardo remove db'
     along with all related goats and syncs. [GSM]
 
+  - Change bucardo.dbrun table column pgpid to INTEGER [Wim Lewis]
+
   - Remove race condition from bucardo_purge_q_table() [GSM]
 
   - Add new options for 'bucardo add db': addalltables and addallsequences [GSM]
