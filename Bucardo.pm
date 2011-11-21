@@ -290,7 +290,7 @@ sub new {
             }
         }
         ## Simple string
-        elsif ($safe ne $hostname) {
+        elsif ($safe eq $hostname) {
             $ok = 1;
         }
 
