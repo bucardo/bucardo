@@ -6049,8 +6049,7 @@ sub fork_controller {
     ## 2. The name of the sync
     ## Returns: undef
 
-    my ($self, $s, $syncname, $kickit) = @_;
-    $kickit = 0 if ! defined $kickit;
+    my ($self, $s, $syncname) = @_;
 
     my $newpid = fork;
     if (!defined $newpid) {
