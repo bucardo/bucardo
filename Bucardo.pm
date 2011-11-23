@@ -8247,8 +8247,7 @@ sub push_rows {
                 for my $t (@{ $srccmd{$clause} }) {
 
                     my $type = $t->{dbtype};
-
-                    my $cols = $t->{tcolumns};
+                    my $cols = $goat->{tcolumns}{$SELECT};
 
                     chomp $buffer;
 
@@ -8298,6 +8297,13 @@ sub push_rows {
                             or 'oracle' eq $type
                             or 'sqlite' eq $type) {
                         my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
+                        for my $cindex (0..@cols) {
+                            next unless defined $cols[$cindex];
+                            if ($goat->{columnhash}{$cols->[$cindex]}{ftype} eq 'boolean') {
+                                # BOOLEAN support is inconsistent, but almost everyone will coerce 1/0 to TRUE/FALSE
+                                $cols[$cindex] = ( $cols[$cindex] =~ /^[1ty]/i )? 1 : 0;
+                            }
+                        }
                         $count += $t->{sth}->execute(@cols);
                     }
                     elsif ('redis' eq $type) {
