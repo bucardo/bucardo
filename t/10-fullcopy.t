@@ -86,10 +86,11 @@ for my $table (sort keys %tabletype) {
     $pkey{$table} = $table =~ /test5/ ? q{"id space"} : 'id';
 
     ## INSERT
+    my (@boolys) = qw( ? true false null false true true null );
     for my $x (1..7) {
         $SQL = $table =~ /X/
             ? "INSERT INTO $table($pkey{$table}) VALUES (?)"
-                : "INSERT INTO $table($pkey{$table},data1,inty) VALUES (?,'foo',$x)";
+                : "INSERT INTO $table($pkey{$table},data1,inty,booly) VALUES (?,'foo',$x,$boolys[$x])";
         $sth{insert}{$x}{$table}{A} = $dbhA->prepare($SQL);
         $sth{insert}{$x}{$table}{C} = $dbhC->prepare($SQL);
 

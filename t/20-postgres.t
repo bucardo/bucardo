@@ -94,10 +94,11 @@ for my $table (sort keys %tabletype) {
     $pkey{$table} = $table =~ /test5/ ? q{"id space"} : 'id';
 
     ## INSERT
+    my (@boolys) = qw( true false null false true true null );
     for my $x (1..7) {
         $SQL = $table =~ /X/
             ? "INSERT INTO $table($pkey{$table}) VALUES (?)"
-                : "INSERT INTO $table($pkey{$table},data1,inty) VALUES (?,'foo',$x)";
+                : "INSERT INTO $table($pkey{$table},data1,inty,booly) VALUES (?,'foo',$x,$boolys[$x])";
         $sth{insert}{$x}{$table}{A} = $dbhA->prepare($SQL);
         if ('BYTEA' eq $tabletype{$table}) {
             $sth{insert}{$x}{$table}{A}->bind_param(1, undef, {pg_type => PG_BYTEA});
@@ -105,7 +106,7 @@ for my $table (sort keys %tabletype) {
     }
 
     ## SELECT
-    $sql{select}{$table} = "SELECT inty FROM $table ORDER BY $pkey{$table}";
+    $sql{select}{$table} = "SELECT inty, booly FROM $table ORDER BY $pkey{$table}";
     $table =~ /X/ and $sql{select}{$table} =~ s/inty/$pkey{$table}/;
 
     ## DELETE ALL
@@ -157,7 +158,7 @@ $bct->ctl('bucardo kick pgtest 0');
 for my $table (sort keys %tabletype) {
 
     my $type = $tabletype{$table};
-    $res = [[1]];
+    $res = [[1,'t']];
 
     $t = qq{Row with pkey of type $type gets copied to B};
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
@@ -180,7 +181,7 @@ $bct->ctl('bucardo kick pgtest 0');
 for my $table (keys %tabletype) {
 
     my $type = $tabletype{$table};
-    $res = [[42]];
+    $res = [[42,'t']];
 
     $t = qq{Row with pkey of type $type gets copied to B after update};
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
@@ -231,7 +232,7 @@ $bct->ctl('bucardo kick pgtest 0');
 for my $table (keys %tabletype) {
 
     my $type = $tabletype{$table};
-    $res = [[1],[2],[3],[4]];
+    $res = [[1,'t'],[2,'f'],[3,undef],[4,'f']];
 
     $t = qq{Row with pkey of type $type gets copied to B after triple insert};
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
@@ -256,7 +257,7 @@ $bct->ctl('bucardo kick pgtest 0');
 for my $table (keys %tabletype) {
 
     my $type = $tabletype{$table};
-    $res = [[1]];
+    $res = [[1,'t']];
 
     $t = qq{Row with pkey of type $type gets removed from B after triple delete};
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);

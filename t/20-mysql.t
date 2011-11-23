@@ -43,7 +43,7 @@ use BucardoTesting;
 delete $tabletype{bucardo_test8};
 
 my $numtabletypes = keys %tabletype;
-plan tests => 119;
+plan tests => 128;
 
 ## Drop the MySQL database if it exists
 my $dbname = 'bucardo_test';
@@ -68,6 +68,7 @@ for my $table (sort keys %tabletype) {
     $SQL .= $table =~ /X/ ? "\n)" : qq{,
                 data1 VARCHAR(100)           NULL,
                 inty  SMALLINT               NULL,
+                booly BOOLEAN                NULL, -- Alias for TINYINT
                 bite1 VARBINARY(999)         NULL,
                 bite2 VARBINARY(999)         NULL,
                 email VARCHAR(100)           NULL UNIQUE
@@ -161,10 +162,11 @@ for my $table (sort keys %tabletype) {
     $pkey{$table} = $table =~ /test5/ ? q{"id space"} : 'id';
 
     ## INSERT
+    my (@boolys) = qw( xxx true false null false true null );
     for my $x (1..6) {
         $SQL = $table =~ /X/
             ? "INSERT INTO $table($pkey{$table}) VALUES (?)"
-                : "INSERT INTO $table($pkey{$table},data1,inty) VALUES (?,'foo',$x)";
+                : "INSERT INTO $table($pkey{$table},data1,inty,booly) VALUES (?,'foo',$x,$boolys[$x])";
         $sth{insert}{$x}{$table}{A} = $dbhA->prepare($SQL);
         if ('BYTEA' eq $tabletype{$table}) {
             $sth{insert}{$x}{$table}{A}->bind_param(1, undef, {pg_type => PG_BYTEA});
@@ -172,7 +174,7 @@ for my $table (sort keys %tabletype) {
     }
 
     ## SELECT
-    $sql{select}{$table} = "SELECT inty FROM $table ORDER BY $pkey{$table}";
+    $sql{select}{$table} = "SELECT inty, booly FROM $table ORDER BY $pkey{$table}";
     $table =~ /X/ and $sql{select}{$table} =~ s/inty/$pkey{$table}/;
 
     ## DELETE ALL
@@ -218,7 +220,7 @@ for my $table (sort keys %tabletype) {
     my $type = $tabletype{$table};
     $t = qq{Row with pkey of type $type gets copied to B};
 
-    $res = [[1]];
+    $res = [[1,1]];
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 }
@@ -248,6 +250,7 @@ for my $table (sort keys %tabletype) {
         {
             $pkeyname => $id,
             inty => 1,
+            booly => 1,
             email => undef,
             bite1 => undef,
             bite2 => undef,
@@ -345,8 +348,20 @@ for my $table (keys %tabletype) {
     $SQL = "SELECT * FROM $table";
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
-    $sth->finish();
     is ($count, 3, $t);
+
+    $t = "MySQL table $table has updated values";
+    my $info = $sth->fetchall_arrayref({});
+    $info = [ sort { $a->{inty} <=> $b->{inty} } @$info ];
+    my($val1, $val3, $val4) = @{$val{$tabletype{$table}}}{1, 3, 4};
+    my $pkeyname = $table =~ /test5/ ? 'id space' : 'id';
+    my(@invar) = ( data1 => 'foo', 'email' => undef, bite1 => undef, bite2 => undef );
+    is_deeply ($info, [{ $pkeyname=>$val1, inty=>1, booly=>1,     @invar },
+                       { $pkeyname=>$val3, inty=>3, booly=>undef, @invar },
+                       { $pkeyname=>$val4, inty=>4, booly=>0,     @invar }], $t) || diag explain $info;
+
+    $sth->finish();
 }
+
 
 exit;

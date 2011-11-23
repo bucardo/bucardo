@@ -709,6 +709,7 @@ sub add_test_schema {
         $SQL .= $table =~ /X/ ? "\n)" : qq{,
                 data1 TEXT                   NULL,
                 inty  SMALLINT               NULL,
+                booly BOOLEAN                NULL,
                 bite1 BYTEA                  NULL,
                 bite2 BYTEA                  NULL,
                 email TEXT                   NULL UNIQUE
