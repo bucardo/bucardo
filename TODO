@@ -3,10 +3,13 @@ TODO list for Bucardo
 
 Version 5:
 
+* Fix quoting bug reported by Sean M. Pappalardo
+* Fix need for password argument when using md5
 * Get pkonly working with 'bucardo add all tables'
 * Get Drizzle tests verified as working
 * Get bucardo-report working again
 * Note 8.2 minimum requirement somewhere (probably from COPY (select))
+
 
 These range the gamut from wildly speculative ideas to must-have features.
 
