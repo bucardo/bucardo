@@ -645,6 +645,9 @@ sub start_mcp {
     for my $syncname (keys %{ $self->{sync} }) {
         my $s = $self->{sync}{$syncname};
 
+        ## Start ina non-kicked mode
+        $s->{kick_on_startup} = 0;
+
         ## Skip inactive syncs
         next unless $s->{mcp_active};
 
@@ -655,7 +658,7 @@ sub start_mcp {
         next if ! $s->{ping};
 
         ## Kick it!
-        $s->{mcp_kicked} = 1;
+        $s->{kick_on_startup} = 1;
     }
 
     ## Start the main loop
@@ -815,7 +818,7 @@ sub mcp_main {
                 }
                 else {
                     ## Kick it!
-                    $sync->{$syncname}{mcp_kicked} = 1;
+                    $sync->{$syncname}{kick_on_startup} = 1;
                 }
 
                 if ($msg) {
@@ -1005,21 +1008,21 @@ sub mcp_main {
             my $s = $sync->{$syncname};
 
             ## If this is not a stayalive, AND is not being kicked, skip it
-            next if ! $s->{stayalive} and ! $s->{mcp_kicked};
+            next if ! $s->{stayalive} and ! $s->{kick_on_startup};
 
             ## If this is a fullcopy sync, skip unless it is being kicked
-            next if $s->{synctype} eq 'fullcopy' and ! $s->{mcp_kicked};
+            next if $s->{synctype} eq 'fullcopy' and ! $s->{kick_on_startup};
 
             ## If this is a previous stayalive, see if it is active, kick if needed
             if ($s->{stayalive} and $s->{controller}) {
                 $count = kill 0 => $s->{controller};
                 ## If kill 0 returns nothing, the controller is gone, so create a new one
                 if (! $count) {
-                    $self->glog("Could not find controller $s->{controller}, will create a new one. Kicked is $s->{mcp_kicked}", LOG_TERSE);
+                    $self->glog("Could not find controller $s->{controller}, will create a new one. Kicked is $s->{kick_on_startup}", LOG_TERSE);
                     $s->{controller} = 0;
                 }
                 else { ## Presume it is alive and listening to us, restart and kick as needed
-                    if ($s->{mcp_kicked}) {
+                    if ($s->{kick_on_startup}) {
                         ## See if controller needs to be killed, because of time limit or job count limit
                         my $restart_reason = '';
 
@@ -1053,7 +1056,7 @@ sub mcp_main {
                         }
 
                         ## Reset so we don't kick the next round
-                        $s->{mcp_kicked} = 0;
+                        $s->{kick_on_startup} = 0;
 
                         ## Track how many times we've kicked
                         $s->{ctl_kick_counts}++;
@@ -1115,7 +1118,7 @@ sub mcp_main {
                     }
                     my $notify = "ctl_kick_$syncname";
                     $self->db_notify($maindbh, $notify);
-                    $s->{mcp_kicked} = 0;
+                    $s->{kick_on_startup} = 0;
                     next SYNC;
                 }
                 $self->glog("No active pid $oldpid found. Killing just in case, and removing file", LOG_TERSE);
@@ -1130,7 +1133,7 @@ sub mcp_main {
             ## Fork off the controller, then clean up the $s hash
             $self->{masterdbh}->commit();
             $self->fork_controller($s, $syncname);
-            $s->{mcp_kicked} = 0;
+            $s->{kick_on_startup} = 0;
             $s->{mcp_changed} = 1;
 
         } ## end each sync
@@ -1163,7 +1166,7 @@ sub start_controller {
 
     ## Extract some of the more common items into local vars
     my ($syncname,$limitdbs,$kidsalive,$dbinfo, $synctype, $kicked,) = @$sync{qw(
-           name    limitdbs  kidsalive  dbs     synctype  mcp_kicked)};
+           name    limitdbs  kidsalive  dbs     synctype kick_on_startup)};
 
     ## Set our process name
     $0 = qq{Bucardo Controller.$self->{extraname} Sync "$syncname" for herd "$sync->{herd}" to dbs "$sync->{dbs}"};
@@ -1829,7 +1832,6 @@ sub start_controller {
         else {
             ## Create any kids that do not exist yet (or have been killed, as detected above)
             $self->glog("Creating a new kid for sync $syncname", LOG_VERBOSE);
-            ## We assume that kids always start "auto-kicked"
             $self->{kidpid} = $self->create_newkid($sync);
         }
 
@@ -1857,13 +1859,13 @@ sub start_kid {
     $self->{logprefix} = 'KID';
 
     ## Extract some of the more common items into local vars
-    my ($syncname, $goatlist, $kidsalive, $dbs) = @$sync{qw(
-          name      goatlist   kidsalive   dbs )};
+    my ($syncname, $goatlist, $kidsalive, $dbs, $kicked) = @$sync{qw(
+          name      goatlist   kidsalive   dbs kick_on_startup)};
 
     ## Adjust the process name, start logging
     $0 = qq{Bucardo Kid.$self->{extraname} Sync "$syncname"};
     my $extra = $sync->{onetimecopy} ? "OTC: $sync->{onetimecopy}" : '';
-    $self->glog(qq{New kid, sync "$syncname" alive=$kidsalive Parent=$self->{ctlpid} PID=$$ $extra}, LOG_TERSE);
+    $self->glog(qq{New kid, sync "$syncname" alive=$kidsalive Parent=$self->{ctlpid} PID=$$ kicked=$kicked $extra}, LOG_TERSE);
 
     ## Store our PID into a file
     ## Save the complete returned name for later cleanup
@@ -2591,9 +2593,6 @@ sub start_kid {
 
     } ## end DBIX::Safe creations
 
-    ## Kids always start "auto-kicked"
-    $self->{runrightnow} = 1;
-
     ## Begin the main KID loop
   KID: {
 
@@ -2607,9 +2606,9 @@ sub start_kid {
         my $dorun = 0;
 
         ## If we were just created, go ahead and start a run
-        if ($self->{runrightnow}) {
+        if ($kicked) {
             $dorun = 1;
-            $self->{runrightnow} = 0;
+            $kicked = 0;
         }
 
         ## If persistent, listen for messages and do an occasional ping of all databases
@@ -6057,7 +6056,7 @@ sub fork_controller {
     }
 
     if ($newpid) { ## We are the parent
-        $self->glog(qq{Created controller $newpid for sync "$syncname". Kick is $s->{mcp_kicked}}, LOG_NORMAL);
+        $self->glog(qq{Created controller $newpid for sync "$syncname". Kick is $s->{kick_on_startupt}}, LOG_NORMAL);
         $s->{controller} = $newpid;
         $self->{pidmap}{$newpid} = 'CTL';
 
@@ -6088,6 +6087,7 @@ sub fork_controller {
     $self->{sync} = $s;
 
     $self->start_controller($s);
+
     exit 0;
 
 } ## end of fork_controller
@@ -6427,7 +6427,7 @@ sub reload_mcp {
         $s->{mcp_changed} = 1;
 
         ## Reset some boolean flags for this sync
-        $s->{mcp_active} = $s->{mcp_kicked} = $s->{controller} = 0;
+        $s->{mcp_active} = $s->{kick_on_startup} = $s->{controller} = 0;
 
         ## If this sync is active, don't bother going any further
         if ($s->{status} ne 'active') {
@@ -7049,12 +7049,11 @@ sub run_ctl_custom_code {
 sub create_newkid {
 
     ## Fork and create a KID process
-    ## Arguments: two
+    ## Arguments: one
     ## 1. Hashref of sync information ($self->{sync}{$syncname})
-    ## 2. Gang number for this kid
     ## Returns: PID of new process
 
-    my ($self,$kidsync) = @_;
+    my ($self, $kidsync) = @_;
 
     ## Just in case, ask any existing kid processes to exit
     $self->db_notify($self->{masterdbh}, "kid_stop_sync_$self->{syncname}");
