@@ -8061,9 +8061,11 @@ sub install {
     ## Arguments: none
     ## Returns: never, exits
 
-    print "This will install the bucardo database into an existing Postgres cluster.\n";
-    print "Postgres must have been compiled with Perl support,\n";
-    print "and you must connect as a superuser\n\n";
+    if (! $bcargs->{batch}) {
+        print "This will install the bucardo database into an existing Postgres cluster.\n";
+        print "Postgres must have been compiled with Perl support,\n";
+        print "and you must connect as a superuser\n\n";
+    }
 
     ## Setup our default arguments for the installation choices
     my $host = $bcargs->{dbhost} || $ENV{PGHOST} || '<none>';
@@ -8302,7 +8304,8 @@ sub install {
     ## Now we apply the bucardo.schema to the new database
     $COM = "$PSQL -AX -qt -f $schema_file 2>&1";
 
-    print "Attempting to create and populate the bucardo database and schema\n";
+    print "Attempting to create and populate the bucardo database and schema\n"
+        if ! $bcargs->{batch};
 
     $res= qx{$COM};
     chomp $res;
@@ -8328,7 +8331,7 @@ sub install {
     }
 
     ## We made it! All downhill from here
-    print "Database creation is complete\n\n";
+    print "Database creation is complete\n\n" if ! $bcargs->{batch};
 
     ## Whether or not we really need to, change some bucardo_config items:
     my $BDSN  = 'dbi:Pg:dbname=bucardo';
@@ -8346,17 +8349,20 @@ sub install {
             warn "!! Failed to set $key to $confvar{$key}\n";
         }
         else {
-            print qq{Updated configuration setting "$key"\n};
+            print qq{Updated configuration setting "$key"\n} if ! $bcargs->{batch};
         }
     }
     $dbh->commit();
 
-    print "Installation is now complete.\n\n";
-    print "If you see errors or need help, please email bucardo-general\@bucardo.org\n\n";
+    print "Installation is now complete.\n";
+    ## A little less verbose if in batch mode
+    if (! $bcargs->{batch}) {
+        print "If you see errors or need help, please email bucardo-general\@bucardo.org\n\n";
 
-    print "You may want to check over the configuration variables next, by running:\n";
-    print "$progname show all\n";
-    print "Change any setting by using: $progname set foo=bar\n\n";
+        print "You may want to check over the configuration variables next, by running:\n";
+        print "$progname show all\n";
+        print "Change any setting by using: $progname set foo=bar\n\n";
+    }
 
     exit 0;
 
