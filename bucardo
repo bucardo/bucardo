@@ -3620,143 +3620,53 @@ sub list_tables {
 
         ## Check for wildcards
         if ($term =~ s/[*%]/.*/) {
-            for my $name (keys %$TABLE) {
-                $matchtable{$name} = 1 if $name =~ /^$term$/;
+            for my $id (keys %$TABLE) {
+                $matchtable{$id} = 1 if $TABLE->{$id}{tablename} =~ /^$term$/;
             }
             next;
         }
 
         ## Must be an exact match
-        for my $name (keys %$DB) {
-            $matchtable{$name} = 1 if $name eq $term;
+        for my $id (keys %$TABLE) {
+            $matchtable{$id} = 1 if $TABLE->{$id}{tablename} eq $term;
         }
 
     } ## end each term
 
     ## No matches?
     if (@nouns and ! keys %matchtable) {
-        print "No matching databases found\n";
+        print "No matching tables found\n";
         exit 1;
     }
 
-    ## We only show the type if they are different from each othera
-    my %typecount;
-
     ## Figure out the length of each item for a pretty display
-    my ($maxdb,$maxtype,$maxstat,$maxlim1,$maxlim2,$showlim) = (1,1,1,1,1,0);
-    for my $name (sort keys %$DB) {
-        next if @nouns and ! exists $matchtable{$name};
-        my $info = $DB->{$name};
-        $typecount{$info->{dbtype}}++;
-        $maxdb   = length $info->{name} if length $info->{name} > $maxdb;
-        $maxtype = length $info->{dbtype} if length $info->{dbtype} > $maxtype;
-        $maxstat = length $info->{status} if length $info->{status} > $maxstat;
-        $maxlim1 = length $info->{sourcelimit} if length $info->{sourcelimit} > $maxlim1;
-        $maxlim2 = length $info->{targetlimit} if length $info->{targetlimit} > $maxlim2;
-        $showlim = 1 if $info->{sourcelimit} or $info->{targetlimit};
+    my ($maxid,$maxname,$maxdb) = (1,1,1);
+    for my $row (values %$TABLE) {
+        my $id = $row->{id};
+        next if @nouns and ! exists $matchtable{$id};
+        $maxid   = length $id if length $id > $maxid;
+        my $name = "$row->{schemaname}.$row->{tablename}";
+        $maxname = length $name if length $name > $maxname;
+        $maxdb = length $row->{db} if length $row->{db} > $maxdb;
     }
-
-    ## Do we show types?
-    my $showtypes = keys %typecount > 1 ? 1 : 0;
-
     ## Now do the actual printing
-    for my $name (sort keys %$DB) {
-        next if @nouns and ! exists $matchtable{$name};
-        my $info = $DB->{$name};
-        my $type = sprintf 'Type: %-*s  ',
-            $maxtype, $info->{dbtype};
-        printf 'Database: %-*s  %sStatus: %-*s  ',
-            $maxdb, $info->{name},
-            $showtypes ? $type : '',
-            $maxstat, $info->{status};
-        if ($showlim) {
-            printf 'Limits: %-*s/%-*s  ',
-                $maxlim1, $info->{sourcelimit},
-                $maxlim2, $info->{targetlimit},
+    ## Sort by schemaname then tablename
+    for my $row (sort {
+        $a->{schemaname} cmp $b->{schemaname}
+        or
+        $a->{tablename} cmp $b->{tablename}
+        } values %$TABLE) {
+        next if @nouns and ! exists $matchtable{$row->{id}};
+        printf '%-*s Table: %-*s  Database: %-*s',
+            1+$maxid, "$row->{id}.",
+            $maxname, "$row->{schemaname}.$row->{tablename}",
+            $maxdb, $row->{db};
+        if ($row->{sync}) {
+#            printf ' Sync: %-*s',
+#                $maxsync, $row->{sync};
         }
-        my $showhost = length $info->{dbhost} ? " -h $info->{dbhost}" : '';
-        my $dbtype = $info->{dbtype};
-        if ($dbtype eq 'postgres') {
-            print "Conn: psql -p $info->{dbport} -U $info->{dbuser} -d $info->{dbname}$showhost";
-            if (! $info->{server_side_prepares}) {
-                print ' (SSP is off)';
-            }
-        }
-        if ($dbtype eq 'drizzle') {
-            my $showport = (length $info->{dbport} and $info->{dbport} != 3306)
-                ? " --port $info->{dbport}" : '';
-            printf 'Conn: drizzle -u %s -D %s%s%s',
-                $info->{dbuser},
-                $info->{dbname},
-                $showhost,
-                $showport;
-        }
-        if ($dbtype eq 'flatfile') {
-            print "Prefix: $info->{dbname}";
-        }
-        if ($dbtype eq 'mongo') {
-            if (length $info->{dbhost}) {
-                print "Host: $info->{dbhost}";
-            }
-        }
-        if ($dbtype eq 'mysql') {
-            my $showport = (length $info->{dbport} and $info->{dbport} != 3306)
-                ? " --port $info->{dbport}" : '';
-            printf 'Conn: mysql -u %s -D %s%s%s',
-                $info->{dbuser},
-                $info->{dbname},
-                $showhost,
-                $showport;
-        }
-        if ($dbtype eq 'oracle') {
-            printf 'Conn: sqlplus %s%s',
-                $info->{dbuser},
-                $showhost ? qq{\@$showhost} : '';
-        }
-        if ($dbtype eq 'redis') {
-            my $server = '';
-            if (length $info->{dbhost}) {
-                $server .= $info->{dbhost};
-            }
-            if (length $info->{dbport}) {
-                $server .= ":$info->{dbport}";
-            }
-            if ($server) {
-                $server = "server=$server";
-                print "Conn: $server";
-            }
-        }
-        if ($dbtype eq 'sqlite') {
-            printf 'Conn: sqlite3 %s',
-                $info->{dbname};
-        }
-
         print "\n";
 
-        if ($VERBOSE) {
-
-            ## Which database groups is this a member of?
-            if (exists $info->{group}) {
-                for my $group (sort keys %{ $info->{group} }) {
-                    my $i = $info->{group}{$group};
-                    my $role = $i->{role};
-                    my $gang = $i->{gang};
-                    my $pri = $i->{priority};
-                    print "  Belongs to database group $group ($role)";
-                    $pri and print "  Priority:$pri";
-                    print "\n";
-                }
-            }
-
-            ## Which syncs are using it, and as what role
-            if (exists $info->{sync}) {
-                for my $syncname (sort keys %{ $info->{sync} }) {
-                    print "  Used in sync $syncname in a role of $info->{sync}{$syncname}{role}\n";
-                }
-            }
-
-            $VERBOSE >= 2 and show_all_columns($info);
-        }
     }
 
     exit 0;
@@ -8884,6 +8794,7 @@ sub load_bucardo_info {
         for my $dbname (keys %{ $sync->{$name}{dblist} }) {
             $db->{$dbname}{sync}{$name} = $sync->{$name}{dblist}{$dbname};
         }
+        ## Note which syncs are used by each goat
     }
 
     ## Grab all customcode information
