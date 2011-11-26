@@ -3662,8 +3662,8 @@ sub list_tables {
             $maxname, "$row->{schemaname}.$row->{tablename}",
             $maxdb, $row->{db};
         if ($row->{sync}) {
-#            printf ' Sync: %-*s',
-#                $maxsync, $row->{sync};
+            printf ' Syncs: ';
+            print join ',' => sort keys %{ $row->{sync} };
         }
         print "\n";
 
@@ -8801,6 +8801,9 @@ sub load_bucardo_info {
             $db->{$dbname}{sync}{$name} = $sync->{$name}{dblist}{$dbname};
         }
         ## Note which syncs are used by each goat
+        for my $row2 (sort keys %{$row->{herd}{goat}}) {
+            $goat->{$row2}{sync}{$name} = 1;
+        }
     }
 
     ## Grab all customcode information
