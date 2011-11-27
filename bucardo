@@ -2418,7 +2418,7 @@ sub update_dbgroup {
 
     ## Make sure this database group exists!
     if (! exists $DBGROUP->{$name}) {
-        die qq{Could not find a database group named "$name"\nUse 'list dbgroups' to see all available.};
+        die qq{Could not find a database group named "$name"\nUse 'list dbgroups' to see all available.\n};
     }
 
     ## From this point on, we have either:
@@ -3437,7 +3437,7 @@ sub update_table {
 
     ## Make sure this table exists!
     if (! exists $GOAT->{$name}) {
-        die qq{Could not find a table named "$name"\nUse 'list tables' to see all available.};
+        die qq{Could not find a table named "$name"\nUse 'list tables' to see all available.\n};
     }
 
     ## Store the id so we work with that alone whenever possible
@@ -4238,7 +4238,7 @@ sub update_sync {
 
     ## Make sure this sync exists!
     if (! exists $SYNC->{$name}) {
-        die qq{Could not find a sync named "$name"\nUse 'list syncs' to see all available.};
+        die qq{Could not find a sync named "$name"\nUse 'list syncs' to see all available.\n};
     }
 
 
