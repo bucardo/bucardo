@@ -3640,7 +3640,7 @@ sub list_tables {
     }
 
     ## Figure out the length of each item for a pretty display
-    my ($maxid,$maxname,$maxdb) = (1,1,1);
+    my ($maxid,$maxname,$maxdb,$maxpk) = (1,1,1,1);
     for my $row (values %$TABLE) {
         my $id = $row->{id};
         next if @nouns and ! exists $matchtable{$id};
@@ -3648,22 +3648,27 @@ sub list_tables {
         my $name = "$row->{schemaname}.$row->{tablename}";
         $maxname = length $name if length $name > $maxname;
         $maxdb = length $row->{db} if length $row->{db} > $maxdb;
+        $row->{ppk} = $row->{pkey} ? "$row->{pkey} ($row->{pkeytype})" : 'none';
+        $maxpk = length $row->{ppk} if length $row->{ppk} > $maxpk;
     }
     ## Now do the actual printing
     ## Sort by schemaname then tablename
-    for my $row (sort {
-        $a->{schemaname} cmp $b->{schemaname}
-        or
-        $a->{tablename} cmp $b->{tablename}
-        } values %$TABLE) {
+    for my $row (sort numbered_relations values %$TABLE) {
         next if @nouns and ! exists $matchtable{$row->{id}};
-        printf '%-*s Table: %-*s  Database: %-*s',
+        printf '%-*s Table: %-*s  DB: %-*s  PK: %-*s',
             1+$maxid, "$row->{id}.",
             $maxname, "$row->{schemaname}.$row->{tablename}",
-            $maxdb, $row->{db};
+            $maxdb, $row->{db},
+            $maxpk, $row->{ppk};
         if ($row->{sync}) {
-            printf ' Syncs: ';
+            printf '  Syncs: ';
             print join ',' => sort keys %{ $row->{sync} };
+        }
+        if (defined $row->{ping}) {
+            printf '  ping:%s', $row->{ping} ? 'true' : 'false';
+        }
+        if ($row->{rebuild_index}) {
+            print '  rebuild_index:true';
         }
         print "\n";
 

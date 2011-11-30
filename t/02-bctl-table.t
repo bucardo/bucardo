@@ -131,20 +131,20 @@ is ($res, qq{$addtable_msg:\n  public.bucardo_test10\n}, $t);
 $t = q{'bucardo list tables' returns expected result};
 $res = $bct->ctl('bucardo list tables');
 $expected =
-q{Table: public.bucardo_test1   DB: A  PK: id (int2)
-Table: public.bucardo_test2   DB: A  PK: id|data1 (int4|text)
-Table: public.bucardo_test3   DB: A  PK: id (int8)
-Table: public.bucardo_test4   DB: A  PK: id (text)
-Table: public.bucardo_test5   DB: A  PK: id space (date)
-Table: public.bucardo_test6   DB: A  PK: id (timestamp)
-Table: public.bucardo_test7   DB: A  PK: id (numeric)
-Table: public.bucardo_test8   DB: A  PK: id (bytea)
-Table: public.bucardo_test9   DB: A  PK: id (int_unsigned)
-Table: public.bucardo_test10  DB: A  PK: id (timestamptz)
-Table: public.droptest        DB: A  PK: none
-Table: tschema.bucardo_test3  DB: A  PK: none
+qr{\d+\.\s* Table: public.bucardo_test1   DB: A  PK: id \(int2\)\s+
+\d+\.\s* Table: public.bucardo_test2   DB: A  PK: id\|data1 \(int4\|text\)
+\d+\.\s* Table: public.bucardo_test3   DB: A  PK: id \(int8\)\s+
+\d+\.\s* Table: public.bucardo_test4   DB: A  PK: id \(text\)\s+
+\d+\.\s* Table: public.bucardo_test5   DB: A  PK: id space \(date\)\s+
+\d+\.\s* Table: public.bucardo_test6   DB: A  PK: id \(timestamp\)\s+
+\d+\.\s* Table: public.bucardo_test7   DB: A  PK: id \(numeric\)\s+
+\d+\.\s* Table: public.bucardo_test8   DB: A  PK: id \(bytea\)\s+
+\d+\.\s* Table: public.bucardo_test9   DB: A  PK: id \(int_unsigned\)\s+
+\d+\.\s* Table: public.bucardo_test10  DB: A  PK: id \(timestamptz\)\s+
+\d+\.\s* Table: public.droptest        DB: A  PK: none\s+
+\d+\.\s* Table: tschema.bucardo_test3  DB: A  PK: none\s+
 };
-is ($res, $expected, $t);
+like ($res, $expected, $t);
 
 ## Remove them all, then try adding in various combinations
 empty_goat_table();
@@ -159,12 +159,12 @@ is ($res, qq{$addtable_msg:\n  public.bucardo_test4\n}, $t);
 $t = q{'bucardo list tables' returns expected result};
 $res = $bct->ctl('bucardo list tables');
 $expected =
-q{Table: public.bucardo_test1  DB: A  PK: id (int2)
-Table: public.bucardo_test2  DB: A  PK: id|data1 (int4|text)
-Table: public.bucardo_test4  DB: A  PK: id (text) ping:true
-Table: public.bucardo_test9  DB: A  PK: id (int_unsigned)
+qr{\d+\.\s* Table: public.bucardo_test1  DB: A  PK: id \(int2\)\s*
+\d+\.\s* Table: public.bucardo_test2  DB: A  PK: id\|data1 \(int4\|text\)\s*
+\d+\.\s* Table: public.bucardo_test4  DB: A  PK: id \(text\)\s* ping:true\s*
+\d+\.\s* Table: public.bucardo_test9  DB: A  PK: id \(int_unsigned\)\s*
 };
-is ($res, $expected, $t);
+like ($res, $expected, $t);
 
 $t = q{Add table works when specifying the rebuild_index and ping options};
 $res = $bct->ctl('bucardo add table bucardo_test5 ping=false rebuild_index=1');
@@ -173,13 +173,13 @@ is ($res, qq{$addtable_msg:\n  public.bucardo_test5\n}, $t);
 $t = q{'bucardo list tables' returns expected result};
 $res = $bct->ctl('bucardo list tables');
 $expected =
-q{Table: public.bucardo_test1  DB: A  PK: id (int2)
-Table: public.bucardo_test2  DB: A  PK: id|data1 (int4|text)
-Table: public.bucardo_test4  DB: A  PK: id (text) ping:true
-Table: public.bucardo_test5  DB: A  PK: id space (date) ping:false rebuild_index:1
-Table: public.bucardo_test9  DB: A  PK: id (int_unsigned)
+qr{\d+\.\s* Table: public.bucardo_test1  DB: A  PK: id \(int2\)\s*
+\d+\.\s* Table: public.bucardo_test2  DB: A  PK: id|data1 \(int4\|text\)\s*
+\d+\.\s* Table: public.bucardo_test4  DB: A  PK: id \(text\)\s* ping:true\s*
+\d+\.\s* Table: public.bucardo_test5  DB: A  PK: id space \(date\)\s* ping:false\s* rebuild_index:true\s*
+\d+\.\s* Table: public.bucardo_test9  DB: A  PK: id \(int_unsigned\)\s*
 };
-is ($res, $expected, $t);
+like ($res, $expected, $t);
 
 empty_goat_table();
 
