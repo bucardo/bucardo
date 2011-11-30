@@ -4567,7 +4567,9 @@ AND nspname !~ '^pg_'
             $SQL = $BASESQL . 'AND relname = ?';
         }
 
-        unless (@matches) {  # No need to check live if we found a match
+        ## We do not check the live database if the match was exact
+        ## *and* something was found. In all other cases, we go live.
+        if ($hasstar or !$hasadot or !@matches) {
             ## Search the live database for matches
             $sth = $rdbh->prepare($SQL);
             ($count = $sth->execute($item)) =~ s/0E0/0/;
