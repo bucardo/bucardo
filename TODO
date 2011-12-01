@@ -10,9 +10,9 @@ Version 5:
 * Get bucardo-report working again
 * Note 8.2 minimum requirement somewhere (probably from COPY (select))
 
-
 These range the gamut from wildly speculative ideas to must-have features.
 
+- Do table locking up front for fullcopy syncs, to reduce deadlock windows
 - Remove the gotos from the pl/perlu code.
 - Use symlinks for long socket directories during testing, as DBD::Pg does.
 - Fix the insert/foreign key problem for conflict resolution.
