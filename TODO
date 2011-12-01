@@ -13,6 +13,8 @@ Version 5:
 These range the gamut from wildly speculative ideas to must-have features.
 
 - Do table locking up front for fullcopy syncs, to reduce deadlock windows
+- Allow creation of schema on first fullcopy as an option
+- Same as above for pushdelta, but auto switch to onetimecopy after!
 - Remove the gotos from the pl/perlu code.
 - Use symlinks for long socket directories during testing, as DBD::Pg does.
 - Fix the insert/foreign key problem for conflict resolution.
@@ -46,7 +48,6 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Use C triggers for the delta stuff if we can (and time them!)
 - Find alternate ways for the kids to lock the tables other than $force_lock_file
 - Options to allow Bucardo to continue with unaffected syncs if a target is dead
-
 
 - Mongo: fix escaped data from COPY TO STDOUT
 - Flatfiles: same escaped data as above for non-PG output
