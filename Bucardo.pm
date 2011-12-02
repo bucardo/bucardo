@@ -6058,7 +6058,7 @@ sub fork_controller {
     }
 
     if ($newpid) { ## We are the parent
-        $self->glog(qq{Created controller $newpid for sync "$syncname". Kick is $s->{kick_on_startupt}}, LOG_NORMAL);
+        $self->glog(qq{Created controller $newpid for sync "$syncname". Kick is $s->{kick_on_startup}}, LOG_NORMAL);
         $s->{controller} = $newpid;
         $self->{pidmap}{$newpid} = 'CTL';
 
