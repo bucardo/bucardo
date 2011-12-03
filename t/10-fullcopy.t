@@ -166,13 +166,13 @@ for my $table (sort keys %tabletype) {
     my $type = $tabletype{$table};
     $res = [[1]];
 
-    $t = qq{Row with pkey of type $type gets copied to B};
+    $t = qq{Row with pkey of type $type gets copied to B.$table};
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets copied to C};
+    $t = qq{Row with pkey of type $type gets copied to C.$table};
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets copied to D};
+    $t = qq{Row with pkey of type $type gets copied to D.$table};
     bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
 
 }
