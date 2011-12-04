@@ -3193,15 +3193,8 @@ sub start_kid {
                             my $decodename = '';
 
                             my @pk;
-                            my $y=0;
                             for my $row (@$x) {
-                                if ($g->{binarypkey}{$y}) {
-                                    push @pk => encode_base64($row, '');
-                                }
-                                else {
-                                    push @pk => $row;
-                                }
-                                $y++;
+                                push @pk => $row;
                             }
                             $deltabin{$dbname}{join "\0" => @pk} = 1;
                         }
@@ -5555,7 +5548,16 @@ sub validate_sync {
             }
 
             ## All pks together for the main delta query
-            $g->{pklist} = join ',' => map { qq{"$_"} } @{ $g->{pkey} };
+            ## We change bytea to base64 so we don't have to declare binary args anywhere
+            $g->{pklist} = '';
+            for ($x = 0; defined $g->{pkey}[$x]; $x++) {
+                $g->{pklist} .= sprintf '%s,',
+                    $g->{pkeytype}[$x] eq 'bytea'
+                        ? qq{ENCODE("$g->{pkey}[$x]", 'base64')}
+                            : qq{"$g->{pkey}[$x]"};
+            }
+            ## Remove the final comma:
+            chop $g->{pklist};
 
             ## The name of the delta and track tables for this table
             $SQL = 'SELECT bucardo.bucardo_tablename_maker(?)';
@@ -8209,7 +8211,7 @@ sub push_rows {
         my $pcount = @pkvals;
 
         ## Loop through each chunk of primary keys to copy over
-        for my $pkvs (@pkvals) {
+       for my $pkvs (@pkvals) {
 
             ## Message to prepend to the statement if chunking
             my $pre = $pcount <= 1 ? '' : "/* $loop of $pcount */";
