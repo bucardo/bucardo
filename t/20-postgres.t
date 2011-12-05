@@ -94,7 +94,7 @@ for my $table (sort keys %tabletype) {
     $pkey{$table} = $table =~ /test5/ ? q{"id space"} : 'id';
 
     ## INSERT
-    my (@boolys) = qw( true false null false true true null );
+    my (@boolys) = qw( notused true false null false true true null );
     for my $x (1..7) {
         $SQL = $table =~ /X/
             ? "INSERT INTO $table($pkey{$table}) VALUES (?)"
@@ -160,13 +160,13 @@ for my $table (sort keys %tabletype) {
     my $type = $tabletype{$table};
     $res = [[1,'t']];
 
-    $t = qq{Row with pkey of type $type gets copied to B};
+    $t = qq{Row with pkey of type $type gets copied to B.$table};
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets copied to C};
+    $t = qq{Row with pkey of type $type gets copied to C.$table};
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets copied to D};
+    $t = qq{Row with pkey of type $type gets copied to D.$table};
     bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
 
 }
