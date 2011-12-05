@@ -3838,6 +3838,7 @@ sub start_kid {
                 $sourcename = $dbname;
                 $sourcedbh = $x->{dbh};
                 $sourcex = $x;
+                $self->glog("For fullcopy, we are using source database $sourcename", LOG_VERBOSE);
                 last;
 
             }
