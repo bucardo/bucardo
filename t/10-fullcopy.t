@@ -233,17 +233,14 @@ $bct->ctl('bucardo reload sync fctest');
 ## One more kick to clean out our messages
 $bct->ctl('bucardo kick fctest 0');
 
-## A, B, C, and D should have the same information now
+## A, C, and D should have the same information now
 for my $table (sort keys %tabletype) {
 
     my $type = $tabletype{$table};
-    $res = [[86]];
+    $res = [[42]];
 
     $t = qq{Database A has expected rows for $table after onetimecopy};
     bc_deeply($res, $dbhA, $sql{select}{$table}, $t);
-
-    $t = qq{Database B has expected rows for $table after onetimecopy};
-    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 
     $t = qq{Database C has expected rows for $table after onetimecopy};
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
