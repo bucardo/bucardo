@@ -158,7 +158,7 @@ $bct->ctl('bucardo kick pgtest 0');
 for my $table (sort keys %tabletype) {
 
     my $type = $tabletype{$table};
-    $res = [[1,'t']];
+    $res = [[1,1]];
 
     $t = qq{Row with pkey of type $type gets copied to B.$table};
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
@@ -181,15 +181,15 @@ $bct->ctl('bucardo kick pgtest 0');
 for my $table (keys %tabletype) {
 
     my $type = $tabletype{$table};
-    $res = [[42,'t']];
+    $res = [[42,1]];
 
-    $t = qq{Row with pkey of type $type gets copied to B after update};
+    $t = qq{Row with pkey of type $type gets copied to B.$table after update};
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets copied to C after update};
+    $t = qq{Row with pkey of type $type gets copied to C.$table after update};
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets copied to D after update};
+    $t = qq{Row with pkey of type $type gets copied to D.$table after update};
     bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
 
 }
@@ -232,15 +232,15 @@ $bct->ctl('bucardo kick pgtest 0');
 for my $table (keys %tabletype) {
 
     my $type = $tabletype{$table};
-    $res = [[1,'t'],[2,'f'],[3,undef],[4,'f']];
+    $res = [[1,1],[2,0],[3,undef],[4,0]];
 
-    $t = qq{Row with pkey of type $type gets copied to B after triple insert};
+    $t = qq{Row with pkey of type $type gets copied to B.$table after triple insert};
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets copied to C after triple insert};
+    $t = qq{Row with pkey of type $type gets copied to C.$table after triple insert};
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets copied to D after triple insert};
+    $t = qq{Row with pkey of type $type gets copied to D.$table after triple insert};
     bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
 
 }
@@ -257,15 +257,15 @@ $bct->ctl('bucardo kick pgtest 0');
 for my $table (keys %tabletype) {
 
     my $type = $tabletype{$table};
-    $res = [[1,'t']];
+    $res = [[1,1]];
 
-    $t = qq{Row with pkey of type $type gets removed from B after triple delete};
+    $t = qq{Row with pkey of type $type gets removed from B.$table after triple delete};
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets removed from C after triple delete};
+    $t = qq{Row with pkey of type $type gets removed from C.$table after triple delete};
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets removed from D after triple delete};
+    $t = qq{Row with pkey of type $type gets removed from D.$table after triple delete};
     bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
 
 }
@@ -322,12 +322,12 @@ $bct->ctl('bucardo kick pgtest 0');
 for my $table (sort keys %tabletype) {
 
     my $type = $tabletype{$table};
-    $res = [[3]];
+    $res = [[3,undef]];
 
-    $t = qq{Row with pkey of type $type gets copied to C with customcol};
+    $t = qq{Row with pkey of type $type gets copied to C.$table with customcol};
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 
-    $t = qq{Row with pkey of type $type gets copied to D with customcol};
+    $t = qq{Row with pkey of type $type gets copied to D.$table with customcol};
     bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
 
     last;
