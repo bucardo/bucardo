@@ -12,6 +12,7 @@ Version 5:
 
 These range the gamut from wildly speculative ideas to must-have features.
 
+- Add DB2 as a target
 - Do table locking up front for fullcopy syncs, to reduce deadlock windows
 - Allow creation of schema on first fullcopy as an option
 - Same as above for pushdelta, but auto switch to onetimecopy after!
