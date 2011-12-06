@@ -240,7 +240,8 @@ for my $table (sort keys %tabletype2) {
         $rows[0],
         {
             $pkeyname => $id,
-            inty => 1,
+            inty  => 1,
+            booly => 0,
             email => undef,
             bite1 => undef,
             bite2 => undef,
