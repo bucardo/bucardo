@@ -2522,6 +2522,8 @@ sub start_kid {
             $xdbh->do('SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE');
             ## ANSI mode: mostly because we want ANSI_QUOTES
             $xdbh->do(q{SET sql_mode = 'ANSI'});
+            ## Use the same time zone everywhere
+            $xdbh->do(q{SET time_zone = '+0:00'});
             $xdbh->commit();
 
         } ## end mysql
