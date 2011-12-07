@@ -40,9 +40,9 @@ if (!$evalok) {
 use BucardoTesting;
 
 ## For now, remove the bytea table type as we don't have full MySQL support yet
-delete $tabletype{bucardo_test8};
+delete $tabletypemysql{bucardo_test8};
 
-my $numtabletypes = keys %tabletype;
+my $numtabletypes = keys %tabletypemysql;
 plan tests => 128;
 
 ## Drop the MySQL database if it exists
@@ -58,7 +58,7 @@ $dbh = DBI->connect("dbi:mysql:database=$dbname", $dbuser, '',
                     {AutoCommit=>1, PrintError=>0, RaiseError=>1});
 
 ## Create one table for each table type
-for my $table (sort keys %tabletype) {
+for my $table (sort keys %tabletypemysql) {
 
     my $pkeyname = $table =~ /test5/ ? q{`id space`} : 'id';
     my $pkindex = $table =~ /test2/ ? '' : 'PRIMARY KEY';
@@ -156,19 +156,21 @@ $bct->ctl('bucardo add sync tsync1 herd=therd dbs=t1 ping=false status=inactive'
 ## Start up Bucardo with these new syncs
 $bct->restart_bucardo($dbhX);
 
+## Boolean values
+my (@boolys) = qw( xxx true false null false true null );
+
 ## Get the statement handles ready for each table type
-for my $table (sort keys %tabletype) {
+for my $table (sort keys %tabletypemysql) {
 
     $pkey{$table} = $table =~ /test5/ ? q{"id space"} : 'id';
 
     ## INSERT
-    my (@boolys) = qw( xxx true false null false true null );
     for my $x (1..6) {
         $SQL = $table =~ /X/
             ? "INSERT INTO $table($pkey{$table}) VALUES (?)"
                 : "INSERT INTO $table($pkey{$table},data1,inty,booly) VALUES (?,'foo',$x,$boolys[$x])";
         $sth{insert}{$x}{$table}{A} = $dbhA->prepare($SQL);
-        if ('BYTEA' eq $tabletype{$table}) {
+        if ('BYTEA' eq $tabletypemysql{$table}) {
             $sth{insert}{$x}{$table}{A}->bind_param(1, undef, {pg_type => PG_BYTEA});
         }
     }
@@ -194,15 +196,15 @@ for my $table (sort keys %tabletype) {
 }
 
 ## Add one row per table type to A
-for my $table (keys %tabletype) {
-    my $type = $tabletype{$table};
+for my $table (keys %tabletypemysql) {
+    my $type = $tabletypemysql{$table};
     my $val1 = $val{$type}{1};
     $sth{insert}{1}{$table}{A}->execute($val1);
 }
 
 ## Before the commit on A, B and C should be empty
-for my $table (sort keys %tabletype) {
-    my $type = $tabletype{$table};
+for my $table (sort keys %tabletypemysql) {
+    my $type = $tabletypemysql{$table};
     $t = qq{B has not received rows for table $table before A commits};
     $res = [];
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
@@ -215,9 +217,9 @@ $bct->ctl('bucardo kick mysql 0');
 $bct->ctl('bucardo kick mysql 0');
 
 ## Check B and C for the new rows
-for my $table (sort keys %tabletype) {
+for my $table (sort keys %tabletypemysql) {
 
-    my $type = $tabletype{$table};
+    my $type = $tabletypemysql{$table};
     $t = qq{Row with pkey of type $type gets copied to B};
 
     $res = [[1,1]];
@@ -226,7 +228,7 @@ for my $table (sort keys %tabletype) {
 }
 
 ## Check that MySQL has the new rows
-for my $table (sort keys %tabletype) {
+for my $table (sort keys %tabletypemysql) {
     $t = "MySQL table $table has correct number of rows after insert";
     $SQL = "SELECT * FROM $table";
     my $sth = $dbh->prepare($SQL);
@@ -235,7 +237,7 @@ for my $table (sort keys %tabletype) {
 
     $t = "MySQL table $table has correct entries";
     my $info = $sth->fetchall_arrayref({})->[0];
-    my $type = $tabletype{$table};
+    my $type = $tabletypemysql{$table};
     my $id = $val{$type}{1};
     my $pkeyname = $table =~ /test5/ ? 'id space' : 'id';
 
@@ -261,13 +263,13 @@ for my $table (sort keys %tabletype) {
 }
 
 ## Update each row
-for my $table (keys %tabletype) {
+for my $table (keys %tabletypemysql) {
     $sth{update}{$table}{A}->execute(42);
 }
 $dbhA->commit();
 $bct->ctl('bucardo kick mysql 0');
 
-for my $table (keys %tabletype) {
+for my $table (keys %tabletypemysql) {
     $t = "MySQL table $table has correct number of rows after update";
     $SQL = "SELECT * FROM $table";
     my $sth = $dbh->prepare($SQL);
@@ -280,13 +282,13 @@ for my $table (keys %tabletype) {
 }
 
 ## Delete each row
-for my $table (keys %tabletype) {
+for my $table (keys %tabletypemysql) {
     $sth{deleteall}{$table}{A}->execute();
 }
 $dbhA->commit();
 $bct->ctl('bucardo kick mysql 0');
 
-for my $table (keys %tabletype) {
+for my $table (keys %tabletypemysql) {
     $t = "MySQL table $table has correct number of rows after delete";
     $SQL = "SELECT * FROM $table";
     my $sth = $dbh->prepare($SQL);
@@ -297,8 +299,8 @@ for my $table (keys %tabletype) {
 
 ## Insert two rows, then delete one of them
 ## Add one row per table type to A
-for my $table (keys %tabletype) {
-    my $type = $tabletype{$table};
+for my $table (keys %tabletypemysql) {
+    my $type = $tabletypemysql{$table};
     my $val1 = $val{$type}{1};
     $sth{insert}{1}{$table}{A}->execute($val1);
     my $val2 = $val{$type}{2};
@@ -307,7 +309,7 @@ for my $table (keys %tabletype) {
 $dbhA->commit();
 $bct->ctl('bucardo kick mysql 0');
 
-for my $table (keys %tabletype) {
+for my $table (keys %tabletypemysql) {
     $t = "MySQL table $table has correct number of rows after double insert";
     $SQL = "SELECT * FROM $table";
     my $sth = $dbh->prepare($SQL);
@@ -317,13 +319,13 @@ for my $table (keys %tabletype) {
 }
 
 ## Delete one of the rows
-for my $table (keys %tabletype) {
+for my $table (keys %tabletypemysql) {
     $sth{deleteone}{$table}{A}->execute(2); ## inty = 2
 }
 $dbhA->commit();
 $bct->ctl('bucardo kick mysql 0');
 
-for my $table (keys %tabletype) {
+for my $table (keys %tabletypemysql) {
     $t = "MySQL table $table has correct number of rows after single deletion";
     $SQL = "SELECT * FROM $table";
     my $sth = $dbh->prepare($SQL);
@@ -333,8 +335,8 @@ for my $table (keys %tabletype) {
 }
 
 ## Insert two more rows, then truncate
-for my $table (keys %tabletype) {
-    my $type = $tabletype{$table};
+for my $table (keys %tabletypemysql) {
+    my $type = $tabletypemysql{$table};
     my $val3 = $val{$type}{3};
     $sth{insert}{3}{$table}{A}->execute($val3);
     my $val4 = $val{$type}{4};
@@ -343,7 +345,7 @@ for my $table (keys %tabletype) {
 $dbhA->commit();
 $bct->ctl('bucardo kick mysql 0');
 
-for my $table (keys %tabletype) {
+for my $table (keys %tabletypemysql) {
     $t = "MySQL table $table has correct number of rows after more inserts";
     $SQL = "SELECT * FROM $table";
     my $sth = $dbh->prepare($SQL);
@@ -353,7 +355,8 @@ for my $table (keys %tabletype) {
     $t = "MySQL table $table has updated values";
     my $info = $sth->fetchall_arrayref({});
     $info = [ sort { $a->{inty} <=> $b->{inty} } @$info ];
-    my($val1, $val3, $val4) = @{$val{$tabletype{$table}}}{1, 3, 4};
+    my ($val1, $val3, $val4) = @{$val{$tabletypemysql{$table}}}{1, 3, 4};
+
     my $pkeyname = $table =~ /test5/ ? 'id space' : 'id';
     my(@invar) = ( data1 => 'foo', 'email' => undef, bite1 => undef, bite2 => undef );
     is_deeply ($info, [{ $pkeyname=>$val1, inty=>1, booly=>1,     @invar },
@@ -361,6 +364,7 @@ for my $table (keys %tabletype) {
                        { $pkeyname=>$val4, inty=>4, booly=>0,     @invar }], $t) || diag explain $info;
 
     $sth->finish();
+
 }
 
 

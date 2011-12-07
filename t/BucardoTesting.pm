@@ -119,6 +119,7 @@ our %sequences =
     (
     'bucardo_test_seq1' => '',
     'bucardo_test_seq2' => '',
+
     'bucardo_test_seq3' => '',
     );
 
@@ -224,18 +225,21 @@ for my $file (qw/bucardo Bucardo.pm/) {
 }
 
 ## Prepare some test values for easy use
+## The secondary names are for other databases, e.g. MySQL
 our %val;
 for (1..30) {
     $val{SMALLINT}{$_} = $_;
     $val{INT}{$_} = 1234567+$_;
     $val{BIGINT}{$_} = 7777777777 + $_;
-    $val{TEXT}{$_} = "bc$_";
-    $val{DATE}{$_} = sprintf "2001-10-%02d", $_;
-    $val{TIMESTAMP}{$_} = $val{DATE}{$_} . " 12:34:56";
-    $val{NUMERIC}{$_} = 0.7 + $_;
+    $val{TEXT}{$_} = $val{'VARCHAR(1000)'}{$_} = "bc$_";
+    $val{DATE}{$_} = sprintf '2001-10-%02d', $_;
+    $val{TIMESTAMP}{$_} = $val{DATE}{$_} . ' 12:34:56';
+    $val{NUMERIC}{$_} = $val{'NUMERIC(5,1)'}{$_} = 0.7 + $_;
     $val{BYTEA}{$_} = "$_\0Z";
-    $val{int_unsigned}{$_} = 5000 + $_;
-    $val{TIMESTAMPTZ}{$_} = $val{DATE}{$_} . " 11:22:33+00";
+    $val{int_unsigned}{$_} = $val{'INTEGER UNSIGNED'}{$_} = 5000 + $_;
+    $val{TIMESTAMPTZ}{$_} = $val{DATETIME}{$_} = $val{DATE}{$_} . ' 11:22:33+00';
+    $val{DATETIME}{$_} =~ s/\+00//;
+    $val{TIMESTAMPTZNOZERO} = $val{DATE}{$_} . ' 11:22:33';
 }
 
 
