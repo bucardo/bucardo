@@ -43,7 +43,7 @@ use BucardoTesting;
 delete $tabletypemysql{bucardo_test8};
 
 my $numtabletypes = keys %tabletypemysql;
-plan tests => 128;
+plan tests => 137;
 
 ## Drop the MySQL database if it exists
 my $dbname = 'bucardo_test';
@@ -202,13 +202,14 @@ for my $table (keys %tabletypemysql) {
     $sth{insert}{1}{$table}{A}->execute($val1);
 }
 
-## Before the commit on A, B and C should be empty
+## Before the commit on A, B, C, and Q should be empty
 for my $table (sort keys %tabletypemysql) {
     my $type = $tabletypemysql{$table};
     $t = qq{B has not received rows for table $table before A commits};
     $res = [];
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
+    bc_deeply($res, $dbh, $sql{select}{$table}, $t);
 }
 
 ## Commit, then kick off the sync
@@ -334,7 +335,7 @@ for my $table (keys %tabletypemysql) {
     is ($count, 1, $t);
 }
 
-## Insert two more rows, then truncate
+## Insert two more rows
 for my $table (keys %tabletypemysql) {
     my $type = $tabletypemysql{$table};
     my $val3 = $val{$type}{3};

@@ -578,13 +578,14 @@ sub connect_database {
         }
     }
 
-    ## Just in case, set the search path
-#    $dbh->do('SET search_path = public');
+    $dbh->do('SET TIME ZONE GMT');
+
     $dbh->commit();
 
     return $dbh;
 
 } ## end of connect_database
+
 
 sub drop_schema {
 
@@ -1459,8 +1460,6 @@ sub bc_deeply {
     if ($@) {
         die "bc_deeply failed from line $line. SQL=$sql\n$@\n";
     }
-
-    $dbh->commit();
 
     return is_deeply($got,$exp,$msg,$oline||(caller)[2]);
 
