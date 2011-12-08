@@ -51,10 +51,7 @@ plan tests => 81;
 ## Create one table for each table type
 for my $table (sort keys %tabletype) {
 
-    eval {
-        $dbh->do("DROP TABLE $table");
-    };
-    $@ and $dbh->rollback();
+    $dbh->do("DROP TABLE $table");
 
     my $pkeyname = $table =~ /test5/ ? q{`id space`} : 'id';
     my $pkindex = $table =~ /test2/ ? '' : 'PRIMARY KEY';
