@@ -102,7 +102,7 @@ $res = $bct->ctl($command);
 like ($res, qr/Creating herd: therd.*New tables added: \d/s, $t);
 
 ## Add a suffix to the end of each mongo target table
-$SQL = q{INSERT INTO bucardo.customname(goat,newname,db) 
+$SQL = q{INSERT INTO bucardo.customname(goat,newname,db)
 SELECT id,tablename||'_pg','M' FROM goat};
 $dbhX->do($SQL);
 
@@ -181,6 +181,8 @@ for my $table (sort keys %tabletype) {
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 }
+$dbhB->commit();
+$dbhC->commit();
 
 ## Commit, then kick off the sync
 $dbhA->commit();
@@ -197,6 +199,9 @@ for my $table (sort keys %tabletype) {
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 }
+$dbhB->commit();
+$dbhC->commit();
+
 
 ## Check that mongo has the new collection names
 my %col;
@@ -241,7 +246,7 @@ for my $table (sort keys %tabletype2) {
         {
             $pkeyname => $id,
             inty  => 1,
-            booly => 0,
+            booly => undef,
             email => undef,
             bite1 => undef,
             bite2 => undef,

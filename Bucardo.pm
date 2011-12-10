@@ -8288,7 +8288,9 @@ sub push_rows {
                                 $object->{$key} = int $object->{$key};
                             }
                             elsif ($goat->{columnhash}{$key}{ftype} eq 'boolean') {
-                                $object->{$key} = $object->{$key} eq 't' ? true : false;
+                                if (defined $object->{$key}) {
+                                    $object->{$key} = $object->{$key} eq 't' ? true : false;
+                                }
                             }
                             elsif ($goat->{columnhash}{$key}{ftype} =~ /real|double|numeric/o) {
                                 $object->{$key} = strtod($object->{$key});
