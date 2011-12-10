@@ -44,7 +44,7 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Add support for automatic DDL changes
 - Cascading slaves: makedelta should create infrastructure as necessary
 - Use polling not sleep for loop notifications
-- Remove large src_code sections from the kid output when dieing
+- Remove large src_code sections from the kid output when they die
 - Force to C locale until we get i18n in place
 - Use C triggers for the delta stuff if we can (and time them!)
 - Find alternate ways for the kids to lock the tables other than $force_lock_file

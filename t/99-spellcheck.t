@@ -148,8 +148,11 @@ customname
 Customname
 customnames
 customselect
+DBI
 DBIx
 dbmap
+dbname
+dbrun
 DDL
 fullcopy
 LOGIN
@@ -159,10 +162,16 @@ Mullane
 mysql
 MySQL
 perl
+PGBINDIR
+pgsql
+plperlu
+postgres
+Postgres
 pushdelta
 rdbms
 recurse
 Sabino
+SQL
 SQLite
 syncrun
 unlisten
@@ -170,9 +179,11 @@ whitespace
 
 ## README
 
-DBD
-Makefile
 bucardo
+DBD
+greg
+Makefile
+Pgsql
 subdirectory
 
 ## Changes
@@ -205,6 +216,7 @@ DESTDIR
 Farmawan
 FreeBSD
 getconn
+Goran
 GSM
 Gugic
 ident
@@ -227,6 +239,7 @@ onetimecopy
 param
 pgbouncer
 PgBouncer's
+pgpid
 pid
 PID
 PIDCLEANUP
@@ -266,6 +279,7 @@ Vilem
 vv
 Wendt
 wildcards
+Wim
 Yan
 Zamani
 
@@ -282,15 +296,18 @@ cronjobs
 ctl
 failover
 Flatfiles
+gotos
 intra
 Mongo
 multi
 onetimecopy
 orderable
+perlu
 pid
 pkey
 plperl
 regex
+symlinks
 synctype
 synctypes
 timeslices
