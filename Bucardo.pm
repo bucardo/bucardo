@@ -2072,14 +2072,14 @@ sub start_kid {
     $self->{pidmap}{$self->{master_backend}} = 'Bucardo DB';
 
     ## SQL to enter a new database in the dbrun table
-    $SQL = qq{
+    $SQL = q{
         INSERT INTO bucardo.dbrun(sync,dbname,pgpid)
         VALUES (?,?,?)
     };
     $sth{dbrun_insert} = $maindbh->prepare($SQL);
 
     ## SQL to remove a database from the dbrun table
-    $SQL{dbrun_delete} = qq{
+    $SQL{dbrun_delete} = q{
         DELETE FROM bucardo.dbrun
         WHERE sync = ? AND dbname = ?
     };
@@ -2109,14 +2109,14 @@ sub start_kid {
         ## Find any error messages/states for all databases
         if ($msg =~ /DBD::Pg/) {
            $msg .= "\nMain DB state: " . ($maindbh->state || '?');
-           $msg .= " Error: " . ($maindbh->err || 'none');
+           $msg .= ' Error: ' . ($maindbh->err || 'none');
            for my $dbname (@dbs_dbi) {
                $x = $sync->{db}{$dbname};
 
                my $dbh = $x->{dbh};
                my $state = $dbh->state || '?';
                   $msg .= "\nDB $dbname state: $state";
-               $msg .= " Error: " . ($dbh->err || 'none');
+               $msg .= ' Error: ' . ($dbh->err || 'none');
                ## If this was a deadlock problem, try and gather more information
                if ($state eq '40P01' and $x->{dbtype} eq 'postgres') {
                    $msg .= $self->get_deadlock_details($dbh, $msg);
@@ -4078,7 +4078,7 @@ sub start_kid {
                         my $t0 = [gettimeofday];
                         $self->glog("Reindexing table $dbname.$tname", LOG_NORMAL);
                         $x->{dbh}->do("REINDEX TABLE $tname");
-                        $self->glog((sprintf(qq{(OTC: %s) REINDEX TABLE %s},
+                        $self->glog((sprintf(q{(OTC: %s) REINDEX TABLE %s},
                             $self->pretty_time(tv_interval($t0), 'day'), $tname)), LOG_NORMAL);
                     }
 
@@ -4215,7 +4215,7 @@ sub start_kid {
             $maindbh->rollback();
         }
         else {
-            $self->glog(qq{Issuing final commit for all databases}, LOG_VERBOSE);
+            $self->glog(q{Issuing final commit for all databases}, LOG_VERBOSE);
             ## This is a tricky bit: all writeable databases *must* go first
             ## If we only have a single source, this ensures we don't mark rows as done
             ## in the track tables before everyone has reported back
@@ -4228,7 +4228,7 @@ sub start_kid {
                 next if $x->{writtento};
                 $sync->{db}{$dbname}{dbh}->commit();
             }
-            $self->glog(qq{All databases committed}, LOG_VERBOSE);
+            $self->glog(q{All databases committed}, LOG_VERBOSE);
         }
 
         ## If we used a staging table for the tracking info, do the final inserts now
@@ -4375,7 +4375,7 @@ sub start_kid {
 
         ## If this was a onetimecopy, leave so we don't have to rebuild dbs_fullcopy etc.
         if ($sync->{onetimecopy}) {
-            $self->glog("Turning onetimecopy back to 0", LOG_VERBOSE);
+            $self->glog('Turning onetimecopy back to 0', LOG_VERBOSE);
             $SQL = 'UPDATE sync SET onetimecopy=0 WHERE name = ?';
             $sth = $maindbh->prepare($SQL);
             $sth->execute($syncname);
@@ -4386,7 +4386,7 @@ sub start_kid {
         }
 
         if (! $kidsalive) {
-            $self->glog("Kid is not kidsalive, so exiting", LOG_DEBUG);
+            $self->glog('Kid is not kidsalive, so exiting', LOG_DEBUG);
             last KID;
         }
 
@@ -6407,7 +6407,7 @@ sub reload_mcp {
     my $maindbh = $self->{masterdbh};
 
     ## At this point, we are authoritative, so we can safely clean out the syncrun table
-    $SQL = qq{
+    $SQL = q{
           UPDATE bucardo.syncrun
           SET status=?, ended=now()
           WHERE ended IS NULL
@@ -8400,7 +8400,7 @@ sub vacuum_table {
     elsif ('sqlite' eq $dbtype) {
         # Note the SQLite command vacuums the entire database.
         # Should probably avoid multi-vacuuming if several tables have changed.
-        $self->glog("Vacuuming the database", LOG_VERBOSE);
+        $self->glog('Vacuuming the database', LOG_VERBOSE);
         $ldbh->do('VACUUM');
 
         my $total_time = sprintf '%.2f', tv_interval($start_time);
