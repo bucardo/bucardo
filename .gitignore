@@ -5,6 +5,7 @@ Makefile.old
 blib/
 none/
 pm_to_blib
+MYMETA.*
 
 ## Editor temporary files:
 *~
@@ -16,6 +17,8 @@ pm_to_blib
 *.blame
 *.patch
 *.diff
+*.orig
+*.rej
 
 ## Testing artifacts:
 bucardo_test_database_*
@@ -28,6 +31,12 @@ tmp/
 *.tmp
 *.asc
 *.tar
+pop
+scrap
+uno
+dos
+tres
+
 
 ## Local notes:
 notes.*
