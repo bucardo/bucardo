@@ -13,6 +13,7 @@ package Bucardo;
 use 5.008003;
 use strict;
 use warnings;
+use utf8;
 
 our $VERSION = '4.99.3';
 
@@ -78,13 +79,13 @@ my %dbix = (
             allow_command   => $strict_allow,
             allow_attribute => '',
             allow_regex     => '', ## Must be qr{} if not empty
-            deny_regex      => ''
+            deny_regex      => '',
         },
         notstrict => {
             allow_command   => $nostrict_allow,
             allow_attribute => 'RaiseError PrintError',
             allow_regex     => [qr{CREATE TEMP TABLE},qr{CREATE(?: UNIQUE)? INDEX}],
-            deny_regex      => ''
+            deny_regex      => '',
         },
     },
     target => {
@@ -92,13 +93,13 @@ my %dbix = (
             allow_command   => $strict_allow,
             allow_attribute => '',
             allow_regex     => '', ## Must be qr{} if not empty
-            deny_regex      => ''
+            deny_regex      => '',
         },
         notstrict => {
             allow_command   => $nostrict_allow,
             allow_attribute => 'RaiseError PrintError',
             allow_regex     => [qr{CREATE TEMP TABLE}],
-            deny_regex      => ''
+            deny_regex      => '',
         },
     }
 );
@@ -6899,7 +6900,7 @@ sub cleanup_controller {
                        $self->{syncname}, "Ended (CTL $$)");
     $finaldbh->commit();
     $finaldbh->disconnect();
-    $self->glog("Made final adjustment to the syncrun table", LOG_DEBUG);
+    $self->glog('Made final adjustment to the syncrun table', LOG_DEBUG);
 
     return;
 
@@ -6928,7 +6929,7 @@ sub end_syncrun {
         die qq{Invalid exitmode "$exitmode"};
 
     ## Make sure we have something to update
-    $SQL = qq{
+    $SQL = q{
         SELECT ctid
         FROM   bucardo.syncrun
         WHERE  sync = ?

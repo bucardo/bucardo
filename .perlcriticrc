@@ -55,6 +55,7 @@ profile-strictness = quiet
 [-RegularExpressions::ProhibitComplexRegexes]
 [-RegularExpressions::RequireExtendedFormatting]
 [-Subroutines::ProhibitExcessComplexity]
+[-Subroutines::ProhibitManyArgs]
 [-ValuesAndExpressions::ProhibitImplicitNewlines]
 [-Variables::ProhibitPackageVars]
 [-ValuesAndExpressions::ProhibitVersionStrings]
