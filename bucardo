@@ -886,9 +886,9 @@ sub start {
     my $dbversion = get_config('bucardo_current_version')
         or die "Could not find Bucardo version!\n";
     if ($dbversion ne $VERSION) {
-        my $msg = "Version mismatch: bucardo is $VERSION, but bucardo database is $dbversion\n";
+        my $message = "Version mismatch: bucardo is $VERSION, but bucardo database is $dbversion\n";
         append_reason_file('fail');
-        warn $msg;
+        warn $message;
         warn "Perhaps you need to run 'bucardo upgrade' ?\n";
         exit 1;
     }
@@ -900,9 +900,9 @@ sub start {
     ## Verify that the version of Bucardo.pm matches our version
     my $pm_version = $bc->{version} || 'unknown';
     if ($VERSION ne $pm_version) {
-        my $msg = "Version mismatch: bucardo is $VERSION, but Bucardo.pm is $pm_version\n";
+        my $message = "Version mismatch: bucardo is $VERSION, but Bucardo.pm is $pm_version\n";
         append_reason_file('fail');
-        die $msg;
+        die $message;
     }
 
     ## Just in case, stop it
@@ -1586,8 +1586,8 @@ sub add_database {
                                 my $encpass = Digest::MD5::md5_hex($newpass);
                                 $testdbh->do(qq{CREATE USER $realuser SUPERUSER ENCRYPTED PASSWORD '$encpass'});
                                 $testdbh->commit();
-                                my $extra = length $pass ? '' : " with password $newpass";
-                                warn "Created superuser '$realuser'$extra\n";
+                                my $extrauser = length $pass ? '' : " with password $newpass";
+                                warn "Created superuser '$realuser'$extrauser\n";
                             };
                             if ($@) {
                                 warn "Unable to create superuser $realuser: $@\n";
@@ -2684,21 +2684,21 @@ sub add_customname {
     {
 
         ## Setup common message post scripts
-        my $msg = '';
-        defined $db[$x] and $msg .= " (for database $db[$x])";
-        defined $sync[$x] and $msg .= " (for sync $sync[$x])";
+        my $message = '';
+        defined $db[$x] and $message .= " (for database $db[$x])";
+        defined $sync[$x] and $message .= " (for sync $sync[$x])";
 
         ## Skip if this exact entry already exists
         if (customname_exists($goatid,$newname,$db[$x],$sync[$x])) {
             if (!$QUIET) {
                 printf "Already have an entry for %s to %s%s\n",
-                    $item_name, $newname, $msg;
+                    $item_name, $newname, $message;
             }
             next;
         }
 
         $sth->execute($newname, $db[$x], $sync[$x]);
-        push @msg => "Transformed $sname.$tname to $newname$msg";
+        push @msg => "Transformed $sname.$tname to $newname$message";
 
         ## Always go at least one round
         ## We go a second time if there is another sync or db waiting
@@ -3000,10 +3000,10 @@ sub add_customcols {
         next if customcols_exists($goatid,$clause,$db[$x],$sync[$x]);
 
         $count = $sth->execute($clause, $db[$x], $sync[$x]);
-        my $msg = qq{New columns for $sname.$tname: "$clause"};
-        defined $db[$x] and $msg .= " (for database $db[$x])";
-        defined $sync[$x] and $msg .= " (for sync $sync[$x])";
-        push @msg => $msg;
+        my $message = qq{New columns for $sname.$tname: "$clause"};
+        defined $db[$x] and $message .= " (for database $db[$x])";
+        defined $sync[$x] and $message .= " (for sync $sync[$x])";
+        push @msg => $message;
 
         ## Always go at least one round
         ## We go a second time if there is another sync or db waiting
@@ -3075,13 +3075,13 @@ sub remove_customcols {
         ## because it has no cascading dependencies
         $sth->execute($name);
 
-        my $cc = sprintf '%s => %s%s%s',
+        my $cc2 = sprintf '%s => %s%s%s',
             $cc->{$name}{tname},
             $cc->{$name}{clause},
             (length $cc->{$name}{sync} ? " Sync: $cc->{$name}{sync}" : ''),
             (length $cc->{$name}{db} ? " Database: $cc->{$name}{db}" : '');
 
-        $QUIET or print qq{Removed customcols $name: $cc\n};
+        $QUIET or print qq{Removed customcols $name: $cc2\n};
 
     }
 
@@ -3280,21 +3280,21 @@ sub add_table {
     my $goatlist = get_goat_ids(args => \@nouns, dbcols => $dbcols);
 
     ## The final output. Store it up all at once for a single QUIET check
-    my $msg = '';
+    my $message = '';
 
     ## We will be nice and indicate anything that did not match
     if (keys %{ $goatlist->{nomatch} }) {
-        $msg .= "Did not find matches for the following terms:\n";
+        $message .= "Did not find matches for the following terms:\n";
         for (sort keys %{ $goatlist->{nomatch} }) {
-            $msg .= "  $_\n";
+            $message .= "  $_\n";
         }
     }
 
     ## Now we need to output which ones were recently added
     if (keys %{ $goatlist->{new} }) {
-        $msg .= "Added the following tables:\n";
+        $message .= "Added the following tables:\n";
         for (sort keys %{ $goatlist->{new} }) {
-            $msg .= "  $_\n";
+            $message .= "  $_\n";
         }
     }
 
@@ -3305,7 +3305,7 @@ sub add_table {
             $SQL = 'INSERT INTO bucardo.herd(name) VALUES(?)';
             $sth = $dbh->prepare($SQL);
             $sth->execute($herdname);
-            $msg .= qq{Created the herd named "$herdname"\n};
+            $message .= qq{Created the herd named "$herdname"\n};
         }
         ## Now load all of these tables into this herd
         $SQL = 'INSERT INTO bucardo.herdmap (herd,priority,goat) VALUES (?,?,'
@@ -3332,23 +3332,23 @@ sub add_table {
         }
 
         if (@oldnames) {
-            $msg .= qq{The following tables were already in the herd "$herdname":\n};
+            $message .= qq{The following tables were already in the herd "$herdname":\n};
             for (@oldnames) {
-                $msg .= "  $_\n";
+                $message .= "  $_\n";
             }
         }
 
         if (@newnames) {
-            $msg .= qq{The following tables are now part of the herd "$herdname":\n};
+            $message .= qq{The following tables are now part of the herd "$herdname":\n};
             for (sort numbered_relations @newnames) {
-                $msg .= "  $_\n";
+                $message .= "  $_\n";
             }
         }
 
     } ## end if herd
 
     if (!$QUIET) {
-        print $msg;
+        print $message;
     }
 
     confirm_commit();
@@ -3729,21 +3729,21 @@ sub add_herd {
     my $goatlist = get_goat_ids(args => \@nouns);
 
     ## The final output. Store it up all at once for a single QUIET check
-    my $msg = '';
+    my $message = '';
 
     ## We will be nice and indicate anything that did not match
     if (keys %{ $goatlist->{nomatch} }) {
-        $msg .= "Did not find matches for the following terms:\n";
+        $message .= "Did not find matches for the following terms:\n";
         for (sort keys %{ $goatlist->{nomatch} }) {
-            $msg .= "  $_\n";
+            $message .= "  $_\n";
         }
     }
 
     ## Now we need to output which ones were recently added
     if (keys %{ $goatlist->{new} }) {
-        $msg .= "Added the following tables:\n";
+        $message .= "Added the following tables:\n";
         for (sort keys %{ $goatlist->{new} }) {
-            $msg .= "  $_\n";
+            $message .= "  $_\n";
         }
     }
 
@@ -3772,21 +3772,21 @@ sub add_herd {
     }
 
     if (@oldnames) {
-        $msg .= qq{The following tables were already in the herd "$herdname":\n};
+        $message .= qq{The following tables were already in the herd "$herdname":\n};
         for (@oldnames) {
-            $msg .= "  $_\n";
+            $message .= "  $_\n";
         }
     }
 
     if (@newnames) {
-        $msg .= qq{The following tables are now part of the herd "$herdname":\n};
+        $message .= qq{The following tables are now part of the herd "$herdname":\n};
         for (@newnames) {
-            $msg .= "  $_\n";
+            $message .= "  $_\n";
         }
     }
 
     if (!$QUIET) {
-        print $msg;
+        print $message;
     }
 
     confirm_commit();
@@ -3958,7 +3958,7 @@ sub add_sync {
         {
             field => 'synctype',
             value => 'fullcopy',
-            new_defaults => 'ping|F stayalive|F kidsalive|F'
+            new_defaults => 'ping|F stayalive|F kidsalive|F',
         },
     ];
 
@@ -4331,14 +4331,14 @@ sub list_syncs {
             my ($attrib, $value) = (lc $1,$2);
             for my $name (keys %$syncs) {
                 if (! exists $syncs->{$name}{$attrib}) {
-                    my $msg = "No such sync attribute: $attrib\n";
-                    $msg .= "Must be one of the following:\n";
+                    my $message = "No such sync attribute: $attrib\n";
+                    $message .= "Must be one of the following:\n";
                     my $names = join ',' =>
                         sort
                         grep { $_ !~ /\b(?:cdate|name)\b/ }
                         keys %{ $syncs->{$name} };
-                    $msg .= " $names\n";
-                    die $msg;
+                    $message .= " $names\n";
+                    die $message;
                 }
                 delete $syncs->{$name} if $syncs->{$name}{$attrib} ne $value;
             }
@@ -4984,10 +4984,10 @@ ORDER BY aborted DESC LIMIT 1
     $whydie =~ s/: ERROR:/:\n    ERROR:/;
     $whydie =~ s/ (at .+ line \d+\.)/\n      $1/g;
     $whydie =~ s/\t/<tab>/g;
-    my $msg = sprintf "  PID: %s\n  Started: %s\n  Ended: %s\n    %s",
+    my $message = sprintf "  PID: %s\n  Started: %s\n  Ended: %s\n    %s",
         $result->{pid}, $result->{started}, $result->{aborted}, $whydie;
 
-    return $msg;
+    return $message;
 
 } ## end of show_why_sync_killed
 
@@ -6391,12 +6391,12 @@ sub add_all_goats {
         }
     }
 
-    my $msg = "New ${type}s added: $count{added}\n";
+    my $message = "New ${type}s added: $count{added}\n";
     if ($count{seenit}) {
-        $msg .= "Already added: $count{seenit}\n";
+        $message .= "Already added: $count{seenit}\n";
     }
 
-    return $msg;
+    return $message;
 
 } ## end of add_all_goats
 
@@ -6464,10 +6464,10 @@ sub clog {
     ## 1. Message
     ## Returns: undef
 
-    my $msg = shift;
-    chomp $msg;
+    my $message = shift;
+    chomp $message;
 
-    warn "$msg\n";
+    warn "$message\n";
 
     return;
 
@@ -7021,7 +7021,7 @@ sub upgrade {
     );
 
     my @old_views = (
-        'goats_in_herd'
+        'goats_in_herd',
     );
 
     my @new_columns = (
@@ -7527,9 +7527,9 @@ sub upgrade {
     $SQL = 'SELECT bucardo.magic_update()';
     $sth = $dbh->prepare($SQL);
     $sth->execute();
-    my $msg = $sth->fetchall_arrayref()->[0][0];
-    if (length $msg) {
-        clog $msg;
+    my $message = $sth->fetchall_arrayref()->[0][0];
+    if (length $message) {
+        clog $message;
         $changes++;
     }
 
@@ -8289,20 +8289,20 @@ sub install {
       $res = qx{$COM 2>&1};
 
       ## Put the new password into the .pgpass file
-      my $file = "$ENV{HOME}/.pgpass";
-      my $fh;
-      if (open my $fh, '>>', $file) {
-        printf {$fh} "%s:%s:%s:%s:%s\n",
+      my $passfile = "$ENV{HOME}/.pgpass";
+      my $pfh;
+      if (open my $pfh, '>>', $passfile) {
+        printf {$pfh} "%s:%s:%s:%s:%s\n",
           $host =~ /^\w/ ? $host : '*',
           $port =~ /^\d/ ? $port : '*',
           '*',
           'bucardo',
           $pass;
-        close $fh or warn qq{Could not close file "$file": $!\n};
-        chmod 0600, $file;
+        close $pfh or warn qq{Could not close file "$passfile": $!\n};
+        chmod 0600, $passfile;
       }
       else {
-        print qq{Could not append password information to file "$file"\n};
+        print qq{Could not append password information to file "$passfile"\n};
         print qq{Password for user bucardo is: $pass\n};
         print qq{You probably want to change it or put into a .pgpass file\n};
       }
@@ -8465,7 +8465,7 @@ sub process_simple_args {
     my %item;
     my %dbcol;
     my %extra;
-    my %alias;
+    my %othername;
 
     ## Transform array of x=y into a hashref
     my $xyargs = process_args(join ' ' => @$list);
@@ -8478,7 +8478,7 @@ sub process_simple_args {
         my $alias = @{$args}[-1];
         for my $name (@$args) {
             $item{$name} = [$dbcol,$flag,$default];
-            $alias{$name} = $alias;
+            $othername{$name} = $alias;
         }
         ## Process environment variable default
         if ($default =~ s/^ENV://) {
@@ -8509,7 +8509,7 @@ sub process_simple_args {
         (my $val = $xyargs->{$arg}) =~ s/^\s*(\S+)\s*$/$1/;
 
         if ($item{$arg}[2] eq 'skip') {
-            $extra{$alias{$arg}} = $val;
+            $extra{$othername{$arg}} = $val;
             next;
         }
 
@@ -8666,18 +8666,18 @@ sub extract_name_and_role {
         if ($extra !~ /(\w+)=([\w\d]+)/) {
             die qq{Invalid value "$extra"\n};
         }
-        my ($name,$val) = ($1,$2);
-        if ($name =~ /make?delta/i) {
+        my ($lname,$val) = ($1,$2);
+        if ($lname =~ /make?delta/i) {
             $extra{'makedelta'} = make_boolean($val);
         }
-        elsif ($name =~ /gang/i) {
+        elsif ($lname =~ /gang/i) {
             $extra{'gang'} = $val;
         }
-        elsif ($name =~ /pri/i) {
+        elsif ($lname =~ /pri/i) {
             $extra{'priority'} = $val;
         }
         else {
-            die qq{Unknown value "$name": must be priority, gang, or makedelta\n};
+            die qq{Unknown value "$lname": must be priority, gang, or makedelta\n};
         }
     }
 
@@ -9104,11 +9104,11 @@ sub add_db_to_group {
         $sth->execute($db,$group,$role);
     };
     if ($@) {
-        my $msg = qq{Cannot add database "$db" to group "$group"};
+        my $message = qq{Cannot add database "$db" to group "$group"};
         if ($@ =~ /"dbmap_unique"/) {
-            die qq{$msg: already part of the group\n};
+            die qq{$message: already part of the group\n};
         }
-        die qq{$msg: $@\n};
+        die qq{$message: $@\n};
     }
 
     ## Reload our hashes
