@@ -51,3 +51,10 @@ WEBSITE:
 
 Please visit http://bucardo.org for complete documentation.
 
+DEVLOPMENT:
+-----------
+
+To follow or participate in the development of Bucardo, use:
+
+git clone git://bucardo.org/bucardo.git/
+
