@@ -7066,7 +7066,7 @@ sub create_newkid {
     my ($self, $kidsync) = @_;
 
     ## Just in case, ask any existing kid processes to exit
-    $self->db_notify($self->{masterdbh}, "kid_stop_sync_$self->{syncname}");
+    $self->db_notify($self->{masterdbh}, "kid_stopsync_$self->{syncname}");
 
     ## Fork off a new process which will become the KID
     my $newkid = fork;
