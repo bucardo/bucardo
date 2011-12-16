@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!perl
 # -*-mode:cperl; indent-tabs-mode: nil; cperl-indent-level: 4-*-
 
 ## The main Bucardo program
@@ -762,7 +762,8 @@ sub mcp_main {
                     }
                     else {
                         $self->glog("Unable to reconnect to database $dbname!", LOG_WARN);
-                        ## XXX TODO: die instead?
+                        ## We may want to throw an exception if this keeps happening
+                        ## We may also want to adjust lastpingcheck so we check more often
                     }
                 }
             }
@@ -908,7 +909,6 @@ sub mcp_main {
                     $self->deactivate_sync($sync->{$syncname});
 
                     ## Reread from the database
-                    ## XXX: possibly refactor
                     $SQL = q{SELECT *, }
                         . q{COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs, }
                             . q{COALESCE(EXTRACT(epoch FROM lifetime),0) AS lifetimesecs }
@@ -3187,8 +3187,7 @@ sub start_kid {
 
                     while ($x = $sth{getdelta}{$dbname}{$g}->fetchrow_arrayref()) {
                         ## Join all primary keys together with \0, put into hash as key
-                        ## XXX: Revisit for binary, now that we have local bucardo_deltas
-                        ## XXX: Nulls? Different divider?
+                        ## XXX: Using \0 is not unique for binaries
                         if (!$g->{hasbinarypk}) {
                             $deltabin{$dbname}{join "\0" => @$x} = 1;
                         }
