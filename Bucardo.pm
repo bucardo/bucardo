@@ -26,7 +26,7 @@ use Config        qw( %Config            ); ## Used to map signal names
 use File::Spec    qw(                    ); ## For portable file operations
 use Data::Dumper  qw( Dumper             ); ## Used to dump information in email alerts
 use POSIX         qw( strftime strtod    ); ## For grabbing the local timezone, and forcing to NV
-use Sys::Hostname qw( hostname           ); ## Used for debugging/mail sending
+use Sys::Hostname qw( hostname           ); ## Used for host safety check, and debugging/mail sending
 use IO::Handle    qw( autoflush          ); ## Used to prevent stdout/stderr buffering
 use Sys::Syslog   qw( openlog syslog     ); ## In case we are logging via syslog()
 use Net::SMTP     qw(                    ); ## Used to send out email alerts
@@ -52,7 +52,7 @@ use constant {
     LOG_TERSE   => 1,  ## Bare minimum
     LOG_NORMAL  => 2,  ## Normal messages
     LOG_VERBOSE => 3,  ## Many more details
-    LOG_DEBUG   => 4,  ## Rarely needed
+    LOG_DEBUG   => 4,  ## Firehose: rarely needed
 };
 
 ## Map system signal numbers to standard names
@@ -207,7 +207,7 @@ sub new {
         sqlprefix    => "/* Bucardo $VERSION */",
     };
 
-    ## Add any passed in parameters to our hash:
+    ## Add any passed-in parameters to our hash:
     for (keys %$params) {
         $self->{$_} = $params->{$_};
     }
@@ -219,9 +219,10 @@ sub new {
     if ($self->{cleandebugs}) {
         ## If the dir does not exists, silently proceed
         if (opendir my $dh, $self->{debugdir}) {
+            ## We look for any files that start with 'log.bucardo' plus another dot
             for my $file (grep { /^log\.bucardo\./ } readdir $dh) {
-                my $f = "$self->{debugdir}/$file";
-                unlink "$self->{debugdir}/$file" or warn qq{Could not remove "$f": $!\n};
+                my $fullfile = File::Spec->catfile( $self->{debugdir} => $file );
+                unlink $fullfile or warn qq{Could not remove "$fullfile": $!\n};
             }
             closedir $dh or warn qq{Could not closedir "$self->{debugdir}": $!\n};
         }
@@ -516,15 +517,16 @@ sub start_mcp {
 
     ## Loop through and remove each file found, making a note in the log
     for my $pidfile (sort @pidfiles) {
+        my $fullfile = File::Spec->catfile( $self->{debugdir} => $pidfile );
         ## Do not erase our own file
-        next if "$piddir/$pidfile" eq $self->{pidfile};
+        next if $fullfile eq $self->{pidfile};
         ## Everything else can get removed
-        if (unlink "$piddir/$pidfile") {
-            $self->glog("Warning: removed old pid file $piddir/$pidfile", LOG_VERBOSE);
+        if (unlink $fullfile) {
+            $self->glog("Warning: removed old pid file $fullfile", LOG_VERBOSE);
         }
         else {
             ## This will cause problems, but we will drive on
-            $self->glog("Warning: failed to remove pid file $piddir/$pidfile", LOG_TERSE);
+            $self->glog("Warning: failed to remove pid file $fullfile", LOG_TERSE);
         }
     }
 
@@ -5238,7 +5240,7 @@ sub send_signal_to_PID {
 
         next if $arg->{sync} and $pidfile !~ /\bsync\.$arg->{sync}\b/;
 
-        my $pfile = "$piddir/$pidfile";
+        my $pfile = File::Spec->catfile( $piddir => $pidfile );
         if (open my $fh, '<', $pfile) {
             my $pid = <$fh>;
             close $fh or warn qq{Could not close "$pfile": $!\n};
@@ -6515,7 +6517,7 @@ sub cleanup_mcp {
     ## For each file, attempt to kill the process it refers to
     for my $pidfile (sort @pidfiles2) {
         next if $pidfile eq 'bucardo.mcp.pid'; ## That's us!
-        my $pfile = "$piddir/$pidfile";
+        my $pfile = File::Spec->catfile( $piddir => $pidfile );
         if (-e $pfile) {
             $self->kill_bucardo_pidfile($pfile);
         }
@@ -6776,19 +6778,20 @@ sub signal_pid_files {
         $self->glog(qq{Attempting to signal PID from file "$name"}, LOG_TERSE);
 
         ## File must be readable
-        if (! open $fh, '<', "$config{piddir}/$name") {
-            $self->glog(qq{Could not open $config{piddir}/$name: $!}, LOG_WARN);
+        my $cfile = File::Spec->catfile( $config{piddir} => $name );
+        if (! open $fh, '<', $cfile) {
+            $self->glog(qq{Could not open $cfile: $!}, LOG_WARN);
             next;
         }
 
         ## File must contain a number (the PID)
         if (<$fh> !~ /(\d+)/) {
-            $self->glog(qq{Warning! File "$config{piddir}/$name" did not contain a PID!}, LOG_WARN);
+            $self->glog(qq{Warning! File "$cfile" did not contain a PID!}, LOG_WARN);
             next;
         }
 
         my $pid = $1; ## no critic (ProhibitCaptureWithoutTest)
-        close $fh or warn qq{Could not close "$config{piddir}/$name": $!\n};
+        close $fh or warn qq{Could not close "$cfile": $!\n};
 
         ## No sense in doing deeper checks that this is still a Bucardo process,
         ## as a USR1 should be a pretty harmless signal
@@ -6860,7 +6863,7 @@ sub cleanup_controller {
     for my $pidfile (sort @pidfiles) {
         my $sname = $self->{syncname};
         next unless $pidfile =~ /^bucardo\.kid\.sync\.$sname\.?.*\.pid$/;
-        my $pfile = "$piddir/$pidfile";
+        my $pfile = File::Spec->catfile( $piddir => $pidfile );
         if (open my $fh, '<', $pfile) {
             my $pid = <$fh>;
             close $fh or warn qq{Could not close "$pfile": $!\n};
