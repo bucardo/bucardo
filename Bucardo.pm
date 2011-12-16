@@ -6253,8 +6253,7 @@ sub fork_vac {
                 die "Process $npid requested we exit\n";
             }
 
-            ## Should not happen, but let's at least log it
-            $self->glog("Warning: received unknown message $name from $npid!", LOG_TERSE);
+            ## Just ignore everything else
 
         } ## end of each notification
 
