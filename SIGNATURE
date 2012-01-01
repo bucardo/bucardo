@@ -1,5 +1,5 @@
 This file contains message digests of all files listed in MANIFEST,
-signed via the Module::Signature module, version 0.66.
+signed via the Module::Signature module, version 0.68.
 
 To verify the content in this distribution, first make sure you have
 Module::Signature installed, then type:
@@ -16,22 +16,22 @@ Hash: RIPEMD160
 
 SHA1 57c33900036014972baca98ce5c014e802050bc7 .gitignore
 SHA1 721d9bef993d601be558b059f33f17e38edd6d3c .perlcriticrc
-SHA1 f1de821cf5ee6c0267e53b6d030a8be240623683 Bucardo.pm
-SHA1 2c684fc2dd60c8b29383680291f97772f28b8dbf Bucardo.pm.html
-SHA1 717cff3ecca0b36ce228ca409d02515260f7f240 Changes
+SHA1 98450897f027a44a89a337ac0fc877918264233f Bucardo.pm
+SHA1 33b03f846d071b48f4788fc3c8acadafc0be8bb3 Bucardo.pm.html
+SHA1 5f8f2a7a4508b9692bffe69d5827fb61e6583c91 Changes
 SHA1 1f0f70bd74872837da0b48c83df3800cf4c7e0b0 INSTALL
-SHA1 bf81be749492fdcc2506046d75892c5c20286fb2 LICENSE
+SHA1 9c6db5ac92309b09930fb27ccb219d648c18b8b9 LICENSE
 SHA1 1008f38a20638f315f64807dff812c86118ada04 MANIFEST
 SHA1 b8daeb8ec60c2bff1a99b5081f9ba46c255dc339 MANIFEST.SKIP
-SHA1 6fa84fd5616cacc2405e98bce815eda829359d85 META.yml
-SHA1 52e4a3c685a7c94ad70706d6148c3514a2055194 Makefile.PL
-SHA1 4e97be1f3b407469313e814cac90bb17bc45e440 README
+SHA1 bddf5fed5ec02e7e3f907195128d64c27956204d META.yml
+SHA1 fb1b64408ba49a81585baeb0a643bccd5fca7ae5 Makefile.PL
+SHA1 330e36f38b0e3f86c4fe838bf2d9c703e539d96a README
 SHA1 e3b3b6308e27cc932c92cf6e2e46d2920ad47a6d README.dev
 SHA1 8d5bda2fcaff0cc9840fae795275d0be61080b6f TODO
 SHA1 11dee45376376dd58a27beb74d5ef284735b59fe UPGRADE
-SHA1 3db0586bc7404ef852399c73f19b50cf06dc099a bucardo.schema
-SHA1 2eb14463bfabc0b723de1b9fdbaf28e2b2302b55 bucardo_ctl
-SHA1 dddd60222bbbdf99c352cdac6d92b0487e82e40a bucardo_ctl.html
+SHA1 1cc659a3dfe44aa5fe4a05b4a0e1e989024e341c bucardo.schema
+SHA1 65f726d00c2e1ec5fbc830d62f84696c89c32035 bucardo_ctl
+SHA1 5f3eb76f0e9aa3a2db3330b7888e51180eb06858 bucardo_ctl.html
 SHA1 98e77ebb6f5d7477d1dc0a7ca2ed79f3f791df5e patches/Bucardo.4.4.0.fix.search.path.patch.txt
 SHA1 059acdd6381de8cbded6b901f70ee2a986817930 scripts/README
 SHA1 376e1fd0bb653ad76afe8072414bb96a6e3cf362 scripts/bucardo-report
@@ -49,7 +49,7 @@ SHA1 22c91ffea2904bcffe94253e37b498603e3137f4 t/BucardoTesting.pm
 SHA1 e34204e19b81328cf90ad2e656db9a4e4ae57f0a t/truncate_test_logs.notest
 -----BEGIN PGP SIGNATURE-----
 
-iEYEAREDAAYFAk4Z0IsACgkQvJuQZxSWSsgUTwCgv15a0WA6CA2QLTOmoNiWzCVv
-Z9oAn3aYezQT2R2XAlDvzSUOzIUQZbLT
-=ZxBN
+iEYEAREDAAYFAk7WV/8ACgkQvJuQZxSWSsgBsQCdHjHzghq9jKA/tO6xq21sVTgQ
+U+EAniRNd7YarFj8q3Qq0cc4ssAGw2G2
+=LrD8
 -----END PGP SIGNATURE-----

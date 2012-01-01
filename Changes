@@ -1,5 +1,20 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
+Bucardo version 4.4.8, released November 30, 2011
+
+  - Fix incorrect checking of hostname for host_safety_check [GSM]
+
+  - Fix wrong version number in the bucardo_ctl script.
+
+
+Bucardo version 4.4.7, released November 8, 2011
+
+  - Fix bug when using multi-column primary keys where the first 
+    is an int, and the second is not. Reported by Brady S Edwards [GSM]
+
+  - Do not rely on $@ to catch important evals [GSM]
+
+
 Bucardo version 4.4.6, released July 10, 2011
 
   - Fix bug resulting in wrong escapes in swap syncs for int4 primary keys

@@ -4,7 +4,7 @@
 ##
 ## This script should only be called via the 'bucardo_ctl' program
 ##
-## Copyright 2006-2010 Greg Sabino Mullane <greg@endpoint.com>
+## Copyright 2006-2011 Greg Sabino Mullane <greg@endpoint.com>
 ##
 ## Please visit http://bucardo.org for more information
 
@@ -13,7 +13,7 @@ use 5.008003;
 use strict;
 use warnings;
 
-our $VERSION = '4.4.6';
+our $VERSION = '4.4.8';
 
 use sigtrap qw( die normal-signals ); ## Call die() on HUP, INT, PIPE, or TERM
 use Config;                           ## Used to map signal names
@@ -202,7 +202,7 @@ sub new {
             }
         }
         ## Simple string
-        elsif ($safe ne $hostname) {
+        elsif ($safe eq $hostname) {
             $ok = 1;
         }
 
@@ -4576,11 +4576,13 @@ sub start_kid {
                     local $SIG{__DIE__} = sub {};
                     my $cascade = $sync->{deletemethod} =~ /cascade/ ? ' CASCADE' : '';
                     $targetdbh->do('SAVEPOINT truncate_attempt');
+                    my $truncate_ok = 0;
                     eval {
                         $targetdbh->do("TRUNCATE TABLE $S.$T $cascade");
+                        $truncate_ok = 1;
                     };
-                    if ($@) {
-                        $self->glog("Truncation of $S.$T failed, so we will try a delete");
+                    if (! $truncate_ok) {
+                        $self->glog("Truncation of $S.$T failed, so we will try a delete. Error was: $@");
                         $targetdbh->do('ROLLBACK TO truncate_attempt');
                         $empty_by_delete = 2;
                     }
@@ -4742,11 +4744,13 @@ sub start_kid {
                     ## Temporarily override our kid-level handler due to the eval
                     local $SIG{__DIE__} = sub {};
                     $targetdbh->do('SAVEPOINT truncate_attempt');
+                    my $truncate_ok = 0;
                     eval {
                         $targetdbh->do("TRUNCATE TABLE $S.$T");
+                        $truncate_ok = 1;
                     };
-                    if ($@) {
-                        $self->glog("Truncation of $S.$T failed, so we will try a delete");
+                    if (! $truncate_ok) {
+                        $self->glog("Truncation of $S.$T failed, so we will try a delete. Error was: $@");
                         $targetdbh->do('ROLLBACK TO truncate_attempt');
                         $empty_by_delete = 2;
                     }
@@ -5500,7 +5504,7 @@ sub start_kid {
                     else {
                         $x=0;
                         for my $pk (@{$info1->{$pkval}{BUCARDO_PKVALS}}) {
-                            if ($g->{pkeytype}[0] =~ /int\d?$/o) {
+                            if ($g->{pkeytype}[$x] =~ /int\d?$/o) {
                                 push @safepk => $pk;
                             }
                             else {
@@ -5508,6 +5512,7 @@ sub start_kid {
                                 $safepkval =~ s{\\}{\\\\}go;
                                 push @safepk => qq{'$safepkval'};
                             }
+                            $x++;
                         }
                     }
 
@@ -6174,6 +6179,7 @@ sub send_mail {
     my $smtphost = $config{default_email_host} || 'localhost';
 
     if ($self->{sendmail} and $arg->{to} ne 'nobody@example.com') {
+        my $sendmail_ok = 0;
         eval {
             my $smtp = Net::SMTP->new(
                 Host    => $smtphost,
@@ -6190,8 +6196,9 @@ sub send_mail {
             $smtp->datasend($arg->{body});
             $smtp->dataend;
             $smtp->quit;
+            $sendmail_ok = 1;
         };
-        if ($@) {
+        if (! $sendmail_ok) {
             my $error = $@ || '???';
             $self->glog("Warning: Error sending email to $arg->{to}: $error");
         }
@@ -6237,7 +6244,7 @@ Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This document describes version 4.4.6 of Bucardo
+This document describes version 4.4.8 of Bucardo
 
 =head1 WEBSITE
 
@@ -6279,7 +6286,7 @@ Greg Sabino Mullane <greg@endpoint.com>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2005-2010 Greg Sabino Mullane <greg@endpoint.com>.
+Copyright (c) 2005-2011 Greg Sabino Mullane <greg@endpoint.com>.
 
 This software is free to use: see the LICENSE file for details.
 

@@ -5,6 +5,7 @@ Makefile.old
 blib/
 none/
 pm_to_blib
+MYMETA.*
 
 ## Editor temporary files:
 *~

@@ -22,7 +22,7 @@ $Data::Dumper::Indent = 1;
 
 return 1 if $ENV{BUCARDO_CTL_TEST};
 
-our $VERSION = '4.4.6';
+our $VERSION = '4.4.8';
 
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
@@ -5587,7 +5587,7 @@ bucardo_ctl - utility script for controlling the Bucardo program
 
 =head1 VERSION
 
-This document describes version 4.4.6 of bucardo_ctl
+This document describes version 4.4.8 of bucardo_ctl
 
 =head1 SYNOPSIS
 
@@ -6011,7 +6011,7 @@ Bucardo
 
 =head1 COPYRIGHT
 
-Copyright 2006-2010 Greg Sabino Mullane <greg@endpoint.com>
+Copyright 2006-2011 Greg Sabino Mullane <greg@endpoint.com>
 
 This program is free to use, subject to the limitations in the LICENSE file.
 
