@@ -3,6 +3,10 @@
 -- Version 4.99.3
 
 -- Should be run as a superuser
+-- This should not need to be run directly: use either
+-- bucardo install
+-- or
+-- bucardo upgrade
 
 \set ON_ERROR_STOP off
 
@@ -14,16 +18,11 @@ SET CLIENT_MIN_MESSAGES = 'WARNING';
 
 \c bucardo bucardo
 
--- plpgsql and plperlu are loaded, but just in case:
-SET client_min_messages = 'FATAL';
+SET CLIENT_MIN_MESSAGES = 'FATAL';
 CREATE LANGUAGE plpgsql;
 CREATE LANGUAGE plperlu;
-SET client_min_messages = 'ERROR';
-
-SET CLIENT_MIN_MESSAGES = 'FATAL';
 CREATE SCHEMA bucardo;
-DROP SCHEMA freezer;
-CREATE SCHEMA freezer;
+SET client_min_messages = 'ERROR';
 
 \set ON_ERROR_STOP on
 
