@@ -8,7 +8,7 @@ my $VERSION = '4.99.3';
 
 WriteMakefile(
     NAME         => 'Bucardo',
-    clean        => { FILES => 'log.bucardo.* *~ *.tmp outgoingmail.* bucardo_test_database*/' },
+    clean        => { FILES => 'log.bucardo.* *~ *.tmp outgoingmail.* bucardo_test_database*/ test.sqlite.db' },
     ABSTRACT     => 'Postgres asynchronous multi-master replication system',
     AUTHOR       => 'Greg Sabino Mullane <greg@endpoint.com>',
     LICENSE      => 'BSD',
