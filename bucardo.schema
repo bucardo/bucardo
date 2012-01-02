@@ -10,30 +10,33 @@
 
 \set ON_ERROR_STOP off
 
-SET CLIENT_MIN_MESSAGES = 'FATAL';
+-- Create the bucardo user and database if they don't already exist
+SET client_min_messages = 'FATAL';
 CREATE USER bucardo SUPERUSER;
 CREATE DATABASE bucardo OWNER bucardo;
 ALTER DATABASE bucardo SET search_path = bucardo, public;
-SET CLIENT_MIN_MESSAGES = 'WARNING';
 
 \c bucardo bucardo
 
-SET CLIENT_MIN_MESSAGES = 'FATAL';
+-- Create the base bucardo schema and languages
+SET client_min_messages = 'FATAL';
 CREATE LANGUAGE plpgsql;
 CREATE LANGUAGE plperlu;
 CREATE SCHEMA bucardo;
-SET client_min_messages = 'ERROR';
+
+-- The above were allowed to fail, because there is no harm if the objects
+-- already existed. From this point forward however, we suffer no errors
 
 \set ON_ERROR_STOP on
 
 BEGIN;
-SET CLIENT_MIN_MESSAGES = 'WARNING';
+SET client_min_messages = 'WARNING';
 SET search_path TO bucardo;
-SET client_min_messages   = 'WARNING';
 SET escape_string_warning = 'OFF';
 SET standard_conforming_strings = 'ON';
 
--- Try and create a plperlu function, then call it
+-- Try and create a plperlu function, then call it at the very end
+-- Do not change this string, as the bucardo program parses it
 CREATE OR REPLACE FUNCTION bucardo.plperlu_test()
 RETURNS TEXT
 LANGUAGE plperlu
@@ -65,28 +68,31 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $bc$
 BEGIN
-NEW.setting = LOWER(NEW.setting);
 
-IF (NEW.type IS NOT NULL and NEW.name IS NULL) THEN
-  RAISE EXCEPTION 'Must provide a specific %', NEW.type;
-END IF;
+  NEW.setting = LOWER(NEW.setting);
 
-IF (NEW.name IS NOT NULL and NEW.type IS NULL) THEN
-  RAISE EXCEPTION 'Must provide a type if giving a name';
-END IF;
+  IF (NEW.type IS NOT NULL and NEW.name IS NULL) THEN
+    RAISE EXCEPTION 'Must provide a specific %', NEW.type;
+  END IF;
 
-IF (NEW.setting = 'sync' OR NEW.setting = 'goat') THEN
-  RAISE EXCEPTION 'Invalid setting name';
-END IF;
+  IF (NEW.name IS NOT NULL and NEW.type IS NULL) THEN
+    RAISE EXCEPTION 'Must provide a type if giving a name';
+  END IF;
 
-RETURN NEW;
+  IF (NEW.setting = 'sync' OR NEW.setting = 'goat') THEN
+    RAISE EXCEPTION 'Invalid setting name';
+  END IF;
+
+  RETURN NEW;
+
 END;
 $bc$;
+
+COMMENT ON FUNCTION bucardo.check_bucardo_config() IS $$Basic sanity checks for configuration items$$;
 
 CREATE TRIGGER check_bucardo_config
   BEFORE INSERT OR UPDATE ON bucardo.bucardo_config
   FOR EACH ROW EXECUTE PROCEDURE bucardo.check_bucardo_config();
-
 
 -- Sleep times (all in seconds)
 COPY bucardo.bucardo_config(setting,value,about)
@@ -106,7 +112,6 @@ vac_run|30|How often does the VAC process run?
 \.
 
 
-
 -- Various timeouts (times are in seconds)
 COPY bucardo.bucardo_config(setting,value,about)
 FROM STDIN
@@ -120,7 +125,8 @@ tcp_keepalives_interval|0|How long to wait for a response to a keepalive probe.
 tcp_keepalives_count|0|How many probes to send. 0 indicates sticking with system defaults.
 \.
 
--- Debug output
+
+-- Logging
 COPY bucardo.bucardo_config(setting,value,about)
 FROM STDIN
 WITH DELIMITER '|';
@@ -129,7 +135,6 @@ log_showpid|1|Show PID in the log output?
 log_showlevel|0|Show log level in the log output?
 log_showline|0|Show line number in the log output?
 log_showtime|3|Show timestamp in the log output?  0=off  1=seconds since epoch  2=scalar gmtime  3=scalar localtime
-log_conflict_details|0|Log detailed conflict data?
 log_conflict_file|bucardo_conflict.log|Name of the conflict detail log file
 log_level|NORMAL|How verbose to make the logging. Higher is more verbose.
 warning_file|bucardo.warning.log|File containing all log lines starting with "Warning"
@@ -155,9 +160,6 @@ default_standard_conflict|bucardo_latest|Default conflict method for all syncs
 email_debug_file||File to save a copy of all outgoing emails to
 flatfile_dir|.|Directory to store the flatfile output inside of
 host_safety_check||Regex to make sure we don't accidentally run where we should not
-kid_abort_limit|3|How many times we will restore an aborted kid before giving up?
-max_delete_clause|200|Maximum number of items to delete inside of IN() clauses
-max_select_clause|500|Maximum number of items to select inside of IN() clauses
 piddir|/var/run/bucardo|Directory holding Bucardo PID files
 reason_file|bucardo.restart.reason.log|File to hold reasons for stopping and starting
 semaphore_table|bucardo_status|Table to let apps know a sync is ongoing
@@ -2616,7 +2618,6 @@ $bc$;
 SELECT bucardo.magic_update();
 
 SELECT plperlu_test();
-
 
 COMMIT;
 
