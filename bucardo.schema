@@ -185,15 +185,13 @@ CREATE TABLE bucardo.db (
   dbtype               TEXT        NOT NULL DEFAULT 'postgres',
   dbhost               TEXT        NOT NULL DEFAULT '',
   dbport               TEXT        NOT NULL DEFAULT '',
-  dbname               TEXT        NOT NULL,
+  dbname               TEXT        NOT NULL, -- the actual name of the database, not the primary key 'local' name
   dbuser               TEXT        NOT NULL,
   dbpass               TEXT            NULL,
   dbconn               TEXT        NOT NULL DEFAULT '',  -- string to add to the generated dsn
   dbservice            TEXT            NULL,
   pgpass               TEXT            NULL,      -- local file with connection info same as pgpass
   status               TEXT        NOT NULL DEFAULT 'active',
-  sourcelimit          SMALLINT    NOT NULL DEFAULT 0, -- maximum concurrent read connections to this database
-  targetlimit          SMALLINT    NOT NULL DEFAULT 0, -- maximum concurrent write connections to this database
   server_side_prepares BOOLEAN     NOT NULL DEFAULT 'true',
   makedelta            BOOLEAN     NOT NULL DEFAULT 'false',
   cdate                TIMESTAMPTZ NOT NULL DEFAULT now()
