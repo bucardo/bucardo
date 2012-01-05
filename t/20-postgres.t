@@ -269,6 +269,11 @@ for my $table (keys %tabletype) {
     bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
 
 }
+$dbhA->commit();
+$dbhB->commit();
+$dbhC->commit();
+$dbhD->commit();
+
 
 ## Insert two more rows, then truncate
 for my $table (keys %tabletype) {
