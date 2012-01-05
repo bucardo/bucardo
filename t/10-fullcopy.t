@@ -249,6 +249,10 @@ for my $table (sort keys %tabletype) {
     bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
 
 }
+$dbhA->commit();
+$dbhB->commit();
+$dbhC->commit();
+$dbhD->commit();
 
 for my $table (keys %tabletype) {
     $sth{update}{$table}{A}->execute(80);
@@ -262,6 +266,7 @@ for my $table (keys %tabletype) {
 }
 $dbhB->commit();
 
+sleep 1;
 ## Kick it to get everything synced
 $bct->ctl('bucardo kick fctest 0');
 
