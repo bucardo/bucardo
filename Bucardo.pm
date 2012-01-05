@@ -521,12 +521,14 @@ sub start_mcp {
         ## Do not erase our own file
         next if $fullfile eq $self->{pidfile};
         ## Everything else can get removed
-        if (unlink $fullfile) {
-            $self->glog("Warning: removed old pid file $fullfile", LOG_VERBOSE);
-        }
-        else {
-            ## This will cause problems, but we will drive on
-            $self->glog("Warning: failed to remove pid file $fullfile", LOG_TERSE);
+        if (-e $fullfile) {
+            if (unlink $fullfile) {
+                $self->glog("Warning: removed old pid file $fullfile", LOG_VERBOSE);
+            }
+            else {
+                ## This will cause problems, but we will drive on
+                $self->glog("Warning: failed to remove pid file $fullfile", LOG_TERSE);
+            }
         }
     }
 
