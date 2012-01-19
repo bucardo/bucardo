@@ -10,7 +10,7 @@ use warnings;
 use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 47;
+use Test::More tests => 48;
 
 use vars qw/$t $res $command $dbhX $dbhA $dbhB/;
 
@@ -40,9 +40,17 @@ $t = q{Add database accepts both 'add database' and 'add db'};
 $res = $bct->ctl('bucardo add database');
 like ($res, qr/Usage: add db/, $t);
 
-$t = q{Add database fails for a non-existent cluster};
+$t = q{Add database fails if not given a dbname};
+$res = $bct->ctl('bucardo add database foobar');
+like ($res, qr/must supply a database name/, $t);
+
+$t = q{Add database fails for an invalid port};
 $res = $bct->ctl('bucardo add database foo dbname=bar dbport=1');
 like ($res, qr/Connection test failed.*could not connect to server/s, $t);
+
+$t = q{Add database fails for non-existent host};
+$res = $bct->ctl("bucardo add database bucardo_test dbname=bucardo_test user=$dbuserA port=$dbportA host=badbucardohost");
+like ($res, qr/Connection test failed.*could not translate host name/s, $t);
 
 $t = q{Add database fails for non-existent database};
 $res = $bct->ctl("bucardo add database foo dbname=bar user=$dbuserA port=$dbportA host=$dbhostA");
@@ -51,10 +59,6 @@ like ($res, qr/Connection test failed.*database "bar" does not exist/s, $t);
 $t = q{Add database fails for non-existent user};
 $res = $bct->ctl("bucardo add database bucardo_test dbname=bucardo_test user=nobob port=$dbportA host=$dbhostA");
 like ($res, qr/Connection test failed.* "nobob" does not exist/s, $t);
-
-$t = q{Add database fails for non-existent host};
-$res = $bct->ctl("bucardo add database bucardo_test dbname=bucardo_test user=$dbuserA port=$dbportA host=badbucardohost");
-like ($res, qr/Connection test failed.*could not translate host name/s, $t);
 
 $t = q{Add database works for non-existent cluster with --force flag};
 $res = $bct->ctl('bucardo add database foo dbname=bar --force');

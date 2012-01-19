@@ -1659,7 +1659,6 @@ sub add_database {
                 $found = 1;
             };
             if (! $found) {
-                warn Dumper $dsn;
                 die qq{Connection to mongodb failed: $@\n};
             }
 
@@ -7615,7 +7614,7 @@ For more information, run: $progname help add <type>};
         return q{Usage: add customcols tablename select_clause [sync=x db=x]};
     }
     if ('add_database' eq $name) {
-        return q{Usage: add db <name> [optional information]
+        return q{Usage: add db <name> <dbname=value> [optional information]
 Adds a database
 
 Optional information:
