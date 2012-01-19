@@ -9,6 +9,7 @@ Version 5:
 * Get Drizzle tests verified as working
 * Get bucardo-report working again
 * Note 8.2 minimum requirement somewhere (probably from COPY (select))
+* Make sure sequences are working
 
 These range the gamut from wildly speculative ideas to must-have features.
 
