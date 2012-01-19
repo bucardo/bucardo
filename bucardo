@@ -1473,24 +1473,27 @@ sub add_database {
     ## Inputs and aliases, database column name, flags, default
     my $validcols = qq{
         null                     name                 0                $item_name
-        type                     dbtype               0                postgres
+        type|dbtype              dbtype               0                postgres
+        user|username|dbuser     dbuser               0                bucardo
+        pass|password|dbpass     dbpass               0                null
         db|dbname                dbname               0                null
-        host|dbhost|pghost       dbhost               0                ENV:PGHOSTADDR|PGHOST
         port|dbport|pgport       dbport               numeric          ENV:PGPORT
-        user|dbuser|pguser       dbuser               0                bucardo
-        pass|dbpass              dbpass               0                null
-        addalltables             none                 0                skip
-        addallsequences          none                 0                skip
+        host|dbhost|pghost       dbhost               0                ENV:PGHOSTADDR|PGHOST
         conn|dbconn|pgconn       dbconn               0                null
         stat|status              status               =active|inactive null
+        group|dbgroup            none                 0                skip
+        addalltables             none                 0                skip
+        addallsequences          none                 0                skip
+        server_side_prepares|ssp server_side_prepares TF               null
         service|dbservice        dbservice            0                null
-        pgpass                   pgpass               0                null
         sourcelimit              sourcelimit          numeric          null
         targetlimit              targetlimit          numeric          null
         makedelta                makedelta            =on|off          null
-        server_side_prepares|ssp server_side_prepares TF               null
-        group|dbgroup            none                 0                skip
     };
+
+
+    ## TODO: See if sourcelimie and targetlimie and makedelta still needed
+    ## If so, add to wiki page: http://bucardo.org/wiki/Bucardo/add_database#Optional_arguments
 
     my ($dbcols,$cols,$phs,$vals,$extra)
         = process_simple_args({cols => $validcols, list => \@nouns, usage => $usage});
