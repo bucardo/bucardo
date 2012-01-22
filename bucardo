@@ -1456,7 +1456,7 @@ sub add_database {
     ## 1. The internal name Bucardo uses to refer to this database
     ## 2+ name=value parameters, dash-dash arguments
     ## Returns: undef
-    ## Example: bucardo add db nyc1 dbname=nyc1 host=nyc1.example.com group=sales
+    ## Example: bucardo add db nyc1 dbname=nyc1 dbhost=nyc1.example.com dbgroup=sales
 
     ## Grab our generic usage message
     my $usage = usage('add_database');
@@ -1465,12 +1465,12 @@ sub add_database {
     my $item_name = shift @nouns || '';
 
     ## No name is a problem
-    if (!length $item_name) {
+    if (! length $item_name) {
         warn "$usage\n";
         exit 1;
     }
 
-    ## Inputs and aliases, database column name, flags, default
+    ## Inputs and aliases, database column name, flags, default value
     my $validcols = qq{
         null                     name                 0                $item_name
         type|dbtype              dbtype               0                postgres
@@ -1496,32 +1496,37 @@ sub add_database {
     my ($dbcols,$cols,$phs,$vals,$extra)
         = process_simple_args({cols => $validcols, list => \@nouns, usage => $usage});
 
-    ## Cannot add if already there
-    if (exists $DB->{$item_name}) {
-        print qq{Cannot add database: the name "$item_name" already exists\n};
-        exit 1;
-    }
-
-    ## Clean up and standardize the names
-    $vals->{dbtype} = standardize_rdbms_name($vals->{dbtype});
-
     ## Must have a database name
     if (! exists $vals->{dbname}) {
         print qq{Cannot add database: must supply a database name to connect to\n};
         exit 1;
     }
 
+    ## Cannot add if already there
+    if (exists $DB->{$item_name}) {
+        print qq{Cannot add database: the name "$item_name" already exists\n};
+        exit 1;
+    }
+
+    ## Clean up and standardize the type name
+    my $dbtype = $vals->{dbtype} = standardize_rdbms_name($vals->{dbtype});
+
     ## Attempt to insert this into the database
     $SQL = "INSERT INTO bucardo.db ($cols) VALUES ($phs)";
     debug("SQL: $SQL");
     debug(Dumper $vals);
     $sth = $dbh->prepare($SQL);
+    my $evalok = 0;
     eval {
-        $count = $sth->execute(map { $vals->{$_} } sort keys  %$vals);
+        $sth->execute(map { $vals->{$_} } sort keys %$vals);
+        $evalok = 1;
     };
-    if ($@) {
+    if (! $evalok) {
         if ($@ =~ /"db_dsn_unique"/) {
             die qq{Cannot add database: already have a connection with the same parameters\n};
+        }
+        if ($@ =~ /"db_name_sane"/) {
+            die qq{Invalid name: you cannot refer to this database as "$item_name"\n};
         }
         die "Failed to add database: $@\n";
     }
@@ -1529,217 +1534,75 @@ sub add_database {
     ## Store certain messages so we can output them in a desired order
     my $finalmsg = '';
 
+    ## Test database handle
+    my $testdbh;
+
     ## May want to do a test connection to the database
   TESTCONN: {
 
         ## Nothing else to do for flatfiles
-        last TESTCONN if 'flatfile' eq $vals->{dbtype};
+        last TESTCONN if 'flatfile' eq $dbtype;
 
-        ## Must have a valid type
-        if ($vals->{dbtype} !~ /^(?:postgres|drizzle|mongo|mysql|oracle|redis|sqlite)$/) {
-            die qq{Unknown database type: $vals->{dbtype}\n};
+        ## Get the module namem the way to refer to its database
+        ## This also makes sure we have a valid type
+        my %dbtypeinfo = (
+            drizzle  => ['DBD::drizzle', 'Drizzle database'],
+            mongo    => ['MongoDB',      'MongoDB'],
+            mysql    => ['DBD::mysql',   'MySQL database'],
+            oracle   => ['DBD::Oracle',  'Oracle database'],
+            postgres => ['DBD::Pg',      'PostgreSQL database'],
+            redis    => ['Redis',        'Redis database'],
+            sqlite   => ['DBD::SQLite',  'SQLite database'],
+        );
+        if (! exists $dbtypeinfo{$dbtype}) {
+            die qq{Unknown database type: $dbtype\n};
         }
+        my ($module,$fullname) = @{ $dbtypeinfo{$dbtype} };
 
         ## Gather connection information from the database via db_getconn
         $SQL = 'SELECT bucardo.db_getconn(?)';
         $sth = $dbh->prepare($SQL);
-        $count = $sth->execute($item_name);
+        $sth->execute($item_name);
         my $dbconn = $sth->fetchall_arrayref()->[0][0];
 
-        if ('postgres' eq $vals->{dbtype}) {
+        ## Must be able to load the Perl driver
+        $evalok = 0;
+        eval {
+            eval "require $module";
+            $evalok = 1;
+        };
+        if (! $evalok) {
+            die "Cannot add unless the Perl module '$module' is available: $@\n";
+        }
 
-            ## For Postgres, we get a little fancy and try to account for instances
-            ## where the bucardo user may not exist yet, by reconnecting and
-            ## creating said user if needed.
+        ## Reset for the evals below
+        $evalok = 0;
 
-            my ($type,$dsn,$user,$pass,$ssp) = split /\n/ => $dbconn;
-            my $testdbh;
-            my $realuser = $user;
+        ## Standard args for the DBI databases
+        ## We put it here as we may move around with the Postgres bucardo user trick
+        my ($type,$dsn,$user,$pass) = split /\n/ => $dbconn;
 
-          CONNLOOP: {
-                eval {
-                    $testdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
-                };
-                if ($@) {
-                    ## Special exception: if the user bucardo does not exist, we will try to create it
-                    if ($user eq 'bucardo' and $@ =~ /FATAL.*"bucardo"/) {
-                        $user = 'postgres';
-                        redo CONNLOOP;
-                    }
-                    if ($bcargs->{force}) {
-                        print "Connection test failed, but will add anyway.\nError was: $@\n\n";
-                    }
-                    else {
-                        die "Connection test failed. You may force add it with the --force argument.\nError was: $@\n\n";
-                    }
-                }
-                else {
-                    ## We were able to connect the second time as the non-bucardo user
-                    ## Thus, we'll now try and create the bucardo user
-                    if ($realuser ne $user) {
-                        if (eval { require Digest::MD5; 1 }) {
-                            ## We need a password. If one was not supplied, create one
-                            eval {
-                                my $newpass = $pass;
-                                if (! length $pass) {
-                                    $newpass = generate_password();
-                                }
-                                my $encpass = Digest::MD5::md5_hex($newpass);
-                                $testdbh->do(qq{CREATE USER $realuser SUPERUSER ENCRYPTED PASSWORD '$encpass'});
-                                $testdbh->commit();
-                                my $extrauser = length $pass ? '' : " with password $newpass";
-                                warn "Created superuser '$realuser'$extrauser\n";
-                            };
-                            if ($@) {
-                                warn "Unable to create superuser $realuser: $@\n";
-                                $bcargs->{force} or exit 1;
-                            }
-                        }
-                    }
-                    $testdbh->disconnect();
+        ## Sometimes we need to adjust the username on the fly and retry
+        my $realuser = $user;
 
-                } } ## end of CONNLOOP
+        ## Handle all of the ones that do not use standard DBI first
 
-        } ## end postgres
+        if ('mongo' eq $dbtype) {
 
-        if ('drizzle' eq $vals->{dbtype}) {
-
-            my ($type,$dsn,$user,$pass) = split /\n/ => $dbconn;
-
-            my $found = 0;
-            eval {
-                require DBD::drizzle;
-                $found = 1;
-            };
-            if (!$found) {
-                die "Cannot add unless the DBD::drizzle module is available\n";
-            }
-
-            my $testdbh;
-            $found = 0;
-            eval {
-                $testdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
-                $found = 1;
-            };
-            if (! $found) {
-                if ($bcargs->{force}) {
-                    print "Connection test failed, but will add anyway.\nError was: $@\n\n";
-                }
-                else {
-                    die "Drizzle connection test failed. You may force add it with the --force argument. Error was: $@\n\n";
-                }
-            }
-            else {
-                $testdbh->disconnect();
-            }
-
-        } ## end drizzle
-
-        if ('mongo' eq $vals->{dbtype}) {
-            my $found = 0;
-            eval {
-                require MongoDB;
-                $found = 1;
-            };
-            if (!$found) {
-                die "Cannot add unless the MongoDB perl driver is available\n";
-            }
-
-            my $testdbh;
-            $found = 0;
             my $dsn = {};
             for my $line (split /\n/ => $dbconn) {
                 next if $line !~ /(\w+):\s+(.+)/;
                 $dsn->{$1} = $2;
             }
+
             eval {
                 $testdbh = MongoDB::Connection->new($dsn); ## no critic
-                $found = 1;
+                $evalok = 1;
             };
-            if (! $found) {
-                die qq{Connection to mongodb failed: $@\n};
-            }
+        }
 
-        } ## end of mongo
+        elsif ('redis' eq $dbtype) {
 
-        if ('mysql' eq $vals->{dbtype}) {
-
-            my ($type,$dsn,$user,$pass) = split /\n/ => $dbconn;
-
-            my $found = 0;
-            eval {
-                require DBD::mysql;
-                $found = 1;
-            };
-            if (!$found) {
-                die "Cannot add unless the DBD::mysql module is available\n";
-            }
-
-            my $testdbh;
-            $found = 0;
-            eval {
-                $testdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
-                $found = 1;
-            };
-            if (! $found) {
-                if ($bcargs->{force}) {
-                    print "Connection test failed, but will add anyway.\nError was: $@\n\n";
-                }
-                else {
-                    die "MySQL connection test failed. You may force add it with the --force argument. Error was: $@\n\n";
-                }
-            }
-            else {
-                $testdbh->disconnect();
-            }
-
-        } ## end mysql
-
-        if ('oracle' eq $vals->{dbtype}) {
-
-            my ($type,$dsn,$user,$pass) = split /\n/ => $dbconn;
-
-            my $found = 0;
-            eval {
-                require DBD::Oracle;
-                $found = 1;
-            };
-            if (!$found) {
-                die "Cannot add unless the DBD::Oracle module is available\n";
-            }
-
-            my $testdbh;
-            $found = 0;
-            eval {
-                $testdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
-                $found = 1;
-            };
-            if (! $found) {
-                if ($bcargs->{force}) {
-                    print "Connection test failed, but will add anyway.\nError was: $@\n\n";
-                }
-                else {
-                    die "Oracle connection test failed. You may force add it with the --force argument. Error was: $@\n\n";
-                }
-            }
-            else {
-                $testdbh->disconnect();
-            }
-
-        } ## end oracle
-
-        if ('redis' eq $vals->{dbtype}) {
-            my $found = 0;
-            eval {
-                require Redis;
-                $found = 1;
-            };
-            if (!$found) {
-                die "Cannot add unless the Redis perl driver is available\n";
-            }
-
-            my $testdbh;
-            $found = 0;
             my $tempdsn = {};
             for my $line (split /\n/ => $dbconn) {
                 next if $line !~ /(\w+):\s+(.+)/;
@@ -1756,53 +1619,74 @@ sub add_database {
             if (defined $server) {
                 push @dsn => 'server', $server;
             }
+
+            $evalok = 0;
             eval {
                 $testdbh = Redis->new(@dsn);
-                $found = 1;
+                $evalok = 1;
             };
-            if (! $found) {
-                if ($bcargs->{force}) {
-                    print "Connection test failed, but will add anyway.\nError was: $@\n\n";
-                }
-                else {
-                    die qq{Connection to redis failed: $@\n};
-                }
+        }
+
+        ## Anything else must be something with a standard DBI driver
+        else {
+
+          DBICONNTEST: {
+                eval {
+                    $testdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+                    $evalok = 1;
+                };
+            }
+        }
+
+        ## At this point, we have eval'd a connection
+
+        if (! $evalok) {
+
+            ## For Postgres, we get a little fancy and try to account for instances
+            ## where the bucardo user may not exist yet, by reconnecting and
+            ## creating said user if needed.
+            if ('postgres' eq $dbtype and $user eq 'bucardo' and $@ =~ /FATAL.*"bucardo"/) {
+                $user = 'postgres';
+                goto DBICONNTEST;
             }
 
-        } ## end redis
-
-        if ('sqlite' eq $vals->{dbtype}) {
-
-            my ($type,$dsn) = split /\n/ => $dbconn;
-
-            my $found = 0;
-            eval {
-                require DBD::SQLite;
-                $found = 1;
-            };
-            if (!$found) {
-                die "Cannot add unless the DBD::SQLite module is available\n";
-            }
-
-            my $testdbh;
-            $found = 0;
-            eval {
-                $testdbh = DBI->connect($dsn, '', '', {AutoCommit=>0,RaiseError=>1,PrintError=>0});
-                $found = 1;
-            };
-            if (! $found) {
-                if ($bcargs->{force}) {
-                    print "Connection test failed, but will add anyway.\nError was: $@\n\n";
-                }
-                else {
-                    die "SQLite connection test failed. You may force add it with the --force argument. Error was: $@\n\n";
-                }
+            if ($bcargs->{force}) {
+                print "Connection to $fullname failed, but will add anyway.\nError was: $@\n\n";
             }
             else {
-                $testdbh->disconnect();
+                die "Connection to $fullname failed. You may force add it with the --force argument. Error was: $@\n\n";
+            }
+        }
+        else {
+
+            ## If we connected twice to Postgres using a different user,
+            ## create the bucardo user now
+            if ('postgres' eq $dbtype and $realuser ne $user) {
+                if (eval { require Digest::MD5; 1 }) {
+                    ## We need a password. If one was not supplied, create one
+                    $evalok = 0;
+                    eval {
+                        my $newpass = $pass;
+                        if (! length $pass) {
+                            $newpass = generate_password();
+                        }
+                        my $encpass = Digest::MD5::md5_hex($newpass);
+                        $testdbh->do(qq{CREATE USER $realuser SUPERUSER ENCRYPTED PASSWORD '$encpass'});
+                        $testdbh->commit();
+                        my $extrauser = length $pass ? '' : " with password $newpass";
+                        warn "Created superuser '$realuser'$extrauser\n";
+                        $evalok = 1;
+                    };
+                    if (! $evalok) {
+                        warn "Unable to create superuser $realuser: $@\n";
+                        $bcargs->{force} or exit 1;
+                    }
+                }
             }
 
-        } ## end sqlite
+            ## Disconnect
+            $testdbh->disconnect() if $module =~ /DBD/;
+        }
 
     } ## end of TESTCONN
 
@@ -7621,9 +7505,10 @@ Optional information:
  dbgroup=name       (database group; created if it does not exist)
  addalltables       (automatically adds all tables in the database)
  addallsequences    (automatically adds all sequences in the database)
- ssp=#              (if server-side prepares are used, defaults to 1 (on) - postgres only)};
+ ssp=#              (if server-side prepares are used, defaults to 1 (on) - postgres only);
  dbservice=name     (the service name to use for Postgres databases)
  makedelta=onoff    (whether this database needs makedelta magic)
+};
     }
     if ('add_dbgroup' eq $name) {
         return q{Usage: add dbgroup <name> [database1 database2 ...]
@@ -9069,8 +8954,6 @@ sub confirm_commit {
 } ## end of confirm_commit
 
 
-
-
 sub add_db_to_group {
 
     ## Add a database to a group
@@ -9212,7 +9095,6 @@ sub create_herd {
     return;
 
 } ## end of create_herd
-
 
 
 __END__
