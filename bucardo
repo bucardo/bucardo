@@ -1486,13 +1486,11 @@ sub add_database {
         addallsequences          none                 0                skip
         server_side_prepares|ssp server_side_prepares TF               null
         service|dbservice        dbservice            0                null
-        sourcelimit              sourcelimit          numeric          null
-        targetlimit              targetlimit          numeric          null
         makedelta                makedelta            =on|off          null
     };
 
 
-    ## TODO: See if sourcelimie and targetlimie and makedelta still needed
+    ## TODO: See if makedelta still needed
     ## If so, add to wiki page: http://bucardo.org/wiki/Bucardo/add_database#Optional_arguments
 
     my ($dbcols,$cols,$phs,$vals,$extra)
@@ -2164,9 +2162,6 @@ sub list_databases {
         $maxdb   = length $info->{name} if length $info->{name} > $maxdb;
         $maxtype = length $info->{dbtype} if length $info->{dbtype} > $maxtype;
         $maxstat = length $info->{status} if length $info->{status} > $maxstat;
-        $maxlim1 = length $info->{sourcelimit} if length $info->{sourcelimit} > $maxlim1;
-        $maxlim2 = length $info->{targetlimit} if length $info->{targetlimit} > $maxlim2;
-        $showlim = 1 if $info->{sourcelimit} or $info->{targetlimit};
     }
 
     ## Do we show types?
@@ -2182,11 +2177,6 @@ sub list_databases {
             $maxdb, $info->{name},
             $showtypes ? $type : '',
             $maxstat, $info->{status};
-        if ($showlim) {
-            printf 'Limits: %-*s/%-*s  ',
-                $maxlim1, $info->{sourcelimit},
-                $maxlim2, $info->{targetlimit},
-        }
         my $showhost = length $info->{dbhost} ? " -h $info->{dbhost}" : '';
         my $dbtype = $info->{dbtype};
         if ($dbtype eq 'postgres') {
@@ -7617,22 +7607,23 @@ For more information, run: $progname help add <type>};
         return q{Usage: add db <name> <dbname=value> [optional information]
 Adds a database
 
+Required information
+dbname=name         (database name to connect to)
+
 Optional information:
- type=type of database (defaults to postgres. Others: drizzle,mongo,mysql,oracle,redis,sqlite)
- db=name            (database name to connect to)
- host=hostname      (defaults to none - which is Unix socket for some types)
- port=#             (defaults to type default, e.g. 5432 for postgres)
- user=username      (defaults to 'bucardo')
- pass=name          (avoid if possible and use .pgpass or equivalent instead)
+ dbtype=type of database (defaults to postgres. Others: drizzle,mongo,mysql,oracle,redis,sqlite)
+ dbuser=username    (defaults to 'bucardo')
+ dbpass=name        (avoid if possible; use .pgpass or equivalent instead)
+ dbport=#           (defaults to type default, e.g. 5432 for postgres)
+ dbhost=hostname    (defaults to none - which is Unix socket for some types)
+ dbconn=string      (extra connection parameters, e.g. "sslmode=require")
+ status=status      (active or inactive, defaults to 'active')
+ dbgroup=name       (database group; created if it does not exist)
  addalltables       (automatically adds all tables in the database)
  addallsequences    (automatically adds all sequences in the database)
- group=groupname    (database group to use - will be created if needed)
- conn=string        (extra connection parameters, e.g. "sslmode=require")
- status=status      (active or inactive, defaults to 'active')
- sourcelimit=#      (maximum concurrent reads from this database. Default is 0 or no limit)
- targetlimit=#      (maximum concurrent writes from this database. Default is 0 or no limit)
- makedelta=onoff    (whether this database needs makedelta magic)
  ssp=#              (if server-side prepares are used, defaults to 1 (on) - postgres only)};
+ dbservice=name     (the service name to use for Postgres databases)
+ makedelta=onoff    (whether this database needs makedelta magic)
     }
     if ('add_dbgroup' eq $name) {
         return q{Usage: add dbgroup <name> [database1 database2 ...]
@@ -9361,7 +9352,7 @@ after the type will look up all matching entries.
 
 Usage:  add <item_type> <item_name>
 
-Usage:  add database <dbname> dbname=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx sourcelimit=xxx targetlimit=xxx ssp=1/0
+Usage:  add database <dbname> dbname=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx ssp=1/0
 
 Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx herd=xxx
 
