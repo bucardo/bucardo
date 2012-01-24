@@ -1729,7 +1729,7 @@ sub add_database {
 
 sub remove_database {
 
-    ## Remove one or more entries from the bucardo.db table
+    ## Remove one or more databases. Updates the bucardo.db table
     ## Use the --force argument to clear out related tables and groups
     ## Arguments: one or more
     ## 1+ Name of a database
@@ -1748,8 +1748,7 @@ sub remove_database {
     ## Make sure all named databases exist
     for my $name (@nouns) {
         if (! exists $DB->{$name}) {
-            my $foo = Dumper $DB;
-            die qq{No such database: $name ($foo)\n};
+            die qq{No such database: $name\n};
         }
     }
 
@@ -1760,16 +1759,18 @@ sub remove_database {
     ## Loop through and attempt to delete each given database
     for my $name (@nouns) {
         ## Wrap in an eval so we can handle known exceptions
+        my $evalok = 0;
         eval {
             $sth->execute($name);
+            $evalok = 1;
         };
-        if ($@) {
+        if (! $evalok) {
             if ($bcargs->{force} and $@ =~ /"goat_db_fk"|"dbmap_db_fk"/) {
                 $QUIET or warn qq{Dropping all tables and dbgroups that reference database "$name"\n};
                 $dbh->rollback();
                 $dbh->do('DELETE FROM bucardo.goat WHERE db = ' . $dbh->quote($name));
                 $dbh->do('DELETE FROM bucardo.dbmap WHERE db = ' . $dbh->quote($name));
-                ## Try again
+                ## Try the same query again
                 eval {
                     $sth->execute($name);
                 };
@@ -1799,7 +1800,7 @@ sub remove_database {
 
 sub update_database {
 
-    ## Update one or more databases
+    ## Update one or more databases.
     ## This may modify the bucardo.db, bucardo.dbgroup, and bucardo.dbmap tables
     ## Arguments: two plus
     ## 1. Name of the database to update. Can be "all" and can have wildcards
@@ -1986,7 +1987,7 @@ sub update_database {
 
 sub list_databases {
 
-    ## Show information about all or some subset of the bucardo.db table
+    ## Show information about databases. Queries the bucardo.db table
     ## Arguments: zero or more
     ## 1+ Databases to view. Can be "all" and can have wildcards
     ## Returns: undef
