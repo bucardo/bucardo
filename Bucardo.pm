@@ -3537,6 +3537,8 @@ sub start_kid {
 
     ## Catch USR1 errors as a signal from the parent CTL process to exit right away
     $SIG{USR1} = sub {
+        ## Mostly so we do not send an email:
+        $self->{clean_exit} = 1;
         die "CTL request\n";
     };
 
