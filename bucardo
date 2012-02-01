@@ -213,6 +213,13 @@ help() unless $verb;
 ## Standardize the verb as lowercase, and grab the rest of the args as the "nouns"
 $verb = lc $verb;
 my @nouns = @ARGV;
+
+## Allow alternate underscore format
+if ($verb =~ /^(\w+)_(\w+)$/) {
+    $verb = $1;
+    unshift @nouns => $2;
+}
+
 ## Make a single string version, mostly for output in logs
 my $nouns = join ' ' => @nouns;
 ## The verb may have a helper, usually a number
