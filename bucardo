@@ -8310,7 +8310,7 @@ sub standardize_name {
 
     return 'sync'       if $name =~ /^s[yi]n[ck]/i;
 
-    return 'table'      if $name =~ /^tab/i;
+    return 'table'      if $name =~ /^tab/i or $name =~ /^tbale/i;
 
     return 'sequence'   if $name =~ /^seq/i;
 
