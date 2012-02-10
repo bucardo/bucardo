@@ -14,7 +14,6 @@
 SET client_min_messages = 'FATAL';
 CREATE USER bucardo SUPERUSER;
 CREATE DATABASE bucardo OWNER bucardo;
-ALTER DATABASE bucardo SET search_path = bucardo, public;
 
 \c bucardo bucardo
 
@@ -23,6 +22,7 @@ SET client_min_messages = 'FATAL';
 CREATE LANGUAGE plpgsql;
 CREATE LANGUAGE plperlu;
 CREATE SCHEMA bucardo;
+ALTER DATABASE bucardo SET search_path = bucardo, public;
 
 -- The above were allowed to fail, because there is no harm if the objects
 -- already existed. From this point forward however, we suffer no errors
