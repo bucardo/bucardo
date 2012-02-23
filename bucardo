@@ -3202,7 +3202,7 @@ sub add_table {
 
         for my $name (sort keys %{ $goatlist->{relations} }) {
             ## Is it already part of this herd?
-            if (exists $HERD->{goat}{$name}) {
+            if (exists $HERD->{$herdname}{goat}{$name}) {
                 push @oldnames => $name;
                 next;
             }
