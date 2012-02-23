@@ -1172,8 +1172,8 @@ sub start_controller {
     $self->{logprefix} = 'CTL';
 
     ## Extract some of the more common items into local vars
-    my ($syncname,$limitdbs,$kidsalive,$dbinfo, $synctype, $kicked,) = @$sync{qw(
-           name    limitdbs  kidsalive  dbs     synctype kick_on_startup)};
+    my ($syncname,$limitdbs,$kidsalive,$dbinfo, $kicked,) = @$sync{qw(
+           name    limitdbs  kidsalive  dbs     kick_on_startup)};
 
     ## Set our process name
     $0 = qq{Bucardo Controller.$self->{extraname} Sync "$syncname" for herd "$sync->{herd}" to dbs "$sync->{dbs}"};
@@ -5291,8 +5291,7 @@ sub validate_sync {
     $count = $sth->execute($s->{dbs});
     $s->{db} = $sth->fetchall_hashref('name');
 
-    ## We don't have synctypes anymore, but it is helpful to know if we are fullcopy
-    ## In this case, fullcopy means no target databases
+    ## Figure out what role each database will play in this sync
     my %role = ( source => 0, target => 0, fullcopy => 0);
 
     ## Establish a connection to each database used
@@ -5334,7 +5333,7 @@ sub validate_sync {
             $self->show_db_version_and_time($x->{dbh}, qq{DB "$dbname" });
         }
 
-        ## Help figure out the synctype
+        ## Help figure out source vs target later on
         $role{$d->{role}}++;
 
         ## We want to grab the first source we find and populate $sourcename and $srcdbh
@@ -5344,10 +5343,6 @@ sub validate_sync {
         }
 
     } ## end each database
-
-    ## If we found no target roles but have at least one fullcopy, mark the sync as fullcopy
-    $s->{synctype} = ($role{target} < 1 and $role{fullcopy} >= 1 and $role{source} == 1)
-        ? 'fullcopy' : 'delta';
 
     ## If we have more than one source, then everyone is a target
     ## Otherwise, only non-source databases are
@@ -6278,6 +6273,18 @@ sub fork_vac {
 
                 my $xdbh = $x->{dbh};
 
+                ## Safety check: if the bucardo schema is not there, we don't want to vacuum
+                if (! exists $x->{hasschema}) {
+                    $SQL = q{SELECT count(*) FROM pg_namespace WHERE nspname = 'bucardo'};
+                    $x->{hasschema} = $xdbh->selectall_arrayref($SQL)->[0][0];
+                    if (! $x->{hasschema} ) {
+                        $self->glog("Database $dbname has no schema named bucardo, so we cannot vacuum", LOG_WARN);
+                    }
+                }
+
+                ## No schema? We've already complained, so skip it silently
+                next if ! $x->{hasschema};
+
                 ## Async please
                 $self->glog(qq{Running bucardo_purge_delta on database "$dbname"}, LOG_VERBOSE);
                 $SQL = q{SELECT bucardo.bucardo_purge_delta('45 seconds')};
@@ -6286,12 +6293,15 @@ sub fork_vac {
 
             } ## end each source database
 
-            ## Kick each one off async
+            ## Finish each one up
             for my $dbname (sort keys %{ $self->{sdb}} ) {
 
                 $x = $self->{sdb}{$dbname};
 
+                ## As above, skip if not a source or no schema available
                 next if $x->{role} ne 'source';
+
+                next if ! $x->{hasschema};
 
                 my $xdbh = $x->{dbh};
 
