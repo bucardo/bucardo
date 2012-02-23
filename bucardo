@@ -4354,8 +4354,8 @@ sub get_goat_ids {
     ## Which tables we added to the goat table
     my %new;
 
-    ## Figure out which database to search in
-    my $bestdb = find_best_db_for_searching();
+    ## Figure out which database to search in, unless already given
+    my $bestdb = exists $dbcols->{db} ? $dbcols->{db} : find_best_db_for_searching();
 
     ## This check still makes sense: if no databases, there should be nothing in $GOAT!
     if (! defined $bestdb) {
@@ -4557,6 +4557,7 @@ sub add_items_to_goat_table {
         my @args = ($schema, $table, $reltype, $db);
         if (exists $info->{$name}{dbcols}) {
             for my $newcol (sort keys %{ $info->{$name}{dbcols} }) {
+                next if $newcol eq 'db';
                 $SQL =~ s/\)/,$newcol)/;
                 $SQL =~ s/\?,/?,?,/;
                 push @args => $info->{$name}{dbcols}{$newcol};
