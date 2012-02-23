@@ -1223,10 +1223,9 @@ if ($role{source} < 1) {
     die "Invalid database group: at least one database must have a role of 'source'!\n";
 }
 
-## If we have at least one target (or more than one source), we must have PKs on each table
-my $fullcopyonly = 1;
-if ($role{target} >= 1 or $role{source} > 1) { ## in other words, not just fullcopy
-    $fullcopyonly = 0;
+## Unless we are fullcopy, we must have PKs on each table
+my $is_fullcopy = $info->{synctype} eq 'fullcopy' ? 1 : 0;
+if (! $is_fullcopy) {
     for my $schema (sort keys %goat) {
         for my $table (sort keys %{$goat{$schema}}) {
             next if $goat{$schema}{$table}{reltype} ne 'table';
@@ -1373,7 +1372,7 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
     ## Unless we are strictly fullcopy, put plpgsql in place on all source dbs
     ## We also will need a bucardo schema
     my $role = $db{$dbname}{role};
-    if ($role eq 'source' and ! $fullcopyonly) {
+    if ($role eq 'source' and ! $is_fullcopy) {
         ## Perform the check for plpgsql
         $SQL = q{SELECT count(*) FROM pg_language WHERE lanname = 'plpgsql'};
         my $count = $dbh->selectall_arrayref($SQL)->[0][0];
@@ -2092,7 +2091,7 @@ SELECT 'Fixme'::TEXT;
             next if $role ne 'source';
 
             ## If this is a fullcopy only sync, also don't need to go any further
-            next if $fullcopyonly;
+            next if $is_fullcopy;
 
             ## This is a source database and we need to track changes.
             ## First step: a way to add things to the bucardo_delta table
