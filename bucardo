@@ -455,7 +455,7 @@ sub get_config {
 
     my $name = shift;
 
-    $SQL = 'SELECT value FROM bucardo.bucardo_config WHERE LOWER(setting) = ?';
+    $SQL = 'SELECT setting FROM bucardo.bucardo_config WHERE LOWER(name) = ?';
     $sth = $dbh->prepare_cached($SQL);
     $count = $sth->execute(lc $name);
     if ($count < 1) {
@@ -3811,6 +3811,7 @@ sub add_sync {
     ## Inputs and aliases, database column name, flags, default
     my $validcols = qq{
         name                     name                 0                $item_name
+        synctype|type            synctype             0                null
         herd                     herd                 0                null
         dbs                      dbs                  0                null
         stayalive                stayalive            TF               null
@@ -3836,7 +3837,8 @@ sub add_sync {
     };
 
     ## Fullcopy syncs get some of their defaults overriden
-    ## Because who wants ping on a fullcopy sync?
+    ## The controllers and kids never start automatically,
+    ## and ping is never on
 
     my $morph = [
         {
@@ -6433,7 +6435,7 @@ sub config_exists {
 
     my $name = shift;
 
-    my $SQL = 'SELECT 1 FROM bucardo.bucardo_config WHERE setting = ?';
+    my $SQL = 'SELECT 1 FROM bucardo.bucardo_config WHERE name = ?';
     my $sth = $dbh->prepare_cached($SQL);
     my $count = $sth->execute($name);
     $sth->finish();
@@ -6919,7 +6921,7 @@ sub upgrade {
 
     my @row_values = (
 
-        ['bucardo_config','about',q{setting = 'log_showtime'}, 1,
+        ['bucardo_config','about',q{name = 'log_showtime'}, 1,
          'Show timestamp in the log output?  0=off  1=seconds since epoch  2=scalar gmtime  3=scalar localtime'],
     );
 
@@ -7220,15 +7222,15 @@ sub upgrade {
     ## Drop any old config items
     for my $name (@old_configs) {
         next if ! config_exists($name);
-        clog "Removed old bucardo_config setting: $name";
-        upgrade_and_log(qq{DELETE FROM bucardo.bucardo_config WHERE setting = '$name'});
+        clog "Removed old bucardo_config name: $name";
+        upgrade_and_log(qq{DELETE FROM bucardo.bucardo_config WHERE name = '$name'});
         $changes++;
     }
 
     ## Check for any new config items
-    $SQL = 'SELECT value FROM bucardo.bucardo_config WHERE lower(setting) = ?';
+    $SQL = 'SELECT setting FROM bucardo.bucardo_config WHERE lower(name) = ?';
     my $cfgsth = $dbh->prepare($SQL);
-    $SQL = 'INSERT INTO bucardo.bucardo_config(setting,value,about) VALUES (?,?,?)';
+    $SQL = 'INSERT INTO bucardo.bucardo_config(name,setting,about) VALUES (?,?,?)';
     my $newcfg = $dbh->prepare($SQL);
     my %config;
     my $inside = 0;
@@ -7245,14 +7247,14 @@ sub upgrade {
             next;
         }
         ## Scoop
-        my ($setting,$value,$about) = split /\|/ => $_;
-        $config{$setting} = [$value,$about];
-        $count = $cfgsth->execute($setting);
+        my ($name,$setting,$about) = split /\|/ => $_;
+        $config{$name} = [$setting,$about];
+        $count = $cfgsth->execute($name);
         $cfgsth->finish();
         if ($count eq '0E0') {
-            clog "Added new bucardo_config setting: $setting";
+            clog "Added new bucardo_config name: $name";
             $changes++;
-            $newcfg->execute($setting,$value,$about);
+            $newcfg->execute($name,$setting,$about);
         }
     }
     close $fh or die qq{Could not close file "$file": $!\n};
@@ -7399,7 +7401,7 @@ sub upgrade {
     else {
         my $curval = $cfgsth->fetchall_arrayref()->[0][0];
         if ($curval ne $schema_version) {
-            $SQL = 'UPDATE bucardo.bucardo_config SET value = ? WHERE setting = ?';
+            $SQL = 'UPDATE bucardo.bucardo_config SET setting = ? WHERE name = ?';
             my $updatecfg = $dbh->prepare($SQL);
             $updatecfg->execute($schema_version, 'bucardo_current_version');
             clog "Set bucardo_config.bucardo_current_version to $schema_version";
@@ -7561,9 +7563,9 @@ Use "add table all" to add in all tables};
     if ('config' eq $name) {
         return q{Usage: config show [all | name]
 Usage: config set foo=bar [foo2=bar2]
-Displays or sets settings from the bucardo_config table.
-Using 'show' will display all settings or a subset based on the given name.
-Using 'set' will change one or more settings.};
+Displays or sets items from the bucardo_config table.
+Using 'show' will display all items or a subset based on the given name.
+Using 'set' will change one or more items.};
     }
     if ('inspect' eq $name) {
         return q{Usage: inspect <type> <name>
@@ -7861,7 +7863,7 @@ sub config {
         exit 1;
     }
 
-    $SQL = 'UPDATE bucardo.bucardo_config SET value = ? WHERE setting = ?';
+    $SQL = 'UPDATE bucardo.bucardo_config SET setting = ? WHERE name = ?';
     $sth = $dbh->prepare($SQL);
 
     for my $noun (@nouns) {
@@ -8233,7 +8235,7 @@ sub install {
     $dbh = DBI->connect($BDSN, 'bucardo', '', {AutoCommit=>0,RaiseError=>1,PrintError=>0});
     $dbh->do('SET search_path = bucardo');
 
-    $SQL = 'UPDATE bucardo.bucardo_config SET value = ? WHERE setting = ?';
+    $SQL = 'UPDATE bucardo.bucardo_config SET setting = ? WHERE name = ?';
     $sth = $dbh->prepare($SQL);
     $confvar{piddir} = $piddir;
     for my $key (sort keys %confvar) {
@@ -9294,7 +9296,7 @@ information is loaded.
 
 Usage: ./bucardo show <all|setting1> [setting2..]
 
-Shows the current values in the bucardo_config table. Use the keyword 'all' to see all the settings, or 
+Shows the current settings in the bucardo_config table. Use the keyword 'all' to see all the settings, or 
 specify one or more search terms.
 
 =item B<set>

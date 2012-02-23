@@ -646,11 +646,13 @@ sub start_mcp {
     ## Let any listeners know we have gotten this far
     $self->db_notify($masterdbh, 'started', 1);
 
-    ## Kick all syncs that may have sent a notice while we were down.
+    ## Because a sync may have gotten a notice while we were down,
+    ## we auto-kick all eligible syncs
     for my $syncname (keys %{ $self->{sync} }) {
+
         my $s = $self->{sync}{$syncname};
 
-        ## Start ina non-kicked mode
+        ## Default to starting in a non-kicked mode
         $s->{kick_on_startup} = 0;
 
         ## Skip inactive syncs
@@ -4602,26 +4604,26 @@ sub reload_config_database {
         DEBUG   => 4,
     );
 
-    $SQL = 'SELECT setting,value,about,type,name FROM bucardo_config';
+    $SQL = 'SELECT name,setting,about,type,name FROM bucardo_config';
     $sth = $self->{masterdbh}->prepare($SQL);
     $sth->execute();
     for my $row (@{$sth->fetchall_arrayref({})}) {
         ## Things from an rc file can override the value in the db
-        my $value = exists $self->{$row->{setting}} ? $self->{$row->{setting}} : $row->{value};
-        if ($row->{setting} eq 'log_level') {
-            my $newvalue = $log_level_number{uc $value};
+        my $setting = exists $self->{$row->{name}} ? $self->{$row->{name}} : $row->{setting};
+        if ($row->{name} eq 'log_level') {
+            my $newvalue = $log_level_number{uc $setting};
             if (! defined $newvalue) {
                 die "Invalid log_level!\n";
             }
             $config{log_level_number} = $newvalue;
         }
         if (defined $row->{type}) {
-            $config{$row->{type}}{$row->{name}}{$row->{setting}} = $value;
+            $config{$row->{type}}{$row->{name}}{$row->{setting}} = $setting;
             $config_about{$row->{type}}{$row->{name}}{$row->{setting}} = $row->{about};
         }
         else {
-            $config{$row->{setting}} = $value;
-            $config_about{$row->{setting}} = $row->{about};
+            $config{$row->{name}} = $setting;
+            $config_about{$row->{name}} = $row->{about};
         }
     }
     $self->{masterdbh}->commit();

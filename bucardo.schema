@@ -48,18 +48,18 @@ $bc$;
 -- Main bucardo configuration information
 --
 CREATE TABLE bucardo.bucardo_config (
-  setting  TEXT        NOT NULL, -- short unique name, maps to %config inside Bucardo
-  value    TEXT        NOT NULL,
+  name     TEXT        NOT NULL, -- short unique name, maps to %config inside Bucardo
+  setting  TEXT        NOT NULL,
   about    TEXT            NULL, -- long description
   type     TEXT            NULL, -- sync or goat
-  name     TEXT            NULL, -- which specific sync or goat
+  item     TEXT            NULL, -- which specific sync or goat
   cdate    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE bucardo.bucardo_config IS $$Contains configuration variables for a specific Bucardo instance$$;
 
-CREATE UNIQUE INDEX bucardo_config_unique ON bucardo.bucardo_config(LOWER(setting)) WHERE name IS NULL;
+CREATE UNIQUE INDEX bucardo_config_unique ON bucardo.bucardo_config(LOWER(name)) WHERE item IS NULL;
 
-CREATE UNIQUE INDEX bucardo_config_unique_name ON bucardo.bucardo_config(setting,name,type) WHERE name IS NOT NULL;
+CREATE UNIQUE INDEX bucardo_config_unique_name ON bucardo.bucardo_config(name,item,type) WHERE item IS NOT NULL;
 
 ALTER TABLE bucardo.bucardo_config ADD CONSTRAINT valid_config_type CHECK (type IN ('sync','goat'));
 
@@ -71,16 +71,16 @@ BEGIN
 
   NEW.setting = LOWER(NEW.setting);
 
-  IF (NEW.type IS NOT NULL and NEW.name IS NULL) THEN
+  IF (NEW.type IS NOT NULL and NEW.item IS NULL) THEN
     RAISE EXCEPTION 'Must provide a specific %', NEW.type;
   END IF;
 
-  IF (NEW.name IS NOT NULL and NEW.type IS NULL) THEN
+  IF (NEW.item IS NOT NULL and NEW.type IS NULL) THEN
     RAISE EXCEPTION 'Must provide a type if giving a name';
   END IF;
 
-  IF (NEW.setting = 'sync' OR NEW.setting = 'goat') THEN
-    RAISE EXCEPTION 'Invalid setting name';
+  IF (NEW.name = 'sync' OR NEW.name = 'goat') THEN
+    RAISE EXCEPTION 'Invalid configuration name';
   END IF;
 
   RETURN NEW;
@@ -95,7 +95,7 @@ CREATE TRIGGER check_bucardo_config
   FOR EACH ROW EXECUTE PROCEDURE bucardo.check_bucardo_config();
 
 -- Sleep times (all in seconds)
-COPY bucardo.bucardo_config(setting,value,about)
+COPY bucardo.bucardo_config("name",setting,about)
 FROM STDIN
 WITH DELIMITER '|';
 mcp_loop_sleep|0.5|How long does the main MCP daemon sleep between loops?
@@ -113,7 +113,7 @@ vac_run|30|How often does the VAC process run?
 
 
 -- Various timeouts (times are in seconds)
-COPY bucardo.bucardo_config(setting,value,about)
+COPY bucardo.bucardo_config("name",setting,about)
 FROM STDIN
 WITH DELIMITER '|';
 mcp_pingtime|60|How often do we ping check the MCP?
@@ -127,7 +127,7 @@ tcp_keepalives_count|0|How many probes to send. 0 indicates sticking with system
 
 
 -- Logging
-COPY bucardo.bucardo_config(setting,value,about)
+COPY bucardo.bucardo_config(name,setting,about)
 FROM STDIN
 WITH DELIMITER '|';
 log_microsecond|0|Show microsecond output in the timestamps?
@@ -141,7 +141,7 @@ warning_file|bucardo.warning.log|File containing all log lines starting with "Wa
 \.
 
 -- Versioning
-COPY bucardo.bucardo_config(setting,value,about)
+COPY bucardo.bucardo_config(name,setting,about)
 FROM STDIN
 WITH DELIMITER '|';
 bucardo_version|4.99.4|Bucardo version this schema was created with
@@ -149,7 +149,7 @@ bucardo_current_version|4.99.4|Current version of Bucardo
 \.
 
 -- Other settings:
-COPY bucardo.bucardo_config(setting,value,about)
+COPY bucardo.bucardo_config(name,setting,about)
 FROM STDIN
 WITH DELIMITER '|';
 bucardo_vac|1|Do we want the automatic VAC daemon to run?
@@ -170,7 +170,7 @@ syslog_facility|LOG_LOCAL1|Which syslog facility level to use
 \.
 
 -- Unused at the moment:
-COPY bucardo.bucardo_config(setting,value,about)
+COPY bucardo.bucardo_config(name,setting,about)
 FROM STDIN
 WITH DELIMITER '|';
 autosync_ddl|newcol|Which DDL changing conditions do we try to remedy automatically?
@@ -389,6 +389,7 @@ CREATE TRIGGER herdcheck
 CREATE TABLE bucardo.sync (
   name               TEXT        NOT NULL UNIQUE,
                        CONSTRAINT sync_name_pk PRIMARY KEY (name),
+  synctype           TEXT        NOT NULL DEFAULT 'delta',
   herd               TEXT            NULL,
                        CONSTRAINT sync_herd_fk FOREIGN KEY (herd) REFERENCES bucardo.herd(name) ON UPDATE CASCADE ON DELETE RESTRICT,
   dbs                TEXT            NULL,
@@ -2353,7 +2354,7 @@ SELECT 'Fixme'::TEXT;
 
 ## Gather information from bucardo_config
 my $config;
-$SQL = 'SELECT setting,value FROM bucardo_config';
+$SQL = 'SELECT name,setting FROM bucardo_config';
 $rv = spi_exec_query($SQL);
 for my $row (@{$rv->{rows}}) {
     $config->{$row->{setting}} = $row->{value};
@@ -2568,9 +2569,9 @@ CREATE TABLE bucardo.upgrade_log (
 COMMENT ON TABLE bucardo.upgrade_log IS $$Historical record of upgrade actions$$;
 
 INSERT INTO bucardo.upgrade_log(action,summary,version)
-  SELECT 'Initial install', '', value
+  SELECT 'Initial install', '', setting
   FROM bucardo.bucardo_config
-  WHERE setting = 'bucardo_version';
+  WHERE name = 'bucardo_version';
 
 -- Allow users to insert messages in the Bucardo logs
 
