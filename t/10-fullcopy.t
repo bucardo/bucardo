@@ -15,7 +15,6 @@ use BucardoTesting;
 my $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object failed\n";
 $location = 'fullcopy';
 
-my $numtabletypes = keys %tabletype;
 plan tests => 339;
 
 pass("*** Beginning 'fullcopy' tests");
@@ -42,8 +41,6 @@ $dbhD = $bct->repopulate_cluster('D');
 ## Create a bucardo database, and install Bucardo into it
 $dbhX = $bct->setup_bucardo('A');
 
-## Tell Bucardo about these databases
-
 ## Teach Bucardo about four databases
 for my $name (qw/ A B C D /) {
     $t = "Adding database from cluster $name works";
@@ -53,12 +50,12 @@ for my $name (qw/ A B C D /) {
     like ($res, qr/Added database "$name"/, $t);
 }
 
-## Put all primary key tables into a herd
+## Put all tables (including non-PK) into a herd
 $t = q{Adding all PK tables on the master works};
 $command =
-"bucardo add tables all db=A herd=pk pkonly";
+"bucardo add tables '*bucardo_test*' db=A herd=all";
 $res = $bct->ctl($command);
-like ($res, qr/Creating herd: pk.*New tables added: \d/s, $t);
+like ($res, qr/Created the herd named "all".*are now part of/s, $t);
 
 ## Create a new database group going from A and B to C and D
 $t = q{Created a new database group};
@@ -70,15 +67,16 @@ like ($res, qr/Created database group "pg"/, $t);
 ## Create a new sync
 $t = q{Created a new sync};
 $command =
-"bucardo add sync fctest herd=pk dbs=pg ping=false";
+"bucardo add sync fctest herd=all dbs=pg type=fullcopy";
 $res = $bct->ctl($command);
 like ($res, qr/Added sync "fctest"/, $t);
 
-## Start up Bucardo with this new sync
+## Start up Bucardo with this new sync.
+## No need to wait for the sync, as fullcopy syncs don't auto-run
 $bct->restart_bucardo($dbhX);
-## Immediate kicks to catch any startup sync effects
-$bct->ctl('bucardo kick fctest 0');
-$bct->ctl('bucardo kick fctest 0');
+
+
+
 
 ## Get the statement handles ready for each table type
 for my $table (sort keys %tabletype) {
@@ -351,7 +349,7 @@ like ($res, qr/Created database group "pg2"/, $t);
 ## Create a new sync
 $t = q{Created a new sync};
 $command =
-"bucardo add sync fctest2 herd=pk dbs=pg2 ping=false";
+"bucardo add sync fctest2 herd=all dbs=pg2 ping=false";
 $res = $bct->ctl($command);
 like ($res, qr/Added sync "fctest2"/, $t);
 
@@ -419,7 +417,7 @@ like ($res, qr/Created database group "pg3"/, $t);
 ## Create a new sync
 $t = q{Created a new sync};
 $command =
-"bucardo add sync fctest3 herd=pk dbs=pg3 ping=false";
+"bucardo add sync fctest3 herd=all dbs=pg3 ping=false";
 $res = $bct->ctl($command);
 like ($res, qr/Added sync "fctest3"/, $t);
 

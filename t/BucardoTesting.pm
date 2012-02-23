@@ -909,7 +909,7 @@ sub ctl {
 sub restart_bucardo {
 
     ## Start Bucardo, but stop first if it is already running
-    ## Arguments:
+    ## Arguments: one, two, or three
     ## 1. database handle to the bucardo_control_test db
     ## 2. The notice we wait for, defaults to: bucardo_started
     ## 3. The message to give to the "pass" function, defaults to: Bucardo was started
@@ -1020,7 +1020,7 @@ sub setup_bucardo {
     $dbh = $self->connect_database($clustername, 'bucardo');
 
     ## Make some adjustments
-    $sth = $dbh->prepare('UPDATE bucardo.bucardo_config SET value = $2 WHERE setting = $1');
+    $sth = $dbh->prepare('UPDATE bucardo.bucardo_config SET setting = $2 WHERE name = $1');
     $count = $sth->execute('piddir' => $PIDDIR);
     $count = $sth->execute('reason_file' => "$PIDDIR/reason");
     $count = $sth->execute('sendmail_file' => 'debug.sendmail.txt');
@@ -1399,7 +1399,7 @@ sub add_bucardo_schema_to_database {
     $dbh->commit();
 
     ## Make some adjustments
-    $sth = $dbh->prepare('UPDATE bucardo.bucardo_config SET value = $2 WHERE setting = $1');
+    $sth = $dbh->prepare('UPDATE bucardo.bucardo_config SET setting = $2 WHERE name = $1');
     $count = $sth->execute('piddir' => $PIDDIR);
     $count = $sth->execute('reason_file' => "$PIDDIR/reason");
     $count = $sth->execute('audit_pid' => 1);

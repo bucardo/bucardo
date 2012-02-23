@@ -46,19 +46,19 @@ like ($res, qr/must supply a database name/, $t);
 
 $t = q{Add database fails for an invalid port};
 $res = $bct->ctl('bucardo add database foo dbname=bar dbport=1');
-like ($res, qr/Connection test failed.*could not connect to server/s, $t);
+like ($res, qr/Connection .+ failed.*could not connect to server/s, $t);
 
 $t = q{Add database fails for non-existent host};
 $res = $bct->ctl("bucardo add database bucardo_test dbname=bucardo_test user=$dbuserA port=$dbportA host=badbucardohost");
-like ($res, qr/Connection test failed.*could not translate host name/s, $t);
+like ($res, qr/Connection .+ failed.*could not translate host name/s, $t);
 
 $t = q{Add database fails for non-existent database};
 $res = $bct->ctl("bucardo add database foo dbname=bar user=$dbuserA port=$dbportA host=$dbhostA");
-like ($res, qr/Connection test failed.*database "bar" does not exist/s, $t);
+like ($res, qr/Connection .+ failed.*database "bar" does not exist/s, $t);
 
 $t = q{Add database fails for non-existent user};
 $res = $bct->ctl("bucardo add database bucardo_test dbname=bucardo_test user=nobob port=$dbportA host=$dbhostA");
-like ($res, qr/Connection test failed.* "nobob" does not exist/s, $t);
+like ($res, qr/Connection .+ failed.* "nobob" does not exist/s, $t);
 
 $t = q{Add database works for non-existent cluster with --force flag};
 $res = $bct->ctl('bucardo add database foo dbname=bar --force');
