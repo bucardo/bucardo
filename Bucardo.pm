@@ -4834,7 +4834,7 @@ sub show_db_version_and_time {
 sub get_dbs {
 
     ## Fetch a hashref of everything in the db table
-    ## Used by start_controller(), connect_database()
+    ## Used by connect_database()
     ## Calls commit on the masterdbh
     ## Arguments: none
     ## Returns: hashref
@@ -6132,6 +6132,7 @@ sub fork_vac {
         $x = $self->{sdb}{$dbname};
         next if $x->{dbtype} =~ /flat|mongo|redis/o;
         $x->{dbh}->{InactiveDestroy} = 1;
+        $x->{dbh} = 0;
     }
 
     ## Prefix all log lines with this TLA (was MCP)
