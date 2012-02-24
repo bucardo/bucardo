@@ -517,7 +517,7 @@ sub start_mcp {
 
     ## Loop through and remove each file found, making a note in the log
     for my $pidfile (sort @pidfiles) {
-        my $fullfile = File::Spec->catfile( $self->{debugdir} => $pidfile );
+        my $fullfile = File::Spec->catfile( $piddir => $pidfile );
         ## Do not erase our own file
         next if $fullfile eq $self->{pidfile};
         ## Everything else can get removed
@@ -6806,7 +6806,8 @@ sub signal_pid_files {
     my $signalled = 0;
 
     ## Open the directory that contains our PID files
-    opendir my $dh, $config{piddir} or die qq{Could not opendir "$config{piddir}": $!\n};
+    my $piddir = $config{piddir};
+    opendir my $dh, $piddir or die qq{Could not opendir "$piddir": $!\n};
     my ($name, $fh);
     while (defined ($name = readdir($dh))) {
 
@@ -6816,7 +6817,7 @@ sub signal_pid_files {
         $self->glog(qq{Attempting to signal PID from file "$name"}, LOG_TERSE);
 
         ## File must be readable
-        my $cfile = File::Spec->catfile( $config{piddir} => $name );
+        my $cfile = File::Spec->catfile( $piddir => $name );
         if (! open $fh, '<', $cfile) {
             $self->glog(qq{Could not open $cfile: $!}, LOG_WARN);
             next;
@@ -6843,7 +6844,7 @@ sub signal_pid_files {
 
     } ## end each file in the pid directory
 
-    closedir $dh or warn qq{Warning! Could not closedir "$config{piddir}": $!\n};
+    closedir $dh or warn qq{Warning! Could not closedir "$piddir": $!\n};
 
     return $signalled;
 
