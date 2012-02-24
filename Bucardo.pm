@@ -648,6 +648,9 @@ sub start_mcp {
 
     ## Because a sync may have gotten a notice while we were down,
     ## we auto-kick all eligible syncs
+    ## We also need to see if we can prevent the VAC daemon from running,
+    ## if there are no databases with bucardo schemas
+    $self->{needsvac} = 0;
     for my $syncname (keys %{ $self->{sync} }) {
 
         my $s = $self->{sync}{$syncname};
@@ -660,6 +663,16 @@ sub start_mcp {
 
         ## Skip fullcopy syncs
         next if $s->{synctype} eq 'fullcopy';
+
+        ## Mark all databases (used by this sync) as needing a vacuum if they meet the criteria
+        for my $db (values %{ $s->{db} }) {
+            if ($db->{status} eq 'active'
+                and $db->{dbtype} eq 'postgres'
+                and $db->{role} eq 'source') {
+                $db->{needsvac}++;
+                $self->{needsvac} = 1;
+            }
+        }
 
         ## Skip if ping is false
         next if ! $s->{ping};
@@ -725,7 +738,9 @@ sub mcp_main {
         }
 
         ## Startup the VAC daemon as needed
-        if ($config{bucardo_vac}) {
+        ## May be off via user configuration, or because of no valid databases
+        if ($config{bucardo_vac} and $self->{needsvac}) {
+
             ## Check on it occasionally (different than the running time)
             if (time() - $lastvaccheck >= $config{mcp_vactime}) {
 
@@ -6208,8 +6223,10 @@ sub fork_vac {
 
         $x = $self->{sdb}{$dbname};
 
-        ## Source only, of course: nobody else has delta and track tables
-        next if $x->{role} ne 'source';
+        ## We looped through all the syncs earlier to determine which databases
+        ## really need to be vacuumed. The criteria:
+        ## not a fullcopy sync, dbtype is postgres, role is source
+        next if ! $x->{needsvac};
 
         ## Overwrites the MCP database handles
         ($x->{backend}, $x->{dbh}) = $self->connect_database($dbname);
@@ -6275,7 +6292,7 @@ sub fork_vac {
 
                 $x = $self->{sdb}{$dbname};
 
-                next if $x->{role} ne 'source';
+                next if ! $x->{needsvac};
 
                 my $xdbh = $x->{dbh};
 
@@ -6319,7 +6336,7 @@ sub fork_vac {
                 $x = $self->{sdb}{$dbname};
 
                 ## As above, skip if not a source or no schema available
-                next if $x->{role} ne 'source';
+                next if ! $x->{needsvac};
 
                 next if ! $x->{hasschema};
 
