@@ -726,7 +726,6 @@ sub mcp_main {
 
         ## Startup the VAC daemon as needed
         if ($config{bucardo_vac}) {
-
             ## Check on it occasionally (different than the running time)
             if (time() - $lastvaccheck >= $config{mcp_vactime}) {
 
@@ -734,6 +733,9 @@ sub mcp_main {
                 my $pidfile = "$config{piddir}/bucardo.vac.pid";
                 if (! -e $pidfile) {
                     $self->fork_vac();
+                }
+                else {
+                    $self->glog("No vac, because $pidfile exists!");
                 }
 
                 $lastvaccheck = time();
@@ -6171,7 +6173,7 @@ sub fork_vac {
         my $line = (caller)[2];
 
         ## Don't issue a warning if this was simply a MCP request
-        my $warn = $diemsg =~ /MCP request/ ? '' : 'Warning! ';
+        my $warn = $diemsg =~ /MCP request|not needed/ ? '' : 'Warning! ';
         $self->glog(qq{${warn}VAC was killed at line $line: $diemsg}, LOG_WARN);
 
         ## Not a whole lot of cleanup to do on this one: just shut database connections and leave
@@ -6265,6 +6267,9 @@ sub fork_vac {
 
             $lastvacrun = time();
 
+            ## If there are no valid backends, we want to stop running entirely
+            my $valid_backends = 0;
+
             ## Kick each one off async
             for my $dbname (sort keys %{ $self->{sdb}} ) {
 
@@ -6279,12 +6284,14 @@ sub fork_vac {
                     $SQL = q{SELECT count(*) FROM pg_namespace WHERE nspname = 'bucardo'};
                     $x->{hasschema} = $xdbh->selectall_arrayref($SQL)->[0][0];
                     if (! $x->{hasschema} ) {
-                        $self->glog("Database $dbname has no schema named bucardo, so we cannot vacuum", LOG_WARN);
+                        $self->glog("Warning! Cannot vacuum db $dbname unless we have a bucardo schema", LOG_WARN);
                     }
                 }
 
                 ## No schema? We've already complained, so skip it silently
                 next if ! $x->{hasschema};
+
+                $valid_backends++;
 
                 ## Async please
                 $self->glog(qq{Running bucardo_purge_delta on database "$dbname"}, LOG_VERBOSE);
@@ -6293,6 +6300,18 @@ sub fork_vac {
                 $sth{"vac_$dbname"}->execute();
 
             } ## end each source database
+
+            ## If we found no backends, we can leave right away, and not run again
+            if (! $valid_backends) {
+
+                $self->glog("Warning! No valid backends, so disabling the VAC daemon", LOG_WARN);
+
+                $config{bucardo_vac} = 0;
+
+                ## Caught by handler above
+                die "Not needed";
+
+            }
 
             ## Finish each one up
             for my $dbname (sort keys %{ $self->{sdb}} ) {
@@ -6533,7 +6552,12 @@ sub cleanup_mcp {
         next if $pidfile eq 'bucardo.mcp.pid'; ## That's us!
         my $pfile = File::Spec->catfile( $piddir => $pidfile );
         if (-e $pfile) {
-            $self->kill_bucardo_pidfile($pfile);
+            $self->glog("Trying to kill stale PID file $pidfile", LOG_DEBUG);
+            my $result = $self->kill_bucardo_pidfile($pfile);
+            if ($result == -4) { ## kill 0 indicates that PID is no more
+                $self->glog("PID from $pidfile is gone, removing file", LOG_NORMAL);
+                unlink $pfile;
+            }
         }
     }
 
