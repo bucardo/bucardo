@@ -2781,8 +2781,8 @@ sub start_kid {
             $x->{dbh}->rollback();
 
             if ($x->{dbtype} eq 'postgres') {
-                $x->{dbh}->do('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ WRITE');
-                $self->glog(qq{Set db "$dbname" to repeatable read read write}, LOG_DEBUG);
+                $x->{dbh}->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE');
+                $self->glog(qq{Set db "$dbname" to serializable read write}, LOG_DEBUG);
             }
 
             if ($x->{dbtype} eq 'mysql') {
