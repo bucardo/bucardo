@@ -4276,7 +4276,6 @@ sub list_syncs {
     }
 
     ## Now print them out in alphabetic order
-    ## TODO: Have a CSV like output
     for my $name (sort keys %$syncs) {
         my $s = $syncs->{$name};
 
@@ -4284,11 +4283,12 @@ sub list_syncs {
         my $maxdbline = 50;
 
         ## Show basic information
-        printf "Sync: %-*s  Herd: %-*s %s[%s]\n",
+        printf "Sync: %-*s  Herd: %-*s %s[%s]%s\n",
             $maxname, $name,
             $maxherd, $s->{herd}{name},
             $maxdbs > $maxdbline ? '' : "$s->{d}  ",
-            ucfirst $s->{status};
+            ucfirst $s->{status},
+            $s->{synctype} eq 'fullcopy' ? ' (fullcopy)' : '';
 
         ## Print the second line if needed
         if ($maxdbs > $maxdbline) {
