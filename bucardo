@@ -7849,7 +7849,7 @@ sub config {
     $SQL = 'SELECT * FROM bucardo.bucardo_config';
     $sth = $dbh->prepare($SQL);
     $sth->execute();
-    my $config = $sth->fetchall_hashref('setting');
+    my $config = $sth->fetchall_hashref('name');
     if ($verb eq 'show') {
         my $all = $nouns[0] =~ /\ball\b/i ? 1 : 0;
         my $maxsize = 3;
