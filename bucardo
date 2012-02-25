@@ -3811,7 +3811,6 @@ sub add_sync {
     ## Inputs and aliases, database column name, flags, default
     my $validcols = qq{
         name                     name                 0                $item_name
-        synctype|type            synctype             0                null
         herd                     herd                 0                null
         dbs                      dbs                  0                null
         stayalive                stayalive            TF               null
@@ -3947,6 +3946,8 @@ sub add_sync {
     }
 
     ## Can be a database group, or a list of databases
+    ## We want to keep track of how many of each role we have
+    my %rolecount;
     if ($dbcols->{dbs} =~ /,/) {
         my @dbs = split /\s*,\s*/ => $dbcols->{dbs};
         my %db;
@@ -3968,6 +3969,7 @@ sub add_sync {
                 die "Invalid database type: must be source, target, or fullcopy (not $type)\n";
             }
             $db{$db} = $type;
+            $rolecount{$type}++;
         }
         ## Do any existing groups match this list exactly?
         my $newlist = join ',' => map { "$_=".$db{$_} } sort keys %db;
@@ -4023,10 +4025,31 @@ sub add_sync {
     } ## end of multiple databases specified
     else {
         my $dbg = $dbcols->{dbs};
-        if (! exists $global{dbgroup}{$dbg}) {
+        if (! exists $DBGROUP->{$dbg}) {
             warn "No such database group: $dbg\n";
             warn "To list all database groups, use: list dbgroups\n";
             exit 1;
+        }
+        for my $db (values %{ $DBGROUP->{$dbg}{db} }) {
+            $rolecount{$db->{role}}++;
+        }
+    }
+
+    ## If this is a pure fullcopy sync, we want to turn stayalive and kidsalive off
+    if ($rolecount{'source'} == 1
+            and $rolecount{'fullcopy'}
+                and ! $rolecount{'target'}) {
+        if ($cols !~ /stayalive/) {
+            $vals->{stayalive} = 0;
+            $phs .= ',?';
+            my @cols = split /,/ => $cols;
+            $cols = join ',' => sort @cols, 'stayalive';
+        }
+        if ($cols !~ /kidsalive/) {
+            $vals->{kidsalive} = 0;
+            $phs .= ',?';
+            my @cols = split /,/ => $cols;
+            $cols = join ',' => sort @cols, 'kidsalive';
         }
     }
 
@@ -4283,12 +4306,11 @@ sub list_syncs {
         my $maxdbline = 50;
 
         ## Show basic information
-        printf "Sync: %-*s  Herd: %-*s %s[%s]%s\n",
+        printf "Sync: %-*s  Herd: %-*s %s[%s]\n",
             $maxname, $name,
             $maxherd, $s->{herd}{name},
             $maxdbs > $maxdbline ? '' : "$s->{d}  ",
-            ucfirst $s->{status},
-            $s->{synctype} eq 'fullcopy' ? ' (fullcopy)' : '';
+            ucfirst $s->{status};
 
         ## Print the second line if needed
         if ($maxdbs > $maxdbline) {

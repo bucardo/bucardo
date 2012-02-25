@@ -389,7 +389,6 @@ CREATE TRIGGER herdcheck
 CREATE TABLE bucardo.sync (
   name               TEXT        NOT NULL UNIQUE,
                        CONSTRAINT sync_name_pk PRIMARY KEY (name),
-  synctype           TEXT        NOT NULL DEFAULT 'delta',
   herd               TEXT            NULL,
                        CONSTRAINT sync_herd_fk FOREIGN KEY (herd) REFERENCES bucardo.herd(name) ON UPDATE CASCADE ON DELETE RESTRICT,
   dbs                TEXT            NULL,
@@ -1224,7 +1223,7 @@ if ($role{source} < 1) {
 }
 
 ## Unless we are fullcopy, we must have PKs on each table
-my $is_fullcopy = $info->{synctype} eq 'fullcopy' ? 1 : 0;
+my $is_fullcopy = (! $role{target} and $role{fullcopy}) ? 1 : 0;
 if (! $is_fullcopy) {
     for my $schema (sort keys %goat) {
         for my $table (sort keys %{$goat{$schema}}) {
@@ -2434,7 +2433,7 @@ AS $bc$
     }
     else {
         my $old = $_TD->{old};
-        for my $x (qw(name source targetdb targetgroup synctype ping)) {
+        for my $x (qw(name source targetdb targetgroup ping)) {
             elog(DEBUG, "Checking on $x");
             if (! defined $old->{$x}) {
                 next if ! defined $new->{$x};
