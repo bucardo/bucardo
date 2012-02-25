@@ -470,6 +470,7 @@ sub start_mcp {
     $self->glog("bucardo: $old0", LOG_WARN);
     $self->glog('Bucardo.pm: ' . $INC{'Bucardo.pm'}, LOG_WARN);
     $self->glog((sprintf 'OS: %s  Perl: %s %vd', $^O, $^X, $^V), LOG_WARN);
+
     ## Get a integer version of the DBD::Pg version, for later comparisons
     if ($DBD::Pg::VERSION !~ /(\d+)\.(\d+)\.(\d+)/) {
         die "Could not parse the DBD::Pg version: was $DBD::Pg::VERSION\n";
@@ -489,17 +490,20 @@ sub start_mcp {
     ## Again with the password trick
     $self->{dbpass} = '<not shown>'; ## already saved as $oldpass above
     my $objdump = "Bucardo object:\n";
+
     ## Get the maximum key length for pretty formatting
     my $maxlen = 5;
     for (keys %$self) {
         $maxlen = length($_) if length($_) > $maxlen;
     }
+
     ## Print each object, aligned, and show 'undef' for undefined values
     ## Yes, this prints things like HASH(0x8fbfc84), but we're okay with that
     for (sort keys %$self) {
         $objdump .= sprintf " %-*s => %s\n", $maxlen, $_, (defined $self->{$_}) ? qq{'$self->{$_}'} : 'undef';
     }
     $self->glog($objdump, LOG_TERSE);
+
     ## Restore the password
     $self->{dbpass} = $oldpass;
 
@@ -646,6 +650,33 @@ sub start_mcp {
     ## Let any listeners know we have gotten this far
     $self->db_notify($masterdbh, 'started', 1);
 
+    ## For optimization later on, we need to know which syncs are 'fullcopy'
+    for my $syncname (keys %{ $self->{sync} }) {
+
+        my $s = $self->{sync}{$syncname};
+
+        ## Skip inactive syncs
+        next unless $s->{mcp_active};
+
+        ## Walk through each database and check the roles, discarding inactive dbs
+        my %rolecount;
+        for my $db (values %{ $s->{db} }) {
+            next if $db->{status} ne 'active';
+            $rolecount{$db->{role}}++;
+        }
+
+        ## Default to being fullcopy
+        $s->{fullcopy} = 1;
+
+        ## We cannot be a fullcopy sync if:
+        if ($rolecount{'target'}           ## there are any target dbs
+            or $rolecount{'source'} > 1    ## there is more than one source db
+            or ! $rolecount{'fullcopy'}) { ## there are no fullcopy dbs
+            $s->{fullcopy} = 0;
+        }
+    }
+
+
     ## Because a sync may have gotten a notice while we were down,
     ## we auto-kick all eligible syncs
     ## We also need to see if we can prevent the VAC daemon from running,
@@ -662,9 +693,10 @@ sub start_mcp {
         next unless $s->{mcp_active};
 
         ## Skip fullcopy syncs
-        next if $s->{synctype} eq 'fullcopy';
+        next if $s->{fullcopy};
 
-        ## Mark all databases (used by this sync) as needing a vacuum if they meet the criteria
+        ## Right now, the vac daemon is only useful for source Postgres databases
+        ## Of course, it is not needed for fullcopy syncs
         for my $db (values %{ $s->{db} }) {
             if ($db->{status} eq 'active'
                 and $db->{dbtype} eq 'postgres'
@@ -1035,7 +1067,7 @@ sub mcp_main {
             next if ! $s->{stayalive} and ! $s->{kick_on_startup};
 
             ## If this is a fullcopy sync, skip unless it is being kicked
-            next if $s->{synctype} eq 'fullcopy' and ! $s->{kick_on_startup};
+            next if $s->{fullcopy} and ! $s->{kick_on_startup};
 
             ## If this is a previous stayalive, see if it is active, kick if needed
             if ($s->{stayalive} and $s->{controller}) {
@@ -1915,25 +1947,10 @@ sub start_kid {
         @dbs_postgres, @dbs_drizzle, @dbs_mongo, @dbs_mysql, @dbs_oracle,
         @dbs_redis, @dbs_sqlite);
 
-    ## Used to weed out all but one source if targets are all fullcopy
+    ## Used to weed out all but one source if in onetimecopy mode
     my $found_first_source = 0;
 
-    ## Quick check to see if all targets are fullcopy
-    ## If onetimecopy is set, this is forced true
-    my $alltargets_fullcopy = 1;
-    if (! $sync->{onetimecopy}) {
-        for my $dbname (sort keys %{ $sync->{db} }) {
-            $x = $sync->{db}{$dbname};
-            if ($x->{role} eq 'target') {
-                $alltargets_fullcopy = 0;
-                last;
-            }
-        }
-    }
-
     for my $dbname (sort keys %{ $sync->{db} }) {
-
-        ## Order the above by priority to allow fine-tuning of the single fullcopy source?
 
         $x = $sync->{db}{$dbname};
 
@@ -1942,9 +1959,8 @@ sub start_kid {
         ## If this is a onetimecopy sync, the fullcopy targets are dead to us
         next if $sync->{onetimecopy} and $x->{role} eq 'fullcopy';
 
-        ## If this is a onetimecopy sync, or if all targets are fullcopy,
-        ## we only need to connect to a single source
-        if ($x->{role} eq 'source' and $alltargets_fullcopy) {
+        ## If this is a onetimecopy sync, we only need to connect to a single source
+        if ($sync->{onetimecopy} and $x->{role} eq 'source') {
             next if $found_first_source;
             $found_first_source = 1;
         }
@@ -1954,19 +1970,19 @@ sub start_kid {
         ## Is this a SQL database?
         $x->{does_sql} = 0;
 
-        ## Can they do truncate?
+        ## Can it do truncate?
         $x->{does_truncate} = 0;
 
-        ## Can they do savepoints (and roll them back)?
+        ## Can it do savepoints (and roll them back)?
         $x->{does_savepoints} = 0;
 
-        ## Do they support truncate cascade?
+        ## Does it support truncate cascade?
         $x->{does_cascade} = 0;
 
-        ## Do they support a LIMIT clause?
+        ## Does it support a LIMIT clause?
         $x->{does_limit} = 0;
 
-        ## Can they be queried?
+        ## Can it be queried?
         $x->{does_append_only} = 0;
 
         ## Start clumping into groups and adjust the attributes
@@ -2034,8 +2050,6 @@ sub start_kid {
         ## Everyone goes into this bucket
         push @dbs => $dbname;
 
-        ## Some of these may change later on depending on fullcopy and onetimecopy settings
-
         ## Databases we read data from
         push @dbs_source => $dbname
             if $x->{role} eq 'source';
@@ -2044,28 +2058,27 @@ sub start_kid {
         push @dbs_target => $dbname
             if $x->{role} ne 'source';
 
-        ## Databases that get written to
-        ## This is all of them, unless we are in fullcopy only mode
+        ## Databases that (potentially) get written to
+        ## This is all of them, unless we are a source
+        ## and a fullcopy sync or in onetimecopy mode
         push @dbs_write => $dbname
-            if ! $alltargets_fullcopy
+            if (!$sync->{fullcopy} and !$sync->{onetimecopy})
                 or $x->{role} ne 'source';
 
         ## Databases that get deltas
         ## If in onetimecopy mode, this is always forced to be empty
+        ## Likewise, no point in populating if this is a fullcopy sync
         push @dbs_delta => $dbname
-            if $x->{role} eq 'target' and ! $sync->{onetimecopy};
+            if $x->{role} eq 'target'
+                and ! $sync->{onetimecopy}
+                    and ! $sync->{fullcopy};
 
         ## Databases that get the full monty
         ## In normal mode, this means a role of 'fullcopy'
         ## In onetimecopy mode, this means a role of 'target'
-        if ($sync->{onetimecopy}) {
-            push @dbs_fullcopy => $dbname
-                if $x->{role} eq 'target';
-        }
-        else {
-            push @dbs_fullcopy => $dbname
-                if $x->{role} eq 'fullcopy';
-        }
+        push @dbs_fullcopy => $dbname
+            if ($sync->{onetimecopy} and $x->{role} eq 'target')
+                or ($sync->{fullcopy} and $x->{role} eq 'fullcopy');
 
         ## Non-fullcopy databases. Basically dbs_source + dbs_target
         push @dbs_non_fullcopy => $dbname
@@ -3102,9 +3115,6 @@ sub start_kid {
 
                     $x = $sync->{db}{$dbname};
 
-                    ## We never do native fullcopy targets here
-                    next if $x->{type} eq 'fullcopy';
-
                     $x->{dbh}->rollback();
                 }
 
@@ -3114,7 +3124,6 @@ sub start_kid {
                     $x = $sync->{db}{$dbname};
 
                     ## We never do native fullcopy targets here
-                    ## ZZZ Where/when are the fullcopys removed?
                     next if $x->{type} eq 'fullcopy';
 
                     $sth = $sth{dbrun_delete};
@@ -3740,12 +3749,10 @@ sub start_kid {
 
                         ## The custom code wants to try again
 
-                        ## Make sure the database connections are still clean
-                        for my $dbname (@dbs_non_fullcopy) {
+                        ## Make sure the Postres database connections are still clean
+                        for my $dbname (@dbs_postgres) {
 
                             $x = $sync->{db}{$dbname};
-
-                            next if $x->{dbtype} ne 'postgres';
 
                             my $ping = $sync->{db}{$dbname}{dbh}->ping();
                             if ($ping !~ /^[123]$/o) {
@@ -3917,9 +3924,6 @@ sub start_kid {
                     for my $dbname (@dbs_fullcopy) {
 
                         $x = $sync->{db}{$dbname};
-
-                        ## Skip if this is an original fullcopy target
-                        next if $x->{dbtype} eq 'fullcopy';
 
                         my $tname = $g->{newname}{$syncname}{$dbname};
 
@@ -4425,6 +4429,7 @@ sub start_kid {
     }
 
     if ($sync->{onetimecopy}) {
+        ## XXX
         ## We need the MCP and CTL to pick up the new setting. This is the easiest way:
         ## First we sleep a second, to make sure the CTL has picked up the syncdone 
         ## signal. It may resurrect a kid, but it will at least have the correct onetimecopy
@@ -5503,7 +5508,7 @@ sub validate_sync {
     } ## end each goat
 
     ## There are things that a fullcopy sync does not do
-    if ($s->{synctype} eq 'fullcopy') {
+    if ($s->{fullcopy}) {
         $s->{track_rates} = 0;
     }
 
@@ -5650,10 +5655,11 @@ sub validate_sync {
         next if $g->{reltype} ne 'table';
 
         ## Customselect may be null, so force to a false value
+        ## XXX Customselect has been superceded by customcols
         $g->{customselect} ||= '';
         my $do_customselect = ($g->{customselect} and $s->{usecustomselect}) ? 1 : 0;
         if ($do_customselect) {
-            if ($s->{synctype} ne 'fullcopy') {
+            if (! $s->{fullcopy}) {
                 my $msg = qq{Warning: Custom select can only be used for fullcopy\n};
                 $self->glog($msg, LOG_WARN);
                 warn $msg;
@@ -5759,7 +5765,7 @@ sub validate_sync {
                 }
             }
 
-            $self->glog(qq{    Inspecting target $g->{reltype} "$RS.$RT" on database "$dbname"}, LOG_NORMAL);
+            $self->glog(qq{   Inspecting target $g->{reltype} "$RS.$RT" on database "$dbname"}, LOG_NORMAL);
 
             $sth->execute("$RS.$RT");
             my $targetcolinfo = $sth->fetchall_hashref('attname');
@@ -5817,7 +5823,7 @@ sub validate_sync {
                 my $fcol = $targetcolinfo->{$colname};
                 my $scol = $colinfo->{$colname};
 
-                $self->glog(qq{    Checking column on target database "$dbname": "$colname" ($scol->{ftype})}, LOG_VERBOSE);
+                $self->glog(qq{    Column on target database "$dbname": "$colname" ($scol->{ftype})}, LOG_DEBUG);
                 ## Always fatal: column on source but not target
                 if (! exists $targetcolinfo->{$colname}) {
                     $column_problems = 2;
@@ -7063,7 +7069,6 @@ sub run_ctl_custom_code {
 
     $input = {
         sourcedbh  => $sync->{safe_sourcedbh},
-        synctype   => $sync->{synctype},
         syncname   => $sync->{name},
         goatlist   => $sync->{goatlist},
         sourcename => $sync->{sourcedb},
