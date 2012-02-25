@@ -1245,7 +1245,7 @@ sub start_controller {
 
     ## Log some startup information, and squirrel some away for later emailing
     my $mailmsg = "$msg\n";
-    $msg = qq{  stayalive: $sync->{stayalive} checksecs: $sync->{checksecs} limitdbs: $limitdbs kicked: $kicked};
+    $msg = qq{  stayalive: $sync->{stayalive} checksecs: $sync->{checksecs} kicked: $kicked};
     $self->glog($msg, LOG_NORMAL);
     $mailmsg .= "$msg\n";
 
@@ -1477,7 +1477,7 @@ sub start_controller {
 
         ## Overwrites the MCP database handles
         ($x->{backend}, $x->{dbh}) = $self->connect_database($dbname);
-        $self->glog(qq{Connected to database "$dbname" with backend PID of $x->{backend}}, LOG_NORMAL);
+        $self->glog(qq{Database "$dbname" backend PID: $x->{backend}}, LOG_NORMAL);
         $self->{pidmap}{$x->{backend}} = "DB $dbname";
     }
 
@@ -2795,12 +2795,12 @@ sub start_kid {
 
             if ($x->{dbtype} eq 'postgres') {
                 $x->{dbh}->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE');
-                $self->glog(qq{Set db "$dbname" to serializable read write}, LOG_DEBUG);
+                $self->glog(qq{Set database "$dbname" to serializable read write}, LOG_DEBUG);
             }
 
             if ($x->{dbtype} eq 'mysql') {
                 $x->{dbh}->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE');
-                $self->glog(qq{Set db "$dbname" to serializable}, LOG_DEBUG);
+                $self->glog(qq{Set database "$dbname" to serializable}, LOG_DEBUG);
             }
 
             if ($x->{dbtype} eq 'drizzle') {
@@ -2810,7 +2810,7 @@ sub start_kid {
             if ($x->{dbtype} eq 'oracle') {
                 $x->{dbh}->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE');
                 ## READ WRITE - can we set serializable and read write at the same time??
-                $self->glog(qq{Set db "$dbname" to serializable and read write}, LOG_DEBUG);
+                $self->glog(qq{Set database "$dbname" to serializable and read write}, LOG_DEBUG);
             }
 
             if ($x->{dbtype} eq 'sqlite') {
@@ -3870,7 +3870,7 @@ sub start_kid {
                 $sourcename = $dbname;
                 $sourcedbh = $x->{dbh};
                 $sourcex = $x;
-                $self->glog("For fullcopy, we are using source database $sourcename", LOG_VERBOSE);
+                $self->glog(qq{For fullcopy, we are using source database "$sourcename"}, LOG_VERBOSE);
                 last;
 
             }
@@ -4042,7 +4042,7 @@ sub start_kid {
 
                     } ## end postgres
 
-                    $self->glog(qq{Emptying out "$dbname.$tname" using $sync->{deletemethod}}, LOG_VERBOSE);
+                    $self->glog(qq{Emptying out $dbname.$tname using $sync->{deletemethod}}, LOG_VERBOSE);
                     my $use_delete = 1;
 
                     ## By hook or by crook, empty this table
@@ -4306,11 +4306,11 @@ sub start_kid {
         my $synctime = sprintf '%.2f', tv_interval($kid_start_time);
         $self->glog((sprintf 'Total time for sync "%s" (%s rows): %s%s',
                     $syncname,
-                    $deltacount{all},
+                    $dmlcount{allinserts}{target},
                     pretty_time($synctime),
                     $synctime < 120 ? '' : " ($synctime seconds)",),
                     ## We don't want to output a "finished" if no changes made unless verbose
-                    $deltacount{all} ? LOG_NORMAL : LOG_VERBOSE);
+                    $dmlcount{allinserts}{target} ? LOG_NORMAL : LOG_VERBOSE);
 
         ## Update our rate information as needed
         if ($sync->{track_rates}) {
@@ -8296,7 +8296,7 @@ sub push_rows {
             $fromdbh->do($srccmd);
 
             my $buffer = '';
-            $self->glog(qq{Begin push of $S.$T rows from database "$fromname"}, LOG_VERBOSE);
+            $self->glog(qq{Copying from $fromname.$S.$T}, LOG_VERBOSE);
 
             ## Loop through all changed rows on the source, and push to the target(s)
             my $multirow = 0;
@@ -8500,24 +8500,21 @@ sub analyze_table {
     ## XXX Return output from analyze as a LOG_VERBOSE or LOG_DEBUG?
 
     if ('postgres' eq $dbtype) {
-        $self->glog("Analyzing $dbname.$tablename", LOG_VERBOSE);
         $ldbh->do("ANALYZE $tablename");
         my $total_time = sprintf '%.2f', tv_interval($start_time);
-        $self->glog("Analyze complete. Time: $total_time", LOG_VERBOSE);
+        $self->glog("Analyze complete for $dbname.$tablename. Time: $total_time", LOG_VERBOSE);
         $ldbh->commit();
     }
     elsif ('sqlite' eq $dbtype) {
-        $self->glog("Analyzing $dbname.$tablename", LOG_VERBOSE);
         $ldbh->do("ANALYZE $tablename");
         my $total_time = sprintf '%.2f', tv_interval($start_time);
-        $self->glog("Analyze complete. Time: $total_time", LOG_VERBOSE);
+        $self->glog("Analyze complete for $dbname.$tablename. Time: $total_time", LOG_VERBOSE);
         $ldbh->commit();
     }
     elsif ('mysql' eq $dbtype or 'drizzle' eq $dbtype) {
-        $self->glog("Analyzing $tablename", LOG_VERBOSE);
         $ldbh->do("ANALYZE TABLE $tablename");
         my $total_time = sprintf '%.2f', tv_interval($start_time);
-        $self->glog("Analyze complete. Time: $total_time", LOG_VERBOSE);
+        $self->glog("Analyze complete for $tablename. Time: $total_time", LOG_VERBOSE);
         $ldbh->commit();
     }
     else {
