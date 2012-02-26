@@ -5535,9 +5535,9 @@ sub validate_sync {
         ## Check the source table, save escaped versions of the names
 
         $sth = $sth{checktable};
-        $count = $sth->execute("$g->{schemaname}.$g->{tablename}");
+        $count = $sth->execute(qq{"$g->{schemaname}"."$g->{tablename}"});
         if ($count != 1) {
-            my $msg = qq{Could not find $g->{reltype} "$g->{schemaname}.$g->{tablename}"\n};
+            my $msg = qq{Could not find $g->{reltype} "$g->{schemaname}"."$g->{tablename}"\n};
             $self->glog($msg, LOG_WARN);
             warn $msg;
             return 0;
@@ -5599,7 +5599,7 @@ sub validate_sync {
 
             ## Check the source columns, and save them
             $sth = $sth{checkcols};
-            $sth->execute("$g->{schemaname}.$g->{tablename}");
+            $sth->execute(qq{"$g->{schemaname}"."$g->{tablename}"});
             $colinfo = $sth->fetchall_hashref('attname');
             ## Allow for 'dead' columns in the attnum ordering
             $x=1;
@@ -5728,16 +5728,6 @@ sub validate_sync {
                 next;
 
             } ## end if sequence
-
-            ## Grab quoted information about the table on the remote database
-            #$sth = $dbh->prepare($SQL{checktable});
-            #$count = $sth->execute("$g->{schemaname}.$g->{tablename}");
-            #if ($count != 1) {
-            #    my $msg = qq{Could not find remote table $g->{schemaname}.$g->{tablename} on $dbname\n};
-            #    $self->glog($msg, LOG_TERSE);
-            #    warn $msg;
-            #    return 0;
-            #}
 
             ## Turn off the search path, to help the checks below match up
             $dbh->do('SET LOCAL search_path = pg_catalog');

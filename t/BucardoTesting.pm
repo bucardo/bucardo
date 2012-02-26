@@ -72,6 +72,7 @@ our %tabletype =
      'bucardo_test8'  => 'BYTEA',
      'bucardo_test9'  => 'int_unsigned',
      'bucardo_test10' => 'TIMESTAMPTZ',
+     'bucardo space test' => 'INT',
      );
 
 our %tabletypemysql =
@@ -86,6 +87,7 @@ our %tabletypemysql =
      'bucardo_test8'  => 'VARBINARY(1000)',
      'bucardo_test9'  => 'INTEGER UNSIGNED',
      'bucardo_test10' => 'DATETIME',
+     'bucardo space test' => 'INT',
      );
 
 our %tabletypeoracle =
@@ -100,6 +102,7 @@ our %tabletypeoracle =
      'bucardo_test8'  => 'BLOB',
      'bucardo_test9'  => 'INTEGER',
      'bucardo_test10' => 'TIMESTAMP WITH TIME ZONE',
+     'bucardo space test' => 'INT',
      );
 
 our %tabletypesqlite =
@@ -114,6 +117,7 @@ our %tabletypesqlite =
      'bucardo_test8'  => 'VARBINARY(1000)',
      'bucardo_test9'  => 'INTEGER UNSIGNED',
      'bucardo_test10' => 'DATETIME',
+     'bucardo space test' => 'INT',
      );
 
 
@@ -722,7 +726,7 @@ sub add_test_schema {
         my $pkeyname = $table =~ /test5/ ? q{"id space"} : 'id';
         my $pkindex = $table =~ /test2/ ? '' : 'PRIMARY KEY';
         $SQL = qq{
-            CREATE TABLE $table (
+            CREATE TABLE "$table" (
                 $pkeyname    $tabletype{$table} NOT NULL $pkindex};
         $SQL .= $table =~ /X/ ? "\n)" : qq{,
                 data1 TEXT                   NULL,
@@ -743,8 +747,8 @@ sub add_test_schema {
 
         ## Create a trigger to test trigger supression during syncs
         $SQL = qq{
-            CREATE TRIGGER bctrig_$table
-            AFTER INSERT OR UPDATE ON $table
+            CREATE TRIGGER "bctrig_$table"
+            AFTER INSERT OR UPDATE ON "$table"
             FOR EACH ROW EXECUTE PROCEDURE trigger_test()
             };
         $table =~ /0/ and ($SQL =~ s/trigger_test/trigger_test_zero/);
@@ -752,8 +756,8 @@ sub add_test_schema {
 
         ## Create a rule to test rule supression during syncs
         $SQL = qq{
-            CREATE OR REPLACE RULE bcrule_$table
-            AS ON INSERT TO $table
+            CREATE OR REPLACE RULE "bcrule_$table"
+            AS ON INSERT TO "$table"
             DO ALSO INSERT INTO droptest(name,type) VALUES ('$table','rule')
             };
         $table =~ /0/ and $SQL =~ s/NEW.inty/0/;
@@ -1558,7 +1562,7 @@ sub add_row_to_database {
             my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
 
             ## Put some standard values in, plus a single placeholder
-            my $SQL = "INSERT INTO $table($pkey,data1,inty,booly) VALUES (?,'foo',$xval,'true')";
+            my $SQL = qq{INSERT INTO "$table"($pkey,data1,inty,booly) VALUES (?,'foo',$xval,'true')};
             $gsth{$dbh}{insert}{$xval}{$table} = $dbh->prepare($SQL);
 
             ## If this is a bytea, we need to tell DBD::Pg about it
@@ -1602,7 +1606,7 @@ sub remove_row_from_database {
         if (! exists $gsth{$dbh}{delete}{$table}) {
 
             ## Delete, based on the inty
-            my $SQL = "DELETE FROM $table WHERE inty = ?";
+            my $SQL = qq{DELETE FROM "$table" WHERE inty = ?};
             $gsth{$dbh}{delete}{$table} = $dbh->prepare($SQL);
 
         }
@@ -1652,7 +1656,7 @@ sub check_for_row {
                 "$dbname.$table",
                     $type;
 
-            my $SQL = "SELECT inty FROM $table ORDER BY $pkey";
+            my $SQL = qq{SELECT inty FROM "$table" ORDER BY $pkey};
             $table =~ /X/ and $SQL =~ s/inty/$pkey/;
 
             bc_deeply($res, $dbh, $SQL, $t, (caller)[2]);

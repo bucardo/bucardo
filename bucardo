@@ -4564,7 +4564,7 @@ sub add_items_to_goat_table {
     my @newid;
 
     for my $name (sort keys %$info) {
-        if ($name !~ /^(\w+)\.(\w+)$/o) {
+        if ($name !~ /^([\w ]+)\.([\w ]+)$/o) {
             die qq{Invalid name, got "$name", but expected format "schema.relname"};
         }
         my ($schema,$table) = ($1,$2);
