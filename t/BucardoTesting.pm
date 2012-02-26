@@ -9,6 +9,7 @@ package BucardoTesting;
 use strict;
 use warnings;
 use DBI;
+use DBD::Pg;
 use Time::HiRes qw/sleep gettimeofday tv_interval/;
 use Cwd;
 use Data::Dumper;
@@ -21,6 +22,9 @@ use base 'Exporter';
 our @EXPORT = qw/%tabletype %tabletypemysql %tabletypeoracle %tabletypesqlite %sequences %val 
                  compare_tables bc_deeply clear_notices wait_for_notice
                  $location $oldherd_msg $newherd_msg $addtable_msg $deltable_msg $nomatch_msg/;
+
+## Special global vars for munging the data
+my (%gsth, %gdbh);
 
 my $dbname = 'bucardo_test';
 
@@ -41,7 +45,7 @@ my $total_errors = 0;
 my %timing;
 
 ## If true, turns off the epoch "time" output at the end of each testing output line
-my $notime = 0;
+my $notime = 1;
 
 my $user = qx{whoami};
 chomp $user;
@@ -285,6 +289,12 @@ sub new {
     else {
         die qq{Could not find bucardo\n};
     }
+
+    ## Handle both old and new way of setting location
+    if ($location eq 'setup' and $arg->{location}) {
+        $location = $self->{location} = $arg->{location};
+    }
+
 
     return $self;
 
@@ -621,6 +631,9 @@ sub repopulate_cluster {
     my $dbh = $self->empty_cluster($clustername);
 
     $self->add_test_schema($dbh);
+
+    ## Store our names away
+    $gdbh{$clustername} = $dbh;
 
     return $dbh;
 
@@ -1514,6 +1527,145 @@ sub drop_database {
     }
     return;
 }
+
+
+sub add_row_to_database {
+
+    ## Add a row to each table in one of the databases
+    ## Arguments: three
+    ## 1. Database name to use
+    ## 2. Value to use (lookup, not the direct value)
+    ## 3. Do we commit or not? Boolean, defaults to true
+    ## Returns: undef
+
+    my ($self, $dbname, $xval, $commit) = @_;
+
+    $commit = 1 if ! defined $commit;
+
+    my $dbh = $gdbh{$dbname} or die "No such database: $dbname";
+
+    ## Loop through each table we know about
+    for my $table (sort keys %tabletype) {
+
+        ## Look up the actual value to use
+        my $type = $tabletype{$table};
+        my $value = $val{$type}{$xval};
+
+        ## Prepare it if we have not already
+        if (! exists $gsth{$dbh}{insert}{$xval}{$table}) {
+
+            ## Handle odd pkeys
+            my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
+
+            ## Put some standard values in, plus a single placeholder
+            my $SQL = "INSERT INTO $table($pkey,data1,inty,booly) VALUES (?,'foo',$xval,'true')";
+            $gsth{$dbh}{insert}{$xval}{$table} = $dbh->prepare($SQL);
+
+            ## If this is a bytea, we need to tell DBD::Pg about it
+            if ('BYTEA' eq $type) {
+                $gsth{$dbh}{insert}{$xval}{$table}->bind_param(1, undef, {pg_type => PG_BYTEA});
+            }
+
+        }
+
+        ## Execute!
+        $gsth{$dbh}{insert}{$xval}{$table}->execute($value);
+
+    }
+
+    $dbh->commit() if $commit;
+
+    return undef;
+
+} ## end of add_row_to_database
+
+
+sub remove_row_from_database {
+
+    ## Delete a row from each table in one of the databases
+    ## Arguments: three
+    ## 1. Database name to use
+    ## 2. Value to use (lookup, not the direct value)
+    ## 3. Do we commit or not? Boolean, defaults to true
+    ## Returns: undef
+
+    my ($self, $dbname, $val, $commit) = @_;
+
+    $commit = 1 if ! defined $commit;
+
+    my $dbh = $gdbh{$dbname} or die "No such database: $dbname";
+
+    ## Loop through each table we know about
+    for my $table (sort keys %tabletype) {
+
+        ## Prepare it if we have not already
+        if (! exists $gsth{$dbh}{delete}{$table}) {
+
+            ## Delete, based on the inty
+            my $SQL = "DELETE FROM $table WHERE inty = ?";
+            $gsth{$dbh}{delete}{$table} = $dbh->prepare($SQL);
+
+        }
+
+        ## Execute!
+        $gsth{$dbh}{delete}{$table}->execute($val);
+
+    }
+
+    $dbh->commit() if $commit;
+
+    return undef;
+
+} ## end of remove_row_from_database
+
+
+sub check_for_row {
+
+    ## Check that a given row is on the database as expected
+    ## Arguments: two
+    ## 1. The result we are expecting, as an arrayref
+    ## 2. A list of database names (should be inside gdbh)
+    ## Returns: undef
+
+    my ($self, $res, $dblist) = @_;
+
+    ## Get largest tablename
+    my $maxtable = 1;
+    for my $table (keys %tabletype) {
+        $maxtable = length $table if length $table > $maxtable;
+    }
+
+    for my $dbname (@$dblist) {
+
+        my $dbh = $gdbh{$dbname} or die "Invalid database name: $dbname";
+
+        my $maxdbtable = $maxtable + 1 + length $dbname;
+
+        for my $table (sort keys %tabletype) {
+
+            ## Handle odd pkeys
+            my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
+
+            my $type = $tabletype{$table};
+            my $t = sprintf qq{Copy to %-*s ok for pkey type %s},
+                $maxdbtable,
+                "$dbname.$table",
+                    $type;
+
+            my $SQL = "SELECT inty FROM $table ORDER BY $pkey";
+            $table =~ /X/ and $SQL =~ s/inty/$pkey/;
+
+            bc_deeply($res, $dbh, $SQL, $t, (caller)[2]);
+        }
+    }
+
+    return;
+
+} ## end of check_for_row
+
+
+
+
 
 ## Hack to override some Test::More methods
 ## no critic
