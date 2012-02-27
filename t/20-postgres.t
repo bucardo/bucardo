@@ -12,15 +12,17 @@ use DBD::Pg;
 use Test::More;
 use MIME::Base64;
 
-use vars qw/ $bct $dbhX $dbhA $dbhB $dbhC $dbhD $res $command $t $SQL %pkey %sth %sql $sth $count/;
+use vars qw/ $dbhX $dbhA $dbhB $dbhC $dbhD $res $command $t $SQL %pkey %sth %sql $sth $count/;
 
 use BucardoTesting;
-$bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object failed\n";
-$location = '';
+my $bct = BucardoTesting->new({location => 'postgres'})
+    or BAIL_OUT "Creation of BucardoTesting object failed\n";
 
-my $numtabletypes = keys %tabletype;
-my $numsequences = keys %sequences;
-plan tests => 226;
+my $numtables = keys %tabletype;
+my $single_tests = 19;
+plan tests => $single_tests +
+    ( 1 * $numtables * 3 ) + ## B C and D
+    ( 3 * $numtables * 4 ); ## A B C and D
 
 pass("*** Beginning postgres tests");
 
@@ -33,7 +35,7 @@ END {
     $dbhD and $dbhD->disconnect();
 }
 
-## Get Postgres databases A, B, C, and D created
+## Get A, B, C, and D created, emptied out, and repopulated with sample data
 $dbhA = $bct->repopulate_cluster('A');
 $dbhB = $bct->repopulate_cluster('B');
 $dbhC = $bct->repopulate_cluster('C');
@@ -42,9 +44,7 @@ $dbhD = $bct->repopulate_cluster('D');
 ## Create a bucardo database, and install Bucardo into it
 $dbhX = $bct->setup_bucardo('A');
 
-## Tell Bucardo about these databases
-
-## Four Postgres databases will be source, source, target, and target
+## Teach Bucardo about four databases
 for my $name (qw/ A B C D /) {
     $t = "Adding database from cluster $name works";
     my ($dbuser,$dbport,$dbhost) = $bct->add_db_args($name);
@@ -53,293 +53,136 @@ for my $name (qw/ A B C D /) {
     like ($res, qr/Added database "$name"/, $t);
 }
 
-## Teach Bucardo about all pushable tables, adding them to a new herd named "therd"
-$t = q{Adding all tables on the master works};
-$command =
-"bucardo add tables all db=A herd=therd pkonly";
-$res = $bct->ctl($command);
-like ($res, qr/Creating herd: therd.*New tables added: \d/s, $t);
-
-## Add all sequences, and add them to the newly created herd
-$t = q{Adding all sequences on the master works};
-$command =
-"bucardo add sequences all db=A herd=therd";
-$res = $bct->ctl($command);
-like ($res, qr/New sequences added: \d/, $t);
-
-## Create a new database group
-$t = q{Created a new database group};
-$command =
-"bucardo add dbgroup pg A:source B:source C:target D:slave";
-$res = $bct->ctl($command);
-like ($res, qr/Created database group "pg"/, $t);
-
-## Create a new sync
-$t = q{Created a new sync};
-$command =
-"bucardo add sync pgtest herd=therd dbs=pg ping=false";
-$res = $bct->ctl($command);
-like ($res, qr/Added sync "pgtest"/, $t);
-
-## Adjust the chunk size so we test both ways
-$res = $bct->ctl('bucardo set statement_chunk_size=2');
-
-## Start up Bucardo with this new sync
-$bct->restart_bucardo($dbhX);
-$bct->ctl('bucardo kick pgtest 0');
-
-## Get the statement handles ready for each table type
-for my $table (sort keys %tabletype) {
-
-    $pkey{$table} = $table =~ /test5/ ? q{"id space"} : 'id';
-
-    ## INSERT
-    my (@boolys) = qw( notused true false null false true true null );
-    for my $x (1..7) {
-        $SQL = $table =~ /X/
-            ? "INSERT INTO $table($pkey{$table}) VALUES (?)"
-                : "INSERT INTO $table($pkey{$table},data1,inty,booly) VALUES (?,'foo',$x,$boolys[$x])";
-        $sth{insert}{$x}{$table}{A} = $dbhA->prepare($SQL);
-        if ('BYTEA' eq $tabletype{$table}) {
-            $sth{insert}{$x}{$table}{A}->bind_param(1, undef, {pg_type => PG_BYTEA});
-        }
-    }
-
-    ## SELECT
-    $sql{select}{$table} = "SELECT inty, booly FROM $table ORDER BY $pkey{$table}";
-    $table =~ /X/ and $sql{select}{$table} =~ s/inty/$pkey{$table}/;
-
-    ## DELETE ALL
-    $SQL = "DELETE FROM $table";
-    $sth{deleteall}{$table}{A} = $dbhA->prepare($SQL);
-
-    ## DELETE ONE
-    $SQL = "DELETE FROM $table WHERE inty = ?";
-    $sth{deleteone}{$table}{A} = $dbhA->prepare($SQL);
-
-    ## TRUNCATE
-    $SQL = "TRUNCATE TABLE $table";
-    $sth{truncate}{$table}{A} = $dbhA->prepare($SQL);
-
-    ## UPDATE
-    $SQL = "UPDATE $table SET inty = ?";
-    $sth{update}{$table}{A} = $dbhA->prepare($SQL);
-}
-
-## Add one row per table type to A
-for my $table (keys %tabletype) {
-    my $type = $tabletype{$table};
-    my $val1 = $val{$type}{1};
-    $sth{insert}{1}{$table}{A}->execute($val1);
-}
-
-## Before the commit on A ... B, C, and D should be empty
-for my $table (sort keys %tabletype) {
-    my $type = $tabletype{$table};
-
-    $t = qq{B has not received rows for table $table before A commits};
-    $res = [];
-    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
-
-    $t = qq{C has not received rows for table $table before A commits};
-    bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
-
-    $t = qq{D has not received rows for table $table before A commits};
-    bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
-
-}
-
-## Commit, then kick off the sync
-$dbhA->commit();
-$bct->ctl('bucardo kick pgtest 0');
-$bct->ctl('bucardo kick pgtest 0');
-
-## Check targets for the new rows
-for my $table (sort keys %tabletype) {
-
-    my $type = $tabletype{$table};
-    $res = [[1,1]];
-
-    $t = qq{Row with pkey of type $type gets copied to B.$table};
-    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
-
-    $t = qq{Row with pkey of type $type gets copied to C.$table};
-    bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
-
-    $t = qq{Row with pkey of type $type gets copied to D.$table};
-    bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
-
-}
-
-## Update each row
-for my $table (keys %tabletype) {
-    $sth{update}{$table}{A}->execute(42);
-}
-$dbhA->commit();
-$bct->ctl('bucardo kick pgtest 0');
-
-for my $table (keys %tabletype) {
-
-    my $type = $tabletype{$table};
-    $res = [[42,1]];
-
-    $t = qq{Row with pkey of type $type gets copied to B.$table after update};
-    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
-
-    $t = qq{Row with pkey of type $type gets copied to C.$table after update};
-    bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
-
-    $t = qq{Row with pkey of type $type gets copied to D.$table after update};
-    bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
-
-}
-
-## Delete each row
-for my $table (keys %tabletype) {
-    $sth{deleteall}{$table}{A}->execute();
-}
-$dbhA->commit();
-$bct->ctl('bucardo kick pgtest 0');
-
-for my $table (keys %tabletype) {
-
-    my $type = $tabletype{$table};
-    $res = [];
-
-    $t = qq{Row with pkey of type $type gets removed from B after delete};
-    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
-
-    $t = qq{Row with pkey of type $type gets removed from C after delete};
-    bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
-
-    $t = qq{Row with pkey of type $type gets removed from D after delete};
-    bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
-
-}
-
-## Insert four rows, then delete three of them
-## We want the deletes and inserts to be > 2 to test statement_chunk_size
-for my $table (keys %tabletype) {
-    my $type = $tabletype{$table};
-
-    for my $num (1..4) {
-        $sth{insert}{$num}{$table}{A}->execute( $val{$type}{$num} );
-    }
-}
-$dbhA->commit();
-$bct->ctl('bucardo kick pgtest 0');
-
-for my $table (keys %tabletype) {
-
-    my $type = $tabletype{$table};
-    $res = [[1,1],[2,0],[3,undef],[4,0]];
-
-    $t = qq{Row with pkey of type $type gets copied to B.$table after triple insert};
-    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
-
-    $t = qq{Row with pkey of type $type gets copied to C.$table after triple insert};
-    bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
-
-    $t = qq{Row with pkey of type $type gets copied to D.$table after triple insert};
-    bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
-
-}
-
-## Delete three of the rows
-for my $table (keys %tabletype) {
-    for my $num (2..4) {
-        $sth{deleteone}{$table}{A}->execute($num); ## using inty
-    }
-}
-$dbhA->commit();
-$bct->ctl('bucardo kick pgtest 0');
-
-for my $table (keys %tabletype) {
-
-    my $type = $tabletype{$table};
-    $res = [[1,1]];
-
-    $t = qq{Row with pkey of type $type gets removed from B.$table after triple delete};
-    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
-
-    $t = qq{Row with pkey of type $type gets removed from C.$table after triple delete};
-    bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
-
-    $t = qq{Row with pkey of type $type gets removed from D.$table after triple delete};
-    bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
-
-}
-$dbhA->commit();
-$dbhB->commit();
-$dbhC->commit();
-$dbhD->commit();
-
-
-## Insert two more rows, then truncate
-for my $table (keys %tabletype) {
-    my $type = $tabletype{$table};
-    my $val6 = $val{$type}{6};
-    $sth{insert}{6}{$table}{A}->execute($val6);
-    my $val7 = $val{$type}{7};
-    $sth{insert}{7}{$table}{A}->execute($val7);
-    $dbhA->do("TRUNCATE TABLE $table");
-}
-$dbhA->commit();
-$bct->ctl('bucardo kick pgtest 0');
-
-for my $table (keys %tabletype) {
-
-    my $type = $tabletype{$table};
-    $res = [];
-
-    $t = qq{Row with pkey of type $type gets removed from B after truncate};
-    bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
-
-    $t = qq{Row with pkey of type $type gets removed from C after truncate};
-    bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
-
-    $t = qq{Row with pkey of type $type gets removed from D after truncate};
-    bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
-
-}
-
-## Tests of customcols
-$t = q{add customcols returns expected message};
-$res = $bct->ctl('bucardo add customcols bucardo_test1 "SELECT id, data1, inty*3 AS inty"');
-like($res, qr/\QNew columns for public.bucardo_test1: "SELECT id, data1, inty*3 AS inty"/, $t);
-
-## Restart the sync
+## Put all pk tables into a herd
+$t = q{Adding all PK tables on the master works};
+$res = $bct->ctl(q{bucardo add tables '*bucardo*test*' db=A herd=allpk pkonly});
+like ($res, qr/Created the herd named "allpk".*are now part of/s, $t);
+
+## Create a new database group going from A to B and C and D
+$t = q{Created a new database group A -> B C D};
+$res = $bct->ctl('bucardo add dbgroup pg1 A:source B:target C:target D:target');
+like ($res, qr/Created database group "pg1"/, $t);
+
+## Create a new database group going from A and B to C and D
+$t = q{Created a new database group (A <=> B ) -> C D};
+$res = $bct->ctl('bucardo add dbgroup pg2 A:source B:source C D');
+like ($res, qr/Created database group "pg2"/, $t);
+
+## Create a new database group going from A and B and C to D
+$t = q{Created a new database group (A <=> B <=> C) -> D};
+$res = $bct->ctl('bucardo add dbgroup pg3 A:source B:source C:source D');
+like ($res, qr/Created database group "pg3"/, $t);
+
+## Create a new database group going from A and B and C and D
+$t = q{Created a new database group (A <=> B <=> C <=> D)};
+$res = $bct->ctl('bucardo add dbgroup pg4 A:source B:source C:source D:source');
+like ($res, qr/Created database group "pg4"/, $t);
+
+## Create some new syncs. Only one should be active at a time!
+$t = q{Created a new sync for dbgroup pg1};
+$res = $bct->ctl('bucardo add sync pgtest1 herd=allpk dbs=pg1 status=inactive');
+like ($res, qr/Added sync "pgtest1"/, $t);
+
+$t = q{Created a new sync for dbgroup pg2};
+$res = $bct->ctl('bucardo add sync pgtest2 herd=allpk dbs=pg2 status=inactive ping=false');
+like ($res, qr/Added sync "pgtest2"/, $t);
+
+$t = q{Created a new sync for dbgroup pg3};
+$res = $bct->ctl('bucardo add sync pgtest3 herd=allpk dbs=pg3 status=inactive ping=false');
+like ($res, qr/Added sync "pgtest3"/, $t);
+
+$t = q{Created a new sync for dbgroup pg4};
+$res = $bct->ctl('bucardo add sync pgtest4 herd=allpk dbs=pg4 status=inactive ping=false');
+like ($res, qr/Added sync "pgtest4"/, $t);
+
+## Add a row to A, to make sure it does not go anywhere with inactive syncs
+$bct->add_row_to_database('A', 1);
+
+## Start up Bucardo. All syncs are inactive, so nothing should happen,
+## and Bucardo should exit
+$bct->restart_bucardo($dbhX, 'bucardo_stopped');
+
+## Activate the pg1 sync
+$t = q{Activated sync pgtest1};
+$bct->ctl('bucardo update sync pgtest1 status=active');
+
+## Start listening for a syndone message
+## Bucardo should fire the sync off right away without a kick
+$dbhX->do('LISTEN bucardo_syncdone_pgtest1');
+$dbhX->commit();
+
+## Start up Bucardo again
 $bct->restart_bucardo($dbhX);
 
-## Add a new row to A
-for my $table (sort keys %tabletype) {
-    my $type = $tabletype{$table};
-    my $val1 = $val{$type}{1};
-    $count = $sth{insert}{1}{$table}{A}->execute($val1);
-    last;
+## Wait for our sync to finish
+$bct->wait_for_notice($dbhX, 'bucardo_syncdone_pgtest1');
+
+## See if things are on the others databases
+$bct->check_for_row([[1]], [qw/ B C D/]);
+
+## Switch to a 2 source, 2 target sync
+$bct->ctl('bucardo update sync pgtest1 status=inactive');
+$bct->ctl('bucardo update sync pgtest2 status=active');
+$bct->ctl('bucardo deactivate sync pgtest1');
+$bct->ctl('bucardo activate sync pgtest2 0');
+
+## Add some rows to both masters, make sure it goes everywhere
+for my $num (2..4) {
+    $bct->add_row_to_database('A', $num);
+}
+for my $num (5..10) {
+    $bct->add_row_to_database('B', $num);
 }
 
-## Commit, then kick off the sync
-$dbhA->commit();
-$bct->ctl('bucardo kick pgtest 0');
+## Kick off B. Everything should go to A, C, and D
+$bct->ctl('bucardo kick sync pgtest2 0');
 
-## Check targets for the new rows
-for my $table (sort keys %tabletype) {
+## Kick off A. Should fail, as the sync is inactive
+$t = q{Inactive sync times out when trying to kick};
+$res = $bct->ctl('bucardo kick sync pgtest1 0');
+like($res, qr/Cannot kick inactive sync/, $t);
 
-    my $type = $tabletype{$table};
-    $res = [[3,undef]];
+## All rows should be on A, B, C, and D
+my $expected = [];
+push @$expected, [$_] for 1..10;
+$bct->check_for_row($expected, [qw/A B C D/]);
 
-    $t = qq{Row with pkey of type $type gets copied to C.$table with customcol};
-    bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
+## Deactivate pgtest2, bring up pgtest3
+$bct->ctl('bucardo update sync pgtest2 status=inactive');
+$bct->ctl('bucardo update sync pgtest3 status=active');
+$bct->ctl('bucardo deactivate sync pgtest2');
+$bct->ctl('bucardo activate sync pgtest3 0');
 
-    $t = qq{Row with pkey of type $type gets copied to D.$table with customcol};
-    bc_deeply($res, $dbhD, $sql{select}{$table}, $t);
+## Kick off the sync to pick up the deltas from the previous runs
+$bct->ctl('bucardo kick sync pgtest3 0');
 
-    last;
+## This one has three sources: A, B, and C. Remove rows from each
+$bct->remove_row_from_database('A', 10);
+$bct->remove_row_from_database('A', 9);
+$bct->remove_row_from_database('A', 8);
+$bct->remove_row_from_database('B', 6);
+$bct->remove_row_from_database('B', 5);
+$bct->remove_row_from_database('B', 4);
+$bct->remove_row_from_database('C', 2);
+$bct->remove_row_from_database('C', 1);
 
-}
+## Kick it off
+$bct->ctl('bucardo kick sync pgtest3 0');
 
+## Only rows left everywhere should be 3 and 7
+$bct->check_for_row([[3],[7]], [qw/A B C D/]);
 
+## Cause a conflict: same row on A, B, and C.
+$bct->add_row_to_database('A', 1);
+$bct->add_row_to_database('B', 1);
 
+$bct->add_row_to_database('A', 2);
+$bct->add_row_to_database('B', 2);
+$bct->add_row_to_database('C', 2);
+
+## Kick and check everyone is the same
+$bct->ctl('bucardo kick sync pgtest3 0');
+$bct->check_for_row([[1],[2],[3],[7]], [qw/A B C D/]);
 
 exit;
+

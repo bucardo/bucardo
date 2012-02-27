@@ -909,8 +909,7 @@ sub ctl {
     };
 
     if ($@ =~ /Alarum/ or $info =~ /Alarum/) {
-        warn "bucardo timed out: $args\n";
-        exit;
+        return "Timed out";
     }
     if ($@) {
         return "Error running bucardo: $@\n";
@@ -1658,7 +1657,7 @@ sub check_for_row {
                     $type;
             }
 
-            my $SQL = qq{SELECT inty FROM "$table" ORDER BY $pkey};
+            my $SQL = qq{SELECT inty FROM "$table" ORDER BY inty};
             $table =~ /X/ and $SQL =~ s/inty/$pkey/;
 
             bc_deeply($res, $dbh, $SQL, $t, (caller)[2]);

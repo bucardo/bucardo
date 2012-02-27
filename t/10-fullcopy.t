@@ -15,7 +15,11 @@ use BucardoTesting;
 my $bct = BucardoTesting->new({sync => 'fctest', location => 'fullcopy'})
     or BAIL_OUT "Creation of BucardoTesting object failed\n";
 
-plan tests => 71;
+my $numtables = keys %tabletype;
+my $single_tests = 11;
+my $table_tests = 2;
+my $numdatabases = 3;
+plan tests => $single_tests + ( $table_tests * $numtables * $numdatabases );
 
 pass("*** Beginning 'fullcopy' tests");
 
@@ -51,12 +55,12 @@ for my $name (qw/ A B C D /) {
 }
 
 ## Put all tables (including non-PK) into a herd
-$t = q{Adding all PK tables on the master works};
+$t = q{Adding all tables on the master works};
 $res = $bct->ctl(q{bucardo add tables '*bucardo*test*' db=A herd=all});
 like ($res, qr/Created the herd named "all".*are now part of/s, $t);
 
-## Create a new database group going from A to b and C and D
-$t = q{Created a new database group};
+## Create a new database group going from A to B and C and D
+$t = q{Created a new fullcopy database group A -> B C D};
 $res = $bct->ctl('bucardo add dbgroup pg A:source B:fullcopy C:fullcopy D:fullcopy');
 like ($res, qr/Created database group "pg"/, $t);
 
