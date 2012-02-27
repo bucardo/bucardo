@@ -943,14 +943,10 @@ sub restart_bucardo {
     sleep 2;
 
     pass('Starting up Bucardo');
-    if ($dbh->{pg_server_version} >= 999990000) {
-        $dbh->do('LISTEN bucardo');
-    }
-    else {
-        $dbh->do('LISTEN bucardo_boot');
-        $dbh->do('LISTEN bucardo_started');
-        $dbh->do('LISTEN bucardo_nosyncs');
-    }
+    $dbh->do('LISTEN bucardo');
+    $dbh->do('LISTEN bucardo_boot');
+    $dbh->do("LISTEN $notice");
+    $dbh->do('LISTEN bucardo_nosyncs');
     $dbh->commit();
 
     $self->ctl('start testing');
@@ -1085,6 +1081,7 @@ sub wait_for_notice {
     ## 3. Seconds we sleep between checks
     ## 4. Boolean: bail out if not found (defaults to true)
 
+    my $self = shift;
     my $dbh = shift;
     my $text = shift;
     my $timeout = shift || $TIMEOUT_NOTICE;
@@ -1098,10 +1095,7 @@ sub wait_for_notice {
       N: {
             while ($n = $dbh->func('pg_notifies')) {
                 my ($name, $pid, $payload) = @$n;
-                if ($dbh->{pg_server_version} >= 9999990000) {
-                    next if $name ne 'bucardo';
-                    $name = $payload;
-                }
+                $name = $payload if length $payload;
                 if ($name eq $text) {
                     last N;
                 }
@@ -1655,6 +1649,14 @@ sub check_for_row {
                 $maxdbtable,
                 "$dbname.$table",
                     $type;
+
+            ## Change the message if no rows
+            if (ref $res eq 'ARRAY' and ! defined $res->[0]) {
+                $t = sprintf qq{No rows as expected in %-*s for pkey type %s},
+                    $maxdbtable,
+                    "$dbname.$table",
+                    $type;
+            }
 
             my $SQL = qq{SELECT inty FROM "$table" ORDER BY $pkey};
             $table =~ /X/ and $SQL =~ s/inty/$pkey/;

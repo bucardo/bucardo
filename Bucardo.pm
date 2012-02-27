@@ -4306,7 +4306,7 @@ sub start_kid {
         my $synctime = sprintf '%.2f', tv_interval($kid_start_time);
         $self->glog((sprintf 'Total time for sync "%s" (%s rows): %s%s',
                     $syncname,
-                    $dmlcount{allinserts}{target},
+                    $dmlcount{allinserts}{target}, ## ZZZ fixme: delta and fullcopy syncs
                     pretty_time($synctime),
                     $synctime < 120 ? '' : " ($synctime seconds)",),
                     ## We don't want to output a "finished" if no changes made unless verbose
@@ -5590,9 +5590,16 @@ sub validate_sync {
             $sth = $self->{masterdbh}->prepare($SQL);
             $sth->execute($S.'_'.$T);
             $g->{makername} = $sth->fetchall_arrayref()->[0][0];
-            $g->{deltatable} = "delta_$g->{makername}";
-            $g->{tracktable} = "track_$g->{makername}";
-            $g->{stagetable} = "stage_$g->{makername}";
+            if ($g->{makername} =~ s/"//g) {
+                $g->{deltatable} = qq{"delta_$g->{makername}"};
+                $g->{tracktable} = qq{"track_$g->{makername}"};
+                $g->{stagetable} = qq{"stage_$g->{makername}"};
+            }
+            else {
+                $g->{deltatable} = "delta_$g->{makername}";
+                $g->{tracktable} = "track_$g->{makername}";
+                $g->{stagetable} = "stage_$g->{makername}";
+            }
 
             ## Turn off the search path, to help the checks below match up
             $srcdbh->do('SET LOCAL search_path = pg_catalog');

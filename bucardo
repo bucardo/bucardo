@@ -322,7 +322,7 @@ reload_config() if $verb eq 'reload_config';
 reload()        if $verb eq 'reload';
 
 ## Show information about something: database, table, sync, etc.
-list_item()     if $verb eq 'list' or $verb eq 'l' or $verb eq 'lsit' or $verb eq 'liast';
+list_item()     if $verb eq 'list' or $verb eq 'l' or $verb eq 'lsit' or $verb eq 'liast' or $verb eq 'lisy';
 
 ## Add something
 add_item()      if $verb eq 'add';
@@ -4165,7 +4165,6 @@ sub update_sync {
         ## Look for a standard foo=bar or foo:bar format
         if ($action =~ /(.+?)\s*[=:]\s*(.+)/) {
             my ($setting,$value) = (lc $1,$2);
-            print "Change request for sync $name for $setting to $value\n";
 
             ## No funny characters please, just boring column names
             $setting =~ /^[a-z]+$/ or die "Invalid setting: $setting\n";

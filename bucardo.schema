@@ -1090,24 +1090,7 @@ CREATE TRIGGER validate_goat
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 -- this is spaced so the func starts at at at even lint for debugging help
-
 CREATE OR REPLACE FUNCTION bucardo.validate_sync(text,integer)
 RETURNS TEXT
 LANGUAGE plperlu
@@ -1459,6 +1442,32 @@ END;
 
           };
           run_sql($SQL,$dbh);
+
+              $SQL = qq{
+                        CREATE OR REPLACE FUNCTION bucardo.bucardo_tablename_maker(TEXT,TEXT)
+RETURNS TEXT
+LANGUAGE plpgsql
+IMMUTABLE
+AS \$clone\$
+DECLARE
+  newname TEXT;
+BEGIN
+  SELECT INTO newname bucardo.bucardo_tablename_maker(\$1);
+
+  -- If it has quotes around it, we expand the quotes to include the prefic
+  IF (POSITION('"' IN newname) >= 1) THEN
+    newname = REPLACE(newname, '"', '');
+    newname = '"' || \$2 || newname || '"';
+  ELSE
+    newname = \$2 || newname;
+  END IF;
+
+  RETURN newname;
+END;
+\$clone\$;
+
+          };
+          run_sql($SQL,$dbh);
         }
               
         ## Create the bucardo_delta_targets table as needed
@@ -1747,7 +1756,6 @@ SELECT 'Fixme'::TEXT;
                     AS
                     \$clone\$
                     DECLARE
-                      maker TEXT;
                       deltatable TEXT;
                       tracktable TEXT;
                       myst TEXT;
@@ -1772,12 +1780,10 @@ SELECT 'Fixme'::TEXT;
                       END IF;
 
                       -- Figure out the names of the delta and track tables for this relation
-                      SELECT INTO maker
-                        bucardo.bucardo_tablename_maker(\$2);
                       SELECT INTO deltatable
-                        'delta_' || maker;
+                        bucardo.bucardo_tablename_maker(\$2, 'delta_');
                       SELECT INTO tracktable
-                        'track_' || maker;
+                        bucardo.bucardo_tablename_maker(\$2, 'track_');
                     
                       -- Delete all txntimes from the delta table that:
                       -- 1) Have been used by all syncs listed in bucardo_delta_targets
@@ -2103,11 +2109,11 @@ SELECT 'Fixme'::TEXT;
                         ? "btrunc_$syncname"
                             : sprintf 'bucardo_note_trunc_%d', int (rand(88888) + 11111);
                 $sth = $sth{haztrig};
-                $count = $sth->execute("$schema.$table",$trunctrig);
+                $count = $sth->execute(qq{"$schema"."$table"},$trunctrig);
                 if ($count < 1) {
                     $SQL = qq{
           CREATE TRIGGER "$trunctrig"
-          AFTER TRUNCATE ON $schema.$table
+          AFTER TRUNCATE ON "$schema"."$table"
           FOR EACH STATEMENT EXECUTE PROCEDURE bucardo.bucardo_note_truncation('$syncname')
         };
                     run_sql($SQL,$dbh);
@@ -2118,7 +2124,23 @@ SELECT 'Fixme'::TEXT;
             my $makername = fetch1_sql($SQL,$dbh,$schema.'_'.$table);
             ## Create this table if needed, with one column per PK columns
             $sth = $sth{haztable};
-            my $delta_table = "delta_$makername";
+            my $delta_table = "delta_$makername";			
+            my $index1_name = "dex1_$makername";
+            my $index2_name = "dex2_$makername";
+            my $deltafunc = "delta_$makername";
+            my $track_table = "track_$makername";
+            my $index3_name = "dex3_$makername";
+            my $stage_table = "stage_$makername";
+			## Need to account for quoted versions, e.g. names with spaces
+			if ($makername =~ s/"//g) {
+              $delta_table = qq{"delta_$makername"};			
+              $index1_name = qq{"dex1_$makername"};
+              $index2_name = qq{"dex2_$makername"};
+              $deltafunc = qq{"delta_$makername"};
+              $track_table = qq{"track_$makername"};
+              $index3_name = qq{"dex3_$makername"};
+              $stage_table = qq{"stage_$makername"};
+            }
             $count = $sth->execute('bucardo',$delta_table);
             if ($count < 1) {
                ## Create that table!
@@ -2126,7 +2148,7 @@ SELECT 'Fixme'::TEXT;
                $SQL = qq{
                    CREATE TABLE bucardo."$delta_table"
                      AS SELECT $pkcols, now()::TIMESTAMPTZ AS txntime
-                        FROM $schema.$table LIMIT 0
+                        FROM "$schema"."$table" LIMIT 0
                };
                run_sql($SQL,$dbh);
                $SQL = qq{
@@ -2138,23 +2160,21 @@ SELECT 'Fixme'::TEXT;
             }
 
             ## Need an index on the txntime column
-            my $index1_name = "dex1_$makername";
             $sth = $sth{hazindex};
             $count = $sth->execute('bucardo',$index1_name);
             $sth->finish();
             if ($count < 1) {
-                $SQL = qq{CREATE INDEX $index1_name ON bucardo.$delta_table(txntime)};
+                $SQL = qq{CREATE INDEX "$index1_name" ON bucardo."$delta_table"(txntime)};
                 run_sql($SQL, $dbh);
             }
 
             ## Need an index on all other columns
-            my $index2_name = "dex2_$makername";
             $sth = $sth{hazindex};
             $count = $sth->execute('bucardo',$index2_name);
             $sth->finish();
             if ($count < 1) {
                 my $pkcols = join ',' => map { qq{"$_"} } split (/\|/ => $tinfo->{pkey});
-                $SQL = qq{CREATE INDEX $index2_name ON bucardo.$delta_table($pkcols)};
+                $SQL = qq{CREATE INDEX "$index2_name" ON bucardo."$delta_table"($pkcols)};
                 run_sql($SQL, $dbh);
             }
 
@@ -2163,7 +2183,6 @@ SELECT 'Fixme'::TEXT;
             ## Trigger function to add any changed primary key rows to this new table
             ## TODO: Check for too long of a name
             ## Function is same as the table name?
-            my $deltafunc = "delta_$makername";
 
             my @pkeys = split (/\|/ => $tinfo->{pkey});
 
@@ -2184,14 +2203,14 @@ SELECT 'Fixme'::TEXT;
         \$clone\$
         BEGIN
         IF (TG_OP = 'INSERT') THEN
-          INSERT INTO bucardo.$delta_table VALUES ($new);
+          INSERT INTO bucardo."$delta_table" VALUES ($new);
         ELSIF (TG_OP = 'UPDATE') THEN
-          INSERT INTO bucardo.$delta_table VALUES ($old);
+          INSERT INTO bucardo."$delta_table" VALUES ($old);
           IF ($clause) THEN
-            INSERT INTO bucardo.$delta_table VALUES ($new);
+            INSERT INTO bucardo."$delta_table" VALUES ($new);
           END IF;
         ELSE
-          INSERT INTO bucardo.$delta_table VALUES ($old);
+          INSERT INTO bucardo."$delta_table" VALUES ($old);
         END IF;
         RETURN NULL;
         END;
@@ -2231,13 +2250,13 @@ SELECT 'Fixme'::TEXT;
             }
 
             $sth = $sth{haztrig};
-            $count = $sth->execute("$schema.$table", 'bucardo_delta');
+            $count = $sth->execute(qq{"$schema"."$table"}, 'bucardo_delta');
             $sth->finish();
             my $func = $customdeltafunc || $deltafunc;
             if ($count < 1) {
                 $SQL = qq{
         CREATE TRIGGER bucardo_delta
-        AFTER INSERT OR UPDATE OR DELETE ON $schema.$table
+        AFTER INSERT OR UPDATE OR DELETE ON "$schema"."$table"
         FOR EACH ROW EXECUTE PROCEDURE bucardo."$func"()
       };
                 run_sql($SQL,$dbh);
@@ -2245,7 +2264,6 @@ SELECT 'Fixme'::TEXT;
 
 
             ## Now the 'track' table
-            my $track_table = "track_$makername";
             $sth = $sth{haztable};
             $count = $sth->execute('bucardo',$track_table);
             $sth->finish();
@@ -2261,16 +2279,14 @@ SELECT 'Fixme'::TEXT;
 
             ## Need to index both columns of the txntime table
             $sth = $sth{hazindex};
-            my $index3_name = "dex3_$makername";
             $count = $sth->execute('bucardo', $index3_name);
             $sth->finish();
             if ($count < 1) {
-                $SQL = qq{CREATE INDEX $index3_name ON bucardo.$track_table(target, txntime)};
+                $SQL = qq{CREATE INDEX "$index3_name" ON bucardo."$track_table"(target, txntime)};
                 run_sql($SQL,$dbh);
             }
 
             ## The 'stage' table, which feeds 'track' once targets have committed
-            my $stage_table = "stage_$makername";
             $sth = $sth{haztable};
             $count = $sth->execute('bucardo',$stage_table);
             $sth->finish();
@@ -2321,7 +2337,7 @@ SELECT 'Fixme'::TEXT;
             ## Skip if ping is false
             $info->{ping} eq 'f' and next TABLE;
             $sth = $sth{haztrig};
-            $count = $sth->execute("$schema.$table", $kickfunc);
+            $count = $sth->execute(qq{"$schema"."$table"}, $kickfunc);
             $sth->finish();
             if ($count < 1) {
                 my $ttrig = $dbh->{pg_server_version} >= 80400 ? ' OR TRUNCATE' : '';
