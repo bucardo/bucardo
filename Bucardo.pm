@@ -781,9 +781,6 @@ sub mcp_main {
                 if (! -e $pidfile) {
                     $self->fork_vac();
                 }
-                else {
-                    $self->glog("No vac, because $pidfile exists!");
-                }
 
                 $lastvaccheck = time();
 
