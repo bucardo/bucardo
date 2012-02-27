@@ -4306,7 +4306,7 @@ sub start_kid {
         my $synctime = sprintf '%.2f', tv_interval($kid_start_time);
         $self->glog((sprintf 'Total time for sync "%s" (%s rows): %s%s',
                     $syncname,
-                    $dmlcount{allinserts}{target}, ## ZZZ fixme: delta and fullcopy syncs
+                    $dmlcount{inserts},
                     pretty_time($synctime),
                     $synctime < 120 ? '' : " ($synctime seconds)",),
                     ## We don't want to output a "finished" if no changes made unless verbose
