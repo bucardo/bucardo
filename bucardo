@@ -322,7 +322,8 @@ reload_config() if $verb eq 'reload_config';
 reload()        if $verb eq 'reload';
 
 ## Show information about something: database, table, sync, etc.
-list_item()     if $verb eq 'list' or $verb eq 'l' or $verb eq 'lsit' or $verb eq 'liast' or $verb eq 'lisy';
+list_item()     if $verb eq 'list' or $verb eq 'l' or $verb eq 'lsit' or $verb eq 'liast'
+    or $verb eq 'lisy' or $verb eq 'lit';
 
 ## Add something
 add_item()      if $verb eq 'add';
