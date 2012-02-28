@@ -127,7 +127,6 @@ our %sequences =
     (
     'bucardo_test_seq1' => '',
     'bucardo_test_seq2' => '',
-
     'bucardo_test_seq3' => '',
     );
 
@@ -1668,6 +1667,67 @@ sub check_for_row {
 
 } ## end of check_for_row
 
+
+sub check_sequences_same {
+
+    ## Check that sequences are the same across all databases
+    ## Arguments: one
+    ## 1. A list of database names (should be inside gdbh)
+    ## Returns: undef
+
+    my ($self, $dblist) = @_;
+
+    for my $seq (sort keys %sequences) {
+
+        $SQL = "SELECT * FROM $seq";
+
+        ## The first we come across will be the standard for the others
+        my (%firstone, $firstdb);
+
+        ## Store failure messages
+        my @msg;
+
+        for my $dbname (@$dblist) {
+
+            my $dbh = $gdbh{$dbname} or die "Invalid database name: $dbname";
+
+            my $sth = $dbh->prepare($SQL);
+            $sth->execute();
+            my $info = $sth->fetchall_arrayref({})->[0];
+
+            if (! defined $firstone{$seq}) {
+                $firstone{$seq} = $info;
+                $firstdb = $dbname;
+                next;
+            }
+
+            ## Compare certain items
+            for my $item (qw/ last_value start_value increment_by min_value max_value is_cycled is_called/) {
+                my ($uno,$dos) = ($firstone{$seq}->{$item}, $info->{$item});
+                if ($uno ne $dos) {
+                    push @msg, "$item is different on $firstdb vs $dbname: $uno vs $dos";
+                }
+            }
+
+        } ## end each sequence
+
+        if (@msg) {
+            Test::More::fail("Sequence $seq NOT the same");
+            for (@msg) {
+                Test::More::diag($_);
+            }
+        }
+        else {
+            Test::More::pass("Sequence $seq is the same across all databases");
+        }
+
+    } ## end each database
+
+
+    return;
+
+
+} ## end of check_sequences_same
 
 
 
