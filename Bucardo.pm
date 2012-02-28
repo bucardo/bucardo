@@ -2935,7 +2935,7 @@ sub start_kid {
 
                 ($S,$T) = ($g->{safeschema},$g->{safetable});
 
-                ## Grab the sequence information from each database
+                ## Grab the sequence information from each database 
                 ## Figure out which source one is the highest
                 ## Right now, this is the only sane option.
                 ## In the future, we might consider coupling tables and sequences and
@@ -7444,7 +7444,10 @@ sub adjust_sequence {
             ## Skip if these items are the exact same
             next if exists $targetinfo->{last_value} and $sourceinfo->{$name} eq $targetinfo->{$name};
 
-            $self->glog("Sequence $S.$T has a different $name value: was $targetinfo->{$name}, now $sourceinfo->{$name}", LOG_VERBOSE);
+            ## Fullcopy will not have this, and we won't report it
+            if (exists $targetinfo->{last_value}) {
+                $self->glog("Sequence $S.$T has a different $name value: was $targetinfo->{$name}, now $sourceinfo->{$name}", LOG_VERBOSE);
+            }
 
             ## If this is a boolean setting, we want to simply prepend a 'NO' for false
             if ($syntax =~ s/BOOL //) {
