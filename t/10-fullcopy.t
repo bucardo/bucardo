@@ -16,10 +16,13 @@ my $bct = BucardoTesting->new({sync => 'fctest', location => 'fullcopy'})
     or BAIL_OUT "Creation of BucardoTesting object failed\n";
 
 my $numtables = keys %tabletype;
-my $single_tests = 11;
+my $numsequences = keys %sequences;
+my $single_tests = 12;
 my $table_tests = 2;
 my $numdatabases = 3;
-plan tests => $single_tests + ( $table_tests * $numtables * $numdatabases );
+plan tests => $single_tests +
+    ( $table_tests * $numtables * $numdatabases ) +
+    ( 1 * $numsequences );
 
 pass("*** Beginning 'fullcopy' tests");
 
@@ -59,6 +62,11 @@ $t = q{Adding all tables on the master works};
 $res = $bct->ctl(q{bucardo add tables '*bucardo*test*' db=A herd=all});
 like ($res, qr/Created the herd named "all".*are now part of/s, $t);
 
+## Add all sequences as well
+$t = q{Adding all tables on the master works};
+$res = $bct->ctl(q{bucardo add sequences all herd=all});
+like ($res, qr/New sequences added/s, $t);
+
 ## Create a new database group going from A to B and C and D
 $t = q{Created a new fullcopy database group A -> B C D};
 $res = $bct->ctl('bucardo add dbgroup pg A:source B:fullcopy C:fullcopy D:fullcopy');
@@ -86,9 +94,15 @@ $bct->check_for_row([[2]], [qw/ B C D/]);
 $bct->add_row_to_database('B',3);
 $bct->remove_row_from_database('C', 2);
 
+## Change the sequence on A
+$dbhA->do('alter sequence bucardo_test_seq1 start 20 restart 25 minvalue 10 maxvalue 100');
+$dbhA->commit();
+
 ## Kick off the sync, then check that everything was replaced
 $bct->ctl('bucardo kick fctest 0');
 $bct->check_for_row([[2]], [qw/ B C D/]);
+
+$bct->check_sequences_same([qw/A B C D/]);
 
 pass("*** End 'fullcopy' tests");
 
