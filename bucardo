@@ -6214,13 +6214,13 @@ sub add_all_goats {
             $VERBOSE >= 2 and warn "Skipping $type already in goat: $S.$T\n";
             $count{seenit}++;
             $old{$S}{$T} = 1;
-            if ($herd and 'table' eq $type) {
+            if ($herd) {
                 ## In case this is not already in the herd, grab the id and jump down
                 $SQL = 'SELECT * FROM goat WHERE db=? AND schemaname=? AND tablename=? AND reltype=?';
                 $sth = $dbh->prepare($SQL);
-                $count = $sth->execute($db->{name},$S,$T,'table');
+                $count = $sth->execute($db->{name},$S,$T,$type);
                 if ($count < 1) {
-                    die qq{Could not find table $S.$T in database "$db->{name}"!\n};
+                    die qq{Could not find $type $S.$T in database "$db->{name}"!\n};
                 }
                 $tinfo = $sth->fetchall_arrayref({})->[0];
                 $id = $tinfo->{id};
@@ -6271,7 +6271,7 @@ sub add_all_goats {
                 $count = $sth->execute($herd, $id);
                 if ($count < 1) {
                     $addtoherd->execute($herd, $id);
-                    $VERBOSE >= 2 and warn "Added $type $S.$T to herd $herd\n";
+                    print "Added $type $S.$T to herd $herd\n";
                 }
             }
         }
