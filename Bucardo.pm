@@ -2972,9 +2972,9 @@ sub start_kid {
                     next if $x->{dbtype} ne 'postgres';
 
                     $x->{adjustsequence} = 1;
-
-                    $deltacount{sequences} += $self->adjust_sequence($g, $sync, $S, $T, $syncname);
                 }
+
+                $deltacount{sequences} += $self->adjust_sequence($g, $sync, $S, $T, $syncname);
 
             } ## end of handling sequences
 
@@ -3323,6 +3323,9 @@ sub start_kid {
 
                                 $self->{dbhightime}{$dbname} = 0;
                                 for my $g (@$goatlist) {
+
+                                    ## This only makes sense for tables
+                                    next if $g->{reltype} ne 'table';
 
                                     ## Prep our SQL: find the epoch of the latest transaction for this table
                                     if (!exists $g->{sql_max_delta}) {
@@ -7408,9 +7411,11 @@ sub adjust_sequence {
 
     ## Walk through all Postgres databases and set the sequence
     for my $dbname (sort keys %{ $sync->{db} }) {
+
         next if $dbname eq $winner; ## Natch
 
         $x = $sync->{db}{$dbname};
+
         next if $x->{dbtype} ne 'postgres';
 
         next if ! $x->{adjustsequence};
