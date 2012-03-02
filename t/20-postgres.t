@@ -12,19 +12,27 @@ use DBD::Pg;
 use Test::More;
 use MIME::Base64;
 
-use vars qw/ $dbhX $dbhA $dbhB $dbhC $dbhD $res $command $t $SQL %pkey %sth %sql $sth $count/;
+use vars qw/ $dbhX $dbhA $dbhB $dbhC $dbhD $res $command $t $SQL %pkey %sth %sql $sth $count $val /;
 
 use BucardoTesting;
 my $bct = BucardoTesting->new({location => 'postgres'})
     or BAIL_OUT "Creation of BucardoTesting object failed\n";
 
+## Some of the tests are called inside of BucardoTesting.pm
+## e.g. $bct->check_for_row([[1]], [qw/ B C D/]);
+## The above runs one test for each passed in database x the number of test tables
+## 1 4
 my $numtables = keys %tabletype;
 my $numsequences = keys %sequences;
-my $single_tests = 19;
+my $single_tests = 23;
+my $check_for_row_3 = 1;
+my $check_for_row_4 = 4;
+my $check_sequences_same = 1;
+
 plan tests => $single_tests +
-    ( 1 * $numsequences ) + 
-    ( 1 * $numtables * 3 ) + ## B C and D
-    ( 3 * $numtables * 4 ); ## A B C and D
+    ( $check_sequences_same * $numsequences ) + ## Simple sequence testing
+    ( $check_for_row_3 * $numtables * 3 ) + ## B C D
+    ( $check_for_row_4 * $numtables * 4 ); ## A B C D
 
 pass("*** Beginning postgres tests");
 
@@ -57,7 +65,7 @@ for my $name (qw/ A B C D /) {
 
 ## Put all pk tables into a herd
 $t = q{Adding all PK tables on the master works};
-$res = $bct->ctl(q{bucardo add tables '*bucardo*test*' db=A herd=allpk pkonly});
+$res = $bct->ctl(q{bucardo add tables '*bucardo*test*' '*Bucardo*test*' db=A herd=allpk pkonly});
 like ($res, qr/Created the herd named "allpk".*are now part of/s, $t);
 
 ## Add all sequences
@@ -201,6 +209,31 @@ $dbhC->commit();
 
 $bct->ctl('bucardo kick sync pgtest3 0');
 $bct->check_sequences_same([qw/A B C D/]);
+
+## Create a PK conflict and let B "win" due to the timestamp
+$SQL = 'UPDATE bucardo_test1 SET data1 = ? WHERE id = ?';
+$dbhB->do($SQL, {}, 'Bravo', 3);
+$dbhC->do($SQL, undef, 'Charlie', 3);
+$dbhA->do($SQL, undef, 'Alpha', 3);
+## Order of commits should not matter: the timestamp comes from the start of the transaction
+$dbhC->commit();
+$dbhB->commit();
+$dbhA->commit();
+
+$bct->ctl('bucardo kick sync pgtest3 0');
+$bct->check_for_row([[1],[2],[3],[7]], [qw/A B C D/]);
+
+
+$SQL = 'SELECT data1 FROM bucardo_test1 WHERE id = ?';
+$val = $dbhA->selectall_arrayref($SQL, undef, 3)->[0][0];
+$t = 'Conflict resolution respects earliest transaction time for A';
+is ($val, 'Charlie', $t);
+$t = 'Conflict resolution respects earliest transaction time for B';
+$val = $dbhB->selectall_arrayref($SQL, undef, 3)->[0][0];
+is ($val, 'Charlie', $t);
+$t = 'Conflict resolution respects earliest transaction time for C';
+$val = $dbhC->selectall_arrayref($SQL, undef, 3)->[0][0];
+is ($val, 'Charlie', $t);
 
 exit;
 
