@@ -19,8 +19,10 @@ my $bct = BucardoTesting->new({location => 'postgres'})
     or BAIL_OUT "Creation of BucardoTesting object failed\n";
 
 my $numtables = keys %tabletype;
+my $numsequences = keys %sequences;
 my $single_tests = 19;
 plan tests => $single_tests +
+    ( 1 * $numsequences ) + 
     ( 1 * $numtables * 3 ) + ## B C and D
     ( 3 * $numtables * 4 ); ## A B C and D
 
@@ -57,6 +59,11 @@ for my $name (qw/ A B C D /) {
 $t = q{Adding all PK tables on the master works};
 $res = $bct->ctl(q{bucardo add tables '*bucardo*test*' db=A herd=allpk pkonly});
 like ($res, qr/Created the herd named "allpk".*are now part of/s, $t);
+
+## Add all sequences
+$t = q{Adding all sequences to the main herd};
+$res = $bct->ctl(q{bucardo add all sequences herd=allpk});
+like ($res, qr/New sequences added/s, $t);
 
 ## Create a new database group going from A to B and C and D
 $t = q{Created a new database group A -> B C D};
@@ -183,6 +190,17 @@ $bct->add_row_to_database('C', 2);
 ## Kick and check everyone is the same
 $bct->ctl('bucardo kick sync pgtest3 0');
 $bct->check_for_row([[1],[2],[3],[7]], [qw/A B C D/]);
+
+## Change sequence information, make sure it gets out to everyone
+$dbhA->do('alter sequence bucardo_test_seq1 start 20 restart 25 minvalue 10 maxvalue 8675');
+$dbhA->commit();
+$dbhB->do('alter sequence bucardo_test_seq2 start 200 restart 250 minvalue 100 maxvalue 86753');
+$dbhB->commit();
+$dbhC->do(q{SELECT setval('bucardo_test_seq3', 12345)});
+$dbhC->commit();
+
+$bct->ctl('bucardo kick sync pgtest3 0');
+$bct->check_sequences_same([qw/A B C D/]);
 
 exit;
 
