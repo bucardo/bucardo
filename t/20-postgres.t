@@ -24,13 +24,15 @@ my $bct = BucardoTesting->new({location => 'postgres'})
 ## 1 4
 my $numtables = keys %tabletype;
 my $numsequences = keys %sequences;
-my $single_tests = 23;
-my $check_for_row_3 = 1;
-my $check_for_row_4 = 4;
+my $single_tests = 26;
+my $check_for_row_1 = 1;
+my $check_for_row_3 = 2;
+my $check_for_row_4 = 7;
 my $check_sequences_same = 1;
 
 plan tests => $single_tests +
     ( $check_sequences_same * $numsequences ) + ## Simple sequence testing
+    ( $check_for_row_1 * $numtables * 1 ) + ## D
     ( $check_for_row_3 * $numtables * 3 ) + ## B C D
     ( $check_for_row_4 * $numtables * 4 ); ## A B C D
 
@@ -235,5 +237,51 @@ $t = 'Conflict resolution respects earliest transaction time for C';
 $val = $dbhC->selectall_arrayref($SQL, undef, 3)->[0][0];
 is ($val, 'Charlie', $t);
 
-exit;
+## Truncate on A:source goes to all other nodes
+$bct->truncate_all_tables('A');
+## Just for fun, let C win a truncation "contest"
+$dbhC->do('TRUNCATE TABLE bucardo_test5');
+## We commit everyone as the truncates will block on open transactions
+$dbhX->commit(); $dbhA->commit(); $dbhB->commit(); $dbhC->commit(); $dbhD->commit();
+$bct->ctl('bucardo kick sync pgtest3 0');
+$bct->check_for_row([], [qw/A B C D/], 'truncate A');
 
+## A truncate plus delta rows will truncate all others but keep delta rows
+$bct->add_row_to_database('A', 1);
+$bct->add_row_to_database('B', 2);
+$bct->add_row_to_database('C', 3);
+$bct->add_row_to_database('D', 4);
+## Order matters: the last one should "win" and thus replicate subsequent changes
+for my $d (qw/ A B C D /) {
+    $bct->truncate_all_tables($d);
+}
+## Now add some things back to each one
+$bct->add_row_to_database('A', 5);
+$bct->add_row_to_database('B', 6);
+$bct->add_row_to_database('C', 7);
+$bct->add_row_to_database('D', 8);
+## Kick off the sync. C should win (D is target), truncate the others, then propogate '7'
+$bct->ctl('bucardo kick sync pgtest3 0');
+$bct->check_for_row([[7]], [qw/A B C D/], 'truncate D');
+
+## Make sure we can go back to normal mode after a truncate
+$bct->add_row_to_database('A', 2);
+$bct->add_row_to_database('B', 3);
+$bct->ctl('bucardo kick sync pgtest3 0');
+$bct->check_for_row([[2],[3],[7]], [qw/A B C D/]);
+
+## Tests of customcols
+$t = q{add customcols returns expected message};
+$res = $bct->ctl('bucardo add customcols bucardo_test1 "SELECT id, data1, inty*30 AS inty"');
+like($res, qr/\QNew columns for public.bucardo_test1: "SELECT id, data1, inty*30 AS inty"/, $t);
+
+## We need to restart Bucardo entirely to change this. Someday, a reload sync will be enough.
+$bct->restart_bucardo($dbhX);
+
+$bct->add_row_to_database('A', 1);
+$bct->ctl('bucardo kick sync pgtest3 0');
+$bct->check_for_row([[1],[2],[3],[7]], [qw/A B C/]);
+$bct->check_for_row([[1],[2],[3],[7]], [qw/D/], 'customcols', '!test1');
+$bct->check_for_row([[2],[3],[7],[30]], [qw/D/], 'customcols', 'test1');
+
+exit;

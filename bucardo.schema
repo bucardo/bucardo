@@ -630,6 +630,10 @@ BEGIN
       || '!'
       || SUBSTRING(MD5(tname) FROM 1 FOR 10);
   END IF;
+
+  -- We let Postgres worry about the quoting details
+  SELECT INTO newname quote_ident(newname);
+
   RETURN newname;
 END;
 $bc$;
@@ -1436,6 +1440,8 @@ BEGIN
       || '!'
       || SUBSTRING(MD5(tname) FROM 1 FOR 10);
   END IF;
+  -- We let Postgres worry about the quoting details
+  SELECT INTO newname quote_ident(newname);
   RETURN newname;
 END;
 \$clone\$;
@@ -1454,7 +1460,7 @@ DECLARE
 BEGIN
   SELECT INTO newname bucardo.bucardo_tablename_maker(\$1);
 
-  -- If it has quotes around it, we expand the quotes to include the prefic
+  -- If it has quotes around it, we expand the quotes to include the prefix
   IF (POSITION('"' IN newname) >= 1) THEN
     newname = REPLACE(newname, '"', '');
     newname = '"' || \$2 || newname || '"';
@@ -1525,23 +1531,26 @@ END;
                   SECURITY DEFINER
                   AS \$clone\$
                   DECLARE
-                    deltaname TEXT;
+                    tname TEXT;
                     myst TEXT;
                   BEGIN
                     INSERT INTO bucardo.bucardo_truncate_trigger(tablename,sname,tname,sync)
                       VALUES (TG_RELID, TG_TABLE_SCHEMA, TG_TABLE_NAME, TG_ARGV[0]);
 
-                    SELECT INTO deltaname
-                      bucardo.bucardo_tablename_maker(TG_TABLE_SCHEMA || '_' || TG_TABLE_NAME);
-
-                    myst = 'TRUNCATE TABLE bucardo.delta_' || deltaname;
+                    SELECT INTO tname
+                      bucardo.bucardo_tablename_maker(TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME, 'delta_');
+                    myst = 'TRUNCATE TABLE bucardo.' || tname;
                     EXECUTE myst;
 
-                    myst = 'TRUNCATE TABLE bucardo.track_' || deltaname;
+                    SELECT INTO tname
+                      bucardo.bucardo_tablename_maker(TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME, 'track_');
+                    myst = 'TRUNCATE TABLE bucardo.' || tname;
                     EXECUTE myst;
 
                     -- Not strictly necessary, but nice to have a clean slate
-                    myst = 'TRUNCATE TABLE bucardo.stage_' || deltaname;
+                    SELECT INTO tname
+                      bucardo.bucardo_tablename_maker(TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME, 'stage_');
+                    myst = 'TRUNCATE TABLE bucardo.' || tname;
                     EXECUTE myst;
 
                     RETURN NEW;
@@ -2141,18 +2150,27 @@ SELECT 'Fixme'::TEXT;
               $index3_name = qq{"dex3_$makername"};
               $stage_table = qq{"stage_$makername"};
             }
-            $count = $sth->execute('bucardo',$delta_table);
+			## Also need non-quoted versions to feed to execute()
+			(my $noquote_delta_table = $delta_table) =~ s/^"(.+)"$/$1/;
+			(my $noquote_index1_name = $index1_name) =~ s/^"(.+)"$/$1/;
+			(my $noquote_index2_name = $index2_name) =~ s/^"(.+)"$/$1/;
+			(my $noquote_deltafunc = $deltafunc) =~ s/^"(.+)"$/$1/;
+			(my $noquote_track_table = $track_table) =~ s/^"(.+)"$/$1/;
+			(my $noquote_index3_name = $index3_name) =~ s/^"(.+)"$/$1/;
+			(my $noquote_stage_table = $stage_table) =~ s/^"(.+)"$/$1/;
+
+            $count = $sth->execute('bucardo',$noquote_delta_table);
             if ($count < 1) {
                ## Create that table!
                my $pkcols = join ',' => map { qq{"$_"} } split (/\|/ => $tinfo->{pkey});
                $SQL = qq{
-                   CREATE TABLE bucardo."$delta_table"
+                   CREATE TABLE bucardo.$delta_table
                      AS SELECT $pkcols, now()::TIMESTAMPTZ AS txntime
                         FROM "$schema"."$table" LIMIT 0
                };
                run_sql($SQL,$dbh);
                $SQL = qq{
-                   ALTER TABLE bucardo."$delta_table"
+                   ALTER TABLE bucardo.$delta_table
                      ALTER txntime SET NOT NULL,
                      ALTER txntime SET DEFAULT now()
                };
@@ -2161,20 +2179,20 @@ SELECT 'Fixme'::TEXT;
 
             ## Need an index on the txntime column
             $sth = $sth{hazindex};
-            $count = $sth->execute('bucardo',$index1_name);
+            $count = $sth->execute('bucardo',$noquote_index1_name);
             $sth->finish();
             if ($count < 1) {
-                $SQL = qq{CREATE INDEX "$index1_name" ON bucardo."$delta_table"(txntime)};
+                $SQL = qq{CREATE INDEX $index1_name ON bucardo.$delta_table(txntime)};
                 run_sql($SQL, $dbh);
             }
 
             ## Need an index on all other columns
             $sth = $sth{hazindex};
-            $count = $sth->execute('bucardo',$index2_name);
+            $count = $sth->execute('bucardo',$noquote_index2_name);
             $sth->finish();
             if ($count < 1) {
                 my $pkcols = join ',' => map { qq{"$_"} } split (/\|/ => $tinfo->{pkey});
-                $SQL = qq{CREATE INDEX "$index2_name" ON bucardo."$delta_table"($pkcols)};
+                $SQL = qq{CREATE INDEX $index2_name ON bucardo.$delta_table($pkcols)};
                 run_sql($SQL, $dbh);
             }
 
@@ -2187,14 +2205,14 @@ SELECT 'Fixme'::TEXT;
             my @pkeys = split (/\|/ => $tinfo->{pkey});
 
             $sth = $sth{hazfunc};
-            $count = $sth->execute('bucardo', $deltafunc);
+            $count = $sth->execute('bucardo', $noquote_deltafunc);
             $sth->finish();
             if ($count < 1) {
                  my $new = join ',' => map { qq{NEW."$_"} } @pkeys;
                  my $old = join ',' => map { qq{OLD."$_"} } @pkeys;
                  my $clause = join ' OR ' => map { qq{OLD."$_" <> NEW."$_"} } @pkeys;
                 $SQL = qq{
-        CREATE OR REPLACE FUNCTION bucardo."$deltafunc"()
+        CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
         RETURNS TRIGGER
         LANGUAGE plpgsql
         SECURITY DEFINER
@@ -2203,14 +2221,14 @@ SELECT 'Fixme'::TEXT;
         \$clone\$
         BEGIN
         IF (TG_OP = 'INSERT') THEN
-          INSERT INTO bucardo."$delta_table" VALUES ($new);
+          INSERT INTO bucardo.$delta_table VALUES ($new);
         ELSIF (TG_OP = 'UPDATE') THEN
-          INSERT INTO bucardo."$delta_table" VALUES ($old);
+          INSERT INTO bucardo.$delta_table VALUES ($old);
           IF ($clause) THEN
-            INSERT INTO bucardo."$delta_table" VALUES ($new);
+            INSERT INTO bucardo.$delta_table VALUES ($new);
           END IF;
         ELSE
-          INSERT INTO bucardo."$delta_table" VALUES ($old);
+          INSERT INTO bucardo.$delta_table VALUES ($old);
         END IF;
         RETURN NULL;
         END;
@@ -2257,7 +2275,7 @@ SELECT 'Fixme'::TEXT;
                 $SQL = qq{
         CREATE TRIGGER bucardo_delta
         AFTER INSERT OR UPDATE OR DELETE ON "$schema"."$table"
-        FOR EACH ROW EXECUTE PROCEDURE bucardo."$func"()
+        FOR EACH ROW EXECUTE PROCEDURE bucardo.$func()
       };
                 run_sql($SQL,$dbh);
             }
@@ -2265,11 +2283,11 @@ SELECT 'Fixme'::TEXT;
 
             ## Now the 'track' table
             $sth = $sth{haztable};
-            $count = $sth->execute('bucardo',$track_table);
+            $count = $sth->execute('bucardo',$noquote_track_table);
             $sth->finish();
             if ($count < 1) {
                 $SQL = qq{
-                   CREATE TABLE bucardo."$track_table" (
+                   CREATE TABLE bucardo.$track_table (
                       txntime    TIMESTAMPTZ,
                       target     TEXT
                    );
@@ -2279,21 +2297,21 @@ SELECT 'Fixme'::TEXT;
 
             ## Need to index both columns of the txntime table
             $sth = $sth{hazindex};
-            $count = $sth->execute('bucardo', $index3_name);
+            $count = $sth->execute('bucardo', $noquote_index3_name);
             $sth->finish();
             if ($count < 1) {
-                $SQL = qq{CREATE INDEX "$index3_name" ON bucardo."$track_table"(target, txntime)};
+                $SQL = qq{CREATE INDEX $index3_name ON bucardo.$track_table(target, txntime)};
                 run_sql($SQL,$dbh);
             }
 
             ## The 'stage' table, which feeds 'track' once targets have committed
             $sth = $sth{haztable};
-            $count = $sth->execute('bucardo',$stage_table);
+            $count = $sth->execute('bucardo',$noquote_stage_table);
             $sth->finish();
             if ($count < 1) {
                 my $unlogged = $dbh->{pg_server_version} >= 90100 ? 'UNLOGGED' : '';
                 $SQL = qq{
-                   CREATE $unlogged TABLE bucardo."$stage_table" (
+                   CREATE $unlogged TABLE bucardo.$stage_table (
                       txntime    TIMESTAMPTZ,
                       target     TEXT
                    );

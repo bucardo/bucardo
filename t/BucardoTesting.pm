@@ -64,7 +64,7 @@ our %tabletype =
     (
      'bucardo_test1'  => 'SMALLINT',
      'bucardo_test2'  => 'INT',
-     'bucardo_test3'  => 'BIGINT',
+     'Bucardo_test3'  => 'BIGINT',
      'bucardo_test4'  => 'TEXT',
      'bucardo_test5'  => 'DATE',
      'bucardo_test6'  => 'TIMESTAMP',
@@ -79,7 +79,7 @@ our %tabletypemysql =
     (
      'bucardo_test1'  => 'SMALLINT',
      'bucardo_test2'  => 'INT',
-     'bucardo_test3'  => 'BIGINT',
+     'Bucardo_test3'  => 'BIGINT',
      'bucardo_test4'  => 'VARCHAR(1000)',
      'bucardo_test5'  => 'DATE',
      'bucardo_test6'  => 'DATETIME',
@@ -94,7 +94,7 @@ our %tabletypeoracle =
     (
      'bucardo_test1'  => 'SMALLINT',
      'bucardo_test2'  => 'INT',
-     'bucardo_test3'  => 'BIGINT',
+     'Bucardo_test3'  => 'BIGINT',
      'bucardo_test4'  => 'NVARCHAR2(1000)',
      'bucardo_test5'  => 'DATE',
      'bucardo_test6'  => 'TIMESTAMP',
@@ -109,7 +109,7 @@ our %tabletypesqlite =
     (
      'bucardo_test1'  => 'SMALLINT',
      'bucardo_test2'  => 'INT',
-     'bucardo_test3'  => 'BIGINT',
+     'Bucardo_test3'  => 'BIGINT',
      'bucardo_test4'  => 'VARCHAR(1000)',
      'bucardo_test5'  => 'DATE',
      'bucardo_test6'  => 'DATETIME',
@@ -127,7 +127,7 @@ our %sequences =
     (
     'bucardo_test_seq1' => '',
     'bucardo_test_seq2' => '',
-    'bucardo_test_seq3' => '',
+    'Bucardo_test_seq3' => '',
     );
 
 my %debug = (
@@ -719,7 +719,7 @@ sub add_test_schema {
 
         ## Does the table already exist? If so, drop it.
         if (table_exists($dbh => $table)) {
-            $dbh->do("DROP TABLE $table");
+            $dbh->do(qq{DROP TABLE "$table"});
         }
 
         my $pkeyname = $table =~ /test5/ ? q{"id space"} : 'id';
@@ -741,7 +741,7 @@ sub add_test_schema {
         $tcount++;
 
         if ($table =~ /test2/) {
-            $dbh->do("ALTER TABLE $table ADD CONSTRAINT multipk PRIMARY KEY ($pkeyname,data1)");
+            $dbh->do(qq{ALTER TABLE "$table" ADD CONSTRAINT multipk PRIMARY KEY ($pkeyname,data1)});
         }
 
         ## Create a trigger to test trigger supression during syncs
@@ -1223,11 +1223,11 @@ sub empty_test_database {
     }
 
     for my $table (sort keys %tabletype) {
-        $dbh->do("TRUNCATE TABLE $table");
+        $dbh->do(qq{TRUNCATE TABLE "$table"});
     }
 
     for my $table (@tables2empty) {
-        $dbh->do("TRUNCATE TABLE $table");
+        $dbh->do(qq{TRUNCATE TABLE "$table"});
     }
 
     if ($dbh->{pg_server_version} >= 80300) {
@@ -1615,15 +1615,43 @@ sub remove_row_from_database {
 } ## end of remove_row_from_database
 
 
-sub check_for_row {
+sub truncate_all_tables {
 
-    ## Check that a given row is on the database as expected
+    ## Truncate all the tables
     ## Arguments: two
-    ## 1. The result we are expecting, as an arrayref
-    ## 2. A list of database names (should be inside gdbh)
+    ## 1. Database to use
+    ## 3. Do we commit or not? Boolean, defaults to true
     ## Returns: undef
 
-    my ($self, $res, $dblist) = @_;
+    my ($self, $dbname, $commit) = @_;
+
+    $commit = 1 if ! defined $commit;
+
+    my $dbh = $gdbh{$dbname} or die "No such database: $dbname";
+
+    ## Loop through each table we know about
+    for my $table (sort keys %tabletype) {
+        $dbh->do(qq{TRUNCATE Table ONLY "$table"});
+    }
+
+    $dbh->commit() if $commit;
+
+    return undef;
+
+} ## end of truncate_all_tables
+
+
+sub check_for_row {
+
+    ## Check that a given row is on the database as expected: checks the inty column only
+    ## Arguments: two or three or four
+    ## 1. The result we are expecting, as an arrayref
+    ## 2. A list of database names (should be inside gdbh)
+    ## 3. Optional text to append to output message
+    ## 4. Optional tables to limit checking to
+    ## Returns: undef
+
+    my ($self, $res, $dblist, $text, $filter) = @_;
 
     ## Get largest tablename
     my $maxtable = 1;
@@ -1639,11 +1667,21 @@ sub check_for_row {
 
         for my $table (sort keys %tabletype) {
 
+            ## Allow skipping tables
+            if (defined $filter) {
+                my $f = $filter;
+                if ($f =~ s/^\!//) {
+                    next if $table =~ /$f$/;
+                }
+                else {
+                    next if $table !~ /$f$/;
+                }
+            }
             ## Handle odd pkeys
             my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
 
             my $type = $tabletype{$table};
-            my $t = sprintf qq{Copy to %-*s ok for pkey type %s},
+            my $t = sprintf qq{%-*s copy ok (%s)},
                 $maxdbtable,
                 "$dbname.$table",
                     $type;
@@ -1654,6 +1692,10 @@ sub check_for_row {
                     $maxdbtable,
                     "$dbname.$table",
                     $type;
+            }
+
+            if (defined $text and length $text) {
+                $t .= " $text";
             }
 
             my $SQL = qq{SELECT inty FROM "$table" ORDER BY inty};

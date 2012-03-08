@@ -2745,11 +2745,25 @@ sub start_kid {
         $dmlcount{truncates} = 0;
         $dmlcount{conflicts} = 0;
 
-        ## Reset both of the above at a per-database level
+        ## Reset all of our truncate stuff
+        $self->{has_truncation} = 0;
+        delete $self->{truncateinfo};
+
+        ## Reset some things at the per-database level
         for my $dbname (keys %{ $sync->{db} }) {
+
             $deltacount{$dbname} = 0;
             $dmlcount{allinserts}{$dbname} = 0;
             $dmlcount{alldeletes}{$dbname} = 0;
+
+            $x = $sync->{db}{$dbname};
+            delete $x->{truncatewinner};
+
+        }
+
+        ## Reset things at the goat level
+        for my $g (@$goatlist) {
+            delete $g->{truncatewinner};
         }
 
         ## Run all 'before_txn' code
@@ -2883,27 +2897,25 @@ sub start_kid {
             ## We will never reach this while in onetimecopy mode as @dbs_delta is emptied
 
             ## Check if any tables were truncated on all source databases
-            ## Store the result in $self->{truncateinfo}
+            ## If so, set $self->{has_truncation}; store results in $self->{truncateinfo}
             ## First level keys are schema then table name
             ## Third level is maxtime and maxdb, showing the "winner" for each table
-            delete $self->{truncateinfo};
 
-            $SQL = 'SELECT sname, tname, MAX(EXTRACT(epoch FROM cdate)) FROM bucardo.bucardo_truncate_trigger '
+            $SQL = 'SELECT quote_ident(sname), quote_ident(tname), MAX(EXTRACT(epoch FROM cdate))'
+                   . ' FROM bucardo.bucardo_truncate_trigger '
                    . ' WHERE sync = ? AND replicated IS NULL GROUP BY 1,2';
 
             for my $dbname (@dbs_source) {
 
                 $x = $sync->{db}{$dbname};
 
-                ## Remove our previous truncation flag
-                delete $x->{truncatewinner};
-
                 ## Grab the latest truncation time for each table, for this source database
                 $self->glog(qq{Checking truncate_trigger table on database "$dbname"}, LOG_VERBOSE);
                 $sth = $x->{dbh}->prepare($SQL);
-                $count = $sth->execute($syncname);
+                $self->{has_truncation} += $sth->execute($syncname);
                 for my $row (@{ $sth->fetchall_arrayref() }) {
                     my ($s,$t,$time) = @{ $row };
+                    ## Store if this is the new winner
                     if (! exists $self->{truncateinfo}{$s}{$t}{maxtime}
                             or $time > $self->{truncateinfo}{$s}{$t}{maxtime}) {
                         $self->{truncateinfo}{$s}{$t}{maxtime} = $time;
@@ -2914,7 +2926,7 @@ sub start_kid {
             } ## end each source database, checking for truncations
 
             ## Now go through and mark the winner within the "x" hash, for easy skipping later on
-            if (exists $self->{truncateinfo}) {
+            if ($self->{has_truncation}) {
                 for my $s (keys %{ $self->{truncateinfo} }) {
                     for my $t (keys %{ $self->{truncateinfo}{$s} }) {
                         my $dbname = $self->{truncateinfo}{$s}{$t}{maxdb};
@@ -2926,16 +2938,25 @@ sub start_kid {
                 ## Set the truncate count
                 my $number = @dbs_non_fullcopy; ## not the best estimate: corner cases
                 $dmlcount{truncate} = $number - 1;
+
+                ## Now map this back to our goatlist
+                for my $g (@$goatlist) {
+                    next if $g->{reltype} ne 'table';
+                    ($S,$T) = ($g->{safeschema},$g->{safetable});
+                    if (exists $self->{truncateinfo}{$S}{$T}) {
+                        $g->{truncatewinner} = $self->{truncateinfo}{$S}{$T}{maxdb};
+                    }
+                }
             }
 
-            ## First, handle all the sequences
+            ## Next, handle all the sequences
             for my $g (@$goatlist) {
 
                 next if $g->{reltype} ne 'sequence';
 
                 ($S,$T) = ($g->{safeschema},$g->{safetable});
 
-                ## Grab the sequence information from each database 
+                ## Grab the sequence information from each database
                 ## Figure out which source one is the highest
                 ## Right now, this is the only sane option.
                 ## In the future, we might consider coupling tables and sequences and
@@ -2998,16 +3019,9 @@ sub start_kid {
                 ## This is the meat of Bucardo:
                 for my $dbname (@dbs_source) {
 
-                    $x = $sync->{db}{$dbname};
-
                     ## If we had a truncation, we only get deltas from the "winning" source
-                    if (exists $self->{truncateinfo}{$S}{$T}) {
-                        if (! exists $x->{truncatewinner}{$S}{$T}) {
-                            $self->glog("Skipping deltas from database $dbname, as some other source has truncated",
-                                        LOG_NORMAL);
-                            next;
-                        }
-                    }
+                    ## We still need these, as we want to respect changes made after the truncation!
+                    next if exists $g->{truncatewinner} and $g->{truncatewinner} ne $dbname;
 
                     ## Gets all relevant rows from bucardo_deltas: runs asynchronously
                     $sth{getdelta}{$dbname}{$g}->execute();
@@ -3017,11 +3031,10 @@ sub start_kid {
                 ## Order does not really matter here, except for consistency in the logs
                 for my $dbname (@dbs_source) {
 
-                    $x = $sync->{db}{$dbname};
-
                     ## Skip if truncating and this one is not the winner
-                    next if exists $self->{truncateinfo}{$S}{$T}
-                        and ! exists $x->{truncatewinner}{$S}{$T};
+                    next if exists $g->{truncatewinner} and $g->{truncatewinner} ne $dbname;
+
+                    $x = $sync->{db}{$dbname};
 
                     ## pg_result tells us to wait for the query to finish
                     $count = $x->{dbh}->pg_result();
@@ -3053,10 +3066,10 @@ sub start_kid {
 
                 for my $dbname (@dbs_source) {
 
-                    $x = $sync->{db}{$dbname};
+                    ## Skip if truncating and this one is not the winner
+                    next if exists $g->{truncatewinner} and $g->{truncatewinner} ne $dbname;
 
-                    next if exists $self->{truncateinfo}{$S}{$T}
-                        and ! exists $x->{truncatewinner}{$S}{$T};
+                    $x = $sync->{db}{$dbname};
 
                     $self->glog((sprintf q{Delta count for %-*s : %*d},
                                  $self->{maxdbstname},
@@ -3084,7 +3097,8 @@ sub start_kid {
 
                 for my $dbname (@dbs_source) {
 
-                    $x = $sync->{db}{$dbname};
+                    ## Skip if truncating and deltacount is thus not set
+                    next if ! exists $deltacount{db}{$dbname};
 
                     $self->glog((sprintf q{Delta count for %-*s: %*d},
                                 $self->{maxdbname} + 2,
@@ -3098,8 +3112,7 @@ sub start_kid {
             ## update the syncrun and dbrun tables, notify listeners,
             ## then either re-loop or leave
 
-            if (! $deltacount{all}
-                    and ! exists $self->{truncateinfo}) {
+            if (! $deltacount{all} and ! $self->{has_truncation}) {
 
                ## If we modified the bucardo_sequences table, save the change
                 if ($deltacount{sequences}) {
@@ -3121,7 +3134,7 @@ sub start_kid {
                     $x = $sync->{db}{$dbname};
 
                     ## We never do native fullcopy targets here
-                    next if $x->{type} eq 'fullcopy';
+                    next if $x->{role} eq 'fullcopy';
 
                     $sth = $sth{dbrun_delete};
                     $sth->execute($syncname, $dbname);
@@ -3156,18 +3169,17 @@ sub start_kid {
 
           PUSHDELTA_GOAT: for my $g (@$goatlist) {
 
-                ($S,$T) = ($g->{safeschema},$g->{safetable});
-
                 ## No need to proceed unless we're a table
                 next if $g->{reltype} ne 'table';
 
                 ## Skip if we've already handled this via fullcopy
-                ## XXX truncate work
                 next if $g->{source}{needstruncation};
 
+                ($S,$T) = ($g->{safeschema},$g->{safetable});
+
                 ## Skip this table if no source rows have changed
-                next if ! $deltacount{table}{$S}{$T}
-                    and ! exists $self->{truncateinfo}{$S}{$T};
+                ## However, we still need to go on in the case of a truncation
+                next if ! $deltacount{table}{$S}{$T} and ! exists $g->{truncatewinner};
 
                 ## How many times this goat has handled an exception?
                 $g->{exceptions} ||= 0;
@@ -3199,14 +3211,17 @@ sub start_kid {
                 ## it's now time to gather the actual data
                 my %deltabin;
 
-                ## If we had a truncate, make sure all databases have at least a bare deltabin entry
-                if (exists $self->{truncateinfo}) {
-                    for my $dbname (@dbs_source) {
+                for my $dbname (@dbs_source) {
+
+                    $x = $sync->{db}{$dbname};
+
+                    ## Skip if we are truncating and this is not the winner
+                    next if exists $g->{truncatewinner} and $g->{truncatewinner} ne $dbname;
+
+                    ## If this is a truncation, we always want the deltabin to exist, even if empty!
+                    if (exists $g->{truncatewinner}) {
                         $deltabin{$dbname} = {};
                     }
-                }
-
-                for my $dbname (@dbs_source) {
 
                     ## Skip if we know we have no rows - and thus have issued a finish()
                     next if ! $deltacount{dbtable}{$dbname}{$S}{$T};
@@ -3214,17 +3229,17 @@ sub start_kid {
                     ## Create an empty hash to hold the primary key information
                     $deltabin{$dbname} = {};
 
-                    while ($x = $sth{getdelta}{$dbname}{$g}->fetchrow_arrayref()) {
+                    while (my $y = $sth{getdelta}{$dbname}{$g}->fetchrow_arrayref()) {
                         ## Join all primary keys together with \0, put into hash as key
                         ## XXX: Using \0 is not unique for binaries
                         if (!$g->{hasbinarypk}) {
-                            $deltabin{$dbname}{join "\0" => @$x} = 1;
+                            $deltabin{$dbname}{join "\0" => @$y} = 1;
                         }
                         else {
                             my $decodename = '';
 
                             my @pk;
-                            for my $row (@$x) {
+                            for my $row (@$y) {
                                 push @pk => $row;
                             }
                             $deltabin{$dbname}{join "\0" => @pk} = 1;
@@ -3423,6 +3438,7 @@ sub start_kid {
                 } ## end if have conflicts
 
                 ## At this point, %deltabin should contain a single copy of each primary key
+                ## It may even be empty if we are truncating
 
                 ## We need to figure out how many sources we have for some later optimizations
                 my $numsources = keys %deltabin;
@@ -3431,9 +3447,11 @@ sub start_kid {
                 ## If there is only one source, then it will *not* get written to
                 ## If there is more than one source, then everyone gets written to!
                 for my $dbname (keys %{ $sync->{db} }) {
+
                     $x = $sync->{db}{$dbname};
 
                     ## Again: everyone is written to unless there is a single source
+                    ## A truncation source may have an empty deltabin, but it will exist
                     $x->{writtento} = (1==$numsources and exists $deltabin{$dbname}) ? 0 : 1;
                     next if ! $x->{writtento};
 
@@ -3585,10 +3603,30 @@ sub start_kid {
                             ## to all other databases for this sync
                             for my $dbname1 (sort keys %deltabin) {
 
+                                ## If we are doing a truncate, delete everything from all other dbs!
+                                if (exists $g->{truncatewinner}) {
+
+                                    for my $dbnamet (@dbs) {
+
+                                        ## Exclude ourselves, which should be the only thing in deltabin!
+                                        next if $dbname1 eq $dbnamet;
+
+                                        ## Grab the real target name
+                                        my $tname = $g->{newname}{$syncname}{$dbnamet};
+
+                                        $x = $sync->{db}{$dbnamet};
+
+                                        my $do_cascade = 0;
+                                        $self->truncate_table($x, $tname, $do_cascade);
+                                    }
+                                    ## We keep going, in case the source has post-truncation items
+                                }
+
                                 ## How many rows are we pushing around? If none, we done!
                                 my $rows = keys %{ $deltabin{$dbname1} };
                                 $self->glog("Rows to push from $dbname1.$S.$T: $rows", LOG_VERBOSE);
-                                next if ! $rows and ! exists $self->{truncateinfo}{$S}{$T};
+                                ## This also exits us if we are a truncate with no source rows
+                                next if ! $rows;
 
                                 ## Build the list of target databases we are pushing to
                                 my @pushdbs;
@@ -4136,7 +4174,7 @@ sub start_kid {
         } ## end have some fullcopy targets
 
         ## Close filehandles for any flatfile databases
-        for my $dbname (keys %{ $sync->{db} }) { ## ZZZ Use a dbs_flat?
+        for my $dbname (keys %{ $sync->{db} }) {
             $x = $sync->{db}{$dbname};
 
             next if $x->{dbtype} !~ /flat/o;
@@ -6893,7 +6931,7 @@ sub cleanup_controller {
     }
 
     ## Ask all kids to exit as well
-    my $exitname = "kid_stop_$self->{syncname}";
+    my $exitname = "kid_stopsync_$self->{syncname}";
     $self->{masterdbh}->rollback();
     $self->db_notify($self->{masterdbh}, $exitname);
 
@@ -7669,13 +7707,14 @@ sub truncate_table {
         $tname,
         ($cascade and $x->{does_cascade}) ? ' CASCADE' : '';
         my $truncate_ok = 0;
+
         eval {
             $x->{dbh}->do($SQL);
             $truncate_ok = 1;
         };
         if (! $truncate_ok) {
             $x->{does_savepoints} and $x->{dbh}->do('ROLLBACK TO truncate_attempt');
-            $self->glog("Truncate error: $@", LOG_NORMAL);
+            $self->glog("Truncate error for db $x->{name}.$x->{dbname}.$tname: $@", LOG_NORMAL);
             return 0;
         }
         else {
@@ -7762,6 +7801,11 @@ sub delete_rows {
 
     my $newname = $goat->{newname}{$self->{syncname}};
 
+    ## Have we already truncated this table? If yes, skip and reset the flag
+    if (exists $goat->{truncatewinner}) {
+        return 0;
+    }
+
     ## Are we truncating?
     if (exists $self->{truncateinfo}{$S}{$T}) {
 
@@ -7777,7 +7821,7 @@ sub delete_rows {
             ## sync (herd), and we have turned all FKs off
             if ('postgres' eq $type) {
                 my $tdbh = $t->{dbh};
-                $tdbh->do("TRUNCATE TABLE $tname", { pg_async => PG_ASYNC });
+                $tdbh->do("TRUNCATE table $tname", { pg_async => PG_ASYNC });
             } ## end postgres database
             ## For all other SQL databases, we simply truncate
             elsif ($x->{does_sql}) {
