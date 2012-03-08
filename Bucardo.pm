@@ -2007,8 +2007,18 @@ sub start_mcp {
                     if ($scol->{ftype} ne $fcol->{ftype}) {
                         ## Carve out some known exceptions (but still warn about them)
                         ## Allowed: varchar == text
-                        if (($scol->{ftype} eq 'character varying' and $fcol->{ftype} eq 'text') or
-                            ($fcol->{ftype} eq 'character varying' and $scol->{ftype} eq 'text')) {
+                        ## Allowed: timestamp* == timestamp*
+                        if (
+                             ($scol->{ftype} eq 'character varying' and $fcol->{ftype} eq 'text')
+                             or
+                             ($scol->{ftype} eq 'text' and $fcol->{ftype} eq 'character varying')
+                             or
+                             (
+                               $scol->{ftype} ne $fcol->{ftype}
+                               and
+                               $scol->{ftype} =~ /^timestamp/ and $fcol->{ftype} =~ /^timestamp/
+                             )
+                           ) {
                             my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" as type "$scol->{ftype}", but target database "$db" has a type of "$fcol->{ftype}". You should really fix that.};
                             $self->glog("Warning: $msg");
                         }
