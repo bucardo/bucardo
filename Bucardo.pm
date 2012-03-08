@@ -2013,11 +2013,7 @@ sub start_mcp {
                              or
                              ($scol->{ftype} eq 'text' and $fcol->{ftype} eq 'character varying')
                              or
-                             (
-                               $scol->{ftype} ne $fcol->{ftype}
-                               and
-                               $scol->{ftype} =~ /^timestamp/ and $fcol->{ftype} =~ /^timestamp/
-                             )
+                             ($scol->{ftype} =~ /^timestamp/ and $fcol->{ftype} =~ /^timestamp/)
                            ) {
                             my $msg = qq{Source database for sync "$s->{name}" has column "$colname" of table "$t" as type "$scol->{ftype}", but target database "$db" has a type of "$fcol->{ftype}". You should really fix that.};
                             $self->glog("Warning: $msg");
