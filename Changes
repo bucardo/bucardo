@@ -1,5 +1,11 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
+
+Bucardo version 4.4.9
+
+  - Allow timestamp differences in source and target columns [GSM]
+
+
 Bucardo version 4.4.8, released November 30, 2011
 
   - Fix incorrect checking of hostname for host_safety_check [GSM]
