@@ -2066,7 +2066,7 @@ sub start_kid {
         ## If in onetimecopy mode, this is always forced to be empty
         ## Likewise, no point in populating if this is a fullcopy sync
         push @dbs_delta => $dbname
-            if $x->{role} eq 'target'
+            if $x->{role} eq 'source'
                 and ! $sync->{onetimecopy}
                     and ! $sync->{fullcopy};
 
