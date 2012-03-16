@@ -6184,6 +6184,10 @@ sub fork_vac {
     if ($newpid) { ## We are the parent
         $self->glog(qq{Created VAC $newpid}, LOG_NORMAL);
         $self->{vacpid} = $newpid;
+        ## We sleep a bit here to increase the chance that the database connections
+        ## below are disassociated before the MCP can come back and possibly
+        ## kill the VAC, causing bad double-free libpq/libc errors
+        sleep 0.5;
         return;
     }
 
@@ -6193,6 +6197,7 @@ sub fork_vac {
     $self->{masterdbh}->{InactiveDestroy} = 1;
     $self->{masterdbh} = 0;
 
+    ## We also need to disassociate ourselves from any open database connections
     for my $dbname (keys %{ $self->{sdb} }) {
         $x = $self->{sdb}{$dbname};
         next if $x->{dbtype} =~ /flat|mongo|redis/o;
@@ -6221,9 +6226,6 @@ sub fork_vac {
     };
 
     ## From this point forward, we want to die gracefully
-    #$SIG{TERM} = 'IGNORE';
-
-    ## From this point forward, we want to die gracefully
     $SIG{__DIE__} = sub {
 
         ## Arguments: one
@@ -6240,8 +6242,7 @@ sub fork_vac {
         $self->glog(qq{${warn}VAC was killed at line $line: $diemsg}, LOG_WARN);
 
         ## Not a whole lot of cleanup to do on this one: just shut database connections and leave
-
-        ## TODO: Disconnect from all databases
+        $self->{masterdbh}->disconnect();
 
         ## Remove our pid file
         unlink $self->{vacpidfile} or $self->glog("Warning! Failed to unlink $self->{vacpidfile}", LOG_WARN);
