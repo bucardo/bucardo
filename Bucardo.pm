@@ -2064,6 +2064,7 @@ sub start_mcp {
                         for ($scol_def, $fcol_def) {
                             s/\A\(//;
                             s/\)\z//;
+							s/\)::/::/;
                         }
                         my $msg;
                         if ($scol_def eq $fcol_def) {
