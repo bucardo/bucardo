@@ -24,8 +24,9 @@ my $bct = BucardoTesting->new({location => 'postgres'})
 ## 1 4
 my $numtables = keys %tabletype;
 my $numsequences = keys %sequences;
-my $single_tests = 26;
+my $single_tests = 28;
 my $check_for_row_1 = 1;
+my $check_for_row_2 = 1;
 my $check_for_row_3 = 2;
 my $check_for_row_4 = 7;
 my $check_sequences_same = 1;
@@ -33,6 +34,7 @@ my $check_sequences_same = 1;
 plan tests => $single_tests +
     ( $check_sequences_same * $numsequences ) + ## Simple sequence testing
     ( $check_for_row_1 * $numtables * 1 ) + ## D
+    ( $check_for_row_2 * $numtables * 2 ) + ## A B
     ( $check_for_row_3 * $numtables * 3 ) + ## B C D
     ( $check_for_row_4 * $numtables * 4 ); ## A B C D
 
@@ -95,6 +97,11 @@ $t = q{Created a new database group (A <=> B <=> C <=> D)};
 $res = $bct->ctl('bucardo add dbgroup pg4 A:source B:source C:source D:source');
 like ($res, qr/Created database group "pg4"/, $t);
 
+## Create a new database group going between A and B
+$t = q{Created a new database group (A <=> B)};
+$res = $bct->ctl('bucardo add dbgroup pg5 A:source B:source');
+like ($res, qr/Created database group "pg5"/, $t);
+
 ## Create some new syncs. Only one should be active at a time!
 $t = q{Created a new sync for dbgroup pg1};
 $res = $bct->ctl('bucardo add sync pgtest1 herd=allpk dbs=pg1 status=inactive');
@@ -112,8 +119,18 @@ $t = q{Created a new sync for dbgroup pg4};
 $res = $bct->ctl('bucardo add sync pgtest4 herd=allpk dbs=pg4 status=inactive ping=false');
 like ($res, qr/Added sync "pgtest4"/, $t);
 
+$t = q{Created a new sync for dbgroup pg5};
+$res = $bct->ctl('bucardo add sync pgtest5 herd=allpk dbs=pg5 status=inactive ping=false');
+like ($res, qr/Added sync "pgtest5"/, $t);
+
 ## Add a row to A, to make sure it does not go anywhere with inactive syncs
 $bct->add_row_to_database('A', 1);
+
+sub d {
+    my $msg = shift || '?';
+    my $time = scalar localtime;
+    diag "$time: $msg";
+}
 
 ## Start up Bucardo. All syncs are inactive, so nothing should happen,
 ## and Bucardo should exit
@@ -137,11 +154,34 @@ $bct->wait_for_notice($dbhX, 'bucardo_syncdone_pgtest1');
 ## See if things are on the others databases
 $bct->check_for_row([[1]], [qw/ B C D/]);
 
-## Switch to a 2 source, 2 target sync
+## Switch to a 2 source sync
 $bct->ctl('bucardo update sync pgtest1 status=inactive');
-$bct->ctl('bucardo update sync pgtest2 status=active');
+$bct->ctl('bucardo update sync pgtest5 status=active');
 $bct->ctl('bucardo deactivate sync pgtest1');
+$bct->ctl('bucardo activate sync pgtest5 0');
+## Add some rows to both masters, make sure it goes everywhere
+$bct->add_row_to_database('A', 3);
+$bct->add_row_to_database('B', 4);
+
+## Kick off the sync.
+$bct->ctl('bucardo kick sync pgtest5 0');
+
+## All rows should be on A, B, C, and D
+my $expected = [[1],[3],[4]];
+$bct->check_for_row($expected, [qw/A B/]);
+
+## Remove the test rows from above
+$bct->remove_row_from_database('A', [3,4]);
+$bct->remove_row_from_database('B', [3,4]);
+
+## Switch to a 2 source, 2 target sync
+$bct->ctl('bucardo update sync pgtest5 status=inactive');
+$bct->ctl('bucardo update sync pgtest2 status=active');
+$bct->ctl('bucardo deactivate sync pgtest5');
 $bct->ctl('bucardo activate sync pgtest2 0');
+
+## Clear the deleted rows above so we have a clean test below
+$bct->ctl('bucardo kick sync pgtest2 0');
 
 ## Add some rows to both masters, make sure it goes everywhere
 for my $num (2..4) {
@@ -151,12 +191,12 @@ for my $num (5..10) {
     $bct->add_row_to_database('B', $num);
 }
 
-## Kick off B. Everything should go to A, C, and D
+## Kick off the sync. Everything should go to A, C, and D
 $bct->ctl('bucardo kick sync pgtest2 0');
 
-## Kick off A. Should fail, as the sync is inactive
+## Kick off old sync. Should fail, as the sync is inactive
 $t = q{Inactive sync times out when trying to kick};
-$res = $bct->ctl('bucardo kick sync pgtest1 0');
+$res = $bct->ctl('bucardo kick sync pgtest3 0');
 like($res, qr/Cannot kick inactive sync/, $t);
 
 ## All rows should be on A, B, C, and D
