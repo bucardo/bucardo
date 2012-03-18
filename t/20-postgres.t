@@ -200,7 +200,7 @@ $res = $bct->ctl('bucardo kick sync pgtest3 0');
 like($res, qr/Cannot kick inactive sync/, $t);
 
 ## All rows should be on A, B, C, and D
-my $expected = [];
+$expected = [];
 push @$expected, [$_] for 1..10;
 $bct->check_for_row($expected, [qw/A B C D/]);
 

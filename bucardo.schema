@@ -2133,16 +2133,16 @@ SELECT 'Fixme'::TEXT;
             my $makername = fetch1_sql($SQL,$dbh,$schema.'_'.$table);
             ## Create this table if needed, with one column per PK columns
             $sth = $sth{haztable};
-            my $delta_table = "delta_$makername";			
+            my $delta_table = "delta_$makername";
             my $index1_name = "dex1_$makername";
             my $index2_name = "dex2_$makername";
             my $deltafunc = "delta_$makername";
             my $track_table = "track_$makername";
             my $index3_name = "dex3_$makername";
             my $stage_table = "stage_$makername";
-			## Need to account for quoted versions, e.g. names with spaces
-			if ($makername =~ s/"//g) {
-              $delta_table = qq{"delta_$makername"};			
+            ## Need to account for quoted versions, e.g. names with spaces
+            if ($makername =~ s/"//g) {
+              $delta_table = qq{"delta_$makername"};
               $index1_name = qq{"dex1_$makername"};
               $index2_name = qq{"dex2_$makername"};
               $deltafunc = qq{"delta_$makername"};
@@ -2150,14 +2150,14 @@ SELECT 'Fixme'::TEXT;
               $index3_name = qq{"dex3_$makername"};
               $stage_table = qq{"stage_$makername"};
             }
-			## Also need non-quoted versions to feed to execute()
-			(my $noquote_delta_table = $delta_table) =~ s/^"(.+)"$/$1/;
-			(my $noquote_index1_name = $index1_name) =~ s/^"(.+)"$/$1/;
-			(my $noquote_index2_name = $index2_name) =~ s/^"(.+)"$/$1/;
-			(my $noquote_deltafunc = $deltafunc) =~ s/^"(.+)"$/$1/;
-			(my $noquote_track_table = $track_table) =~ s/^"(.+)"$/$1/;
-			(my $noquote_index3_name = $index3_name) =~ s/^"(.+)"$/$1/;
-			(my $noquote_stage_table = $stage_table) =~ s/^"(.+)"$/$1/;
+            ## Also need non-quoted versions to feed to execute()
+            (my $noquote_delta_table = $delta_table) =~ s/^"(.+)"$/$1/;
+            (my $noquote_index1_name = $index1_name) =~ s/^"(.+)"$/$1/;
+            (my $noquote_index2_name = $index2_name) =~ s/^"(.+)"$/$1/;
+            (my $noquote_deltafunc = $deltafunc) =~ s/^"(.+)"$/$1/;
+            (my $noquote_track_table = $track_table) =~ s/^"(.+)"$/$1/;
+            (my $noquote_index3_name = $index3_name) =~ s/^"(.+)"$/$1/;
+            (my $noquote_stage_table = $stage_table) =~ s/^"(.+)"$/$1/;
 
             $count = $sth->execute('bucardo',$noquote_delta_table);
             if ($count < 1) {

@@ -3299,7 +3299,6 @@ sub start_kid {
                     $dmlcount{conflicts} += $count;
 
                     $self->glog("Conflicts for $S.$T: $count", LOG_NORMAL);
-$self->glog(Dumper \%conflict);
 
                     ## If we have a custom conflict handler for this goat, invoke it
                     if ($g->{code_conflict}) {
@@ -3447,7 +3446,6 @@ $self->glog(Dumper \%conflict);
                                                  . qq{(SELECT MAX(txntime) FROM bucardo.$g->{tracktable} }
                                                  . qq{WHERE target = '$x->{TARGETNAME}')};
                                             $g->{sql_got_delta} = $SQL;
-                                            $self->glog("AAAA Running $SQL");
                                         }
                                         $sth = $x->{dbh}->prepare($g->{sql_got_delta});
                                         $count = $sth->execute();
