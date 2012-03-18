@@ -214,7 +214,7 @@ my $TIMEOUT_SYNCWAIT = 3;
 ## How long to sleep between checks for sync being done?
 my $TIMEOUT_SLEEP = 0.1;
 ## How long to wait for a notice to be issued?
-my $TIMEOUT_NOTICE = 2;
+my $TIMEOUT_NOTICE = 4;
 
 ## Bail if the bucardo file does not exist / does not compile
 for my $file (qw/bucardo Bucardo.pm/) {
@@ -932,15 +932,17 @@ sub restart_bucardo {
 
     my ($self,$dbh,$notice,$passmsg) = @_;
 
+    my $line = (caller)[2];
+
     $notice ||= 'bucardo_started';
-    $passmsg ||= 'Bucardo was started';
+    $passmsg ||= "Bucardo was started (caller line $line)";
 
     $self->stop_bucardo();
 
     ## Because the stop signal arrives before the PID is removed, sleep a bit
     sleep 2;
 
-    pass('Starting up Bucardo');
+    pass("Starting up Bucardo (caller line $line)");
     $dbh->do('LISTEN bucardo');
     $dbh->do('LISTEN bucardo_boot');
     $dbh->do("LISTEN $notice");
@@ -1109,7 +1111,8 @@ sub wait_for_notice {
     if ($@) {
         if ($@ =~ /Lookout/o) {
             my $line = (caller)[2];
-            my $notice = qq{Gave up waiting for notice "$text": timed out at $timeout from line $line};
+            my $now = scalar localtime;
+            my $notice = qq{Gave up waiting for notice "$text": timed out at $timeout from line $line. Time=$now};
             if ($bail) {
                 Test::More::BAIL_OUT ($notice);
             }
@@ -1335,88 +1338,6 @@ sub t {
 
 } ## end of t
 
-sub add_bucardo_schema_to_database {
-
-    ## Parses the bucardo.schema file and creates the database
-    ## Assumes the schema 'bucardo' does not exist yet
-    ## First argument is a database handle
-
-    my $dbh = shift;
-
-    if (schema_exists($dbh => 'bucardo')) {
-        return;
-    }
-
-    my $schema_file = 'bucardo.schema';
-    -e $schema_file or die qq{Cannot find the file "$schema_file"!};
-    open my $fh, '<', $schema_file or die qq{Could not open "$schema_file": $!\n};
-    my $sql='';
-    my (%copy,%copydata);
-    my ($start,$copy,$insidecopy) = (0,0,0);
-    while (<$fh>) {
-        if (!$start) {
-            next unless /ON_ERROR_STOP on/;
-            $start = 1;
-            next;
-        }
-        next if /^\\[^\.]/; ## Avoid psql meta-commands at top of file
-        if (1==$insidecopy) {
-            $copy{$copy} .= $_;
-            if (/;/) {
-                $insidecopy = 2;
-            }
-        }
-        elsif (2==$insidecopy) {
-            if (/^\\\./) {
-                $insidecopy = 0;
-            }
-            else {
-                push @{$copydata{$copy}}, $_;
-            }
-        }
-        elsif (/^\s*(COPY bucardo.*)/) {
-            $copy{++$copy} = $1;
-            $insidecopy = 1;
-        }
-        else {
-            $sql .= $_;
-        }
-    }
-    close $fh or die qq{Could not close "$schema_file": $!\n};
-
-    $dbh->do("SET escape_string_warning = 'off'");
-
-    $dbh->{pg_server_prepare} = 0;
-
-    unless ($ENV{BUCARDO_TEST_NOCREATEDB}) {
-        $dbh->do('CREATE schema bucardo');
-        $dbh->do('CREATE schema freezer');
-
-        $dbh->do($sql);
-
-        $count = 1;
-        while ($count <= $copy) {
-            $dbh->do($copy{$count});
-            for my $copyline (@{$copydata{$count}}) {
-                $dbh->pg_putline($copyline);
-            }
-            $dbh->pg_endcopy();
-            $count++;
-        }
-    }
-
-    $dbh->commit();
-
-    ## Make some adjustments
-    $sth = $dbh->prepare('UPDATE bucardo.bucardo_config SET setting = $2 WHERE name = $1');
-    $count = $sth->execute('piddir' => $PIDDIR);
-    $count = $sth->execute('reason_file' => "$PIDDIR/reason");
-    $count = $sth->execute('audit_pid' => 1);
-    $dbh->commit();
-
-} ## end of add_bucardo_schema_to_database
-
-
 
 sub add_test_tables_to_herd {
 
@@ -1581,7 +1502,7 @@ sub remove_row_from_database {
     ## Delete a row from each table in one of the databases
     ## Arguments: three
     ## 1. Database name to use
-    ## 2. Value to use (lookup, not the direct value)
+    ## 2. Value to use (lookup, not the direct value). Can be an arrayref.
     ## 3. Do we commit or not? Boolean, defaults to true
     ## Returns: undef
 
@@ -1603,8 +1524,15 @@ sub remove_row_from_database {
 
         }
 
-        ## Execute!
-        $gsth{$dbh}{delete}{$table}->execute($val);
+        ## Execute it.
+        if (ref $val) {
+            for (@$val) {
+                $gsth{$dbh}{delete}{$table}->execute($_);
+            }
+        }
+        else {
+            $gsth{$dbh}{delete}{$table}->execute($val);
+        }
 
     }
 
