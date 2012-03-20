@@ -4604,7 +4604,7 @@ sub start_kid {
                 if ($empty_by_delete) {
                     ($dmlcount{D}{target}{$S}{$T} = $targetdbh->do("DELETE FROM $S.$T")) =~ s/0E0/0/o;
                     $dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
-                    $self->glog("Rows deleted from $S.$T: $dmlcount{D}{target}{$S}{$T}");
+                    $self->glog("Rows deleted from $targetdb.$S.$T: $dmlcount{D}{target}{$S}{$T}");
                 }
 
                 my ($srccmd,$tgtcmd);
@@ -4635,7 +4635,7 @@ sub start_kid {
                 }
                 $targetdbh->pg_putcopyend();
                 my $otc = $startotc ? (sprintf '(OTC: %ds) ', time-$startotc) : '';
-                $self->glog(qq{${otc}End COPY of $S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
+                $self->glog(qq{${otc}End COPY of $targetdb.$S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
                 $dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
 
                 if ($hasindex) {
