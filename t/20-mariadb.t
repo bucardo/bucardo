@@ -1,7 +1,8 @@
 #!/usr/bin/env perl
 # -*-mode:cperl; indent-tabs-mode: nil-*-
 
-## Test using MySQL as a database target
+## Test using MariaDB as a database target
+## It should be a dropin for MySQL, but we break it out just in case
 
 use 5.008003;
 use strict;
@@ -21,10 +22,10 @@ eval {
     $evalok = 1;
 };
 if (!$evalok) {
-    plan (skip_all =>  'Cannot test MySQL unless the Perl module DBD::mysql is installed');
+    plan (skip_all =>  'Cannot test MariaDB unless the Perl module DBD::mysql is installed');
 }
 
-## MySQL must be up and running
+## MariaDB must be up and running
 $evalok = 0;
 my $dbh;
 my $dbuser = 'root';
@@ -34,21 +35,21 @@ eval {
     $evalok = 1;
 };
 if (!$evalok) {
-    plan (skip_all =>  "Cannot test MySQL as we cannot connect to a running MySQL database");
+    plan (skip_all =>  "Cannot test MariaDB as we cannot connect to a running MariaDB database");
 }
 
-## Need to ensure this is really MySQL, not MariaDB
+## Need to ensure this is really MariaDB, not MySQL
 my $ver = $dbh->selectall_arrayref('SELECT version()')->[0][0];
-if ($ver =~ /MariaDB/) {
-    plan (skip_all =>  "Cannot test MySQL: MySQL port is being used by MariaDB");
+if ($ver !~ /MariaDB/) {
+    plan (skip_all =>  "Cannot test MariaDB: MySQL port is being used by MySQL");
 }
 
 use BucardoTesting;
 
 ## For now, remove the bytea table type as we don't have full support yet
-delete $tabletypemysql{bucardo_test8};
+delete $tabletypemariadb{bucardo_test8};
 
-my $numtabletypes = keys %tabletypemysql;
+my $numtabletypes = keys %tabletypemariadb;
 plan tests => 151;
 
 ## Drop the test database if it exists
@@ -68,13 +69,13 @@ $dbh = DBI->connect("dbi:mysql:database=$dbname", $dbuser, '',
 $dbh->do("SET sql_mode='ANSI_QUOTES'");
 
 ## Create one table for each table type
-for my $table (sort keys %tabletypemysql) {
+for my $table (sort keys %tabletypemariadb) {
 
     my $pkeyname = $table =~ /test5/ ? q{"id space"} : 'id';
     my $pkindex = $table =~ /test2/ ? '' : 'PRIMARY KEY';
     $SQL = qq{
             CREATE TABLE "$table" (
-                $pkeyname    $tabletypemysql{$table} NOT NULL $pkindex};
+                $pkeyname    $tabletypemariadb{$table} NOT NULL $pkindex};
     $SQL .= $table =~ /X/ ? "\n)" : qq{,
                 data1 VARCHAR(100)           NULL,
                 inty  SMALLINT               NULL,
@@ -94,9 +95,9 @@ for my $table (sort keys %tabletypemysql) {
 }
 
 $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object failed\n";
-$location = 'mysql';
+$location = 'mariadb';
 
-pass("*** Beginning MySQL tests");
+pass("*** Beginning MariaDB tests");
 
 END {
     $bct and $bct->stop_bucardo($dbhX);
@@ -126,9 +127,9 @@ for my $name (qw/ A B C /) {
     like ($res, qr/Added database "$name"/, $t);
 }
 
-$t = 'Adding mysql database Q works';
+$t = 'Adding mariadb database Q works';
 $command =
-"bucardo add db Q dbname=$dbname type=mysql dbuser=$dbuser";
+"bucardo add db Q dbname=$dbname type=mariadb dbuser=$dbuser";
 $res = $bct->ctl($command);
 like ($res, qr/Added database "Q"/, $t);
 
@@ -156,9 +157,9 @@ like ($res, qr/Created database group "qx"/, $t);
 ## Create a new sync
 $t = q{Created a new sync};
 $command =
-"bucardo add sync mysql herd=therd dbs=qx ping=false";
+"bucardo add sync mariadb herd=therd dbs=qx ping=false";
 $res = $bct->ctl($command);
-like ($res, qr/Added sync "mysql"/, $t);
+like ($res, qr/Added sync "mariadb"/, $t);
 
 ## Create a second sync, solely for multi-sync interaction issues
 $bct->ctl('bucardo add dbgroup t1 A:source B C');
@@ -171,7 +172,7 @@ $bct->restart_bucardo($dbhX);
 my (@boolys) = qw( xxx true false null false true null );
 
 ## Get the statement handles ready for each table type
-for my $table (sort keys %tabletypemysql) {
+for my $table (sort keys %tabletypemariadb) {
 
     $pkey{$table} = $table =~ /test5/ ? q{"id space"} : 'id';
 
@@ -181,7 +182,7 @@ for my $table (sort keys %tabletypemysql) {
             ? qq{INSERT INTO "$table"($pkey{$table}) VALUES (?)}
                 : qq{INSERT INTO "$table"($pkey{$table},data1,inty,booly) VALUES (?,'foo',$x,$boolys[$x])};
         $sth{insert}{$x}{$table}{A} = $dbhA->prepare($SQL);
-        if ('BYTEA' eq $tabletypemysql{$table}) {
+        if ('BYTEA' eq $tabletypemariadb{$table}) {
             $sth{insert}{$x}{$table}{A}->bind_param(1, undef, {pg_type => PG_BYTEA});
         }
     }
@@ -207,15 +208,15 @@ for my $table (sort keys %tabletypemysql) {
 }
 
 ## Add one row per table type to A
-for my $table (keys %tabletypemysql) {
-    my $type = $tabletypemysql{$table};
+for my $table (keys %tabletypemariadb) {
+    my $type = $tabletypemariadb{$table};
     my $val1 = $val{$type}{1};
     $sth{insert}{1}{$table}{A}->execute($val1);
 }
 
 ## Before the commit on A, B, C, and Q should be empty
-for my $table (sort keys %tabletypemysql) {
-    my $type = $tabletypemysql{$table};
+for my $table (sort keys %tabletypemariadb) {
+    my $type = $tabletypemariadb{$table};
     $t = qq{B has not received rows for table $table before A commits};
     $res = [];
     bc_deeply($res, $dbhB, $sql{select}{$table}, $t);
@@ -225,13 +226,13 @@ for my $table (sort keys %tabletypemysql) {
 
 ## Commit, then kick off the sync
 $dbhA->commit();
-$bct->ctl('bucardo kick mysql 0');
-$bct->ctl('bucardo kick mysql 0');
+$bct->ctl('bucardo kick mariadb 0');
+$bct->ctl('bucardo kick mariadb 0');
 
 ## Check B and C for the new rows
-for my $table (sort keys %tabletypemysql) {
+for my $table (sort keys %tabletypemariadb) {
 
-    my $type = $tabletypemysql{$table};
+    my $type = $tabletypemariadb{$table};
     $t = qq{Row with pkey of type $type gets copied to B};
 
     $res = [[1,1]];
@@ -239,17 +240,17 @@ for my $table (sort keys %tabletypemysql) {
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 }
 
-## Check that MySQL has the new rows
-for my $table (sort keys %tabletypemysql) {
-    $t = "MySQL table $table has correct number of rows after insert";
+## Check that Mariadb has the new rows
+for my $table (sort keys %tabletypemariadb) {
+    $t = "Mariadb table $table has correct number of rows after insert";
     $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
     is ($count, 1, $t);
 
-    $t = "MySQL table $table has correct entries";
+    $t = "Mariadb table $table has correct entries";
     my $info = $sth->fetchall_arrayref({})->[0];
-    my $type = $tabletypemysql{$table};
+    my $type = $tabletypemariadb{$table};
     my $id = $val{$type}{1};
     my $pkeyname = $table =~ /test5/ ? 'id space' : 'id';
 
@@ -257,7 +258,7 @@ for my $table (sort keys %tabletypemysql) {
     next if $table =~ /test8/;
 
     ## Datetime has no time zone thingy at the end
-    $tabletypemysql{$table} =~ /DATETIME/ and $id =~ s/\+.*//;
+    $tabletypemariadb{$table} =~ /DATETIME/ and $id =~ s/\+.*//;
 
     is_deeply(
         $info,
@@ -275,33 +276,33 @@ for my $table (sort keys %tabletypemysql) {
 }
 
 ## Update each row
-for my $table (keys %tabletypemysql) {
+for my $table (keys %tabletypemariadb) {
     $sth{update}{$table}{A}->execute(42);
 }
 $dbhA->commit();
-$bct->ctl('bucardo kick mysql 0');
+$bct->ctl('bucardo kick mariadb 0');
 
-for my $table (keys %tabletypemysql) {
-    $t = "MySQL table $table has correct number of rows after update";
+for my $table (keys %tabletypemariadb) {
+    $t = "Mariadb table $table has correct number of rows after update";
     $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
     is ($count, 1, $t);
 
-    $t = "MySQL table $table has updated value";
+    $t = "Mariadb table $table has updated value";
     my $info = $sth->fetchall_arrayref({})->[0];
     is ($info->{inty}, 42, $t);
 }
 
 ## Delete each row
-for my $table (keys %tabletypemysql) {
+for my $table (keys %tabletypemariadb) {
     $sth{deleteall}{$table}{A}->execute();
 }
 $dbhA->commit();
-$bct->ctl('bucardo kick mysql 0');
+$bct->ctl('bucardo kick mariadb 0');
 
-for my $table (keys %tabletypemysql) {
-    $t = "MySQL table $table has correct number of rows after delete";
+for my $table (keys %tabletypemariadb) {
+    $t = "Mariadb table $table has correct number of rows after delete";
     $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     (my $count = $sth->execute()) =~ s/0E0/0/;
@@ -311,18 +312,18 @@ for my $table (keys %tabletypemysql) {
 
 ## Insert two rows, then delete one of them
 ## Add one row per table type to A
-for my $table (keys %tabletypemysql) {
-    my $type = $tabletypemysql{$table};
+for my $table (keys %tabletypemariadb) {
+    my $type = $tabletypemariadb{$table};
     my $val1 = $val{$type}{1};
     $sth{insert}{1}{$table}{A}->execute($val1);
     my $val2 = $val{$type}{2};
     $sth{insert}{2}{$table}{A}->execute($val2);
 }
 $dbhA->commit();
-$bct->ctl('bucardo kick mysql 0');
+$bct->ctl('bucardo kick mariadb 0');
 
-for my $table (keys %tabletypemysql) {
-    $t = "MySQL table $table has correct number of rows after double insert";
+for my $table (keys %tabletypemariadb) {
+    $t = "Mariadb table $table has correct number of rows after double insert";
     $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
@@ -331,14 +332,14 @@ for my $table (keys %tabletypemysql) {
 }
 
 ## Delete one of the rows
-for my $table (keys %tabletypemysql) {
+for my $table (keys %tabletypemariadb) {
     $sth{deleteone}{$table}{A}->execute(2); ## inty = 2
 }
 $dbhA->commit();
-$bct->ctl('bucardo kick mysql 0');
+$bct->ctl('bucardo kick mariadb 0');
 
-for my $table (keys %tabletypemysql) {
-    $t = "MySQL table $table has correct number of rows after single deletion";
+for my $table (keys %tabletypemariadb) {
+    $t = "Mariadb table $table has correct number of rows after single deletion";
     $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
@@ -347,27 +348,27 @@ for my $table (keys %tabletypemysql) {
 }
 
 ## Insert two more rows
-for my $table (keys %tabletypemysql) {
-    my $type = $tabletypemysql{$table};
+for my $table (keys %tabletypemariadb) {
+    my $type = $tabletypemariadb{$table};
     my $val3 = $val{$type}{3};
     $sth{insert}{3}{$table}{A}->execute($val3);
     my $val4 = $val{$type}{4};
     $sth{insert}{4}{$table}{A}->execute($val4);
 }
 $dbhA->commit();
-$bct->ctl('bucardo kick mysql 0');
+$bct->ctl('bucardo kick mariadb 0');
 
-for my $table (keys %tabletypemysql) {
-    $t = "MySQL table $table has correct number of rows after more inserts";
+for my $table (keys %tabletypemariadb) {
+    $t = "Mariadb table $table has correct number of rows after more inserts";
     $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
     is ($count, 3, $t);
 
-    $t = "MySQL table $table has updated values";
+    $t = "Mariadb table $table has updated values";
     my $info = $sth->fetchall_arrayref({});
     $info = [ sort { $a->{inty} <=> $b->{inty} } @$info ];
-    my ($val1, $val3, $val4) = @{$val{$tabletypemysql{$table}}}{1, 3, 4};
+    my ($val1, $val3, $val4) = @{$val{$tabletypemariadb{$table}}}{1, 3, 4};
 
     my $pkeyname = $table =~ /test5/ ? 'id space' : 'id';
     my(@invar) = ( data1 => 'foo', 'email' => undef, bite1 => undef, bite2 => undef );

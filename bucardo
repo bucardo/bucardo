@@ -1557,6 +1557,7 @@ sub add_database {
             drizzle  => ['DBD::drizzle', 'Drizzle database'],
             mongo    => ['MongoDB',      'MongoDB'],
             mysql    => ['DBD::mysql',   'MySQL database'],
+            mariadb  => ['DBD::mysql',   'MariaDB database'],
             oracle   => ['DBD::Oracle',  'Oracle database'],
             postgres => ['DBD::Pg',      'PostgreSQL database'],
             redis    => ['Redis',        'Redis database'],
@@ -2095,7 +2096,7 @@ sub list_databases {
                 print "Host: $info->{dbhost}";
             }
         }
-        if ($dbtype eq 'mysql') {
+        if ($dbtype eq 'mysql' or $dbtype eq 'mariadb') {
             my $showport = (length $info->{dbport} and $info->{dbport} != 3306)
                 ? " --port $info->{dbport}" : '';
             printf 'Conn: mysql -u %s -D %s%s%s',
@@ -7528,7 +7529,7 @@ Required information
 dbname=name         (database name to connect to)
 
 Optional information:
- dbtype=type of database (defaults to postgres. Others: drizzle,mongo,mysql,oracle,redis,sqlite)
+ dbtype=type of database (defaults to postgres. Others: drizzle,mongo,mariadb,mysql,oracle,redis,sqlite)
  dbuser=username    (defaults to 'bucardo')
  dbpass=name        (avoid if possible; use .pgpass or equivalent instead)
  dbport=#           (defaults to type default, e.g. 5432 for postgres)
@@ -8907,6 +8908,7 @@ sub standardize_rdbms_name {
     $name =~ s/driz?zle.*/drizzle/io;
     $name =~ s/mongo.*/mongo/io;
     $name =~ s/mysql.*/mysql/io;
+    $name =~ s/maria.*/mariadb/io;
     $name =~ s/oracle.*/oracle/io;
     $name =~ s/redis.*/redis/io;
     $name =~ s/sqll?ite.*/sqlite/io;

@@ -652,6 +652,7 @@ AS $bc$
 ## Postgres: a connection string, username, password, and attribs
 ## Drizzle: a connection string, username, and password
 ## Mongo: "foo: bar" style connection information, one per line
+## MariaDB: a connection string, username, and password
 ## MySQL: a connection string, username, and password
 ## Oracle: a connection string, username, and password
 ## Redis: "foo: bar" style connection information, one per line
@@ -744,7 +745,7 @@ if ($dbtype eq 'mongo') {
    return $connstring;
 }
 
-if ($dbtype eq 'mysql') {
+if ($dbtype eq 'mysql' or $dbtype eq 'mariadb') {
 
     length $db{name} or elog(ERROR, qq{Database name is mandatory\n});
     length $db{user} or elog(ERROR, qq{Database username is mandatory\n});
@@ -757,7 +758,7 @@ if ($dbtype eq 'mysql') {
 
     return "$dbtype\n$connstring\n$db{user}\n$db{pass}";
 
-} ## end mysql
+} ## end mysql/mariadb
 
 if ($dbtype eq 'oracle') {
 
@@ -1270,7 +1271,7 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
     next if $db{$dbname}{dbtype} =~ /flat/;
 
     ## Skip if this is a non-supported database
-    next if $db{$dbname}{dbtype} =~ /drizzle|mongo|mysql|oracle|redis|sqlite/;
+    next if $db{$dbname}{dbtype} =~ /drizzle|mariadb|mongo|mysql|oracle|redis|sqlite/;
 
     ## Figure out how to connect to this database
     my $rv = spi_exec_query("SELECT bucardo.db_getconn('$dbname') AS conn");

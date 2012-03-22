@@ -2008,8 +2008,8 @@ sub start_kid {
             push @dbs_mongo => $dbname;
         }
 
-        ## MySQL
-        if ('mysql' eq $x->{dbtype}) {
+        ## MySQL (and MariaDB)
+        if ('mysql' eq $x->{dbtype} or 'mariadb' eq $x->{dbtype}) {
             push @dbs_mysql => $dbname;
             $x->{does_sql}        = 1;
             $x->{does_truncate}   = 1;
@@ -2085,6 +2085,7 @@ sub start_kid {
         push @dbs_dbi => $dbname
             if $x->{dbtype} eq 'postgres'
             or $x->{dbtype} eq 'drizzle'
+            or $x->{dbtype} eq 'mariadb'
             or $x->{dbtype} eq 'mysql'
             or $x->{dbtype} eq 'oracle'
             or $x->{dbtype} eq 'sqlite';
@@ -2550,7 +2551,7 @@ sub start_kid {
 
         } ## end postgres
 
-        elsif ($x->{dbtype} eq 'mysql') {
+        elsif ($x->{dbtype} eq 'mysql' or $x->{dbtype} eq 'mariadb') {
 
             ## Serialize for this session
             $xdbh->do('SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE');
@@ -2560,7 +2561,7 @@ sub start_kid {
             $xdbh->do(q{SET time_zone = '+0:00'});
             $xdbh->commit();
 
-        } ## end mysql
+        } ## end mysql/mariadb
 
     }
 
@@ -2582,13 +2583,13 @@ sub start_kid {
 
         } ## end postgres
 
-        elsif ($x->{dbtype} eq 'mysql') {
+        elsif ($x->{dbtype} eq 'mysql' or $x->{dbtype} eq 'mariadb') {
 
             ## No foreign key checks, please
             $xdbh->do('SET foreign_key_checks = 0');
             $xdbh->commit();
 
-        } ## end mysql
+        } ## end mysql/mariadb
 
     }
 
@@ -2810,7 +2811,7 @@ sub start_kid {
                 $self->glog(qq{Set database "$dbname" to serializable read write}, LOG_DEBUG);
             }
 
-            if ($x->{dbtype} eq 'mysql') {
+            if ($x->{dbtype} eq 'mysql' or $x->{dbtype} eq 'mariadb') {
                 $x->{dbh}->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE');
                 $self->glog(qq{Set database "$dbname" to serializable}, LOG_DEBUG);
             }
@@ -2865,7 +2866,7 @@ sub start_kid {
                         $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
                         $x->{dbh}->do("LOCK TABLE $com");
                     }
-                    elsif ('mysql' eq $x->{dbtype} or 'drizzle' eq $x->{dbtype}) {
+                    elsif ('mysql' eq $x->{dbtype} or 'drizzle' eq $x->{dbtype} or 'mariadb' eq $x->{dbtype}) {
                         my $com = "$tname WRITE";
                         $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
                         $x->{dbh}->do("LOCK TABLE $com");
@@ -4083,7 +4084,7 @@ sub start_kid {
                             }
                         }
 
-                        if ($x->{dbtype} eq 'mysql') {
+                        if ($x->{dbtype} eq 'mysql' or $x->{dbtype} eq 'mariadb') {
                             $SQL = "ALTER TABLE $tname DISABLE KEYS";
                             $self->glog("Disabling keys for $tname on $dbname", LOG_NORMAL);
                             $x->{dbh}->do($SQL);
@@ -4211,7 +4212,7 @@ sub start_kid {
                             $self->pretty_time(tv_interval($t0), 'day'), $tname)), LOG_NORMAL);
                     }
 
-                    if ($x->{dbtype} eq 'mysql') {
+                    if ($x->{dbtype} eq 'mysql' or $x->{dbtype} eq 'mariadb') {
                         $SQL = "ALTER TABLE $tname ENABLE KEYS";
                         $self->glog("Enabling keys for $tname on $dbname", LOG_NORMAL);
                         $x->{dbh}->do($SQL);
@@ -4320,7 +4321,7 @@ sub start_kid {
                 $self->glog(qq{Enabling triggers and rules on $dbname via pg_class}, LOG_VERBOSE);
                 $x->{dbh}->do($SQL{enable_trigrules});
             }
-            elsif ($x->{dbtype} eq 'mysql') {
+            elsif ($x->{dbtype} eq 'mysql' or $x->{dbtype} eq 'mariadb') {
 
                 $self->glog(qq{Turning foreign key checks back on for $dbname}, LOG_VERBOSE);
                 $x->{dbh}->do('SET foreign_key_checks = 1');
@@ -4617,7 +4618,7 @@ sub connect_database {
 
             return $backend, $dbh;
         }
-        elsif ('mysql' eq $dbtype) {
+        elsif ('mysql' eq $dbtype or 'mariadb' eq $dbtype) {
             $dsn = "dbi:mysql:database=$d->{dbname}";
         }
         elsif ('oracle' eq $dbtype) {
@@ -5798,8 +5799,8 @@ sub validate_sync {
             ## Redis is skipped because we can create keys on the fly
             next if $x->{dbtype} =~ /redis/o;
 
-            ## MySQL/Drizzle/Oracle/SQLite is skipped for now, but should be added later
-            next if $x->{dbtype} =~ /mysql|drizzle|oracle|sqlite/o;
+            ## MySQL/MariaDB/Drizzle/Oracle/SQLite is skipped for now, but should be added later
+            next if $x->{dbtype} =~ /mysql|mariadb|drizzle|oracle|sqlite/o;
 
             ## Respond to ping here and now for very impatient watchdog programs
             $maindbh->commit();
@@ -7947,7 +7948,7 @@ sub delete_rows {
         if ('postgres' eq $type) {
             $sqltype = (1 == $numpks) ? 'ANY' : 'PGIN';
         }
-        elsif ('mysql' eq $type or 'drizzle' eq $type) {
+        elsif ('mysql' eq $type or 'drizzle' eq $type or 'mariadb' eq $type) {
             $sqltype = 'MYIN';
         }
         elsif ('oracle' eq $type) {
@@ -8144,7 +8145,7 @@ sub delete_rows {
             next;
         }
 
-        if ('mysql' eq $type or 'drizzle' eq $type) {
+        if ('mysql' eq $type or 'drizzle' eq $type or 'mariadb' eq $type) {
             my $tdbh = $t->{dbh};
             for (@{ $SQL{MYIN} }) {
                 ($count{$t} += $tdbh->do($_)) =~ s/0E0/0/o;
@@ -8364,7 +8365,7 @@ sub push_rows {
             elsif ('redis' eq $type) {
                 ## TODO
             }
-            elsif ('mysql' eq $type or 'drizzle' eq $type) {
+            elsif ('mysql' eq $type or 'drizzle' eq $type or 'mariadb' eq $type) {
                 my $tgtcmd = "INSERT INTO $tname$columnlist VALUES (";
                 $tgtcmd .= '?,' x @$cols;
                 $tgtcmd =~ s/,$/)/o;
@@ -8481,8 +8482,9 @@ sub push_rows {
                         }
                         $self->{collection}->insert($object, { safe => 1 });
                     }
-                    ## For MySQL, Drizzle, Oracle, and SQLite, do some basic INSERTs
+                    ## For MySQL, MariaDB, Drizzle, Oracle, and SQLite, do some basic INSERTs
                     elsif ('mysql' eq $type
+                            or 'mariadb' eq $type
                             or 'drizzle' eq $type
                             or 'oracle' eq $type
                             or 'sqlite' eq $type) {
@@ -8569,7 +8571,7 @@ sub vacuum_table {
         my $total_time = sprintf '%.2f', tv_interval($start_time);
         $self->glog("Vacuum complete. Time: $total_time", LOG_VERBOSE);
     }
-    elsif ('mysql' eq $dbtype or 'drizzle' eq $dbtype) {
+    elsif ('mysql' eq $dbtype or 'drizzle' eq $dbtype or 'mariadb' eq $dbtype) {
         ## Optimize the table
         $self->glog("Optimizing $tablename", LOG_VERBOSE);
 
@@ -8630,7 +8632,7 @@ sub analyze_table {
         $self->glog("Analyze complete for $dbname.$tablename. Time: $total_time", LOG_VERBOSE);
         $ldbh->commit();
     }
-    elsif ('mysql' eq $dbtype or 'drizzle' eq $dbtype) {
+    elsif ('mysql' eq $dbtype or 'drizzle' eq $dbtype or 'mariadb' eq $dbtype) {
         $ldbh->do("ANALYZE TABLE $tablename");
         my $total_time = sprintf '%.2f', tv_interval($start_time);
         $self->glog("Analyze complete for $tablename. Time: $total_time", LOG_VERBOSE);

@@ -34,6 +34,7 @@ t/02-bctl-dbg.t
 t/20-drizzle.t
 t/20-mongo.t
 t/20-mysql.t
+t/20-mariadb.t
 t/20-oracle.t
 t/20-sqlite.t
 t/98-cleanup.t

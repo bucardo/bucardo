@@ -19,7 +19,8 @@ use vars qw/$SQL $sth $count $COM %dbh/;
 my $DEBUG = $ENV{BUCARDO_DEBUG} || 0;
 
 use base 'Exporter';
-our @EXPORT = qw/%tabletype %tabletypemysql %tabletypeoracle %tabletypesqlite %sequences %val 
+our @EXPORT = qw/%tabletype %tabletypemysql %tabletypemariadb %tabletypeoracle %tabletypesqlite
+                 %sequences %val 
                  compare_tables bc_deeply clear_notices wait_for_notice
                  $location $oldherd_msg $newherd_msg $addtable_msg $deltable_msg $nomatch_msg/;
 
@@ -76,6 +77,21 @@ our %tabletype =
      );
 
 our %tabletypemysql =
+    (
+     'bucardo_test1'  => 'SMALLINT',
+     'bucardo_test2'  => 'INT',
+     'Bucardo_test3'  => 'BIGINT',
+     'bucardo_test4'  => 'VARCHAR(1000)',
+     'bucardo_test5'  => 'DATE',
+     'bucardo_test6'  => 'DATETIME',
+     'bucardo_test7'  => 'NUMERIC(5,1)',
+     'bucardo_test8'  => 'VARBINARY(1000)',
+     'bucardo_test9'  => 'INTEGER UNSIGNED',
+     'bucardo_test10' => 'DATETIME',
+     'bucardo space test' => 'INT',
+     );
+
+our %tabletypemariadb =
     (
      'bucardo_test1'  => 'SMALLINT',
      'bucardo_test2'  => 'INT',
