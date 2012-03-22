@@ -64,7 +64,7 @@ $dbh->do("SET sql_mode='ANSI_QUOTES'");
 ## Create one table for each table type
 for my $table (sort keys %tabletypemysql) {
 
-    my $pkeyname = $table =~ /test5/ ? q{`id space`} : 'id';
+    my $pkeyname = $table =~ /test5/ ? q{"id space"} : 'id';
     my $pkindex = $table =~ /test2/ ? '' : 'PRIMARY KEY';
     $SQL = qq{
             CREATE TABLE "$table" (
