@@ -312,7 +312,7 @@ status_detail() if $verb eq 'status';
 
 ## Stop, start, or restart the main Bucardo daemon
 stop()          if $verb eq 'stop';
-start()         if $verb eq 'start';
+start()         if $verb eq 'start' or $verb eq 'strt';
 restart()       if $verb eq 'restart';
 
 ## Reload the configuration file
