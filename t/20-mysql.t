@@ -34,7 +34,7 @@ eval {
     $evalok = 1;
 };
 if (!$evalok) {
-    plan (skip_all =>  "Cannot test MySQL as we cannot connect to a running MySQL database: $@");
+    plan (skip_all =>  "Cannot test MySQL as we cannot connect to a running MySQL database");
 }
 
 use BucardoTesting;
@@ -43,10 +43,11 @@ use BucardoTesting;
 delete $tabletypemysql{bucardo_test8};
 
 my $numtabletypes = keys %tabletypemysql;
-plan tests => 137;
+plan tests => 151;
 
 ## Drop the MySQL database if it exists
 my $dbname = 'bucardo_test';
+
 eval {
     $dbh->do("DROP DATABASE $dbname");
 };
@@ -57,13 +58,16 @@ $dbh->do("CREATE DATABASE $dbname");
 $dbh = DBI->connect("dbi:mysql:database=$dbname", $dbuser, '',
                     {AutoCommit=>1, PrintError=>0, RaiseError=>1});
 
+## Yes, this must be turned on manually!
+$dbh->do("SET sql_mode='ANSI_QUOTES'");
+
 ## Create one table for each table type
 for my $table (sort keys %tabletypemysql) {
 
     my $pkeyname = $table =~ /test5/ ? q{`id space`} : 'id';
     my $pkindex = $table =~ /test2/ ? '' : 'PRIMARY KEY';
     $SQL = qq{
-            CREATE TABLE $table (
+            CREATE TABLE "$table" (
                 $pkeyname    $tabletypemysql{$table} NOT NULL $pkindex};
     $SQL .= $table =~ /X/ ? "\n)" : qq{,
                 data1 VARCHAR(100)           NULL,
@@ -78,7 +82,7 @@ for my $table (sort keys %tabletypemysql) {
     $dbh->do($SQL);
 
     if ($table =~ /test2/) {
-        $dbh->do("ALTER TABLE $table ADD CONSTRAINT multipk PRIMARY KEY ($pkeyname,data1)");
+        $dbh->do(qq{ALTER TABLE "$table" ADD CONSTRAINT multipk PRIMARY KEY ($pkeyname,data1)});
     }
 
 }
@@ -94,6 +98,7 @@ END {
     $dbhA and $dbhA->disconnect();
     $dbhB and $dbhB->disconnect();
     $dbhC and $dbhC->disconnect();
+    $dbhD and $dbhD->disconnect();
 }
 
 ## Get Postgres database A and B and C created
@@ -167,8 +172,8 @@ for my $table (sort keys %tabletypemysql) {
     ## INSERT
     for my $x (1..6) {
         $SQL = $table =~ /X/
-            ? "INSERT INTO $table($pkey{$table}) VALUES (?)"
-                : "INSERT INTO $table($pkey{$table},data1,inty,booly) VALUES (?,'foo',$x,$boolys[$x])";
+            ? qq{INSERT INTO "$table"($pkey{$table}) VALUES (?)}
+                : qq{INSERT INTO "$table"($pkey{$table},data1,inty,booly) VALUES (?,'foo',$x,$boolys[$x])};
         $sth{insert}{$x}{$table}{A} = $dbhA->prepare($SQL);
         if ('BYTEA' eq $tabletypemysql{$table}) {
             $sth{insert}{$x}{$table}{A}->bind_param(1, undef, {pg_type => PG_BYTEA});
@@ -176,22 +181,22 @@ for my $table (sort keys %tabletypemysql) {
     }
 
     ## SELECT
-    $sql{select}{$table} = "SELECT inty, booly FROM $table ORDER BY $pkey{$table}";
+    $sql{select}{$table} = qq{SELECT inty, booly FROM "$table" ORDER BY $pkey{$table}};
     $table =~ /X/ and $sql{select}{$table} =~ s/inty/$pkey{$table}/;
 
     ## DELETE ALL
-    $SQL = "DELETE FROM $table";
+    $SQL = qq{DELETE FROM "$table"};
     $sth{deleteall}{$table}{A} = $dbhA->prepare($SQL);
 
     ## DELETE ONE
-    $SQL = "DELETE FROM $table WHERE inty = ?";
+    $SQL = qq{DELETE FROM "$table" WHERE inty = ?};
     $sth{deleteone}{$table}{A} = $dbhA->prepare($SQL);
 
     ## TRUNCATE
-    $SQL = "TRUNCATE TABLE $table";
+    $SQL = qq{TRUNCATE TABLE "$table"};
     $sth{truncate}{$table}{A} = $dbhA->prepare($SQL);
     ## UPDATE
-    $SQL = "UPDATE $table SET inty = ?";
+    $SQL = qq{UPDATE "$table" SET inty = ?};
     $sth{update}{$table}{A} = $dbhA->prepare($SQL);
 }
 
@@ -231,7 +236,7 @@ for my $table (sort keys %tabletypemysql) {
 ## Check that MySQL has the new rows
 for my $table (sort keys %tabletypemysql) {
     $t = "MySQL table $table has correct number of rows after insert";
-    $SQL = "SELECT * FROM $table";
+    $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
     is ($count, 1, $t);
@@ -272,7 +277,7 @@ $bct->ctl('bucardo kick mysql 0');
 
 for my $table (keys %tabletypemysql) {
     $t = "MySQL table $table has correct number of rows after update";
-    $SQL = "SELECT * FROM $table";
+    $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
     is ($count, 1, $t);
@@ -291,7 +296,7 @@ $bct->ctl('bucardo kick mysql 0');
 
 for my $table (keys %tabletypemysql) {
     $t = "MySQL table $table has correct number of rows after delete";
-    $SQL = "SELECT * FROM $table";
+    $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     (my $count = $sth->execute()) =~ s/0E0/0/;
     $sth->finish();
@@ -312,7 +317,7 @@ $bct->ctl('bucardo kick mysql 0');
 
 for my $table (keys %tabletypemysql) {
     $t = "MySQL table $table has correct number of rows after double insert";
-    $SQL = "SELECT * FROM $table";
+    $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
     $sth->finish();
@@ -328,7 +333,7 @@ $bct->ctl('bucardo kick mysql 0');
 
 for my $table (keys %tabletypemysql) {
     $t = "MySQL table $table has correct number of rows after single deletion";
-    $SQL = "SELECT * FROM $table";
+    $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
     $sth->finish();
@@ -348,7 +353,7 @@ $bct->ctl('bucardo kick mysql 0');
 
 for my $table (keys %tabletypemysql) {
     $t = "MySQL table $table has correct number of rows after more inserts";
-    $SQL = "SELECT * FROM $table";
+    $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
     is ($count, 3, $t);
