@@ -46,17 +46,17 @@ for my $num (2,8,10) {
 }
 
 my $numtabletypes = keys %tabletype;
-plan tests => 81;
+plan tests => 91;
 
 ## Create one table for each table type
 for my $table (sort keys %tabletype) {
 
-    $dbh->do("DROP TABLE $table");
+    $dbh->do(qq{DROP TABLE IF EXISTS "$table"});
 
-    my $pkeyname = $table =~ /test5/ ? q{`id space`} : 'id';
+    my $pkeyname = $table =~ /test5/ ? q{"id space"} : 'id';
     my $pkindex = $table =~ /test2/ ? '' : 'PRIMARY KEY';
     $SQL = qq{
-            CREATE TABLE $table (
+            CREATE TABLE "$table" (
                 $pkeyname    $tabletypesqlite{$table} NOT NULL $pkindex};
     $SQL .= $table =~ /X/ ? "\n)" : qq{,
                 data1 VARCHAR(100)           NULL,
@@ -154,8 +154,8 @@ for my $table (sort keys %tabletype) {
     my (@boolys) = qw( xxx true false null false true null );
     for my $x (1..6) {
         $SQL = $table =~ /X/
-            ? "INSERT INTO $table($pkey{$table}) VALUES (?)"
-                : "INSERT INTO $table($pkey{$table},data1,inty,booly) VALUES (?,'foo',$x,$boolys[$x])";
+            ? qq{INSERT INTO "$table"($pkey{$table}) VALUES (?)}
+                : qq{INSERT INTO "$table"($pkey{$table},data1,inty,booly) VALUES (?,'foo',$x,$boolys[$x])};
         $sth{insert}{$x}{$table}{A} = $dbhA->prepare($SQL);
         if ('BYTEA' eq $tabletype{$table}) {
             $sth{insert}{$x}{$table}{A}->bind_param(1, undef, {pg_type => PG_BYTEA});
@@ -163,22 +163,22 @@ for my $table (sort keys %tabletype) {
     }
 
     ## SELECT
-    $sql{select}{$table} = "SELECT inty,booly FROM $table ORDER BY $pkey{$table}";
+    $sql{select}{$table} = qq{SELECT inty,booly FROM "$table" ORDER BY $pkey{$table}};
     $table =~ /X/ and $sql{select}{$table} =~ s/inty/$pkey{$table}/;
 
     ## DELETE ALL
-    $SQL = "DELETE FROM $table";
+    $SQL = qq{DELETE FROM "$table"};
     $sth{deleteall}{$table}{A} = $dbhA->prepare($SQL);
 
     ## DELETE ONE
-    $SQL = "DELETE FROM $table WHERE inty = ?";
+    $SQL = qq{DELETE FROM "$table" WHERE inty = ?};
     $sth{deleteone}{$table}{A} = $dbhA->prepare($SQL);
 
     ## TRUNCATE
-    $SQL = "TRUNCATE TABLE $table";
+    $SQL = qq{TRUNCATE TABLE "$table"};
     $sth{truncate}{$table}{A} = $dbhA->prepare($SQL);
     ## UPDATE
-    $SQL = "UPDATE $table SET inty = ?";
+    $SQL = qq{UPDATE "$table" SET inty = ?};
     $sth{update}{$table}{A} = $dbhA->prepare($SQL);
 }
 
@@ -217,7 +217,7 @@ for my $table (sort keys %tabletype) {
 ## Check that SQLite has the new rows
 for my $table (sort keys %tabletype) {
     $t = "SQLite table $table has correct entries";
-    $SQL = "SELECT * FROM $table";
+    $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     $sth->execute();
     my $info = $sth->fetchall_arrayref({})->[0];
@@ -252,7 +252,7 @@ $bct->ctl('bucardo kick sqlite 0');
 
 for my $table (keys %tabletype) {
     $t = "SQLite table $table has correct number of rows after update";
-    $SQL = "SELECT * FROM $table";
+    $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     $sth->execute();
 
@@ -270,7 +270,7 @@ $bct->ctl('bucardo kick sqlite 0');
 
 for my $table (keys %tabletype) {
     $t = "SQLite table $table has correct number of rows after delete";
-    $SQL = "SELECT * FROM $table";
+    $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     (my $count = $sth->execute()) =~ s/0E0/0/;
     $sth->finish();
@@ -291,7 +291,7 @@ $bct->ctl('bucardo kick sqlite 0');
 
 for my $table (keys %tabletype) {
     $t = "SQLite table $table has correct number of rows after double insert";
-    $SQL = "SELECT count(*) FROM $table";
+    $SQL = qq{SELECT count(*) FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     $sth->execute();
     my $count = $sth->fetchall_arrayref()->[0][0];
@@ -307,7 +307,7 @@ $bct->ctl('bucardo kick sqlite 0');
 
 for my $table (keys %tabletype) {
     $t = "SQLite table $table has correct number of rows after single deletion";
-    $SQL = "SELECT count(*) FROM $table";
+    $SQL = qq{SELECT count(*) FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     $sth->execute();
     my $count = $sth->fetchall_arrayref()->[0][0];
@@ -327,7 +327,7 @@ $bct->ctl('bucardo kick sqlite 0');
 
 for my $table (keys %tabletype) {
     $t = "SQLite table $table has correct data after more inserts";
-    $SQL = "SELECT * FROM $table";
+    $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     $sth->execute();
     my $info = $sth->fetchall_arrayref({});
