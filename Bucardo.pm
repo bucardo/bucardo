@@ -4602,9 +4602,11 @@ sub start_kid {
                 }
 
                 if ($empty_by_delete) {
+					my $startdelete = time;
                     ($dmlcount{D}{target}{$S}{$T} = $targetdbh->do("DELETE FROM $S.$T")) =~ s/0E0/0/o;
                     $dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
-                    $self->glog("Rows deleted from $targetdb.$S.$T: $dmlcount{D}{target}{$S}{$T}");
+					my $speed = sprintf '(%ds)', time-$startdelete;
+					$self->glog("$speed Rows deleted from $targetdb.$S.$T: $dmlcount{D}{target}{$S}{$T}");
                 }
 
                 my ($srccmd,$tgtcmd);
@@ -4625,7 +4627,7 @@ sub start_kid {
                 $sourcedbh->do($srccmd);
 
                 $self->glog("Running on $targetdb: $tgtcmd");
-                my $startotc = $sync->{onetimecopy} ? time : 0;
+				my $startcopy = time;
                 $targetdbh->do($tgtcmd);
                 my $buffer='';
                 $dmlcount{I}{target}{$S}{$T} = 0;
@@ -4634,18 +4636,18 @@ sub start_kid {
                     $dmlcount{I}{target}{$S}{$T}++;
                 }
                 $targetdbh->pg_putcopyend();
-                my $otc = $startotc ? (sprintf '(OTC: %ds) ', time-$startotc) : '';
-                $self->glog(qq{${otc}End COPY of $targetdb.$S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
-                $dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
+				my $speed = sprintf '(%ds)', time-$startcopy;
+				$self->glog(qq{$speed End COPY of $targetdb.$S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
+				$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
 
                 if ($hasindex) {
                     $SQL = "UPDATE pg_class SET relhasindex = 't' WHERE oid = $g->{targetoid}{$targetdb}";
                     $targetdbh->do($SQL);
                     $self->glog("Reindexing table $S.$T on $targetdb");
+					my $startreindex = time;
                     $targetdbh->do("REINDEX TABLE $S.$T");
-                    if ($otc) {
-                        $self->glog(sprintf qq{(OTC: %ds) REINDEX TABLE $S.$T}, time-$startotc);
-                    }
+					my $speed = sprintf '(%ds)', time-$startreindex;
+					$self->glog(qq{$speed REINDEX TABLE $S.$T});
                 }
 
                 ## If we just did a fullcopy, but the table is pushdelta or swap,
@@ -4768,9 +4770,11 @@ sub start_kid {
                         $empty_by_delete = 0;
                     }
                     if ($empty_by_delete) {
+						my $startdelete = time;
                         ($dmlcount{D}{target}{$S}{$T} = $targetdbh->do("DELETE FROM $S.$T")) =~ s/0E0/0/o;
                         $dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
-                        $self->glog("Rows deleted from $S.$T: $dmlcount{D}{target}{$S}{$T}");
+						my $speed = sprintf '(%ds)', time-$startdelete;
+						$self->glog("$speed Rows deleted from $S.$T: $dmlcount{D}{target}{$S}{$T}");
                     }
 
                     $self->glog("Running on $sourcedb: $srccmd");
@@ -5607,6 +5611,7 @@ sub start_kid {
                 $SQL = $g->{pkeycols};
 
                 $SQL = "DELETE FROM $S.$T WHERE $SQL IN";
+				my $startdelete = time;
                 while (@srcdelete) {
                     $x=0;
                     my $list = '';
@@ -5629,9 +5634,11 @@ sub start_kid {
                     }
                 }
                 if ($dmlcount{D}{source}{$S}{$T}) {
-                    $self->glog(qq{Rows deleted from source "$S.$T": $dmlcount{D}{source}{$S}{$T}/$count});
+					my $speed = sprintf '(%ds)', time-$startdelete;
+                    $self->glog(qq{$speed Rows deleted from source "$S.$T": $dmlcount{D}{source}{$S}{$T}/$count});
                 }
 
+				$startdelete = time;
                 while (@tgtdelete) {
                     $x=0;
                     my $list = '';
@@ -5654,7 +5661,8 @@ sub start_kid {
                     }
                 }
                 if ($dmlcount{D}{target}{$S}{$T}) {
-                    $self->glog(qq{Rows deleted from target "$S.$T": $dmlcount{D}{target}{$S}{$T}/$count});
+					my $speed = sprintf '(%ds)', time-$startdelete;
+					$self->glog(qq{$speed Rows deleted from target "$S.$T": $dmlcount{D}{target}{$S}{$T}/$count});
                 }
                 ## Get authoritative existence information for all undefined keys
                 ## Before this point, the lack of a matching record from the left join
@@ -6085,10 +6093,10 @@ sub start_kid {
 
         my $total_time = time() - $kid_start_time;
         if ($synctype eq 'swap') {
-            $self->glog("Finished syncing. Time: $total_time. Updates: $dmlcount{allupdates}{source}+$dmlcount{allupdates}{target} Inserts: $dmlcount{allinserts}{source}+$dmlcount{allinserts}{target} Deletes: $dmlcount{alldeletes}{source}+$dmlcount{alldeletes}{target} Sync: $syncname. Keepalive: $kidsalive");
+            $self->glog("Finished syncing to $targetdb. Time: $total_time. Updates: $dmlcount{allupdates}{source}+$dmlcount{allupdates}{target} Inserts: $dmlcount{allinserts}{source}+$dmlcount{allinserts}{target} Deletes: $dmlcount{alldeletes}{source}+$dmlcount{alldeletes}{target} Sync: $syncname. Keepalive: $kidsalive");
         }
         else {
-            $self->glog("Finished syncing. Time: $total_time. Updates: $dmlcount{allupdates}{target} Inserts: $dmlcount{allinserts}{target} Deletes: $dmlcount{alldeletes}{target} Sync: $syncname. Keepalive: $kidsalive");
+            $self->glog("Finished syncing to $targetdb. Time: $total_time. Updates: $dmlcount{allupdates}{target} Inserts: $dmlcount{allinserts}{target} Deletes: $dmlcount{alldeletes}{target} Sync: $syncname. Keepalive: $kidsalive");
         }
 
         ## Remove lock file if we used it
