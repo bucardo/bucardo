@@ -139,7 +139,7 @@ $bct->restart_bucardo($dbhX, 'bucardo_stopped');
 $t = q{Activated sync pgtest1};
 $bct->ctl('bucardo update sync pgtest1 status=active');
 
-## Start listening for a syndone message
+## Start listening for a syncdone message
 ## Bucardo should fire the sync off right away without a kick
 $dbhX->do('LISTEN bucardo_syncdone_pgtest1');
 $dbhX->commit();
@@ -299,7 +299,7 @@ $bct->add_row_to_database('A', 5);
 $bct->add_row_to_database('B', 6);
 $bct->add_row_to_database('C', 7);
 $bct->add_row_to_database('D', 8);
-## Kick off the sync. C should win (D is target), truncate the others, then propogate '7'
+## Kick off the sync. C should win (D is target), truncate the others, then propagate '7'
 $bct->ctl('bucardo kick sync pgtest3 0');
 $bct->check_for_row([[7]], [qw/A B C D/], 'truncate D');
 

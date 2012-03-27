@@ -142,6 +142,7 @@ args
 autostart
 Bucardo
 bucardorc
+combinations
 customcols
 Customcols
 customname
@@ -154,8 +155,10 @@ dbmap
 dbname
 dbrun
 DDL
+dropin
 fullcopy
 LOGIN
+MariaDB
 mongo
 MongoDB
 Mullane
@@ -164,17 +167,23 @@ MySQL
 perl
 PGBINDIR
 pgsql
+pgtest
 plperlu
 postgres
 Postgres
+pushable
 pushdelta
+qw
 rdbms
 recurse
+Redis
 Sabino
 SQL
 SQLite
+syncdone
 syncrun
 unlisten
+wget
 whitespace
 
 ## README
@@ -213,6 +222,7 @@ debugstderr
 debugstdout
 Deckelmann
 DESTDIR
+evals
 Farmawan
 FreeBSD
 getconn
@@ -225,6 +235,7 @@ intra
 Kaveh
 Kebrt
 kidsalive
+Kiriakos
 localtime
 Machado
 Mathieu
@@ -273,6 +284,7 @@ timestamptz
 Tolley
 triggerkick
 trigrules
+Tsourapas
 UNLISTEN
 upsert
 Vilem
@@ -302,6 +314,7 @@ Mongo
 multi
 onetimecopy
 orderable
+Pappalardo
 perlu
 pid
 pkey
@@ -331,6 +344,7 @@ debugsyslog
 dir
 GetOptions
 MCP
+msg
 notimer
 piddir
 pkonly

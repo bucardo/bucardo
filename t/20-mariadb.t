@@ -240,15 +240,15 @@ for my $table (sort keys %tabletypemariadb) {
     bc_deeply($res, $dbhC, $sql{select}{$table}, $t);
 }
 
-## Check that Mariadb has the new rows
+## Check that MariaDB has the new rows
 for my $table (sort keys %tabletypemariadb) {
-    $t = "Mariadb table $table has correct number of rows after insert";
+    $t = "MariaDB table $table has correct number of rows after insert";
     $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
     is ($count, 1, $t);
 
-    $t = "Mariadb table $table has correct entries";
+    $t = "MariaDB table $table has correct entries";
     my $info = $sth->fetchall_arrayref({})->[0];
     my $type = $tabletypemariadb{$table};
     my $id = $val{$type}{1};
@@ -283,13 +283,13 @@ $dbhA->commit();
 $bct->ctl('bucardo kick mariadb 0');
 
 for my $table (keys %tabletypemariadb) {
-    $t = "Mariadb table $table has correct number of rows after update";
+    $t = "MariaDB table $table has correct number of rows after update";
     $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
     is ($count, 1, $t);
 
-    $t = "Mariadb table $table has updated value";
+    $t = "MariaDB table $table has updated value";
     my $info = $sth->fetchall_arrayref({})->[0];
     is ($info->{inty}, 42, $t);
 }
@@ -302,7 +302,7 @@ $dbhA->commit();
 $bct->ctl('bucardo kick mariadb 0');
 
 for my $table (keys %tabletypemariadb) {
-    $t = "Mariadb table $table has correct number of rows after delete";
+    $t = "MariaDB table $table has correct number of rows after delete";
     $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     (my $count = $sth->execute()) =~ s/0E0/0/;
@@ -323,7 +323,7 @@ $dbhA->commit();
 $bct->ctl('bucardo kick mariadb 0');
 
 for my $table (keys %tabletypemariadb) {
-    $t = "Mariadb table $table has correct number of rows after double insert";
+    $t = "MariaDB table $table has correct number of rows after double insert";
     $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
@@ -339,7 +339,7 @@ $dbhA->commit();
 $bct->ctl('bucardo kick mariadb 0');
 
 for my $table (keys %tabletypemariadb) {
-    $t = "Mariadb table $table has correct number of rows after single deletion";
+    $t = "MariaDB table $table has correct number of rows after single deletion";
     $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
@@ -359,13 +359,13 @@ $dbhA->commit();
 $bct->ctl('bucardo kick mariadb 0');
 
 for my $table (keys %tabletypemariadb) {
-    $t = "Mariadb table $table has correct number of rows after more inserts";
+    $t = "MariaDB table $table has correct number of rows after more inserts";
     $SQL = qq{SELECT * FROM "$table"};
     my $sth = $dbh->prepare($SQL);
     my $count = $sth->execute();
     is ($count, 3, $t);
 
-    $t = "Mariadb table $table has updated values";
+    $t = "MariaDB table $table has updated values";
     my $info = $sth->fetchall_arrayref({});
     $info = [ sort { $a->{inty} <=> $b->{inty} } @$info ];
     my ($val1, $val3, $val4) = @{$val{$tabletypemariadb{$table}}}{1, 3, 4};

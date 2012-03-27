@@ -114,7 +114,7 @@ like ($res, qr/Added sync "pgtest1"/, $t);
 $bct->add_row_to_database('A', 1);
 $bct->add_row_to_database('B', 2);
 
-## Start listening for a syndone message
+## Start listening for a syncdone message
 $dbhX->do('LISTEN bucardo_syncdone_pgtest1');
 $dbhX->commit();
 
