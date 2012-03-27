@@ -1554,14 +1554,14 @@ sub add_database {
         ## Get the module namem the way to refer to its database
         ## This also makes sure we have a valid type
         my %dbtypeinfo = (
-            drizzle  => ['DBD::drizzle', 'Drizzle database'],
-            mongo    => ['MongoDB',      'MongoDB'],
-            mysql    => ['DBD::mysql',   'MySQL database'],
-            mariadb  => ['DBD::mysql',   'MariaDB database'],
-            oracle   => ['DBD::Oracle',  'Oracle database'],
-            postgres => ['DBD::Pg',      'PostgreSQL database'],
-            redis    => ['Redis',        'Redis database'],
-            sqlite   => ['DBD::SQLite',  'SQLite database'],
+            drizzle  => ['DBD::drizzle',  'Drizzle database'],
+            mongo    => ['MongoDB',       'MongoDB'],
+            mysql    => ['DBD::mysql',    'MySQL database'],
+            mariadb  => ['DBD::mysql',    'MariaDB database'],
+            oracle   => ['DBD::Oracle',   'Oracle database'],
+            postgres => ['DBD::Pg',       'PostgreSQL database'],
+            redis    => ['Redis::Client', 'Redis database'],
+            sqlite   => ['DBD::SQLite',   'SQLite database'],
         );
         if (! exists $dbtypeinfo{$dbtype}) {
             die qq{Unknown database type: $dbtype\n};
@@ -1631,7 +1631,7 @@ sub add_database {
 
             $evalok = 0;
             eval {
-                $testdbh = Redis->new(@dsn);
+                $testdbh = Redis::Client->new(@dsn);
                 $evalok = 1;
             };
         }

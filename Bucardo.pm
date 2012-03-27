@@ -1613,6 +1613,10 @@ sub start_controller {
                    or $x->{dbtype} eq 'flatpg') {
                 $g->{newname}{$syncname}{$dbname} = "$S.$T";
             }
+            ## Some always get the raw table name
+            elsif ($x->{dbtype} eq 'redis') {
+                $g->{newname}{$syncname}{$dbname} = $g->{tablename};
+            }
             else {
                 $g->{newname}{$syncname}{$dbname} = $T;
             }
@@ -2829,6 +2833,12 @@ sub start_kid {
             if ($x->{dbtype} eq 'sqlite') {
                 ## Nothing needed here, the default seems okay
             }
+
+            if ($x->{dbtype} eq 'redis') {
+                ## Implement MULTI, when the driver supports it
+                ##$x->{dbh}->multi();
+            }
+
         }
 
         ## We may want to lock all the tables. Use sparingly
@@ -4342,6 +4352,10 @@ sub start_kid {
             for my $dbname (@dbs_dbi) {
                 $sync->{db}{$dbname}{dbh}->rollback();
             }
+            for my $dbname (@dbs_redis) {
+                ## Implement DISCARD when the client supports it
+                ##$sync->{db}{$dbname}{dbh}->discard();
+            }
             $maindbh->rollback();
         }
         else {
@@ -4357,6 +4371,10 @@ sub start_kid {
             for my $dbname (@dbs_dbi) {
                 next if $x->{writtento};
                 $sync->{db}{$dbname}{dbh}->commit();
+            }
+            for my $dbname (@dbs_redis) {
+                ## Implement EXEC when the client supports it
+                ## $sync->{db}{$dbname}{dbh}->exec();
             }
             $self->glog(q{All databases committed}, LOG_VERBOSE);
         }
@@ -4646,8 +4664,8 @@ sub connect_database {
             }
 
             ## For now, we simply require it
-            require Redis;
-            $dbh = Redis->new(@dsn);
+            require Redis::Client;
+            $dbh = Redis::Client->new(@dsn);
             my $backend = 0;
 
             return $backend, $dbh;
@@ -7804,7 +7822,9 @@ sub truncate_table {
     }
 
     elsif ('redis' eq $x->{dbtype}) {
-        ## Do nothing here yet
+        ## No real equivalent here, as we do not map tables 1:1 to redis keys
+        ## In theory, we could walk through all keys and delete ones that match the table
+        ## We will hold off until someone actually needs that, however :)
         return 1;
     }
 
@@ -7835,7 +7855,7 @@ sub delete_table {
         $count = $res->{n};
     }
     elsif ('redis' eq $x->{dbtype}) {
-        ## Do nothing here yet
+        ## Nothing relevant here, as the table is only part of the key name
     }
     else {
         die "Do not know how to delete a dbtype of $x->{dbtype}";
@@ -8162,7 +8182,15 @@ sub delete_rows {
         }
 
         if ('redis' eq $type) {
-            ## TODO
+            ## We need to remove the entire tablename:pkey:column for each column we know about
+            my $cols = $goat->{cols};
+            for my $pk (keys %$rows) {
+                ## If this is a multi-column primary key, change our null delimiter to a colon
+                if ($goat->{numpkcols} > 1) {
+                    $pk =~ s{\0}{:}go;
+                }
+                $count = $t->{dbh}->del("$tname:$pk");
+            }
             next;
         }
 
@@ -8340,7 +8368,9 @@ sub push_rows {
 
             ## The columns we are pushing to, both as an arrayref and a CSV:
             my $cols = $goat->{tcolumns}{$SELECT};
-            my $columnlist = '(' . (join ',', map { $t->{dbh}->quote_identifier($_) } @$cols) . ')';
+            my $columnlist = $t->{does_sql} ? 
+                ('(' . (join ',', map { $t->{dbh}->quote_identifier($_) } @$cols) . ')')
+              : ('(' . (join ',', map { $_ } @$cols) . ')');
 
             my $type = $t->{dbtype};
 
@@ -8363,7 +8393,8 @@ sub push_rows {
                 $self->{collection} = $t->{dbh}->get_collection($tname);
             }
             elsif ('redis' eq $type) {
-                ## TODO
+                ## No prep needed, other than to reset our count of changes
+                $t->{redis} = 0;
             }
             elsif ('mysql' eq $type or 'drizzle' eq $type or 'mariadb' eq $type) {
                 my $tgtcmd = "INSERT INTO $tname$columnlist VALUES (";
@@ -8398,7 +8429,7 @@ sub push_rows {
         my $pcount = @pkvals;
 
         ## Loop through each chunk of primary keys to copy over
-       for my $pkvs (@pkvals) {
+        for my $pkvs (@pkvals) {
 
             ## Message to prepend to the statement if chunking
             my $pre = $pcount <= 1 ? '' : "/* $loop of $pcount */";
@@ -8437,6 +8468,7 @@ sub push_rows {
 
                     my $type = $t->{dbtype};
                     my $cols = $goat->{tcolumns}{$SELECT};
+                    my $tname = $newname->{$t->{name}};
 
                     chomp $buffer;
 
@@ -8499,7 +8531,25 @@ sub push_rows {
                         $count += $t->{sth}->execute(@cols);
                     }
                     elsif ('redis' eq $type) {
-                        ## TODO
+                        ## We are going to set a Redis hash, in which the key is "tablename:pkeyvalue"
+                        my @colvals = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
+                        my @pkey;
+                        for (1 .. $goat->{numpkcols}) {
+                            push @pkey => shift @colvals;
+                        }
+                        my $pkeyval = join ':' => @pkey;
+                        ## Build a list of non-null key/value pairs to set in the hash
+                        my @add;
+                        my $x = $goat->{numpkcols} - 1;
+                        for my $val (@colvals) {
+                            $x++;
+                            next if ! defined $val;
+                            push @add, $cols->[$x], $val;
+                        }
+
+                        $t->{dbh}->hmset("$tname:$pkeyval", @add);
+                        $count++;
+                        $t->{redis}++;
                     }
 
                 } ## end each target
@@ -8535,6 +8585,9 @@ sub push_rows {
             }
             elsif ('flatsql' eq $type) {
                 print {$t->{filehandle}} ";\n\n";
+            }
+            elsif ('redis' eq $type) {
+                $self->glog(qq{Rows copied to Redis $t->{name}.$tname:<pkeyvalue>: $t->{redis}}, LOG_VERBOSE);
             }
         }
 
@@ -8591,7 +8644,7 @@ sub vacuum_table {
         $self->glog("Vacuum complete. Time: $total_time", LOG_VERBOSE);
     }
     elsif ('redis' eq $dbtype) {
-        # Use BGWRITEAOF ?
+        # Nothing to do, really
     }
     elsif ('mongodb' eq $dbtype) {
         # Use db.repairDatabase() ?
