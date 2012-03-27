@@ -21,7 +21,6 @@ my $bct = BucardoTesting->new({location => 'postgres'})
 ## Some of the tests are called inside of BucardoTesting.pm
 ## e.g. $bct->check_for_row([[1]], [qw/ B C D/]);
 ## The above runs one test for each passed in database x the number of test tables
-## 1 4
 my $numtables = keys %tabletype;
 my $numsequences = keys %sequences;
 my $single_tests = 28;
@@ -151,7 +150,7 @@ $bct->restart_bucardo($dbhX);
 ## Wait for our sync to finish
 $bct->wait_for_notice($dbhX, 'bucardo_syncdone_pgtest1');
 
-## See if things are on the others databases
+## See if things are on the other databases
 $bct->check_for_row([[1]], [qw/ B C D/]);
 
 ## Switch to a 2 source sync
