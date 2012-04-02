@@ -3470,7 +3470,7 @@ sub get_deadlock_details {
         next if $1 == $pid;
         my ($process,$locktype,$relation) = ($1,$2,$3);
         ## Fetch the relation name
-        my $getname = $dldbh->prepare('SELECT relname FROM pg_class WHERE oid = ?');
+        my $getname = $dldbh->prepare(q{SELECT nspname||'.'||relname FROM pg_class c, pg_namespace n ON (n.oid=c.relnamespace) WHERE c.oid = ?});
         $getname->execute($relation);
         my $relname = $getname->fetchall_arrayref()->[0][0];
 
