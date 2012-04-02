@@ -7320,7 +7320,7 @@ sub get_deadlock_details {
         next if $1 == $pid;
         my ($process,$locktype,$relation) = ($1,$2,$3);
         ## Fetch the relation name
-        my $getname = $dldbh->prepare('SELECT relname FROM pg_class WHERE oid = ?');
+        my $getname = $dldbh->prepare(q{SELECT nspname||'.'||relname FROM pg_class c, pg_namespace n ON (n.oid=c.relnamespace) WHERE c.oid = ?});
         $getname->execute($relation);
         my $relname = $getname->fetchall_arrayref()->[0][0];
 
@@ -7338,7 +7338,7 @@ SELECT
   CASE WHEN query_start IS NULL THEN '?' ELSE
     TO_CHAR(query_start, 'HH24:MI:SS (YYYY-MM-DD)') END AS query_started,
   CASE WHEN query_start IS NULL THEN '?' ELSE
-    TO_CHAR($clock_timestamp - query_start, 'HH24:MI:SS') END AS query_age
+    TO_CHAR($clock_timestamp - query_start, 'HH24:MI:SS') END AS query_age,
   COALESCE(host(client_addr)::text,''::text) AS ip,
   CASE WHEN client_port <= 0 THEN 0 ELSE client_port END AS port,
   usename AS user
