@@ -3488,7 +3488,7 @@ SELECT
   CASE WHEN query_start IS NULL THEN '?' ELSE
     TO_CHAR(query_start, 'HH24:MI:SS (YYYY-MM-DD)') END AS query_started,
   CASE WHEN query_start IS NULL THEN '?' ELSE
-    TO_CHAR($clock_timestamp - query_start, 'HH24:MI:SS') END AS query_age
+    TO_CHAR($clock_timestamp - query_start, 'HH24:MI:SS') END AS query_age,
   COALESCE(host(client_addr)::text,''::text) AS ip,
   CASE WHEN client_port <= 0 THEN 0 ELSE client_port END AS port,
   usename AS user
