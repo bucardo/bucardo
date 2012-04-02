@@ -2064,7 +2064,7 @@ sub start_mcp {
                         for ($scol_def, $fcol_def) {
                             s/\A\(//;
                             s/\)\z//;
-							s/\)::/::/;
+                            s/\)::/::/;
                         }
                         my $msg;
                         if ($scol_def eq $fcol_def) {
@@ -4602,11 +4602,11 @@ sub start_kid {
                 }
 
                 if ($empty_by_delete) {
-					my $startdelete = time;
+                    my $startdelete = time;
                     ($dmlcount{D}{target}{$S}{$T} = $targetdbh->do("DELETE FROM $S.$T")) =~ s/0E0/0/o;
                     $dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
-					my $speed = sprintf '(%ds)', time-$startdelete;
-					$self->glog("$speed Rows deleted from $targetdb.$S.$T: $dmlcount{D}{target}{$S}{$T}");
+                    my $speed = sprintf '(%ds)', time-$startdelete;
+                    $self->glog("$speed Rows deleted from $targetdb.$S.$T: $dmlcount{D}{target}{$S}{$T}");
                 }
 
                 my ($srccmd,$tgtcmd);
@@ -4627,7 +4627,7 @@ sub start_kid {
                 $sourcedbh->do($srccmd);
 
                 $self->glog("Running on $targetdb: $tgtcmd");
-				my $startcopy = time;
+                my $startcopy = time;
                 $targetdbh->do($tgtcmd);
                 my $buffer='';
                 $dmlcount{I}{target}{$S}{$T} = 0;
@@ -4636,18 +4636,18 @@ sub start_kid {
                     $dmlcount{I}{target}{$S}{$T}++;
                 }
                 $targetdbh->pg_putcopyend();
-				my $speed = sprintf '(%ds)', time-$startcopy;
-				$self->glog(qq{$speed End COPY of $targetdb.$S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
-				$dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
+                my $speed = sprintf '(%ds)', time-$startcopy;
+                $self->glog(qq{$speed End COPY of $targetdb.$S.$T, rows inserted: $dmlcount{I}{target}{$S}{$T}});
+                $dmlcount{allinserts}{target} += $dmlcount{I}{target}{$S}{$T};
 
                 if ($hasindex) {
                     $SQL = "UPDATE pg_class SET relhasindex = 't' WHERE oid = $g->{targetoid}{$targetdb}";
                     $targetdbh->do($SQL);
                     $self->glog("Reindexing table $S.$T on $targetdb");
-					my $startreindex = time;
+                    my $startreindex = time;
                     $targetdbh->do("REINDEX TABLE $S.$T");
-					my $speed = sprintf '(%ds)', time-$startreindex;
-					$self->glog(qq{$speed REINDEX TABLE $targetdb.$S.$T});
+                    my $speed = sprintf '(%ds)', time-$startreindex;
+                    $self->glog(qq{$speed REINDEX TABLE $targetdb.$S.$T});
                 }
 
                 ## If we just did a fullcopy, but the table is pushdelta or swap,
@@ -4770,11 +4770,11 @@ sub start_kid {
                         $empty_by_delete = 0;
                     }
                     if ($empty_by_delete) {
-						my $startdelete = time;
+                        my $startdelete = time;
                         ($dmlcount{D}{target}{$S}{$T} = $targetdbh->do("DELETE FROM $S.$T")) =~ s/0E0/0/o;
                         $dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
-						my $speed = sprintf '(%ds)', time-$startdelete;
-						$self->glog("$speed Rows deleted from $S.$T: $dmlcount{D}{target}{$S}{$T}");
+                        my $speed = sprintf '(%ds)', time-$startdelete;
+                        $self->glog("$speed Rows deleted from $S.$T: $dmlcount{D}{target}{$S}{$T}");
                     }
 
                     $self->glog("Running on $sourcedb: $srccmd");
@@ -5611,7 +5611,7 @@ sub start_kid {
                 $SQL = $g->{pkeycols};
 
                 $SQL = "DELETE FROM $S.$T WHERE $SQL IN";
-				my $startdelete = time;
+                my $startdelete = time;
                 while (@srcdelete) {
                     $x=0;
                     my $list = '';
@@ -5634,11 +5634,11 @@ sub start_kid {
                     }
                 }
                 if ($dmlcount{D}{source}{$S}{$T}) {
-					my $speed = sprintf '(%ds)', time-$startdelete;
+                    my $speed = sprintf '(%ds)', time-$startdelete;
                     $self->glog(qq{$speed Rows deleted from source "$S.$T": $dmlcount{D}{source}{$S}{$T}/$count});
                 }
 
-				$startdelete = time;
+                $startdelete = time;
                 while (@tgtdelete) {
                     $x=0;
                     my $list = '';
@@ -5661,8 +5661,8 @@ sub start_kid {
                     }
                 }
                 if ($dmlcount{D}{target}{$S}{$T}) {
-					my $speed = sprintf '(%ds)', time-$startdelete;
-					$self->glog(qq{$speed Rows deleted from target "$S.$T": $dmlcount{D}{target}{$S}{$T}/$count});
+                    my $speed = sprintf '(%ds)', time-$startdelete;
+                    $self->glog(qq{$speed Rows deleted from target "$S.$T": $dmlcount{D}{target}{$S}{$T}/$count});
                 }
                 ## Get authoritative existence information for all undefined keys
                 ## Before this point, the lack of a matching record from the left join
