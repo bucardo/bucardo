@@ -4647,7 +4647,7 @@ sub start_kid {
 					my $startreindex = time;
                     $targetdbh->do("REINDEX TABLE $S.$T");
 					my $speed = sprintf '(%ds)', time-$startreindex;
-					$self->glog(qq{$speed REINDEX TABLE $S.$T});
+					$self->glog(qq{$speed REINDEX TABLE $targetdb.$S.$T});
                 }
 
                 ## If we just did a fullcopy, but the table is pushdelta or swap,
