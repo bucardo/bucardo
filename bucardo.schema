@@ -1532,26 +1532,26 @@ END;
                   SECURITY DEFINER
                   AS \$clone\$
                   DECLARE
-                    tablename TEXT;
+                    mytable TEXT;
                     myst TEXT;
                   BEGIN
                     INSERT INTO bucardo.bucardo_truncate_trigger(tablename,sname,tname,sync)
                       VALUES (TG_RELID, TG_TABLE_SCHEMA, TG_TABLE_NAME, TG_ARGV[0]);
 
-                    SELECT INTO tablename
+                    SELECT INTO mytable
                       bucardo.bucardo_tablename_maker(TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME, 'delta_');
-                    myst = 'TRUNCATE TABLE bucardo.' || tablename;
+                    myst = 'TRUNCATE TABLE bucardo.' || mytable;
                     EXECUTE myst;
 
-                    SELECT INTO tablename
+                    SELECT INTO mytable
                       bucardo.bucardo_tablename_maker(TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME, 'track_');
-                    myst = 'TRUNCATE TABLE bucardo.' || tablename;
+                    myst = 'TRUNCATE TABLE bucardo.' || mytable;
                     EXECUTE myst;
 
                     -- Not strictly necessary, but nice to have a clean slate
-                    SELECT INTO tablename
+                    SELECT INTO mytable
                       bucardo.bucardo_tablename_maker(TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME, 'stage_');
-                    myst = 'TRUNCATE TABLE bucardo.' || tablename;
+                    myst = 'TRUNCATE TABLE bucardo.' || mytable;
                     EXECUTE myst;
 
                     RETURN NEW;
