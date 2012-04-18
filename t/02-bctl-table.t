@@ -73,16 +73,16 @@ is ($res, qq{$nomatch_msg:\n  bucardo_notest2\n}, $t);
 
 $dbhA->do('DROP SCHEMA IF EXISTS tschema CASCADE');
 $dbhA->do('CREATE SCHEMA tschema');
-$dbhA->do('CREATE TABLE tschema.bucardo_test3 (a int)');
+$dbhA->do('CREATE TABLE tschema.bucardo_test4 (a int)');
 $dbhA->commit();
 
 $t = q{Add table works for multiple matching valid table entry (no schema)};
-$res = $bct->ctl('bucardo add table bucardo_test3');
-is ($res, qq{$addtable_msg:\n  public.bucardo_test3\n  tschema.bucardo_test3\n}, $t);
+$res = $bct->ctl('bucardo add table bucardo_test4');
+is ($res, qq{$addtable_msg:\n  public.bucardo_test4\n  tschema.bucardo_test4\n}, $t);
 
 $t = q{Add table works for a single valid middle wildcard entry};
-$res = $bct->ctl('bucardo add table b%_test4');
-is ($res, qq{$addtable_msg:\n  public.bucardo_test4\n}, $t);
+$res = $bct->ctl('bucardo add table B%_test3');
+is ($res, qq{$addtable_msg:\n  public.Bucardo_test3\n}, $t);
 
 $t = q{Add table works for a single valid beginning wildcard entry};
 $res = $bct->ctl('bucardo add table %_test5');
@@ -126,23 +126,24 @@ is ($res, qq{$nomatch_msg:\n  pub%.no%test\n}, $t);
 
 $t = q{Add table does not re-add existing tables};
 $res = $bct->ctl('bucardo add table bucard%');
-is ($res, qq{$addtable_msg:\n  public.bucardo_test10\n}, $t);
+is ($res, qq{$addtable_msg:\n  public.bucardo space test\n  public.bucardo_test10\n}, $t);
 
 $t = q{'bucardo list tables' returns expected result};
 $res = $bct->ctl('bucardo list tables');
 $expected =
-qr{\d+\.\s* Table: public.bucardo_test1   DB: A  PK: id \(int2\)\s+
-\d+\.\s* Table: public.bucardo_test2   DB: A  PK: id\|data1 \(int4\|text\)
-\d+\.\s* Table: public.bucardo_test3   DB: A  PK: id \(int8\)\s+
-\d+\.\s* Table: public.bucardo_test4   DB: A  PK: id \(text\)\s+
-\d+\.\s* Table: public.bucardo_test5   DB: A  PK: id space \(date\)\s+
-\d+\.\s* Table: public.bucardo_test6   DB: A  PK: id \(timestamp\)\s+
-\d+\.\s* Table: public.bucardo_test7   DB: A  PK: id \(numeric\)\s+
-\d+\.\s* Table: public.bucardo_test8   DB: A  PK: id \(bytea\)\s+
-\d+\.\s* Table: public.bucardo_test9   DB: A  PK: id \(int_unsigned\)\s+
-\d+\.\s* Table: public.bucardo_test10  DB: A  PK: id \(timestamptz\)\s+
-\d+\.\s* Table: public.droptest        DB: A  PK: none\s+
-\d+\.\s* Table: tschema.bucardo_test3  DB: A  PK: none\s+
+qr{\d+\.\s* Table: public.Bucardo_test3       DB: A  PK: id \(int8\)\s+
+\d+\.\s* Table: public.bucardo space test  DB: A  PK: id \(int4\)\s+
+\d+\.\s* Table: public.bucardo_test1       DB: A  PK: id \(int2\)\s+
+\d+\.\s* Table: public.bucardo_test2       DB: A  PK: id\|data1 \(int4\|text\)
+\d+\.\s* Table: public.bucardo_test4       DB: A  PK: id \(text\)\s+
+\d+\.\s* Table: public.bucardo_test5       DB: A  PK: id space \(date\)\s+
+\d+\.\s* Table: public.bucardo_test6       DB: A  PK: id \(timestamp\)\s+
+\d+\.\s* Table: public.bucardo_test7       DB: A  PK: id \(numeric\)\s+
+\d+\.\s* Table: public.bucardo_test8       DB: A  PK: id \(bytea\)\s+
+\d+\.\s* Table: public.bucardo_test9       DB: A  PK: id \(int_unsigned\)\s+
+\d+\.\s* Table: public.bucardo_test10      DB: A  PK: id \(timestamptz\)\s+
+\d+\.\s* Table: public.droptest            DB: A  PK: none\s+
+\d+\.\s* Table: tschema.bucardo_test4      DB: A  PK: none\s+
 };
 like ($res, $expected, $t);
 
@@ -153,31 +154,32 @@ $res = $bct->ctl('bucardo add table pub%.bucard%9 public.bucardo_test1 nada buca
 is ($res, qq{$nomatch_msg:\n  bucardo3\n  nada\n$addtable_msg:\n  public.bucardo_test1\n  public.bucardo_test2\n  public.bucardo_test9\n}, $t);
 
 $t = q{Add table works when specifying the ping option};
-$res = $bct->ctl('bucardo add table bucardo_test4 ping=true');
-is ($res, qq{$addtable_msg:\n  public.bucardo_test4\n}, $t);
-
-$t = q{'bucardo list tables' returns expected result};
-$res = $bct->ctl('bucardo list tables');
-$expected =
-qr{\d+\.\s* Table: public.bucardo_test1  DB: A  PK: id \(int2\)\s*
-\d+\.\s* Table: public.bucardo_test2  DB: A  PK: id\|data1 \(int4\|text\)\s*
-\d+\.\s* Table: public.bucardo_test4  DB: A  PK: id \(text\)\s* ping:true\s*
-\d+\.\s* Table: public.bucardo_test9  DB: A  PK: id \(int_unsigned\)\s*
-};
-like ($res, $expected, $t);
-
-$t = q{Add table works when specifying the rebuild_index and ping options};
-$res = $bct->ctl('bucardo add table bucardo_test5 ping=false rebuild_index=1');
+$res = $bct->ctl('bucardo add table bucardo_test5 ping=true');
 is ($res, qq{$addtable_msg:\n  public.bucardo_test5\n}, $t);
 
 $t = q{'bucardo list tables' returns expected result};
 $res = $bct->ctl('bucardo list tables');
 $expected =
 qr{\d+\.\s* Table: public.bucardo_test1  DB: A  PK: id \(int2\)\s*
-\d+\.\s* Table: public.bucardo_test2  DB: A  PK: id|data1 \(int4\|text\)\s*
-\d+\.\s* Table: public.bucardo_test4  DB: A  PK: id \(text\)\s* ping:true\s*
-\d+\.\s* Table: public.bucardo_test5  DB: A  PK: id space \(date\)\s* ping:false\s* rebuild_index:true\s*
+\d+\.\s* Table: public.bucardo_test2  DB: A  PK: id\|data1 \(int4\|text\)\s*
+\d+\.\s* Table: public.bucardo_test5  DB: A  PK: id space \(date\)       ping:true\s*
 \d+\.\s* Table: public.bucardo_test9  DB: A  PK: id \(int_unsigned\)\s*
+};
+like ($res, $expected, $t);
+
+$t = q{Add table works when specifying the rebuild_index and ping options};
+$res = $bct->ctl('bucardo add table bucardo_test4 ping=false rebuild_index=1');
+is ($res, qq{$addtable_msg:\n  public.bucardo_test4\n  tschema.bucardo_test4\n}, $t);
+
+$t = q{'bucardo list tables' returns expected result};
+$res = $bct->ctl('bucardo list tables');
+$expected =
+qr{\d+\.\s* Table: public.bucardo_test1   DB: A  PK: id \(int2\)\s*
+\d+\.\s* Table: public.bucardo_test2   DB: A  PK: id|data1 \(int4\|text\)\s*
+\d+\.\s* Table: public.bucardo_test4   DB: A  PK: id \(text\)\s* ping:false\s*rebuild_index:true\s*
+\d+\.\s* Table: public.bucardo_test5   DB: A  PK: id space \(date\)\s* ping:true\s*
+\d+\.\s* Table: public.bucardo_test9   DB: A  PK: id \(int_unsigned\)\s*
+\d+\.\s* Table: tschema.bucardo_test4  DB: A  PK: none\s*ping:false  rebuild_index:true\s*
 };
 like ($res, $expected, $t);
 
@@ -199,15 +201,15 @@ $res = $bct->ctl('bucardo add table bucardo_test5 herd=foobar');
 is ($res, qq{$addtable_msg:\n  public.bucardo_test5\n$oldherd_msg "foobar":\n  public.bucardo_test5\n}, $t);
 
 $t = q{Add table works when adding multiple tables to a new herd};
-$res = $bct->ctl('bucardo add table "public.buc*3" %.bucardo_test2 herd=foobar2');
+$res = $bct->ctl('bucardo add table "public.Buc*3" %.bucardo_test2 herd=foobar2');
 $expected =
 qq{$addtable_msg:
+  public.Bucardo_test3
   public.bucardo_test2
-  public.bucardo_test3
 Created the herd named "foobar2"
 $newherd_msg "foobar2":
+  public.Bucardo_test3
   public.bucardo_test2
-  public.bucardo_test3
 };
 is ($res, $expected, $t);
 
@@ -217,9 +219,11 @@ $expected =
 qq{$addtable_msg:
   public.bucardo_test4
   public.bucardo_test6
+  tschema.bucardo_test4
 $newherd_msg "foobar2":
   public.bucardo_test4
   public.bucardo_test6
+  tschema.bucardo_test4
 };
 is ($res, $expected, $t);
 
@@ -234,11 +238,11 @@ qq{$deltable_msg:
 is ($res, $expected, $t);
 
 $t = q{Delete table works for multiple entries};
-$res = $bct->ctl('bucardo remove table public.bucardo_test3 public.bucardo_test2');
+$res = $bct->ctl('bucardo remove table public.Bucardo_test3 public.bucardo_test2');
 $expected =
 qq{$deltable_msg:
+  public.Bucardo_test3
   public.bucardo_test2
-  public.bucardo_test3
 };
 is ($res, $expected, $t);
 
