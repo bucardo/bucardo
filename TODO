@@ -12,6 +12,7 @@ Version 5:
 
 These range the gamut from wildly speculative ideas to must-have features.
 
+- Allow one log file per sync
 - Handle the case where newly created databases do not have a public schema
 - Add DB2 as a target
 - Do table locking up front for fullcopy syncs, to reduce deadlock windows
