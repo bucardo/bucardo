@@ -7882,7 +7882,7 @@ sub config {
         }
         for my $s (sort keys %$config) {
             next if ! $all and ! grep { $s =~ /$_/i } @nouns;
-            printf "%-*s = %s\n", $maxsize, $s, $config->{$s}{value};
+            printf "%-*s = %s\n", $maxsize, $s, $config->{$s}{setting};
         }
         exit 1;
     }
