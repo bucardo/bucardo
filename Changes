@@ -89,6 +89,8 @@ Bucardo version 5.0.0, released ??, 2012
 
   - Automatically create the bucardo (superuser) if we can connect as 'postgres'. [GSM]
 
+  - Add 'bucardo list all' feature [Christian Recktenwald]t
+
   - Allow removal of tables from herds via bucardo. [GSM]
 
   - Add create_child_q_table() function. [GSM]
