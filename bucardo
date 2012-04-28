@@ -545,7 +545,7 @@ sub help {
 
   stop <reason>   ** Tell all Bucardo processes to stop permanently
 
-  list <type> [name]   ** View information about dbs, dbgroups, herds, syncs, tables, or sequences
+  list <type> [name]   ** View information about dbs, dbgroups, herds, syncs, tables, sequences or "all" of them
   add <type> <name>    ** Add a db, dbgroup, herd, sync, table, or sequence
   remove <type> <name> ** Remove a db, dbgroup, herd, sync, table, or sequence
   For detailed help on the above, prefix with a help like this:
@@ -1380,7 +1380,7 @@ sub list_item {
 
     ## Show information about one or more items in the bucardo database
     ## Arguments: none, but parses nouns
-    ## Returns: never, exits
+    ## Returns: 0 on success, -1 on error
 
     my $usage = usage('list');
 
@@ -1395,22 +1395,66 @@ sub list_item {
     ## Account for variations and abbreviations
     $thing = standardize_name($thing);
 
-    ## All of these will exit and do not return
-    list_customcodes() if $thing eq 'customcode';
-    list_customnames() if $thing eq 'customname';
-    list_customcols()  if $thing eq 'customcols';
-    ## The dbgroup must be checked before the database (dbg vs db)
-    list_dbgroups()    if $thing eq 'dbgroup';
-    list_databases()   if $thing eq 'database';
-    list_herds()       if $thing eq 'herd';
-    list_syncs()       if $thing eq 'sync';
-    list_tables()      if $thing eq 'table';
-    list_sequences()   if $thing eq 'sequence';
+    SWITCH: {
+        $thing eq 'customcode' and do {
+                list_customcodes();
+                last SWITCH;
+        };
+        $thing eq 'customname' and do {
+                list_customnames();
+                last SWITCH;
+        };
+        $thing eq 'customcols' and do {
+                list_customcols();
+                last SWITCH;
+        };
+        ## The dbgroup must be checked before the database (dbg vs db)
+        $thing eq 'dbgroup' and do {
+                list_dbgroups();
+                last SWITCH;
+        };
+        $thing eq 'database' and do {
+                list_databases();
+                last SWITCH;
+        };
+        $thing eq 'herd' and do {
+                list_herds();
+                last SWITCH;
+        };
+        $thing eq 'sync' and do {
+                list_syncs();
+                last SWITCH;
+        };
+        $thing eq 'table' and do {
+                list_tables();
+                last SWITCH;
+        };
+        $thing eq 'sequence' and do {
+                list_sequences();
+                last SWITCH;
+        };
+        $thing eq 'all' and do {
+                print "-- customcodes:\n";  list_customcodes();
+                print "-- customnames:\n";  list_customnames();
+                print "-- customcols:\n";   list_customcols();
+                print "-- dbgroups:\n";     list_dbgroups();
+                print "-- databases:\n";    list_databases();
+                print "-- herds:\n";        list_herds();
+                print "-- syncs:\n";        list_syncs();
+                print "-- tables:\n";       list_tables();
+                print "-- sequences:\n";    list_sequences();
+                print "\n";
+                last SWITCH;
+        };
 
-    ## Cannot list anything else
-    warn "$usage\n";
-    exit 1;
+        ## catch all
+        ## Cannot list anything else
+        warn "$usage\n";
+        exit 1;
 
+    } # SWITCH
+
+    exit 0;
 } ## end of list_item
 
 
@@ -1999,7 +2043,7 @@ sub list_databases {
     ## Show information about databases. Queries the bucardo.db table
     ## Arguments: zero or more
     ## 1+ Databases to view. Can be "all" and can have wildcards
-    ## Returns: undef
+    ## Returns: 0 on success, -1 on error
     ## Example: bucardo list db sale%
 
     ## Grab our generic usage message
@@ -2008,7 +2052,7 @@ sub list_databases {
     ## Might be no databases yet
     if (! keys %$DB) {
         print "No databases have been added yet\n";
-        exit 1;
+        return -1;
     }
 
     ## If not doing all, keep track of which to show
@@ -2041,7 +2085,7 @@ sub list_databases {
     ## No matches?
     if (@nouns and ! keys %matchdb) {
         print "No matching databases found\n";
-        exit 1;
+        return -1;
     }
 
     ## We only show the type if they are different from each othera
@@ -2156,7 +2200,7 @@ sub list_databases {
         }
     }
 
-    exit 0;
+    return 0;
 
 } ## end of list_databases
 
@@ -2387,7 +2431,7 @@ sub list_dbgroups {
     ## Show information about all or some subset of the bucardo.dbgroup table
     ## Arguments: zero or more
     ## 1+ Groups to view. Can be "all" and can have wildcards
-    ## Returns: undef
+    ## Returns: 0 on success, -1 on error
     ## Example: bucardo list dbgroups
 
     ## Grab our generic usage message
@@ -2396,7 +2440,7 @@ sub list_dbgroups {
     ## Might be no groups yet
     if (! keys %$DBGROUP) {
         print "No database groups have been added yet\n";
-        exit 1;
+        return -1;
     }
 
     ## If not doing all, keep track of which to show
@@ -2429,7 +2473,7 @@ sub list_dbgroups {
     ## No matches?
     if (@nouns and ! keys %matchdbg) {
         print "No matching database groups found\n";
-        exit 1;
+        return -1;
     }
 
     ## Figure out the length of each item for a pretty display
@@ -2466,7 +2510,7 @@ sub list_dbgroups {
         $VERBOSE >= 2 and show_all_columns($info);
     }
 
-    exit 0;
+    return 0;
 
 } ## end of list_dbgroups
 
@@ -2706,7 +2750,7 @@ sub list_customnames {
     ## Show information about all or some subset of the bucardo.customname table
     ## Arguments: zero or more
     ## 1+ Names to view. Can be "all" and can have wildcards
-    ## Returns: undef
+    ## Returns: 0 on success, -1 on error
     ## Example: bucardo list customname
 
     ## Grab our generic usage message
@@ -2715,7 +2759,7 @@ sub list_customnames {
     ## Might be no entries yet
     if (! keys %$CUSTOMNAME) {
         print "No customnames have been added yet\n";
-        exit 1;
+        return -1;
     }
 
     my $cn = $CUSTOMNAME->{list};
@@ -2755,7 +2799,7 @@ sub list_customnames {
     ## No matches?
     if (@nouns and ! $matches) {
         print "No matching customnames found\n";
-        exit 1;
+        return -1;
     }
 
     ## Figure out the length of each item for a pretty display
@@ -2797,7 +2841,7 @@ sub list_customnames {
 
     }
 
-    exit 0;
+    return 0;
 
 } ## end of list_customnames
 
@@ -3030,7 +3074,7 @@ sub list_customcols {
     ## Show information about all or some subset of the bucardo.customcols table
     ## Arguments: zero or more
     ## 1+ Names to view. Can be "all" and can have wildcards
-    ## Returns: undef
+    ## Returns: 0 on success, -1 on error
     ## Example: bucardo list customcols
 
     ## Grab our generic usage message
@@ -3039,7 +3083,7 @@ sub list_customcols {
     ## Might be no entries yet
     if (! keys %$CUSTOMCOLS) {
         print "No customcols have been added yet\n";
-        exit 1;
+        return -1;
     }
 
     my $cc = $CUSTOMCOLS->{list};
@@ -3079,7 +3123,7 @@ sub list_customcols {
     ## No matches?
     if (@nouns and ! $matches) {
         print "No matching customcols found\n";
-        exit 1;
+        return -1;
     }
 
     ## Figure out the length of each item for a pretty display
@@ -3121,7 +3165,7 @@ sub list_customcols {
 
     }
 
-    exit 0;
+    return 0;
 
 } ## end of list_customcols
 
@@ -3480,7 +3524,7 @@ sub list_tables {
 
     ## Show information about all or some tables in the 'goat' table
     ## Arguments: none (reads nouns for a list of tables)
-    ## Returns: never, exits
+    ## Returns: 0 on success, -1 on error
     ## Example: bucardo list tables
 
     ## Grab our generic usage message
@@ -3489,7 +3533,7 @@ sub list_tables {
     ## Might be no tables yet
     if (! keys %$TABLE) {
         print "No tables have been added yet\n";
-        exit 1;
+        return -1;
     }
 
     ## If not doing all, keep track of which to show
@@ -3522,7 +3566,7 @@ sub list_tables {
     ## No matches?
     if (@nouns and ! keys %matchtable) {
         print "No matching tables found\n";
-        exit 1;
+        return -1;
     }
 
     ## Figure out the length of each item for a pretty display
@@ -3561,7 +3605,7 @@ sub list_tables {
         $VERBOSE >= 2 and show_all_columns($row);
     }
 
-    exit 0;
+    return 0;
 
 } ## end of list_tables
 
@@ -3741,7 +3785,7 @@ sub list_herds {
 
     ## Show information about all or some subset of the 'herd' table
     ## Arguments: none, parses nouns for herd names
-    ## Returns: never, exits
+    ## Returns: 0 on success, -1 on error
 
     my $usage = usage('list_herds');
 
@@ -3755,7 +3799,7 @@ sub list_herds {
         $sth->finish();
         printf "There are no%s entries in the 'herd' table.\n",
             $WHERE ? ' matching' : '';
-        exit 1;
+        return -1;
     }
     $info = $sth->fetchall_arrayref({});
 
@@ -3785,7 +3829,7 @@ sub list_herds {
         $VERBOSE >= 2 and show_all_columns($row);
     }
 
-    exit 0;
+    return 0;
 
 } ## end of list_herds
 
@@ -4216,7 +4260,7 @@ sub list_syncs {
 
     ## Show information about all or some subset of the 'sync' table
     ## Arguments: none (reads nouns for a list of syncs)
-    ## Returns: never, exits
+    ## Returns: 0 on success, -1 on error
 
     my $usage = usage('list_syncs');
 
@@ -4283,7 +4327,7 @@ sub list_syncs {
     ## Nothing found? We're out of here
     if (! keys %$syncs) {
         print "No syncs found\n";
-        exit 1;
+        return -1;
     }
 
     ## Determine the size of the output strings for pretty aligning later
@@ -4338,7 +4382,7 @@ sub list_syncs {
 
     } ## end of each sync
 
-    exit 0;
+    return 0;
 
 } ## end of list_syncs
 
@@ -5652,7 +5696,7 @@ sub list_customcodes {
 
     ## Show information about all or some subset of the 'customcode' table
     ## Arguments: none, parses nouns for customcodes
-    ## Returns: never, exits
+    ## Returns: 0 on success, -1 on error
 
     my $usage = usage('list_customcodes');
 
@@ -5666,7 +5710,7 @@ sub list_customcodes {
         $sth->finish();
         printf "There are no%s entries in the 'customcode' table.\n",
             $WHERE ? ' matching' : '';
-        exit 1;
+        return -1;
     }
 
     $info = $sth->fetchall_arrayref({});
@@ -5690,7 +5734,7 @@ sub list_customcodes {
         $VERBOSE >= 2 and show_all_columns($row);
     }
 
-    exit 0;
+    return 0;
 
 } ## end of list_customcodes
 
@@ -5707,7 +5751,7 @@ sub list_sequences {
 
     ## Show information about all or some sequences in the 'goat' table
     ## Arguments: none (reads nouns for a list of sequences)
-    ## Returns: never, exits
+    ## Returns: 0 on success, -1 on error
 
     my $usage = usage('list_sequences');
 
@@ -5720,7 +5764,7 @@ sub list_sequences {
         $sth->finish();
         printf "There are no%s entries in the 'goat' table.\n",
             $WHERE ? ' matching' : '';
-        exit 1;
+        return -1;
     }
 
     $info = $sth->fetchall_arrayref({});
@@ -5738,7 +5782,7 @@ sub list_sequences {
     }
 
 
-    exit 0;
+    return 0;
 
 } ## end of list_sequences
 
@@ -7619,7 +7663,7 @@ By default a graphical timer is given: this can be turned off with the --notimer
         return qq{Usage: list <type> [options]
 Shows information about items in the internal Bucardo database.
 The type is one of: db, dbgroup, table, sequence, herd, sync,
-  customcode, customcols, or customname
+  customcode, customcols, customname, or all to see everything at once.
 For more information, run: $progname help list <type>};
     }
     if ('list_customcode' eq $name) {
