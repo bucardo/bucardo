@@ -7954,6 +7954,11 @@ sub delete_rows {
 
     } ## end truncation
 
+    ## The number of items before we break it into a separate statement
+    ## This is inexact, as we don't know how large each key is,
+    ## but should be good enough as long as not set too high.
+    my $chunksize = $config{statement_chunk_size} || 10_000;
+
     ## Setup our deletion SQL as needed
     my %SQL;
     for my $t (@$deldb) {
@@ -7989,11 +7994,6 @@ sub delete_rows {
 
         ## We may want to break this up into separate rounds if large
         my $round = 0;
-
-        ## The number of items before we break it into a separate statement
-        ## This is inexact, as we don't know how large each key is,
-        ## but should be good enough as long as not set too high.
-        my $chunksize = $config{statement_chunk_size} || 10_000;
 
         ## Internal counter of how many items we've processed this round
         my $roundtotal = 0;
@@ -8131,6 +8131,7 @@ sub delete_rows {
         } ## end postgres database
 
         if ('mongo' eq $type) {
+
             $self->{collection} = $t->{dbh}->get_collection($tname);
 
             ## We want the 'raw' versions of the primary keys
@@ -8158,9 +8159,27 @@ sub delete_rows {
                 }
             }
 
-            my $result = $self->{collection}->remove
-                ({$pkcolsraw => { '$in' => $delkeys }}, { safe => 1 } );
-            $count{$t} = $result->{n};
+            $count{$t} = 0;
+
+            ## Very large messages will cause mongo to freak out,
+            ## so we may need to batch the deletes
+            my $max = scalar @{ $delkeys };
+            $max--;
+
+            my $bottom = 0;
+            {
+                ## Send a copy of our array
+                my $top = $bottom + $chunksize;
+                $top = $max if $top > $max;
+                my @newarray = @$delkeys[$bottom..$top];
+                my $result = $self->{collection}->remove
+                    ({$pkcolsraw => { '$in' => \@newarray }}, { safe => 1 } );
+                $count{$t} += $result->{n};
+                last if $top >= $max;
+                $bottom = $top + 1;
+                redo;
+            }
+
             $self->glog("Mongo objects removed from $tname: $count{$t}", LOG_VERBOSE);
             next;
         }
