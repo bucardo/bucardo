@@ -3782,6 +3782,13 @@ sub start_kid {
                         (my $err = $@) =~ s/\n/\\n/g;
 
                         ## If we have no exception code, we simply pass to our __DIE__ sub
+                        ## XXX If no handler, we want to rewind and try again ourselves
+                        ## XXX But this time, we want to enter a more aggressive conflict resolution mode
+                        ## XXX Specifically, we need to ensure that a single database "wins" and that
+                        ## XXX all table changes therein come from that database.
+                        ## XXX No need if we only have a single table, of course, or if there were 
+                        ## XXX no possible conflicting changes.
+                        ## XXX Finally, we skip if the firsst run already had a canonical winner
                         if (!$g->{has_exception_code}) {
                             $self->glog("Warning! Aborting due to exception for $S.$T:$pkval Error was $err", LOG_WARN);
                             die "$err\n";
