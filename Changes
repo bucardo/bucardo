@@ -2,6 +2,12 @@
 
 Bucardo version 5.0.0, released ??, 2012
 
+  - Complete rework of Bucardo: we now allow as many source and target 
+    databases as wanted in a single sync. [GSM]
+
+  - Allow alternate targets: Drizzle, MariaDB, MongoDB, MySQL, Oracle, Redis, 
+    SQLite, as well as "flat files" [GSM]
+
   - Rename bucardo_ctl to simply bucardo [Jon Jensen, GSM]
 
   - Change the way that swap syncs work: should be much faster [GSM]
@@ -36,6 +42,8 @@ Bucardo version 5.0.0, released ??, 2012
   - Add new subprocess (VAC) to run bucardo_purge_delta. [GSM]
 
   - Fix errors with bytea and swap syncs. [GSM]
+
+  - Do not replicate null values to MongoDB [Ali Asad Lotia]
 
   - Add 'default_standard_conflict' option, per idea from Franz Dürr. [GSM]
 
@@ -89,7 +97,7 @@ Bucardo version 5.0.0, released ??, 2012
 
   - Automatically create the bucardo (superuser) if we can connect as 'postgres'. [GSM]
 
-  - Add 'bucardo list all' feature [Christian Recktenwald]t
+  - Add 'bucardo list all' feature [Christian Recktenwald]
 
   - Allow removal of tables from herds via bucardo. [GSM]
 
