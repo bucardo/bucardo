@@ -8526,7 +8526,11 @@ sub push_rows {
                         }
                         ## Coerce non-strings into different objects
                         for my $key (keys %$object) {
-                            if ($goat->{columnhash}{$key}{ftype} =~ /smallint|integer|bigint/o) {
+                            ## Since mongo is schemaless, don't set null columns in the mongo doc
+                            if (!defined($object->{$key})) {
+                                delete $object->{$key};
+                            }
+                            elsif ($goat->{columnhash}{$key}{ftype} =~ /smallint|integer|bigint/o) {
                                 $object->{$key} = int $object->{$key};
                             }
                             elsif ($goat->{columnhash}{$key}{ftype} eq 'boolean') {
