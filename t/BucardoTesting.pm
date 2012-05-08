@@ -369,7 +369,7 @@ sub empty_cluster {
         $dbh = $self->connect_database($clustername, $dbname);
         ## Remove any of our known schemas
         my @slist;
-        for my $sname (qw/ public bucardo freezer /) {
+        for my $sname (qw/ public bucardo freezer tschema /) {
             push @slist => $sname if $self->drop_schema($dbh, $sname);
         }
         debug(qq{Schemas dropped from $dbname on $clustername: } . join ',' => @slist);
