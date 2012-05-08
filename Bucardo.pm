@@ -4671,8 +4671,8 @@ sub connect_database {
             }
 
             ## For now, we simply require it
-            require Redis::Client;
-            $dbh = Redis::Client->new(@dsn);
+            require Redis;
+            $dbh = Redis->new(@dsn);
             my $backend = 0;
 
             return $backend, $dbh;

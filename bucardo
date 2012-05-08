@@ -1604,7 +1604,7 @@ sub add_database {
             mariadb  => ['DBD::mysql',    'MariaDB database'],
             oracle   => ['DBD::Oracle',   'Oracle database'],
             postgres => ['DBD::Pg',       'PostgreSQL database'],
-            redis    => ['Redis::Client', 'Redis database'],
+            redis    => ['Redis',         'Redis database'],
             sqlite   => ['DBD::SQLite',   'SQLite database'],
         );
         if (! exists $dbtypeinfo{$dbtype}) {
@@ -1675,7 +1675,7 @@ sub add_database {
 
             $evalok = 0;
             eval {
-                $testdbh = Redis::Client->new(@dsn);
+                $testdbh = Redis->new(@dsn);
                 $evalok = 1;
             };
         }

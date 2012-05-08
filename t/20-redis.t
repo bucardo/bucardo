@@ -14,25 +14,25 @@ use MIME::Base64;
 
 use vars qw/ $dbhX $dbhA $dbhB $res $command $t $SQL %pkey %sth %sql $sth $count $val /;
 
-## Must have the Redis::Client module
+## Must have the Redis module
 my $evalok = 0;
 eval {
-    require Redis::Client;
+    require Redis;
     $evalok = 1;
 };
 if (!$evalok) {
-    plan (skip_all =>  'Cannot test Redis unless the Perl module Redis::Client is installed');
+    plan (skip_all =>  'Cannot test Redis unless the Perl module Redis is installed');
 }
 
 ## Redis must be up and running
 $evalok = 0;
 my $dbhR;
 eval {
-    $dbhR = Redis::Client->new();
+    $dbhR = Redis->new();
     $evalok = 1;
 };
 if (!$evalok) {
-    plan (skip_all =>  "Cannot test Redis as we cannot connect to a running Redis instance: $@");
+    plan (skip_all =>  "Cannot test Redis as we cannot connect to a running Redis instance");
 }
 
 use BucardoTesting;
