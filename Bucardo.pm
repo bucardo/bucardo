@@ -8139,52 +8139,116 @@ sub delete_rows {
 
         if ('mongo' eq $type) {
 
+            ## Grab the collection name and store it
             $self->{collection} = $t->{dbh}->get_collection($tname);
 
-            ## We want the 'raw' versions of the primary keys
+            ## Because we may have multi-column primary keys, and each key may need modifying,
+            ## we have to put everything into an array of arrays.
+            ## The first level is the primary key number, the next is the actual values
+            my @delkeys = [];
 
-            ## If this is a binary pkey, we need to decode it
-            my $delkeys = [];
+            ## The pkcolsraw variable is a simple comma-separated list of PK column names
+            ## The rows variable is a hash with the PK values as keys (the values can be ignored)
+
+            ## Binary PKs are easy: all we have to do is decode
+            ## We can assume that binary PK means not a multi-column PK
             if ($goat->{hasbinarypkey}) {
-                for my $k (keys %$rows) {
-                    push @$delkeys => decode_base64($k);
-                }
+                @{ $delkeys[0] } = map { decode_base64($_) } keys %$rows;
             }
             else {
-                ## Need to make sure we send non-strings as the correct type
-                if ($goat->{columnhash}{$pkcolsraw}{ftype} =~ /smallint|integer|bigint/o) {
-                    $delkeys = [ map { int $_ } keys %$rows ];
-                }
-                elsif ($goat->{columnhash}{$pkcolsraw}{ftype} eq 'boolean') {
-                    $delkeys = [ map { $_ eq 't' ? true : false } keys %$rows ];
-                }
-                elsif ($goat->{columnhash}{$pkcolsraw}{ftype} =~ /real|double|numeric/o) {
-                    $delkeys = [ map { strtod $_ } keys %$rows ];
-                }
-                else {
-                    $delkeys = [keys %$rows];
-                }
-            }
 
+                ## Break apart the primary keys into an array of arrays
+                my @fullrow = map { [split '\0'] } keys %$rows;
+
+                ## Which primary key column we are currently using
+                my $pknum = 0;
+
+                ## Walk through each column making up the primary key
+                for my $realpkname (split /,/ => $pkcolsraw) {
+
+                    ## Grab what type this column is
+                    ## We need to map non-strings to correct types as best we can
+                    my $type = $goat->{columnhash}{$realpkname}{ftype};
+
+                    ## For integers, we simply force to a Perlish int
+                    if ($type =~ /smallint|integer|bigint/o) {
+                        @{ $delkeys[$pknum] } = map { int $_->[$pknum] } @fullrow;
+                    }
+                    ## Non-integer numbers get set via the strtod command from the 'POSIX' module
+                    elsif ($type =~ /real|double|numeric/o) {
+                        @{ $delkeys[$pknum] } = map { strtod $_->[$pknum] } @fullrow;
+                    }
+                    ## Boolean becomes true Perlish booleans via the 'boolean' module
+                    elsif ($type eq 'boolean') {
+                        @{ $delkeys[$pknum] } = map { $_->[$pknum] eq 't' ? true : false } @fullrow;
+                    }
+                    ## Everything else gets a direct mapping
+                    else {
+                        @{ $delkeys[$pknum] } = map { $_->[$pknum] } @fullrow;
+                    }
+                    $pknum++;
+                }
+            } ## end of multi-column PKs
+
+            ## How many items we end up actually deleting
             $count{$t} = 0;
 
-            ## Very large messages will cause mongo to freak out,
-            ## so we may need to batch the deletes
-            my $max = scalar @{ $delkeys };
+            ## We may need to batch these to keep the total message size reasonable
+            my $max = keys %$rows;
             $max--;
 
+            ## The bottom of our current array slice
             my $bottom = 0;
-            {
-                ## Send a copy of our array
+
+            ## This loop limits the size of our delete requests to mongodb
+          MONGODEL: {
+                ## Calculate the current top of the array slice
                 my $top = $bottom + $chunksize;
+
+                ## Stop at the total number of rows
                 $top = $max if $top > $max;
-                my @newarray = @$delkeys[$bottom..$top];
-                my $result = $self->{collection}->remove
-                    ({$pkcolsraw => { '$in' => \@newarray }}, { safe => 1 } );
-                $count{$t} += $result->{n};
-                last if $top >= $max;
+
+                ## If we have a single key, we can use the '$in' syntax
+                if ($numpks <= 1) {
+                    my @newarray = @{ $delkeys[0] }[$bottom..$top];
+                    my $result = $self->{collection}->remove(
+                        {$pkcolsraw => { '$in' => \@newarray }}, { safe => 1 });
+                    $count{$t} += $result->{n};
+                }
+                else {
+                    ## For multi-column primary keys, we cannot use '$in', sadly.
+                    ## Thus, we will just call delete once per row
+
+                    ## Put the names into an easy to access array
+                    my @realpknames = split /,/ => $pkcolsraw;
+
+                    my @find;
+
+                    ## Which row we are currently processing
+                    my $numrows = scalar keys %$rows;
+                    for my $rownumber (0..$numrows-1) {
+                        for my $pknum (0..$numpks-1) {
+                            push @find => $realpknames[$pknum], $delkeys[$pknum][$rownumber];
+                        }
+                    }
+
+                    my $result = $self->{collection}->remove(
+                        { '$and' => \@find }, { safe => 1 });
+
+                    $count{$t} += $result->{n};
+
+                    ## We do not need to loop, as we just went 1 by 1 through the whole list
+                    last MONGODEL;
+
+                }
+
+                ## Bail out of the loop if we've hit the max
+                last MONGODEL if $top >= $max;
+
+                ## Assign the bottom of our array slice to be above the current top
                 $bottom = $top + 1;
-                redo;
+
+                redo MONGODEL;
             }
 
             $self->glog("Mongo objects removed from $tname: $count{$t}", LOG_VERBOSE);

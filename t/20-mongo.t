@@ -45,7 +45,7 @@ delete $tabletype{bucardo_test2};
 
 
 my $numtabletypes = keys %tabletype;
-plan tests => 133;
+plan tests => 148;
 
 ## Make sure we start clean by dropping the test database
 my $dbname = 'bucardotest';
@@ -138,8 +138,8 @@ for my $table (sort keys %tabletype) {
     ## INSERT
     for my $x (1..6) {
         $SQL = $table =~ /X/
-            ? "INSERT INTO $table($pkey{$table}) VALUES (?)"
-                : "INSERT INTO $table($pkey{$table},data1,inty) VALUES (?,'foo',$x)";
+            ? qq{INSERT INTO "$table"($pkey{$table}) VALUES (?)}
+                : qq{INSERT INTO "$table"($pkey{$table},data1,inty) VALUES (?,'foo',$x)};
         $sth{insert}{$x}{$table}{A} = $dbhA->prepare($SQL);
         if ('BYTEA' eq $tabletype{$table}) {
             $sth{insert}{$x}{$table}{A}->bind_param(1, undef, {pg_type => PG_BYTEA});
@@ -147,22 +147,22 @@ for my $table (sort keys %tabletype) {
     }
 
     ## SELECT
-    $sql{select}{$table} = "SELECT inty FROM $table ORDER BY $pkey{$table}";
+    $sql{select}{$table} = qq{SELECT inty FROM "$table" ORDER BY $pkey{$table}};
     $table =~ /X/ and $sql{select}{$table} =~ s/inty/$pkey{$table}/;
 
     ## DELETE ALL
-    $SQL = "DELETE FROM $table";
+    $SQL = qq{DELETE FROM "$table"};
     $sth{deleteall}{$table}{A} = $dbhA->prepare($SQL);
 
     ## DELETE ONE
-    $SQL = "DELETE FROM $table WHERE inty = ?";
+    $SQL = qq{DELETE FROM "$table" WHERE inty = ?};
     $sth{deleteone}{$table}{A} = $dbhA->prepare($SQL);
 
     ## TRUNCATE
-    $SQL = "TRUNCATE TABLE $table";
+    $SQL = qq{TRUNCATE TABLE "$table"};
     $sth{truncate}{$table}{A} = $dbhA->prepare($SQL);
     ## UPDATE
-    $SQL = "UPDATE $table SET inty = ?";
+    $SQL = qq{UPDATE "$table" SET inty = ?};
     $sth{update}{$table}{A} = $dbhA->prepare($SQL);
 }
 
@@ -246,10 +246,6 @@ for my $table (sort keys %tabletype2) {
         {
             $pkeyname => $id,
             inty  => 1,
-            booly => undef,
-            email => undef,
-            bite1 => undef,
-            bite2 => undef,
             data1 => 'foo',
         },
 
