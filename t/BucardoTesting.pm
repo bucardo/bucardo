@@ -20,7 +20,7 @@ my $DEBUG = $ENV{BUCARDO_DEBUG} || 0;
 
 use base 'Exporter';
 our @EXPORT = qw/%tabletype %tabletypemysql %tabletypemariadb %tabletypeoracle %tabletypesqlite
-                 %sequences %val 
+                 %sequences %val
                  compare_tables bc_deeply clear_notices wait_for_notice
                  $location $oldherd_msg $newherd_msg $addtable_msg $deltable_msg $nomatch_msg/;
 
