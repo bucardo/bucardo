@@ -545,9 +545,10 @@ sub help {
 
   stop <reason>   ** Tell all Bucardo processes to stop permanently
 
-  list <type> [name]   ** View information about dbs, dbgroups, herds, syncs, tables, sequences or "all" of them
-  add <type> <name>    ** Add a db, dbgroup, herd, sync, table, or sequence
-  remove <type> <name> ** Remove a db, dbgroup, herd, sync, table, or sequence
+  list <type> [name]   ** View information about dbs, dbgroups, herds, syncs, tables, sequences, customnames, customcols, customcode or "all" of them
+  add <type> <name>    ** Add a db, dbgroup, herd, sync, table, sequence, customcode, customcols customname or customcode
+  remove <type> <name> ** Remove a db, dbgroup, herd, sync, table, sequence, customname, customcol or customcode
+
   For detailed help on the above, prefix with a help like this:
     $progname help add db
 
@@ -9272,48 +9273,51 @@ line:
 
 Usage: ./bucardo upgrade
 
-Upgrades an existing Bucardo installation to the current version of the bucardo script. 
-Requires that the bucardo script and the bucardo.schema file be the same version. All 
-changes should be backwards compatible, but you may need to re-validate existing scripts 
+Upgrades an existing Bucardo installation to the current version of the bucardo script.
+Requires that the bucardo script and the bucardo.schema file be the same version. All
+changes should be backwards compatible, but you may need to re-validate existing scripts
 to make sure changes get propagated to all databases.
 
 =item B<start>
 
 Usage: ./bucardo start "Reason --name"
 
-Restarts Bucardo cleanly by first issuing the equivalent of a stop to ask any existing Bucardo 
-processes to exit, and then starting a new Bucardo MCP process. A short reason and name should 
-be provided - these are logged in the reason_file file and sent in the email sent when Bucardo 
+Restarts Bucardo cleanly by first issuing the equivalent of a stop to ask any existing Bucardo
+processes to exit, and then starting a new Bucardo MCP process. A short reason and name should
+be provided - these are logged in the reason_file file and sent in the email sent when Bucardo
 has been started up.
 
-Before attempting to kill any old processes, a ping command with a timeout of 5 seconds is issued. 
-If this returns successfully (indicating an active MCP process already running), the script will 
+Before attempting to kill any old processes, a ping command with a timeout of 5 seconds is issued.
+If this returns successfully (indicating an active MCP process already running), the script will
 exit with a return value of 2.
 
 =item B<stop>
 
 Usage: ./bucardo stop "Reason --name"
 
-Forces Bucardo to quit by creating a stop file which all MCP, CTL, and KID processes should 
-detect and cause them to exit. Note that active syncs will not exit right away, as they 
-will not look for the stop file until they have finished their current run. Typically, 
-you should scan the list of processes after running this program to make sure that all Bucardo 
-processes have stopped. One should also provide a reason for issuing the stop - usually 
-this is a short explanation and your name. This is logged in the reason_file file and 
+Forces Bucardo to quit by creating a stop file which all MCP, CTL, and KID processes should
+detect and cause them to exit. Note that active syncs will not exit right away, as they
+will not look for the stop file until they have finished their current run. Typically,
+you should scan the list of processes after running this program to make sure that all Bucardo
+processes have stopped. One should also provide a reason for issuing the stop - usually
+this is a short explanation and your name. This is logged in the reason_file file and
 is also used by Bucardo when it exits and sends out mail about its death.
 
 =item B<list>
 
 Usage: ./bucardo list <type> <regex>
 
-Lists summary information about databases, tables, sequences, syncs, or herds. Adding anything 
+Lists summary information about dbs, dbgroups, tables, sequences,
+syncs, herds, customnames, customcols or customcode. Adding anything
 after the type will look up all matching entries.
 
 =item B<add>
 
 Usage:  add <item_type> <item_name>
 
-Usage:  add database <dbname> dbname=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx ssp=1/0
+Usage:  add db <dbname> dbname=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx ssp=1/0
+
+Usage:  add dbgroup name db1 db2 db3 ...
 
 Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx herd=xxx
 
@@ -9327,7 +9331,11 @@ Usage:  add sync syncname options
 
 Usage:  add herd name
 
-Usage:  add dbgroup name db1 db2 db3 ...
+Usage:  add customname tablename newtablename [sync=x db=x]
+
+Usage:  add customcols tablename select_clause [sync=x db=x]
+
+Usage:  add customcode <name> <whenrun=value> <src_code=filename> [optional information]
 
 Tells Bucardo about new objects it should know about. These commands can
 replace direct manipulation of the tables in the bucardo schema for the
