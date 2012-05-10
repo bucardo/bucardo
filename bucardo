@@ -4214,7 +4214,7 @@ sub update_sync {
             my ($setting,$value) = (lc $1,$2);
 
             ## No funny characters please, just boring column names
-            $setting =~ /^[a-z]+$/ or die "Invalid setting: $setting\n";
+            $setting =~ /^[a-z_]+$/ or die "Invalid setting: $setting\n";
 
             ## If we have not already, grab the current information for this sync
             ## We also use this to get the list of valid column names to modify
