@@ -4388,7 +4388,7 @@ sub generate_clause {
 
     }
     if (@itemlist) {
-        my $list = sprintf "$col ${NOT}IN (" . (join ',' => @itemlist) . ')';
+        my $list = sprintf '%s %s%s (%s)', $col, $NOT, 'IN', (join ',' => @itemlist);
         push @oneitem => $list;
     }
     my $SQL = join " $andor " => @oneitem;
