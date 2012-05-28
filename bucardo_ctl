@@ -1651,7 +1651,7 @@ ORDER BY ended DESC LIMIT 1;
 };
     $sth{latest_good} = $dbh->prepare($SQL);
 
-    ## If the last one was an abort, find the latest good run:
+    ## If the last one was an abort, find the latest bad run:
     $SQL =~ s/IS NULL/IS NOT NULL/;
     $sth{latest_bad} = $dbh->prepare($SQL);
 
