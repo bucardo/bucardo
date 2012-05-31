@@ -12,6 +12,8 @@ UPGRADE
 MANIFEST
 MANIFEST.SKIP
 META.yml
+MYMETA.json
+MYMETA.yml
 Makefile.PL
 Changes
 .gitignore
@@ -29,14 +31,22 @@ bucardo.html
 ## Testing-related stuff
 .perlcriticrc
 t/01-basic.t
+t/02-bctl-customname.t
 t/02-bctl-db.t
 t/02-bctl-dbg.t
+t/02-bctl-herd.t
+t/02-bctl-sync.t
+t/02-bctl-table.t
+t/10-fullcopy.t
 t/20-drizzle.t
 t/20-mongo.t
 t/20-mysql.t
 t/20-mariadb.t
 t/20-oracle.t
+t/20-postgres.t
+t/20-redis.t
 t/20-sqlite.t
+t/30-delta.t
 t/98-cleanup.t
 t/99-signature.t
 t/BucardoTesting.pm
