@@ -48,7 +48,7 @@
 </p>
 <hr />
 <h1><a name="version">VERSION</a></h1>
-<p>This document describes version 4.99.4 of bucardo</p>
+<p>This document describes version 4.99.5 of bucardo</p>
 <p>
 </p>
 <hr />
@@ -135,54 +135,58 @@ line:</p>
 
 <dd>
 <p>Usage: ./bucardo upgrade</p>
-<p>Upgrades an existing Bucardo installation to the current version of the bucardo script. 
-Requires that the bucardo script and the bucardo.schema file be the same version. All 
-changes should be backwards compatible, but you may need to re-validate existing scripts 
+<p>Upgrades an existing Bucardo installation to the current version of the bucardo script.
+Requires that the bucardo script and the bucardo.schema file be the same version. All
+changes should be backwards compatible, but you may need to re-validate existing scripts
 to make sure changes get propagated to all databases.</p>
 </dd>
 <dt><strong><a name="start" class="item"><strong>start</strong></a></strong></dt>
 
 <dd>
 <p>Usage: ./bucardo start &quot;Reason --name&quot;</p>
-<p>Restarts Bucardo cleanly by first issuing the equivalent of a stop to ask any existing Bucardo 
-processes to exit, and then starting a new Bucardo MCP process. A short reason and name should 
-be provided - these are logged in the reason_file file and sent in the email sent when Bucardo 
+<p>Restarts Bucardo cleanly by first issuing the equivalent of a stop to ask any existing Bucardo
+processes to exit, and then starting a new Bucardo MCP process. A short reason and name should
+be provided - these are logged in the reason_file file and sent in the email sent when Bucardo
 has been started up.</p>
-<p>Before attempting to kill any old processes, a ping command with a timeout of 5 seconds is issued. 
-If this returns successfully (indicating an active MCP process already running), the script will 
+<p>Before attempting to kill any old processes, a ping command with a timeout of 5 seconds is issued.
+If this returns successfully (indicating an active MCP process already running), the script will
 exit with a return value of 2.</p>
 </dd>
 <dt><strong><a name="stop" class="item"><strong>stop</strong></a></strong></dt>
 
 <dd>
 <p>Usage: ./bucardo stop &quot;Reason --name&quot;</p>
-<p>Forces Bucardo to quit by creating a stop file which all MCP, CTL, and KID processes should 
-detect and cause them to exit. Note that active syncs will not exit right away, as they 
-will not look for the stop file until they have finished their current run. Typically, 
-you should scan the list of processes after running this program to make sure that all Bucardo 
-processes have stopped. One should also provide a reason for issuing the stop - usually 
-this is a short explanation and your name. This is logged in the reason_file file and 
+<p>Forces Bucardo to quit by creating a stop file which all MCP, CTL, and KID processes should
+detect and cause them to exit. Note that active syncs will not exit right away, as they
+will not look for the stop file until they have finished their current run. Typically,
+you should scan the list of processes after running this program to make sure that all Bucardo
+processes have stopped. One should also provide a reason for issuing the stop - usually
+this is a short explanation and your name. This is logged in the reason_file file and
 is also used by Bucardo when it exits and sends out mail about its death.</p>
 </dd>
 <dt><strong><a name="list" class="item"><strong>list</strong></a></strong></dt>
 
 <dd>
 <p>Usage: ./bucardo list &lt;type&gt; &lt;regex&gt;</p>
-<p>Lists summary information about databases, tables, sequences, syncs, or herds. Adding anything 
+<p>Lists summary information about dbs, dbgroups, tables, sequences,
+syncs, herds, customnames, customcols or customcode. Adding anything
 after the type will look up all matching entries.</p>
 </dd>
 <dt><strong><a name="add" class="item"><strong>add</strong></a></strong></dt>
 
 <dd>
 <p>Usage:  add &lt;item_type&gt; &lt;item_name&gt;</p>
-<p>Usage:  add database &lt;dbname&gt; dbname=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx ssp=1/0</p>
+<p>Usage:  add db &lt;dbname&gt; dbname=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx ssp=1/0</p>
+<p>Usage:  add dbgroup name db1 db2 db3 ...</p>
 <p>Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx herd=xxx</p>
 <p>Usage:  add all tables [herd=xxx] [pkonly]</p>
 <p>Usage:  add sequence [schema].table herd=xxx</p>
 <p>Usage:  add all sequences herd=xxx</p>
 <p>Usage:  add sync syncname options</p>
 <p>Usage:  add herd name</p>
-<p>Usage:  add dbgroup name db1 db2 db3 ...</p>
+<p>Usage:  add customname tablename newtablename [sync=x db=x]</p>
+<p>Usage:  add customcols tablename select_clause [sync=x db=x]</p>
+<p>Usage:  add customcode &lt;name&gt; &lt;whenrun=value&gt; &lt;src_code=filename&gt; [optional information]</p>
 <p>Tells Bucardo about new objects it should know about. These commands can
 replace direct manipulation of the tables in the bucardo schema for the
 supported object types (you'll still need to add things like the mappings between objects on your own).</p>
@@ -219,7 +223,7 @@ information is loaded.</p>
 
 <dd>
 <p>Usage: ./bucardo show &lt;all|setting1&gt; [setting2..]</p>
-<p>Shows the current values in the bucardo_config table. Use the keyword 'all' to see all the settings, or 
+<p>Shows the current settings in the bucardo_config table. Use the keyword 'all' to see all the settings, or 
 specify one or more search terms.</p>
 </dd>
 <dt><strong><a name="set" class="item"><strong>set</strong></a></strong></dt>
