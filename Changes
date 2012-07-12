@@ -1,7 +1,9 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
 
-Bucardo version 4.4.9
+Bucardo version 4.5.0
+
+  - Always set session_replication_role to replica after customcode runs [GSM]
 
   - Allow timestamp differences in source and target columns [GSM]
 
