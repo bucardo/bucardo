@@ -23,7 +23,7 @@ my $bct = BucardoTesting->new({location => 'postgres'})
 ## The above runs one test for each passed in database x the number of test tables
 my $numtables = keys %tabletype;
 my $numsequences = keys %sequences;
-my $single_tests = 28;
+my $single_tests = 30;
 my $check_for_row_1 = 1;
 my $check_for_row_2 = 1;
 my $check_for_row_3 = 2;
@@ -122,6 +122,22 @@ $t = q{Created a new sync for dbgroup pg5};
 $res = $bct->ctl('bucardo add sync pgtest5 herd=allpk dbs=pg5 status=inactive ping=false');
 like ($res, qr/Added sync "pgtest5"/, $t);
 
+## Create a table that only exists on A and B: make sure C does not look for it!
+$SQL = 'CREATE TABLE mtest(id INT PRIMARY KEY, email TEXT)';
+$dbhA->do($SQL);
+$dbhA->commit();
+$dbhB->do($SQL);
+$dbhB->commit();
+
+## Create new herds, goats, and a sync
+$t = q{Created a new herd mherd};
+$res = $bct->ctl('bucardo add herd mherd mtest');
+like ($res, qr/Created herd "mherd"/, $t);
+
+$t = q{Created a new sync for mherd};
+$res = $bct->ctl('bucardo add sync msync herd=mherd dbs=A:source,B:source status=inactive');
+like ($res, qr/Added sync "msync"/, $t);
+
 ## Add a row to A, to make sure it does not go anywhere with inactive syncs
 $bct->add_row_to_database('A', 1);
 
@@ -135,9 +151,10 @@ sub d {
 ## and Bucardo should exit
 $bct->restart_bucardo($dbhX, 'bucardo_stopped');
 
-## Activate the pg1 sync
+## Activate the pg1 and mtest syncs
 $t = q{Activated sync pgtest1};
 $bct->ctl('bucardo update sync pgtest1 status=active');
+$bct->ctl('bucardo update sync mtest status=active');
 
 ## Start listening for a syncdone message
 ## Bucardo should fire the sync off right away without a kick
