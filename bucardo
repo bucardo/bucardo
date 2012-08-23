@@ -1575,9 +1575,6 @@ sub add_database {
         $evalok = 1;
     };
     if (! $evalok) {
-        if ($@ =~ /"db_dsn_unique"/) {
-            die qq{Cannot add database: already have a connection with the same parameters\n};
-        }
         if ($@ =~ /"db_name_sane"/) {
             die qq{Invalid name: you cannot refer to this database as "$item_name"\n};
         }
