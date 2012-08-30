@@ -23,7 +23,7 @@ my $bct = BucardoTesting->new({location => 'postgres'})
 ## The above runs one test for each passed in database x the number of test tables
 my $numtables = keys %tabletype;
 my $numsequences = keys %sequences;
-my $single_tests = 30;
+my $single_tests = 35;
 my $check_for_row_1 = 1;
 my $check_for_row_2 = 1;
 my $check_for_row_3 = 2;
@@ -58,7 +58,7 @@ $dbhD = $bct->repopulate_cluster('D');
 $dbhX = $bct->setup_bucardo('A');
 
 ## Teach Bucardo about four databases
-for my $name (qw/ A B C D /) {
+for my $name (qw/ A B C D A1 /) {
     $t = "Adding database from cluster $name works";
     my ($dbuser,$dbport,$dbhost) = $bct->add_db_args($name);
     $command = "bucardo add db $name dbname=bucardo_test user=$dbuser port=$dbport host=$dbhost";
@@ -129,6 +129,26 @@ $dbhA->commit();
 $dbhB->do($SQL);
 $dbhB->commit();
 
+## Create a copy of table1, but with a different name for same-database replication testing
+$SQL = 'CREATE TABLE bucardo_test1_copy (LIKE bucardo_test1)';
+$dbhA->do($SQL);
+$dbhA->commit();
+$dbhB->do($SQL);
+$dbhB->commit();
+## Create a herd for same-database testing
+$t = q{Created a new herd sameherd};
+$res = $bct->ctl('bucardo add herd sameherd bucardo_test1');
+like ($res, qr/Created herd "sameherd"/, $t);
+
+## We want all access to A1 to use the alternate table
+$t = q{Created a customname to force usage of bucardo_test1_copy};
+$res = $bct->ctl('bucardo add customname bucardo_test1 bucardo_test1_copy db=A1');
+like ($res, qr/\Qpublic.bucardo_test1 to bucardo_test1_copy (for database A1)/, $t);
+
+$t = q{Created a new sync for samedb};
+$res = $bct->ctl('bucardo add sync samedb herd=sameherd dbs=A,A1 status=inactive');
+like ($res, qr/Added sync "samedb"/, $t);
+
 ## Create new herds, goats, and a sync
 $t = q{Created a new herd mherd};
 $res = $bct->ctl('bucardo add herd mherd mtest');
@@ -151,14 +171,16 @@ sub d {
 ## and Bucardo should exit
 $bct->restart_bucardo($dbhX, 'bucardo_stopped');
 
-## Activate the pg1 and mtest syncs
-$t = q{Activated sync pgtest1};
+## Activate the pg1, mtest, and samedb syncs
 $bct->ctl('bucardo update sync pgtest1 status=active');
 $bct->ctl('bucardo update sync mtest status=active');
+$bct->ctl('bucardo update sync samedb status=active');
 
 ## Start listening for a syncdone message
 ## Bucardo should fire the sync off right away without a kick
 $dbhX->do('LISTEN bucardo_syncdone_pgtest1');
+$dbhX->do('LISTEN bucardo_syncdone_mtest');
+$dbhX->do('LISTEN bucardo_syncdone_samedb');
 $dbhX->commit();
 
 ## Start up Bucardo again
@@ -169,6 +191,12 @@ $bct->wait_for_notice($dbhX, 'bucardo_syncdone_pgtest1');
 
 ## See if things are on the other databases
 $bct->check_for_row([[1]], [qw/ B C D/]);
+
+## Check that our "samedb" process worked
+$t = q{Replicating to the same database via customname works};
+$SQL = 'SELECT inty FROM bucardo_test1_copy';
+$res = $dbhA->selectall_arrayref($SQL);
+is_deeply($res, [[1]], $t);
 
 ## Switch to a 2 source sync
 $bct->ctl('bucardo update sync pgtest1 status=inactive');

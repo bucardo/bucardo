@@ -840,18 +840,19 @@ sub add_db_args {
     ## Arguments:
     ## 1. Name of a cluster
     ## Returns: DSN-like string to connect to that cluster
-    ## May return string or array dependig on how it was called
+    ## Allows for "same" databases o the form X# e.g. A1, B1
+    ## May return string or array depending on how it was called
 
     my $self = shift;
     my $clustername = shift or die;
+
+    $clustername =~ s/\d+$//;
 
     ## Build the DSN to connect with
     my $info = $pgver{$clustername};
     my $dbport = $info->{port};
     my $dbhost = getcwd . "/$info->{dirname}/socket";
     my $dsn = "dbi:Pg:dbname=$dbname;port=$dbport;host=$dbhost";
-
-    my $arg = 
 
     return wantarray
         ? ($user,$dbport,$dbhost)
