@@ -1409,6 +1409,7 @@ sub bc_deeply {
         die "bc_deeply failed from line $line. SQL=$sql\n$@\n";
     }
 
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     return is_deeply($got,$exp,$msg,$oline||(caller)[2]);
 
 } ## end of bc_deeply
@@ -1647,6 +1648,7 @@ sub check_for_row {
             my $SQL = qq{SELECT inty FROM "$table" ORDER BY inty};
             $table =~ /X/ and $SQL =~ s/inty/$pkey/;
 
+            local $Test::Builder::Level = $Test::Builder::Level + 1;
             bc_deeply($res, $dbh, $SQL, $t, (caller)[2]);
         }
     }
@@ -1724,7 +1726,9 @@ sub check_sequences_same {
 ## no critic
 
 sub is_deeply {
+
     t($_[2],$_[3] || (caller)[2]);
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     my $rv = Test::More::is_deeply($_[0],$_[1],$testmsg);
     return $rv if $rv;
     if ($bail_on_error and ++$total_errors => $bail_on_error) {
@@ -1737,6 +1741,7 @@ sub is_deeply {
 } ## end of is_deeply
 sub like($$;$) {
     t($_[2],(caller)[2]);
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     my $rv = Test::More::like($_[0],$_[1],$testmsg);
     return $rv if $rv;
     if ($bail_on_error and ++$total_errors => $bail_on_error) {
@@ -1749,10 +1754,12 @@ sub like($$;$) {
 } ## end of like
 sub pass(;$) {
     t($_[0],$_[1]||(caller)[2]);
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     Test::More::pass($testmsg);
 } ## end of pass
 sub is($$;$) {
     t($_[2],(caller)[2]);
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     my $rv = Test::More::is($_[0],$_[1],$testmsg);
     return $rv if $rv;
     ## Where exactly did this fail?
@@ -1785,6 +1792,7 @@ sub is($$;$) {
 sub isa_ok($$;$) {
     t("Object isa $_[1]",(caller)[2]);
     my ($name, $type, $msg) = ($_[0],$_[1]);
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     if (ref $name and ref $name eq $type) {
         Test::More::pass($testmsg);
         return;
@@ -1795,6 +1803,7 @@ sub isa_ok($$;$) {
 } ## end of isa_ok
 sub ok($;$) {
     t($_[1]||$testmsg);
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     my $rv = Test::More::ok($_[0],$testmsg);
     return $rv if $rv;
     if ($bail_on_error and ++$total_errors => $bail_on_error) {
