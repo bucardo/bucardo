@@ -254,7 +254,7 @@ for (1..30) {
     $val{SMALLINT}{$_} = $_;
     $val{INT}{$_} = 1234567+$_;
     $val{BIGINT}{$_} = 7777777777 + $_;
-    $val{TEXT}{$_} = $val{'VARCHAR(1000)'}{$_} = "bc$_";
+    $val{TEXT}{$_} = $val{'VARCHAR(1000)'}{$_} = "bc'$_";
     $val{DATE}{$_} = sprintf '2001-10-%02d', $_;
     $val{TIMESTAMP}{$_} = $val{DATE}{$_} . ' 12:34:56';
     $val{NUMERIC}{$_} = $val{'NUMERIC(5,1)'}{$_} = 0.7 + $_;
