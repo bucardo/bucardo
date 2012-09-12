@@ -1019,7 +1019,8 @@ sub setup_bucardo {
     my $dbh = $self->connect_database($clustername, 'postgres');
     if (database_exists($dbh,'bucardo')) {
         ## Kick off all other people
-        $SQL = q{SELECT procpid FROM pg_stat_activity WHERE datname = 'bucardo' and procpid <> pg_backend_pid()};
+        my $pidcol = $dbh->{pg_server_version} >= 90200 ? 'pid' : 'procpid';
+        $SQL = qq{SELECT $pidcol FROM pg_stat_activity WHERE datname = 'bucardo' and $pidcol <> pg_backend_pid()};
         for my $row (@{$dbh->selectall_arrayref($SQL)}) {
             my $pid = $row->[0];
             $SQL = 'SELECT pg_terminate_backend(?)';

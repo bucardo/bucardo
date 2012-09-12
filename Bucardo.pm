@@ -6773,7 +6773,8 @@ sub terminate_old_goats {
     }
 
     ## Use pg_stat_activity to find a match, then terminate it
-    $SQL = 'SELECT 1 FROM pg_stat_activity WHERE procpid = ? AND query_start = ?';
+    my $pidcol = $maindbh->{pg_server_version} >= 90200 ? 'pid' : 'procpid';
+    $SQL = "SELECT 1 FROM pg_stat_activity WHERE $pidcol = ? AND query_start = ?";
     my $SQLC = 'SELECT pg_cancel_backend(?)';
     my $total = 0;
     for my $dbname (sort keys %{ $self->{sdb} }) {
@@ -7335,6 +7336,7 @@ sub get_deadlock_details {
             ? 'clock_timestamp()' : 'timeofday()::timestamptz';
 
         ## Fetch information about the conflicting process
+        my $pidcol = $dldbh->{pg_server_version} >= 90200 ? 'pid' : 'procpid';
         my $queryinfo =$dldbh->prepare(qq{
 SELECT
   current_query AS query,
@@ -7350,7 +7352,7 @@ SELECT
   CASE WHEN client_port <= 0 THEN 0 ELSE client_port END AS port,
   usename AS user
 FROM pg_stat_activity
-WHERE procpid = ?
+WHERE $pidcol = ?
 });
         $queryinfo->execute($process);
         my $q = $queryinfo->fetchall_arrayref({})->[0];
