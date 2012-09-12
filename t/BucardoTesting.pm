@@ -243,7 +243,7 @@ for my $file (qw/bucardo Bucardo.pm/) {
         $ENV{BUCARDO_TEST} = 0;
     };
     if ($@) {
-        die "Cannot run unless $file compiles cleanly\n";
+        die "Cannot run unless $file compiles cleanly: $@\n";
     }
 }
 
