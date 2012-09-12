@@ -72,9 +72,9 @@ $t = q{Add database fails if using the same internal name};
 $res = $bct->ctl("bucardo add db A dbname=postgres user=$dbuserA port=$dbportA host=$dbhostA");
 like ($res, qr/Cannot add database: the name "A" already exists/, $t);
 
-$t = q{Add database fails if same paramters given};
+$t = q{Add database works if same parameters given but different DB};
 $res = $bct->ctl("bucardo add db A2 dbname=bucardo_test user=$dbuserA port=$dbportA host=$dbhostA");
-like ($res, qr/same parameters/, $t);
+like ($res, qr/Added database "A2"/, $t);
 
 $t = 'Add database works for cluster B works with ssp=false';
 $res = $bct->ctl("bucardo add db B dbname=bucardo_test user=$dbuserB port=$dbportB host=$dbhostB ssp=0");
@@ -83,9 +83,10 @@ like ($res, qr/Added database "B"/, $t);
 $t = 'List databases gives expected results';
 $res = $bct->ctl('bucardo list databases');
 my $statA = qq{Database: A\\s+Status: active\\s+Conn: psql -p $dbportA -U $dbuserA -d bucardo_test -h $dbhostA};
+my $statA2 = qq{Database: A2\\s+Status: active\\s+Conn: psql -p $dbportA -U $dbuserA -d bucardo_test -h $dbhostA};
 my $statB = qq{Database: B\\s+Status: active\\s+Conn: psql -p $dbportB -U $dbuserB -d bucardo_test -h $dbhostB \\(SSP is off\\)};
 my $statz = qq{Database: foo\\s+Status: active\\s+Conn: psql .*-d bar};
-my $regex = qr{$statA\n$statB\n$statz$}s;
+my $regex = qr{$statA\n$statA2\n$statB\n$statz$}s;
 like ($res, $regex, $t);
 
 ## Clear them out for some more testing
@@ -125,8 +126,8 @@ like ($res, qr/Removed database "B"/, $t);
 
 $t = q{Able to remove more than one database at a time};
 $bct->ctl("bucardo add db B dbname=bucardo_test user=$dbuserB port=$dbportB host=$dbhostB");
-$res = $bct->ctl('bucardo remove db A B foo');
-like ($res, qr/Removed database "A"\nRemoved database "B"/ms, $t);
+$res = $bct->ctl('bucardo remove db A A2 B foo');
+like ($res, qr/Removed database "A"\nRemoved database "A2"\nRemoved database "B"/ms, $t);
 
 ## Tests for 'list databases'
 
