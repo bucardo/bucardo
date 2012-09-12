@@ -9023,11 +9023,21 @@ this distribution. See also the documentation for the bucardo program.
 
 =head1 DEPENDENCIES
 
-* DBI (1.51 or better)
-* DBD::Pg (2.0.0 or better)
-* Sys::Hostname
-* Sys::Syslog
-* DBIx::Safe    ## Try 'yum install perl-DBIx-Safe' or visit bucardo.org
+=over
+
+=item * DBI (1.51 or better)
+
+=item * DBD::Pg (2.0.0 or better)
+
+=item * Sys::Hostname
+
+=item * Sys::Syslog
+
+=item * DBIx::Safe ## Try 'yum install perl-DBIx-Safe' or visit bucardo.org
+
+=item * boolean
+
+=back
 
 =head1 BUGS
 
