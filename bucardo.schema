@@ -1338,7 +1338,9 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
     $sth{hazindex} = $dbh->prepare($SQL);
 
     ## Does a named column exist on a specific table?
-    $SQL = q{SELECT 1 FROM pg_attribute WHERE attrelid = ?::regclass AND attname = ?};
+    $SQL = q{SELECT 1 FROM pg_attribute WHERE attrelid = }
+          .q{(SELECT c.oid FROM pg_class c JOIN pg_namespace n ON (n.oid=c.relnamespace)}
+          .q{ AND nspname=? AND relname=?) AND attname = ?};
     $sth{hazcol} = $dbh->prepare($SQL);
 
     ## Given a table oid, return detailed column information
@@ -1488,6 +1490,22 @@ END;
                         cdate      TIMESTAMPTZ NOT NULL DEFAULT now()
                     );
                 };
+            run_sql($SQL,$dbh);
+        }
+
+		## Check for missing 'sync' column in the bucardo_delta_target table
+		$sth = $sth{hazcol};
+		$count = $sth->execute('bucardo', 'bucardo_delta_targets', 'sync');
+		$sth->finish();
+		if ($count < 1) {
+            ## As the new column cannot be null, we have to delete existing entries!
+			## However, missing this column is a pretty obscure corner-case
+            $SQL = qq{DELETE FROM bucardo.bucardo_delta_targets};
+            run_sql($SQL,$dbh);
+            $SQL = qq{
+                    ALTER TABLE bucardo.bucardo_delta_targets
+                      ADD COLUMN sync TEXT NOT NULL;
+            };
             run_sql($SQL,$dbh);
         }
 
