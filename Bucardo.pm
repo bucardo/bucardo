@@ -2484,12 +2484,12 @@ sub start_kid {
 
         ## The SQL to disable all triggers and rules for the tables in this sync
         $SQL = q{
-            UPDATE pg_class c
+            UPDATE pg_class
             SET    reltriggers = 0, relhasrules = false
             WHERE  (
         };
         $SQL .= join "OR\n"
-            => map { "(c.oid = '$_->{safeschemaliteral}.$_->{safetableliteral}'::regclass)" }
+            => map { "(oid = '$_->{safeschema}.$_->{safetable}'::regclass)" }
             grep { $_->{reltype} eq 'table' }
             @$goatlist;
         $SQL .= ')';
@@ -2502,22 +2502,24 @@ sub start_kid {
             q{reltriggers = }
             . q{(SELECT count(*) FROM pg_catalog.pg_trigger WHERE tgrelid = pg_catalog.pg_class.oid),}
             . q{relhasrules = }
-            . q{CASE WHEN (SELECT COUNT(*) FROM pg_catalog.pg_rules WHERE schemaname=$1 AND tablename=$2) > 0 }
+            . q{CASE WHEN (SELECT COUNT(*) FROM pg_catalog.pg_rules WHERE schemaname=SNAME AND tablename=TNAME) > 0 }
             . q{THEN true ELSE false END};
             ## use critic
 
         ## The SQL to re-enable rules and triggers
         ## for each table in this sync
         $SQL{etrig} = qq{
-            UPDATE pg_class c
+            UPDATE pg_class
             SET    $setclause
-            WHERE  c.oid = 'SCHEMANAME.TABLENAME'::regclass
+            WHERE  oid = 'SCHEMANAME.TABLENAME'::regclass
         };
         $SQL = join ";\n"
             => map {
                      my $sql = $SQL{etrig};
-                     $sql =~ s/SCHEMANAME/$_->{safeschemaliteral}/g;
-                     $sql =~ s/TABLENAME/$_->{safetableliteral}/g;
+                     $sql =~ s/SNAME/$_->{safeschemaliteral}/g;
+                     $sql =~ s/TNAME/$_->{safetableliteral}/g;
+                     $sql =~ s/SCHEMANAME/$_->{safeschema}/g;
+                     $sql =~ s/TABLENAME/$_->{safetable}/g;
                      $sql;
                  }
                 grep { $_->{reltype} eq 'table' }
