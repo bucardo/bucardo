@@ -3373,16 +3373,12 @@ sub start_kid {
                                         $g->{sql_max_delta} = $SQL;
                                     }
                                     $sth = $x->{dbh}->prepare($g->{sql_max_delta});
-                                    $count = $sth->execute();
-                                    if ($count < 1) { ## No changes means we keep the default of "0"
-                                        $sth->finish();
-                                    }
-                                    else {
-                                        ## Keep in mind we don't really care which table this is
-                                        my $epoch = $sth->fetchall_arrayref()->[0][0];
-                                        if ($epoch > $x->{lastmod}) {
-                                            $x->{lastmod} = $epoch;
-                                        }
+                                    $sth->execute();
+                                    ## Keep in mind we don't really care which table this is
+                                    my $epoch = $sth->fetchall_arrayref()->[0][0];
+                                    ## May be undefined if no rows in the table yet: MAX forces a row back
+                                    if (defined $epoch and $epoch > $x->{lastmod}) {
+                                        $x->{lastmod} = $epoch;
                                     }
 
                                 } ## end checking each table in the sync
