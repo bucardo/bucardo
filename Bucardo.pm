@@ -7978,7 +7978,7 @@ sub delete_rows {
         ## Set the type of SQL we are using: IN vs ANY
         my $sqltype = '';
         if ('postgres' eq $type) {
-            $sqltype = (1 == $numpks) ? 'ANY' : 'PGIN';
+            $sqltype = (1 == $numpks) ? 'ANY' : 'IN';
         }
         elsif ('mysql' eq $type or 'drizzle' eq $type or 'mariadb' eq $type) {
             $sqltype = 'MYIN';
@@ -7991,7 +7991,7 @@ sub delete_rows {
         }
         elsif ($type =~ /flatpg/o) {
             ## XXX Worth the trouble to allow building an ANY someday for flatpg?
-            $sqltype = 'PGIN';
+            $sqltype = 'IN';
         }
         elsif ($type =~ /flat/o) {
             $sqltype = 'IN';
@@ -8080,29 +8080,6 @@ sub delete_rows {
                 $_ = "$SQL $_)";
             }
             $SQL{MYIN} = \@SQL;
-        }
-        ## Postgres-specific IN clause (schemas)
-        elsif ($sqltype eq 'PGIN') {
-            $SQL = sprintf '%sDELETE FROM %s WHERE %s IN (',
-                $self->{sqlprefix},
-                $tname,
-                $pkcols;
-            ## The array where we store each chunk
-            my @SQL;
-            for my $key (keys %$rows) {
-                my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0', $key, -1;
-                $SQL[$round] .= "($inner),";
-                if (++$roundtotal >= $chunksize) {
-                    $roundtotal = 0;
-                    $round++;
-                }
-            }
-            ## Cleanup
-            for (@SQL) {
-                chop;
-                $_ = "$SQL $_)";
-            }
-            $SQL{PGIN} = \@SQL;
         }
     }
 
