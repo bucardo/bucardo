@@ -8011,7 +8011,7 @@ sub delete_rows {
             ## The array where we store each chunk
             my @SQL;
             for my $key (keys %$rows) {
-                push @{$SQL[$round]} => [split '\0' => $key];
+                push @{$SQL[$round]} => [split '\0', $key, -1];
                 if (++$roundtotal >= $chunksize) {
                     $roundtotal = 0;
                     $round++;
@@ -8028,7 +8028,7 @@ sub delete_rows {
             ## The array where we store each chunk
             my @SQL;
             for my $key (keys %$rows) {
-                my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0' => $key;
+                my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0', $key, -1;
                 $SQL[$round] .= "($inner),";
                 if (++$roundtotal >= $chunksize) {
                     $roundtotal = 0;
@@ -8056,7 +8056,7 @@ sub delete_rows {
             ## Quick workaround for a more standard timestamp
             if ($goat->{pkeytype}[0] =~ /timestamptz/) {
                 for my $key (keys %$rows) {
-                    my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; s/\+\d\d$//; qq{'$_'}; } split '\0' => $key;
+                    my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; s/\+\d\d$//; qq{'$_'}; } split '\0', $key, -1;
                     $SQL[$round] .= "($inner),";
                     if (++$roundtotal >= $chunksize) {
                         $roundtotal = 0;
@@ -8066,7 +8066,7 @@ sub delete_rows {
             }
             else {
                 for my $key (keys %$rows) {
-                    my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0' => $key;
+                    my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0', $key, -1;
                     $SQL[$round] .= "($inner),";
                     if (++$roundtotal >= $chunksize) {
                         $roundtotal = 0;
@@ -8090,7 +8090,7 @@ sub delete_rows {
             ## The array where we store each chunk
             my @SQL;
             for my $key (keys %$rows) {
-                my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0' => $key;
+                my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0', $key, -1;
                 $SQL[$round] .= "($inner),";
                 if (++$roundtotal >= $chunksize) {
                     $roundtotal = 0;
@@ -8158,13 +8158,13 @@ sub delete_rows {
             else {
 
                 ## Break apart the primary keys into an array of arrays
-                my @fullrow = map { [split '\0'] } keys %$rows;
+                my @fullrow = map { [split '\0', $_, -1] } keys %$rows;
 
                 ## Which primary key column we are currently using
                 my $pknum = 0;
 
                 ## Walk through each column making up the primary key
-                for my $realpkname (split /,/ => $pkcolsraw) {
+                for my $realpkname (split /,/, $pkcolsraw, -1) {
 
                     ## Grab what type this column is
                     ## We need to map non-strings to correct types as best we can
@@ -8220,7 +8220,7 @@ sub delete_rows {
                     ## Thus, we will just call delete once per row
 
                     ## Put the names into an easy to access array
-                    my @realpknames = split /,/ => $pkcolsraw;
+                    my @realpknames = split /,/, $pkcolsraw, -1;
 
                     my @find;
 
@@ -8399,7 +8399,7 @@ sub push_rows {
     my $round = 0;
     my $roundtotal = 0;
     for my $key (keys %$rows) {
-        my $inner = join ',' => map { s{\'}{''}go; s{\\}{\\\\}go; qq{'$_'}; } split '\0' => $key;
+        my $inner = join ',' => map { s{\'}{''}go; s{\\}{\\\\}go; qq{'$_'}; } split '\0', $key, -1;
         $pkvals[$round] .= $numpks > 1 ? "($inner)," : "$inner,";
         if (++$roundtotal >= $chunksize) {
             $roundtotal = 0;
@@ -8576,12 +8576,12 @@ sub push_rows {
                             print {$t->{filehandle}} ",\n";
                         }
                         print {$t->{filehandle}} '(' .
-                            (join ',' => map { $self->{masterdbh}->quote($_) } split /\t/ => $buffer) . ')';
+                            (join ',' => map { $self->{masterdbh}->quote($_) } split /\t/, $buffer, -1) . ')';
                     }
                     ## For Mongo, do some mongomagic
                     elsif ('mongo' eq $type) {
                         ## Have to map these values back to their names
-                        my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
+                        my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/, $buffer, -1;
 
                         ## Our object consists of the primary keys, plus all other fields
                         my $object = {};
@@ -8614,7 +8614,7 @@ sub push_rows {
                             or 'drizzle' eq $type
                             or 'oracle' eq $type
                             or 'sqlite' eq $type) {
-                        my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
+                        my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/, $buffer, -1;
                         for my $cindex (0..@cols) {
                             next unless defined $cols[$cindex];
                             if ($goat->{columnhash}{$cols->[$cindex]}{ftype} eq 'boolean') {
@@ -8626,7 +8626,7 @@ sub push_rows {
                     }
                     elsif ('redis' eq $type) {
                         ## We are going to set a Redis hash, in which the key is "tablename:pkeyvalue"
-                        my @colvals = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/ => $buffer;
+                        my @colvals = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/, $buffer, -1;
                         my @pkey;
                         for (1 .. $goat->{numpkcols}) {
                             push @pkey => shift @colvals;
