@@ -8270,7 +8270,7 @@ sub delete_rows {
         }
 
         if ($type =~ /flatpg/o) {
-            for (@{ $SQL{PGIN} }) {
+            for (@{ $SQL{IN} }) {
                 print {$t->{filehandle}} qq{$_;\n\n};
             }
             $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
