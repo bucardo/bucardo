@@ -8105,7 +8105,7 @@ sub delete_rows {
                     $count{$t} += $res unless $async;
                 }
                 else {
-                    $count{$t} += $tdbh->do($pre.$SQL{PGIN}->[$loop-1], { pg_direct => 1, pg_async => $async });
+                    $count{$t} += $tdbh->do($pre.$SQL{IN}->[$loop-1], { pg_direct => 1, pg_async => $async });
                     $t->{deletesth} = 0;
                 }
             }
@@ -8269,15 +8269,7 @@ sub delete_rows {
             next;
         }
 
-        if ($type =~ /flatpg/o) {
-            for (@{ $SQL{IN} }) {
-                print {$t->{filehandle}} qq{$_;\n\n};
-            }
-            $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
-            next;
-        }
-
-        if ($type =~ /flat/o) {
+        if ($type =~ /flat/o) { ## same as flatpg for now
             for (@{ $SQL{IN} }) {
                 print {$t->{filehandle}} qq{$_;\n\n};
             }
