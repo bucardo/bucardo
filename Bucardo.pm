@@ -8095,7 +8095,7 @@ sub delete_rows {
 
             ## Only the last will be async
             ## In most cases, this means always async
-            my $count = 1==$numpks ? @{ $SQL{ANYargs} } : @{ $SQL{PGIN} };
+            my $count = 1==$numpks ? @{ $SQL{ANYargs} } : @{ $SQL{IN} };
             for my $loop (1..$count) {
                 my $async = $loop==$count ? PG_ASYNC : 0;
                 my $pre = $count > 1 ? "/* $loop of $count */ " : '';
