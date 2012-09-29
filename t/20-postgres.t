@@ -267,11 +267,6 @@ $bct->remove_row_from_database('B', 4);
 $bct->remove_row_from_database('C', 2);
 $bct->remove_row_from_database('C', 1);
 
-## XXX
-### Before leaving, do a special test of empty string on multi-pks
-die;
-
-
 ## Kick it off
 $bct->ctl('bucardo kick sync pgtest3 0');
 
