@@ -8011,7 +8011,7 @@ sub delete_rows {
             ## The array where we store each chunk
             my @SQL;
             for my $key (keys %$rows) {
-                push @{$SQL[$round]} => [split '\0', $key, -1];
+                push @{$SQL[$round]} => length $key ? ([split '\0', $key, -1]) : [''];
                 if (++$roundtotal >= $chunksize) {
                     $roundtotal = 0;
                     $round++;
@@ -8028,7 +8028,9 @@ sub delete_rows {
             ## The array where we store each chunk
             my @SQL;
             for my $key (keys %$rows) {
-                my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0', $key, -1;
+                my $inner = length $key
+                    ? (join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0', $key, -1)
+                    : q{''};
                 $SQL[$round] .= "($inner),";
                 if (++$roundtotal >= $chunksize) {
                     $roundtotal = 0;
@@ -8056,7 +8058,9 @@ sub delete_rows {
             ## Quick workaround for a more standard timestamp
             if ($goat->{pkeytype}[0] =~ /timestamptz/) {
                 for my $key (keys %$rows) {
-                    my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; s/\+\d\d$//; qq{'$_'}; } split '\0', $key, -1;
+                    my $inner = length $key
+                        ? (join ',' => map { s/\'/''/go; s{\\}{\\\\}; s/\+\d\d$//; qq{'$_'}; } split '\0', $key, -1)
+                        : q{''};
                     $SQL[$round] .= "($inner),";
                     if (++$roundtotal >= $chunksize) {
                         $roundtotal = 0;
@@ -8066,7 +8070,9 @@ sub delete_rows {
             }
             else {
                 for my $key (keys %$rows) {
-                    my $inner = join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0', $key, -1;
+                    my $inner = length $key
+						? (join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0', $key, -1)
+						: q{''};
                     $SQL[$round] .= "($inner),";
                     if (++$roundtotal >= $chunksize) {
                         $roundtotal = 0;
@@ -8135,7 +8141,7 @@ sub delete_rows {
             else {
 
                 ## Break apart the primary keys into an array of arrays
-                my @fullrow = map { [split '\0', $_, -1] } keys %$rows;
+                my @fullrow = map { length($_) ? [split '\0', $_, -1] : [''] } keys %$rows;
 
                 ## Which primary key column we are currently using
                 my $pknum = 0;
@@ -8368,7 +8374,9 @@ sub push_rows {
     my $round = 0;
     my $roundtotal = 0;
     for my $key (keys %$rows) {
-        my $inner = join ',' => map { s{\'}{''}go; s{\\}{\\\\}go; qq{'$_'}; } split '\0', $key, -1;
+        my $inner = length $key
+			? (join ',' => map { s{\'}{''}go; s{\\}{\\\\}go; qq{'$_'}; } split '\0', $key, -1)
+			: q{''};
         $pkvals[$round] .= $numpks > 1 ? "($inner)," : "$inner,";
         if (++$roundtotal >= $chunksize) {
             $roundtotal = 0;
