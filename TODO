@@ -4,14 +4,29 @@ TODO list for Bucardo
 Version 5:
 
 * Fix 'error loop' escaping bug from mailing list
-* Fix 'arguments of row IN must all be row expressions' bug from mailing list
+http://blog.gmane.org/gmane.comp.db.postgresql.bucardo.general/day=20120911
+
 * Fix quoting bug reported by Sean M. Pappalardo
+http://web.archiveorange.com/archive/v/aQD0QdXXbfPFi8fzeaGi
+
 * Fix need for password argument when using md5
+
 * Get Drizzle tests verified as working
+
 * Get bucardo-report working again
+
 * Note minimum Postgres version requirements (source and target)
+
 * Get some solid tests for the makedelta system
+
 * Fix bug with checking wrong tables in databases on startup reported to list
+
+* Get customcode working, with tests
+
+* Make sure all outstanding mailing list questions are handled.
+
+
+
 
 These range the gamut from wildly speculative ideas to must-have features.
 
