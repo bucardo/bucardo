@@ -1,0 +1,138 @@
+#!/bin/bash
+#
+#   /etc/rc.d/init.d/bucardo
+#
+# Starts / stops the bucardo daemon
+#
+# chkconfig: - 65 35
+# description: Bucardo replication service
+# processname: bucardo
+
+# Source function library.
+. /etc/init.d/functions
+
+# Find the name of the script
+NAME=`basename $0`
+if [ ${NAME:0:1} = "S" -o ${NAME:0:1} = "K" ]
+then
+    	NAME=${NAME:3}
+fi
+
+# For SELinux we need to use 'runuser' not 'su'
+if [ -x /sbin/runuser ]
+then
+    SU=runuser
+else
+    SU=su
+fi
+
+SYSUSER=${SYSUSER-postgres}
+DBNAME=${DBNAME-bucardo}
+DBUSER=${DBUSER-bucardo}
+LOGDIR=${LOGDIR-/var/log/${NAME}}
+PIDDIR=${LOGDIR-/var/run/${NAME}}
+
+# Override defaults from /etc/sysconfig/bucardo, if file is present:
+[ -f /etc/sysconfig/${NAME} ] && . /etc/sysconfig/${NAME}
+
+if [ -z "$DBHOST" ]; then hostopt=""; else hostopt="--dbhost $DBHOST"; fi
+if [ -z "$DBPORT" ]; then portopt=""; else portopt="--dbport $DBPORT"; fi
+
+bucardo_flags="--quiet ${hostopt} ${portopt} --dbname ${DBNAME} --dbuser ${DBUSER} --debugdir ${LOGDIR} --piddir ${PIDDIR}"
+RETVAL=0
+
+cd $LOGDIR
+
+start() {
+     # Make sure that bucardo is not already running:
+     if [ -f "${PIDDIR}/bucardo.mc.pid" ]; then
+         echo -n "${NAME} is already running"
+	 echo_success
+	 echo
+	 exit 0
+     fi
+
+    echo -n $"Starting ${NAME} service: "
+    $SU $SYSUSER -c "bucardo ${bucardo_flags} start 'Started by init script'"
+    RETVAL=$?
+    if [ $RETVAL -eq 0 ]; then
+	echo_success
+	echo
+    else
+        echo_failure
+	echo
+        script_result=1
+    fi
+}
+
+stop(){
+    echo -n $"Stopping ${NAME} service: "
+    $SU $SYSUSER -c "bucardo ${bucardo_flags} stop 'Stopped by init script'"
+    RETVAL=$?
+    if [ $RETVAL -eq 0 ]; then
+	echo_success
+	echo
+    else
+        echo_failure
+	echo
+        script_result=1
+    fi
+}
+
+reload(){
+    echo -n $"Reloading ${NAME} config: "
+
+    $SU $SYSUSER -c "bucardo $bucardo_flags reload_config"
+    RETVAL=$?
+    if [ $RETVAL -eq 0 ]; then
+	echo_success
+	echo
+    else
+        echo_failure
+	echo
+        script_result=1
+    fi
+}
+
+status(){
+    echo -n $"Checking ${NAME} status: "
+
+    $SU $SYSUSER -c "bucardo $bucardo_flags status"
+    RETVAL=$?
+    if [ $RETVAL -eq 0 ]; then
+	echo_success
+	echo
+    else
+        echo_failure
+	echo
+        script_result=1
+    fi
+}
+
+#
+#   See how we were called.
+#
+case "$1" in
+  start)
+    start
+    ;;
+  stop)
+    stop
+    ;;
+  reload)
+    reload
+    ;;
+  restart)
+    stop
+    start
+    RETVAL=$?
+    ;;
+  status)
+    status
+    ;;
+  *)
+    echo $"Usage: $0 {start|stop|restart|reload|status}"
+    exit 1
+esac
+
+exit $RETVAL

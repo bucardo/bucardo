@@ -3,7 +3,6 @@
 # PROVIDE: bucardo
 # REQUIRE: LOGIN postgresql 
 # KEYWORD: shutdown
-# chkconfig: - 65 35
 #
 # bucardo_enable="YES"
 # bucardo_flags="--dbuser bucardo --dbname bucardo"
