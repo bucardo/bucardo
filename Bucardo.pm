@@ -20,6 +20,7 @@ use Config;                           ## Used to map signal names
 use Time::HiRes qw( sleep );          ## For better resolution than the built-in sleep
 use DBI 1.51;                         ## How Perl talks to databases
 use DBD::Pg 2.0;                      ## The Postgres driver for DBI
+use POSIX qw( strftime );             ## For grabbing the local timezone
 use Net::SMTP;                        ## Used to send out email alerts
 use Sys::Hostname qw( hostname );     ## Used for debugging/mail sending
 use IO::Handle qw( autoflush );       ## Used to prevent stdout/stderr buffering
@@ -684,9 +685,7 @@ sub start_mcp {
     $self->glog("Local system epoch: $systemtime  Database epoch: $dbtime->[0]");
     $systemtime = scalar localtime ($systemtime);
     $self->glog("Local system time: $systemtime  Database time: $dbtime->[1]");
-    ## TODO: No hard-coded call to date
-    $systemtime = qx{/bin/date +"%Z"} || '?';
-    chomp $systemtime;
+    $systemtime = strftime('%Z (%z)', localtime());
     $self->glog("Local system timezone: $systemtime  Database timezone: $dbtime->[2]");
     $self->glog("PID: $$");
     $self->glog("Backend PID: $mcp_backend");
