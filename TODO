@@ -4,24 +4,30 @@ TODO list for Bucardo
 Version 5:
 
 * Fix 'error loop' escaping bug from mailing list
-http://blog.gmane.org/gmane.comp.db.postgresql.bucardo.general/day=20120911
+  https://github.com/bucardo/bucardo/issues/13
 
 * Fix quoting bug reported by Sean M. Pappalardo
-http://web.archiveorange.com/archive/v/aQD0QdXXbfPFi8fzeaGi
+  https://github.com/bucardo/bucardo/issues/14
 
 * Fix need for password argument when using md5
+  https://github.com/bucardo/bucardo/issues/15
 
 * Get Drizzle tests verified as working
+  https://github.com/bucardo/bucardo/issues/16
 
 * Get bucardo-report working again
+  https://github.com/bucardo/bucardo/issues/17
 
 * Note minimum Postgres version requirements (source and target)
+  https://github.com/bucardo/bucardo/issues/18
 
 * Get some solid tests for the makedelta system
+  https://github.com/bucardo/bucardo/issues/19
 
 * Fix bug with checking wrong tables in databases on startup reported to list
 
 * Get customcode working, with tests
+  https://github.com/bucardo/bucardo/issues/20
 
 * Make sure all outstanding mailing list questions are handled.
 
