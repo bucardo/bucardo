@@ -254,7 +254,9 @@ $dbh->commit();
 ## Set some global variables based on information from the bucardo_config table
 
 ## The reason file records startup and shutdown messages
-my $REASONFILE = get_config('reason_file') or die "Invalid reason_file!\n";
+my $REASONFILE = "$bcargs->{debugdir}/" . do {
+    get_config('reason_file') or die "Invalid reason_file!\n"
+};
 my $REASONFILE_LOG = "$REASONFILE.log";
 
 ## The directory Bucardo.pm writes PID and other information to
@@ -9284,8 +9286,8 @@ Usage: ./bucardo start "Reason --name"
 
 Restarts Bucardo cleanly by first issuing the equivalent of a stop to ask any existing Bucardo
 processes to exit, and then starting a new Bucardo MCP process. A short reason and name should
-be provided - these are logged in the reason_file file and sent in the email sent when Bucardo
-has been started up.
+be provided - these are logged in the C<reason_file> file in the C<debudir> and sent in the
+email sent when Bucardo has been started up.
 
 Before attempting to kill any old processes, a ping command with a timeout of 5 seconds is issued.
 If this returns successfully (indicating an active MCP process already running), the script will
@@ -9300,8 +9302,8 @@ detect and cause them to exit. Note that active syncs will not exit right away, 
 will not look for the stop file until they have finished their current run. Typically,
 you should scan the list of processes after running this program to make sure that all Bucardo
 processes have stopped. One should also provide a reason for issuing the stop - usually
-this is a short explanation and your name. This is logged in the reason_file file and
-is also used by Bucardo when it exits and sends out mail about its death.
+this is a short explanation and your name. This is logged in the C<reason_file> file in the
+C<debugdir> and is also used by Bucardo when it exits and sends out mail about its death.
 
 =item B<list>
 
