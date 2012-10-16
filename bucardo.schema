@@ -161,7 +161,7 @@ email_debug_file||File to save a copy of all outgoing emails to
 flatfile_dir|.|Directory to store the flatfile output inside of
 host_safety_check||Regex to make sure we don't accidentally run where we should not
 piddir|/var/run/bucardo|Directory holding Bucardo PID files
-reason_file|bucardo.restart.reason.log|File to hold reasons for stopping and starting
+reason_file|bucardo.restart.reason.txt|File to hold reasons for stopping and starting
 semaphore_table|bucardo_status|Table to let apps know a sync is ongoing
 statement_chunk_size|10000|How many primary keys to shove into a single statement
 stats_script_url|http://www.bucardo.org/|Location of the stats script
