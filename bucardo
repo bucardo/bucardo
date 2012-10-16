@@ -143,6 +143,7 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'dryrun|dry-run',
      'confirm',
      'tsep=s',
+     'exit-on-nosync!',
 
      ## These are sent to the constructor:
      'bcverbose',
@@ -904,6 +905,8 @@ sub start {
 
     ## Create a new Bucardo daemon
     require Bucardo;
+    $bcargs->{exit_on_nosync} = delete $bcargs->{'exit-on-nosync'}
+        if exists $bcargs->{'exit-on-nosync'};
     my $bc = Bucardo->new($bcargs);
 
     ## Verify that the version of Bucardo.pm matches our version
@@ -9567,6 +9570,19 @@ before the name as well, so a debugname of "rootdb" would produce a log file nam
 =item B<--cleandebugs>
 
 Forces removal of all old debug files before running.
+
+=item B<--exit-on-nosync>
+
+=item B<--no-exit-on-nosync>
+
+On startup, if Bucardo finds no active syncs, it normally will continue to
+run, requiring a restart once syncs are added. This is useful for startup
+scripts and whatnot.
+
+If, however, you want it to exit when there are no active syncs, pass the
+C<--exit-on-nosync> option. You can also be explicit that it should I<not>
+exit when there are no syncs by passing C<--no-exit-on-nosync>. This is the
+default value.
 
 =back
 

@@ -204,6 +204,7 @@ sub new {
         version      => $VERSION,
         listening    => {},
         pidmap       => {},
+        exit_on_nosync => 0,
         sqlprefix    => "/* Bucardo $VERSION */",
     };
 
@@ -631,8 +632,8 @@ sub start_mcp {
     ## This resets listeners, kills kids, and loads/activates syncs
     my $active_syncs = $self->reload_mcp();
 
-    ## No syncs means no reason for us to hang around, so we exit
-    if (!$active_syncs) {
+    if (!$active_syncs && $self->{exit_on_nosync}) {
+        ## No syncs means no reason for us to hang around, so we exit
         $self->glog('No active syncs were found, so we are exiting', LOG_WARN);
         $self->db_notify($masterdbh, 'nosyncs', 1);
         $self->cleanup_mcp('No active syncs');
