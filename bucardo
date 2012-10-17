@@ -10062,28 +10062,33 @@ processes to report completion.
 
   bucardo show <all|setting1> [setting2..]
 
-Shows the current settings in the bucardo_config table. Use the keyword 'all' to see all the settings, or 
+Shows the current Bucardo settings. Use the keyword "all" to see all the settings, or
 specify one or more search terms.
 
 =item B<set>
 
   bucardo set setting1=value [setting2=value]
 
-Sets one or more items inside the bucardo_config table. Setting names are case-insensitive.
+Sets one or more configuration setting table. Setting names are case-insensitive.
 
 =item B<ping>
+
+  bucardo ping
+  bucardo ping 60
+  bucardo ping 0
 
 Sends a ping notice to the MCP process to see if it will respond. By default, it will wait 15 seconds. A 
 numeric argument will change this timeout. Using a 0 as the timeout indicates waiting forever. If a response 
 was returned, the program will exit with a value of 0. If it times out, the value will be 1.
+Returns a Nagios like message starting with "OK" or "CRITICAL" for success or failure.
 
 =item B<status>
 
   bucardo status [syncname(s)] [--sort=#] [--showdays] [--compress]
 
-Shows the brief status of all known syncs in a tabular format. If given one or more syncnames, 
+Shows the brief status of all known syncs in a tabular format. If given one or more sync names, 
 shows detailed information for each one. To see detailed information for all syncs, simply 
-use 'status all'.
+use "status all"
 
 When showing brief information, the columns are:
 
@@ -10120,7 +10125,6 @@ How long it has been since the last sync failure
 
 =back
 
-
 =item B<activate> syncname [syncname2 syncname3 ...] [timeout]
 
 Activates one or more named syncs. If given a timeout argument, it will wait until it has received 
@@ -10153,10 +10157,6 @@ adds another message.
 
 
 
-=item B<message>
-
-
-
 =item B<config>
 
 
@@ -10166,14 +10166,6 @@ adds another message.
 
 
 =item B<purge>
-
-
-
-=item B<activate>
-
-
-
-=item B<deactivate>
 
 
 
