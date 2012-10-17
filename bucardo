@@ -549,7 +549,7 @@ sub help {
   stop <reason>   ** Tell all Bucardo processes to stop permanently
 
   list <type> [name]   ** View information about dbs, dbgroups, herds, syncs, tables, sequences, customnames, customcols, customcode or "all" of them
-  add <type> <name>    ** Add a db, dbgroup, herd, sync, table, sequence, customcode, customcols customname or customcode
+  bucardo add <type> <name>    ** Add a db, dbgroup, herd, sync, table, sequence, customcode, customcols customname or customcode
   remove <type> <name> ** Remove a db, dbgroup, herd, sync, table, sequence, customname, customcol or customcode
 
   For detailed help on the above, prefix with a help like this:
@@ -9366,7 +9366,7 @@ matching a regular expression.
 
 =item B<add>
 
-  add <type> <name> <parameters>
+  bucardo add <type> <name> <parameters>
 
 Adds a new object to Bucardo. The C<type> sepcifies the type of object to add,
 while the C<name> should be the name of the object. The supported types and
@@ -9376,7 +9376,7 @@ their parameters are:
 
 =item C<db>
 
-  add db <name> dbname=actual_name port=xxx host=xxx user=xxx pass=xxx
+  bucardo add db <name> dbname=actual_name port=xxx host=xxx user=xxx pass=xxx
 
 Adds a new database. The C<name> is the name by which the database will be
 known to Bucardo, and must be unique. This may vary from the actual database
@@ -9501,7 +9501,7 @@ to "on".
 
 =item C<dbgroup>
 
-  add dbgroup name db1 db2 db3 ...
+  bucardo add dbgroup name db1 db2 db3 ...
 
 Adds one or more databases to the named database group. If the database group
 doesn't exist, it will be created.
@@ -9510,8 +9510,8 @@ doesn't exist, it will be created.
 
 =item C<sequence>
 
-  add table [schema].table db=actual_db_name
-  add sequence [schema].sequence herd=xxx
+  bucardo add table [schema].table db=actual_db_name
+  bucardo add sequence [schema].sequence herd=xxx
 
 Adds a table or sequence object. The table or sequence information will be
 read from the specified database. Supported parameters:
@@ -9554,8 +9554,8 @@ will be created. Optional.
 
 =item C<all sequences>
 
-  add all tables [herd=xxx] [pkonly]
-  add all sequences herd=xxx
+  bucardo add all tables [herd=xxx] [pkonly]
+  bucardo add all sequences herd=xxx
 
 Adds all the tables or sequences in all known databases or in a specified
 database. Excludes tables and sequences in the C<pg_catalog>,
@@ -9622,15 +9622,15 @@ Exclude tables without primary keys.
 
 =item C<herd>
 
-  add herd name
-  add herd name table, sequence, ...
+  bucardo add herd name
+  bucardo add herd name table, sequence, ...
 
 Adds a herd. After the name, pass in an optional list of tables and/or
 sequences and they will be added to the herd.
 
 =item C<sync>
 
-  add sync syncname herd=xxx dbs=xxx
+  bucardo add sync syncname herd=xxx dbs=xxx
 
 Adds a sync, which is a named replication event containing information about
 what to replicate from where to where. The supported parameters are:
@@ -9762,15 +9762,238 @@ XXX Where does one specify the custom query?
 
 =item C<customname>
 
-  add customname tablename newtablename [sync=x db=x]
+  bucardo add customname oldname newname [db=name] [sync=name]
+
+Creates a new Bucardo custom name mapping. This allows the tables involved in
+replication to have different names on different databases. The C<oldname>
+must contain the schema as well as the table name (if the source database
+supports schemas). The optional parameters limit it to one or more databases,
+and/or to one or more syncs. Supported parameters:
+
+=over
+
+=item C<sync>
+
+A sync to which to add the customname. May be specified multiple times.
+
+=item C<database>
+
+=item C<db>
+
+A database for which to add the customname. May be specified multiple times.
+
+=back
 
 =item C<customcols>
 
-  add customcols tablename select_clause [sync=x db=x]
+  bucardo add customcols tablename select_clause [sync=x db=x]
+
+Specify the list of columns to select from when syncing. Rather than the
+default C<SELECT *> behavior, you can specify any columns you want, including
+the use of function call return values and things not in the source column
+list. The optional parameters limit it to one or more databases, and/or to one
+or more syncs. Some examples:
+
+  bucardo add customcols public.foobar "select a, b, c"
+  bucardo add customcols public.foobar "select a, upper(b) AS b, c" db=foo
+  bucardo add customcols public.foobar "select a, b, c" db=foo sync=abc
+
+Supported parameters:
+
+=item C<sync>
+
+A sync to which to add the customcols. May be specified multiple times.
+
+=item C<database>
+
+=item C<db>
+
+A database for which to add the customcols. May be specified multiple times.
+
+=back
 
 =item C<customcode>
 
-  add customcode <name> <whenrun=value> <src_code=filename> [optional information]
+  bucardo add customcode <name> <whenrun=value> <src_code=filename> [optional information]
+
+Adds a customcode, which is a Perl subroutine that can be run at certain
+points in the sync process. It might handle exceptions, handle conflicts, or
+just run at certain times with no expectation of functionality (e.g., before
+Bucardo drops triggers). Metadata bout that point will be passed to the
+subroutine as a hash reference.
+
+Supported parameters:
+
+=over
+
+=item C<name>
+
+The name of the custom code object.
+
+=item C<about>
+
+XXX No-op?
+
+=item C<whenrun>
+
+=item C<when_run>
+
+A string indicating when the custom code should be run. Supported values
+include:
+
+=over
+
+=item C<before_txn>
+
+=item C<before_check_rows>
+
+=item C<before_trigger_drop>
+
+=item C<after_trigger_drop>
+
+=item C<after_table_sync>
+
+=item C<exception>
+
+=item C<conflict>
+
+=item C<before_trigger_enable>
+
+=item C<after_trigger_enable>
+
+=item C<after_txn>
+
+=item C<before_sync>
+
+=item C<after_sync>
+
+=back
+
+=item C<getdbh>
+
+Boolean indicating whether or not Perl L<DBI> database handles should be
+provided to the custom code subroutine. If true, database handles will be
+provided under the C<dbh> key of the hash reference passed to the subroutine.
+The value under this key will be a hash reference mapping database names to
+their respective handles.
+
+=item C<getrows>
+
+XXX Currently a no-op.
+
+=item C<trigrules>
+
+Boolean indicating whether or not to disable trigger rules during the
+execution of the custom code. Defaults to false.
+
+=item C<sync>
+
+Name of the sync with which to associate the custom code.
+
+=item C<goat>
+
+Name of the table or sequence with which to associate the custom code.
+
+=item C<active>
+
+Boolean indicating whether or not the custom code is active.
+
+=item C<priority>
+
+Number indicating the priority in which to execute custom codes. Lower numbers
+are higher priority. Useful for subroutines that set C<lastcode> in order to
+cancel the execution of subsequent custom codes for the same C<when_run>.
+
+=item C<src_code>
+
+File from which to read the custom code Perl source.
+
+=back
+
+The body of the Perl subroutine should be implemented in the C<src_code> file,
+and not inside a C<sub> declaration. When called, it will be passed a single
+hash reference with the following keys:
+
+=over
+
+=item C<syncname>
+
+The name of the currently-executing sync.
+
+=item C<version>
+
+The version of Bucardo executing the sync.
+
+=item C<sourcename>
+
+The name of the source database.
+
+=item C<targetname>
+
+The name of the target database.
+
+=item C<sendmail>
+
+A code reference that can be used to send email messages.
+
+=item C<dummy>
+
+Boolean indicating that the subroutine should return without executing.
+
+=back
+
+In addition, the subroutine may set any of these keys in the hash reference to
+change the behavior of the sync:
+
+=over
+
+=item C<message>
+
+Message to send to the logs.
+
+=item C<warning>
+
+A warning to emit after the subroutine has returned.
+
+=item C<error>
+
+An error to be thrown after the subroutine has returned.
+
+=item C<lastcode>
+
+Set to true to have any subsequent custom codes of the same type to be
+skipped.
+
+=item C<endsync>
+
+Cancels the sync altogether.
+
+=back
+
+An example:
+
+  use strict;
+  use warnings;
+  use Data::Dumper;
+
+  # Bail if it's a dummy run (triggerd by validate_sync).
+  my $info = shift;
+  return if $info->{dummy};
+
+  # Let's open a file.
+  my $file = '/tmp/bucardo_dump.txt';
+  open my $fh, '>:encoding(UTF-8)', $file or do {
+      $info->{error} = "Cannot open $file: $!\n";
+      return;
+  };
+
+  # Inspect $info for fun.
+  print $fh Dumper $info;
+  close $fh or $info->{warning} = "Error closing $file: $!\n";
+
+  # Log a message and return.
+  $info->{message} = 'IN UR DATABASEZ NORMALIZIN UR RELAYSHUNS';
+  return;
 
 =back
 
