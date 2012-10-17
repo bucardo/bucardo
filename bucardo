@@ -9242,11 +9242,27 @@ This document describes version 4.99.5 of bucardo
 
 The bucardo script is the main interaction to a running Bucardo instance. It can 
 be used to start and stop Bucardo, add new items, kick syncs, and even install and 
-upgrade Bucardo itself. For more complete documentation, please view the wiki at:
-
-http://bucardo.org/
+upgrade Bucardo itself. For more complete documentation, please view
+L<the wiki|http://bucardo.org/>.
 
 =head1 COMMANDS
+
+Most of the commands take parameters. These may be passed after the command
+name and, where appropriate, an object name. Parameters take the form of
+key/value pairs separated by an equal sign (C<=>). For example:
+
+  bucardo add db sea_widgets dbname=widgets host=db.example.com
+
+Here C<dbname> and <host> are parameters.
+
+Many of the commands also use command-line options, which are specified in the
+normal way. For eample, the C<bucardo add db> command could also be written
+as:
+
+  bucardo add db sea_widgets --dbname widgets --dbhost db.example.com
+
+However, parameters and options are not directly interchangeable in all cases.
+See L</OPTIONS> for a complete list of options.
 
 =over 4
 
@@ -9589,7 +9605,7 @@ than once.
 
 =item C<-T>
 
-Esclude the specified tables or sequences. The options may be specified more
+Exclude the specified tables or sequences. The options may be specified more
 than once.
 
 =item C<heard>
@@ -9607,10 +9623,142 @@ Exclude tables without primary keys.
 =item C<herd>
 
   add herd name
+  add herd name table, sequence, ...
+
+Adds a herd. After the name, pass in an optional list of tables and/or
+sequences and they will be added to the herd.
 
 =item C<sync>
 
-  add sync syncname options
+  add sync syncname herd=xxx dbs=xxx
+
+Adds a sync, which is a named replication event containing information about
+what to replicate from where to where. The supported parameters are:
+
+=over
+
+=item C<dbs>
+
+The name of a database group or comma-delimited list of databases. All of the
+specified databases will be synchronized. Required.
+
+=item C<herd>
+
+The name of a herd to synchronize. All of the tables and/or sequences in the
+herd will be synchronized. Required unless C<tables> is specified.
+
+=item C<tables>
+
+List of tables to add to the sync. This implicitly creates a herd with the
+same name as the sync. Required unless C<herd> is specified.
+
+=item C<status>
+
+Indicates whether or not the sync is active. Must be either "active" or
+"inactive". Defaults to "active".
+
+=item C<rebuild_index>
+
+Boolean indicating whether or not to rebuild indexes after every sync.
+Defaults to off.
+
+=item C<lifetime>
+
+Number of seconds a KID can live before being reaped. No limit by default.
+
+=item C<maxkicks>
+
+Numger of times a KID may be kicked before being reaped. No limit by default.
+
+=item C<onetimecopy>
+
+Determines whether or not a sync should switch to a full copy mode for a
+single run. Supported values are:
+
+=over
+
+=item 0: off
+
+=item 1: always full copy
+
+=item 2: only copy tables that are empty on the target
+
+=back
+
+=item C<stayalive>
+
+Boolean indicating whether or not the sync processes (CTL) should be
+persisent. Defaults to false.
+
+=item C<kidsalive>
+
+Boolean indicating whether or not the sync child processes (KID) should be
+persisent. Defaults to false.
+
+=item C<limitdbs>
+
+XXX Appears to be a no-op.
+
+=item C<ping>
+
+Boolean indicating whether or not to ping each database before each sync.
+Optional.
+
+=item C<do_listen>
+
+XXX An alias for C<ping>?
+
+=item C<checktime>
+
+XXX No idea what this is for.
+
+=item C<source_makedelta>
+
+Indicates which that source databases should get manual delta rows.
+XXX WHA?
+
+=item C<target_makedelta>
+
+Indicates which that target databases should get manual delta rows.
+XXX WHA?
+
+=item C<priority>
+
+An integer indicating the priority of the sync. Lower numbers are higher
+priority.
+XXX What does this mean?
+
+=item C<analyze_after_copy>
+
+Boolean indicating whether or not to analyze tables after every sync. Off by
+default. Optional.
+
+=item C<overdue>
+
+XXX Appears to be a no-op.
+
+=item C<expired>
+
+XXX Appears to be a no-op.
+
+=item C<track_rates>
+
+Boolean indicating whether or not to track syncrhonization rates.
+XXX WHA?
+
+=item C<rebuild_index>
+
+Boolean indicating whether or not to rebuild indexes after every sync. Off by
+default. Optional.
+
+=item C<customselect>
+
+Boolean indicating whether or not to use a custom C<SELECT> statement, which
+is only supported for a C<onetimecopy>. Deprecated in favor of
+L<adding C<customcols> objects|/customcols>.
+XXX Where does one specify the custom query?
+
+=back
 
 =item C<customname>
 
