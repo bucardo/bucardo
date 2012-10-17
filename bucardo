@@ -9350,16 +9350,17 @@ matching a regular expression.
 
 =item B<add>
 
-  add <type> <name>
+  add <type> <name> <parameters>
 
 Adds a new object to Bucardo. The C<type> sepcifies the type of object to add,
-while the C<name> should be the name of the object. The supported types are:
+while the C<name> should be the name of the object. The supported types and
+their parameters are:
 
 =over
 
 =item C<db>
 
-  add db <name> dbname=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx ssp=1/0
+  add db <name> dbname=actual_name port=xxx host=xxx user=xxx pass=xxx
 
 Adds a new database. The C<name> is the name by which the database will be
 known to Bucardo, and must be unique. This may vary from the actual database
@@ -9484,53 +9485,146 @@ to "on".
 
 =item C<dbgroup>
 
-=item C<table>
+  add dbgroup name db1 db2 db3 ...
 
-=item C<all tables>
+Adds one or more databases to the named database group. If the database group
+doesn't exist, it will be created.
+
+=item C<table>
 
 =item C<sequence>
 
-=item C<all sequences>
+  add table [schema].table db=actual_db_name
+  add sequence [schema].sequence herd=xxx
+
+Adds a table or sequence object. The table or sequence information will be
+read from the specified database. Supported parameters:
+
+=over
+
+=item C<db>
+
+The name of the database from which to read the table or sequence information.
+Should be a name known to Bucardo, thanks to a previous call to C<add
+database>. Required.
+
+=item C<ping>
+
+Boolean indicating whether or not to ping the database before each sync.
+Optional.
+
+=item C<rebuild_index>
+
+Boolean indicating whether or not to rebuild indexes after every sync. Off by
+default. Optional.
+
+=item C<standard_conflict>
+
+XXX Deprecated, move to C<add sync>.
+
+=item C<analyze_after_copy>
+
+Boolean indicating whether or not to analyze the table after every sync. Off
+by default. Optional.
 
 =item C<herd>
 
-=item C<sync>
-
-=item C<customcode>
-
-=item C<customname>
-
-=item C<customcols>
+Adds the table or sequence to the named herd. If the herd does not exist, it
+will be created. Optional.
 
 =back
-    add_herd()       if $thing eq 'herd';
-    add_sync()       if $thing eq 'sync';
 
-  add db <dbname> dbname=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx ssp=1/0
+=item C<all tables>
 
-  add dbgroup name db1 db2 db3 ...
-
-  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx herd=xxx
+=item C<all sequences>
 
   add all tables [herd=xxx] [pkonly]
-
-  add sequence [schema].table herd=xxx
-
   add all sequences herd=xxx
 
-  add sync syncname options
+Adds all the tables or sequences in all known databases or in a specified
+database. Excludes tables and sequences in the C<pg_catalog>,
+C<information_schema>, and C<bucardo> schemas. (Yes, this means that you
+cannot replicate the Bucardo configuration database using Bucardo. Sorry about
+that.) Supported options and parameters:
+
+=over
+
+=item C<db>
+
+=item C<--db>
+
+Name of the database from which to find all the tables or sequences to add. If
+not provided, tables or sequences will be added from all known databases.
+
+=item C<schema>
+
+=item C<--schema>
+
+=item C<-n>
+
+Limit to the tables or sequenes in the specified comma-delimited list of
+schemas. The options may be specified more than once.
+
+=item C<exclude-schema>
+
+=item C<--exclude-schema>
+
+=item C<-N>
+
+Exclude tales in the specified comma-delimited list of schemas. The options
+may be specified more than once.
+
+=item C<table>
+
+=item C<--table>
+
+=item C<-t>
+
+Limit to the specified tables or sequences. The options may be specified more
+than once.
+
+=item C<exclude-table>
+
+=item C<--exclude-table>
+
+=item C<-T>
+
+Esclude the specified tables or sequences. The options may be specified more
+than once.
+
+=item C<heard>
+
+=item C<--heard>
+
+Name of the heard to which to add new tables or sequences.
+
+=item C<pkonly>
+
+Exclude tables without primary keys.
+
+=back
+
+=item C<herd>
 
   add herd name
 
+=item C<sync>
+
+  add sync syncname options
+
+=item C<customname>
+
   add customname tablename newtablename [sync=x db=x]
+
+=item C<customcols>
 
   add customcols tablename select_clause [sync=x db=x]
 
+=item C<customcode>
+
   add customcode <name> <whenrun=value> <src_code=filename> [optional information]
 
-Tells Bucardo about new objects it should know about. These commands can
-replace direct manipulation of the tables in the bucardo schema for the
-supported object types (you'll still need to add things like the mappings between objects on your own).
+=back
 
 =item B<remove>
 
