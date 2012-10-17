@@ -9370,7 +9370,7 @@ If a timeout is given, the total completion time in seconds is also displayed. I
 multiple targets, the time that each target takes from the start of the kick is also shown as each 
 target finishes.
 
-=item B<reload_config>
+=item B<reload config>
 
 Forces Bucardo to reload the bucardo_config file, and then restart all processes to ensure that the new 
 information is loaded.
@@ -9453,6 +9453,50 @@ confirmation from Bucardo that the sync has been successfully deactivated.
 Adds a message to the running Bucardo logs. This message will appear prefixed with "MESSAGE: ". If 
 Bucardo is not running, the message will go to the logs the next time Bucardo is running and someone 
 adds another message.
+
+=item B<restart>
+
+
+
+=item B<reload>
+
+
+
+=item B<update>
+
+
+
+=item B<inspect>
+
+
+
+=item B<message>
+
+
+
+=item B<config>
+
+
+
+=item B<validate>
+
+
+
+=item B<purge>
+
+
+
+=item B<activate>
+
+
+
+=item B<deactivate>
+
+
+
+=item B<help>
+
+
 
 =back
 
