@@ -9252,52 +9252,56 @@ http://bucardo.org/
 
 =item B<install>
 
-Usage: ./bucardo install
+  bucardo install
 
-Attempts to install the Bucardo schema from the file 'bucardo.schema' into an existing 
-Postgres cluster. The user 'bucardo' and database 'bucardo' will be created first as needed.
-This is an interactive installer, but you can supply the following values from the command 
-line:
+Installs the Bucardo schema from the file F<bucardo.schema> into an existing Postgres cluster.
+The user "bucardo" and database "bucardo" will be created first as needed. This is an
+interactive installer, but you can supply the following values from the command line:
 
 =over 2
 
-=item --dbuser (defaults to postgres)
+=item C<--dbuser>
 
-=item --dbname (defaults to postgres)
+defaults to postgres
 
-=item --dbport (defaults to 5432)
+=item C<--dbname>
 
-=item --piddir (defaults to /var/run/bucardo/)
+defaults to postgres
+
+=item C<--dbport>
+
+defaults to 5432
+
+=item C<--piddir>
+
+defaults to /var/run/bucardo/
 
 =back
 
 =item B<upgrade>
 
-Usage: ./bucardo upgrade
+  bucardo upgrade
 
-Upgrades an existing Bucardo installation to the current version of the bucardo script.
-Requires that the bucardo script and the bucardo.schema file be the same version. All
+Upgrades an existing Bucardo installation to the current version of the bucardo database
+script. Requires that bucardo and the F<bucardo.schema> file be the same version. All
 changes should be backwards compatible, but you may need to re-validate existing scripts
 to make sure changes get propagated to all databases.
 
 =item B<start>
 
-Usage: ./bucardo start "Reason --name"
+  bucardo start "Reason"
 
-Restarts Bucardo cleanly by first issuing the equivalent of a stop to ask any existing Bucardo
+Starts Bucardo. Fails if the MCP process is running (determined if its PID file is present).
+Otherwise, starts cleanly by first issuing the equivalent of a stop to ask any existing Bucardo
 processes to exit, and then starting a new Bucardo MCP process. A short reason and name should
 be provided - these are written to the C<reason_file> file (F<bucardo.restart.reason.txt> by
 default) in the C<debudir> and sent in the email sent when Bucardo has been started up. It is
 also appended to the reason log, which has the same name as the the C<reason_file> but ends in
 F<.log>.
 
-Before attempting to kill any old processes, a ping command with a timeout of 5 seconds is issued.
-If this returns successfully (indicating an active MCP process already running), the script will
-exit with a return value of 2.
-
 =item B<stop>
 
-Usage: ./bucardo stop "Reason --name"
+  bucardo stop "Reason"
 
 Forces Bucardo to quit by creating a stop file which all MCP, CTL, and KID processes should
 detect and cause them to exit. Note that active syncs will not exit right away, as they
@@ -9311,37 +9315,218 @@ the same name as the the C<reason_file> but ends in F<.log>.
 
 =item B<list>
 
-Usage: ./bucardo list <type> <regex>
+  bucardo list <type> <regex>
 
-Lists summary information about dbs, dbgroups, tables, sequences,
-syncs, herds, customnames, customcols or customcode. Adding anything
-after the type will look up all matching entries.
+Lists summary information about Bucardo objects. The supported C<types> are:
+
+=over
+
+=item * C<database>
+
+=item * C<dbgroup>
+
+=item * C<herd>
+
+=item * C<sync>
+
+=item * C<table>
+
+=item * C<sequence>
+
+=item * C<customcode>
+
+=item * C<customname>
+
+=item * C<customcols>
+
+=item * C<all>
+
+=back
+
+The C<all> option will list information about all object types.
+
+The optional C<regex> option can be used to filter the list to only those
+matching a regular expression.
 
 =item B<add>
 
-Usage:  add <item_type> <item_name>
+  add <type> <name>
 
-Usage:  add db <dbname> dbname=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx ssp=1/0
+Adds a new object to Bucardo. The C<type> sepcifies the type of object to add,
+while the C<name> should be the name of the object. The supported types are:
 
-Usage:  add dbgroup name db1 db2 db3 ...
+=over
 
-Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx herd=xxx
+=item C<db>
 
-Usage:  add all tables [herd=xxx] [pkonly]
+  add db <name> dbname=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx ssp=1/0
 
-Usage:  add sequence [schema].table herd=xxx
+Adds a new database. The C<name> is the name by which the database will be
+known to Bucardo, and must be unique. This may vary from the actual database
+name, as multiple hosts might have databases with the same name.
 
-Usage:  add all sequences herd=xxx
+The supported named parameters are:
 
-Usage:  add sync syncname options
+=over
 
-Usage:  add herd name
+=item C<dbname>
 
-Usage:  add customname tablename newtablename [sync=x db=x]
+=item C<db>
 
-Usage:  add customcols tablename select_clause [sync=x db=x]
+The actual name of the database. Required.
 
-Usage:  add customcode <name> <whenrun=value> <src_code=filename> [optional information]
+=item C<type>
+
+=item C<dbtype>
+
+The type of the database. Defaults to C<postgres>. Currently supported values are:
+
+=over
+
+=item * C<postgres>
+
+=item * C<drizzle>
+
+=item * C<mongo>
+
+=item * C<mysql>
+
+=item * C<maria>
+
+=item * C<oracle>
+
+=item * C<redis>
+
+=item * C<sqlite>
+
+=back
+
+=item C<username>
+
+=item C<dbuser>
+
+=item C<user>
+
+The username Bucardo should use to connect to the database. Optional.
+
+=item C<password>
+
+=item C<dbpass>
+
+=item C<pass>
+
+The password Bucardo should use when connecting to the database. Optional.
+
+=item C<dbhost>
+
+=item C<pghost>
+
+=item C<host>
+
+The host name to which to connect. Defaults to the value of the C<$PGHOSTADDR>
+or C<$PGHOST> environment variables, if present. Optional.
+
+=item C<dbport>
+
+=item C<pgport>
+
+=item C<port>
+
+The port to which to connect. Defaults to the value of the C<$PGPORT>
+environment variable, if present. Optional.
+
+=item C<dbconn>
+
+=item C<pgconn>
+
+=item C<conn>
+
+Additional connection parameters, e.g., C<sslmode=require>. Optional.
+
+=item C<status>
+
+Initial status of the database in Bucardo. Must be either "active" or
+"inactive". Defaults to "active".
+
+=item C<dbgroup>
+
+=item C<group>
+
+Bucardo database group to which to add the database. Optional.
+
+=item C<addalltables>
+
+Automatically adds all tables once the database has been added. Optional.
+
+=item C<addallsequences>
+
+Automatically adds all sequences once the database has been added. Optional.
+
+=item C<server_side_prepares>
+
+=item C<ssp>
+
+Enable or disable server-side prepares. Pass 1 to enable them or 0 to disable
+them. Defaults to 1.
+
+=item C<dbservice>
+
+=item C<service>
+
+The service name to use for a Postgres database. Optional.
+
+=item C<makedelta>
+
+Turns makedelta magic on or off. Value must be one of "on" or "off". Defaults
+to "on".
+
+=back
+
+=item C<dbgroup>
+
+=item C<table>
+
+=item C<all tables>
+
+=item C<sequence>
+
+=item C<all sequences>
+
+=item C<herd>
+
+=item C<sync>
+
+=item C<customcode>
+
+=item C<customname>
+
+=item C<customcols>
+
+=back
+    add_herd()       if $thing eq 'herd';
+    add_sync()       if $thing eq 'sync';
+
+  add db <dbname> dbname=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx ssp=1/0
+
+  add dbgroup name db1 db2 db3 ...
+
+  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx herd=xxx
+
+  add all tables [herd=xxx] [pkonly]
+
+  add sequence [schema].table herd=xxx
+
+  add all sequences herd=xxx
+
+  add sync syncname options
+
+  add herd name
+
+  add customname tablename newtablename [sync=x db=x]
+
+  add customcols tablename select_clause [sync=x db=x]
+
+  add customcode <name> <whenrun=value> <src_code=filename> [optional information]
 
 Tells Bucardo about new objects it should know about. These commands can
 replace direct manipulation of the tables in the bucardo schema for the
@@ -9356,7 +9541,7 @@ dbgroup, herd, sync, table, and sequence.
 
 =item B<kick>
 
-Usage: ./bucardo kick <syncname(s)> [timeout]
+  bucardo kick <syncname(s)> [timeout]
 
 Tells one or more named syncs to fire as soon as possible. Note that this simply sends a request that 
 the sync fire: it may not start right away if the same sync is already running, or if the source or 
@@ -9377,14 +9562,14 @@ information is loaded.
 
 =item B<show>
 
-Usage: ./bucardo show <all|setting1> [setting2..]
+  bucardo show <all|setting1> [setting2..]
 
 Shows the current settings in the bucardo_config table. Use the keyword 'all' to see all the settings, or 
 specify one or more search terms.
 
 =item B<set>
 
-Usage: ./bucardo set setting1=value [setting2=value]
+  bucardo set setting1=value [setting2=value]
 
 Sets one or more items inside the bucardo_config table. Setting names are case-insensitive.
 
@@ -9396,7 +9581,7 @@ was returned, the program will exit with a value of 0. If it times out, the valu
 
 =item B<status>
 
-Usage: ./bucardo status [syncname(s)] [--sort=#] [--showdays] [--compress]
+  bucardo status [syncname(s)] [--sort=#] [--showdays] [--compress]
 
 Shows the brief status of all known syncs in a tabular format. If given one or more syncnames, 
 shows detailed information for each one. To see detailed information for all syncs, simply 
