@@ -9999,10 +9999,34 @@ An example:
 
 =item B<remove>
 
-Usage:  remove <item_type> <item_name>
+  bucardo remove <item_type> <item_name>
 
-Removes one or more items from the Bucardo database. Valid item types are database, 
-dbgroup, herd, sync, table, and sequence.
+Removes one or more objects from Bucardo. Valid item types are;
+
+=over
+
+=item * C<db> or C<database>
+
+Use the C<--force> option to clear out related tables and groups instead of
+erroring out.
+
+=item * C<dbgroup>
+
+=item * C<herd>
+
+=item * C<sync>
+
+=item * C<table>
+
+=item * C<sequence> (not implemented)
+
+=item * C<customcols>
+
+=item * C<customname>
+
+=item * C<customcode>
+
+=back
 
 =item B<kick>
 
@@ -10013,8 +10037,8 @@ the sync fire: it may not start right away if the same sync is already running, 
 target database has exceeded the number of allowed Bucardo connections. If the final argument is a 
 number, it is treated as a timeout. If this number is zero, the bucardo command will not return 
 until the sync has finished. For any other number, the sync will wait at most that number of seconds. 
-If any sync has not finished before the timeout, a false value is returned. In all other cases, a 
-true value is returned.
+If any sync has not finished before the timeout, an exit value of 1 will be returned. Errors will
+cause exit values of 2 or 3. In all other cases, an exit value of 0 will be returned.
 
 If a timeout is given, the total completion time in seconds is also displayed. If the sync is going to 
 multiple targets, the time that each target takes from the start of the kick is also shown as each 
@@ -10022,8 +10046,17 @@ target finishes.
 
 =item B<reload config>
 
-Forces Bucardo to reload the bucardo_config file, and then restart all processes to ensure that the new 
-information is loaded.
+  bucardo reload config
+  bucardo reload config 30
+
+Sends a message to all CTL and KID processes asking them to reload the Bucardo
+configuration. This configuration is a series of key/value pairs that
+configure Bucardo's behavior, and not any of the objects managed by the
+C<add>, C<remove>, or C<update> commands.
+
+By default, Bucardo will send the message and then exit. Pass an optional
+number and Bucardo will instead wait up to that length of time for all child
+processes to report completion.
 
 =item B<show>
 
