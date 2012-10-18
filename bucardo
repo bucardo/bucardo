@@ -10461,7 +10461,10 @@ The bucardo script uses I<$ENV{HOME}> to look for a F<.bucardorc> file.
 
 =head1 BUGS
 
-Bug reports and feature requests are always welcome, please visit http://bucardo.org or email bucardo-general@bucardo.org.
+Bug reports and feature requests are always welcome, please visit
+L<bucardo.org|http://bucardo.org>, file L<GitHub
+Issues|http://github.com/bucardo/bucardo/issues>, or post to our
+L<email list|https://mail.endcrypt.com/mailman/listinfo/bucardo-general>.
 
 =head1 SEE ALSO
 
