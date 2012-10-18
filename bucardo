@@ -9775,7 +9775,9 @@ XXX An alias for C<ping>?
 
 =item C<checktime>
 
-XXX No idea what this is for.
+An interval specifying's the maximum time a sync should go before being
+kicked. Useful for busy systems where you don't want the overhead of notify
+triggers.
 
 =item C<source_makedelta>
 
