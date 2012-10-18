@@ -981,7 +981,7 @@ sub mcp_main {
                     $maindbh->commit();
 
                     ## Only certain things can be changed "on the fly"
-                    for my $val (qw/checksecs stayalive limitdbs do_listen deletemethod status ping
+                    for my $val (qw/checksecs stayalive do_listen deletemethod status ping
                                     analyze_after_copy vacuum_after_copy targetgroup targetdb usecustomselect
                                     onetimecopy lifetimesecs maxkicks rebuild_index/) {
                         $sync->{$syncname}{$val} = $self->{sync}{$syncname}{$val} = $info->{$val};
@@ -1219,8 +1219,8 @@ sub start_controller {
     $self->{logprefix} = 'CTL';
 
     ## Extract some of the more common items into local vars
-    my ($syncname,$limitdbs,$kidsalive,$dbinfo, $kicked,) = @$sync{qw(
-           name    limitdbs  kidsalive  dbs     kick_on_startup)};
+    my ($syncname,$kidsalive,$dbinfo, $kicked,) = @$sync{qw(
+           name    kidsalive  dbs     kick_on_startup)};
 
     ## Set our process name
     $0 = qq{Bucardo Controller.$self->{extraname} Sync "$syncname" for herd "$sync->{herd}" to dbs "$sync->{dbs}"};

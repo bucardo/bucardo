@@ -1336,7 +1336,6 @@ $delta
 $fullcopy
 <tr><th class="syncinfo">Controller stays alive:</th><td class="syncinfo">$info->{YNstayalive}</th></tr>
 <tr><th class="syncinfo">Kids stay alive:</th><td class="syncinfo">$info->{YNkidsalive}</th></tr>
-<tr><th class="syncinfo">Limit databases:</th><td class="syncinfo">$info->{limitdbs}</th></tr>
 <tr><th class="syncinfo">Priority:</th><td class="syncinfo">$info->{priority}</th></tr>
     };
 

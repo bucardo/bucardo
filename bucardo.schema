@@ -396,7 +396,6 @@ CREATE TABLE bucardo.sync (
   usecustomselect    BOOLEAN     NOT NULL DEFAULT 'false',
   copyextra          TEXT        NOT NULL DEFAULT '',  -- e.g. WITH OIDS
   deletemethod       TEXT        NOT NULL DEFAULT 'delete',
-  limitdbs           SMALLINT    NOT NULL DEFAULT 0,     -- How many databases can sync at once? 0=all
   ping               BOOLEAN     NOT NULL DEFAULT true,      -- Are we issuing NOTICES via triggers?
   do_listen          BOOLEAN     NOT NULL DEFAULT false,     -- LISTEN for kicks on source/target database if ! ping
   checktime          INTERVAL        NULL,                   -- How often to check if we've not heard anything?

@@ -3864,7 +3864,6 @@ sub add_sync {
         dbs                      dbs                  0                null
         stayalive                stayalive            TF               null
         kidsalive                kidsalive            TF               null
-        limitdbs                 limitdbs             numeric          null
         ping                     ping                 TF               null
         do_listen                do_listen            TF               null
         checktime                checktime            interval         null
@@ -6984,6 +6983,10 @@ sub upgrade {
     my @new_columns = (
     );
 
+    my @dropped_columns = (
+        ['bucardo', 'sync', 'limitdbs'],
+    );
+
     my @altered_columns = (
         ['bucardo', 'goat', 'rebuild_index', 'BOOL2SMALLINT1'],
         ['bucardo', 'goat', 'schemaname',    'NO DEFAULT'],
@@ -7195,6 +7198,15 @@ sub upgrade {
         $def =~ s/\s+/ /g;
         upgrade_and_log("ALTER TABLE $schema.$table ADD COLUMN $def");
         clog "Created column: $schema.$table.$column";
+        $changes++;
+    }
+
+    ## Drop columns as needed.
+    for my $row (@dropped_columns) {
+        my ($schema,$table,$column) = @$row;
+        next unless column_exists($schema, $table, $column);
+        upgrade_and_log("ALTER TABLE $schema.$table DROP COLUMN $column");
+        clog "Dropped column: $schema.$table.$column";
         $changes++;
     }
 
@@ -9751,10 +9763,6 @@ persisent. Defaults to false.
 
 Boolean indicating whether or not the sync child processes (KID) should be
 persisent. Defaults to false.
-
-=item C<limitdbs>
-
-XXX Appears to be a no-op.
 
 =item C<ping>
 
