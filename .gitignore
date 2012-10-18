@@ -24,6 +24,7 @@ MYMETA.*
 bucardo_test_database_*
 *.log
 log.bucardo
+bucardo.restart.reason.*
 test.*
 
 ## Temporary files:
