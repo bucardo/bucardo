@@ -9372,6 +9372,24 @@ The C<all> option will list information about all object types.
 The optional C<regex> option can be used to filter the list to only those
 matching a regular expression.
 
+Aliases:
+
+=over
+
+=item C<l>
+
+=item C<lsit>
+
+=item C<liast>
+
+=item C<lisy>
+
+=item C<lit>
+
+=back
+
+=back
+
 =item B<add>
 
   bucardo add <type> <name> <parameters>
@@ -10062,6 +10080,16 @@ erroring out.
 =item * C<customname>
 
 =item * C<customcode>
+
+=back
+
+Aliases:
+
+=over
+
+=item C<delete>
+
+=item C<del>
 
 =back
 
