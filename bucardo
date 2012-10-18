@@ -9792,8 +9792,7 @@ XXX WHA?
 =item C<priority>
 
 An integer indicating the priority of the sync. Lower numbers are higher
-priority.
-XXX What does this mean?
+priority. Currently used only for display purposes.
 
 =item C<analyze_after_copy>
 
