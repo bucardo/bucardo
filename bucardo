@@ -9199,7 +9199,7 @@ This document describes version 4.99.5 of bucardo
 
   ./bucardo add sync testsync source=herd1 type=pushdelta targetdb=B tables=tab1,tab2,tab3
 
-  ./bucardo add database newdb dbname=internal_name port=5432 host=myserver
+  ./bucardo add db newdb dbname=internal_name port=5432 host=myserver
 
   ./bucardo add all tables db=foo [herd=x] [pkonly]
 
@@ -9328,6 +9328,14 @@ this is a short explanation and your name. This is written to the C<reason_file>
 (F<bucardo.restart.reason.txt> by default) in the C<debugdir> and is also used by Bucardo when
 it exits and sends out mail about its death. It is also appended to the reason log, which has
 the same name as the the C<reason_file> but ends in F<.log>.
+
+=item B<restart>
+
+  bucardo restart "Reason"
+
+Stops bucardo, waits for the stop to complete, and then starts it again.
+Useful for start scripts. For getting just CTL and KID processes to recognize
+newly added, updated, or removed objects, use the C<reload> command, instead.
 
 =item B<list>
 
@@ -9537,6 +9545,37 @@ default. Optional.
 =item C<standard_conflict>
 
 XXX Deprecated, move to C<add sync>.
+
+Supported values:
+
+=over
+
+=item C<bucardo_source>
+
+The rows on the "source" database always "win". In other words, in a conflict,
+Bucardo copies rows from source to target.
+
+=item C<bucardo_target>
+
+The rows on the "target" database always win.
+
+=item C<bucardo_skip>
+
+Any conflicting rows are simply not replicated. Not recommended for most cases.
+
+=item C<bucardo_random>
+
+Each database has an equal chance of winning each time. This is the default.
+
+=item C<bucardo_latest>
+
+The row that was most recently changed wins.
+
+=item C<bucardo_abort>
+
+The sync is aborted on a conflict.
+
+=back
 
 =item C<analyze_after_copy>
 
@@ -10125,33 +10164,62 @@ How long it has been since the last sync failure
 
 =back
 
-=item B<activate> syncname [syncname2 syncname3 ...] [timeout]
+=item B<activate>
+
+  bucardo syncname [syncname2 syncname3 ...] [timeout]
 
 Activates one or more named syncs. If given a timeout argument, it will wait until it has received 
 confirmation from Bucardo that each sync has been successfully activated.
 
-=item B<deactivate> syncname [syncname2 syncname3 ...] [timeout]
+=item B<deactivate>
+
+  bucardo syncname [syncname2 syncname3 ...] [timeout]
 
 Deactivates one or more named syncs. If given a timeout argument, it will wait until it has received 
 confirmation from Bucardo that the sync has been successfully deactivated.
 
 =item B<message>
 
-Adds a message to the running Bucardo logs. This message will appear prefixed with "MESSAGE: ". If 
-Bucardo is not running, the message will go to the logs the next time Bucardo is running and someone 
+  bucardo message 'I WAS HERE'
+
+Sends a message to the running Bucardo logs. This message will appear prefixed with "MESSAGE: ". If 
+Bucardo is not running, the message will go to the logs the next time Bucardo runs and someone 
 adds another message.
-
-=item B<restart>
-
-
 
 =item B<reload>
 
+  bucardo reload [syncname2 syncname3 ...]
 
+Sends a message to one or more sync processes, instructing them to reload.
+Waits for each to reload before going on to the next. Reloading consists of
+deactivating a sync, reloading its information from the database, and
+activating it again.
 
 =item B<update>
 
+  bucardo update <type> <name> <parameters>
 
+Updates a Bucardo object. The C<type> sepcifies the type of object to update,
+while the C<name> should be the name of the object. The supported parameters
+for each type are the same as those for L</add>. The supported types are:
+
+=over
+
+=item C<db>
+
+=item C<dbgroup>
+
+=item C<herd> (unimplemented)
+
+=item C<sync>
+
+=item C<table>
+
+=item C<sequence>
+
+=item C<customcode> (unimplemented)
+
+=back
 
 =item B<inspect>
 
