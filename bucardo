@@ -10034,8 +10034,6 @@ An example:
   $info->{message} = 'IN UR DATABASEZ NORMALIZIN UR RELAYSHUNS';
   return;
 
-=back
-
 =item B<remove>
 
   bucardo remove <item_type> <item_name>
@@ -10109,6 +10107,14 @@ specify one or more search terms.
   bucardo set setting1=value [setting2=value]
 
 Sets one or more configuration setting table. Setting names are case-insensitive.
+
+=item B<config>
+
+  bucardo config show <all|setting1> [setting2..]
+  bucardo config set setting1=value [setting2=value]
+
+Deprecated interface for showing and setting configuration settings. Use the
+L</show> and L</set> commands, instead.
 
 =item B<ping>
 
@@ -10223,23 +10229,47 @@ for each type are the same as those for L</add>. The supported types are:
 
 =item B<inspect>
 
+  bucardo inspect <type> <name> [<name2>...]
 
+Inspects one or more objects of a particular type. The results are sent to
+C<STDOUT>. The supported types include:
 
-=item B<config>
+=over
 
+=item C<table>
 
+=item C<sync>
+
+=item C<herd>
+
+=back
 
 =item B<validate>
 
+  bucardo validate <all|sync1> [sync2..]
 
+Validates one or more syncs. Use the keyword "all" to validate all syncs, or
+specify one or more syncs to validate.
 
 =item B<purge>
 
+  bucardo purge <all|table1> [table2..]
 
+Purgess the delta and track tables for one or more tables, for one or more
+databases. Use the keyword "all" to validate all tables, or specify one or
+more tables to validate.
 
 =item B<help>
 
+  bucardo help
+  bucardo help <command>
+  bucardo help <command> <action>
 
+Get help. General help can be returned, as well as help for a single command
+or a command and its action. Some examples:
+
+  bucard help list
+  bucard help add table
 
 =back
 
