@@ -9800,7 +9800,8 @@ default. Optional.
 
 =item C<overdue>
 
-XXX Appears to be a no-op.
+An interval specifying the amount of time after which the sync has not run
+that it should be considered overdue.
 
 =item C<expired>
 
@@ -9809,7 +9810,6 @@ XXX Appears to be a no-op.
 =item C<track_rates>
 
 Boolean indicating whether or not to track syncrhonization rates.
-XXX WHA?
 
 =item C<rebuild_index>
 
