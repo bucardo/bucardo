@@ -1279,8 +1279,8 @@ sub shutdown_cluster {
 
     my $pidfile = "$dirname/postmaster.pid";
     return if ! -e $pidfile;
-    system($pg_ctl, '-D', $dirname, '-s', 'stop') == 0
-        or die "$pg_ctl -D $dirname -s stop failed: $?\n";
+    my @cmd = ($pg_ctl, '-D', $dirname, '-s', '-m', 'fast', 'stop');
+    system(@cmd) == 0 or die "@cmd failed: $?\n";
     return;
 
 } ## end of shutdown_cluster
