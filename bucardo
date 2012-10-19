@@ -4919,12 +4919,10 @@ sub show_why_sync_killed {
     my $sync = shift;
 
     $SQL = q{
-SELECT * FROM bucardo.q
+SELECT * FROM bucardo.syncrun
 WHERE sync = ?
-AND aborted IS NOT NULL
-AND LENGTH(whydie) > 2
-AND aborted >= now() - '30 seconds'::interval
-ORDER BY aborted DESC LIMIT 1
+AND lastbad
+ORDER BY started DESC LIMIT 1
 };
     $sth = $dbh->prepare($SQL);
     $count = $sth->execute($sync);
@@ -4934,12 +4932,12 @@ ORDER BY aborted DESC LIMIT 1
     }
 
     my $result = $sth->fetchall_arrayref({})->[0];
-    (my $whydie = $result->{whydie}) =~ s/\\n */\n    /g;
+    (my $whydie = $result->{details}) =~ s/\\n */\n    /g;
     $whydie =~ s/: ERROR:/:\n    ERROR:/;
     $whydie =~ s/ (at .+ line \d+\.)/\n      $1/g;
     $whydie =~ s/\t/<tab>/g;
-    my $message = sprintf "  PID: %s\n  Started: %s\n  Ended: %s\n    %s",
-        $result->{pid}, $result->{started}, $result->{aborted}, $whydie;
+    my $message = sprintf "  Started: %s\n  Ended: %s\n    %s",
+        $result->{pid}, $result->{started}, $result->{ended}, $whydie;
 
     return $message;
 
