@@ -1260,9 +1260,8 @@ sub empty_test_database {
 
 } ## end of empty_test_database
 
-DESTROY {
-    my $self = shift;
-    $self->shutdown_cluster($_) for keys %pgver;
+END {
+    __PACKAGE__->shutdown_cluster($_) for keys %pgver;
 }
 
 sub shutdown_cluster {
