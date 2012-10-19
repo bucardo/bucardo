@@ -1260,6 +1260,11 @@ sub empty_test_database {
 
 } ## end of empty_test_database
 
+DESTROY {
+    my $self = shift;
+    $self->shutdown_cluster($_) for keys %pgver;
+}
+
 sub shutdown_cluster {
 
     ## Shutdown a cluster if running
@@ -1274,25 +1279,8 @@ sub shutdown_cluster {
 
     my $pidfile = "$dirname/postmaster.pid";
     return if ! -e $pidfile;
-
-    open my $fh, '<', $pidfile or die qq{Could not open "$pidfile": $!\n};
-    <$fh> =~ /(\d+)/ or die qq{No PID found in file "$pidfile"\n};
-    my $pid = $1;
-    close $fh or die qq{Could not close "$pidfile": $!\n};
-    ## Make sure it's still around
-    $count = kill 0 => $pid;
-    if ($count != 1) {
-        debug("Removing $pidfile");
-        unlink $pidfile;
-    }
-    $count = kill 15 => $pid;
-    {
-        $count = kill 0 => $pid;
-        last if $count != 1;
-        sleep 0.2;
-        redo;
-    }
-
+    system($pg_ctl, '-D', $dirname, '-s', 'stop') == 0
+        or die "$pg_ctl -D $dirname -s stop failed: $?\n";
     return;
 
 } ## end of shutdown_cluster
