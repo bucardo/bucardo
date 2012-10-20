@@ -966,13 +966,14 @@ sub restart_bucardo {
     $dbh->do('LISTEN bucardo_nosyncs');
     $dbh->commit();
 
-    $self->ctl('start testing');
+    my $output = $self->ctl('start --exit-on-nosync testing');
 
     my $bail = 30;
     my $n;
   WAITFORIT: {
         if ($bail--<0) {
-            die "Bucardo did not start, but we waited!\n";
+            $output =~ s/^/#     /gmx;
+            die "Bucardo did not start, but we waited! Start output:\n\n$output\n";
         }
         while ($n = $dbh->func('pg_notifies')) {
             my ($name, $pid, $payload) = @$n;
@@ -1261,7 +1262,7 @@ sub empty_test_database {
 } ## end of empty_test_database
 
 END {
-    __PACKAGE__->shutdown_cluster($_) for keys %pgver;
+#    __PACKAGE__->shutdown_cluster($_) for keys %pgver;
 }
 
 sub shutdown_cluster {
