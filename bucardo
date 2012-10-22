@@ -10344,7 +10344,7 @@ The following arguments are only used with the 'kick' command:
 
 =over 4
 
-=item B<--retry=#>
+=item B<--retry>
 
 The number of times to retry a sync if it fails. Defaults to 0.
 
