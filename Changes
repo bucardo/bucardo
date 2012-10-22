@@ -1,6 +1,17 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
 
+Bucardo version 4.5.1
+
+  - Remove the use of 'trigrules' inside customcode: deemed too dangerous.
+    Same effect can be done dierectly inside the customcodes. [GSM]
+
+  - Add additional safety checks to make sure customcodes cannot 
+    change session_replication_role out of 'replica' mode. [GSM]
+
+  - Switch to using strftime rather than system calls [GSM]
+
+
 Bucardo version 4.5.0, released July 12, 2012
 
   - Always set session_replication_role to replica after customcode runs [GSM]
