@@ -4327,8 +4327,8 @@ sub start_kid {
         ## Note that all database handles are currently not in a txn (last action was commit or rollback)
         $targetdbh->do("SET TRANSACTION ISOLATION LEVEL $sync->{txnmode} READ WRITE");
         $sourcedbh->do("SET TRANSACTION ISOLATION LEVEL $sync->{txnmode} READ WRITE");
-        $sourcedbh->do('SET TIME ZONE GMT');
-        $targetdbh->do('SET TIME ZONE GMT');
+        $sourcedbh->do(q{SET TIME ZONE 'GMT'});
+        $targetdbh->do(q{SET TIME ZONE 'GMT'});
 
         ## We may want to lock all the tables
         ## TODO: alternate ways to trigger this
