@@ -2173,6 +2173,7 @@ sub start_kid {
         ## Drop connection to the main database, then reconnect
         if (defined $maindbh and $maindbh) {
             $maindbh->rollback;
+            $_->finish for values %{ $maindbh->{CachedKids} };
             $maindbh->disconnect;
         }
         my ($finalbackend, $finaldbh) = $self->connect_database();
@@ -2186,6 +2187,7 @@ sub start_kid {
 
             $dbh->rollback();
             $self->glog("Disconnecting from database $dbname", LOG_DEBUG);
+            $_->finish for values %{ $dbh->{CachedKids} };
             $dbh->disconnect();
 
             ## Clear out the entry from the dbrun table
