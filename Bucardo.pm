@@ -1615,7 +1615,7 @@ sub start_mcp {
 
         $SQL = qq{
             SELECT c.src_code, c.id, c.whenrun, c.getdbh, c.name, c.getrows, COALESCE(c.about,'?') AS about,
-                   c.trigrules, m.active, m.priority, COALESCE(m.goat,0) AS goat
+                   m.active, m.priority, COALESCE(m.goat,0) AS goat
             FROM customcode c, customcode_map m
             WHERE c.id=m.code AND m.active IS TRUE
             AND (m.sync = ? OR m.goat IN ($goatlistcodes))
@@ -4165,16 +4165,6 @@ sub start_kid {
         if ($c->{getdbh}) {
             $input->{sourcedbh} = $strictness eq 'nostrict' ? $safe_sourcedbh : $safe_sourcedbh_strict;
             $input->{targetdbh} = $strictness eq 'nostrict' ? $safe_targetdbh : $safe_targetdbh_strict;
-        }
-        ## In case the custom code wants to use other table's rules or triggers:
-        if ($c->{trigrules}) {
-            ## We assume the default is something other than replica, naturally
-            if ($source_disable_trigrules eq 'replica') {
-                $sourcedbh->do(q{SET session_replication_role = DEFAULT});
-            }
-            if ($target_disable_trigrules eq 'replica') {
-                $targetdbh->do(q{SET session_replication_role = DEFAULT});
-            }
         }
         $maindbh->{InactiveDestroy} = 1;
         $sourcedbh->{InactiveDestroy} = 1;
