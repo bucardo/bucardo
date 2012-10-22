@@ -4175,6 +4175,7 @@ sub start_kid {
         $targetdbh->{InactiveDestroy} = 0;
 
         ## Just in case, set session_replication_role back to replica
+        ## Make sure to do this again in the caller if it runs in 'nostrict' mode!
         if ($source_disable_trigrules eq 'replica') {
             $sourcedbh->do(q{SET session_replication_role = 'replica'});
         }
@@ -4200,6 +4201,15 @@ sub start_kid {
             ## before_txn and after_txn should commit themselves
             $targetdbh->rollback();
             $sourcedbh->rollback();
+            ## Make sure we are still in replica mode:
+            if ($source_disable_trigrules eq 'replica') {
+                $sourcedbh->do(q{SET session_replication_role = 'replica'});
+                $sourcedbh->commit();
+            }
+            if ($target_disable_trigrules eq 'replica') {
+                $targetdbh->do(q{SET session_replication_role = 'replica'});
+                $targetdbh->commit();
+            }
             $sth{qend}->execute(0,0,0,$syncname,$targetdb,$$);
             $self->glog( "Called qend with $syncname and $targetdb and $$!\n");
             my $notify = "bucardo_syncdone_${syncname}_$targetdb";
@@ -4296,14 +4306,20 @@ sub start_kid {
         ## Run all 'before_txn' code
         for my $code (@{$sync->{code_before_txn}}) {
             my $result = run_kid_custom_code($code, 'nostrict');
+            ## For safety, we rollback and ensure we are still in replica mode
+            $sourcedbh->rollback();
+            $targetdbh->rollback();
+            if ($source_disable_trigrules eq 'replica') {
+                $sourcedbh->do(q{SET session_replication_role = 'replica'});
+                $sourcedbh->commit();
+            }
+            if ($target_disable_trigrules eq 'replica') {
+                $targetdbh->do(q{SET session_replication_role = 'replica'});
+                $targetdbh->commit();
+            }
             if ($result eq 'redo') {
                 redo KID if $kidsalive;
                 last KID;
-            }
-            else {
-                ## Just in case it left it in a funky state
-                $sourcedbh->rollback();
-                $targetdbh->rollback();
             }
         }
 
@@ -6097,14 +6113,21 @@ sub start_kid {
         # Run all 'after_txn' code
         for my $code (@{$sync->{code_after_txn}}) {
             my $result = run_kid_custom_code($code, 'nostrict');
-            ## In case we want to bypass other after_txn code
+            ## For safety, we rollback and ensure we are still in replica mode
+            $sourcedbh->rollback();
+            $targetdbh->rollback();
+            if ($source_disable_trigrules eq 'replica') {
+                $sourcedbh->do(q{SET session_replication_role = 'replica'});
+                $sourcedbh->commit();
+            }
+            if ($target_disable_trigrules eq 'replica') {
+                $targetdbh->do(q{SET session_replication_role = 'replica'});
+                $targetdbh->commit();
+            }
             if ($result eq 'redo') {
                 redo KID if $kidsalive;
                 last KID;
             }
-            ## Just in case
-            $sourcedbh->rollback();
-            $targetdbh->rollback();
         }
 
         if (! $kidsalive) {
