@@ -6719,11 +6719,11 @@ sub cleanup_mcp {
 
     ## Gather system and database timestamps, output them to the logs
     my $end_systemtime = scalar localtime;
-    my $end_dbtime = $finaldbh->selectall_arrayref('SELECT now()')->[0][0];
+    my $end_dbtime = eval { $finaldbh->selectcol_arrayref('SELECT now()')->[0] } || 'unknown';
     $self->glog(qq{End of cleanup_mcp. Sys time: $end_systemtime. Database time: $end_dbtime}, LOG_TERSE);
 
     ## Let anyone listening know we have stopped
-    $self->db_notify($finaldbh, 'stopped', 1);
+    $self->db_notify($finaldbh, 'stopped', 1) if $end_dbtime ne 'unknown';
     $finaldbh->disconnect();
 
     ## For the very last thing, remove our own PID file

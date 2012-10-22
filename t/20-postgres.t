@@ -40,7 +40,7 @@ plan tests => $single_tests +
 pass("*** Beginning postgres tests");
 
 END {
-    $bct and $bct->stop_bucardo($dbhX);
+    $bct and $bct->stop_bucardo();
     $dbhX and $dbhX->disconnect();
     $dbhA and $dbhA->disconnect();
     $dbhB and $dbhB->disconnect();
