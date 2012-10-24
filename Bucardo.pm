@@ -2139,7 +2139,7 @@ sub start_kid {
         my $line = (caller)[2];
         $msg .= "\nLine: $line";
 
-        ## If we had a serialization error, sleep a hair before retrying
+        ## If we had a serialization error, sleep a hair, then retry
         my $gotosleep;
 
         ## Subject line tweaking later on
@@ -2165,12 +2165,33 @@ sub start_kid {
                elsif ($state eq '40001' and $config{kid_serial_sleep}) {
                    $gotosleep = $config{kid_serial_sleep};
                    $moresub = ' (serialization)';
-                   $self->glog("Could not serialize, sleeping for $gotosleep seconds", LOG_TERSE);
+                   $self->glog("Could not serialize, will sleep for $gotosleep seconds", LOG_TERSE);
+                   $dbh->rollback();
                    last;
                }
             }
         }
         $msg .= "\n";
+
+        ## If we had a serialization error, we are going to simply sleep and try again
+        if (defined $gotosleep) {
+
+            ## Roll everyone back
+            for my $dbname (@dbs_dbi) {
+                $x = $sync->{db}{$dbname};
+                my $dbh = $x->{dbh};
+                $dbh->rollback();
+            }
+            $maindbh->rollback;
+
+            ## Tell listeners we are about to sleep
+            ## TODO: Add some sweet payload information: sleep time, which dbs/tables failed, etc.
+            $self->db_notify($maindbh, "syncsleep_${syncname}");
+            $maindbh->commit();
+
+            sleep $gotosleep;
+            goto KID;
+        }
 
         ## Drop connection to the main database, then reconnect
         if (defined $maindbh and $maindbh) {
