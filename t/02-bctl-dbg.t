@@ -102,8 +102,8 @@ $bct->ctl('bucardo add herd therd bucardo_test1');
 $bct->ctl('bucardo add dbgroup foobar3 A:source B');
 $bct->ctl('bucardo add sync mysync herd=therd dbs=foobar3');
 $res = $bct->ctl('bucardo remove dbgroup foobar3');
-chomp $res;
-is ($res, q/Cannot remove database group "foobar3": it is being used by one or more syncs/, $t);
+$res =~ s/\s+$//ms;
+is ($res, q/Error running bucardo: Cannot remove database group "foobar3": it is being used by one or more syncs/, $t);
 
 $t = 'Removal of dbgroup works if used in a sync and the --force argument used';
 $res = $bct->ctl('bucardo remove dbgroup foobar3 --force');
