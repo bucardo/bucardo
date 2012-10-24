@@ -23,10 +23,10 @@ my $bct = BucardoTesting->new({location => 'postgres'})
 ## The above runs one test for each passed in database x the number of test tables
 my $numtables = keys %tabletype;
 my $numsequences = keys %sequences;
-my $single_tests = 37;
+my $single_tests = 42;
 my $check_for_row_1 = 1;
-my $check_for_row_2 = 1;
-my $check_for_row_3 = 2;
+my $check_for_row_2 = 2;
+my $check_for_row_3 = 3;
 my $check_for_row_4 = 7;
 my $check_sequences_same = 1;
 
@@ -172,6 +172,9 @@ sub d {
 ## and Bucardo should exit
 $bct->restart_bucardo($dbhX, 'bucardo_stopped');
 
+# Nothing should have been copied to B, C, or D, yet.
+$bct->check_for_row([], [qw/B C D/]);
+
 ## Activate the pg1, mtest, and samedb syncs
 is $bct->ctl('bucardo update sync pgtest1 status=active'), '', 'Activate pgtest1';
 is $bct->ctl('bucardo update sync samedb status=active'),  '', 'Activate samedb';
@@ -209,11 +212,16 @@ $bct->add_row_to_database('A', 3);
 $bct->add_row_to_database('B', 4);
 
 ## Kick off the sync.
-$bct->ctl('bucardo kick sync pgtest5 0');
+like $bct->ctl('bucardo  kick sync pgtest5 0'),
+    qr/^Kick\s+pgtest5:\s+\[0\s*s\]\s+(?:[\b]{6}\[\d+\s*s\]\s+)*DONE!/,
+    'Kick pgtest5';
 
 ## All rows should be on A and B.
 my $expected = [[1],[3],[4]];
 $bct->check_for_row($expected, [qw/A B/]);
+
+# But new rows should not be on C or D.
+$bct->check_for_row([[1]], [qw/C D/]);
 
 ## Remove the test rows from above
 $bct->remove_row_from_database('A', [3,4]);

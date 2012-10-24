@@ -2206,7 +2206,10 @@ sub start_kid {
         ## Drop all open database connections, clear out the dbrun table
         for my $dbname (@dbs_dbi) {
             $x = $sync->{db}{$dbname};
-            my $dbh = $x->{dbh};
+            my $dbh = $x->{dbh} or do {
+                $self->glog("Missing $dbname database handle", LOG_WARN);
+                next;
+            };
 
             $dbh->rollback();
             $self->glog("Disconnecting from database $dbname", LOG_DEBUG);
