@@ -2,7 +2,7 @@
 %define         sysuser postgres
 Name:           bucardo
 Version:        4.99.5
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        Postgres replication system for both multi-master and multi-slave operations
 
 Group:          Applications/Databases
@@ -13,6 +13,7 @@ BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 Source1: master-master-replication-example.txt
 Source2: bucardo.init
+Patch0:  bucardo-logfiles.patch
 
 BuildArch:     noarch
 
@@ -55,6 +56,7 @@ chown -R %{sysuser}:%{sysuser} /var/log/bucardo
 
 %prep
 %setup -q -n %{realname}-%{version}
+%patch0 -p0
 
 %build
 
@@ -99,6 +101,10 @@ rm -rf %{buildroot}
 %{_initrddir}/%{name}
 
 %changelog
+* Wed Oct 24 2012 David E. Wheeler <david@justatheory.com> - 4.99.5-3
+- Fixed the init script so that the `stop` command actually works.
+- Added a patch to point all of the log files to the log directory.
+
 * Tue Oct 2 2012 David E. Wheeler <david@justatheory.com> - 4.99.5-2
 - Require postgres.
 - Add start script running as postgres.

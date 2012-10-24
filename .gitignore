@@ -15,7 +15,7 @@ MYMETA.*
 
 ## Git stuff
 *.blame
-*.patch
+/*.patch
 *.diff
 *.orig
 *.rej
