@@ -928,7 +928,7 @@ sub ctl {
     };
 
     if ($@ =~ /Alarum/ or $info =~ /Alarum/) {
-        return "Timed out";
+        return __PACKAGE__ . ' timeout hit, giving up';
     }
     if ($@) {
         return "Error running bucardo: $@\n";

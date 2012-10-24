@@ -23,7 +23,7 @@ my $bct = BucardoTesting->new({location => 'postgres'})
 ## The above runs one test for each passed in database x the number of test tables
 my $numtables = keys %tabletype;
 my $numsequences = keys %sequences;
-my $single_tests = 42;
+my $single_tests = 61;
 my $check_for_row_1 = 1;
 my $check_for_row_2 = 2;
 my $check_for_row_3 = 3;
@@ -212,9 +212,10 @@ $bct->add_row_to_database('A', 3);
 $bct->add_row_to_database('B', 4);
 
 ## Kick off the sync.
-like $bct->ctl('bucardo  kick sync pgtest5 0'),
-    qr/^Kick\s+pgtest5:\s+\[0\s*s\]\s+(?:[\b]{6}\[\d+\s*s\]\s+)*DONE!/,
-    'Kick pgtest5';
+my $timer_regex = qr/\[0\s*s\]\s+(?:[\b]{6}\[\d+\s*s\]\s+)*/;
+like $bct->ctl('bucardo kick sync pgtest5 0'),
+    qr/^Kick\s+pgtest5:\s+${timer_regex}DONE!/,
+    'Kick pgtest5' or die 'Sync failed, no point continuing';
 
 ## All rows should be on A and B.
 my $expected = [[1],[3],[4]];
@@ -228,13 +229,19 @@ $bct->remove_row_from_database('A', [3,4]);
 $bct->remove_row_from_database('B', [3,4]);
 
 ## Switch to a 2 source, 2 target sync
-$bct->ctl('bucardo update sync pgtest5 status=inactive');
-$bct->ctl('bucardo update sync pgtest2 status=active');
-$bct->ctl('bucardo deactivate sync pgtest5');
-$bct->ctl('bucardo activate sync pgtest2 0');
+is $bct->ctl('bucardo update sync pgtest5 status=inactive'), '',
+    'set pgtest5 status=inactive';
+is $bct->ctl('bucardo update sync pgtest2 status=active'), '',
+    'Set pgtest2 status=active';
+is $bct->ctl('bucardo deactivate sync pgtest5'), "Deactivating sync pgtest5\n",
+    'Deactivate pgtest5';
+is $bct->ctl('bucardo activate sync pgtest2 0'), "Activating sync pgtest2...OK\n",
+    'Activate pgtest2';
 
 ## Clear the deleted rows above so we have a clean test below
-$bct->ctl('bucardo kick sync pgtest2 0');
+like $bct->ctl('bucardo kick sync pgtest2 0'),
+    qr/^Kick\s+pgtest2:\s+${timer_regex}DONE!/,
+    'Kick pgtest2' or die 'Sync failed, no point continuing';
 
 ## Add some rows to both masters, make sure it goes everywhere
 for my $num (2..4) {
@@ -244,13 +251,15 @@ for my $num (5..10) {
     $bct->add_row_to_database('B', $num);
 }
 
-## Kick off the sync. Everything should go to A, C, and D
-$bct->ctl('bucardo kick sync pgtest2 0');
+## Kick off the sync. Everything should go to A, B, C, and D
+like $bct->ctl('bucardo kick sync pgtest2 0'),
+    qr/^Kick\s+pgtest2:\s+${timer_regex}DONE!/,
+    'Kick pgtest2 again' or die 'Sync failed, no point continuing';
 
 ## Kick off old sync. Should fail, as the sync is inactive
-$t = q{Inactive sync times out when trying to kick};
+$t = q{Inactive sync pgtest3 should not reject kick};
 $res = $bct->ctl('bucardo kick sync pgtest3 0');
-like($res, qr/Cannot kick inactive sync/, $t);
+like($res, qr/^Cannot kick inactive sync/, $t);
 
 ## All rows should be on A, B, C, and D
 $expected = [];
@@ -258,13 +267,21 @@ push @$expected, [$_] for 1..10;
 $bct->check_for_row($expected, [qw/A B C D/]);
 
 ## Deactivate pgtest2, bring up pgtest3
-$bct->ctl('bucardo update sync pgtest2 status=inactive');
-$bct->ctl('bucardo update sync pgtest3 status=active');
-$bct->ctl('bucardo deactivate sync pgtest2');
-$bct->ctl('bucardo activate sync pgtest3 0');
+is $bct->ctl('bucardo update sync pgtest2 status=inactive'), '',
+    'Set pgtest2 status=inactive';
+is $bct->ctl('bucardo update sync pgtest3 status=active'), '',
+    'Set pgtest3 status=active';
+is $bct->ctl('bucardo deactivate sync pgtest2'),
+    "Deactivating sync pgtest2\n",
+    'Deactivate pgtest2';
+is $bct->ctl('bucardo activate sync pgtest3 0'),
+    "Activating sync pgtest3...OK\n",
+    'Activate pgtest3';
 
 ## Kick off the sync to pick up the deltas from the previous runs
-$bct->ctl('bucardo kick sync pgtest3 0');
+like $bct->ctl('bucardo kick sync pgtest3 0'),
+    qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
+    'Kick pgtest3' or die 'Sync failed, no point continuing';
 
 ## This one has three sources: A, B, and C. Remove rows from each
 $bct->remove_row_from_database('A', 10);
@@ -277,7 +294,9 @@ $bct->remove_row_from_database('C', 2);
 $bct->remove_row_from_database('C', 1);
 
 ## Kick it off
-$bct->ctl('bucardo kick sync pgtest3 0');
+like $bct->ctl('bucardo kick sync pgtest3 0'),
+    qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
+    'Kick pgtest3 again' or die 'Sync failed, no point continuing';
 
 ## Only rows left everywhere should be 3 and 7
 $bct->check_for_row([[3],[7]], [qw/A B C D/]);
@@ -291,7 +310,9 @@ $bct->add_row_to_database('B', 2);
 $bct->add_row_to_database('C', 2);
 
 ## Kick and check everyone is the same
-$bct->ctl('bucardo kick sync pgtest3 0');
+like $bct->ctl('bucardo kick sync pgtest3 0'),
+    qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
+    'Kick pgtest3 yet again' or die 'Sync failed, no point continuing';
 $bct->check_for_row([[1],[2],[3],[7]], [qw/A B C D/]);
 
 ## Change sequence information, make sure it gets out to everyone
@@ -302,7 +323,10 @@ $dbhB->commit();
 $dbhC->do(q{SELECT setval('bucardo_test_seq3', 12345)});
 $dbhC->commit();
 
-$bct->ctl('bucardo kick sync pgtest3 0');
+like $bct->ctl('bucardo kick sync pgtest3 0'),
+    qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
+    'Kick pgtest3 once more' or die 'Sync failed, no point continuing';
+
 $bct->check_sequences_same([qw/A B C D/]);
 
 ## Create a PK conflict and let B "win" due to the timestamp
@@ -315,9 +339,10 @@ $dbhC->commit();
 $dbhB->commit();
 $dbhA->commit();
 
-$bct->ctl('bucardo kick sync pgtest3 0');
+like $bct->ctl('bucardo kick sync pgtest3 0'),
+    qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
+    'Kick pgtest3 LIKE A BOSS' or die 'Sync failed, no point continuing';
 $bct->check_for_row([[1],[2],[3],[7]], [qw/A B C D/]);
-
 
 $SQL = 'SELECT data1 FROM bucardo_test1 WHERE id = ?';
 $val = $dbhA->selectall_arrayref($SQL, undef, 3)->[0][0];
@@ -336,7 +361,9 @@ $bct->truncate_all_tables('A');
 $dbhC->do('TRUNCATE TABLE bucardo_test5');
 ## We commit everyone as the truncates will block on open transactions
 $dbhX->commit(); $dbhA->commit(); $dbhB->commit(); $dbhC->commit(); $dbhD->commit();
-$bct->ctl('bucardo kick sync pgtest3 0');
+like $bct->ctl('bucardo kick sync pgtest3 0'),
+    qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
+    'Kick pgtest3 like a mofo' or die 'Sync failed, no point continuing';
 $bct->check_for_row([], [qw/A B C D/], 'truncate A');
 
 ## A truncate plus delta rows will truncate all others but keep delta rows
@@ -354,13 +381,18 @@ $bct->add_row_to_database('B', 6);
 $bct->add_row_to_database('C', 7);
 $bct->add_row_to_database('D', 8);
 ## Kick off the sync. C should win (D is target), truncate the others, then propagate '7'
-$bct->ctl('bucardo kick sync pgtest3 0');
+like $bct->ctl('bucardo kick sync pgtest3 0'),
+    qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
+    'Kick pgtest3 like a it\'s going out of style'
+    or die 'Sync failed, no point continuing';
 $bct->check_for_row([[7]], [qw/A B C D/], 'truncate D');
 
 ## Make sure we can go back to normal mode after a truncate
 $bct->add_row_to_database('A', 2);
 $bct->add_row_to_database('B', 3);
-$bct->ctl('bucardo kick sync pgtest3 0');
+like $bct->ctl('bucardo kick sync pgtest3 0'),
+    qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
+    'Kick pgtest3 like it hurts' or die 'Sync failed, no point continuing';
 $bct->check_for_row([[2],[3],[7]], [qw/A B C D/]);
 
 ## Tests of customcols
@@ -372,7 +404,9 @@ like($res, qr/\QNew columns for public.bucardo_test1: "SELECT id, data1, inty*30
 $bct->restart_bucardo($dbhX);
 
 $bct->add_row_to_database('A', 1);
-$bct->ctl('bucardo kick sync pgtest3 0');
+like $bct->ctl('bucardo kick sync pgtest3 0'),
+    qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
+    'Kick pgtest3 again for the road' or die 'Sync failed, no point continuing';
 $bct->check_for_row([[1],[2],[3],[7]], [qw/A B C/]);
 $bct->check_for_row([[1],[2],[3],[7]], [qw/D/], 'customcols', '!test1');
 $bct->check_for_row([[2],[3],[7],[30]], [qw/D/], 'customcols', 'test1');
