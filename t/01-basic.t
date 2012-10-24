@@ -18,7 +18,7 @@ my @test_files = grep { /\.t$/ } readdir $dh;
 closedir $dh or warn qq{Could not close the 't' directory: $!\n};
 
 opendir $dh, 'scripts' or die qq{Could not open the 'scripts' directory};
-my @script_files = grep { /^[a-z]/ and ! /\.(?:rc|init|spec)$/ } readdir $dh;
+my @script_files = grep { /^[a-z]/ } readdir $dh;
 closedir $dh or warn qq{Could not close the 'scripts' directory: $!\n};
 
 plan tests => @important_files + @test_files + @script_files;

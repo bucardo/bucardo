@@ -1,0 +1,15 @@
+This directory contains various distribution configuration files,
+patches, and start scripts.
+
+* bucardo.rc
+
+Sample BSD rc file for controlling Bucardo
+
+* bucardo.init
+
+Sample chkconfig-style start script for controlling Bucardo
+
+* bucardo.spec
+
+RPM spec file.
+
