@@ -23,7 +23,7 @@ my $bct = BucardoTesting->new({location => 'postgres'})
 ## The above runs one test for each passed in database x the number of test tables
 my $numtables = keys %tabletype;
 my $numsequences = keys %sequences;
-my $single_tests = 38;
+my $single_tests = 37;
 my $check_for_row_1 = 1;
 my $check_for_row_2 = 1;
 my $check_for_row_3 = 2;
