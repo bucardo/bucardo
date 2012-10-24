@@ -13,3 +13,6 @@ Sample chkconfig-style start script for controlling Bucardo
 
 RPM spec file.
 
+* bucardo-logfiles.patch
+
+Patch to set the default directory for log files to /var/log/bucardo.
