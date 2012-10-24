@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/env perl -w
 # -*-mode:cperl; indent-tabs-mode: nil; cperl-indent-level: 4-*-
 
 ## Script to control Bucardo
@@ -4804,8 +4804,6 @@ sub kick {
             $QUIET or print qq{Kick $sync: };
             $dbh->do(qq{LISTEN "$done"});
             $dbh->do(qq{LISTEN "$killed"});
-            my $s = $SYNC->{$sync};
-            $dbh->do(qq{LISTEN "bucardo_syncdone_$sync"});
             $dbh->commit();
 
             my $time = time;
