@@ -2140,7 +2140,7 @@ sub start_kid {
         $msg .= "\nLine: $line";
 
         ## If we had a serialization error, sleep a hair before retrying
-        my $gotosleep = 0;
+        my $gotosleep;
 
         ## Subject line tweaking later on
         my $moresub = '';
@@ -2245,7 +2245,7 @@ sub start_kid {
         }
 
         ## Sleep if we figured out we should above (e.g. serialization error)
-        sleep $gotosleep if $gotosleep;
+        sleep $gotosleep if defined $gotosleep;
 
         ## Send an email as needed (never for clean exit)
         if (! $self->{clean_exit} and $self->{sendmail} or $self->{sendmail_file}) {
