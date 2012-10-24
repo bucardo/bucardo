@@ -23,7 +23,7 @@ my $bct = BucardoTesting->new({location => 'postgres'})
 ## The above runs one test for each passed in database x the number of test tables
 my $numtables = keys %tabletype;
 my $numsequences = keys %sequences;
-my $single_tests = 35;
+my $single_tests = 38;
 my $check_for_row_1 = 1;
 my $check_for_row_2 = 1;
 my $check_for_row_3 = 2;
@@ -135,6 +135,7 @@ $dbhA->do($SQL);
 $dbhA->commit();
 $dbhB->do($SQL);
 $dbhB->commit();
+
 ## Create a herd for same-database testing
 $t = q{Created a new herd sameherd};
 $res = $bct->ctl('bucardo add herd sameherd bucardo_test1');
@@ -172,9 +173,9 @@ sub d {
 $bct->restart_bucardo($dbhX, 'bucardo_stopped');
 
 ## Activate the pg1, mtest, and samedb syncs
-$bct->ctl('bucardo update sync pgtest1 status=active');
-$bct->ctl('bucardo update sync mtest status=active');
-$bct->ctl('bucardo update sync samedb status=active');
+is $bct->ctl('bucardo update sync pgtest1 status=active'), '', 'Activate pgtest1';
+is $bct->ctl('bucardo update sync msync status=active'),   '', 'Activate msync';
+is $bct->ctl('bucardo update sync samedb status=active'),  '', 'Activate samedb';
 
 ## Start listening for a syncdone message
 ## Bucardo should fire the sync off right away without a kick
