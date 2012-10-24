@@ -2160,11 +2160,13 @@ sub start_kid {
                if ($state eq '40P01' and $x->{dbtype} eq 'postgres') {
                    $msg .= $self->get_deadlock_details($dbh, $msg);
                    $moresub = ' (deadlock)';
+                   last;
                }
                elsif ($state eq '40001' and $config{kid_serial_sleep}) {
                    $gotosleep = $config{kid_serial_sleep};
                    $moresub = ' (serialization)';
                    $self->glog("Could not serialize, sleeping for $gotosleep seconds", LOG_TERSE);
+                   last;
                }
             }
         }
