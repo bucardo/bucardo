@@ -913,7 +913,7 @@ sub ctl {
     $args =~ s/^\s+//s;
 
     ## Allow the caller to look better
-    $args =~ s/^bucardo//;
+    $args =~ s/^bucardo\s+//;
 
     ## Set a timeout
     alarm 0;
@@ -922,6 +922,8 @@ sub ctl {
         alarm $ALARM_BUCARDO;
         debug("Connection options: $connopts Args: $args", 3);
         $info = qx{$ctl $connopts $args 2>&1};
+        debug("Exit value: $?", 3);
+        die $info if $? != 0;
         alarm 0;
     };
 

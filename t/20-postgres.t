@@ -200,10 +200,12 @@ $res = $dbhA->selectall_arrayref($SQL);
 is_deeply($res, [[1]], $t);
 
 ## Switch to a 2 source sync
-$bct->ctl('bucardo update sync pgtest1 status=inactive');
-$bct->ctl('bucardo update sync pgtest5 status=active');
-$bct->ctl('bucardo deactivate sync pgtest1');
-$bct->ctl('bucardo activate sync pgtest5 0');
+is $bct->ctl('bucardo update sync pgtest1 status=inactive'), '', 'Set pgtest1 status=inactive';
+is $bct->ctl('bucardo update sync pgtest5 status=active'), '', 'Set pgtest5 status=active';
+is $bct->ctl('bucardo deactivate pgtest1'), "Deactivating sync pgtest1\n",
+    'Deactivate pgtest1';
+is $bct->ctl('bucardo activate pgtest5 0'), "Activating sync pgtest5...OK\n",
+    'Activate pgtest5';
 ## Add some rows to both masters, make sure it goes everywhere
 $bct->add_row_to_database('A', 3);
 $bct->add_row_to_database('B', 4);
@@ -211,7 +213,7 @@ $bct->add_row_to_database('B', 4);
 ## Kick off the sync.
 $bct->ctl('bucardo kick sync pgtest5 0');
 
-## All rows should be on A, B, C, and D
+## All rows should be on A and B.
 my $expected = [[1],[3],[4]];
 $bct->check_for_row($expected, [qw/A B/]);
 

@@ -1363,20 +1363,18 @@ sub update_item {
     ## Account for variations and abbreviations
     $thing = standardize_name($thing);
 
-    ## These do return due to recursion, so we must exit afterwards
-    (update_customcode() or exit 1) if $thing eq 'customcode';
-    ## We do not update customname or customcols
-    ## The dbgroup must be checked before the database (dbg vs db)
-    (update_database(@nouns) or exit 1) if $thing eq 'database';
-    (update_dbgroup(@nouns)  or exit 1) if $thing eq 'dbgroup';
-    (update_herd(@nouns)     or exit 1) if $thing eq 'herd';
-    (update_sync(@nouns)     or exit 1) if $thing eq 'sync';
-    (update_table(@nouns)    or exit 1) if $thing eq 'table' or $thing eq 'sequence';
+    my $code = $thing eq 'customcode' ? \&update_customcode
+             : $thing eq 'database'   ? \&update_database
+             : $thing eq 'dbgroup'    ? \&update_dbgroup
+             : $thing eq 'herd'       ? \&update_herd
+             : $thing eq 'sync'       ? \&update_sync
+             : $thing eq 'table'      ? \&update_table
+             : $thing eq 'sequence'   ? \&update_table
+             :                          do { warn "$usage\n"; exit 1; };
 
-    ## If we got this far, we have an unknown thing
-    warn "$usage\n";
-    exit 1;
-
+    ## The update function returns, due to recursion, so we must exit.
+    $code->(@nouns);
+    exit 0;
 } ## end of update_item
 
 
@@ -10204,14 +10202,14 @@ How long it has been since the last sync failure
 
 =item B<activate>
 
-  bucardo syncname [syncname2 syncname3 ...] [timeout]
+  bucardo activate syncname [syncname2 syncname3 ...] [timeout]
 
 Activates one or more named syncs. If given a timeout argument, it will wait until it has received 
 confirmation from Bucardo that each sync has been successfully activated.
 
 =item B<deactivate>
 
-  bucardo syncname [syncname2 syncname3 ...] [timeout]
+  bucardo deactivate syncname [syncname2 syncname3 ...] [timeout]
 
 Deactivates one or more named syncs. If given a timeout argument, it will wait until it has received 
 confirmation from Bucardo that the sync has been successfully deactivated.
