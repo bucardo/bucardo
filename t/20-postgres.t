@@ -174,13 +174,11 @@ $bct->restart_bucardo($dbhX, 'bucardo_stopped');
 
 ## Activate the pg1, mtest, and samedb syncs
 is $bct->ctl('bucardo update sync pgtest1 status=active'), '', 'Activate pgtest1';
-is $bct->ctl('bucardo update sync msync status=active'),   '', 'Activate msync';
 is $bct->ctl('bucardo update sync samedb status=active'),  '', 'Activate samedb';
 
 ## Start listening for a syncdone message
 ## Bucardo should fire the sync off right away without a kick
 $dbhX->do('LISTEN bucardo_syncdone_pgtest1');
-$dbhX->do('LISTEN bucardo_syncdone_mtest');
 $dbhX->do('LISTEN bucardo_syncdone_samedb');
 $dbhX->commit();
 

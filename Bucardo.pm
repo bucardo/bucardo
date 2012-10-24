@@ -2686,6 +2686,8 @@ sub start_kid {
         if ($kidsalive) {
 
             my $nlist = $self->db_get_notices($maindbh);
+            use Data::Dumper;
+            $self->glog("For $syncname, got: " . Dumper($nlist), LOG_DEBUG);
 
             for my $name (sort keys %{ $nlist }) {
 
