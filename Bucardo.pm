@@ -1042,6 +1042,15 @@ sub mcp_main {
                 }
             }
 
+            # Serialization failed and now the child is gonna sleep.
+            elsif ($name =~ /^syncsleep_(.+)/o) {
+                my $syncname = $1;
+                $self->glog("Sync $syncname could not serialize, will sleep", LOG_DEBUG);
+
+                ## Echo out to anyone listening
+                $self->db_notify($maindbh, $name, 1);
+            }
+
             ## Should not happen, but let's at least log it
             else {
                 $self->glog("Warning: received unknown message $name from $npid!", LOG_TERSE);
@@ -3791,7 +3800,7 @@ sub start_kid {
                         ## XXX all table changes therein come from that database.
                         ## XXX No need if we only have a single table, of course, or if there were 
                         ## XXX no possible conflicting changes.
-                        ## XXX Finally, we skip if the firsst run already had a canonical winner
+                        ## XXX Finally, we skip if the first run already had a canonical winner
                         if (!$g->{has_exception_code}) {
                             $self->glog("Warning! Aborting due to exception for $S.$T:$pkval Error was $err", LOG_WARN);
                             die "$err\n";
@@ -4554,9 +4563,10 @@ sub start_kid {
 
         ## Disconnect from all the databases used in this sync
         for my $dbname (@dbs_dbi) {
-            $x = $sync->{db}{$dbname};
-            $x->{dbh}->rollback();
-            $x->{dbh}->disconnect();
+            my $dbh  $sync->{db}{$dbname}{dbh};
+            $dbh->rollback();
+            $_->finish for values %{ $dbh->{CachedKids} };
+            $dbh->disconnect();
         }
 
         if ($sync->{onetimecopy}) {
