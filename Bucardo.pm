@@ -4608,7 +4608,8 @@ sub start_kid {
 
         ## Tell listeners we are about to sleep
         ## TODO: Add some sweet payload information: sleep time, which dbs/tables failed, etc.
-        $self->db_notify($maindbh, "syncsleep_${syncname}");
+        my $payload = "Sleep time: $sleeptime";
+        $self->db_notify($maindbh, "syncsleep_${syncname}", 0, $payload);
         $maindbh->commit;
 
         ## Sleep and try again.
