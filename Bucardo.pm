@@ -4582,7 +4582,6 @@ sub start_kid {
         exit 0 if $didrun;
 
         my $err = $@;
-        $self->glog("CAUGHT ERROR: $err", LOG_DEBUG);
         $err_handler->($err) if $err !~ /DBD::Pg/;
         $err_handler->($err) unless defined (my $sleeptime = $config{kid_serial_sleep});
         $err_handler->($err) unless first { $sync->{db}{$_}{dbh}->state eq '40001' } @dbs_dbi;
