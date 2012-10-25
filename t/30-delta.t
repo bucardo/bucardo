@@ -107,7 +107,7 @@ for my $table (sort keys %tabletype) {
 
     $t = "The delta table $deltatable contains the correct id";
     $SQL = qq{SELECT $pkeyname FROM bucardo."$deltatable"};
-    $dbhA->do(q{SET TIME ZONE 'GMT'});
+    $dbhA->do(q{SET TIME ZONE 'UTC'});
     $res = $dbhA->selectall_arrayref($SQL);
     my $type = $tabletype{$table};
     my $val1 = $val{$type}{1};

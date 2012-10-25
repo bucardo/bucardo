@@ -608,7 +608,7 @@ sub connect_database {
         }
     }
 
-    $dbh->do('SET TIME ZONE GMT');
+    $dbh->do(q{SET TIME ZONE 'UTC'});
 
     $dbh->commit();
 
