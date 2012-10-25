@@ -31,6 +31,7 @@ use IO::Handle    qw( autoflush          ); ## Used to prevent stdout/stderr buf
 use Sys::Syslog   qw( openlog syslog     ); ## In case we are logging via syslog()
 use Net::SMTP     qw(                    ); ## Used to send out email alerts
 use boolean       qw( true false         ); ## Used to send truthiness to MongoDB
+use List::Util    qw( first              ); ## Better than grep
 use MIME::Base64  qw( encode_base64
                       decode_base64      ); ## For making text versions of bytea primary keys
 
@@ -567,7 +568,7 @@ sub start_mcp {
 
     ## From this point forward, we want to die gracefully
     ## We setup our own subroutine to catch any die signals
-    $SIG{__DIE__} = sub {
+    local $SIG{__DIE__} = sub {
 
         ## Arguments: one
         ## 1. The error message
@@ -644,7 +645,7 @@ sub start_mcp {
     $self->glog("Active syncs: $active_syncs", LOG_TERSE);
 
     ## We want to reload everything if someone HUPs us
-    $SIG{HUP} = sub {
+    local $SIG{HUP} = sub {
         $self->reload_mcp();
     };
 
@@ -1257,13 +1258,13 @@ sub start_controller {
     $mailmsg .= "$msg\n";
 
     ## Allow the MCP to signal us (request to exit)
-    $SIG{USR1} = sub {
+    local $SIG{USR1} = sub {
         ## Do not change this message: looked for in the controller DIE sub
         die "MCP request\n";
     };
 
     ## From this point forward, we want to die gracefully
-    $SIG{__DIE__} = sub {
+    local $SIG{__DIE__} = sub {
 
         ## Arguments: one
         ## 1. Error message
@@ -1936,7 +1937,7 @@ sub start_kid {
     my $kidloop = 0;
 
     ## Catch USR1 errors as a signal from the parent CTL process to exit right away
-    $SIG{USR1} = sub {
+    local $SIG{USR1} = sub {
         ## Mostly so we do not send an email:
         $self->{clean_exit} = 1;
         die "CTL request\n";
@@ -2124,8 +2125,11 @@ sub start_kid {
     };
     $sth{dbrun_delete} = $maindbh->prepare($SQL{dbrun_delete});
 
+    ## Disable the CTL exception handler.
+    local $SIG{__DIE__};
+
     ## Fancy exception handler to clean things up before leaving.
-    $SIG{__DIE__} = sub {
+    my $err_handler = sub {
 
         ## Arguments: one
         ## 1. Error message
@@ -2138,9 +2142,6 @@ sub start_kid {
         ## Where did we die?
         my $line = (caller)[2];
         $msg .= "\nLine: $line";
-
-        ## If we had a serialization error, sleep a hair, then retry
-        my $gotosleep;
 
         ## Subject line tweaking later on
         my $moresub = '';
@@ -2162,36 +2163,9 @@ sub start_kid {
                    $moresub = ' (deadlock)';
                    last;
                }
-               elsif ($state eq '40001' and $config{kid_serial_sleep}) {
-                   $gotosleep = $config{kid_serial_sleep};
-                   $moresub = ' (serialization)';
-                   $self->glog("Could not serialize, will sleep for $gotosleep seconds", LOG_TERSE);
-                   $dbh->rollback();
-                   last;
-               }
             }
         }
         $msg .= "\n";
-
-        ## If we had a serialization error, we are going to simply sleep and try again
-        if (defined $gotosleep) {
-
-            ## Roll everyone back
-            for my $dbname (@dbs_dbi) {
-                $x = $sync->{db}{$dbname};
-                my $dbh = $x->{dbh};
-                $dbh->rollback();
-            }
-            $maindbh->rollback;
-
-            ## Tell listeners we are about to sleep
-            ## TODO: Add some sweet payload information: sleep time, which dbs/tables failed, etc.
-            $self->db_notify($maindbh, "syncsleep_${syncname}");
-            $maindbh->commit();
-
-            sleep $gotosleep;
-            goto KID;
-        }
 
         ## Drop connection to the main database, then reconnect
         if (defined $maindbh and $maindbh) {
@@ -2268,9 +2242,6 @@ sub start_kid {
             $self->glog($flatmsg, LOG_TERSE);
         }
 
-        ## Sleep if we figured out we should above (e.g. serialization error)
-        sleep $gotosleep if defined $gotosleep;
-
         ## Send an email as needed (never for clean exit)
         if (! $self->{clean_exit} and $self->{sendmail} or $self->{sendmail_file}) {
             my $warn = $msg =~ /CTL.+request/ ? '' : 'Warning! ';
@@ -2319,8 +2290,21 @@ sub start_kid {
 
         exit 1;
 
-    }; ## end SIG{__DIE_} handler sub
+    }; ## end $err_handler
 
+    my $stop_sync_request = "stopsync_$syncname";
+    ## Tracks how long it has been since we last ran a ping against our databases
+    my $lastpingcheck = 0;
+
+    ## Row counts from the delta tables:
+    my %deltacount;
+
+    ## Count of changes made (inserts,deletes,truncates,conflicts handled):
+    my %dmlcount;
+
+    my $did_setup = 0;
+    local $@;
+    eval {
     ## Listen for the controller asking us to go again if persistent
     if ($kidsalive) {
         $self->db_listen( $maindbh, "kid_run_$syncname" );
@@ -2331,7 +2315,6 @@ sub start_kid {
     $self->db_listen( $maindbh, "kid_$kidping" );
 
     ## Listen for a sync-wide exit signal
-    my $stop_sync_request = "stopsync_$syncname";
     $self->db_listen( $maindbh, "kid_$stop_sync_request" );
 
     ## Prepare all of our SQL
@@ -2628,15 +2611,6 @@ sub start_kid {
 
     }
 
-    ## Tracks how long it has been since we last ran a ping against our databases
-    my $lastpingcheck = 0;
-
-    ## Row counts from the delta tables:
-    my %deltacount;
-
-    ## Count of changes made (inserts,deletes,truncates,conflicts handled):
-    my %dmlcount;
-
     ## Create safe versions of the database handles if we are going to need them
     if ($sync->{need_safe_dbh_strict} or $sync->{need_safe_dbh}) {
 
@@ -2666,10 +2640,14 @@ sub start_kid {
         }
 
     } ## end DBIX::Safe creations
+    $did_setup = 1;
+};
+    $err_handler->(@_) if !$did_setup;
 
     ## Begin the main KID loop
-  KID: {
-
+    my $didrun = 0;
+    my $runkid = sub {
+      KID: {
         ## Leave right away if we find a stopfile
         if (-e $self->{stopfile}) {
             $self->glog(qq{Found stopfile "$self->{stopfile}": exiting}, LOG_WARN);
@@ -2689,8 +2667,6 @@ sub start_kid {
         if ($kidsalive) {
 
             my $nlist = $self->db_get_notices($maindbh);
-            use Data::Dumper;
-            $self->glog("For $syncname, got: " . Dumper($nlist), LOG_DEBUG);
 
             for my $name (sort keys %{ $nlist }) {
 
@@ -3693,9 +3669,6 @@ sub start_kid {
                     ## This label is solely to localize the DIE signal handler
                   LOCALDIE: {
 
-                        ## Temporarily override our kid-level handler due to the eval
-                        local $SIG{__DIE__} = sub {};
-
                         $sth{kid_syncrun_update_status}->execute("Sync $S.$T (KID $$)", $syncname);
                         $maindbh->commit();
 
@@ -3810,7 +3783,7 @@ sub start_kid {
                         chomp $@;
                         (my $err = $@) =~ s/\n/\\n/g;
 
-                        ## If we have no exception code, we simply pass to our __DIE__ sub
+                        ## If we have no exception code, we simply die to pass control to $err_handler.
                         ## XXX If no handler, we want to rewind and try again ourselves
                         ## XXX But this time, we want to enter a more aggressive conflict resolution mode
                         ## XXX Specifically, we need to ensure that a single database "wins" and that
@@ -4575,33 +4548,61 @@ sub start_kid {
         }
 
         redo KID;
+      } ## end KID
 
-    } ## end KID
+        ## Disconnect from all the databases used in this sync
+        for my $dbname (@dbs_dbi) {
+            $x = $sync->{db}{$dbname};
+            $x->{dbh}->rollback();
+            $x->{dbh}->disconnect();
+        }
 
-    ## Disconnect from all the databases used in this sync
-    for my $dbname (@dbs_dbi) {
-        $x = $sync->{db}{$dbname};
+        if ($sync->{onetimecopy}) {
+            ## XXX
+            ## We need the MCP and CTL to pick up the new setting. This is the
+            ## easiest way: First we sleep a second, to make sure the CTL has
+            ## picked up the syncdone signal. It may resurrect a kid, but it
+            ## will at least have the correct onetimecopy
+            #sleep 1;
+            #$maindbh->do("NOTIFY reload_sync_$syncname");
+            #$maindbh->commit();
+        }
 
-        $x->{dbh}->rollback();
-        $x->{dbh}->disconnect();
+        ## Disconnect from the main database
+        $maindbh->disconnect();
+
+        $self->cleanup_kid('Normal exit', '');
+
+        $didrun = 1;
+    }; ## end $runkid
+
+    ## Do the actual work.
+    RUNKID: {
+        eval { $runkid->() };
+        exit 0 if $didrun;
+
+        my $err = $@;
+        $self->glog("CAUGHT ERROR: $err", LOG_DEBUG);
+        $err_handler->($err) if $err !~ /DBD::Pg/;
+        $err_handler->($err) unless defined (my $sleeptime = $config{kid_serial_sleep});
+        $err_handler->($err) unless first { $sync->{db}{$_}{dbh}->state eq '40001' } @dbs_dbi;
+
+        ## We have a serialization failure and need to sleep on it.
+        $self->glog("Could not serialize, will sleep for $sleeptime seconds", LOG_TERSE);
+
+        ## Roll everyone back
+        $sync->{db}{$_}{dbh}->rollback for @dbs_dbi;
+        $maindbh->rollback;
+
+        ## Tell listeners we are about to sleep
+        ## TODO: Add some sweet payload information: sleep time, which dbs/tables failed, etc.
+        $self->db_notify($maindbh, "syncsleep_${syncname}");
+        $maindbh->commit;
+
+        ## Sleep and try again.
+        sleep $sleeptime;
+        redo RUNKID;
     }
-
-    if ($sync->{onetimecopy}) {
-        ## XXX
-        ## We need the MCP and CTL to pick up the new setting. This is the easiest way:
-        ## First we sleep a second, to make sure the CTL has picked up the syncdone 
-        ## signal. It may resurrect a kid, but it will at least have the correct onetimecopy
-        #sleep 1;
-        #$maindbh->do("NOTIFY reload_sync_$syncname");
-        #$maindbh->commit();
-    }
-
-    ## Disconnect from the main database
-    $maindbh->disconnect();
-
-    $self->cleanup_kid('Normal exit', '');
-
-    exit 0;
 
 } ## end of start_kid
 
@@ -6287,13 +6288,13 @@ sub fork_vac {
     $self->glog($msg, LOG_TERSE);
 
     ## Allow the MCP to signal us (request to exit)
-    $SIG{USR1} = sub {
+    local $SIG{USR1} = sub {
         ## Do not change this message: looked for in the controller DIE sub
         die "MCP request\n";
     };
 
     ## From this point forward, we want to die gracefully
-    $SIG{__DIE__} = sub {
+    local $SIG{__DIE__} = sub {
 
         ## Arguments: one
         ## 1. Error message
