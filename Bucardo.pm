@@ -4563,7 +4563,7 @@ sub start_kid {
 
         ## Disconnect from all the databases used in this sync
         for my $dbname (@dbs_dbi) {
-            my $dbh  $sync->{db}{$dbname}{dbh};
+            my $dbh = $sync->{db}{$dbname}{dbh};
             $dbh->rollback();
             $_->finish for values %{ $dbh->{CachedKids} };
             $dbh->disconnect();
