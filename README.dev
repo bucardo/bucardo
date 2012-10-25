@@ -120,8 +120,6 @@ t/09-uniqueconstraint.t - Test of customcode with pushdelta
 
 t/10-makedelta.t - Test of makedelta functionality
 
-t/11-customselect.t - Test of customselect
-
 t/12-addtable.t - Test adding new tables
 
 t/13-ddl.t - Test pushing DDL (not complete yet)

@@ -3875,7 +3875,6 @@ sub add_sync {
         lifetime                 lifetime             interval         null
         maxkicks                 maxkicks             numeric          null
         rebuild_index|rebuildindex   rebuild_index    numeric          null
-        customselect|usecustomselect usecustomselect  TF               null
         tables                   tables               0                skip
     };
 
@@ -5208,7 +5207,7 @@ sub status_detail {
         }
 
         ## Should be 'yes' or 'no'
-        for (qw/analyze_after_copy vacuum_after_copy stayalive kidsalive ping do_listen usecustomselect/) {
+        for (qw/analyze_after_copy vacuum_after_copy stayalive kidsalive ping do_listen/) {
             $s->{$_} = (defined $s->{$_} and $s->{$_}) ? 'yes' : 'no ';
         }
 
@@ -5233,9 +5232,6 @@ sub status_detail {
         push @items => ['Onetimecopy'          => $s->{onetimecopy} ? 'Yes' : 'No'];
 
         ## Only show these if enabled
-        if ($s->{usecustomselect} eq 'yes') {
-            push @items => ['Custom select', $s->{usecustomselect}];
-        }
         if ($s->{analyze_after_copy} eq 'yes') {
             push @items => ['Post-copy analyze', 'Yes'];
         }
@@ -6977,6 +6973,8 @@ sub upgrade {
 
     my @dropped_columns = (
         ['bucardo', 'sync', 'limitdbs'],
+        ['bucardo', 'goat', 'customselect'],
+        ['bucardo', 'sync', 'usecustomselect'],
     );
 
     my @altered_columns = (
@@ -9807,13 +9805,6 @@ Boolean indicating whether or not to track syncrhonization rates.
 
 Boolean indicating whether or not to rebuild indexes after every sync. Off by
 default. Optional.
-
-=item C<customselect>
-
-Boolean indicating whether or not to use a custom C<SELECT> statement, which
-is only supported for a C<onetimecopy>. Deprecated in favor of
-L<adding C<customcols> objects|/customcols>.
-XXX Where does one specify the custom query?
 
 =back
 

@@ -257,7 +257,6 @@ CREATE TABLE bucardo.goat (
   pkeytype           TEXT            NULL,
   has_delta          BOOLEAN     NOT NULL DEFAULT 'false',
   ping               BOOLEAN         NULL,                 -- overrides sync-level ping
-  customselect       TEXT            NULL,
   standard_conflict  TEXT            NULL,
   makedelta          BOOLEAN         NULL,
   rebuild_index      SMALLINT        NULL DEFAULT 0,       -- overrides sync-level rebuild_index
@@ -276,8 +275,6 @@ COMMENT ON TABLE bucardo.goat IS $$Holds information on each table or sequence t
 ALTER TABLE bucardo.goat ADD CONSTRAINT has_schemaname CHECK (length(schemaname) > 1);
 
 ALTER TABLE bucardo.goat ADD CONSTRAINT valid_reltype CHECK (reltype IN ('table','sequence'));
-
-ALTER TABLE bucardo.goat ADD CONSTRAINT custom_needs_pkey CHECK (customselect IS NULL OR length(pkey) > 1);
 
 ALTER TABLE bucardo.goat ADD CONSTRAINT pkey_needs_type CHECK (pkey = '' OR pkeytype IS NOT NULL);
 
@@ -393,7 +390,6 @@ CREATE TABLE bucardo.sync (
   stayalive          BOOLEAN     NOT NULL DEFAULT 'true', -- Does the sync controller stay connected?
   kidsalive          BOOLEAN     NOT NULL DEFAULT 'true', -- Do the children stay connected?
   standard_conflict  TEXT        NOT NULL DEFAULT '',
-  usecustomselect    BOOLEAN     NOT NULL DEFAULT 'false',
   copyextra          TEXT        NOT NULL DEFAULT '',  -- e.g. WITH OIDS
   deletemethod       TEXT        NOT NULL DEFAULT 'delete',
   ping               BOOLEAN     NOT NULL DEFAULT true,      -- Are we issuing NOTICES via triggers?
@@ -2041,8 +2037,6 @@ SELECT 'Fixme'::TEXT;
                 $col{db} = $dbname;
             }
             else { ## Seen this before, so check against canonical list
-
-                ## Todo: customselect
 
                 ## First, any columns that exist on a source but not this one is not allowed
                 for my $c1 (sort keys %{$col{$t}}) {

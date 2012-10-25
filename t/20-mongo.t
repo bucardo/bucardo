@@ -361,7 +361,7 @@ for my $table (keys %tabletype) {
 }
 
 
-## Test of customselect options
+## Test of customname options
 $dbhX->do('DELETE FROM bucardo.customname');
 
 ## Add a new suffix to the end of each table in this sync for mongo
@@ -392,14 +392,14 @@ for my $table (keys %tabletype2) {
 }
 
 
-$t=q{Using customselect, we can force a text string to an int};
+$t=q{Using customname, we can force a text string to an int};
 my $CS = 'SELECT id, data1 AS data2inty::INTEGER, inty, email FROM bucardo.bucardo_test2';
 ## Set this one for this db and this sync
 $bct->ctl('bucardo add cs db=M sync=mongo table=ttable');
 
-$t=q{Using customselect, we can restrict the columns sent};
+$t=q{Using customname, we can restrict the columns sent};
 
-$t=q{Using customselect, we can add new columns and modify others};
+$t=q{Using customname, we can add new columns and modify others};
 ## Set this one for all syncs
 
 pass('Done with mongo testing');

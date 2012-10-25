@@ -982,7 +982,7 @@ sub mcp_main {
 
                     ## Only certain things can be changed "on the fly"
                     for my $val (qw/checksecs stayalive do_listen deletemethod status ping
-                                    analyze_after_copy vacuum_after_copy targetgroup targetdb usecustomselect
+                                    analyze_after_copy vacuum_after_copy targetgroup targetdb
                                     onetimecopy lifetimesecs maxkicks rebuild_index/) {
                         $sync->{$syncname}{$val} = $self->{sync}{$syncname}{$val} = $info->{$val};
                     }
@@ -5819,24 +5819,6 @@ sub validate_sync {
 
         next if $g->{reltype} ne 'table';
 
-        ## Customselect may be null, so force to a false value
-        ## XXX Customselect has been superceded by customcols
-        $g->{customselect} ||= '';
-        my $do_customselect = ($g->{customselect} and $s->{usecustomselect}) ? 1 : 0;
-        if ($do_customselect) {
-            if (! $s->{fullcopy}) {
-                my $msg = qq{Warning: Custom select can only be used for fullcopy\n};
-                $self->glog($msg, LOG_WARN);
-                warn $msg;
-                return 0;
-            }
-            $self->glog(qq{Transforming custom select query "$g->{customselect}"}, LOG_NORMAL);
-            $sth = $srcdbh->prepare("SELECT * FROM ($g->{customselect}) AS foo LIMIT 0");
-            $sth->execute();
-            $g->{customselectNAME} = $sth->{NAME};
-            $sth->finish();
-        }
-
         ## Verify sequences or tables+columns on remote databases
         for my $dbname (sort keys %{ $self->{sdb} }) {
 
@@ -5937,42 +5919,8 @@ sub validate_sync {
             ## We'll state no problems until we are proved wrong
             my $column_problems = 0;
 
-            ## For customselect, the transformed output must match the slave
-            ## Note: extra columns on the target are okay
-            if ($do_customselect) {
-                my $msg;
-                my $newcols = [];
-                my $info2;
-                for my $col (@{$g->{customselectNAME}}) {
-                    my $ok = 0;
-                    if (!exists $targetcolinfo->{$col}) {
-                        $msg = qq{Warning: Custom SELECT returned column "$col" that does not exist on target "$dbname"\n};
-                        $self->glog($msg, LOG_WARN);
-                        warn $msg;
-                        return 0;
-                    }
-                    ## Get a quoted version of this column
-                    push @$info2 => $srcdbh->quote_identifier($col);
-                }
-                ## Replace the actual set of columns with our subset
-                my $collist = join ' | ' => @{$g->{cols}};
-                $self->glog("Old columns: $collist", LOG_VERBOSE);
-                $collist = join ' | ' => @{$g->{customselectNAME}};
-                $self->glog("New columns: $collist", LOG_VERBOSE);
-                $g->{cols} = $g->{customselectNAME};
-                $g->{safecols} = $info2;
-
-                ## Replace the column lists
-                $g->{columnlist} = join ',' => @{$g->{customselectNAME}};
-                $g->{safecolumnlist} = join ',' => @$info2;
-
-            } ## end custom select
-
             ## Check each column in alphabetic order
             for my $colname (sort keys %$colinfo) {
-
-                ## We've already checked customselect above
-                next if $do_customselect;
 
                 ## Simple var mapping to make the following code sane
                 my $fcol = $targetcolinfo->{$colname};
@@ -6075,7 +6023,6 @@ sub validate_sync {
 
             ## Fatal in strict mode: extra columns on the target side
             for my $colname (sort keys %$targetcolinfo) {
-                next if $do_customselect;
                 next if exists $colinfo->{$colname};
                 $column_problems ||= 1; ## Don't want to override a setting of "2"
                 my $msg = qq{Target database has column "$colname" on table "$t", but source database does not};

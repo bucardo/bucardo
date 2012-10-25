@@ -148,7 +148,6 @@ Customcols
 customname
 Customname
 customnames
-customselect
 DBI
 DBIx
 dbmap
