@@ -2314,343 +2314,343 @@ sub start_kid {
     my $did_setup = 0;
     local $@;
     eval {
-    ## Listen for the controller asking us to go again if persistent
-    if ($kidsalive) {
-        $self->db_listen( $maindbh, "kid_run_$syncname" );
-    }
+        ## Listen for the controller asking us to go again if persistent
+        if ($kidsalive) {
+            $self->db_listen( $maindbh, "kid_run_$syncname" );
+        }
 
-    ## Listen for a kid ping, even if not persistent
-    my $kidping = "${$}_ping";
-    $self->db_listen( $maindbh, "kid_$kidping" );
+        ## Listen for a kid ping, even if not persistent
+        my $kidping = "${$}_ping";
+        $self->db_listen( $maindbh, "kid_$kidping" );
 
-    ## Listen for a sync-wide exit signal
-    $self->db_listen( $maindbh, "kid_$stop_sync_request" );
+        ## Listen for a sync-wide exit signal
+        $self->db_listen( $maindbh, "kid_$stop_sync_request" );
 
-    ## Prepare all of our SQL
-    ## Note that none of this is actually 'prepared' until the first execute
+        ## Prepare all of our SQL
+        ## Note that none of this is actually 'prepared' until the first execute
 
-    ## SQL to add a new row to the syncrun table
-    $SQL = 'INSERT INTO bucardo.syncrun(sync,status) VALUES (?,?)';
-    $sth{kid_syncrun_insert} = $maindbh->prepare($SQL);
+        ## SQL to add a new row to the syncrun table
+        $SQL = 'INSERT INTO bucardo.syncrun(sync,status) VALUES (?,?)';
+        $sth{kid_syncrun_insert} = $maindbh->prepare($SQL);
 
-    ## SQL to update the syncrun table's status only
-    $SQL = q{
-        UPDATE bucardo.syncrun
-        SET    status=?
-        WHERE  sync=?
-        AND    ended IS NULL
-    };
-    $sth{kid_syncrun_update_status} = $maindbh->prepare($SQL);
+        ## SQL to update the syncrun table's status only
+        $SQL = q{
+            UPDATE bucardo.syncrun
+            SET    status=?
+            WHERE  sync=?
+            AND    ended IS NULL
+        };
+        $sth{kid_syncrun_update_status} = $maindbh->prepare($SQL);
 
-    ## SQL to set the syncrun table as ended once complete
-    $SQL = q{
-        UPDATE bucardo.syncrun
-        SET    deletes=deletes+?, inserts=inserts+?, truncates=truncates+?,
-               conflicts=?, details=?, status=?
-        WHERE  sync=?
-        AND    ended IS NULL
-    };
-    $sth{kid_syncrun_end} = $maindbh->prepare($SQL);
+        ## SQL to set the syncrun table as ended once complete
+        $SQL = q{
+            UPDATE bucardo.syncrun
+            SET    deletes=deletes+?, inserts=inserts+?, truncates=truncates+?,
+                   conflicts=?, details=?, status=?
+            WHERE  sync=?
+            AND    ended IS NULL
+        };
+        $sth{kid_syncrun_end} = $maindbh->prepare($SQL);
 
-    ## Connect to all (connectable) databases we are responsible for
-    ## This main list has already been pruned by the controller as needed
-    for my $dbname (@dbs_connectable) {
-
-        $x = $sync->{db}{$dbname};
-
-        ## This overwrites the items we inherited from the controller
-        ($x->{backend}, $x->{dbh}) = $self->connect_database($dbname);
-        $self->glog(qq{Database "$dbname" backend PID: $x->{backend}}, LOG_VERBOSE);
-    }
-
-    ## Set the maximum length of the $dbname.$S.$T string.
-    ## Used for logging output
-    $self->{maxdbname} = 1;
-    for my $dbname (keys %{ $sync->{db} }) {
-        $self->{maxdbname} = length $dbname if length $dbname > $self->{maxdbname};
-    }
-    my $maxst = 3;
-    for my $g (@$goatlist) {
-        next if $g->{reltype} ne 'table';
-        ($S,$T) = ($g->{safeschema},$g->{safetable});
-        $maxst = length "$S.$T" if length "$S.$T" > $maxst;
-    }
-    $self->{maxdbstname} = $self->{maxdbname} + 1 + $maxst;
-
-    ## If we are using delta tables, prepare all relevant SQL
-    if (@dbs_delta) {
-
-        ## Prepare the SQL specific to each table
-        for my $g (@$goatlist) {
-
-            ## Only tables get all this fuss: sequences are easy
-            next if $g->{reltype} ne 'table';
-
-            ## This is the main query: grab all unique changed primary keys since the last sync
-            $SQL{delta}{$g} = qq{
-                SELECT  DISTINCT $g->{pklist}
-                FROM    bucardo.$g->{deltatable} d
-                WHERE   NOT EXISTS (
-                           SELECT 1
-                           FROM   bucardo.$g->{tracktable} t
-                           WHERE  d.txntime = t.txntime
-                           AND    t.target = TARGETNAME::text
-                        )
-                };
-
-            ## Mark all unclaimed visible delta rows as done in the track table
-            $SQL{track}{$g} = qq{
-                INSERT INTO bucardo.$g->{tracktable} (txntime,target)
-                SELECT DISTINCT txntime, TARGETNAME::text
-                FROM bucardo.$g->{deltatable} d
-                WHERE NOT EXISTS (
-                    SELECT 1
-                    FROM   bucardo.$g->{tracktable} t
-                    WHERE  d.txntime = t.txntime
-                    AND    t.target = TARGETNAME::text
-                );
-            };
-
-            ## The same thing, but to the staging table instead, as we have to
-            ## wait for all targets to succesfully commit in multi-source situations
-            $SQL{stage}{$g} = qq{
-                INSERT INTO bucardo.$g->{stagetable} (txntime,target)
-                SELECT DISTINCT txntime, TARGETNAME::text
-                FROM bucardo.$g->{deltatable} d
-                WHERE NOT EXISTS (
-                    SELECT 1
-                    FROM   bucardo.$g->{tracktable} t
-                    WHERE  d.txntime = t.txntime
-                    AND    t.target = TARGETNAME::text
-                );
-            };
-
-        } ## end each table
-
-        ## For each source database, prepare the queries above
-        for my $dbname (@dbs_source) {
+        ## Connect to all (connectable) databases we are responsible for
+        ## This main list has already been pruned by the controller as needed
+        for my $dbname (@dbs_connectable) {
 
             $x = $sync->{db}{$dbname};
 
-            ## Set the TARGETNAME for each database: the bucardo.track_* target entry
-            ## Unless we start using gangs again, just use the dbgroup
-            $x->{TARGETNAME} = "dbgroup $dbs";
+            ## This overwrites the items we inherited from the controller
+            ($x->{backend}, $x->{dbh}) = $self->connect_database($dbname);
+            $self->glog(qq{Database "$dbname" backend PID: $x->{backend}}, LOG_VERBOSE);
+        }
 
+        ## Set the maximum length of the $dbname.$S.$T string.
+        ## Used for logging output
+        $self->{maxdbname} = 1;
+        for my $dbname (keys %{ $sync->{db} }) {
+            $self->{maxdbname} = length $dbname if length $dbname > $self->{maxdbname};
+        }
+        my $maxst = 3;
+        for my $g (@$goatlist) {
+            next if $g->{reltype} ne 'table';
+            ($S,$T) = ($g->{safeschema},$g->{safetable});
+            $maxst = length "$S.$T" if length "$S.$T" > $maxst;
+        }
+        $self->{maxdbstname} = $self->{maxdbname} + 1 + $maxst;
+
+        ## If we are using delta tables, prepare all relevant SQL
+        if (@dbs_delta) {
+
+            ## Prepare the SQL specific to each table
             for my $g (@$goatlist) {
 
+                ## Only tables get all this fuss: sequences are easy
                 next if $g->{reltype} ne 'table';
 
-                ## Replace with the target name for source delta querying
-                ($SQL = $SQL{delta}{$g}) =~ s/TARGETNAME/'$x->{TARGETNAME}'/o;
+                ## This is the main query: grab all unique changed primary keys since the last sync
+                $SQL{delta}{$g} = qq{
+                    SELECT  DISTINCT $g->{pklist}
+                    FROM    bucardo.$g->{deltatable} d
+                    WHERE   NOT EXISTS (
+                               SELECT 1
+                               FROM   bucardo.$g->{tracktable} t
+                               WHERE  d.txntime = t.txntime
+                               AND    t.target = TARGETNAME::text
+                            )
+                    };
 
-                ## As these can be expensive, make them asynchronous
-                $sth{getdelta}{$dbname}{$g} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
+                ## Mark all unclaimed visible delta rows as done in the track table
+                $SQL{track}{$g} = qq{
+                    INSERT INTO bucardo.$g->{tracktable} (txntime,target)
+                    SELECT DISTINCT txntime, TARGETNAME::text
+                    FROM bucardo.$g->{deltatable} d
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM   bucardo.$g->{tracktable} t
+                        WHERE  d.txntime = t.txntime
+                        AND    t.target = TARGETNAME::text
+                    );
+                };
 
-                ## We need to update either the track table or the stage table
-                ## There is no way to know beforehand which we will need, so we prepare both
-
-                ## Replace with the target name for source track updating
-                ($SQL = $SQL{track}{$g}) =~ s/TARGETNAME/'$x->{TARGETNAME}'/go;
-                ## Again, async as they may be slow
-                $sth{track}{$dbname}{$g} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
-
-                ## Same thing for stage
-                ($SQL = $SQL{stage}{$g}) =~ s/TARGETNAME/'$x->{TARGETNAME}'/go;
-                $sth{stage}{$dbname}{$g} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
+                ## The same thing, but to the staging table instead, as we have to
+                ## wait for all targets to succesfully commit in multi-source situations
+                $SQL{stage}{$g} = qq{
+                    INSERT INTO bucardo.$g->{stagetable} (txntime,target)
+                    SELECT DISTINCT txntime, TARGETNAME::text
+                    FROM bucardo.$g->{deltatable} d
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM   bucardo.$g->{tracktable} t
+                        WHERE  d.txntime = t.txntime
+                        AND    t.target = TARGETNAME::text
+                    );
+                };
 
             } ## end each table
 
-        } ## end each source database
+            ## For each source database, prepare the queries above
+            for my $dbname (@dbs_source) {
 
-    } ## end if delta databases
+                $x = $sync->{db}{$dbname};
 
-    ## We disable and enable triggers and rules in one of two ways
-    ## For old, pre 8.3 versions of Postgres, we manipulate pg_class
-    ## This is not ideal, as we don't lock pg_class and thus risk problems
-    ## because the system catalogs are not strictly MVCC. However, there is
-    ## no other way to disable rules, which we must do.
-    ## If we are 8.3 or higher, we simply use session_replication_role,
-    ## which is completely safe, and faster (thanks Jan!)
-    ##
-    ## We also see if the version is modern enough to use COPY with subselects
-    ##
-    ## Note that each database within the same sync may have different methods,
-    ## so we need to see if anyone is doing things the old way
-    my $anyone_does_pgclass = 0;
-    for my $dbname (@dbs_write) {
+                ## Set the TARGETNAME for each database: the bucardo.track_* target entry
+                ## Unless we start using gangs again, just use the dbgroup
+                $x->{TARGETNAME} = "dbgroup $dbs";
 
-        $x = $sync->{db}{$dbname};
+                for my $g (@$goatlist) {
 
-        next if $x->{dbtype} ne 'postgres';
+                    next if $g->{reltype} ne 'table';
 
-        my $ver = $x->{dbh}{pg_server_version};
-        if ($ver >= 80300) {
-            $x->{disable_trigrules} = 'replica';
-        }
-        else {
-            $x->{disable_trigrules} = 'pg_class';
-            $anyone_does_pgclass = 1;
-        }
+                    ## Replace with the target name for source delta querying
+                    ($SQL = $SQL{delta}{$g}) =~ s/TARGETNAME/'$x->{TARGETNAME}'/o;
 
-        ## If 8.2 or higher, we can use COPY (SELECT *)
-        $x->{modern_copy} = $ver >= 80200 ? 1 : 0;
-    }
+                    ## As these can be expensive, make them asynchronous
+                    $sth{getdelta}{$dbname}{$g} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
 
-    ## We don't bother building these statements unless we need to
-    if ($anyone_does_pgclass) {
+                    ## We need to update either the track table or the stage table
+                    ## There is no way to know beforehand which we will need, so we prepare both
 
-        ## TODO: Ideally, we would also adjust for "newname"
-        ## For now, we do not and thus have a restriction of no
-        ## customnames on Postgres databases older than 8.2
+                    ## Replace with the target name for source track updating
+                    ($SQL = $SQL{track}{$g}) =~ s/TARGETNAME/'$x->{TARGETNAME}'/go;
+                    ## Again, async as they may be slow
+                    $sth{track}{$dbname}{$g} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
 
-        ## The SQL to disable all triggers and rules for the tables in this sync
-        $SQL = q{
-            UPDATE pg_class
-            SET    reltriggers = 0, relhasrules = false
-            WHERE  (
-        };
-        $SQL .= join "OR\n"
-            => map { "(oid = '$_->{safeschema}.$_->{safetable}'::regclass)" }
-            grep { $_->{reltype} eq 'table' }
-            @$goatlist;
-        $SQL .= ')';
+                    ## Same thing for stage
+                    ($SQL = $SQL{stage}{$g}) =~ s/TARGETNAME/'$x->{TARGETNAME}'/go;
+                    $sth{stage}{$dbname}{$g} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
 
-        ## We are adding all tables together in a single multi-statement query
-        $SQL{disable_trigrules} = $SQL;
+                } ## end each table
 
-        my $setclause =
-            ## no critic (RequireInterpolationOfMetachars)
-            q{reltriggers = }
-            . q{(SELECT count(*) FROM pg_catalog.pg_trigger WHERE tgrelid = pg_catalog.pg_class.oid),}
-            . q{relhasrules = }
-            . q{CASE WHEN (SELECT COUNT(*) FROM pg_catalog.pg_rules WHERE schemaname=SNAME AND tablename=TNAME) > 0 }
-            . q{THEN true ELSE false END};
-            ## use critic
+            } ## end each source database
 
-        ## The SQL to re-enable rules and triggers
-        ## for each table in this sync
-        $SQL{etrig} = qq{
-            UPDATE pg_class
-            SET    $setclause
-            WHERE  oid = 'SCHEMANAME.TABLENAME'::regclass
-        };
-        $SQL = join ";\n"
-            => map {
-                     my $sql = $SQL{etrig};
-                     $sql =~ s/SNAME/$_->{safeschemaliteral}/g;
-                     $sql =~ s/TNAME/$_->{safetableliteral}/g;
-                     $sql =~ s/SCHEMANAME/$_->{safeschema}/g;
-                     $sql =~ s/TABLENAME/$_->{safetable}/g;
-                     $sql;
-                 }
-                grep { $_->{reltype} eq 'table' }
-                @$goatlist;
+        } ## end if delta databases
 
-        $SQL{enable_trigrules} .= $SQL;
-
-    } ## end anyone using pg_class to turn off triggers and rules
-
-    ## Common settings for the database handles. Set before passing to DBIx::Safe below
-    ## These persist through all subsequent transactions
-    ## First, things that are common to databases, irrespective of read/write:
-    for my $dbname (@dbs) {
-
-        $x = $sync->{db}{$dbname};
-
-        my $xdbh = $x->{dbh};
-
-        if ($x->{dbtype} eq 'postgres') {
-
-            ## We never want to timeout
-            $xdbh->do('SET statement_timeout = 0');
-
-            ## Using the same time zone everywhere keeps us sane
-            $xdbh->do(q{SET TIME ZONE 'UTC'});
-
-            ## Rare, but allow for tcp fiddling
-            if ($config{tcp_keepalives_idle}) { ## e.g. not 0, should always exist
-                $xdbh->do("SET tcp_keepalives_idle = $config{tcp_keepalives_idle}");
-                $xdbh->do("SET tcp_keepalives_interval = $config{tcp_keepalives_interval}");
-                $xdbh->do("SET tcp_keepalives_count = $config{tcp_keepalives_count}");
-            }
-
-            $xdbh->commit();
-
-        } ## end postgres
-
-        elsif ($x->{dbtype} eq 'mysql' or $x->{dbtype} eq 'mariadb') {
-
-            ## Serialize for this session
-            $xdbh->do('SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE');
-            ## ANSI mode: mostly because we want ANSI_QUOTES
-            $xdbh->do(q{SET sql_mode = 'ANSI'});
-            ## Use the same time zone everywhere
-            $xdbh->do(q{SET time_zone = '+0:00'});
-            $xdbh->commit();
-
-        } ## end mysql/mariadb
-
-    }
-
-    ## Now things that apply only to databases we are writing to:
-    for my $dbname (@dbs_write) {
-
-        $x = $sync->{db}{$dbname};
-
-        my $xdbh = $x->{dbh};
-
-        if ($x->{dbtype} eq 'postgres') {
-
-            ## Note: no need to turn these back to what they were: we always want to stay in replica mode
-            ## If doing old school pg_class hackery, we defer until much later
-            if ($x->{disable_trigrules} eq 'replica') {
-                $xdbh->do(q{SET session_replication_role = 'replica'});
-                $xdbh->commit();
-            }
-
-        } ## end postgres
-
-        elsif ($x->{dbtype} eq 'mysql' or $x->{dbtype} eq 'mariadb') {
-
-            ## No foreign key checks, please
-            $xdbh->do('SET foreign_key_checks = 0');
-            $xdbh->commit();
-
-        } ## end mysql/mariadb
-
-    }
-
-    ## Create safe versions of the database handles if we are going to need them
-    if ($sync->{need_safe_dbh_strict} or $sync->{need_safe_dbh}) {
-
-        for my $dbname (@dbs_postgres) {
+        ## We disable and enable triggers and rules in one of two ways
+        ## For old, pre 8.3 versions of Postgres, we manipulate pg_class
+        ## This is not ideal, as we don't lock pg_class and thus risk problems
+        ## because the system catalogs are not strictly MVCC. However, there is
+        ## no other way to disable rules, which we must do.
+        ## If we are 8.3 or higher, we simply use session_replication_role,
+        ## which is completely safe, and faster (thanks Jan!)
+        ##
+        ## We also see if the version is modern enough to use COPY with subselects
+        ##
+        ## Note that each database within the same sync may have different methods,
+        ## so we need to see if anyone is doing things the old way
+        my $anyone_does_pgclass = 0;
+        for my $dbname (@dbs_write) {
 
             $x = $sync->{db}{$dbname};
 
-            my $darg;
-            if ($sync->{need_safe_dbh_strict}) {
-                for my $arg (sort keys %{ $dbix{ $x->{role} }{strict} }) {
-                    next if ! length $dbix{ $x->{role} }{strict}{$arg};
-                    $darg->{$arg} = $dbix{ $x->{role} }{strict}{$arg};
-                }
-                $darg->{dbh} = $x->{dbh};
-                $self->{safe_dbh_strict}{$dbname} = DBIx::Safe->new($darg);
+            next if $x->{dbtype} ne 'postgres';
+
+            my $ver = $x->{dbh}{pg_server_version};
+            if ($ver >= 80300) {
+                $x->{disable_trigrules} = 'replica';
+            }
+            else {
+                $x->{disable_trigrules} = 'pg_class';
+                $anyone_does_pgclass = 1;
             }
 
-            if ($sync->{need_safe_dbh}) {
-                undef $darg;
-                for my $arg (sort keys %{ $dbix{ $x->{role} }{notstrict} }) {
-                    next if ! length $dbix{ $x->{role} }{notstrict}{$arg};
-                    $darg->{$arg} = $dbix{ $x->{role} }{notstrict}{$arg};
-                }
-                $darg->{dbh} = $x->{dbh};
-                $self->{safe_dbh}{$dbname} = DBIx::Safe->new($darg);
-            }
+            ## If 8.2 or higher, we can use COPY (SELECT *)
+            $x->{modern_copy} = $ver >= 80200 ? 1 : 0;
         }
 
-    } ## end DBIX::Safe creations
-    $did_setup = 1;
-};
+        ## We don't bother building these statements unless we need to
+        if ($anyone_does_pgclass) {
+
+            ## TODO: Ideally, we would also adjust for "newname"
+            ## For now, we do not and thus have a restriction of no
+            ## customnames on Postgres databases older than 8.2
+
+            ## The SQL to disable all triggers and rules for the tables in this sync
+            $SQL = q{
+                UPDATE pg_class
+                SET    reltriggers = 0, relhasrules = false
+                WHERE  (
+            };
+            $SQL .= join "OR\n"
+                => map { "(oid = '$_->{safeschema}.$_->{safetable}'::regclass)" }
+                grep { $_->{reltype} eq 'table' }
+                @$goatlist;
+            $SQL .= ')';
+
+            ## We are adding all tables together in a single multi-statement query
+            $SQL{disable_trigrules} = $SQL;
+
+            my $setclause =
+                ## no critic (RequireInterpolationOfMetachars)
+                q{reltriggers = }
+                . q{(SELECT count(*) FROM pg_catalog.pg_trigger WHERE tgrelid = pg_catalog.pg_class.oid),}
+                . q{relhasrules = }
+                . q{CASE WHEN (SELECT COUNT(*) FROM pg_catalog.pg_rules WHERE schemaname=SNAME AND tablename=TNAME) > 0 }
+                . q{THEN true ELSE false END};
+                ## use critic
+
+            ## The SQL to re-enable rules and triggers
+            ## for each table in this sync
+            $SQL{etrig} = qq{
+                UPDATE pg_class
+                SET    $setclause
+                WHERE  oid = 'SCHEMANAME.TABLENAME'::regclass
+            };
+            $SQL = join ";\n"
+                => map {
+                         my $sql = $SQL{etrig};
+                         $sql =~ s/SNAME/$_->{safeschemaliteral}/g;
+                         $sql =~ s/TNAME/$_->{safetableliteral}/g;
+                         $sql =~ s/SCHEMANAME/$_->{safeschema}/g;
+                         $sql =~ s/TABLENAME/$_->{safetable}/g;
+                         $sql;
+                     }
+                    grep { $_->{reltype} eq 'table' }
+                    @$goatlist;
+
+            $SQL{enable_trigrules} .= $SQL;
+
+        } ## end anyone using pg_class to turn off triggers and rules
+
+        ## Common settings for the database handles. Set before passing to DBIx::Safe below
+        ## These persist through all subsequent transactions
+        ## First, things that are common to databases, irrespective of read/write:
+        for my $dbname (@dbs) {
+
+            $x = $sync->{db}{$dbname};
+
+            my $xdbh = $x->{dbh};
+
+            if ($x->{dbtype} eq 'postgres') {
+
+                ## We never want to timeout
+                $xdbh->do('SET statement_timeout = 0');
+
+                ## Using the same time zone everywhere keeps us sane
+                $xdbh->do(q{SET TIME ZONE 'UTC'});
+
+                ## Rare, but allow for tcp fiddling
+                if ($config{tcp_keepalives_idle}) { ## e.g. not 0, should always exist
+                    $xdbh->do("SET tcp_keepalives_idle = $config{tcp_keepalives_idle}");
+                    $xdbh->do("SET tcp_keepalives_interval = $config{tcp_keepalives_interval}");
+                    $xdbh->do("SET tcp_keepalives_count = $config{tcp_keepalives_count}");
+                }
+
+                $xdbh->commit();
+
+            } ## end postgres
+
+            elsif ($x->{dbtype} eq 'mysql' or $x->{dbtype} eq 'mariadb') {
+
+                ## Serialize for this session
+                $xdbh->do('SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE');
+                ## ANSI mode: mostly because we want ANSI_QUOTES
+                $xdbh->do(q{SET sql_mode = 'ANSI'});
+                ## Use the same time zone everywhere
+                $xdbh->do(q{SET time_zone = '+0:00'});
+                $xdbh->commit();
+
+            } ## end mysql/mariadb
+
+        }
+
+        ## Now things that apply only to databases we are writing to:
+        for my $dbname (@dbs_write) {
+
+            $x = $sync->{db}{$dbname};
+
+            my $xdbh = $x->{dbh};
+
+            if ($x->{dbtype} eq 'postgres') {
+
+                ## Note: no need to turn these back to what they were: we always want to stay in replica mode
+                ## If doing old school pg_class hackery, we defer until much later
+                if ($x->{disable_trigrules} eq 'replica') {
+                    $xdbh->do(q{SET session_replication_role = 'replica'});
+                    $xdbh->commit();
+                }
+
+            } ## end postgres
+
+            elsif ($x->{dbtype} eq 'mysql' or $x->{dbtype} eq 'mariadb') {
+
+                ## No foreign key checks, please
+                $xdbh->do('SET foreign_key_checks = 0');
+                $xdbh->commit();
+
+            } ## end mysql/mariadb
+
+        }
+
+        ## Create safe versions of the database handles if we are going to need them
+        if ($sync->{need_safe_dbh_strict} or $sync->{need_safe_dbh}) {
+
+            for my $dbname (@dbs_postgres) {
+
+                $x = $sync->{db}{$dbname};
+
+                my $darg;
+                if ($sync->{need_safe_dbh_strict}) {
+                    for my $arg (sort keys %{ $dbix{ $x->{role} }{strict} }) {
+                        next if ! length $dbix{ $x->{role} }{strict}{$arg};
+                        $darg->{$arg} = $dbix{ $x->{role} }{strict}{$arg};
+                    }
+                    $darg->{dbh} = $x->{dbh};
+                    $self->{safe_dbh_strict}{$dbname} = DBIx::Safe->new($darg);
+                }
+
+                if ($sync->{need_safe_dbh}) {
+                    undef $darg;
+                    for my $arg (sort keys %{ $dbix{ $x->{role} }{notstrict} }) {
+                        next if ! length $dbix{ $x->{role} }{notstrict}{$arg};
+                        $darg->{$arg} = $dbix{ $x->{role} }{notstrict}{$arg};
+                    }
+                    $darg->{dbh} = $x->{dbh};
+                    $self->{safe_dbh}{$dbname} = DBIx::Safe->new($darg);
+                }
+            }
+
+        } ## end DBIX::Safe creations
+        $did_setup = 1;
+    };
     $err_handler->(@_) if !$did_setup;
 
     ## Begin the main KID loop
