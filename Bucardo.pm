@@ -3171,6 +3171,7 @@ sub start_kid {
 
                 ## Let the CTL know we are done
                 $self->db_notify($maindbh, "ctl_syncdone_${syncname}");
+                $maindbh->commit();
 
                 ## Sleep a hair
                 sleep $config{kid_nodeltarows_sleep};
@@ -4548,6 +4549,7 @@ sub start_kid {
         }
 
         redo KID;
+
       } ## end KID
 
         ## Disconnect from all the databases used in this sync
