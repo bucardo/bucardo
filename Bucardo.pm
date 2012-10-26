@@ -1049,6 +1049,9 @@ sub mcp_main {
 
                 ## Echo out to anyone listening
                 $self->db_notify($maindbh, $name, 1);
+
+                ## Kick it!
+                $sync->{$syncname}{kick_on_startup} = 1;
             }
 
             ## Should not happen, but let's at least log it
@@ -4590,6 +4593,7 @@ sub start_kid {
 
     ## Do the actual work.
     RUNKID: {
+        $didrun = 0;
         eval { $runkid->() };
         exit 0 if $didrun;
 
