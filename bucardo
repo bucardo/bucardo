@@ -5208,12 +5208,12 @@ sub status_detail {
 
         ## Undefined should be written as 'none'
         for (qw/checktime/) {
-            $s->{$_} ||= 'none';
+            $s->{$_} ||= 'None';
         }
 
         ## Should be 'yes' or 'no'
         for (qw/analyze_after_copy vacuum_after_copy stayalive kidsalive autokick/) {
-            $s->{$_} = (defined $s->{$_} and $s->{$_}) ? 'yes' : 'no ';
+            $s->{$_} = (defined $s->{$_} and $s->{$_}) ? 'Yes' : 'No';
         }
 
         ## If currently running, there should be a PID file
@@ -5227,20 +5227,20 @@ sub status_detail {
         push @items => ['Current state'        => $s->{state}];
         push @items => ['Source herd/database' => "$s->{herd}{name} / $sourcedb"];
         push @items => ['Tables in sync'       => $numtables];
-        push @items => ['Status'               => $s->{status}];
+        push @items => ['Status'               => ucfirst $s->{status}];
         push @items => ['Check time'           => $s->{checktime}];
         push @items => ['Overdue time'         => $s->{overdue}];
         push @items => ['Expired time'         => $s->{expired}];
-        push @items => ['Stayalive/Kidsalive'  => "\u$s->{stayalive} / \u$s->{kidsalive}"];
+        push @items => ['Stayalive/Kidsalive'  => "$s->{stayalive} / $s->{kidsalive}"];
         push @items => ['Rebuild index'        => $s->{rebuild_index} ? 'Yes' : 'No'];
         push @items => ['Autokick'             => $s->{autokick}];
         push @items => ['Onetimecopy'          => $s->{onetimecopy} ? 'Yes' : 'No'];
 
         ## Only show these if enabled
-        if ($s->{analyze_after_copy} eq 'yes') {
+        if ($s->{analyze_after_copy} eq 'Yes') {
             push @items => ['Post-copy analyze', 'Yes'];
         }
-        if ($s->{vacuum_after_copy} eq 'yes') {
+        if ($s->{vacuum_after_copy} eq 'Yes') {
             push @items => ['Post-copy vacuum', 'Yes'];
         }
 
