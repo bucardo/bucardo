@@ -9817,7 +9817,8 @@ that it should be considered overdue.
 
 =item C<expired>
 
-XXX Appears to be a no-op.
+An interval specifying the amount of time after which the sync has not run
+that it should be considered expired.
 
 =item C<track_rates>
 
