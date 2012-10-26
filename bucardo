@@ -9902,7 +9902,7 @@ The name of the custom code object.
 
 =item C<about>
 
-XXX No-op?
+A description of the custom code.
 
 =item C<whenrun>
 
