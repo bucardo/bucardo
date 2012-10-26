@@ -3196,7 +3196,6 @@ sub add_table {
         db                       db                   0                null
         autokick|ping            ping                 TF               null
         rebuild_index            rebuild_index        numeric          null
-        standard_conflict        standard_conflict    0                null
         analyze_after_copy       analyze_after_copy   TF               null
         herd                     herd                 0                skip
     };
@@ -3863,6 +3862,7 @@ sub add_sync {
         autokick|ping            ping                 TF               null
         checktime                checktime            interval         null
         status                   status               =active|inactive null
+        standard_conflict        standard_conflict    0                null
         source_makedelta         source_makedelta     =inherits|on|off null
         target_makedelta         target_makedelta     =inherits|on|off null
         priority                 priority             numeric          null
@@ -9563,41 +9563,6 @@ of which the table is a part. Applies only to tables.
 Boolean indicating whether or not to rebuild indexes after every sync. Off by
 default. Optional.
 
-=item C<standard_conflict>
-
-XXX Deprecated, move to C<add sync>.
-
-Supported values:
-
-=over
-
-=item C<bucardo_source>
-
-The rows on the "source" database always "win". In other words, in a conflict,
-Bucardo copies rows from source to target.
-
-=item C<bucardo_target>
-
-The rows on the "target" database always win.
-
-=item C<bucardo_skip>
-
-Any conflicting rows are simply not replicated. Not recommended for most cases.
-
-=item C<bucardo_random>
-
-Each database has an equal chance of winning each time. This is the default.
-
-=item C<bucardo_latest>
-
-The row that was most recently changed wins.
-
-=item C<bucardo_abort>
-
-The sync is aborted on a conflict.
-
-=back
-
 =item C<analyze_after_copy>
 
 Boolean indicating whether or not to analyze the table after every sync. Off
@@ -9729,6 +9694,39 @@ Number of seconds a KID can live before being reaped. No limit by default.
 =item C<maxkicks>
 
 Numger of times a KID may be kicked before being reaped. No limit by default.
+
+=item C<standard_conflict>
+
+The type of conflict resolution to use in the sync. Supported values:
+
+=over
+
+=item C<bucardo_source>
+
+The rows on the "source" database always "win". In other words, in a conflict,
+Bucardo copies rows from source to target.
+
+=item C<bucardo_target>
+
+The rows on the "target" database always win.
+
+=item C<bucardo_skip>
+
+Any conflicting rows are simply not replicated. Not recommended for most cases.
+
+=item C<bucardo_random>
+
+Each database has an equal chance of winning each time. This is the default.
+
+=item C<bucardo_latest>
+
+The row that was most recently changed wins.
+
+=item C<bucardo_abort>
+
+The sync is aborted on a conflict.
+
+=back
 
 =item C<onetimecopy>
 
