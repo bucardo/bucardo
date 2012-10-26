@@ -982,7 +982,7 @@ sub mcp_main {
                     $maindbh->commit();
 
                     ## Only certain things can be changed "on the fly"
-                    for my $val (qw/checksecs stayalive do_listen deletemethod status ping
+                    for my $val (qw/checksecs stayalive deletemethod status ping
                                     analyze_after_copy vacuum_after_copy targetgroup targetdb
                                     onetimecopy lifetimesecs maxkicks rebuild_index/) {
                         $sync->{$syncname}{$val} = $self->{sync}{$syncname}{$val} = $info->{$val};
@@ -6068,7 +6068,7 @@ sub validate_sync {
     } ## end each goat
 
     ## If pinging, listen for a triggerkick on all source databases
-    if ($s->{ping} or $s->{do_listen}) {
+    if ($s->{ping}) {
         my $l = "kick_sync_$syncname";
         for my $dbname (sort keys %{ $self->{sdb} }) {
             $x = $self->{sdb}{$dbname};
@@ -6181,7 +6181,7 @@ sub deactivate_sync {
 
         $x->{dbh} ||= $self->connect_database($dbname);
         $x->{dbh}->commit();
-        if ($s->{ping} or $s->{do_listen}) {
+        if ($s->{ping}) {
             my $l = "kick_sync_$syncname";
             $self->db_unlisten($x->{dbh}, $l, $dbname, 0);
             $x->{dbh}->commit();

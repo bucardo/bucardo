@@ -3861,7 +3861,6 @@ sub add_sync {
         stayalive                stayalive            TF               null
         kidsalive                kidsalive            TF               null
         ping                     ping                 TF               null
-        do_listen                do_listen            TF               null
         checktime                checktime            interval         null
         status                   status               =active|inactive null
         source_makedelta         source_makedelta     =inherits|on|off null
@@ -5207,7 +5206,7 @@ sub status_detail {
         }
 
         ## Should be 'yes' or 'no'
-        for (qw/analyze_after_copy vacuum_after_copy stayalive kidsalive ping do_listen/) {
+        for (qw/analyze_after_copy vacuum_after_copy stayalive kidsalive ping/) {
             $s->{$_} = (defined $s->{$_} and $s->{$_}) ? 'yes' : 'no ';
         }
 
@@ -6975,6 +6974,7 @@ sub upgrade {
         ['bucardo', 'sync', 'limitdbs'],
         ['bucardo', 'goat', 'customselect'],
         ['bucardo', 'sync', 'usecustomselect'],
+        ['bucardo', 'sync', 'do_listen'],
     );
 
     my @altered_columns = (
@@ -9757,10 +9757,6 @@ persisent. Defaults to false.
 
 Boolean indicating whether or not to ping each database before each sync.
 Optional.
-
-=item C<do_listen>
-
-XXX An alias for C<ping>?
 
 =item C<checktime>
 
