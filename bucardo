@@ -5231,7 +5231,7 @@ sub status_detail {
         push @items => ['Check time'           => $s->{checktime}];
         push @items => ['Overdue time'         => $s->{overdue}];
         push @items => ['Expired time'         => $s->{expired}];
-        push @items => ['Stayalive/Kidsalive'  => "$s->{stayalive} / $s->{kidsalive}"];
+        push @items => ['Stayalive/Kidsalive'  => "\u$s->{stayalive} / \u$s->{kidsalive}"];
         push @items => ['Rebuild index'        => $s->{rebuild_index} ? 'Yes' : 'No'];
         push @items => ['Autokick'             => $s->{autokick}];
         push @items => ['Onetimecopy'          => $s->{onetimecopy} ? 'Yes' : 'No'];
@@ -9949,7 +9949,8 @@ their respective handles.
 
 =item C<getrows>
 
-XXX Currently a no-op.
+Boolean indicating whether or not the custom code routine needs to fetch
+rows. Currently ignored.
 
 =item C<trigrules>
 
