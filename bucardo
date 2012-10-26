@@ -3862,7 +3862,7 @@ sub add_sync {
         autokick|ping            ping                 TF               null
         checktime                checktime            interval         null
         status                   status               =active|inactive null
-        standard_conflict        standard_conflict    0                null
+        conflict_strategy|standard_conflict conflict_strategy  0       null
         source_makedelta         source_makedelta     =inherits|on|off null
         target_makedelta         target_makedelta     =inherits|on|off null
         priority                 priority             numeric          null
@@ -4203,6 +4203,11 @@ sub update_sync {
     ## Current information about this sync, including column names
     my $syncinfo;
 
+    my %aliases = (
+        standard_conflict => 'conflict_strategy',
+        autokick          => 'ping',
+    );
+
     for my $action (@actions) {
         ## Look for a standard foo=bar or foo:bar format
         if ($action =~ /(.+?)\s*[=:]\s*(.+)/) {
@@ -4210,7 +4215,7 @@ sub update_sync {
 
             ## No funny characters please, just boring column names
             $setting =~ /^[a-z_]+$/ or die "Invalid setting: $setting\n";
-            $setting = 'ping' if $setting eq 'autokick';
+            $setting = $aliases{$setting} || $setting;
 
             ## If we have not already, grab the current information for this sync
             ## We also use this to get the list of valid column names to modify
@@ -6912,7 +6917,7 @@ sub upgrade {
     }
     if ($schema_version ne $VERSION) {
         die qq{Cannot continue: bucardo is version $VERSION, but $schema_file is version $schema_version\n};
-    }
+   }
 
     $dbh->do(q{SET escape_string_warning = 'OFF'});
     $dbh->do(q{SET standard_conforming_strings = 'ON'});
@@ -6941,6 +6946,7 @@ sub upgrade {
     my @old_configs = (
         'pidfile',
         'upsert_attempts',
+        'default_standard_conflict',
     );
 
     my @old_constraints = (
@@ -6982,12 +6988,14 @@ sub upgrade {
         ['bucardo', 'goat', 'rebuild_index', 'BOOL2SMALLINT1'],
         ['bucardo', 'goat', 'schemaname',    'NO DEFAULT'],
         ['bucardo', 'sync', 'rebuild_index', 'BOOL2SMALLINT1'],
+        ['bucardo', 'sync', 'standard_conflict', 'RENAME conflict_strategy'],
     );
 
     my @row_values = (
 
         ['bucardo_config','about',q{name = 'log_showtime'}, 1,
          'Show timestamp in the log output?  0=off  1=seconds since epoch  2=scalar gmtime  3=scalar localtime'],
+        ['bucardo_config', 'about', q{name = 'default_conflict_strategy'}, 1, 'Default conflict strategy for all syncs'],
     );
 
     my @drop_all_rules = (
@@ -7347,7 +7355,6 @@ sub upgrade {
         clog "New value set for bucardo.$table.$column WHERE $where";
         $changes++;
     }
-
 
     $SQL = 'SELECT pg_catalog.md5(?)';
     my $md5sth = $dbh->prepare($SQL);
@@ -7954,7 +7961,7 @@ sub config {
                 die "Invalid log_level, must be terse, normal, verbose, or debug\n";
             }
         }
-        if ($setting eq 'default_standard_conflict') {
+        if ($setting eq 'default_standard_conflict' || $setting eq 'default_conflict_strategy') {
             if ($val !~ /^(?:source|target|skip|random|latest|none)$/oi) {
                 ## FIXME
                 #die "Invalid default_standard_conflict, must be none, source, target, skip, random, or latest\n";
@@ -7962,6 +7969,7 @@ sub config {
             if ($val =~ /none/i) {
                 $val = '';
             }
+            $setting = 'default_conflict_strategy';
         }
 
         $sth->execute($val,$setting);
@@ -9695,9 +9703,9 @@ Number of seconds a KID can live before being reaped. No limit by default.
 
 Numger of times a KID may be kicked before being reaped. No limit by default.
 
-=item C<standard_conflict>
+=item C<conflict_strategy>
 
-The type of conflict resolution to use in the sync. Supported values:
+The conflict resolution strategy to use in the sync. Supported values:
 
 =over
 

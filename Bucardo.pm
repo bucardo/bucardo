@@ -2778,7 +2778,7 @@ sub start_kid {
         ## Reset some things at the per-database level
         for my $dbname (keys %{ $sync->{db} }) {
 
-            ## This must be set, as it is used by the standard_conflict below
+            ## This must be set, as it is used by the conflict_strategy below
             $deltacount{$dbname} = 0;
             $dmlcount{allinserts}{$dbname} = 0;
             $dmlcount{alldeletes}{$dbname} = 0;
@@ -3352,13 +3352,13 @@ sub start_kid {
                             }
                         }
                     }
-                    ## If standard_conflict is abort, simply die right away
-                    elsif ('bucardo_abort' eq $g->{standard_conflict}) {
+                    ## If conflict_strategy is abort, simply die right away
+                    elsif ('bucardo_abort' eq $g->{conflict_strategy}) {
                         die "Aborting sync due to conflict of $S.$T";
                     }
 
                     ## If we require a custom code, also die
-                    elsif ('bucardo_custom' eq $g->{standard_conflict}) {
+                    elsif ('bucardo_custom' eq $g->{conflict_strategy}) {
                         die "Aborting sync due to lack of custom conflict handler for $S.$T";
                     }
 
@@ -3367,7 +3367,7 @@ sub start_kid {
                     ## as deeply linked to each other, and this we have one winning
                     ## database for *all* tables in the sync.
                     ## Thus, the only things arriving from other databases will be inserts
-                    elsif ('bucardo_latest' eq $g->{standard_conflict}) {
+                    elsif ('bucardo_latest' eq $g->{conflict_strategy}) {
 
                         ## We only need to figure out the winning database once
                         ## The winner is the latest one to touch any of our tables
@@ -3436,11 +3436,11 @@ sub start_kid {
                         if (! exists $self->{conflictwinner}) {
 
                             ## Optimize for a single database name
-                            my $sc = $g->{standard_conflict};
+                            my $sc = $g->{conflict_strategy};
                             if (index($sc, ' ') < 1) {
                                 ## Sanity check
                                 if (! exists $deltacount{$sc}) {
-                                    die "Invalid standard_conflict '$sc' used for $S.$T";
+                                    die "Invalid conflict_strategy '$sc' used for $S.$T";
                                 }
                                 $self->{conflictwinner} = $sc;
                             }
@@ -5731,7 +5731,7 @@ sub validate_sync {
 
         ## Determine the conflict method for each goat
         ## Use the syncs if it has one, otherwise the default
-        $g->{standard_conflict} = $s->{standard_conflict} || $config{default_standard_conflict};
+        $g->{conflict_strategy} = $s->{conflict_strategy} || $config{default_conflict_strategy};
         ## We do this even if g->{code_conflict} exists so it can fall through
 
         my $colinfo;
