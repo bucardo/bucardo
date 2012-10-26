@@ -350,7 +350,7 @@ $bc$
     elog(DEBUG, "Running $SQL");
     my $count = spi_exec_query($SQL)->{processed};
     if ($count >= 1) {
-        elog(ERROR, "Cannot have goats from different databases in the same herd ($count)");
+        elog(ERROR, "Cannot have goats from different databases in the same relgroup ($count)");
     }
 
     ## Make sure that a herd contains at most one schemaname/tablename combination
@@ -366,7 +366,7 @@ $bc$
     elog(DEBUG, "Running $SQL");
     $count = spi_exec_query($SQL)->{rows}[0]{goats};
     if ($count >= 1) {
-        elog(ERROR, "Cannot have two goats with the same schema and table inside a herd (herd=$herdname) (goat=$new->{goat}) (count=$count)");
+        elog(ERROR, "Cannot have two goats with the same schema and table inside a relgroup (relgroup=$herdname) (goat=$new->{goat}) (count=$count)");
     }
 
     return;
@@ -1127,7 +1127,7 @@ my $info = $rv->{rows}[0];
 $SQL = qq{SELECT 1 FROM herd WHERE name = '$herd'};
 $rv = spi_exec_query($SQL);
 if (!$rv->{processed}) {
-    elog(ERROR, "No such herd: $herd");
+    elog(ERROR, "No such relgroup: $herd");
 }
 
 ## Grab information on all members of this herd
@@ -1144,7 +1144,7 @@ $SQL = qq{
     };
 $rv = spi_exec_query($SQL);
 if (!$rv->{processed}) {
-    elog(WARNING, "Herd has no members: $herd");
+    elog(WARNING, "Relgroup has no members: $herd");
     return qq{Herd "$herd" for sync "$syncname" has no members: cannot validate};
 }
 
@@ -2521,7 +2521,7 @@ AS $bc$
     $SQL = qq{SELECT 1 FROM herd WHERE name = '$herd'};
     $rv = spi_exec_query($SQL);
     if (!$rv->{processed}) {
-       #elog(ERROR, "Cannot delete: sync refers to an invalid herd: $herd");
+       #elog(ERROR, "Cannot delete: sync refers to an invalid relgroup: $herd");
     }
 
     $SQL = qq{
@@ -2533,7 +2533,7 @@ AS $bc$
     };
     $rv = spi_exec_query($SQL);
     if (!$rv->{processed}) {
-      elog(DEBUG, 'Herd has no members, so no further work needed');
+      elog(DEBUG, 'Relgroup has no members, so no further work needed');
       return;
     }
 

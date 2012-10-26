@@ -60,7 +60,7 @@ for my $name (qw/ A B C D /) {
 ## Put all tables (including non-PK) into a herd
 $t = q{Adding all tables on the master works};
 $res = $bct->ctl(q{bucardo add tables '*bucardo*test*' '*Bucardo*test*' db=A herd=all});
-like ($res, qr/Created the herd named "all".*are now part of/s, $t);
+like ($res, qr/Created the relgroup named "all".*are now part of/s, $t);
 
 ## Add all sequences as well
 $t = q{Adding all tables on the master works};

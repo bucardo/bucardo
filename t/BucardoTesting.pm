@@ -33,8 +33,8 @@ my $dbname = 'bucardo_test';
 our $addtable_msg = 'Added the following tables';
 our $deltable_msg = 'Removed the following tables';
 our $nomatch_msg = 'Did not find matches for the following terms';
-our $oldherd_msg = 'The following tables are now part of the herd';
-our $newherd_msg = 'The following tables are now part of the herd';
+our $oldherd_msg = 'The following tables are now part of the relgroup';
+our $newherd_msg = 'The following tables are now part of the relgroup';
 
 our $location = 'setup';
 my $testmsg  = ' ?';

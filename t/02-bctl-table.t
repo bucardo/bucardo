@@ -185,36 +185,36 @@ like ($res, $expected, $t);
 
 empty_goat_table();
 
-$t = q{Add table works when adding to a new herd};
-$res = $bct->ctl('bucardo add table bucardo_test1 herd=foobar');
+$t = q{Add table works when adding to a new relgroup};
+$res = $bct->ctl('bucardo add table bucardo_test1 relgroup=foobar');
 $expected =
 qq{$addtable_msg:
   public.bucardo_test1
-Created the herd named "foobar"
+Created the relgroup named "foobar"
 $newherd_msg "foobar":
   public.bucardo_test1
 };
 is ($res, $expected, $t);
 
-$t = q{Add table works when adding to an existing herd};
-$res = $bct->ctl('bucardo add table bucardo_test5 herd=foobar');
+$t = q{Add table works when adding to an existing relgroup};
+$res = $bct->ctl('bucardo add table bucardo_test5 relgroup=foobar');
 is ($res, qq{$addtable_msg:\n  public.bucardo_test5\n$oldherd_msg "foobar":\n  public.bucardo_test5\n}, $t);
 
-$t = q{Add table works when adding multiple tables to a new herd};
-$res = $bct->ctl('bucardo add table "public.Buc*3" %.bucardo_test2 herd=foobar2');
+$t = q{Add table works when adding multiple tables to a new relgroup};
+$res = $bct->ctl('bucardo add table "public.Buc*3" %.bucardo_test2 relgroup=foobar2');
 $expected =
 qq{$addtable_msg:
   public.Bucardo_test3
   public.bucardo_test2
-Created the herd named "foobar2"
+Created the relgroup named "foobar2"
 $newherd_msg "foobar2":
   public.Bucardo_test3
   public.bucardo_test2
 };
 is ($res, $expected, $t);
 
-$t = q{Add table works when adding multiple tables to an existing herd};
-$res = $bct->ctl('bucardo add table bucardo_test6 %.%do_test4 herd=foobar2');
+$t = q{Add table works when adding multiple tables to an existing relgroup};
+$res = $bct->ctl('bucardo add table bucardo_test6 %.%do_test4 relgroup=foobar2');
 $expected =
 qq{$addtable_msg:
   public.bucardo_test4

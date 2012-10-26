@@ -1,8 +1,8 @@
 #!/usr/bin/env perl
 # -*-mode:cperl; indent-tabs-mode: nil-*-
 
-## Test adding, dropping, and changing herds via bucardo
-## Tests the main subs: add_herd, list_herds, update_herd, remove_herd
+## Test adding, dropping, and changing relgroups via bucardo
+## Tests the main subs: add_relgroup, list_relgroups, update_relgroup, remove_relgroup
 
 use 5.008003;
 use strict;
@@ -30,22 +30,22 @@ $dbhX = $bct->setup_bucardo('A');
 my ($dbuserA,$dbportA,$dbhostA) = $bct->add_db_args('A');
 my ($dbuserB,$dbportB,$dbhostB) = $bct->add_db_args('B');
 
-## Tests of basic 'add herd' usage
+## Tests of basic 'add relgroup' usage
 
-$t = 'Add herd with no argument gives expected help message';
-$res = $bct->ctl('bucardo add herd');
-like ($res, qr/Usage: add herd/, $t);
+$t = 'Add relgroup with no argument gives expected help message';
+$res = $bct->ctl('bucardo add relgroup');
+like ($res, qr/Usage: add relgroup/, $t);
 
-$t = q{Add herd works for a new herd};
-$res = $bct->ctl('bucardo add herd foobar');
-like ($res, qr/Created herd "foobar"/, $t);
+$t = q{Add relgroup works for a new relgroup};
+$res = $bct->ctl('bucardo add relgroup foobar');
+like ($res, qr/Created relgroup "foobar"/, $t);
 
-$t = q{Add herd gives expected message if herd already exists};
-$res = $bct->ctl('bucardo add herd foobar');
-like ($res, qr/Herd "foobar" already exists/, $t);
+$t = q{Add relgroup gives expected message if relgroup already exists};
+$res = $bct->ctl('bucardo add relgroup foobar');
+like ($res, qr/Relgroup "foobar" already exists/, $t);
 
-$t = q{Add herd gives expected message when adding a single table that does not exist};
-$res = $bct->ctl('bucardo add herd foobar nosuchtable');
+$t = q{Add relgroup gives expected message when adding a single table that does not exist};
+$res = $bct->ctl('bucardo add relgroup foobar nosuchtable');
 like ($res, qr/No databases have been added yet/, $t);
 
 ## Add two postgres databases
@@ -57,30 +57,30 @@ for my $name (qw/ A B /) {
     like ($res, qr/Added database "$name"/, $t);
 }
 
-$t = q{Add herd works when adding a single table};
+$t = q{Add relgroup works when adding a single table};
 $bct->ctl("bucardo add database bucardo_test user=$dbuserA port=$dbportA host=$dbhostA addalltables");
-$res = $bct->ctl('bucardo add herd foobar bucardo_test1');
-is ($res, qq{Herd "foobar" already exists
+$res = $bct->ctl('bucardo add relgroup foobar bucardo_test1');
+is ($res, qq{Relgroup "foobar" already exists
 Added the following tables:
   public.bucardo_test1
 $newherd_msg "foobar":
   public.bucardo_test1\n}, $t);
 
-$t = q{Add herd works when adding multiple tables};
+$t = q{Add relgroup works when adding multiple tables};
 
-$t = q{Add herd works when adding a single sequence};
+$t = q{Add relgroup works when adding a single sequence};
 
-$t = q{Add herd works when adding multiple sequences};
+$t = q{Add relgroup works when adding multiple sequences};
 
-$t = q{Add herd works when adding same name table and sequence};
+$t = q{Add relgroup works when adding same name table and sequence};
 
-$t = q{Add herd works when adding tables via schema wildcards};
+$t = q{Add relgroup works when adding tables via schema wildcards};
 
-$t = q{Add herd works when adding tables via table wildcards};
+$t = q{Add relgroup works when adding tables via table wildcards};
 
 exit;
 
-## end add herd?
+## end add relgroup?
 
 exit;
 

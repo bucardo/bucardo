@@ -546,9 +546,9 @@ sub help {
 
   stop <reason>   ** Tell all Bucardo processes to stop permanently
 
-  list <type> [name]   ** View information about dbs, dbgroups, herds, syncs, tables, sequences, customnames, customcols, customcode or "all" of them
-  bucardo add <type> <name>    ** Add a db, dbgroup, herd, sync, table, sequence, customcode, customcols customname or customcode
-  remove <type> <name> ** Remove a db, dbgroup, herd, sync, table, sequence, customname, customcol or customcode
+  list <type> [name]   ** View information about dbs, dbgroups, relgroups, syncs, tables, sequences, customnames, customcols, customcode or "all" of them
+  bucardo add <type> <name>    ** Add a db, dbgroup, relgroup, sync, table, sequence, customcode, customcols customname or customcode
+  remove <type> <name> ** Remove a db, dbgroup, relgroup, sync, table, sequence, customname, customcol or customcode
 
   For detailed help on the above, prefix with a help like this:
     $progname help add db
@@ -1366,6 +1366,7 @@ sub update_item {
     my $code = $thing eq 'customcode' ? \&update_customcode
              : $thing eq 'database'   ? \&update_database
              : $thing eq 'dbgroup'    ? \&update_dbgroup
+             : $thing eq 'relgroup'   ? \&update_herd
              : $thing eq 'herd'       ? \&update_herd
              : $thing eq 'sync'       ? \&update_sync
              : $thing eq 'table'      ? \&update_table
@@ -1441,7 +1442,7 @@ sub list_item {
                 print "-- customcols:\n";   list_customcols();
                 print "-- dbgroups:\n";     list_dbgroups();
                 print "-- databases:\n";    list_databases();
-                print "-- herds:\n";        list_herds();
+                print "-- relgroup:\n";     list_herds();
                 print "-- syncs:\n";        list_syncs();
                 print "-- tables:\n";       list_tables();
                 print "-- sequences:\n";    list_sequences();
@@ -3197,7 +3198,7 @@ sub add_table {
         autokick|ping            autokick             TF               null
         rebuild_index            rebuild_index        numeric          null
         analyze_after_copy       analyze_after_copy   TF               null
-        herd                     herd                 0                skip
+        herd|relgroup            herd                 0                skip
     };
 
     my ($dbcols,$cols,$phs,$vals,$extra)
@@ -3227,13 +3228,13 @@ sub add_table {
     }
 
     ## If they requested a herd and it does not exist, create it
-    if (exists $extra->{herd}) {
-        my $herdname = $extra->{herd};
+    if (exists $extra->{relgroup}) {
+        my $herdname = $extra->{relgroup};
         if (! exists $HERD->{$herdname}) {
             $SQL = 'INSERT INTO bucardo.herd(name) VALUES(?)';
             $sth = $dbh->prepare($SQL);
             $sth->execute($herdname);
-            $message .= qq{Created the herd named "$herdname"\n};
+            $message .= qq{Created the relgroup named "$herdname"\n};
         }
         ## Now load all of these tables into this herd
         $SQL = 'INSERT INTO bucardo.herdmap (herd,priority,goat) VALUES (?,?,'
@@ -3260,14 +3261,14 @@ sub add_table {
         }
 
         if (@oldnames) {
-            $message .= qq{The following tables were already in the herd "$herdname":\n};
+            $message .= qq{The following tables were already in the relgroup "$herdname":\n};
             for (@oldnames) {
                 $message .= "  $_\n";
             }
         }
 
         if (@newnames) {
-            $message .= qq{The following tables are now part of the herd "$herdname":\n};
+            $message .= qq{The following tables are now part of the relgroup "$herdname":\n};
             for (sort numbered_relations @newnames) {
                 $message .= "  $_\n";
             }
@@ -3404,7 +3405,7 @@ sub update_table {
         my $newvalue = transform_value($value);
 
         ## Handle all the non-standard columns
-        if (lc $newname eq 'herd') {
+        if (lc $newname eq 'herd' || lc $newname eq 'relgroup') {
 
             ## Track the changes and publish at the end
             my @herdchanges;
@@ -3424,17 +3425,17 @@ sub update_table {
                 ## Does this herd exist?
                 if (! exists $HERD->{$herd}) {
                     create_herd($herd);
-                    push @herdchanges => qq{Created herd "$herd"};
+                    push @herdchanges => qq{Created relgroup "$herd"};
                 }
 
                 ## Are we a part of it already?
                 if ($oldherd and exists $oldherd->{$herd}) {
-                    $QUIET or print qq{No change: table "$name" already belongs to herd "$herd"\n};
+                    $QUIET or print qq{No change: table "$name" already belongs to relgroup "$herd"\n};
                 }
                 else {
                     ## We are not a part of this herd yet
                     add_goat_to_herd($herd, $id);
-                    push @herdchanges => qq{Added table "$name" to herd "$herd"};
+                    push @herdchanges => qq{Added table "$name" to relgroup "$herd"};
                 }
 
             } ## end each herd specified
@@ -3449,7 +3450,7 @@ sub update_table {
                     next;
 
                     remove_table_from_herd($name, $old);
-                    push @herdchanges => qq{Removed table "$name" from herd "$old"};
+                    push @herdchanges => qq{Removed table "$name" from relgroup "$old"};
                 }
             }
 
@@ -3635,11 +3636,11 @@ sub add_herd {
 
     ## Create the herd if it does not exist
     if (exists $HERD->{$herdname}) {
-        print qq{Herd "$herdname" already exists\n};
+        print qq{Relgroup "$herdname" already exists\n};
     }
     else {
         create_herd($herdname);
-        $QUIET or print qq{Created herd "$herdname"\n};
+        $QUIET or print qq{Created relgroup "$herdname"\n};
     }
 
     ## Everything else is tables or sequences to add to this herd
@@ -3700,14 +3701,14 @@ sub add_herd {
     }
 
     if (@oldnames) {
-        $message .= qq{The following tables were already in the herd "$herdname":\n};
+        $message .= qq{The following tables were already in the relgroup "$herdname":\n};
         for (@oldnames) {
             $message .= "  $_\n";
         }
     }
 
     if (@newnames) {
-        $message .= qq{The following tables are now part of the herd "$herdname":\n};
+        $message .= qq{The following tables are now part of the relgroup "$herdname":\n};
         for (@newnames) {
             $message .= "  $_\n";
         }
@@ -3741,7 +3742,7 @@ sub remove_herd {
 
     for my $name (@nouns) {
         if (! exists $herd->{$name}) {
-            die qq{No such herd: $name\n};
+            die qq{No such relgroup: $name\n};
         }
     }
 
@@ -3753,14 +3754,14 @@ sub remove_herd {
         };
         if ($@) {
             if ($@ =~ /"sync_source_herd_fk"/) {
-                die qq{Cannot delete herd "$name": must remove all syncs that reference it first\n};
+                die qq{Cannot delete relgroup "$name": must remove all syncs that reference it first\n};
             }
-            die qq{Could not delete herd "$name"\n$@\n};
+            die qq{Could not delete relgroup "$name"\n$@\n};
         }
     }
 
     for my $name (@nouns) {
-        print qq{Removed herd "$name"\n};
+        print qq{Removed relgroup "$name"\n};
     }
 
     $dbh->commit();
@@ -3776,7 +3777,12 @@ sub update_herd {
     ## Arguments: none, parses nouns
     ## Returns: never, exits
 
+    die "update relgroup not implemented yet\n";
 } ## end of update_herd
+
+sub add_goat_to_herd {
+    die "Adding to a relgroup not implemented yet\n";
+}
 
 
 sub list_herds {
@@ -3795,7 +3801,7 @@ sub list_herds {
     $count = $sth->execute();
     if ($count < 1) {
         $sth->finish();
-        printf "There are no%s entries in the 'herd' table.\n",
+        printf "There are no%s relgroups.\n",
             $WHERE ? ' matching' : '';
         return -1;
     }
@@ -3810,7 +3816,7 @@ sub list_herds {
     for my $row (@$info) {
         my $name = $row->{name};
         my $h = $global{herd}{$name};
-        printf 'Herd: %-*s ',
+        printf 'Relgroup: %-*s ',
             $maxlen, $name;
         printf ' DB: %s ', $h->{db} if $h->{db};
         ## Got goats?
@@ -3855,7 +3861,7 @@ sub add_sync {
     ## Inputs and aliases, database column name, flags, default
     my $validcols = qq{
         name                     name                 0                $item_name
-        herd                     herd                 0                null
+        herd|relgroup            herd                 0                null
         dbs                      dbs                  0                null
         stayalive                stayalive            TF               null
         kidsalive                kidsalive            TF               null
@@ -3894,7 +3900,7 @@ sub add_sync {
 
     if (! exists $dbcols->{herd}) {
         ## But allow on-the-fly herd creation
-        die "Need to specify a herd for this sync\n";
+        die "Need to specify a relgroup for this sync\n";
     }
     if (! exists $dbcols->{dbs}) {
         die "Need to specify which databases\n";
@@ -3922,8 +3928,8 @@ sub add_sync {
 
             ## Maybe it's a table?
             if (! exists $global{goat}{$name}) {
-                warn "No such herd or table: $name\n";
-                warn "To list all herds, use: list herds\n";
+                warn "No such relgroup or table: $name\n";
+                warn "To list all relgroups, use: list relgroups\n";
                 warn "To list all tables, use: list tables\n";
                 exit 1;
             }
@@ -3932,7 +3938,7 @@ sub add_sync {
             for my $hname (sort keys %{$global{herd}}) {
                 my $number = keys %{$global{herd}{$hname}{hasgoat}{$schema}};
                 next unless 1 == $number;
-                print qq{Use existing herd "$hname"? Y/N };
+                print qq{Use existing relgroup "$hname"? Y/N };
                 my $ans = $batch ? 'Y' : <STDIN>;
                 if ($ans =~ /^y/i) {
                     $dbcols->{herd} = $hname;
@@ -3943,7 +3949,7 @@ sub add_sync {
             ## If we aren't using an existing herd, create a new one
             $name = $dbcols->{herd};
             if (! exists $global{herd}{$name}) {
-                print "Create a new herd with table $name\n";
+                print "Create a new relgroup with table $name\n";
 
                 ## We will use the name of the sync if free
                 ## Otherwise, keep adding numbers to it until we get a free name
@@ -4206,6 +4212,7 @@ sub update_sync {
     my %aliases = (
         standard_conflict => 'conflict_strategy',
         ping              => 'autokick',
+        relgroup          => 'herd',
     );
 
     for my $action (@actions) {
@@ -4353,7 +4360,7 @@ sub list_syncs {
         my $maxdbline = 50;
 
         ## Show basic information
-        printf "Sync: %-*s  Herd: %-*s %s[%s]\n",
+        printf "Sync: %-*s  Relgroup: %-*s %s[%s]\n",
             $maxname, $name,
             $maxherd, $s->{herd}{name},
             $maxdbs > $maxdbline ? '' : "$s->{d}  ",
@@ -5225,7 +5232,7 @@ sub status_detail {
         ## Build the display list
         push @items => ['Sync name'            => $sync];
         push @items => ['Current state'        => $s->{state}];
-        push @items => ['Source herd/database' => "$s->{herd}{name} / $sourcedb"];
+        push @items => ['Source relgroup/database' => "$s->{herd}{name} / $sourcedb"];
         push @items => ['Tables in sync'       => $numtables];
         push @items => ['Status'               => ucfirst $s->{status}];
         push @items => ['Check time'           => $s->{checktime}];
@@ -5446,7 +5453,7 @@ sub inspect {
 
     inspect_table() if $thing =~ /tab/i  or $thing eq 't';
     inspect_sync()  if $thing =~ /sync/i or $thing eq 's';
-    inspect_herd()  if $thing =~ /herd/i or $thing eq 'h';
+    inspect_herd()  if $thing =~ /(?:relgr|herd)/i or $thing eq 'h';
 
     warn "$usage\n";
 
@@ -5518,7 +5525,7 @@ sub inspect_table {
             for my $herd (sort keys %{$ggoat->{$id}{herd}}) {
                 $seenit{fktable} = 1;
                 next if exists $hherd->{$herd}{hasgoat}{$schema}{$table};
-                printf "Table %s.%s is in herd %s, but %s.%s (used as FK%s) is not\n",
+                printf "Table %s.%s is in relgroup %s, but %s.%s (used as FK%s) is not\n",
                     $s, $t, $herd, $schema, $table,
                         $type == 1 ? '' : ' target';
 
@@ -6118,7 +6125,7 @@ sub add_all_goats {
     ## --exclude-schema or -N: exclude these schemas
     ## --table or -t: limit to the given tables
     ## --exclude-table or -t: exclude these tables
-    ## --herd: name of the herd to add new tables to
+    ## --relgroup: name of the herd to add new tables to
     ## pkonly: exclude tables with no pkey
     ## Returns: text string of results, with a newline
 
@@ -6133,6 +6140,8 @@ sub add_all_goats {
             $bcargs->{$noun} = 1;
         }
     }
+
+    $bcargs->{herd}|= delete $bcargs->{relgroup} || $bcargs->{herd};
 
     ## If no databases, cowardly refuse to continue
     if (! keys %$DB) {
@@ -6227,13 +6236,13 @@ sub add_all_goats {
         $count = $herdcheck->execute($herd);
         $herdcheck->finish();
         if ($count < 1) {
-            print "Creating herd: $herd\n";
+            print "Creating relgroup: $herd\n";
             $SQL = 'INSERT INTO bucardo.herd(name) VALUES (?)';
             $herdcheck = $dbh->prepare($SQL);
             $herdcheck->execute($herd);
         }
         else {
-            $VERBOSE >= 1 and warn "Herd already exists: $herd\n";
+            $VERBOSE >= 1 and warn "Relgroup already exists: $herd\n";
         }
         $SQL = 'INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,?)';
         $addtoherd = $dbh->prepare($SQL);
@@ -6303,7 +6312,7 @@ sub add_all_goats {
                 $tinfo = $sth->fetchall_arrayref({})->[0];
             }
             if ($bcargs->{pkonly} and 'table' eq $type and ! length $tinfo->{pkey}) {
-                warn "Not adding table $S.$T to herd: no pkey\n";
+                warn "Not adding table $S.$T to relgroup: no pkey\n";
             }
             else {
                 $SQL = 'SELECT 1 FROM herdmap WHERE herd=? AND goat = ?';
@@ -6311,7 +6320,7 @@ sub add_all_goats {
                 $count = $sth->execute($herd, $id);
                 if ($count < 1) {
                     $addtoherd->execute($herd, $id);
-                    print "Added $type $S.$T to herd $herd\n";
+                    print "Added $type $S.$T to relgroup $herd\n";
                 }
             }
         }
@@ -7582,7 +7591,7 @@ sub usage {
     if ('add' eq $name) {
         return qq{Usage: add <type> <name> [options]
 Adds an item to the internal Bucardo database.
-The type is one of: db, dbgroup, herd, sync, table, sequence,
+The type is one of: db, dbgroup, relgroup, sync, table, sequence,
   customname, customcols, or customcode
 For more information, run: $progname help add <type>};
     }
@@ -7627,14 +7636,14 @@ Example: add dbgroup foobar d1:source d2:source d3 d4
 This can also be used to assign databases to an existing group.};
     }
     if ('add_herd' eq $name) {
-        return q{Usage: add herd <name> [table1 table2 ...]
-Adds a herd, and optionally which tables are members of it.
-This can also be used to assign tables to an existing herd.};
+        return q{Usage: add relgroup <name> [table1 table2 ...]
+Adds a relgation roup, and optionally which tables are members of it.
+This can also be used to assign tables to an existing relgroup.};
     }
     if ('add_sync' eq $name) {
-        return q{Usage: add sync <name> herd=x dbs=dbgroup [options]
+        return q{Usage: add sync <name> relgroup=x dbs=dbgroup [options]
 Adds a sync. Required args:
-  herd=name          (the herd containing the tables and sequences to be replicated)
+  relgroup=name      (the relation group containing the tables and sequences to be replicated)
   dbs=name           (the database group, or a comma-separated list of databases)
 
 Optional information:
@@ -7645,7 +7654,7 @@ Optional information:
   onetimecopy=number (controls whether we switch to a fullcopy mode for one run,
                       0=off, 1=always full copy, 2=only copy tables which are empty on the target)
   tables=list        (list of tables to add to this new sync,
-                      will create a herd with the same name as the sync)};
+                      will create a relation group with the same name as the sync)};
     }
     if ('add_sequence' eq $name) {
         return q{Usage: add sequence <name> [name2 name3 ...]
@@ -7671,8 +7680,8 @@ Inspects an object to see if it has dependency issues.
 The only supported type is currently 'table'.};
     }
     if ('inspect_herd' eq $name) {
-        return q{Usage: inspect herd <name>
-Inspects a herd to see if it has dependency issues.};
+        return q{Usage: inspect relgroup <name>
+Inspects a relation group to see if it has dependency issues.};
     }
     if ('inspect_sync' eq $name) {
         return q{Usage: inspect sync <name>
@@ -7692,7 +7701,7 @@ By default a graphical timer is given: this can be turned off with the --notimer
     if ('list' eq $name) {
         return qq{Usage: list <type> [options]
 Shows information about items in the internal Bucardo database.
-The type is one of: db, dbgroup, table, sequence, herd, sync,
+The type is one of: db, dbgroup, table, sequence, relgroup, sync,
   customcode, customcols, customname, or all to see everything at once.
 For more information, run: $progname help list <type>};
     }
@@ -7720,10 +7729,10 @@ The name can have wildcards with a '%'
 If '--verbose --verbose' is added, the internal database columns for the 'dbgroup' table are shown.};
     }
     if ('list_herds' eq $name) {
-        return q{Usage: list herd [name] [--verbose --verbose]
-Lists herds, and which tables (if any) are members.
+        return q{Usage: list relgroup [name] [--verbose --verbose]
+Lists relation groups, and which tables (if any) are members.
 
-Without a name, all herds are listed.
+Without a name, all relation groups are listed.
 The name can have wildcards with a '%'
 If '--verbose --verbose' is added, the internal database columns for the 'herd' table are shown.};
     }
@@ -7777,7 +7786,7 @@ Instructs the Bucardo daemon to reload its configuration file and restart.};
     if ('remove' eq $name or 'delete' eq $name) {
         return qq{Usage: remove <type> <name> [options]
 Removes an item from the internal Bucardo database.
-The type is one of: db, dbgroup, table, sequence, herd, sync,
+The type is one of: db, dbgroup, table, sequence, relgroup, sync,
   customcode, customcols, or customname
 For more information, run: $progname help remove <type>};
     }
@@ -7803,8 +7812,8 @@ Use the --force option to remove all related tables};
 Removes one or more database groups.};
     }
     if ('remove_herd' eq $name) {
-        return qq{Usage: $verb herd <name> [name2 name3 ...]
-Removes one or more herds.};
+        return qq{Usage: $verb relgroup <name> [name2 name3 ...]
+Removes one or more relation groups.};
     }
     if ('remove_sync' eq $name) {
         return qq{Usage: $verb sync <name> [name2 name3 ...]
@@ -7844,7 +7853,7 @@ Active children will not stop until they have finished their current task.};
     if ('update' eq $name) {
         return q{Usage: update <type> <name> col1=val [col2=val2 col3=val3 ...]
 Updates an item from the internal Bucardo database.
-The type is one of: db, dbgroup, table, sequence, herd, sync, or customname};
+The type is one of: db, dbgroup, table, sequence, relgroup, sync, or customname};
     }
     if ('update_database' eq $name) {
         return q{Usage: update database <name> col1=val [col2=val2 col3=val3 ...]
@@ -7852,7 +7861,7 @@ Updates a database
     };
     }
     if ('update_table' eq $name) {
-        return q{Usage: update table <name> col1=val [col2=val2 col3=val3 ...] herd=herd1,herd2
+        return q{Usage: update table <name> col1=val [col2=val2 col3=val3 ...] relgroup=relgroup1,relgroup2
 Updates a table
     };
     }
@@ -8407,7 +8416,7 @@ sub standardize_name {
 
     return 'database'   if $name =~ /^db/i or $name =~ /^database/i;
 
-    return 'herd'       if $name =~ /^herd/i;
+    return 'herd'       if $name =~ /^(?:relgr|herd)/i;
 
     return 'sync'       if $name =~ /^s[yi]n[ck]/i;
 
@@ -9195,7 +9204,7 @@ sub create_herd {
         $sth->execute($name);
     };
     if ($@) {
-        print qq{Failed to create database group "$name"\n$@\n};
+        print qq{Failed to create relation group "$name"\n$@\n};
         exit 1;
     }
 
@@ -9223,17 +9232,17 @@ This document describes version 4.99.5 of bucardo
 
   ./bucardo list dbs
 
-  ./bucardo add sync testsync source=herd1 type=pushdelta targetdb=B
+  ./bucardo add sync testsync source=relgroup1 type=pushdelta targetdb=B
 
-  ./bucardo add sync testsync source=herd1 type=pushdelta targetdb=B tables=tab1,tab2,tab3
+  ./bucardo add sync testsync source=relgroup1 type=pushdelta targetdb=B tables=tab1,tab2,tab3
 
   ./bucardo add db newdb dbname=internal_name port=5432 host=myserver
 
-  ./bucardo add all tables db=foo [herd=x] [pkonly]
+  ./bucardo add all tables db=foo [relgroup=x] [pkonly]
 
-  ./bucardo add all sequences db=foo [herd=x]
+  ./bucardo add all sequences db=foo [relgroup=x]
 
-  ./bucardo add herd newherd table1 table2 table3 ...
+  ./bucardo add relgroup newrelgroup table1 table2 table3 ...
 
   ./bucardo add dbgroup name db1 db2 db3 ...
 
@@ -9376,7 +9385,7 @@ Lists summary information about Bucardo objects. The supported C<types> are:
 
 =item * C<dbgroup>
 
-=item * C<herd>
+=item * C<relgroup>
 
 =item * C<sync>
 
@@ -9564,7 +9573,7 @@ doesn't exist, it will be created.
 =item C<sequence>
 
   bucardo add table [schema].table db=actual_db_name
-  bucardo add sequence [schema].sequence herd=xxx
+  bucardo add sequence [schema].sequence relgroup=xxx
 
 Adds a table or sequence object. The table or sequence information will be
 read from the specified database. Supported parameters:
@@ -9595,8 +9604,8 @@ by default. Optional.
 
 =item C<herd>
 
-Adds the table or sequence to the named herd. If the herd does not exist, it
-will be created. Optional.
+Adds the table or sequence to the named relation group. If the relation group
+does not exist, it will be created. Optional.
 
 =back
 
@@ -9604,8 +9613,8 @@ will be created. Optional.
 
 =item C<all sequences>
 
-  bucardo add all tables [herd=xxx] [pkonly]
-  bucardo add all sequences herd=xxx
+  bucardo add all tables [relgroup=xxx] [pkonly]
+  bucardo add all sequences relgroup=xxx
 
 Adds all the tables or sequences in all known databases or in a specified
 database. Excludes tables and sequences in the C<pg_catalog>,
@@ -9670,17 +9679,17 @@ Exclude tables without primary keys.
 
 =back
 
-=item C<herd>
+=item C<relgroup>
 
-  bucardo add herd name
-  bucardo add herd name table, sequence, ...
+  bucardo add relgroup name
+  bucardo add relgroup name table, sequence, ...
 
-Adds a herd. After the name, pass in an optional list of tables and/or
-sequences and they will be added to the herd.
+Adds a relation group. After the name, pass in an optional list of tables
+and/or sequences and they will be added to the group.
 
 =item C<sync>
 
-  bucardo add sync syncname herd=xxx dbs=xxx
+  bucardo add sync syncname relgroup=xxx dbs=xxx
 
 Adds a sync, which is a named replication event containing information about
 what to replicate from where to where. The supported parameters are:
@@ -9692,15 +9701,16 @@ what to replicate from where to where. The supported parameters are:
 The name of a database group or comma-delimited list of databases. All of the
 specified databases will be synchronized. Required.
 
-=item C<herd>
+=item C<relgroup>
 
-The name of a herd to synchronize. All of the tables and/or sequences in the
-herd will be synchronized. Required unless C<tables> is specified.
+The name of a relation group to synchronize. All of the tables and/or
+sequences in the relgroup will be synchronized. Required unless C<tables> is
+specified.
 
 =item C<tables>
 
-List of tables to add to the sync. This implicitly creates a herd with the
-same name as the sync. Required unless C<herd> is specified.
+List of tables to add to the sync. This implicitly creates a relation group
+with the same name as the sync. Required unless C<relgroup> is specified.
 
 =item C<status>
 
@@ -10082,7 +10092,7 @@ erroring out.
 
 =item * C<dbgroup>
 
-=item * C<herd>
+=item * C<relgroup>
 
 =item * C<sync>
 
@@ -10258,7 +10268,7 @@ for each type are the same as those for L</add>. The supported types are:
 
 =item C<dbgroup>
 
-=item C<herd> (unimplemented)
+=item C<relgroup> (unimplemented)
 
 =item C<sync>
 
@@ -10283,7 +10293,7 @@ C<STDOUT>. The supported types include:
 
 =item C<sync>
 
-=item C<herd>
+=item C<relgroup>
 
 =back
 

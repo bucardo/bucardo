@@ -66,14 +66,14 @@ for my $name (qw/ A B C D A1 /) {
     like ($res, qr/Added database "$name"/, $t);
 }
 
-## Put all pk tables into a herd
+## Put all pk tables into a relgroup
 $t = q{Adding all PK tables on the master works};
-$res = $bct->ctl(q{bucardo add tables '*bucardo*test*' '*Bucardo*test*' db=A herd=allpk pkonly});
-like ($res, qr/Created the herd named "allpk".*are now part of/s, $t);
+$res = $bct->ctl(q{bucardo add tables '*bucardo*test*' '*Bucardo*test*' db=A relgroup=allpk pkonly});
+like ($res, qr/Created the relgroup named "allpk".*are now part of/s, $t);
 
 ## Add all sequences
-$t = q{Adding all sequences to the main herd};
-$res = $bct->ctl(q{bucardo add all sequences herd=allpk});
+$t = q{Adding all sequences to the main relgroup};
+$res = $bct->ctl(q{bucardo add all sequences relgroup=allpk});
 like ($res, qr/New sequences added/s, $t);
 
 ## Create a new database group going from A to B and C and D
@@ -103,23 +103,23 @@ like ($res, qr/Created database group "pg5"/, $t);
 
 ## Create some new syncs. Only one should be active at a time!
 $t = q{Created a new sync for dbgroup pg1};
-$res = $bct->ctl('bucardo add sync pgtest1 herd=allpk dbs=pg1 status=inactive');
+$res = $bct->ctl('bucardo add sync pgtest1 relgroup=allpk dbs=pg1 status=inactive');
 like ($res, qr/Added sync "pgtest1"/, $t);
 
 $t = q{Created a new sync for dbgroup pg2};
-$res = $bct->ctl('bucardo add sync pgtest2 herd=allpk dbs=pg2 status=inactive autokick=false');
+$res = $bct->ctl('bucardo add sync pgtest2 relgroup=allpk dbs=pg2 status=inactive autokick=false');
 like ($res, qr/Added sync "pgtest2"/, $t);
 
 $t = q{Created a new sync for dbgroup pg3};
-$res = $bct->ctl('bucardo add sync pgtest3 herd=allpk dbs=pg3 status=inactive autokick=false');
+$res = $bct->ctl('bucardo add sync pgtest3 relgroup=allpk dbs=pg3 status=inactive autokick=false');
 like ($res, qr/Added sync "pgtest3"/, $t);
 
 $t = q{Created a new sync for dbgroup pg4};
-$res = $bct->ctl('bucardo add sync pgtest4 herd=allpk dbs=pg4 status=inactive autokick=false');
+$res = $bct->ctl('bucardo add sync pgtest4 relgroup=allpk dbs=pg4 status=inactive autokick=false');
 like ($res, qr/Added sync "pgtest4"/, $t);
 
 $t = q{Created a new sync for dbgroup pg5};
-$res = $bct->ctl('bucardo add sync pgtest5 herd=allpk dbs=pg5 status=inactive autokick=false');
+$res = $bct->ctl('bucardo add sync pgtest5 relgroup=allpk dbs=pg5 status=inactive autokick=false');
 like ($res, qr/Added sync "pgtest5"/, $t);
 
 ## Create a table that only exists on A and B: make sure C does not look for it!
@@ -136,10 +136,10 @@ $dbhA->commit();
 $dbhB->do($SQL);
 $dbhB->commit();
 
-## Create a herd for same-database testing
-$t = q{Created a new herd sameherd};
-$res = $bct->ctl('bucardo add herd sameherd bucardo_test1');
-like ($res, qr/Created herd "sameherd"/, $t);
+## Create a relgroup for same-database testing
+$t = q{Created a new relgroup samerelgroup};
+$res = $bct->ctl('bucardo add relgroup samerelgroup bucardo_test1');
+like ($res, qr/Created relgroup "samerelgroup"/, $t);
 
 ## We want all access to A1 to use the alternate table
 $t = q{Created a customname to force usage of bucardo_test1_copy};
@@ -147,16 +147,16 @@ $res = $bct->ctl('bucardo add customname bucardo_test1 bucardo_test1_copy db=A1'
 like ($res, qr/\Qpublic.bucardo_test1 to bucardo_test1_copy (for database A1)/, $t);
 
 $t = q{Created a new sync for samedb};
-$res = $bct->ctl('bucardo add sync samedb herd=sameherd dbs=A,A1 status=inactive');
+$res = $bct->ctl('bucardo add sync samedb relgroup=samerelgroup dbs=A,A1 status=inactive');
 like ($res, qr/Added sync "samedb"/, $t);
 
-## Create new herds, goats, and a sync
-$t = q{Created a new herd mherd};
-$res = $bct->ctl('bucardo add herd mherd mtest');
-like ($res, qr/Created herd "mherd"/, $t);
+## Create new relgroups, goats, and a sync
+$t = q{Created a new relgroup mrelgroup};
+$res = $bct->ctl('bucardo add relgroup mrelgroup mtest');
+like ($res, qr/Created relgroup "mrelgroup"/, $t);
 
-$t = q{Created a new sync for mherd};
-$res = $bct->ctl('bucardo add sync msync herd=mherd dbs=A:source,B:source status=inactive');
+$t = q{Created a new sync for mrelgroup};
+$res = $bct->ctl('bucardo add sync msync relgroup=mrelgroup dbs=A:source,B:source status=inactive');
 like ($res, qr/Added sync "msync"/, $t);
 
 ## Add a row to A, to make sure it does not go anywhere with inactive syncs

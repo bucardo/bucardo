@@ -1236,7 +1236,7 @@ sub start_controller {
            name    kidsalive  dbs     kick_on_startup)};
 
     ## Set our process name
-    $0 = qq{Bucardo Controller.$self->{extraname} Sync "$syncname" for herd "$sync->{herd}" to dbs "$sync->{dbs}"};
+    $0 = qq{Bucardo Controller.$self->{extraname} Sync "$syncname" for relgroup "$sync->{herd}" to dbs "$sync->{dbs}"};
 
     ## Upgrade any specific sync configs to global configs
     if (exists $config{sync}{$syncname}) {
@@ -1251,7 +1251,7 @@ sub start_controller {
     $self->{ctlpidfile} = $self->store_pid( "bucardo.ctl.sync.$syncname.pid" );
 
     ## Start normal log output for this controller: basic facts
-    my $msg = qq{New controller for sync "$syncname". Herd is "$sync->{herd}", dbs is "$sync->{dbs}". PID=$$};
+    my $msg = qq{New controller for sync "$syncname". Relgroup is "$sync->{herd}", dbs is "$sync->{dbs}". PID=$$};
     $self->glog($msg, LOG_TERSE);
 
     ## Log some startup information, and squirrel some away for later emailing
@@ -1305,7 +1305,7 @@ sub start_controller {
                 Controller $$ has been killed at line $line
                 Host: $hostname
                 Sync name: $syncname
-                Herd: $sync->{herd}
+                Relgroup: $sync->{herd}
                 Databases: $sync->{dbs}
                 Error: $diemsg
                 Parent process: $self->{mcppid}
