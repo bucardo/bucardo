@@ -6946,7 +6946,10 @@ sub upgrade {
     my @old_configs = (
         'pidfile',
         'upsert_attempts',
-        'default_standard_conflict',
+    );
+
+    my @renamed_configs = (
+        ['default_standard_conflict' => 'default_conflict_strategy'],
     );
 
     my @old_constraints = (
@@ -7308,6 +7311,18 @@ sub upgrade {
         next if ! config_exists($name);
         clog "Removed old bucardo_config name: $name";
         upgrade_and_log(qq{DELETE FROM bucardo.bucardo_config WHERE name = '$name'});
+        $changes++;
+    }
+
+    ## Rename configs.
+    for my $names (@renamed_configs) {
+        next if config_exists($names->[1]);
+        clog "Renamed bucardo_config $names->[0] to $names->[1]";
+        upgrade_and_log(qq{
+            UPDATE bucardo.bucardo_config
+               SET name = '$names->[1]'
+             WHERE name = '$names->[0]'
+        });
         $changes++;
     }
 
