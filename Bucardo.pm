@@ -4607,7 +4607,11 @@ sub start_kid {
                     $sleeptime, 1==$sleeptime ? 'second' : 'seconds'), LOG_TERSE);
 
         ## Roll everyone back
-        $sync->{db}{$_}{dbh}->rollback for @dbs_dbi;
+        for my $dbname (@dbs_dbi) {
+            my $dbh = $sync->{db}{$dbname}{dbh};
+            $dbh->pg_cancel if $dbh->{pg_async_status} > 0;
+            $dbh->rollback;
+        }
         $maindbh->rollback;
 
         ## Tell listeners we are about to sleep
