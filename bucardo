@@ -3194,7 +3194,7 @@ sub add_table {
     ## Inputs and aliases, database column name, flags, default
     my $validcols = q{
         db                       db                   0                null
-        ping                     ping                 TF               null
+        autokick|ping            ping                 TF               null
         rebuild_index            rebuild_index        numeric          null
         standard_conflict        standard_conflict    0                null
         analyze_after_copy       analyze_after_copy   TF               null
@@ -3860,7 +3860,7 @@ sub add_sync {
         dbs                      dbs                  0                null
         stayalive                stayalive            TF               null
         kidsalive                kidsalive            TF               null
-        ping                     ping                 TF               null
+        autokick|ping            ping                 TF               null
         checktime                checktime            interval         null
         status                   status               =active|inactive null
         source_makedelta         source_makedelta     =inherits|on|off null
@@ -4210,6 +4210,7 @@ sub update_sync {
 
             ## No funny characters please, just boring column names
             $setting =~ /^[a-z_]+$/ or die "Invalid setting: $setting\n";
+            $setting = 'ping' if $setting eq 'autokick';
 
             ## If we have not already, grab the current information for this sync
             ## We also use this to get the list of valid column names to modify
@@ -9551,10 +9552,11 @@ The name of the database from which to read the table or sequence information.
 Should be a name known to Bucardo, thanks to a previous call to C<add
 database>. Required.
 
-=item C<ping>
+=item C<autokick>
 
-Boolean indicating whether or not to ping the database before each sync.
-Optional.
+Boolean indicating whether or not the table should automatically send kick
+messages when it's modified. Overrides the C<autokick> parameter of any syncs
+of which the table is a part. Applies only to tables.
 
 =item C<rebuild_index>
 
@@ -9753,10 +9755,11 @@ persisent. Defaults to false.
 Boolean indicating whether or not the sync child processes (KID) should be
 persisent. Defaults to false.
 
-=item C<ping>
+=item C<autokick>
 
-Boolean indicating whether or not to ping each database before each sync.
-Optional.
+Boolean indicating whether or not tables in the sync should automatically send
+kick messages when they're modified. May be overridden by the C<autokick>
+parameter of individual tables.
 
 =item C<checktime>
 
