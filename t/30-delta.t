@@ -66,7 +66,7 @@ like ($res, qr/Created database group "pg"/, $t);
 
 ## Create a new sync
 $t = q{Created a new sync};
-$res = $bct->ctl(q{ bucardo add sync dtest herd=therd dbs=pg ping=false });
+$res = $bct->ctl(q{ bucardo add sync dtest herd=therd dbs=pg autokick=false });
 like ($res, qr/Added sync "dtest"/, $t);
 
 ## Make sure the bucardo_delta and bucardo_track tables are empty

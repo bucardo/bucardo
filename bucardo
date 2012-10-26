@@ -3194,7 +3194,7 @@ sub add_table {
     ## Inputs and aliases, database column name, flags, default
     my $validcols = q{
         db                       db                   0                null
-        autokick|ping            ping                 TF               null
+        autokick|ping            autokick             TF               null
         rebuild_index            rebuild_index        numeric          null
         analyze_after_copy       analyze_after_copy   TF               null
         herd                     herd                 0                skip
@@ -3592,8 +3592,8 @@ sub list_tables {
             printf '  Syncs: ';
             print join ',' => sort keys %{ $row->{sync} };
         }
-        if (defined $row->{ping}) {
-            printf '  ping:%s', $row->{ping} ? 'true' : 'false';
+        if (defined $row->{autokick}) {
+            printf '  autokick:%s', $row->{autokick} ? 'true' : 'false';
         }
         if ($row->{rebuild_index}) {
             print '  rebuild_index:true';
@@ -3859,7 +3859,7 @@ sub add_sync {
         dbs                      dbs                  0                null
         stayalive                stayalive            TF               null
         kidsalive                kidsalive            TF               null
-        autokick|ping            ping                 TF               null
+        autokick|ping            autokick             TF               null
         checktime                checktime            interval         null
         status                   status               =active|inactive null
         conflict_strategy|standard_conflict conflict_strategy  0       null
@@ -3879,13 +3879,13 @@ sub add_sync {
 
     ## Fullcopy syncs get some of their defaults overriden
     ## The controllers and kids never start automatically,
-    ## and ping is never on
+    ## and autokick is never on
 
     my $morph = [
         {
             field => 'synctype',
             value => 'fullcopy',
-            new_defaults => 'ping|F stayalive|F kidsalive|F',
+            new_defaults => 'autokick|F stayalive|F kidsalive|F',
         },
     ];
 
@@ -4205,7 +4205,7 @@ sub update_sync {
 
     my %aliases = (
         standard_conflict => 'conflict_strategy',
-        autokick          => 'ping',
+        ping              => 'autokick',
     );
 
     for my $action (@actions) {
@@ -4395,7 +4395,7 @@ sub get_goat_ids {
     ## Also checks the live database and adds tables to the goat table as needed.
     ## Arguments: key-value pairs:
     ##  - args: arrayref of names to match against. Can have wildcards.
-    ##  - dbcols: optional hashref of fields to populate goat table with (e.g. ping=1)
+    ##  - dbcols: optional hashref of fields to populate goat table with (e.g. autokick=1)
     ## Returns: a hash with:
     ##  - relations: hash of goat objects, key is the fully qualified name
     ##    - original: hash of search term(s) used to find this
@@ -5212,7 +5212,7 @@ sub status_detail {
         }
 
         ## Should be 'yes' or 'no'
-        for (qw/analyze_after_copy vacuum_after_copy stayalive kidsalive ping/) {
+        for (qw/analyze_after_copy vacuum_after_copy stayalive kidsalive autokick/) {
             $s->{$_} = (defined $s->{$_} and $s->{$_}) ? 'yes' : 'no ';
         }
 
@@ -5233,7 +5233,7 @@ sub status_detail {
         push @items => ['Expired time'         => $s->{expired}];
         push @items => ['Stayalive/Kidsalive'  => "$s->{stayalive} / $s->{kidsalive}"];
         push @items => ['Rebuild index'        => $s->{rebuild_index} ? 'Yes' : 'No'];
-        push @items => ['Ping'                 => $s->{ping}];
+        push @items => ['Autokick'             => $s->{autokick}];
         push @items => ['Onetimecopy'          => $s->{onetimecopy} ? 'Yes' : 'No'];
 
         ## Only show these if enabled
@@ -6985,10 +6985,11 @@ sub upgrade {
     );
 
     my @altered_columns = (
-        ['bucardo', 'goat', 'rebuild_index', 'BOOL2SMALLINT1'],
-        ['bucardo', 'goat', 'schemaname',    'NO DEFAULT'],
-        ['bucardo', 'sync', 'rebuild_index', 'BOOL2SMALLINT1'],
+        ['bucardo', 'goat', 'rebuild_index',     'BOOL2SMALLINT1'],
+        ['bucardo', 'goat', 'schemaname',        'NO DEFAULT'],
+        ['bucardo', 'sync', 'rebuild_index',     'BOOL2SMALLINT1'],
         ['bucardo', 'sync', 'standard_conflict', 'RENAME conflict_strategy'],
+        ['bucardo', 'sync', 'ping',              'RENAME autokick'],
     );
 
     my @row_values = (
@@ -7222,6 +7223,7 @@ sub upgrade {
         }
         elsif ($change =~ /^RENAME\s+(\w+)/) {
             my $newname = $1;
+            next if column_exists($schema, $table, $newname);
             upgrade_and_log("ALTER TABLE $schema.$table RENAME COLUMN $column TO $newname");
             clog("Renamed $schema.$table.$column to $newname");
             $changes++;

@@ -123,7 +123,7 @@ like ($res, qr/Created database group "md"/, $t);
 ## Create a new sync
 $t = q{Created a new sync};
 $command =
-"bucardo add sync mongo herd=therd dbs=md ping=false";
+"bucardo add sync mongo herd=therd dbs=md autokick=false";
 $res = $bct->ctl($command);
 like ($res, qr/Added sync "mongo"/, $t);
 

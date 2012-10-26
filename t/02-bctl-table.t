@@ -153,8 +153,8 @@ $t = q{Add table works with multiple entries};
 $res = $bct->ctl('bucardo add table pub%.bucard%9 public.bucardo_test1 nada bucardo3 buca%2');
 is ($res, qq{$nomatch_msg:\n  bucardo3\n  nada\n$addtable_msg:\n  public.bucardo_test1\n  public.bucardo_test2\n  public.bucardo_test9\n}, $t);
 
-$t = q{Add table works when specifying the ping option};
-$res = $bct->ctl('bucardo add table bucardo_test5 ping=true');
+$t = q{Add table works when specifying the autokick option};
+$res = $bct->ctl('bucardo add table bucardo_test5 autokick=true');
 is ($res, qq{$addtable_msg:\n  public.bucardo_test5\n}, $t);
 
 $t = q{'bucardo list tables' returns expected result};
@@ -162,13 +162,13 @@ $res = $bct->ctl('bucardo list tables');
 $expected =
 qr{\d+\.\s* Table: public.bucardo_test1  DB: A  PK: id \(int2\)\s*
 \d+\.\s* Table: public.bucardo_test2  DB: A  PK: id\|data1 \(int4\|text\)\s*
-\d+\.\s* Table: public.bucardo_test5  DB: A  PK: id space \(date\)       ping:true\s*
+\d+\.\s* Table: public.bucardo_test5  DB: A  PK: id space \(date\)       autokick:true\s*
 \d+\.\s* Table: public.bucardo_test9  DB: A  PK: id \(int_unsigned\)\s*
 };
 like ($res, $expected, $t);
 
-$t = q{Add table works when specifying the rebuild_index and ping options};
-$res = $bct->ctl('bucardo add table bucardo_test4 ping=false rebuild_index=1');
+$t = q{Add table works when specifying the rebuild_index and autokick options};
+$res = $bct->ctl('bucardo add table bucardo_test4 autokick=false rebuild_index=1');
 is ($res, qq{$addtable_msg:\n  public.bucardo_test4\n  tschema.bucardo_test4\n}, $t);
 
 $t = q{'bucardo list tables' returns expected result};
@@ -176,10 +176,10 @@ $res = $bct->ctl('bucardo list tables');
 $expected =
 qr{\d+\.\s* Table: public.bucardo_test1   DB: A  PK: id \(int2\)\s*
 \d+\.\s* Table: public.bucardo_test2   DB: A  PK: id|data1 \(int4\|text\)\s*
-\d+\.\s* Table: public.bucardo_test4   DB: A  PK: id \(text\)\s* ping:false\s*rebuild_index:true\s*
-\d+\.\s* Table: public.bucardo_test5   DB: A  PK: id space \(date\)\s* ping:true\s*
+\d+\.\s* Table: public.bucardo_test4   DB: A  PK: id \(text\)\s* autokick:false\s*rebuild_index:true\s*
+\d+\.\s* Table: public.bucardo_test5   DB: A  PK: id space \(date\)\s* autokick:true\s*
 \d+\.\s* Table: public.bucardo_test9   DB: A  PK: id \(int_unsigned\)\s*
-\d+\.\s* Table: tschema.bucardo_test4  DB: A  PK: none\s*ping:false  rebuild_index:true\s*
+\d+\.\s* Table: tschema.bucardo_test4  DB: A  PK: none\s*autokick:false  rebuild_index:true\s*
 };
 like ($res, $expected, $t);
 

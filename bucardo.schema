@@ -256,7 +256,7 @@ CREATE TABLE bucardo.goat (
   qpkey              TEXT            NULL,
   pkeytype           TEXT            NULL,
   has_delta          BOOLEAN     NOT NULL DEFAULT 'false',
-  ping               BOOLEAN         NULL,                 -- overrides sync-level ping
+  autokick           BOOLEAN         NULL,                 -- overrides sync-level autokick
   standard_conflict  TEXT            NULL,
   makedelta          BOOLEAN         NULL,
   rebuild_index      SMALLINT        NULL DEFAULT 0,       -- overrides sync-level rebuild_index
@@ -392,7 +392,7 @@ CREATE TABLE bucardo.sync (
   standard_conflict  TEXT        NOT NULL DEFAULT '',
   copyextra          TEXT        NOT NULL DEFAULT '',  -- e.g. WITH OIDS
   deletemethod       TEXT        NOT NULL DEFAULT 'delete',
-  ping               BOOLEAN     NOT NULL DEFAULT true,      -- Are we issuing NOTICES via triggers?
+  autokick           BOOLEAN     NOT NULL DEFAULT true,      -- Are we issuing NOTICES via triggers?
   checktime          INTERVAL        NULL,                   -- How often to check if we've not heard anything?
   status             TEXT        NOT NULL DEFAULT 'active',  -- Possibly CHECK / FK ('stopped','paused','b0rken')
   makedelta          BOOLEAN         NULL,
@@ -1133,7 +1133,7 @@ if (!$rv->{processed}) {
 ## Grab information on all members of this herd
 $SQL = qq{
         SELECT id, db, schemaname, tablename, pkey, pkeytype, reltype, 
-               ping AS goatping,
+               autokick AS goatkick,
                pg_catalog.quote_ident(db)         AS safedb,
                pg_catalog.quote_ident(schemaname) AS safeschema,
                pg_catalog.quote_ident(tablename)  AS safetable,
@@ -2335,7 +2335,7 @@ SELECT 'Fixme'::TEXT;
                 $dbh->do(qq{CREATE INDEX bucardo_delta_target_unique ON bucardo.bucardo_delta_targets(tablename,sync)});
             }
 
-            ## Override the 'ping' kick trigger if needed
+            ## Override the 'autokick' kick trigger if needed
             $SQL = qq{SELECT trigger_language,trigger_body,trigger_level FROM bucardo_custom_trigger
               WHERE goat=$tinfo->{id}
               AND status='active'
@@ -2361,9 +2361,9 @@ SELECT 'Fixme'::TEXT;
                 }
             }
 
-            ## Add in the ping triggers as needed
-            ## Skip if ping is false
-            $info->{ping} eq 'f' and next TABLE;
+            ## Add in the autokick triggers as needed
+            ## Skip if autokick is false
+            $info->{autokick} eq 'f' and next TABLE;
             $sth = $sth{haztrig};
             $count = $sth->execute(qq{"$schema"."$table"}, $kickfunc);
             $sth->finish();
@@ -2477,7 +2477,7 @@ AS $bc$
     }
     else {
         my $old = $_TD->{old};
-        for my $x (qw(name source targetdb targetgroup ping)) {
+        for my $x (qw(name source targetdb targetgroup autokick)) {
             elog(DEBUG, "Checking on $x");
             if (! defined $old->{$x}) {
                 next if ! defined $new->{$x};

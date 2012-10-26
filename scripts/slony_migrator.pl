@@ -988,13 +988,13 @@ sub make_bucardo_init {
                 map {
                     my $name = $info->{table}{$_}{FQN};
                     if ($info->{table}{$_}{set} == $set_num) {
-                        print "./bucardo add table $name db=$db ping=true conflict_strategy=source herd=$herd\n";
+                        print "./bucardo add table $name db=$db autokick=true conflict_strategy=source herd=$herd\n";
                     }
                 } keys %{$info->{table}};
                 map {
                     my $name = $info->{sequence}{$_}{FQN};
                     if ($info->{sequence}{$_}{set} == $set_num) {
-                        print "./bucardo add sequence $name db=$db ping=true standard_conflict=source herd=$herd\n";
+                        print "./bucardo add sequence $name db=$db autokick=true conflict_strategy=source herd=$herd\n";
                     }
                 } keys %{$info->{sequence}};
                 for my $child (@{$node->{children}}) {

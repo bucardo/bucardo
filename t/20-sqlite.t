@@ -134,13 +134,13 @@ like ($res, qr/Created database group "qx"/, $t);
 ## Create a new sync
 $t = q{Created a new sync};
 $command =
-"bucardo add sync sqlite herd=therd dbs=qx ping=false";
+"bucardo add sync sqlite herd=therd dbs=qx autokick=false";
 $res = $bct->ctl($command);
 like ($res, qr/Added sync "sqlite"/, $t);
 
 ## Create a second sync, solely for multi-sync interaction issues
 $bct->ctl('bucardo add dbgroup t1 A:source B C');
-$bct->ctl('bucardo add sync tsync1 herd=therd dbs=t1 ping=false status=inactive');
+$bct->ctl('bucardo add sync tsync1 herd=therd dbs=t1 autokick=false status=inactive');
 
 ## Start up Bucardo with these new syncs
 $bct->restart_bucardo($dbhX);

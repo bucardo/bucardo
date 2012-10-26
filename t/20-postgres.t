@@ -107,19 +107,19 @@ $res = $bct->ctl('bucardo add sync pgtest1 herd=allpk dbs=pg1 status=inactive');
 like ($res, qr/Added sync "pgtest1"/, $t);
 
 $t = q{Created a new sync for dbgroup pg2};
-$res = $bct->ctl('bucardo add sync pgtest2 herd=allpk dbs=pg2 status=inactive ping=false');
+$res = $bct->ctl('bucardo add sync pgtest2 herd=allpk dbs=pg2 status=inactive autokick=false');
 like ($res, qr/Added sync "pgtest2"/, $t);
 
 $t = q{Created a new sync for dbgroup pg3};
-$res = $bct->ctl('bucardo add sync pgtest3 herd=allpk dbs=pg3 status=inactive ping=false');
+$res = $bct->ctl('bucardo add sync pgtest3 herd=allpk dbs=pg3 status=inactive autokick=false');
 like ($res, qr/Added sync "pgtest3"/, $t);
 
 $t = q{Created a new sync for dbgroup pg4};
-$res = $bct->ctl('bucardo add sync pgtest4 herd=allpk dbs=pg4 status=inactive ping=false');
+$res = $bct->ctl('bucardo add sync pgtest4 herd=allpk dbs=pg4 status=inactive autokick=false');
 like ($res, qr/Added sync "pgtest4"/, $t);
 
 $t = q{Created a new sync for dbgroup pg5};
-$res = $bct->ctl('bucardo add sync pgtest5 herd=allpk dbs=pg5 status=inactive ping=false');
+$res = $bct->ctl('bucardo add sync pgtest5 herd=allpk dbs=pg5 status=inactive autokick=false');
 like ($res, qr/Added sync "pgtest5"/, $t);
 
 ## Create a table that only exists on A and B: make sure C does not look for it!
