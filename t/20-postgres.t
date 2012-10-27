@@ -150,7 +150,7 @@ $t = q{Created a new sync for samedb};
 $res = $bct->ctl('bucardo add sync samedb relgroup=samerelgroup dbs=A,A1 status=inactive');
 like ($res, qr/Added sync "samedb"/, $t);
 
-## Create new relgroups, goats, and a sync
+## Create new relgroups, relations, and a sync
 $t = q{Created a new relgroup mrelgroup};
 $res = $bct->ctl('bucardo add relgroup mrelgroup mtest');
 like ($res, qr/Created relgroup "mrelgroup"/, $t);

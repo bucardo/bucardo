@@ -2533,7 +2533,6 @@ sub add_customname {
     my $item_name = shift @nouns || '';
 
     my $usage = usage('add_customname');
-
     ## Must have a second name as well
     my $newname = shift @nouns || '';
 
@@ -3313,7 +3312,7 @@ sub remove_table {
                 $sth->execute($name);
             };
             if ($@) {
-                die qq{Could not delete goat "$name"\n$@\n};
+                die qq{Could not delete relation "$name"\n$@\n};
             }
         }
         else {
@@ -3502,13 +3501,13 @@ sub update_table {
         if ($@) {
             $dbh->rollback();
             $dbh->disconnect();
-            print "Sorry, failed to update the bucardo.goat table. Error was:\n$@\n";
+            print "Sorry, failed to update the relation. Error was:\n$@\n";
             exit 1;
         }
 
         for my $item (sort keys %change) {
             my ($old,$new) = @{ $change{$item} };
-            print "Changed bucardo.goat $item from $old to $new\n";
+            print "Changed relation $item from $old to $new\n";
         }
 
         confirm_commit();
@@ -4642,7 +4641,7 @@ sub add_items_to_goat_table {
         $sth = $dbh->prepare($SQL);
         ($count = $sth->execute(@args)) =~ s/0E0/0/;
 
-        debug(qq{Added "$schema.$table" to goat table with db "$db", count was $count});
+        debug(qq{Added "$schema.$table" with db "$db", count was $count});
 
         push @newid => $sth->fetchall_arrayref()->[0][0];
     }
@@ -5764,7 +5763,7 @@ sub list_sequences {
     $count = $sth->execute();
     if ($count < 1) {
         $sth->finish();
-        printf "There are no%s entries in the 'goat' table.\n",
+        printf "There are no%s squences.\n",
             $WHERE ? ' matching' : '';
         return -1;
     }
@@ -5948,13 +5947,13 @@ sub add_customcode {
         getrows                  getrows              TF               null
         trigrules                trigrules            TF               null
         sync                     sync                 0                skip
-        goat                     goat                 0                skip
+        goat|relation            goat                 0                skip
         active                   active               TF               skip
         priority                 priority             number           skip
         src_code                 src_code             0                skip
     };
 
-    my ($dbcols,$cols,$phs,$vals)
+    my ($dbcols,$cols,$phs,$vals,$extras)
         = process_simple_args({cols => $validcols, list => \@nouns, usage => $usage});
 
     my $newname = $dbcols->{name};
@@ -5972,11 +5971,11 @@ sub add_customcode {
     }
 
     ## We must have a src_code as a file
-    if (! exists $dbcols->{src_code} or ! $dbcols->{src_code}) {
+    if (! exists $extras->{src_code} or ! $extras->{src_code}) {
         warn "$usage\n";
         exit 1;
     }
-    my $tfile = $dbcols->{src_code};
+    my $tfile = $extras->{src_code};
     if (! -e $tfile) {
         warn qq{Could not find a file named "$tfile"\n};
         exit 2;
@@ -5992,7 +5991,7 @@ sub add_customcode {
     $DEBUG and warn Dumper $vals;
     $sth = $dbh->prepare($SQL);
     eval {
-        $count = $sth->execute(@$vals, $src);
+        $count = $sth->execute((map { $vals->{$_} } sort keys %$vals), $src);
     };
     if ($@) {
         die "Failed to add customcode: $@\n";
@@ -6003,33 +6002,35 @@ sub add_customcode {
     ## See if any updates to customcode_map need to be made
 
     ## Only one of sync or goat can be specified
-    if ($dbcols->{sync} and $dbcols->{goat}) {
-        die qq{Sorry, you must specify a sync OR a goat, not both\n};
+    if ($extras->{sync} and $extras->{relation}) {
+        die qq{Sorry, you must specify a sync OR a relation, not both\n};
     }
 
     ## Makes no sense to specify priority or active if no goat or sync
-    if (($dbcols->{priority} or $dbcols->{active}) and !$dbcols->{sync} and ! $dbcols->{goat}) {
-        die qq{You must specify a sync or a goat when using priority or active\n};
+    if (($extras->{priority} or $extras->{active}) and !$extras->{sync} and ! $extras->{relation}) {
+        die qq{You must specify a sync or a relation when using priority or active\n};
     }
 
     ## Is this a valid sync?
-    if ($dbcols->{sync} and ! exists $global{sync}{$dbcols->{sync}}) {
+    if ($extras->{sync} and ! exists $global{sync}{$extras->{sync}}) {
         die qq{Unknown sync: $dbcols->{sync}\n};
     }
 
     ## Is this a valid gaot?
-    if ($dbcols->{goat} and ! exists $global{goat}{$dbcols->{goat}}) {
-        die qq{Unknown goat: $dbcols->{goat}\n};
+    if ($extras->{relation} and ! exists $global{goat}{$extras->{relation}}) {
+        die qq{Unknown relation: $extras->{relation}\n};
     }
 
     ## Add to the customcode_map table
-    if ($dbcols->{sync} or $dbcols->{goat}) {
+    if ($extras->{sync} or $extras->{relation}) {
         $SQL = 'INSERT INTO customcode_map(code,';
         my @vals;
-        for my $col (qw/sync goat priority active/) {
-            if ($dbcols->{$col}) {
+        # XXX Relation is text, but we need a goat.id. Should the param be
+        # table instead of relation, and should it look up the ID?
+        for my $col (qw/sync priority active/) {
+            if ($extras->{$col}) {
                 $SQL .= "$col,";
-                push @vals => $dbcols->{$col};
+                push @vals => $extras->{$col};
             }
         }
         my $phs2 = '?,' x @vals;
@@ -6260,7 +6261,7 @@ sub add_all_goats {
         my $tinfo;
         ## Do we already have this one?
         if (exists $hastable{$S}{$T}) {
-            $VERBOSE >= 2 and warn "Skipping $type already in goat: $S.$T\n";
+            $VERBOSE >= 2 and warn "Skipping $type already in relation: $S.$T\n";
             $count{seenit}++;
             $old{$S}{$T} = 1;
             if ($herd) {
@@ -6277,7 +6278,7 @@ sub add_all_goats {
             }
             next;
         }
-        $VERBOSE >= 2 and warn "Attempting to add $S.$T to the goat table\n";
+        $VERBOSE >= 2 and warn "Attempting to add relation $S.$T\n";
         eval {
             $count = $addtable->execute($db->{name},$S,$T,$type);
         };
@@ -6293,7 +6294,7 @@ sub add_all_goats {
         }
         if ($count != 1) {
             $addtable->finish();
-            warn "Failed to add $type $S.$T to the goat table!\n";
+            warn "Failed to add $type relation $S.$T!\n";
             $fail{$S}{$T} = 1;
             next;
         }
@@ -8890,7 +8891,7 @@ JOIN goat g ON (g.id = c.goat)
             $SEQUENCE->{$id} = $GOAT->{$id};
         }
         else {
-            die "Unknown goat type $type!";
+            die "Unknown relation type $type!";
         }
     }
 
@@ -9972,7 +9973,7 @@ execution of the custom code. Defaults to false.
 
 Name of the sync with which to associate the custom code.
 
-=item C<goat>
+=item C<relation>
 
 Name of the table or sequence with which to associate the custom code.
 

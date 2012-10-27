@@ -5739,7 +5739,7 @@ sub validate_sync {
 
             ## Save information about each column in the primary key
             if (!defined $g->{pkey} or !defined $g->{qpkey}) {
-                die "Table $g->{safetable} has no pkey or qpkey - do you need to run validate_goat on it?\n";
+                die "Table $g->{safetable} has no pkey or qpkey - do you need to run validate_goat() on it?\n";
             }
 
             ## Much of this is used later on, for speed of performing the sync
