@@ -1049,9 +1049,6 @@ sub mcp_main {
 
                 ## Echo out to anyone listening
                 $self->db_notify($maindbh, $name, 1);
-
-                ## Kick it!
-                $sync->{$syncname}{kick_on_startup} = 1;
             }
 
             ## Should not happen, but let's at least log it
@@ -2669,7 +2666,7 @@ sub start_kid {
         ## Should we actually do something this round?
         my $dorun = 0;
 
-        ## If we were just created, go ahead and start a run
+        ## If we were just created or kicked, go ahead and start a run.
         if ($kicked) {
             $dorun = 1;
             $kicked = 0;
@@ -4622,6 +4619,7 @@ sub start_kid {
 
         ## Sleep and try again.
         sleep $sleeptime;
+        $kicked = 1;
         redo RUNKID;
     }
 
