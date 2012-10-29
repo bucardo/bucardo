@@ -473,7 +473,7 @@ sub start_mcp {
     $self->glog('Bucardo.pm: ' . $INC{'Bucardo.pm'}, LOG_WARN);
     $self->glog((sprintf 'OS: %s  Perl: %s %vd', $^O, $^X, $^V), LOG_WARN);
 
-    ## Get a integer version of the DBD::Pg version, for later comparisons
+    ## Get an integer version of the DBD::Pg version, for later comparisons
     if ($DBD::Pg::VERSION !~ /(\d+)\.(\d+)\.(\d+)/) {
         die "Could not parse the DBD::Pg version: was $DBD::Pg::VERSION\n";
     }
