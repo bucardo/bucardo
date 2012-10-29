@@ -9824,12 +9824,14 @@ default. Optional.
 =item C<overdue>
 
 An interval specifying the amount of time after which the sync has not run
-that it should be considered overdue.
+that it should be considered overdue. C<check_bucardo_sync> issues a warning
+when a sync has not been run in this amount of time.
 
 =item C<expired>
 
 An interval specifying the amount of time after which the sync has not run
-that it should be considered expired.
+that it should be considered expired. C<check_bucardo_sync> issues a critical
+messagewhen a sync has not been run in this amount of time.
 
 =item C<track_rates>
 
