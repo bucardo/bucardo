@@ -5599,7 +5599,7 @@ sub validate_sync {
     my $goatlistcodes = join ',' => map { $_->{id} } @{$s->{goatlist}};
 
     $SQL = qq{
-            SELECT c.src_code, c.id, c.whenrun, c.getdbh, c.name, c.getrows, COALESCE(c.about,'?') AS about,
+            SELECT c.src_code, c.id, c.whenrun, c.getdbh, c.name, COALESCE(c.about,'?') AS about,
                    c.trigrules, m.active, m.priority, COALESCE(m.goat,0) AS goat
             FROM customcode c, customcode_map m
             WHERE c.id=m.code AND m.active IS TRUE
@@ -5640,11 +5640,6 @@ sub validate_sync {
         }
         else {
             push @{$s->{"code_$c->{whenrun}"}}, $c;
-        }
-
-        ## Some custom code needs row information - the default is 0
-        if ($c->{getrows}) {
-            $s->{need_rows} = 1;
         }
 
         ## Some custom code needs database handles - if so, gets one of two types
@@ -7212,10 +7207,6 @@ sub run_ctl_custom_code {
         nextcode   => '',
         endsync    => '',
     };
-    if ($c->{getrows}) {
-        ## add back, but without left join...
-        #$input->{rows} = $rows_for_custom_code;
-    }
 
     $self->{masterdbh}->{InactiveDestroy} = 1;
     $cc_sourcedbh->{InactiveDestroy} = 1;

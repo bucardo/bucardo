@@ -5727,7 +5727,7 @@ sub list_customcodes {
         printf "Code: %-*s  When run: %-*s  Get dbh: %s  Get rows: %s Trigrules: %s\n",
             $maxname, $name,
             $maxwhen, $row->{whenrun},
-            $row->{getdbh}, $row->{getrows}, $row->{trigrules};
+            $row->{getdbh}, $row->{trigrules};
         if (defined $row->{about} and $VERBOSE) {
             (my $about = $row->{about}) =~ s/(.)^/$1    /gsm;
             print "  About: $about\n";
@@ -5944,7 +5944,6 @@ sub add_customcode {
         about                    about                0                null
         whenrun|when_run         whenrun              =$whenrun        null
         getdbh                   getdbh               TF               null
-        getrows                  getrows              TF               null
         trigrules                trigrules            TF               null
         sync                     sync                 0                skip
         goat|relation            goat                 0                skip
@@ -6995,6 +6994,7 @@ sub upgrade {
         ['bucardo', 'goat', 'customselect'],
         ['bucardo', 'sync', 'usecustomselect'],
         ['bucardo', 'sync', 'do_listen'],
+        ['bucardo', 'customcode', 'getrows'],
     );
 
     my @altered_columns = (
@@ -9960,11 +9960,6 @@ provided to the custom code subroutine. If true, database handles will be
 provided under the C<dbh> key of the hash reference passed to the subroutine.
 The value under this key will be a hash reference mapping database names to
 their respective handles.
-
-=item C<getrows>
-
-Boolean indicating whether or not the custom code routine needs to fetch
-rows. Currently ignored.
 
 =item C<trigrules>
 
