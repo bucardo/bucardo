@@ -318,10 +318,10 @@ sub start_mcp {
 
     ## Start the Bucardo daemon. Called by bucardo after setsid()
     ## Arguments: one
-    ## 1. Hashref of startup arguments
+    ## 1. Arrayref of command-line options.
     ## Returns: never (exit 0 or exit 1)
 
-    my ($self,$arg) = @_;
+    my ($self, $opts) = @_;
 
     ## Store the original invocation string, then modify it
     my $old0 = $0;
@@ -538,34 +538,6 @@ sub start_mcp {
         }
     }
 
-    ## Which syncs to activate? Default is all of them
-    ## Passing a 'sync' argument can activate only a subset
-    ## We populate $self->{dosyncs} with the list of wanted syncs
-    ## If this does not exist, we want all of them
-    delete $self->{dosyncs};
-    if (exists $arg->{sync}) {
-        ## It can be a normal sync name...
-        if (! ref $arg->{sync}) {
-            $self->{dosyncs}{$arg->{sync}} = 1;
-        }
-        ## or it can be a list of names...
-        elsif (ref $arg->{sync} eq 'ARRAY') {
-            %{ $self->{dosyncs} } = map { $_ => 1 } @{$arg->{sync}};
-        }
-        ## or it can be a hash with names as keys
-        ## (the value can be false to not load this sync)
-        elsif (ref $arg->{sync} eq 'HASH') {
-            %{ $self->{dosyncs} } = map { $_ => 1 } grep { $arg->{sync}{$_} } keys %{ $arg->{sync} };
-        }
-    }
-
-    ## If we created a list above, print out the result
-    if (exists $self->{dosyncs}) {
-        $self->glog(('Only doing these syncs: ' . join ' ' => sort keys %{ $self->{dosyncs} }), LOG_TERSE);
-        $0 .= ' Requested syncs: ' . join ' ' => sort keys %{ $self->{dosyncs} };
-        ## Yes, $0 can be quite large at this point!
-    }
-
     ## From this point forward, we want to die gracefully
     ## We setup our own subroutine to catch any die signals
     local $SIG{__DIE__} = sub {
@@ -622,11 +594,13 @@ sub start_mcp {
         if (! -x $RUNME) {
             $RUNME = "./$RUNME" if index ($RUNME,'.') != 0;
         }
-        $RUNME .= q{ start "Attempting automatic respawn after MCP death"};
-        $self->glog("Respawn attempt: $RUNME", LOG_TERSE);
+
+        my $reason = 'Attempting automatic respawn after MCP death';
+        $self->glog("Respawn attempt: $RUNME @{ $opts } start '$reason'", LOG_TERSE);
 
         ## Replace ourselves with a new process running this command
-        exec $RUNME;
+        { exec $RUNME, @{ $opts }, 'start', $reason };
+        $self->glog("Could not exec $RUNME: $!", LOG_WARN);
 
     }; ## end SIG{__DIE_} handler sub
 

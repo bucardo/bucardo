@@ -125,6 +125,7 @@ if (defined $file) {
     close $rc or die;
 }
 
+my @opts = @ARGV;
 GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
     ($bcargs,
      'verbose+',
@@ -930,6 +931,11 @@ sub start {
     ## Disconnect from our local connection before we fork
     $dbh->disconnect();
 
+    ## Remove nouns from @opts.
+    ## XXX Will fail if an option value is the same as a noun.
+    my %remove = map { $_ => undef } @nouns;
+    @opts = grep { ! exists $remove{$_} } @opts;
+
     ## Fork and setsid to disassociate ourselves from the daemon
     if (fork) {
         ## We are the kid, do nothing
@@ -939,7 +945,7 @@ sub start {
         close STDOUT or warn "Could not close STDOUT\n";
         setsid() or die;
         ## Here we go!
-        $bc->start_mcp();
+        $bc->start_mcp( \@opts );
     }
 
     exit 0;
