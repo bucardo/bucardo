@@ -449,7 +449,7 @@ sub start_mcp {
     close $pidfh or warn qq{Could not close "$self->{pidfile}": $!\n};
 
     ## Reconnect to the master database
-    ($self->{mcp_backend}, $self->{masterdbh}) = $self->connect_database();
+    ($self->{mcp_backend_pid}, $self->{masterdbh}) = $self->connect_database();
     my $masterdbh = $self->{masterdbh};
 
     ## Let any listeners know we have gotten this far
@@ -467,7 +467,7 @@ sub start_mcp {
     ## Start outputting some interesting things to the log
     $self->show_db_version_and_time($masterdbh, 'Master DB ');
     $self->glog("PID: $$", LOG_WARN);
-    $self->glog("Postgres backend PID: $self->{mcp_backend}", LOG_WARN);
+    $self->glog("Postgres backend PID: $self->{mcp_backend_pid}", LOG_WARN);
     $self->glog('Postgres library version: ' . $masterdbh->{pg_lib_version}, LOG_WARN);
     $self->glog("bucardo: $old0", LOG_WARN);
     $self->glog('Bucardo.pm: ' . $INC{'Bucardo.pm'}, LOG_WARN);
@@ -487,7 +487,7 @@ sub start_mcp {
 
     ## Store some PIDs for later debugging use
     $self->{pidmap}{$$} = 'MCP';
-    $self->{pidmap}{$self->{mcp_backend}} = 'Bucardo DB';
+    $self->{pidmap}{$self->{mcp_backend_pid}} = 'Bucardo DB';
 
     ## Again with the password trick
     $self->{dbpass} = '<not shown>'; ## already saved as $oldpass above
@@ -809,9 +809,9 @@ sub mcp_main {
                     ## Sleep a hair so we don't reloop constantly
                     sleep 0.5;
 
-                    ($x->{backend}, $x->{dbh}) = $self->connect_database($dbname);
-                    if (defined $x->{backend}) {
-                        $self->glog(qq{Database "$dbname" backend PID: $x->{backend}}, LOG_VERBOSE);
+                    ($x->{backend_pid}, $x->{dbh}) = $self->connect_database($dbname);
+                    if (defined $x->{backend_pid}) {
+                        $self->glog(qq{Database "$dbname" backend PID: $x->{backend_pid}}, LOG_VERBOSE);
                         $self->show_db_version_and_time($x->{dbh}, qq{Database "$dbname" });
                     }
                     else {
@@ -829,7 +829,7 @@ sub mcp_main {
 
         ## Add in any messages from the main database and reset the notice hash
         ## Ignore things we may have sent ourselves
-        my $notice = $self->db_get_notices($maindbh, $self->{mcp_backend});
+        my $notice = $self->db_get_notices($maindbh, $self->{mcp_backend_pid});
 
         ## Add in any messages from each remote database
         for my $dbname (keys %{ $self->{sdb} }) {
@@ -1347,13 +1347,13 @@ sub start_controller {
     }; ## end SIG{__DIE_} handler sub
 
     ## Connect to the master database (overwriting the pre-fork MCP connection)
-    ($self->{master_backend}, $self->{masterdbh}) = $self->connect_database();
+    ($self->{master_backend_pid}, $self->{masterdbh}) = $self->connect_database();
     my $maindbh = $self->{masterdbh};
-    $self->glog("Bucardo database backend PID: $self->{master_backend}", LOG_VERBOSE);
+    $self->glog("Bucardo database backend PID: $self->{master_backend_pid}", LOG_VERBOSE);
 
     ## Map the PIDs to common names for better log output
     $self->{pidmap}{$$} = 'CTL';
-    $self->{pidmap}{$self->{master_backend}} = 'Bucardo DB';
+    $self->{pidmap}{$self->{master_backend_pid}} = 'Bucardo DB';
 
     ## Listen for kick requests from the MCP for this sync
     my $kicklisten = "kick_$syncname";
@@ -1484,9 +1484,9 @@ sub start_controller {
         next if $x->{dbtype} ne 'postgres';
 
         ## Overwrites the MCP database handles
-        ($x->{backend}, $x->{dbh}) = $self->connect_database($dbname);
-        $self->glog(qq{Database "$dbname" backend PID: $x->{backend}}, LOG_NORMAL);
-        $self->{pidmap}{$x->{backend}} = "DB $dbname";
+        ($x->{ctl_backend_pid}, $x->{dbh}) = $self->connect_database($dbname);
+        $self->glog(qq{Database "$dbname" backend PID: $x->{ctl_backend_pid}}, LOG_NORMAL);
+        $self->{pidmap}{$x->{ctl_backend_pid}} = "DB $dbname";
     }
 
     ## Adjust the target table names as needed and store in the goat hash
@@ -2111,14 +2111,14 @@ sub start_kid {
 
     ## Connect to the main database
     ## Overwrites the previous handle from the controller
-    ($self->{master_backend}, $self->{masterdbh}) = $self->connect_database();
+    ($self->{master_backend_pid}, $self->{masterdbh}) = $self->connect_database();
 
     ## Set a shortcut for this handle, and log the details
     my $maindbh = $self->{masterdbh};
-    $self->glog("Bucardo database backend PID: $self->{master_backend}", LOG_VERBOSE);
+    $self->glog("Bucardo database backend PID: $self->{master_backend_pid}", LOG_VERBOSE);
 
     ## Setup mapping so we can report in the log which things came from this backend
-    $self->{pidmap}{$self->{master_backend}} = 'Bucardo DB';
+    $self->{pidmap}{$self->{master_backend_pid}} = 'Bucardo DB';
 
     ## SQL to enter a new database in the dbrun table
     $SQL = q{
@@ -2359,8 +2359,8 @@ sub start_kid {
             $x = $sync->{db}{$dbname};
 
             ## This overwrites the items we inherited from the controller
-            ($x->{backend}, $x->{dbh}) = $self->connect_database($dbname);
-            $self->glog(qq{Database "$dbname" backend PID: $x->{backend}}, LOG_VERBOSE);
+            ($x->{kid_backend_pid}, $x->{dbh}) = $self->connect_database($dbname);
+            $self->glog(qq{Database "$dbname" backend PID: $x->{kid_backend_pid}}, LOG_VERBOSE);
         }
 
         ## Set the maximum length of the $dbname.$S.$T string.
@@ -2806,7 +2806,7 @@ sub start_kid {
 
             $x = $sync->{db}{$dbname};
 
-            $sth{dbrun_insert}->execute($syncname, $dbname, $x->{backend});
+            $sth{dbrun_insert}->execute($syncname, $dbname, $x->{kid_backend_pid});
             $maindbh->commit();
         }
 
@@ -4633,7 +4633,7 @@ sub connect_database {
     ## 1. The id of the database
     ##   If the database id is blank or zero, we return the main database
     ## Returns:
-    ## - the database handle and the backend PID
+    ## - the database handle AND the backend PID
     ##   OR
     ## - the string 'inactive' if set as such in the db table
     ##   OR
@@ -5526,9 +5526,9 @@ sub validate_sync {
                 next;
             }
             $self->glog(qq{Connecting to database "$dbname" ($role)}, LOG_TERSE);
-            ($x->{backend}, $x->{dbh}) = $self->connect_database($dbname);
-            if (defined $x->{backend}) {
-                $self->glog(qq{Database "$dbname" backend PID: $x->{backend}}, LOG_VERBOSE);
+            ($x->{backend_pid}, $x->{dbh}) = $self->connect_database($dbname);
+            if (defined $x->{backend_pid}) {
+                $self->glog(qq{Database "$dbname" backend PID: $x->{backend_pid}}, LOG_VERBOSE);
             }
             $self->show_db_version_and_time($x->{dbh}, qq{DB "$dbname" });
         }
@@ -6334,13 +6334,13 @@ sub fork_vac {
     }; ## end SIG{__DIE_} handler sub
 
     ## Connect to the master database (overwriting the pre-fork MCP connection)
-    ($self->{master_backend}, $self->{masterdbh}) = $self->connect_database();
+    ($self->{vac_backend_pid}, $self->{masterdbh}) = $self->connect_database();
     my $maindbh = $self->{masterdbh};
-    $self->glog("Bucardo database backend PID: $self->{master_backend}", LOG_VERBOSE);
+    $self->glog("Bucardo database backend PID: $self->{vac_backend_pid}", LOG_VERBOSE);
 
     ## Map the PIDs to common names for better log output
     $self->{pidmap}{$$} = 'VAC';
-    $self->{pidmap}{$self->{master_backend}} = 'Bucardo DB';
+    $self->{pidmap}{$self->{vac_backend_pid}} = 'Bucardo DB';
 
     ## Listen for an exit request from the MCP
     my $exitrequest = 'stop_vac';
@@ -6360,9 +6360,9 @@ sub fork_vac {
         next if ! $x->{needsvac};
 
         ## Overwrites the MCP database handles
-        ($x->{backend}, $x->{dbh}) = $self->connect_database($dbname);
-        $self->glog(qq{Connected to database "$dbname" with backend PID of $x->{backend}}, LOG_NORMAL);
-        $self->{pidmap}{$x->{backend}} = "DB $dbname";
+        ($x->{vac_backend_pid}, $x->{dbh}) = $self->connect_database($dbname);
+        $self->glog(qq{Connected to database "$dbname" with backend PID of $x->{vac_backend_pid}}, LOG_NORMAL);
+        $self->{pidmap}{$x->{vac_backend_pid}} = "DB $dbname";
     }
 
     ## Track how long since we last came to life for vacuuming
@@ -6389,7 +6389,7 @@ sub fork_vac {
 
         ## Process any notifications from the main database
         ## Ignore things we may have sent ourselves
-        my $nlist = $self->db_get_notices($maindbh, $self->{master_backend});
+        my $nlist = $self->db_get_notices($maindbh, $self->{vac_backend_pid});
 
       NOTICE: for my $name (sort keys %{ $nlist }) {
 
