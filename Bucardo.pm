@@ -331,7 +331,7 @@ sub start_mcp {
     ## Prefix all lines in the log file with this TLA (until overriden by a forked child)
     $self->{logprefix} = 'MCP';
 
-    ## If the pid file already exists, cowardly refuse to run
+    ## If the standard pid file [from new()] already exists, cowardly refuse to run
     if (-e $self->{pidfile}) {
         ## Grab the PID from the file if we can for better output
         my $extra = '';
@@ -359,9 +359,9 @@ sub start_mcp {
         $self->glog($msg, LOG_WARN);
         warn $msg;
 
-        ## Read in up to 10 lines from the stopfile and output them
         ## Failure to open this file is not fatal
         if (open my $fh, '<', $self->{stopfile}) {
+            ## Read in up to 10 lines from the stopfile and output them
             while (<$fh>) {
                 $msg = "Line $.: $_";
                 $self->glog($msg, LOG_WARN);
@@ -383,14 +383,14 @@ sub start_mcp {
     open my $pidfh, '>', $self->{pidfile}
         or die qq{Cannot write to $self->{pidfile}: $!\n};
 
-    ## Print the PID on the first line,
-    ##  how the script was originally invoked on the second line (old $0),
-    ##  and the current time on the third
+    ## Inside our newly created PID file, print out PID on the first line
+    ##  - print how the script was originally invoked on the second line (old $0),
+    ##  - print the current time on the third line
     my $now = scalar localtime;
     print {$pidfh} "$$\n$old0\n$now\n";
     close $pidfh or warn qq{Could not close "$self->{pidfile}": $!\n};
 
-    ## Create a pretty dumped version of the current $self object, with the password elided
+    ## Create a pretty Dumped version of the current $self object, with the password elided
     ## This is used in the body of emails that may be sent later
 
     ## Squirrel away the old password
@@ -419,7 +419,7 @@ sub start_mcp {
     ## Strip leading whitespace from the body (from the qq{} above)
     $body =~ s/^\s+//gsm;
 
-    ## Send out the email
+    ## Send out the email (if sendmail or sendmail_file is enabled)
     $self->send_mail({ body => "$body\n\n$dump", subject => $subject });
 
     ## Drop the existing database connection, fork, and get a new one
