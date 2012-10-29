@@ -6892,12 +6892,8 @@ sub kill_bucardo_pid {
         if ($info !~ /^COMMAND/) {
             $self->glog(qq{Could not determine ps information for pid $pid}, LOG_VERBOSE);
         }
-        elsif ($info !~ /perl/) {
-            $self->glog(qq{Will not kill process $pid: ps has no 'perl'}, LOG_TERSE);
-            return 0;
-        }
-        elsif ($info !~ /\s+perl/o and $info !~ /\s+Bucardo/o) {
-            $self->glog(qq{Will not kill process $pid: ps args is neither 'perl' nor 'Bucardo', got: $info}, LOG_TERSE);
+        elsif ($info !~ /\bBucardo\s+/o) {
+            $self->glog(qq{Will not kill process $pid: ps args is not 'Bucardo', got: $info}, LOG_TERSE);
             return 0;
         }
     } ## end of trying ps because not Windows
