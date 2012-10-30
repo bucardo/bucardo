@@ -8719,11 +8719,18 @@ This document describes version 4.99.5 of bucardo
 
 =head1 USAGE
 
-  bucardo [<options>] <command> [<command-params>]
+  bucardo [<options>] <command> [<action>] [<command-options>] [<command-params>]
+
+=head1 DESCRIPTION
+
+The bucardo script is the main interaction to a running Bucardo instance. It
+can be used to start and stop Bucardo, add new items, kick syncs, and even
+install and upgrade Bucardo itself. For more complete documentation, please
+view L<the wiki|http://bucardo.org/>.
 
 =head1 COMMANDS
 
-Run C<< bucardo help <command> >> for additional details.
+Run C<< bucardo help <command> >> for additional details
 
 =over
 
@@ -8735,7 +8742,7 @@ Installs the Bucardo configuration database.
 
 Upgrades the Bucardo configuration database to the latest schema.
 
-=item C<< start [<reason>] >>
+=item C<< start [<start options>] [<reason>] >>
 
 Starts Bucardo.
 
@@ -8743,7 +8750,7 @@ Starts Bucardo.
 
 Stops Bucardo.
 
-=item C<< restart [<reason>] >>
+=item C<< restart [<start options>] [<reason>] >>
 
 Stops and starts Bucardo.
 
@@ -8763,7 +8770,7 @@ Updates an object.
 
 Removes one or more objects.
 
-=item C<< kick <syncname> [<syncname>...] [<timeout>] >>
+=item C<< kick <syncname> [<sync options>] [<syncname>...] [<timeout>] >>
 
 Kicks off one or more syncs.
 
@@ -8784,7 +8791,7 @@ Sets one or more configuration setting..
 
 Sends a ping notice to the MCP process to see if it will respond.
 
-=item C<< status <syncname> [<syncname>...] >>
+=item C<< status [<status options>] <syncname> [<syncname>...] >>
 
 Shows the brief status of syncs in a tabular format.
 
@@ -8823,12 +8830,17 @@ Shows help.
 
 =back
 
-=head1 DESCRIPTION
+=head1 OPTIONS
 
-The bucardo script is the main interaction to a running Bucardo instance. It can 
-be used to start and stop Bucardo, add new items, kick syncs, and even install and 
-upgrade Bucardo itself. For more complete documentation, please view
-L<the wiki|http://bucardo.org/>.
+  --dbname    NAME    Database name.
+  --dbuser    USER    Database user name.
+  --dbpass    PASS    Database password.
+  --dbhost    HOST    Database server host name.
+  --dbport    PORT    Database server port number.
+  --quiet             Incremental quiet.
+  --verbose           Incremental verbose mode.
+  --help              Output basic help and exit.
+  --version           Print the version number and exit.
 
 =head1 COMMAND DETAILS
 
@@ -8847,7 +8859,7 @@ as:
   bucardo add db sea_widgets --dbname widgets --dbhost db.example.com
 
 However, parameters and options are not directly interchangeable in all cases.
-See L</OPTIONS> for a complete list of options.
+See the documentation for individual commands for their supported options.
 
 =head2 install
 
@@ -8857,7 +8869,7 @@ Installs the Bucardo schema from the file F<bucardo.schema> into an existing Pos
 The user "bucardo" and database "bucardo" will be created first as needed. This is an
 interactive installer, but you can supply the following values from the command line:
 
-=over 2
+=over
 
 =item C<--dbuser>
 
@@ -8897,6 +8909,65 @@ be provided - these are written to the C<reason_file> file (F<./bucardo.restart.
 default) and sent in the email sent when Bucardo has been started up. It is also appended to
 the reason log, which has the same name as the the C<reason_file> but ends in F<.log>.
 
+The options for the C<start> command are:
+
+=item C<--sendmail>
+
+Tells Bucardo whether or not to send mail on interesting events: startup,
+shutdown, and errors. Default is on.
+
+=item C<--extraname=string>
+
+A short string that will be appended to the version string as output by the
+Bucardo process names. Mostly useful for debugging.
+
+=item C<--debugfilesep>
+
+Forces creation of separate log files for each Bucardo process of the form
+"log.bucardo.X.Y", where X is the type of process (MCP, CTL, or KID), and Y is
+the process ID.
+
+=item C<--debugsyslog>
+
+Sends all log messages to the syslog daemon. On by default. The facility used
+is controlled by the row "syslog_facility" in the bucardo_config table, and
+defaults to "LOG_LOCAL1".
+
+=item C<--debugfile>
+
+If set, writes detailed debugging information to one or more files.
+
+=item C<--debugdir=directory name>
+
+Directory where the debug files should go.
+
+=item C<--debugname=string>
+
+Appends the given string to the end of the default debug file name,
+"log.bucardo". A dot is added before the name as well, so a debugname of
+"rootdb" would produce a log file named "log.bucardo.rootdb".
+
+=item C<--cleandebugs>
+
+Forces removal of all old debug files before running.
+
+=item C<--exit-on-nosync>
+
+=item C<--no-exit-on-nosync>
+
+On startup, if Bucardo finds no active syncs, it normally will continue to
+run, requiring a restart once syncs are added. This is useful for startup
+scripts and whatnot.
+
+If, however, you want it to exit when there are no active syncs, pass the
+C<--exit-on-nosync> option. You can also be explicit that it should I<not>
+exit when there are no syncs by passing C<--no-exit-on-nosync>. This is the
+default value.
+
+=back
+
+=over
+
 =head2 stop
 
   bucardo stop "Reason"
@@ -8916,8 +8987,9 @@ as the the C<reason_file> but ends in F<.log>.
   bucardo restart "Reason"
 
 Stops bucardo, waits for the stop to complete, and then starts it again.
-Useful for start scripts. For getting just CTL and KID processes to recognize
-newly added, updated, or removed objects, use the C<reload> command, instead.
+Supports the same options as <C<start>/start>. Useful for start scripts. For
+getting just CTL and KID processes to recognize newly added, updated, or
+removed objects, use the C<reload> command, instead.
 
 =head2 list
 
@@ -9752,7 +9824,26 @@ cause exit values of 2 or 3. In all other cases, an exit value of 0 will be retu
 
 If a timeout is given, the total completion time in seconds is also displayed. If the sync is going to 
 multiple targets, the time that each target takes from the start of the kick is also shown as each 
-target finishes.
+target finishes. Options:
+
+=over
+
+=item C<--retry>
+
+The number of times to retry a sync if it fails. Defaults to 0.
+
+=item C<--retrysleep>
+
+How long to sleep, in seconds, between each retry attempt.
+
+=item C<--notimer>
+
+By default, kicks with a timeout argument give a running real-time summary of
+time elapsed by using the backspace character. This may not be wanted if
+running a kick, for example, via a cronjob, so turning --notimer on will
+simply print the entire message without backspaces.
+
+=back
 
 =head2 reload config
 
@@ -9810,7 +9901,7 @@ use "status all"
 
 When showing brief information, the columns are:
 
-=over 8
+=over
 
 =item 1. B<Name>
 
@@ -9840,6 +9931,25 @@ When the sync last failed.
 =item 7. B<Time>
 
 How long it has been since the last sync failure
+
+=back
+
+The options for C<status> are:
+
+=item C<--showdays>
+
+Specifies whether or not do list the time interval with days, or simply show
+the hours. For example, "3d 12h 6m 3s" vs. "48h 6m 3s"
+
+=item C<--compress>
+
+Specifies whether or not to compress the time interval by removing spaces.
+Mostly used to limit the width of the 'status' display.
+
+=item C<--sort=#>
+
+Requests sorting of the 'status' output by one of the nine columns. Use a
+negative number to reverse the sort order.
 
 =back
 
@@ -9944,7 +10054,7 @@ or a command and its action. Some examples:
   bucard help list
   bucard help add table
 
-=head1 OPTIONS
+=head1 OPTIONS DETAILS
 
 It is usually easier to set most of these options at the top of the script, or make an alias for them, 
 as they will not change very often if at all.
@@ -9974,109 +10084,6 @@ Tells bucardo to be as quiet as possible. Default is off.
 =item C<--help>
 
 Shows a brief summary of usage for bucardo.
-
-=back
-
-=head2 Kick arguments
-
-The following arguments are only used with the 'kick' command:
-
-=over
-
-=item C<--retry>
-
-The number of times to retry a sync if it fails. Defaults to 0.
-
-=item C<--retrysleep>
-
-How long to sleep, in seconds, between each retry attempt.
-
-=item C<--notimer>
-
-By default, kicks with a timeout argument give a running real-time summary of time elapsed by 
-using the backspace character. This may not be wanted if running a kick, for example, 
-via a cronjob, so turning --notimer on will simply print the entire message without backspaces.
-
-=back
-
-=head2 Status arguments
-
-The following arguments are only used with the 'status' command:
-
-=over
-
-=item C<--showdays>
-
-Specifies whether or not do list the time interval with days, or simply show the hours. For example, 
-"3d 12h 6m 3s" vs. "48h 6m 3s"
-
-=item C<--compress>
-
-Specifies whether or not to compress the time interval by removing spaces. Mostly used to limit 
-the width of the 'status' display.
-
-=item C<--sort=#>
-
-Requests sorting of the 'status' output by one of the nine columns. Use a negative number to reverse 
-the sort order.
-
-=back
-
-=head2 Startup arguments
-
-The following arguments are only applicable when using the "start" command:
-
-=over
-
-=item C<--sendmail>
-
-Tells Bucardo whether or not to send mail on interesting events: startup, shutdown, and errors. Default is on.
-Only applicable when using C<bucardo start>.
-
-=item C<--extraname=string>
-
-A short string that will be appended to the version string as output by the Bucardo process names. Mostly 
-useful for debugging.
-
-=item C<--debugfilesep>
-
-Forces creation of separate log files for each Bucardo process of the form "log.bucardo.X.Y", 
-where X is the type of process (MCP, CTL, or KID), and Y is the process ID.
-
-=item C<--debugsyslog>
-
-Sends all log messages to the syslog daemon. On by default. The facility used is controlled by 
-the row "syslog_facility" in the bucardo_config table, and defaults to "LOG_LOCAL1".
-
-=item C<--debugfile>
-
-If set, writes detailed debugging information to one or more files.
-
-=item C<--debugdir=directory name>
-
-Directory where the debug files should go.
-
-=item C<--debugname=string>
-
-Appends the given string to the end of the default debug file name, "log.bucardo". A dot is added 
-before the name as well, so a debugname of "rootdb" would produce a log file named "log.bucardo.rootdb".
-
-=item C<--cleandebugs>
-
-Forces removal of all old debug files before running.
-
-=item C<--exit-on-nosync>
-
-=item C<--no-exit-on-nosync>
-
-On startup, if Bucardo finds no active syncs, it normally will continue to
-run, requiring a restart once syncs are added. This is useful for startup
-scripts and whatnot.
-
-If, however, you want it to exit when there are no active syncs, pass the
-C<--exit-on-nosync> option. You can also be explicit that it should I<not>
-exit when there are no syncs by passing C<--no-exit-on-nosync>. This is the
-default value.
 
 =back
 
