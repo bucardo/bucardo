@@ -36,11 +36,11 @@ like ($res, qr/Added database "A"\nNew tables added: \d/s, $t);
 
 $t = 'Add customname with no argument gives expected help message';
 $res = $bct->ctl('bucardo add customname');
-like ($res, qr/Usage: add customname/, $t);
+like ($res, qr/add customname/, $t);
 
 $t = 'Add customname with a single argument gives expected help message';
 $res = $bct->ctl('bucardo add customname foobar');
-like ($res, qr/Usage: add customname/, $t);
+like ($res, qr/add customname/, $t);
 
 $t = 'Add customname with an invalid table name gives expected error message';
 $res = $bct->ctl('bucardo add customname nosuchtable foobar');
@@ -84,11 +84,11 @@ like ($res, qr/1\. Table: public.bucardo_test1 => foobar/, $t);
 
 $t = q{Remove customname with no argument gives expected help message};
 $res = $bct->ctl('bucardo remove customname');
-like ($res, qr/Usage: remove customname/, $t);
+like ($res, qr/bucardo remove/, $t);
 
 $t = q{Remove customname with non-numeric argument gives expected help message};
 $res = $bct->ctl('bucardo remove customname foobar');
-like ($res, qr/Usage: remove customname/, $t);
+like ($res, qr/bucardo remove/, $t);
 
 $t = q{Remove customname with invalid argument gives expected error message};
 $res = $bct->ctl('bucardo remove customname 1234');

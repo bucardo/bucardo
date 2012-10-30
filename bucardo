@@ -567,10 +567,7 @@ sub superhelp {
     ## If there are no nouns, we can only show the generic help
     help() if ! @nouns;
 
-    my @command = @nouns < 3 ? @nouns
-        : $nouns[1] eq 'all' ? ($nouns[0], $nouns[2])
-        :                      ($nouns[0], $nouns[1]);
-
+    my @command = ($nouns[0], join ' ', @nouns);
     my $usage = usage(join '/' => @command)
         or help(1, "Unknown command: " . join ' ' => @command);
     print $usage;
@@ -1291,14 +1288,14 @@ sub add_database {
     ## Example: bucardo add db nyc1 dbname=nyc1 dbhost=nyc1.example.com dbgroup=sales
 
     ## Grab our generic usage message
-    my $usage = usage('add_database');
+    my $usage = usage('add/add db');
 
     ## The first word is the internal name (bucardo.db.name)
     my $item_name = shift @nouns || '';
 
     ## No name is a problem
     if (! length $item_name) {
-        warn "$usage\n";
+        warn $usage;
         exit 1;
     }
 
@@ -1567,7 +1564,7 @@ sub remove_database {
     ## Example: bucardo remove db nyc1 nyc2 --force
 
     ## Grab our generic usage message
-    my $usage = usage('remove_database');
+    my $usage = usage('remove');
 
     ## Must have at least one name
     if (!@nouns) {
@@ -1641,7 +1638,7 @@ sub update_database {
     my @actions = @_;
 
     ## Grab our generic usage message
-    my $usage = usage('update_database');
+    my $usage = usage('update');
 
     if (! @actions) {
         print "$usage\n";
@@ -1824,7 +1821,7 @@ sub list_databases {
     ## Example: bucardo list db sale%
 
     ## Grab our generic usage message
-    my $usage = usage('list_databases');
+    my $usage = usage('list');
 
     ## Might be no databases yet
     if (! keys %$DB) {
@@ -1997,7 +1994,7 @@ sub add_dbgroup {
     ## Example: bucardo add dbgroup nycservers nyc1:source nyc2:source lax1
 
     ## Grab our generic usage message
-    my $usage = usage('add_dbgroup');
+    my $usage = usage('add/add dbgroup');
 
     my $name = shift @nouns || '';
 
@@ -2046,7 +2043,7 @@ sub remove_dbgroup {
     ## Example: bucardo remove dbgroup sales
 
     ## Grab our generic usage message
-    my $usage = usage('remove_dbgroup');
+    my $usage = usage('remove');
 
     ## Must have at least one name
     if (!@nouns) {
@@ -2111,7 +2108,7 @@ sub update_dbgroup {
     my @actions = @_;
 
     ## Grab our generic usage message
-    my $usage = usage('update_dbgroup');
+    my $usage = usage('update');
 
     if (! @actions) {
         print "$usage\n";
@@ -2212,7 +2209,7 @@ sub list_dbgroups {
     ## Example: bucardo list dbgroups
 
     ## Grab our generic usage message
-    my $usage = usage('list_dbgroups');
+    my $usage = usage('list');
 
     ## Might be no groups yet
     if (! keys %$DBGROUP) {
@@ -2309,7 +2306,7 @@ sub add_customname {
 
     my $item_name = shift @nouns || '';
 
-    my $usage = usage('add_customname');
+    my $usage = usage('add/add customname');
     ## Must have a second name as well
     my $newname = shift @nouns || '';
 
@@ -2436,7 +2433,7 @@ sub remove_customname {
     ## Example: bucardo remove customname 7
 
     ## Grab our generic usage message
-    my $usage = usage('remove_customname');
+    my $usage = usage('remove');
 
     ## Must have at least one name
     if (!@nouns) {
@@ -2530,7 +2527,7 @@ sub list_customnames {
     ## Example: bucardo list customname
 
     ## Grab our generic usage message
-    my $usage = usage('list_customname');
+    my $usage = usage('list');
 
     ## Might be no entries yet
     if (! keys %$CUSTOMNAME) {
@@ -2638,7 +2635,7 @@ sub add_customcols {
 
     my $item_name = shift @nouns || '';
 
-    my $usage = usage('add_customcols');
+    my $usage = usage('add');
 
     ## Must have a clause as well
     my $clause = shift @nouns || '';
@@ -2741,7 +2738,7 @@ sub remove_customcols {
     ## Example: bucardo remove customcols 7
 
     ## Grab our generic usage message
-    my $usage = usage('remove_customcols');
+    my $usage = usage('remove');
 
     ## Must have at least one name
     if (!@nouns) {
@@ -2854,7 +2851,7 @@ sub list_customcols {
     ## Example: bucardo list customcols
 
     ## Grab our generic usage message
-    my $usage = usage('list_customcols');
+    my $usage = usage('list');
 
     ## Might be no entries yet
     if (! keys %$CUSTOMCOLS) {
@@ -2960,7 +2957,7 @@ sub add_table {
     ## Example: bucardo add table pgbench_accounts foo% myschema.abc
 
     ## Grab our generic usage message
-    my $usage = usage('add_table');
+    my $usage = usage('add/add table');
 
     ## Must have at least one table
     if (! @nouns) {
@@ -3069,7 +3066,7 @@ sub remove_table {
     ## Arguments: none, parses nouns for tables
     ## Returns: never, exits
 
-    my $usage = usage('remove_table');
+    my $usage = usage('remove');
 
     if (!@nouns) {
         warn "$usage\n";
@@ -3128,7 +3125,7 @@ sub update_table {
     my @actions = @_;
 
     ## Grab our generic usage message
-    my $usage = usage('update_table');
+    my $usage = usage('update');
 
     if (! @actions) {
         print "$usage\n";
@@ -3303,7 +3300,7 @@ sub list_tables {
     ## Example: bucardo list tables
 
     ## Grab our generic usage message
-    my $usage = usage('list_tables');
+    my $usage = usage('list');
 
     ## Might be no tables yet
     if (! keys %$TABLE) {
@@ -3400,7 +3397,7 @@ sub add_herd {
     ## Example: bucardo add herd foobar tab1 tab2
 
     ## Grab our generic usage message
-    my $usage = usage('add_herd');
+    my $usage = usage('add/add relgroup');
 
     my $herdname = shift @nouns || '';
 
@@ -3507,7 +3504,7 @@ sub remove_herd {
     ## Arguments: none, parses nouns
     ## Returns: never, exits
 
-    my $usage = usage('remove_herd');
+    my $usage = usage('remove');
 
     if (!@nouns) {
         warn "$usage\n";
@@ -3567,7 +3564,7 @@ sub list_herds {
     ## Arguments: none, parses nouns for herd names
     ## Returns: 0 on success, -1 on error
 
-    my $usage = usage('list_herds');
+    my $usage = usage('list');
 
     ## Any nouns are filters against the whole list
     my $clause = generate_clause({col => 'name', items => \@nouns});
@@ -3625,7 +3622,7 @@ sub add_sync {
 
     my $item_name = shift @nouns || '';
 
-    my $usage = usage('add_sync');
+    my $usage = usage('add/add sync');
 
     my $batch = 1;
 
@@ -3910,7 +3907,7 @@ sub remove_sync {
     ## Arguments: none (uses nouns)
     ## Returns: never, exits
 
-    my $usage = usage('remove_sync');
+    my $usage = usage('remove');
 
     if (!@nouns) {
         warn "$usage\n";
@@ -3962,7 +3959,7 @@ sub update_sync {
 
     my @actions = @_;
 
-    my $usage = usage('update_sync');
+    my $usage = usage('update');
 
     if (! @actions) {
         print "$usage\n";
@@ -4047,7 +4044,7 @@ sub list_syncs {
     ## Arguments: none (reads nouns for a list of syncs)
     ## Returns: 0 on success, -1 on error
 
-    my $usage = usage('list_syncs');
+    my $usage = usage('list');
 
     my $syncs = $global{sync};
 
@@ -5244,7 +5241,7 @@ sub inspect_table {
     ## Arguments: none, parses nouns
     ## Returns: never, exits
 
-    my $usage = usage('inspect_table');
+    my $usage = usage('inspect');
 
     if (! @nouns) {
         warn "$usage\n";
@@ -5325,7 +5322,7 @@ sub inspect_herd {
     ## Arguments: none, parses nouns
     ## Returns: never, exits
 
-    my $usage = usage('inspect_herd');
+    my $usage = usage('inspect');
 
     if (! @nouns) {
         warn "$usage\n";
@@ -5343,7 +5340,7 @@ sub inspect_sync {
     ## Arguments: none, parses nouns
     ## Returns: never, exits
 
-    my $usage = usage('inspect_sync');
+    my $usage = usage('inspect');
 
     if (! @nouns) {
         warn "$usage\n";
@@ -5476,7 +5473,7 @@ sub list_customcodes {
     ## Arguments: none, parses nouns for customcodes
     ## Returns: 0 on success, -1 on error
 
-    my $usage = usage('list_customcodes');
+    my $usage = usage('list');
 
     ## Any nouns are filters against the whole list
     my $clause = generate_clause({col => 'name', items => \@nouns});
@@ -5531,7 +5528,7 @@ sub list_sequences {
     ## Arguments: none (reads nouns for a list of sequences)
     ## Returns: 0 on success, -1 on error
 
-    my $usage = usage('list_sequences');
+    my $usage = usage('list');
 
     my $clause = generate_clause({col => 'tablename', items => \@nouns});
     my $WHERE = $clause ? "AND $clause" : '';
@@ -5704,7 +5701,7 @@ sub add_customcode {
 
     my $item_name = shift @nouns || '';
 
-    my $usage = usage('add_customcode');
+    my $usage = usage('add/add customcode');
 
     if (!length $item_name) {
         warn "$usage\n";
@@ -6144,7 +6141,7 @@ sub remove_customcode {
     ## Arguments: none (uses nouns)
     ## Returns: never, exits
 
-    my $usage = usage('remove_customcode');
+    my $usage = usage('remove');
 
     if (!@nouns) {
         warn "$usage\n";
@@ -7366,6 +7363,7 @@ sub usage {
     ## Returns: help string or an empty string for no matches
 
     my $name = shift or die;
+    $name .= "/!.+" if $name eq 'add';
 
     my $usage;
     open my $usage_fh, '>', \$usage;
@@ -8925,7 +8923,7 @@ newly added, updated, or removed objects, use the C<reload> command, instead.
 
   bucardo list <type> <regex>
 
-Lists summary information about Bucardo objects. The supported C<types> are:
+Lists summary information about Bucardo objects. The supported types are:
 
 =over
 
@@ -8977,10 +8975,36 @@ Aliases:
   bucardo add <type> <name> <parameters>
 
 Adds a new object to Bucardo. The C<type> sepcifies the type of object to add,
-while the C<name> should be the name of the object. The supported types and
-their parameters are:
+while the C<name> should be the name of the object. The supported types
+include:
 
-=head3 db
+=over
+
+=item C<db>
+
+=item C<dbgroup>
+
+=item C<table>
+
+=item C<sequence>
+
+=item C<all tables>
+
+=item C<all sequences>
+
+=item C<relgroup>
+
+=item C<sync>
+
+=item C<customname>
+
+=item C<customcols>
+
+=item C<customcols>
+
+=back
+
+=head3 add db
 
   bucardo add db <name> dbname=actual_name port=xxx host=xxx user=xxx pass=xxx
 
@@ -9105,14 +9129,14 @@ to "on".
 
 =back
 
-=head3 dbgroup
+=head3 add dbgroup
 
   bucardo add dbgroup name db1 db2 db3 ...
 
 Adds one or more databases to the named database group. If the database group
 doesn't exist, it will be created.
 
-=head3 table
+=head3 add table
 
   bucardo add table [schema].table db=actual_db_name
 
@@ -9149,7 +9173,7 @@ exist, it will be created. Optional.
 
 =back
 
-=head3 sequence
+=head3 add sequence
 
   bucardo add sequence [schema].sequence relgroup=xxx
 
@@ -9168,7 +9192,7 @@ exist, it will be created. Optional.
 
 =back
 
-=head3 all tables
+=head3 add all tables
 
   bucardo add all tables [relgroup=xxx] [pkonly]
 
@@ -9232,7 +9256,7 @@ Exclude tables without primary keys.
 
 =back
 
-=head3 all sequences
+=head3 add all sequences
 
   bucardo add all sequences relgroup=xxx
 
@@ -9276,7 +9300,7 @@ Name of the relation group to which to add new tables or sequences.
 
 =back
 
-=head3 relgroup
+=head3 add relgroup
 
   bucardo add relgroup name
   bucardo add relgroup name table, sequence, ...
@@ -9284,7 +9308,7 @@ Name of the relation group to which to add new tables or sequences.
 Adds a relation group. After the name, pass in an optional list of tables
 and/or sequences and they will be added to the group.
 
-=head3 sync
+=head3 add sync
 
   bucardo add sync syncname relgroup=xxx dbs=xxx
 
@@ -9440,7 +9464,7 @@ default. Optional.
 
 =back
 
-=head3 customname
+=head3 add customname
 
   bucardo add customname oldname newname [db=name] [sync=name]
 
@@ -9464,7 +9488,7 @@ A database for which to add the customname. May be specified multiple times.
 
 =back
 
-=head3 customcols
+=head3 add customcols
 
   bucardo add customcols tablename select_clause [sync=x db=x]
 
@@ -9494,7 +9518,7 @@ A database for which to add the customcols. May be specified multiple times.
 
 =back
 
-=head3 customcode
+=head3 add customcode
 
   bucardo add customcode <name> <whenrun=value> <src_code=filename> [optional information]
 

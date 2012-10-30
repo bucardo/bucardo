@@ -34,7 +34,7 @@ my ($dbuserB,$dbportB,$dbhostB) = $bct->add_db_args('B');
 
 $t = 'Add relgroup with no argument gives expected help message';
 $res = $bct->ctl('bucardo add relgroup');
-like ($res, qr/Usage: add relgroup/, $t);
+like ($res, qr/add relgroup/, $t);
 
 $t = q{Add relgroup works for a new relgroup};
 $res = $bct->ctl('bucardo add relgroup foobar');

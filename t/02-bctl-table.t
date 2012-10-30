@@ -34,7 +34,7 @@ my ($dbuserB,$dbportB,$dbhostB) = $bct->add_db_args('B');
 
 $t = 'Add table with no argument gives expected help message';
 $res = $bct->ctl('bucardo add table');
-like ($res, qr/Usage: add table/, $t);
+like ($res, qr/add table/, $t);
 
 $t = q{Add table fails when no databases have been created yet};
 $res = $bct->ctl('bucardo add table foobarz');

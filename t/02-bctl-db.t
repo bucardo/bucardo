@@ -34,11 +34,11 @@ my ($dbuserB,$dbportB,$dbhostB) = $bct->add_db_args('B');
 
 $t = 'Add database with no argument gives expected help message';
 $res = $bct->ctl('bucardo add db');
-like ($res, qr/Usage: add db/, $t);
+like ($res, qr/bucardo add db/, $t);
 
 $t = q{Add database accepts both 'add database' and 'add db'};
 $res = $bct->ctl('bucardo add database');
-like ($res, qr/Usage: add db/, $t);
+like ($res, qr/bucardo add db/, $t);
 
 $t = q{Add database fails if not given a dbname};
 $res = $bct->ctl('bucardo add database foobar');
@@ -179,11 +179,11 @@ is ($res, '', $t);
 
 $t = q{Update database gives proper error with no db};
 $res = $bct->ctl('bucardo update db');
-like ($res, qr/Usage:/, $t);
+like ($res, qr/bucardo update/, $t);
 
 $t = q{Update database gives proper error with no items};
 $res = $bct->ctl('bucardo update db foobar');
-like ($res, qr/Usage:/, $t);
+like ($res, qr/bucardo update/, $t);
 
 $t = q{Update database gives proper error with invalid database};
 $res = $bct->ctl('bucardo update db foobar a=b');
@@ -191,10 +191,10 @@ like ($res, qr/Could not find a database named "foobar"/, $t);
 
 $t = q{Update database gives proper error with invalid format};
 $res = $bct->ctl('bucardo update db A blah blah');
-like ($res, qr/Usage: update database/, $t);
+like ($res, qr/bucardo update/, $t);
 
 $res = $bct->ctl('bucardo update db A blah123#=123');
-like ($res, qr/Usage: update database/, $t);
+like ($res, qr/bucardo update/, $t);
 
 $t = q{Update database gives proper error with invalid items};
 $res = $bct->ctl('bucardo update db A foobar=123');

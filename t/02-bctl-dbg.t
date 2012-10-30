@@ -34,11 +34,11 @@ my ($dbuserB,$dbportB,$dbhostB) = $bct->add_db_args('B');
 
 $t = 'Add database group with no argument gives expected help message';
 $res = $bct->ctl('bucardo add dbg');
-like ($res, qr/Usage: add dbgroup/, $t);
+like ($res, qr/add dbgroup/, $t);
 
 $t = q{Add database group accepts both 'add dbg' and 'add dbgroup'};
 $res = $bct->ctl('bucardo add dbgroup');
-like ($res, qr/Usage: add dbgroup/, $t);
+like ($res, qr/add dbgroup/, $t);
 
 $t = q{Add database group fails with invalid characters};
 $res = $bct->ctl('bucardo add dbgroup foo^barz');
@@ -115,7 +115,7 @@ $bct->ctl('bucardo add dbgroup foobar');
 
 $t = 'Update dbgroup with no arguments gives expected message';
 $res = $bct->ctl('bucardo update dbgroup foobar');
-like ($res, qr/Usage: update/, $t);
+like ($res, qr/update/, $t);
 
 $t = 'Update dbgroup with invalid group gives expected message';
 $res = $bct->ctl('bucardo update dbgroup foobar3 baz');
