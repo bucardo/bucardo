@@ -294,7 +294,7 @@ ping() if $verb eq 'ping';
 superhelp() if $verb eq 'help';
 
 ## Make sure the Bucardo database has the latest schema
-upgrade() if $verb eq 'upgrade' or $verb eq 'uprgade';
+upgrade() if $verb eq 'upgrade' or $verb eq 'uprgade' or $verb eq 'ugprade';
 
 ## All the rest of the verbs require use of global information
 ## Thus, we load everything right now
@@ -326,7 +326,7 @@ add_item()      if $verb eq 'add';
 remove_item()   if $verb eq 'remove' or $verb eq 'delete' or $verb eq 'del';
 
 ## Update something
-update_item()   if $verb eq 'update' or $verb eq 'upd';
+update_item()   if $verb eq 'update' or $verb eq 'upd' or $verb eq 'udpate';
 
 ## Inspect something
 inspect()       if $verb eq 'inspect';
@@ -549,7 +549,6 @@ sub help {
 
 } ## end of help
 
-
 sub superhelp {
 
     ## Show detailed help by examining the verb and nouns
@@ -558,17 +557,66 @@ sub superhelp {
 
     ## If there are no nouns, we can only show the generic help
     help() if ! @nouns;
-    my @command = ($nouns[0]);
-    if (@nouns > 1) {
+
+    # Make sure all commands and actions, as well as their aliases, are here.
+    my %names = (
+        ( map { $_ => 'relgroup' } qw(relgroup herd) ),
+        ( map { $_ => 'db'       } qw(db database) ),
+        ( map { $_ => 'list'     } qw(l lsit liast lisy lit) ),
+        ( map { $_ => 'upgrade'  } qw(upgrade uprgade ugprade) ),
+        ( map { $_ => 'start'    } qw(start strt) ),
+        ( map { $_ => 'remove'   } qw(remove delete del) ),
+        ( map { $_ => 'update'   } qw(update upd udpate) ),
+        map { $_ => $_ } qw(
+            activate
+            add
+            all
+            config
+            customcode
+            customcol
+            customname
+            dbgroup
+            deactivate
+            help
+            inspect
+            install
+            kick
+            list
+            message
+            ping
+            purge
+            reload
+            reload
+            restart
+            sequence
+            sequences
+            set
+            show
+            status
+            stop
+            sync
+            table
+            tables
+            validate
+        )
+    );
+
+    # Standardize names.
+    my @names;
+    for my $noun (@nouns) {
+        push @names => $names{ lc $noun } || $names{ standardize_name($noun) }
+            || help( 1, "Unknown command: " . join ' ' => @nouns );
+    }
+
+    my @command = ($names[0]);
+    if (@names > 1) {
         ## Actions are documented in Pod as "=head3 $action $command".
-        push @command, join ' ', @nouns;
+        push @command, join ' ', @names;
     } else {
         ## Don't show subsections for commands that have them.
         $command[0] .= "/!.+" if $command[0] eq 'add';
     }
-    print usage_exit(join('/' => @command), 0)
-        || help(1, "Unknown command: " . join ' ' => @command);
-    exit;
+    usage_exit(join('/' => @command), 0);
 
 } ## end of superhelp
 
