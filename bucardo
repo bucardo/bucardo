@@ -558,11 +558,16 @@ sub superhelp {
 
     ## If there are no nouns, we can only show the generic help
     help() if ! @nouns;
-
-    my @command = ($nouns[0], join ' ', @nouns);
-    my $usage = usage(join '/' => @command)
-        or help(1, "Unknown command: " . join ' ' => @command);
-    print $usage;
+    my @command = ($nouns[0]);
+    if (@nouns > 1) {
+        ## Actions are documented in Pod as "=head3 $action $command".
+        push @command, join ' ', @nouns;
+    } else {
+        ## Don't show subsections for commands that have them.
+        $command[0] .= "/!.+" if $command[0] eq 'add';
+    }
+    print usage(join '/' => @command)
+        || help(1, "Unknown command: " . join ' ' => @command);
     exit;
 
 } ## end of superhelp
@@ -1022,7 +1027,7 @@ sub add_item {
     ## Arguments: none directly (but processes the nouns)
     ## Returns: never, exits
 
-    my $usage = usage('add');
+    my $usage = usage('add/!.+');
 
     if (!@nouns) {
         warn "$usage\n";
@@ -7355,7 +7360,6 @@ sub usage {
     ## Returns: help string or an empty string for no matches
 
     my $name = shift or die;
-    $name .= "/!.+" if $name eq 'add';
 
     my $usage;
     open my $usage_fh, '>', \$usage;
