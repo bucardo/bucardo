@@ -6746,8 +6746,10 @@ sub upgrade {
     );
 
     my @old_columns = (
-        ['bucardo', 'sync', 'disable_rules'],
-        ['bucardo', 'sync', 'disable_triggers'],
+        ['bucardo', 'dbmap', 'makedelta'],
+        ['bucardo', 'sync',  'disable_rules'],
+        ['bucardo', 'sync',  'disable_triggers'],
+        ['bucardo', 'sync',  'makedelta'],
     );
 
     my @old_functions = (

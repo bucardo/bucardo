@@ -218,7 +218,6 @@ CREATE TABLE bucardo.dbmap (
   priority  SMALLINT    NOT NULL DEFAULT 0,
   role      TEXT        NOT NULL DEFAULT 'target',
   gang      SMALLINT    NOT NULL DEFAULT 1,
-  makedelta BOOLEAN         NULL,
   cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE bucardo.dbmap IS $$Associates a database with one or more groups$$;
@@ -395,7 +394,6 @@ CREATE TABLE bucardo.sync (
   autokick           BOOLEAN     NOT NULL DEFAULT true,      -- Are we issuing NOTICES via triggers?
   checktime          INTERVAL        NULL,                   -- How often to check if we've not heard anything?
   status             TEXT        NOT NULL DEFAULT 'active',  -- Possibly CHECK / FK ('stopped','paused','b0rken')
-  makedelta          BOOLEAN         NULL,
   rebuild_index      SMALLINT    NOT NULL DEFAULT 0,     -- Load without indexes and then REINDEX table
   priority           SMALLINT    NOT NULL DEFAULT 0,     -- Higher is better
   analyze_after_copy BOOLEAN     NOT NULL DEFAULT 'true',
