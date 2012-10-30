@@ -79,17 +79,13 @@ my $bcargs = {
           };
 
 ## These options must come before the GetOptions call
-for my $arg (@ARGV) {
-    if ($arg eq '--no-bucardorc') {
-        $bcargs->{'no-bucardorc'} = 1;
-    }
-    if ($arg =~ /--bucardorc=(.+)/) {
-        $bcargs->{'bucardorc'} = $1;
-    }
-    if ($arg =~ /^-+\?$/) {
-        help();
-    }
-}
+my @opts = @ARGV;
+Getopt::Long::Configure(qw(pass_through));
+GetOptions(
+    $bcargs,
+    'no-bucardorc',
+    'bucardorc=s',
+);
 
 ## Values are first read from a .bucardorc, either in the current dir, or the home dir.
 ## If those do not exist, check for a global rc file
@@ -125,14 +121,14 @@ if (defined $file) {
     close $rc or die;
 }
 
-my @opts = @ARGV;
+Getopt::Long::Configure(qw(no_pass_through));
 GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
     ($bcargs,
      'verbose+',
      'vv',
      'quiet+',
      'notimer',
-     'help',
+     'help|?',
      'debug',
      'version',
      'sort=i',
@@ -8832,15 +8828,17 @@ Shows help.
 
 =head1 OPTIONS
 
-  -d --db-name    NAME    Database name.
-  -U --db-user    USER    Database user name.
-  -P --db-pass    PASS    Database password.
-  -h --db-host    HOST    Database server host name.
-  -p --db-port    PORT    Database server port number.
-  --quiet                 Incremental quiet.
-  --verbose               Incremental verbose mode.
-  --help                  Output basic help and exit.
-  --version               Print the version number and exit.
+  -d --db-name       NAME  Database name.
+  -U --db-user       USER  Database user name.
+  -P --db-pass       PASS  Database password.
+  -h --db-host       HOST  Database server host name.
+  -p --db-port       PORT  Database server port number.
+     --bucardorc     FILE  Use specified .bucarorc file.
+     --no-bucardorc        Do not use .bucardorc file.
+     --quiet               Incremental quiet.
+     --verbose             Incremental verbose mode.
+  -? --help                Output basic help and exit.
+     --version             Print the version number and exit.
 
 =head1 COMMAND DETAILS
 
@@ -10104,6 +10102,17 @@ Host name to use when connecting to the Bucardo database.
   bucardo --db-port 7654
 
 Port number to connect to when connecting to the Bucardo database.
+
+=item C<--bucardorc>
+
+  bucardo --bucardorc myrcfile
+
+Use the specified file for configuration instead of the default
+F<./.bucardorc>.
+
+=item C<--no-bucardorc>
+
+Do not use the F<./.bucardorc> configuration file.
 
 =item C<--verbose>
 
