@@ -566,7 +566,7 @@ sub superhelp {
         ## Don't show subsections for commands that have them.
         $command[0] .= "/!.+" if $command[0] eq 'add';
     }
-    print usage(join '/' => @command)
+    print usage_exit(join('/' => @command), 0)
         || help(1, "Unknown command: " . join ' ' => @command);
     exit;
 
@@ -846,12 +846,8 @@ sub reload {
     ## Arguments: none directly (but processes the nouns for a list of syncs)
     ## Returns: never, exits
 
-    my $usage = usage('reload');
-
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'reload';
+    usage_exit($doc_section) unless @nouns;
 
     for my $syncname (@nouns) {
 
@@ -900,12 +896,8 @@ sub validate {
     ## Arguments: none directly (but processes the nouns for a list of syncs)
     ## Returns: never, exits
 
-    my $usage = usage('validate');
-
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 0;
-    }
+    my $doc_section = 'validate';
+    usage_exit($doc_section) unless @nouns;
 
     ## Build the list of syncs to validate
     my @synclist;
@@ -972,7 +964,7 @@ sub purge {
 
     ## TODO: databases, tables, timeslices
 
-    my $usage = usage('purge');
+    my $doc_section = 'purge';
 
     ## Nothing specific is the same as 'all'
     my $doall = 0;
@@ -1027,12 +1019,8 @@ sub add_item {
     ## Arguments: none directly (but processes the nouns)
     ## Returns: never, exits
 
-    my $usage = usage('add/!.+');
-
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'add/!.+';
+    usage_exit($doc_section) unless @nouns;
 
     ## First word is the type of thing we are adding
     my $thing = shift @nouns;
@@ -1107,8 +1095,7 @@ sub add_item {
         exit 1;
     }
 
-    warn "$usage\n";
-    exit 1;
+    usage_exit($doc_section);
 
 } ## end of add_item
 
@@ -1120,13 +1107,10 @@ sub update_item {
     ## Arguments: none (but parses nouns)
     ## Returns: undef
 
-    my $usage = usage('update');
+    my $doc_section = 'update';
 
-    ## Must have at least two nouns
-    if ($#nouns < 2) {
-        warn "$usage\n";
-        exit 1;
-    }
+    ## Must have at least three nouns
+    usage_exit($doc_section) if @nouns < 3;
 
     ## What type of thing are we updating?
     my $thing = shift @nouns;
@@ -1142,7 +1126,8 @@ sub update_item {
              : $thing eq 'sync'       ? \&update_sync
              : $thing eq 'table'      ? \&update_table
              : $thing eq 'sequence'   ? \&update_table
-             :                          do { warn "$usage\n"; exit 1; };
+             :                          usage_exit($doc_section)
+    ;
 
     ## The update function returns, due to recursion, so we must exit.
     $code->(@nouns);
@@ -1156,12 +1141,8 @@ sub list_item {
     ## Arguments: none, but parses nouns
     ## Returns: 0 on success, -1 on error
 
-    my $usage = usage('list');
-
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'list';
+    usage_exit($doc_section) unless @nouns;
 
     ## First word is the type if thing we are listing
     my $thing = shift @nouns;
@@ -1223,8 +1204,7 @@ sub list_item {
 
         ## catch all
         ## Cannot list anything else
-        warn "$usage\n";
-        exit 1;
+        usage_exit($doc_section);
 
     } # SWITCH
 
@@ -1238,12 +1218,8 @@ sub remove_item {
     ## Arguments: none, but parses nouns
     ## Returns: never, exits
 
-    my $usage = usage('remove');
-
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'remove';
+    usage_exit($doc_section) unless @nouns;
 
     ## First word is the type if thing we are removing
     my $thing = shift @nouns;
@@ -1264,8 +1240,7 @@ sub remove_item {
     remove_sequence()   if $thing eq 'sequence';
 
     ## Do not know how to remove anything else
-    warn "$usage\n";
-    exit 1;
+    usage_exit($doc_section);
 
 } ## end of remove_item
 
@@ -1285,16 +1260,13 @@ sub add_database {
     ## Example: bucardo add db nyc1 dbname=nyc1 dbhost=nyc1.example.com dbgroup=sales
 
     ## Grab our generic usage message
-    my $usage = usage('add/add db');
+    my $doc_section = 'add/add db';
 
     ## The first word is the internal name (bucardo.db.name)
     my $item_name = shift @nouns || '';
 
     ## No name is a problem
-    if (! length $item_name) {
-        warn $usage;
-        exit 1;
-    }
+    usage_exit($doc_section) unless length $item_name;
 
     ## Inputs and aliases, database column name, flags, default value
     my $validcols = qq{
@@ -1319,8 +1291,11 @@ sub add_database {
     ## TODO: See if makedelta still needed
     ## If so, add to wiki page: http://bucardo.org/wiki/Bucardo/add_database#Optional_arguments
 
-    my ($dbcols,$cols,$phs,$vals,$extra)
-        = process_simple_args({cols => $validcols, list => \@nouns, usage => $usage});
+    my ( $dbcols, $cols, $phs, $vals, $extra ) = process_simple_args({
+        cols        => $validcols,
+        list        => \@nouns,
+        doc_section => $doc_section,
+    });
 
     ## Must have a database name
     if (! exists $vals->{dbname}) {
@@ -1560,14 +1535,8 @@ sub remove_database {
     ## Returns: undef
     ## Example: bucardo remove db nyc1 nyc2 --force
 
-    ## Grab our generic usage message
-    my $usage = usage('remove');
-
-    ## Must have at least one name
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'remove';
+    usage_exit($doc_section) unless @nouns;
 
     ## Make sure all named databases exist
     for my $name (@nouns) {
@@ -1635,12 +1604,8 @@ sub update_database {
     my @actions = @_;
 
     ## Grab our generic usage message
-    my $usage = usage('update');
-
-    if (! @actions) {
-        print "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'update';
+    usage_exit($doc_section) unless @actions;
 
     my $name = shift @actions;
 
@@ -1657,8 +1622,7 @@ sub update_database {
     for my $arg (@actions) {
         next if $arg =~ /set/i;
         next if $arg =~ /\w+=\w+/o;
-        print "$usage\n";
-        exit 1;
+        usage_exit($doc_section);
     }
 
     ## Change the arguments into a hash
@@ -1816,9 +1780,6 @@ sub list_databases {
     ## 1+ Databases to view. Can be "all" and can have wildcards
     ## Returns: 0 on success, -1 on error
     ## Example: bucardo list db sale%
-
-    ## Grab our generic usage message
-    my $usage = usage('list');
 
     ## Might be no databases yet
     if (! keys %$DB) {
@@ -1991,15 +1952,12 @@ sub add_dbgroup {
     ## Example: bucardo add dbgroup nycservers nyc1:source nyc2:source lax1
 
     ## Grab our generic usage message
-    my $usage = usage('add/add dbgroup');
+    my $doc_section = 'add/add dbgroup';
 
     my $name = shift @nouns || '';
 
     ## Must have a name
-    if (!length $name) {
-        warn "$usage\n";
-        exit 1;
-    }
+    usage_exit($doc_section) unless length $name;
 
     ## Create the group if it does not exist
     if (! exists $DBGROUP->{$name}) {
@@ -2039,14 +1997,10 @@ sub remove_dbgroup {
     ## Returns: undef
     ## Example: bucardo remove dbgroup sales
 
-    ## Grab our generic usage message
-    my $usage = usage('remove');
+    my $doc_section = 'remove';
 
     ## Must have at least one name
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
+    usage_exit($doc_section) unless @nouns;
 
     ## Make sure all the groups exist
     for my $name (@nouns) {
@@ -2104,13 +2058,8 @@ sub update_dbgroup {
 
     my @actions = @_;
 
-    ## Grab our generic usage message
-    my $usage = usage('update');
-
-    if (! @actions) {
-        print "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'update';
+    usage_exit($doc_section) unless @actions;
 
     my $name = shift @actions;
 
@@ -2204,9 +2153,6 @@ sub list_dbgroups {
     ## 1+ Groups to view. Can be "all" and can have wildcards
     ## Returns: 0 on success, -1 on error
     ## Example: bucardo list dbgroups
-
-    ## Grab our generic usage message
-    my $usage = usage('list');
 
     ## Might be no groups yet
     if (! keys %$DBGROUP) {
@@ -2303,14 +2249,11 @@ sub add_customname {
 
     my $item_name = shift @nouns || '';
 
-    my $usage = usage('add/add customname');
-    ## Must have a second name as well
+    my $doc_section = 'add/add customname';
+
     my $newname = shift @nouns || '';
 
-    if (!length $item_name or ! length $newname) {
-        warn "$usage\n";
-        exit 1;
-    }
+    usage_exit($doc_section) unless length $item_name && length $newname;
 
     ## Does this number or name exist?
     if (! exists $GOAT->{$item_name}) {
@@ -2335,10 +2278,7 @@ sub add_customname {
     }
 
     ## If the new name contains an equal sign, treat as an error
-    if ($Tname =~ /=/) {
-        warn "$usage\n";
-        exit 1;
-    }
+    usage_exit($doc_section) if $Tname =~ /=/;
 
     ## Names cannot be the same
     if ($sname eq $Sname and $tname eq $Tname) {
@@ -2367,8 +2307,7 @@ sub add_customname {
             push @db => $db;
         }
         else {
-            warn "$usage\n";
-            exit 1;
+            usage_exit($doc_section);
         }
     }
 
@@ -2430,20 +2369,12 @@ sub remove_customname {
     ## Example: bucardo remove customname 7
 
     ## Grab our generic usage message
-    my $usage = usage('remove');
-
-    ## Must have at least one name
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'remove';
+    usage_exit($doc_section) unless @nouns;
 
     ## Make sure each argument is a number
     for my $name (@nouns) {
-        if ($name !~ /^\d+$/) {
-            warn "$usage\n";
-            exit 1;
-        }
+        usage_exit($doc_section) if $name !~ /^\d+$/;
     }
 
     ## We want the per-id hash here
@@ -2524,7 +2455,7 @@ sub list_customnames {
     ## Example: bucardo list customname
 
     ## Grab our generic usage message
-    my $usage = usage('list');
+    my $doc_section = 'list';
 
     ## Might be no entries yet
     if (! keys %$CUSTOMNAME) {
@@ -2632,15 +2563,12 @@ sub add_customcols {
 
     my $item_name = shift @nouns || '';
 
-    my $usage = usage('add');
+    my $doc_section = 'add';
 
     ## Must have a clause as well
     my $clause = shift @nouns || '';
 
-    if (!length $item_name or ! length $clause) {
-        warn "$usage\n";
-        exit 1;
-    }
+    usage_exit($doc_section) unless length $item_name && length $clause;
 
     ## Does this number or name exist?
     if (! exists $GOAT->{$item_name}) {
@@ -2656,8 +2584,8 @@ sub add_customcols {
 
     ## Make sure the clause looks sane
     if ($clause !~ /^\s*SELECT /i) {
-        warn "$usage\nThe clause must start with SELECT\n";
-        exit 1;
+        warn "\nThe clause must start with SELECT\n";
+        usage_exit($doc_section);
     }
 
     ## Parse the rest of the arguments
@@ -2681,8 +2609,7 @@ sub add_customcols {
             push @db => $db;
         }
         else {
-            warn "$usage\n";
-            exit 1;
+            usage_exit($doc_section);
         }
     }
 
@@ -2734,21 +2661,12 @@ sub remove_customcols {
     ## Returns: undef
     ## Example: bucardo remove customcols 7
 
-    ## Grab our generic usage message
-    my $usage = usage('remove');
-
-    ## Must have at least one name
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'remove';
+    usage_exit($doc_section) unless @nouns;
 
     ## Make sure each argument is a number
     for my $name (@nouns) {
-        if ($name !~ /^\d+$/) {
-            warn "$usage\n";
-            exit 1;
-        }
+        usage_exit($doc_section) if $name !~ /^\d+$/;
     }
 
     ## We want the per-id hash here
@@ -2847,8 +2765,7 @@ sub list_customcols {
     ## Returns: 0 on success, -1 on error
     ## Example: bucardo list customcols
 
-    ## Grab our generic usage message
-    my $usage = usage('list');
+    my $doc_section = 'list';
 
     ## Might be no entries yet
     if (! keys %$CUSTOMCOLS) {
@@ -2954,13 +2871,8 @@ sub add_table {
     ## Example: bucardo add table pgbench_accounts foo% myschema.abc
 
     ## Grab our generic usage message
-    my $usage = usage('add/add table');
-
-    ## Must have at least one table
-    if (! @nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'add/add table';
+    usage_exit($doc_section) unless @nouns;
 
     ## Inputs and aliases, database column name, flags, default
     my $validcols = q{
@@ -2971,8 +2883,11 @@ sub add_table {
         herd|relgroup            herd                 0                skip
     };
 
-    my ($dbcols,$cols,$phs,$vals,$extra)
-        = process_simple_args({cols => $validcols, list => \@nouns, usage => $usage});
+    my ( $dbcols, $cols, $phs, $vals, $extra ) = process_simple_args({
+        cols        => $validcols,
+        list        => \@nouns,
+        doc_section => $doc_section,
+    });
 
     ## Loop through all the args and attempt to add the tables
     ## This returns a hash with the following keys: relations, match, nomatch
@@ -3063,12 +2978,8 @@ sub remove_table {
     ## Arguments: none, parses nouns for tables
     ## Returns: never, exits
 
-    my $usage = usage('remove');
-
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'remove';
+    usage_exit($doc_section) unless @nouns;
 
     ## Prepare our SQL
     $SQL = q{DELETE FROM bucardo.goat WHERE schemaname||'.'||tablename = ?};
@@ -3121,13 +3032,8 @@ sub update_table {
 
     my @actions = @_;
 
-    ## Grab our generic usage message
-    my $usage = usage('update');
-
-    if (! @actions) {
-        print "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'update';
+    usage_exit($doc_section) unless @actions;
 
     my $name = shift @actions;
 
@@ -3147,8 +3053,7 @@ sub update_table {
     for my $arg (@actions) {
         next if $arg =~ /set/i;
         next if $arg =~ /\w+=\w+/o;
-        print "$usage\n";
-        exit 1;
+        usage_exit($doc_section);
     }
 
     ## Change the arguments into a hash
@@ -3296,8 +3201,7 @@ sub list_tables {
     ## Returns: 0 on success, -1 on error
     ## Example: bucardo list tables
 
-    ## Grab our generic usage message
-    my $usage = usage('list');
+    my $doc_section = 'list';
 
     ## Might be no tables yet
     if (! keys %$TABLE) {
@@ -3393,16 +3297,12 @@ sub add_herd {
     ## Returns: undef
     ## Example: bucardo add herd foobar tab1 tab2
 
-    ## Grab our generic usage message
-    my $usage = usage('add/add relgroup');
+    my $doc_section = 'add/add relgroup';
 
     my $herdname = shift @nouns || '';
 
     ## Must have a name
-    if (!length $herdname) {
-        warn "$usage\n";
-        exit 1;
-    }
+    usage_exit($doc_section) unless length $herdname;
 
     ## Create the herd if it does not exist
     if (exists $HERD->{$herdname}) {
@@ -3501,12 +3401,8 @@ sub remove_herd {
     ## Arguments: none, parses nouns
     ## Returns: never, exits
 
-    my $usage = usage('remove');
-
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'remove';
+    usage_exit($doc_section) unless @nouns;
 
     my $herd = $global{herd};
 
@@ -3561,7 +3457,7 @@ sub list_herds {
     ## Arguments: none, parses nouns for herd names
     ## Returns: 0 on success, -1 on error
 
-    my $usage = usage('list');
+    my $doc_section = 'list';
 
     ## Any nouns are filters against the whole list
     my $clause = generate_clause({col => 'name', items => \@nouns});
@@ -3619,14 +3515,9 @@ sub add_sync {
 
     my $item_name = shift @nouns || '';
 
-    my $usage = usage('add/add sync');
-
+    my $doc_section = 'add/add sync';
+    usage_exit($doc_section) unless length $item_name;
     my $batch = 1;
-
-    if (!length $item_name) {
-        warn "$usage\n";
-        exit 1;
-    }
 
     ## Inputs and aliases, database column name, flags, default
     my $validcols = qq{
@@ -3665,8 +3556,12 @@ sub add_sync {
         },
     ];
 
-    my ($dbcols,$cols,$phs,$vals)
-        = process_simple_args({cols => $validcols, list => \@nouns, usage => $usage, morph => $morph});
+    my ( $dbcols, $cols, $phs, $vals ) = process_simple_args({
+        cols        => $validcols,
+        list        => \@nouns,
+        doc_section => $doc_section,
+        morph       => $morph,
+    });
 
     if (! exists $dbcols->{herd}) {
         ## But allow on-the-fly herd creation
@@ -3904,12 +3799,8 @@ sub remove_sync {
     ## Arguments: none (uses nouns)
     ## Returns: never, exits
 
-    my $usage = usage('remove');
-
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'remove';
+    usage_exit($doc_section) unless @nouns;
 
     ## Make sure all named syncs exist
     my $s = $global{sync};
@@ -3956,12 +3847,8 @@ sub update_sync {
 
     my @actions = @_;
 
-    my $usage = usage('update');
-
-    if (! @actions) {
-        print "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'update';
+    usage_exit($doc_section) unless @actions;
 
     my $name = shift @actions;
 
@@ -4023,9 +3910,8 @@ sub update_sync {
             next;
         }
 
-        print "Unknown action: $action\n$usage\n";
-        exit 1;
-
+        warn "\nUnknown action: $action\n";
+        usage_exit($doc_section);
     }
 
     confirm_commit() if $changes;
@@ -4041,7 +3927,7 @@ sub list_syncs {
     ## Arguments: none (reads nouns for a list of syncs)
     ## Returns: 0 on success, -1 on error
 
-    my $usage = usage('list');
+    my $doc_section = 'list';
 
     my $syncs = $global{sync};
 
@@ -4552,12 +4438,8 @@ sub kick {
     ## Arguments: none, parses nouns
     ## Returns: never, exits
 
-    my $usage = usage('kick');
-
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'kick';
+    usage_exit($doc_section) unless @nouns;
 
     my ($exitstatus, $retries, $do_retry) = (0,0,0);
 
@@ -5213,22 +5095,15 @@ sub inspect {
     ## Arguments: none, parses nouns
     ## Returns: never, exits
 
-    my $usage = usage('inspect');
-
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'inspect';
+    usage_exit($doc_section) unless @nouns;
     my $thing = shift @nouns;
 
     inspect_table() if $thing =~ /tab/i  or $thing eq 't';
     inspect_sync()  if $thing =~ /sync/i or $thing eq 's';
     inspect_herd()  if $thing =~ /(?:relgr|herd)/i or $thing eq 'h';
 
-    warn "$usage\n";
-
-    exit 1;
-
+    usage_exit($doc_section);
 } ## end of inspect
 
 
@@ -5238,12 +5113,8 @@ sub inspect_table {
     ## Arguments: none, parses nouns
     ## Returns: never, exits
 
-    my $usage = usage('inspect');
-
-    if (! @nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'inspect';
+    usage_exit($doc_section) unless @nouns;
 
     $SQL = q{SELECT * FROM bucardo.goat WHERE tablename=?};
     my $sth_goat = $dbh->prepare($SQL);
@@ -5319,12 +5190,8 @@ sub inspect_herd {
     ## Arguments: none, parses nouns
     ## Returns: never, exits
 
-    my $usage = usage('inspect');
-
-    if (! @nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'inspect';
+    usage_exit($doc_section) unless @nouns;
 
     die "Not implemented yet\n";
 
@@ -5337,12 +5204,8 @@ sub inspect_sync {
     ## Arguments: none, parses nouns
     ## Returns: never, exits
 
-    my $usage = usage('inspect');
-
-    if (! @nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'inspect';
+    usage_exit($doc_section) unless @nouns;
 
     die "Not implemented yet\n";
 
@@ -5470,7 +5333,7 @@ sub list_customcodes {
     ## Arguments: none, parses nouns for customcodes
     ## Returns: 0 on success, -1 on error
 
-    my $usage = usage('list');
+    my $doc_section = 'list';
 
     ## Any nouns are filters against the whole list
     my $clause = generate_clause({col => 'name', items => \@nouns});
@@ -5525,7 +5388,8 @@ sub list_sequences {
     ## Arguments: none (reads nouns for a list of sequences)
     ## Returns: 0 on success, -1 on error
 
-    my $usage = usage('list');
+    my $doc_section = 'list';
+    usage_exit($doc_section) unless @nouns;
 
     my $clause = generate_clause({col => 'tablename', items => \@nouns});
     my $WHERE = $clause ? "AND $clause" : '';
@@ -5698,12 +5562,8 @@ sub add_customcode {
 
     my $item_name = shift @nouns || '';
 
-    my $usage = usage('add/add customcode');
-
-    if (!length $item_name) {
-        warn "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'add/add customcode';
+    usage_exit($doc_section) unless length $item_name;
 
     ## Inputs and aliases, database column name, flags, default
     my $whenrunlist = 'before_txn before_check_rows before_trigger_drop after_trigger_drop'
@@ -5723,8 +5583,11 @@ sub add_customcode {
         src_code                 src_code             0                skip
     };
 
-    my ($dbcols,$cols,$phs,$vals,$extras)
-        = process_simple_args({cols => $validcols, list => \@nouns, usage => $usage});
+    my ( $dbcols, $cols, $phs, $vals, $extras ) = process_simple_args({
+        cols        => $validcols,
+        list        => \@nouns,
+        doc_section => $doc_section,
+    });
 
     my $newname = $dbcols->{name};
 
@@ -5735,16 +5598,11 @@ sub add_customcode {
     }
 
     ## We must have a "whenrun"
-    if (! $dbcols->{whenrun}) {
-        warn "$usage\n";
-        exit 1;
-    }
+    usage_exit($doc_section) unless $dbcols->{whenrun};
 
     ## We must have a src_code as a file
-    if (! exists $extras->{src_code} or ! $extras->{src_code}) {
-        warn "$usage\n";
-        exit 1;
-    }
+    usage_exit($doc_section) unless $extras->{src_code};
+
     my $tfile = $extras->{src_code};
     if (! -e $tfile) {
         warn qq{Could not find a file named "$tfile"\n};
@@ -6138,12 +5996,8 @@ sub remove_customcode {
     ## Arguments: none (uses nouns)
     ## Returns: never, exits
 
-    my $usage = usage('remove');
-
-    if (!@nouns) {
-        warn "$usage\n";
-        exit 1;
-    }
+    my $doc_section = 'remove';
+    usage_exit($doc_section) unless @nouns;
 
     ## Make sure all named codes exist
     my $code = $global{cc};
@@ -7352,24 +7206,20 @@ sub upgrade_and_log {
 } ## end of upgrade_and_log
 
 
-sub usage {
+sub usage_exit {
 
     ## Grab the help string for a specific item
     ## Arguments: one
     ## 1. The thing we want help on
-    ## Returns: help string or an empty string for no matches
+    ## Returns: nothing
 
     my $name = shift or die;
+    my $exitval = defined $_[0] ? shift : 1;
 
-    my $usage;
-    open my $usage_fh, '>', \$usage;
     _pod2usage(
         '-sections' => "COMMAND DETAILS/$name",
-        '-exitval'  => 'NOEXIT',
-        '-output'   => $usage_fh,
+        '-exitval'  => $exitval,
     );
-
-    return $usage;
 
 } ## end of usage
 
@@ -7504,9 +7354,8 @@ sub message {
     ## Arguments: none (reads in nouns)
     ## Returns: never, exits
 
-    if (! length($nouns)) {
-        die qq{Usage: bucardo message "Some message to send to the logs"\n};
-    }
+    my $doc_section = 'message';
+    usage_exit($doc_section) unless length $nouns;
 
     $SQL = 'INSERT INTO bucardo.bucardo_log_message(msg) VALUES (?)';
     $sth = $dbh->prepare($SQL);
@@ -7941,9 +7790,9 @@ sub process_simple_args {
     ##    values string, and 'extra' hashref
 
     my $arg = shift;
-    my $validcols = $arg->{cols} or die 'Need a list of valid cols!';
-    my $list = $arg->{list}      or die 'Need a list of arguments!';
-    my $usage = $arg->{usage}    or die 'Need a usage!';
+    my $validcols   = $arg->{cols}        or die 'Need a list of valid cols!';
+    my $list        = $arg->{list}        or die 'Need a list of arguments!';
+    my $doc_section = $arg->{doc_section} or die 'Need a doc_section!';
 
     my %item;
     my %dbcol;
@@ -7986,7 +7835,8 @@ sub process_simple_args {
         next if $arg eq 'extraargs';
 
         if (! exists $item{$arg}) {
-            die "Unknown option '$arg'\n$usage\n";
+            warn "Unknown option '$arg'\n";
+            usage_exit($doc_section);
         }
 
         (my $val = $xyargs->{$arg}) =~ s/^\s*(\S+)\s*$/$1/;
