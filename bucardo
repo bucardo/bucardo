@@ -136,10 +136,10 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'debug',
      'version',
      'sort=i',
-     'showdays',
+     'showdays|show-days',
      'compress',
      'retry=i',
-     'retrysleep=i',
+     'retrysleep|retry-sleep=i',
      'batch',
      'dryrun|dry-run',
      'confirm',
@@ -148,11 +148,11 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
 
      ## These are sent to the constructor:
      'bcverbose',
-     'dbport=i',
-     'dbhost=s',
-     'dbname=s',
-     'dbuser=s',
-     'dbpass=s',
+     'dbport|db-port|p=i',
+     'dbhost|db-host|h=s',
+     'dbname|db-name|d=s',
+     'dbuser|db-user|U=s',
+     'dbpass|db-pass|P=s',
      'sendmail=i',
      'extraname=s',
      'debugfilesep',
@@ -8832,15 +8832,15 @@ Shows help.
 
 =head1 OPTIONS
 
-  --dbname    NAME    Database name.
-  --dbuser    USER    Database user name.
-  --dbpass    PASS    Database password.
-  --dbhost    HOST    Database server host name.
-  --dbport    PORT    Database server port number.
-  --quiet             Incremental quiet.
-  --verbose           Incremental verbose mode.
-  --help              Output basic help and exit.
-  --version           Print the version number and exit.
+  -d --db-name    NAME    Database name.
+  -U --db-user    USER    Database user name.
+  -P --db-pass    PASS    Database password.
+  -h --db-host    HOST    Database server host name.
+  -p --db-port    PORT    Database server port number.
+  --quiet                 Incremental quiet.
+  --verbose               Incremental verbose mode.
+  --help                  Output basic help and exit.
+  --version               Print the version number and exit.
 
 =head1 COMMAND DETAILS
 
@@ -9832,7 +9832,7 @@ target finishes. Options:
 
 The number of times to retry a sync if it fails. Defaults to 0.
 
-=item C<--retrysleep>
+=item C<--retry-sleep>
 
 How long to sleep, in seconds, between each retry attempt.
 
@@ -9893,7 +9893,7 @@ Returns a Nagios like message starting with "OK" or "CRITICAL" for success or fa
 
 =head2 status
 
-  bucardo status [syncname(s)] [--sort=#] [--showdays] [--compress]
+  bucardo status [syncname(s)] [--sort=#] [--show-days] [--compress]
 
 Shows the brief status of all known syncs in a tabular format. If given one or more sync names, 
 shows detailed information for each one. To see detailed information for all syncs, simply 
@@ -9936,7 +9936,7 @@ How long it has been since the last sync failure
 
 The options for C<status> are:
 
-=item C<--showdays>
+=item C<--show-days>
 
 Specifies whether or not do list the time interval with days, or simply show
 the hours. For example, "3d 12h 6m 3s" vs. "48h 6m 3s"
@@ -10061,17 +10061,49 @@ as they will not change very often if at all.
 
 =over
 
-=item C<--dbport=number>
+=item C<-d>
 
-=item C<--dbhost=string>
+=item C<--db-name>
 
-=item C<--dbname=string>
+  bucardo --db-name widgets
+  bucardo -d bricolage
 
-=item C<--dbuser=string>
+Name of the Bucardo database to which to connect.
 
-=item C<--dbpass=string>
+=item C<-U>
 
-The port, host, and name of the Bucardo database, the user to connect as, and the password to use.
+=item C<--db-user>
+
+  bucardo --db-user postgres
+  bucardo -U Mom
+
+User name to use when connecting to the Bucardo database.
+
+=item C<-P>
+
+=item C<--db-pass>
+
+  bucardo --db-pass s3cr1t
+  bucardo -P lolz
+
+Password to use when connecting to the Bucardo database.
+
+=item C<-h>
+
+=item C<--db-host>
+
+  bucardo --db-host db.example.com
+  bucardo -h db2.example.net
+
+Host name to use when connecting to the Bucardo database.
+
+=item C<-p>
+
+=item C<--db-port>
+
+  bucardo --db-port 7654
+
+Port number to connect to when connecting to the Bucardo database.
 
 =item C<--verbose>
 
