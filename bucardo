@@ -150,7 +150,7 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'dbuser|db-user|U=s',
      'dbpass|db-pass|P=s',
      'sendmail=i',
-     'extraname=s',
+     'extraname|extra-name=s',
      'debugfilesep',
      'debugname=s',
      'debugsyslog=i',
@@ -164,13 +164,9 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'exclude-schema|N=s@',
      'table|t=s@',
      'exclude-table|T=s@',
-     'db=s',
-     'herd=s',
-     'piddir=s',
-     ## These two already handled above, but need to be here so GetOptions is happy:
-     'bucardorc=s',
-     'no-bucardorc',
-
+     'db|database=s',
+     'herd|relgroup=s',
+     'piddir|pid-dir=s',
 ) or die "\n";
 
 ## If --help is set, ignore everything else, show help, then exit
@@ -8881,7 +8877,7 @@ defaults to postgres
 
 defaults to 5432
 
-=item C<--piddir>
+=item C<--pid-dir>
 
 defaults to /var/run/bucardo/
 
@@ -8914,7 +8910,7 @@ The options for the C<start> command are:
 Tells Bucardo whether or not to send mail on interesting events: startup,
 shutdown, and errors. Default is on.
 
-=item C<--extraname=string>
+=item C<--extra-name string>
 
 A short string that will be appended to the version string as output by the
 Bucardo process names. Mostly useful for debugging.
@@ -8935,11 +8931,11 @@ defaults to "LOG_LOCAL1".
 
 If set, writes detailed debugging information to one or more files.
 
-=item C<--debugdir=directory name>
+=item C<--debugdir directory name>
 
 Directory where the debug files should go.
 
-=item C<--debugname=string>
+=item C<--debugname string>
 
 Appends the given string to the end of the default debug file name,
 "log.bucardo". A dot is added before the name as well, so a debugname of
