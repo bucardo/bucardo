@@ -57,7 +57,7 @@ if (exists $ENV{PATH} and $progname =~ m{(.+)/(.+)}) {
 }
 
 ## We must have at least one argument to do anything
-help() unless @ARGV;
+help(1) unless @ARGV;
 
 ## Default arguments - most are for the bc constructor
 my $bcargs = {
@@ -210,7 +210,7 @@ my $NOTIMER = delete $bcargs->{notimer} || 0;
 my $verb = shift || '';
 
 ## No verb? Show a help message and exit
-help() unless $verb;
+help(1, "Missing required command\n") unless $verb;
 
 ## Standardize the verb as lowercase, and grab the rest of the args as the "nouns"
 $verb = lc $verb;
@@ -354,7 +354,7 @@ purge()         if $verb eq 'purge';
 ## There are only a few valid verbs left, so we check for them now
 if ($verb ne 'kick' and $verb ne 'activate' and $verb ne 'deactivate') {
     ## Show help and exit
-    help();
+    help(1, qq{Unknown command "$verb"\n});
 }
 
 ## For all remaining verbs, we expect a list of syncs with an optional decimal "timeout"
@@ -442,7 +442,7 @@ vate_sync() if $verb eq 'activate' or $verb eq 'deactivate';
 kick() if $verb eq 'kick';
 
 ## If we reach here (and we should not), display help and exit
-help();
+help(1);
 
 exit;
 
@@ -530,8 +530,17 @@ sub check_version {
 
 } ## end of check_version
 
+sub _pod2usage {
+    require Pod::Usage;
+    Pod::Usage::pod2usage(
+        '-verbose' => 99,
+        '-exitval' => 2,
+        @_
+    );
+}
 
 sub help {
+    my ($exitval, $msg) = @_;
 
     ## Give detailed help about usage of this program
     ## Arguments: none
@@ -540,56 +549,11 @@ sub help {
     ## Nothing to do if we are being quiet
     exit 0 if $QUIET;
 
-    warn qq{Usage: $progname args
-  install         ** Installs the Bucardo database
-
-  start <reason>  ** Force any existing sync(s) to quit, then starts Bucardo
-
-  stop <reason>   ** Tell all Bucardo processes to stop permanently
-
-  list <type> [name]   ** View information about dbs, dbgroups, relgroups, syncs, tables, sequences, customnames, customcols, customcode or "all" of them
-  bucardo add <type> <name>    ** Add a db, dbgroup, relgroup, sync, table, sequence, customcode, customcols customname or customcode
-  remove <type> <name> ** Remove a db, dbgroup, relgroup, sync, table, sequence, customname, customcol or customcode
-
-  For detailed help on the above, prefix with a help like this:
-    $progname help add db
-
-  kick <syncname(s)> [timeout]
-                  ** Kick off one or more syncs, optionally wait for result (0 = wait until done)
-
-  ping [timeout]  ** Ping the MCP process for a response, return a Nagios-friendly string
-
-  status [--sort=col#]
-                  ** List information about all syncs
-
-  status syncname[s]
-                  ** List detailed information about one or more syncs
-
-  reload syncname[s]
-                 ** Reload a sync
-
-  validate syncname[s]
-                 ** Validate a sync
-
-  purge [database]
-                 ** Purge the delta and track tables
-
-  upgrade
-                 ** Upgrade Bucardo to the current version
-
-  message
-                 ** Write a message to the Bucardo logs
-
-  show [all|item]
-  set [item=value]
-                 ** View or set configuration parameters
-
-  reload_config   ** Force a running Bucardo to reload the bucardo_config table
-
-For more details, try 'man bucardo'
-};
-
-    exit 0;
+    _pod2usage(
+        '-message'  => $msg,
+        '-sections' => '^(?:USAGE|COMMANDS|OPTIONS)$',
+        '-exitval'  => $exitval || 0,
+    ) unless $QUIET;
 
 } ## end of help
 
@@ -603,207 +567,14 @@ sub superhelp {
     ## If there are no nouns, we can only show the generic help
     help() if ! @nouns;
 
-    ## Grab the first two words and standardize them
-    my $word1 = lc $nouns[0];
-    my $word2 = lc $nouns[1];
-    my $word3 = lc $nouns[2];
+    my @command = @nouns < 3 ? @nouns
+        : $nouns[1] eq 'all' ? ($nouns[0], $nouns[2])
+        :                      ($nouns[0], $nouns[1]);
 
-    ## Swap them out if the second one is 'all' and the third exists
-    if (defined $word2 and $word2 eq 'all' and defined $word3) {
-        $word2 = $word3;
-    }
-
-    ## Because usage() sometimes relies on the verb
-    $verb = $word1;
-
-    ## Standardize the 'thing' argument
-    $word2 = standardize_name($word2);
-
-    ## TODO: Write a test to ensure full coverage below
-
-    if ('add' eq $word1) {
-        if ('customcode' eq $word2) {
-            warn usage('add_customcode') . "\n";
-            exit 0;
-        }
-        if ('customname' eq $word2) {
-            warn usage('add_customname') . "\n";
-            exit 0;
-        }
-        if ('customcols' eq $word2) {
-            warn usage('add_customcols') . "\n";
-            exit 0;
-        }
-        if ('database' eq $word2) {
-            warn usage('add_database') . "\n";
-            exit 0;
-        }
-        if ('dbgroup' eq $word2) {
-            warn usage('add_dbgroup') . "\n";
-            exit 0;
-        }
-        if ('herd' eq $word2) {
-            warn usage('add_herd') . "\n";
-            exit 0;
-        }
-        if ('sync' eq $word2) {
-            warn usage('add_sync') . "\n";
-            exit 0;
-        }
-        if ('table' eq $word2) {
-            warn usage('add_table') . "\n";
-            exit 0;
-        }
-        if ('sequence' eq $word2) {
-            warn usage('add_sequence') . "\n";
-            exit 0;
-        }
-        warn usage('add') . "\n";
-        exit 0;
-    }
-    if ('config' eq $word1) {
-        warn usage('config') . "\n";
-        exit 0;
-    }
-    if ('inspect' eq $word1) {
-        if ('table' eq $word2) {
-            warn usage('inspect_table') . "\n";
-            exit 0;
-        }
-        if ('herd' eq $word2) {
-            warn usage('inspect_herd') . "\n";
-            exit 0;
-        }
-        if ('sync' eq $word2) {
-            warn usage('inspect_sync') . "\n";
-            exit 0;
-        }
-
-        warn usage('inspect') . "\n";
-        exit 0;
-    }
-    if ('kick' eq $word1) {
-        warn usage('kick') . "\n";
-        exit 0;
-    }
-    if ('list' eq $word1 or 'l' eq $word1 or 'liast' eq $word1) {
-        if ('customcode' eq $word2 or 'custom_code' eq $word2) {
-            warn usage('list_customcode') . "\n";
-            exit 0;
-        }
-        ## Keep dbg before db
-        if ('dbg' eq $word2 or 'dbgroup' eq $word2) {
-            warn usage('list_dbgroups') . "\n";
-            exit 0;
-        }
-        if ($word2 =~ /^(?:db|database)/) {
-            warn usage('list_databases') . "\n";
-            exit 0;
-        }
-        if ('herd' eq $word2) {
-            warn usage('list_herds') . "\n";
-            exit 0;
-        }
-        if ('sync' eq $word2) {
-            warn usage('list_syncs') . "\n";
-            exit 0;
-        }
-        if ('table' eq $word2 or 'tab' eq $word2) {
-            warn usage('list_tables') . "\n";
-            exit 0;
-        }
-        if ('sequence' eq $word2 or 'seq' eq $word2) {
-            warn usage('list_sequences') . "\n";
-            exit 0;
-        }
-        warn usage('list') . "\n";
-        exit 0;
-    }
-    if ('message' eq $word1) {
-        warn usage('message') . "\n";
-        exit 0;
-    }
-    if ('ping' eq $word1) {
-        warn usage('ping') . "\n";
-        exit 0;
-    }
-    if ('reload' eq $word1) {
-        warn usage('reload') . "\n";
-        exit 0;
-    }
-    if ('reload_config' eq $word1) {
-        warn usage('reload_config') . "\n";
-        exit 0;
-    }
-    if ('remove' eq $word1 or 'delete' eq $word1) {
-        if ('customcode' eq $word2 or 'custom_code' eq $word2) {
-            warn usage('remove_customcode') . "\n";
-            exit 0;
-        }
-        if ('db' eq $word2 or 'database' eq $word2) {
-            warn usage('remove_database') . "\n";
-            exit 0;
-        }
-        if ('dbg' eq $word2 or 'dbgroup' eq $word2) {
-            warn usage('remove_dbgroup') . "\n";
-            exit 0;
-        }
-        if ('herd' eq $word2) {
-            warn usage('remove_herd') . "\n";
-            exit 0;
-        }
-        if ('sync' eq $word2) {
-            warn usage('remove_sync') . "\n";
-            exit 0;
-        }
-        if ('table' eq $word2 or 'tab' eq $word2) {
-            warn usage('remove_table') . "\n";
-            exit 0;
-        }
-        if ('sequence' eq $word2 or 'seq' eq $word2) {
-            warn usage('remove_sequence') . "\n";
-            exit 0;
-        }
-        warn usage('remove') . "\n";
-        exit 0;
-    }
-    if ('restart' eq $word1) {
-        warn usage('restart') . "\n";
-        exit 0;
-    }
-    if ('start' eq $word1) {
-        warn usage('start') . "\n";
-        exit 0;
-    }
-    if ('status' eq $word1) {
-        warn usage('status') . "\n";
-        exit 0;
-    }
-    if ('stop' eq $word1) {
-        warn usage('stop') . "\n";
-        exit 0;
-    }
-    if ('update' eq $word1) {
-        warn usage('update') . "\n";
-        exit 0;
-    }
-    if ('upgrade' eq $word1) {
-        warn usage('upgrade') . "\n";
-        exit 0;
-    }
-    if ('validate' eq $word1) {
-        warn usage('validate') . "\n";
-        exit 0;
-    }
-    if ('purge' eq $word1) {
-        warn usage('purge') . "\n";
-        exit 0;
-    }
-
-    ## Generic fallthrough
-    help();
-
-    exit 0;
+    my $usage = usage(join '/' => @command)
+        or help(1, "Unknown command: " . join ' ' => @command);
+    print $usage;
+    exit;
 
 } ## end of superhelp
 
@@ -7594,302 +7365,15 @@ sub usage {
 
     my $name = shift or die;
 
-    ## no critic (RequireInterpolationOfMetachars)
-    if ('add' eq $name) {
-        return qq{Usage: add <type> <name> [options]
-Adds an item to the internal Bucardo database.
-The type is one of: db, dbgroup, relgroup, sync, table, sequence,
-  customname, customcols, or customcode
-For more information, run: $progname help add <type>};
-    }
-    if ('add_customcode' eq $name) {
-        return q{Usage: add customcode <name> <whenrun=value> <src_code=filename> [optional information]};
-    }
-    if ('add_customname' eq $name) {
-        return q{Usage: add customname tablename newtablename [sync=x db=x]};
-    }
-    if ('add_customcols' eq $name) {
-        return q{Usage: add customcols tablename select_clause [sync=x db=x]};
-    }
-    if ('add_database' eq $name) {
-        return q{Usage: add db <name> <dbname=value> [optional information]
-Adds a database
+    my $usage;
+    open my $usage_fh, '>', \$usage;
+    _pod2usage(
+        '-sections' => "COMMAND DETAILS/$name",
+        '-exitval'  => 'NOEXIT',
+        '-output'   => $usage_fh,
+    );
 
-Required information
-dbname=name         (database name to connect to)
-
-Optional information:
- dbtype=type of database (defaults to postgres. Others: drizzle,mongo,mariadb,mysql,oracle,redis,sqlite)
- dbuser=username    (defaults to 'bucardo')
- dbpass=name        (avoid if possible; use .pgpass or equivalent instead)
- dbport=#           (defaults to type default, e.g. 5432 for postgres)
- dbhost=hostname    (defaults to none - which is Unix socket for some types)
- dbconn=string      (extra connection parameters, e.g. "sslmode=require")
- status=status      (active or inactive, defaults to 'active')
- dbgroup=name       (database group; created if it does not exist)
- addalltables       (automatically adds all tables in the database)
- addallsequences    (automatically adds all sequences in the database)
- ssp=#              (if server-side prepares are used, defaults to 1 (on) - postgres only);
- dbservice=name     (the service name to use for Postgres databases)
- makedelta=onoff    (whether this database needs makedelta magic)
-};
-    }
-    if ('add_dbgroup' eq $name) {
-        return q{Usage: add dbgroup <name> [database1 database2 ...]
-Adds a database group, and optionally which databases are members of it.
-You can specify the role a database has with a colon and role name.
-If none is given, the default is a role of 'target'
-Example: add dbgroup foobar d1:source d2:source d3 d4
-This can also be used to assign databases to an existing group.};
-    }
-    if ('add_herd' eq $name) {
-        return q{Usage: add relgroup <name> [table1 table2 ...]
-Adds a relgation roup, and optionally which tables are members of it.
-This can also be used to assign tables to an existing relgroup.};
-    }
-    if ('add_sync' eq $name) {
-        return q{Usage: add sync <name> relgroup=x dbs=dbgroup [options]
-Adds a sync. Required args:
-  relgroup=name      (the relation group containing the tables and sequences to be replicated)
-  dbs=name           (the database group, or a comma-separated list of databases)
-
-Optional information:
-  status=x           (One of 'active' or 'inactive', defaults to 'active')
-  rebuild_index      (whether to rebuild indexes after every sync, defaults to 0 (off))
-  lifetime=number    (how long a kid can live before being reaped, defaults to null (no limit))
-  maxkicks=number    (how many kicks a kid can process before being reaped, defaults to 0 (no limit))
-  onetimecopy=number (controls whether we switch to a fullcopy mode for one run,
-                      0=off, 1=always full copy, 2=only copy tables which are empty on the target)
-  tables=list        (list of tables to add to this new sync,
-                      will create a relation group with the same name as the sync)};
-    }
-    if ('add_sequence' eq $name) {
-        return q{Usage: add sequence <name> [name2 name3 ...]
-Adds one or more sequences to the internal Bucardo database.};
-    }
-    if ('add_table' eq $name) {
-        return q{Usage: add table <name> [name2 name3 ...]
-Adds one or more tables to the internal Bucardo database.
-Use "table" to find all matching tables, or be specific with "schema.table"
-Can use wildcards, e.g. "foobar%"
-Use "add table all" to add in all tables};
-    }
-    if ('config' eq $name) {
-        return q{Usage: config show [all | name]
-Usage: config set foo=bar [foo2=bar2]
-Displays or sets items from the bucardo_config table.
-Using 'show' will display all items or a subset based on the given name.
-Using 'set' will change one or more items.};
-    }
-    if ('inspect' eq $name) {
-        return q{Usage: inspect <type> <name>
-Inspects an object to see if it has dependency issues.
-The only supported type is currently 'table'.};
-    }
-    if ('inspect_herd' eq $name) {
-        return q{Usage: inspect relgroup <name>
-Inspects a relation group to see if it has dependency issues.};
-    }
-    if ('inspect_sync' eq $name) {
-        return q{Usage: inspect sync <name>
-Inspects a sync to see if it has dependency issues.};
-    }
-    if ('inspect_table' eq $name) {
-        return q{Usage: inspect table <name>
-Inspects a table to see if it has dependency issues.};
-    }
-    if ('kick' eq $name) {
-        return q{Usage: kick <name> [# of seconds] [name2 name3...] [--notimer]
-Kicks one or more named syncs.
-If a number is given, that is how long to wait for the sync to signal that it is finished.
-If the number 0 is given, we wait as long as it takes.
-By default a graphical timer is given: this can be turned off with the --notimer option.};
-    }
-    if ('list' eq $name) {
-        return qq{Usage: list <type> [options]
-Shows information about items in the internal Bucardo database.
-The type is one of: db, dbgroup, table, sequence, relgroup, sync,
-  customcode, customcols, customname, or all to see everything at once.
-For more information, run: $progname help list <type>};
-    }
-    if ('list_customcode' eq $name) {
-        return q{Usage: list customcode name [options]
-Lists information about each customcode.
-If ''verbose' is added, the 'About' for each code is shown.
-If '--verbose --verbose' is added, the internal database columns for the 'customcode' table are shown.};
-    }
-    if ('list_databases' eq $name) {
-        return q{Usage: list db [name] [--verbose] [--verbose]
-Lists information about each database Bucardo knows about.
-
-Without a name, all databases are listed.
-The name can have wildcards with '%'
-If '--verbose' is added, information is shown about which groups and syncs are involved.
-If a second '--verbose' is added, the internal database columns for the 'db' table are shown.};
-    }
-    if ('list_dbgroups' eq $name) {
-        return q{Usage: list dbgroup [name] [--verbose --verbose]
-Lists database groups, and which databases (if any) are members.
-
-Without a name, all database groups are listed.
-The name can have wildcards with a '%'
-If '--verbose --verbose' is added, the internal database columns for the 'dbgroup' table are shown.};
-    }
-    if ('list_herds' eq $name) {
-        return q{Usage: list relgroup [name] [--verbose --verbose]
-Lists relation groups, and which tables (if any) are members.
-
-Without a name, all relation groups are listed.
-The name can have wildcards with a '%'
-If '--verbose --verbose' is added, the internal database columns for the 'herd' table are shown.};
-    }
-    if ('list_syncs' eq $name) {
-        return q{Usage: list sync [name] [--verbose --verbose]
-Lists syncs
-
-Without a name, all syncs are listed.
-The name can have wildcards with a '%'
-If '--verbose --verbose' is added, the internal database columns for the 'sync' table are shown.};
-    }
-    if ('list_sequences' eq $name) {
-        return q{Usage: list sequence [name] [--verbose --verbose]
-Lists sequences
-
-Without a name, all sequences are listed.
-The name can have wildcards with a '%'
-If '--verbose --verbose' is added, the internal database columns for the 'goat' table are shown.};
-    }
-    if ('list_tables' eq $name) {
-        return q{Usage: list table [name] [--verbose --verbose]
-Lists tables
-
-Without a name, all tables are listed.
-The name can have wildcards with a '%'
-If '--verbose --verbose' is added, the internal database columns for the 'goat' table are shown.};
-    }
-    if ('message' eq $name) {
-        return q{Usage: message "text"
-Asks a running Bucardo daemon to insert the given text into the Bucardo log files.};
-    }
-    if ('ping' eq $name) {
-        return q{Usage: ping [# of seconds]
-Sends a ping notice to the main Bucardo process (MCP) to see if it will respond.
-By default, it will wait 15 seconds for a response.
-If a number is given, it will wait that number of seconds instead.
-Returns a Nagios like message starting with "OK" or "CRITICAL" for success or failure.\n};
-    }
-    if ('reload' eq $name) {
-        return q{Usage: reload sync [sync2 sync3 ...]
-Reloads one or more syncs.
-This sends a message to Bucardo to stop the named syncs, reload their
-information from the database, and start them up again.
-Useful if you have changed a setting for an active syncs and need
-to put the change in place right away.};
-    }
-    if ('reload_config' eq $name) {
-        return q{Usage: reload_config
-Instructs the Bucardo daemon to reload its configuration file and restart.};
-    }
-    if ('remove' eq $name or 'delete' eq $name) {
-        return qq{Usage: remove <type> <name> [options]
-Removes an item from the internal Bucardo database.
-The type is one of: db, dbgroup, table, sequence, relgroup, sync,
-  customcode, customcols, or customname
-For more information, run: $progname help remove <type>};
-    }
-    if ('remove_customcode' eq $name) {
-        return qq{Usage: $verb customcode <name> [name2 name3 ...]
-Removes one or more customcodes.};
-    }
-    if ('remove_customname' eq $name) {
-        return qq{Usage: $verb customname number [number2 number3 ...]
-Removes one or more customnames. Determine the numbers with list customnames};
-    }
-    if ('remove_customcols' eq $name) {
-        return qq{Usage: $verb customcols number [number2 number3 ...]
-Removes one or more customcols. Determine the numbers with list customcols};
-    }
-    if ('remove_database' eq $name) {
-        return qq{Usage: $verb db <name> [name2 name3 ...]
-Removes one or more databases.
-Use the --force option to remove all related tables};
-    }
-    if ('remove_dbgroup' eq $name) {
-        return qq{Usage: $verb dbgroup <name> [name2 name3 ...]
-Removes one or more database groups.};
-    }
-    if ('remove_herd' eq $name) {
-        return qq{Usage: $verb relgroup <name> [name2 name3 ...]
-Removes one or more relation groups.};
-    }
-    if ('remove_sync' eq $name) {
-        return qq{Usage: $verb sync <name> [name2 name3 ...]
-Removes one or more syncs.};
-    }
-    if ('remove_sequence' eq $name) {
-        return qq{Usage: $verb sequence <name> [name2 name3 ...]
-Removes one or more sequences.};
-    }
-    if ('remove_table' eq $name) {
-        return qq{Usage: $verb table <name> [name2 name3 ...]
-Removes one or more tables.};
-    }
-    if ('restart' eq $name) {
-        return q{Usage: restart ["reason"]
-Restarts Bucardo by stopping, then starting it up again.
-An optional reason can be given.};
-    }
-    if ('start' eq $name) {
-        return q{Usage: start ["reason"]
-Starts Bucardo.
-An optional reason can be given.};
-    }
-    if ('status' eq $name) {
-        return q{Usage: status [sync1 sync2]
-Displays information about the status of syncs.
-With no arguments, shows a summary of all syncs.
-If one or more named syncs are given, detailed information
-about each sync is given.}
-    }
-    if ('stop' eq $name) {
-        return q{Usage: stop ["reason"]
-Stops Bucardo and all of its child processes.
-An optional reason can be given.
-Active children will not stop until they have finished their current task.};
-    }
-    if ('update' eq $name) {
-        return q{Usage: update <type> <name> col1=val [col2=val2 col3=val3 ...]
-Updates an item from the internal Bucardo database.
-The type is one of: db, dbgroup, table, sequence, relgroup, sync, or customname};
-    }
-    if ('update_database' eq $name) {
-        return q{Usage: update database <name> col1=val [col2=val2 col3=val3 ...]
-Updates a database
-    };
-    }
-    if ('update_table' eq $name) {
-        return q{Usage: update table <name> col1=val [col2=val2 col3=val3 ...] relgroup=relgroup1,relgroup2
-Updates a table
-    };
-    }
-    if ('upgrade' eq $name) {
-        return q{Usage: upgrade
-Upgrades an existing Bucardo database to the current version.};
-    }
-    if ('validate' eq $name) {
-        return q{Usage: validate [all] [sync1 sync2]
-Validates one or more named syncs.
-Use 'all' to validate all known syncs at once};
-    }
-    if ('purge' eq $name) {
-        return q{Usage: purge [all] [database] [database.table]
-Purges one or more tables in one or more databases
-Use 'all' to validate all known tables};
-    }
-
-    ## use critic
-
-    return '';
+    return $usage;
 
 } ## end of usage
 
@@ -9233,54 +8717,111 @@ bucardo - utility script for controlling the Bucardo program
 
 This document describes version 4.99.5 of bucardo
 
-=head1 SYNOPSIS
+=head1 USAGE
 
-  ./bucardo install
+  bucardo [<options>] <command> [<command-params>]
 
-  ./bucardo list dbs
+=head1 COMMANDS
 
-  ./bucardo add sync testsync source=relgroup1 type=pushdelta targetdb=B
+Run C<< bucardo help <command> >> for additional details.
 
-  ./bucardo add sync testsync source=relgroup1 type=pushdelta targetdb=B tables=tab1,tab2,tab3
+=over
 
-  ./bucardo add db newdb dbname=internal_name port=5432 host=myserver
+=item C<install>
 
-  ./bucardo add all tables db=foo [relgroup=x] [pkonly]
+Installs the Bucardo configuration database.
 
-  ./bucardo add all sequences db=foo [relgroup=x]
+=item C<upgrade>
 
-  ./bucardo add relgroup newrelgroup table1 table2 table3 ...
+Upgrades the Bucardo configuration database to the latest schema.
 
-  ./bucardo add dbgroup name db1 db2 db3 ...
+=item C<< start [<reason>] >>
 
-  ./bucardo start "Starting up - Greg"
+Starts Bucardo.
 
-  ./bucardo stop "Bringing down for debugging - Raul E."
+=item C<< stop [<reason>] >>
 
-  ./bucardo ping
+Stops Bucardo.
 
-  ./bucardo status
+=item C<< restart [<reason>] >>
 
-  ./bucardo status sync1 sync2
+Stops and starts Bucardo.
 
-  ./bucardo kick sync1 sync2
+=item C<< list <type> [<regex>] >>
 
-  ./bucardo kick sync1 0
+Lists objects managed by Bucardo.
 
-  ./bucardo reload_config
+=item C<< add <type> <name> <parameters> >>
 
-  ./bucardo upgrade
+Adds a new object.
 
-  ./bucardo reload sync
+=item C<< update <type> <name> <parameters> >>
 
-  ./bucardo validate sync
+Updates an object.
 
-  ./bucardo message "Your message here"
+=item C<< remove <type> <name> [<name>...] >>
 
-  ./bucardo config show
+Removes one or more objects.
 
-  ./bucardo config set foo=bar baz=123
+=item C<< kick <syncname> [<syncname>...] [<timeout>] >>
 
+Kicks off one or more syncs.
+
+=item C<reload config>
+
+Sends a message to all CTL and KID processes asking them to reload the Bucardo
+configuration.
+
+=item C<< show all|<setting> [<setting>...] >>
+
+Shows the current Bucardo settings.
+
+=item C<<set <setting=value> [<setting=value>...] >>
+
+Sets one or more configuration setting..
+
+=item C<< ping [<timeout>] >>
+
+Sends a ping notice to the MCP process to see if it will respond.
+
+=item C<< status <syncname> [<syncname>...] >>
+
+Shows the brief status of syncs in a tabular format.
+
+=item C<< activate <syncname> [<syncname>...] [<timeout>] >>
+
+Activates one or more named syncs.
+
+=item C<< deactivate <syncname> [<syncname>...] [<timeout>] >>
+
+Deactivates one or more named syncs.
+
+=item C<< message <body> >>
+
+Sends a message to the running Bucardo logs.
+
+=item C<< reload [<syncname> [<syncname>...]] >>
+
+Sends a message to one or more sync processes, instructing them to reload.
+
+=item C<< inspect <type> <name> [<name>...] >>
+
+Inspects one or more objects of a particular type.
+
+=item C<< validate all|<syncname> [<syncname>...] >>
+
+Validates one or more syncs.
+
+=item C<< purge all|<table> [<table>...] >>
+
+Purgess the delta and track tables for one or more tables, for one or more
+databases.
+
+=item C<< help [<command> [<action>]] >>
+
+Shows help.
+
+=back
 
 =head1 DESCRIPTION
 
@@ -9289,7 +8830,7 @@ be used to start and stop Bucardo, add new items, kick syncs, and even install a
 upgrade Bucardo itself. For more complete documentation, please view
 L<the wiki|http://bucardo.org/>.
 
-=head1 COMMANDS
+=head1 COMMAND DETAILS
 
 Most of the commands take parameters. These may be passed after the command
 name and, where appropriate, an object name. Parameters take the form of
@@ -9308,9 +8849,7 @@ as:
 However, parameters and options are not directly interchangeable in all cases.
 See L</OPTIONS> for a complete list of options.
 
-=over 4
-
-=item B<install>
+=head2 install
 
   bucardo install
 
@@ -9338,7 +8877,7 @@ defaults to /var/run/bucardo/
 
 =back
 
-=item B<upgrade>
+=head2 upgrade
 
   bucardo upgrade
 
@@ -9347,7 +8886,7 @@ script. Requires that bucardo and the F<bucardo.schema> file be the same version
 changes should be backwards compatible, but you may need to re-validate existing scripts
 to make sure changes get propagated to all databases.
 
-=item B<start>
+=head2 start
 
   bucardo start "Reason"
 
@@ -9358,7 +8897,7 @@ be provided - these are written to the C<reason_file> file (F<./bucardo.restart.
 default) and sent in the email sent when Bucardo has been started up. It is also appended to
 the reason log, which has the same name as the the C<reason_file> but ends in F<.log>.
 
-=item B<stop>
+=head2 stop
 
   bucardo stop "Reason"
 
@@ -9372,7 +8911,7 @@ this is a short explanation and your name. This is written to the C<reason_file>
 sends out mail about its death. It is also appended to the reason log, which has the same name
 as the the C<reason_file> but ends in F<.log>.
 
-=item B<restart>
+=head2 restart
 
   bucardo restart "Reason"
 
@@ -9380,7 +8919,7 @@ Stops bucardo, waits for the stop to complete, and then starts it again.
 Useful for start scripts. For getting just CTL and KID processes to recognize
 newly added, updated, or removed objects, use the C<reload> command, instead.
 
-=item B<list>
+=head2 list
 
   bucardo list <type> <regex>
 
@@ -9431,9 +8970,7 @@ Aliases:
 
 =back
 
-=back
-
-=item B<add>
+=head2 add
 
   bucardo add <type> <name> <parameters>
 
@@ -9441,9 +8978,7 @@ Adds a new object to Bucardo. The C<type> sepcifies the type of object to add,
 while the C<name> should be the name of the object. The supported types and
 their parameters are:
 
-=over
-
-=item C<db>
+=head3 db
 
   bucardo add db <name> dbname=actual_name port=xxx host=xxx user=xxx pass=xxx
 
@@ -9568,36 +9103,32 @@ to "on".
 
 =back
 
-=item C<dbgroup>
+=head3 dbgroup
 
   bucardo add dbgroup name db1 db2 db3 ...
 
 Adds one or more databases to the named database group. If the database group
 doesn't exist, it will be created.
 
-=item C<table>
-
-=item C<sequence>
+=head3 table
 
   bucardo add table [schema].table db=actual_db_name
-  bucardo add sequence [schema].sequence relgroup=xxx
 
-Adds a table or sequence object. The table or sequence information will be
-read from the specified database. Supported parameters:
+Adds a table object. The table information will be read from the specified
+database. Supported parameters:
 
 =over
 
 =item C<db>
 
-The name of the database from which to read the table or sequence information.
-Should be a name known to Bucardo, thanks to a previous call to C<add
-database>. Required.
+The name of the database from which to read the table information. Should be a
+name known to Bucardo, thanks to a previous call to C<add database>. Required.
 
 =item C<autokick>
 
 Boolean indicating whether or not the table should automatically send kick
 messages when it's modified. Overrides the C<autokick> parameter of any syncs
-of which the table is a part. Applies only to tables.
+of which the table is a part.
 
 =item C<rebuild_index>
 
@@ -9609,25 +9140,40 @@ default. Optional.
 Boolean indicating whether or not to analyze the table after every sync. Off
 by default. Optional.
 
-=item C<herd>
+=item C<relgroup>
 
-Adds the table or sequence to the named relation group. If the relation group
-does not exist, it will be created. Optional.
+Adds the table to the named relation group. If the relation group does not
+exist, it will be created. Optional.
 
 =back
 
-=item C<all tables>
+=head3 sequence
 
-=item C<all sequences>
+  bucardo add sequence [schema].sequence relgroup=xxx
+
+=over
+
+=item C<db>
+
+The name of the database from which to read the sequence information. Should
+be a name known to Bucardo, thanks to a previous call to C<add database>.
+Required.
+
+=item C<relgroup>
+
+Adds the sequence to the named relation group. If the relation group does not
+exist, it will be created. Optional.
+
+=back
+
+=head3 all tables
 
   bucardo add all tables [relgroup=xxx] [pkonly]
-  bucardo add all sequences relgroup=xxx
 
-Adds all the tables or sequences in all known databases or in a specified
-database. Excludes tables and sequences in the C<pg_catalog>,
-C<information_schema>, and C<bucardo> schemas. (Yes, this means that you
-cannot replicate the Bucardo configuration database using Bucardo. Sorry about
-that.) Supported options and parameters:
+Adds all the tables in all known databases or in a specified database.
+Excludes tables in the C<pg_catalog>, C<information_schema>, and C<bucardo>
+schemas. (Yes, this means that you cannot replicate the Bucardo configuration
+database using Bucardo. Sorry about that.) Supported options and parameters:
 
 =over
 
@@ -9635,8 +9181,8 @@ that.) Supported options and parameters:
 
 =item C<--db>
 
-Name of the database from which to find all the tables or sequences to add. If
-not provided, tables or sequences will be added from all known databases.
+Name of the database from which to find all the tables to add. If not
+provided, tables will be added from all known databases.
 
 =item C<schema>
 
@@ -9644,8 +9190,8 @@ not provided, tables or sequences will be added from all known databases.
 
 =item C<-n>
 
-Limit to the tables or sequenes in the specified comma-delimited list of
-schemas. The options may be specified more than once.
+Limit to the tables in the specified comma-delimited list of schemas. The
+options may be specified more than once.
 
 =item C<exclude-schema>
 
@@ -9653,7 +9199,7 @@ schemas. The options may be specified more than once.
 
 =item C<-N>
 
-Exclude tales in the specified comma-delimited list of schemas. The options
+Exclude tables in the specified comma-delimited list of schemas. The options
 may be specified more than once.
 
 =item C<table>
@@ -9662,8 +9208,7 @@ may be specified more than once.
 
 =item C<-t>
 
-Limit to the specified tables or sequences. The options may be specified more
-than once.
+Limit to the specified tables. The options may be specified more than once.
 
 =item C<exclude-table>
 
@@ -9671,14 +9216,13 @@ than once.
 
 =item C<-T>
 
-Exclude the specified tables or sequences. The options may be specified more
-than once.
+Exclude the specified tables. The options may be specified more than once.
 
-=item C<heard>
+=item C<relgroup>
 
-=item C<--heard>
+=item C<--relgroup>
 
-Name of the heard to which to add new tables or sequences.
+Name of the relation group to which to add new tables.
 
 =item C<pkonly>
 
@@ -9686,7 +9230,51 @@ Exclude tables without primary keys.
 
 =back
 
+=head3 all sequences
+
+  bucardo add all sequences relgroup=xxx
+
+Adds all the sequences in all known databases or in a specified database.
+Excludes sequences in the C<pg_catalog>, C<information_schema>, and C<bucardo>
+schemas. (Yes, this means that you cannot replicate the Bucardo configuration
+database using Bucardo. Sorry about that.) Supported options and parameters:
+
+=over
+
+=item C<db>
+
+=item C<--db>
+
+Name of the database from which to find all the sequences to add. If not
+provided, sequences will be added from all known databases.
+
+=item C<schema>
+
+=item C<--schema>
+
+=item C<-n>
+
+Limit to the sequenes in the specified comma-delimited list of schemas. The
+options may be specified more than once.
+
+=item C<exclude-schema>
+
+=item C<--exclude-schema>
+
+=item C<-N>
+
+Exclude sequences in the specified comma-delimited list of schemas. The
+options may be specified more than once.
+
 =item C<relgroup>
+
+=item C<--relgroup>
+
+Name of the relation group to which to add new tables or sequences.
+
+=back
+
+=head3 relgroup
 
   bucardo add relgroup name
   bucardo add relgroup name table, sequence, ...
@@ -9694,7 +9282,7 @@ Exclude tables without primary keys.
 Adds a relation group. After the name, pass in an optional list of tables
 and/or sequences and they will be added to the group.
 
-=item C<sync>
+=head3 sync
 
   bucardo add sync syncname relgroup=xxx dbs=xxx
 
@@ -9850,7 +9438,7 @@ default. Optional.
 
 =back
 
-=item C<customname>
+=head3 customname
 
   bucardo add customname oldname newname [db=name] [sync=name]
 
@@ -9874,7 +9462,7 @@ A database for which to add the customname. May be specified multiple times.
 
 =back
 
-=item C<customcols>
+=head3 customcols
 
   bucardo add customcols tablename select_clause [sync=x db=x]
 
@@ -9890,6 +9478,8 @@ or more syncs. Some examples:
 
 Supported parameters:
 
+=over
+
 =item C<sync>
 
 A sync to which to add the customcols. May be specified multiple times.
@@ -9902,7 +9492,7 @@ A database for which to add the customcols. May be specified multiple times.
 
 =back
 
-=item C<customcode>
+=head3 customcode
 
   bucardo add customcode <name> <whenrun=value> <src_code=filename> [optional information]
 
@@ -10081,7 +9671,7 @@ An example:
   $info->{message} = 'IN UR DATABASEZ NORMALIZIN UR RELAYSHUNS';
   return;
 
-=item B<remove>
+=head2 remove
 
   bucardo remove <item_type> <item_name>
 
@@ -10122,7 +9712,7 @@ Aliases:
 
 =back
 
-=item B<kick>
+=head2 kick
 
   bucardo kick <syncname(s)> [timeout]
 
@@ -10138,7 +9728,7 @@ If a timeout is given, the total completion time in seconds is also displayed. I
 multiple targets, the time that each target takes from the start of the kick is also shown as each 
 target finishes.
 
-=item B<reload config>
+=head2 reload config
 
   bucardo reload config
   bucardo reload config 30
@@ -10152,28 +9742,28 @@ By default, Bucardo will send the message and then exit. Pass an optional
 number and Bucardo will instead wait up to that length of time for all child
 processes to report completion.
 
-=item B<show>
+=head2 show
 
-  bucardo show <all|setting1> [setting2..]
+  bucardo show all|<setting> [<setting>...]
 
 Shows the current Bucardo settings. Use the keyword "all" to see all the settings, or
 specify one or more search terms.
 
-=item B<set>
+=head2 set
 
   bucardo set setting1=value [setting2=value]
 
 Sets one or more configuration setting table. Setting names are case-insensitive.
 
-=item B<config>
+=head2 config
 
-  bucardo config show <all|setting1> [setting2..]
-  bucardo config set setting1=value [setting2=value]
+  bucardo config show all|<setting> [<setting>...]
+  bucardo config set <setting=value> [<setting=value>...]
 
 Deprecated interface for showing and setting configuration settings. Use the
 L</show> and L</set> commands, instead.
 
-=item B<ping>
+=head2 ping
 
   bucardo ping
   bucardo ping 60
@@ -10184,7 +9774,7 @@ numeric argument will change this timeout. Using a 0 as the timeout indicates wa
 was returned, the program will exit with a value of 0. If it times out, the value will be 1.
 Returns a Nagios like message starting with "OK" or "CRITICAL" for success or failure.
 
-=item B<status>
+=head2 status
 
   bucardo status [syncname(s)] [--sort=#] [--showdays] [--compress]
 
@@ -10227,21 +9817,21 @@ How long it has been since the last sync failure
 
 =back
 
-=item B<activate>
+=head2 activate
 
   bucardo activate syncname [syncname2 syncname3 ...] [timeout]
 
 Activates one or more named syncs. If given a timeout argument, it will wait until it has received 
 confirmation from Bucardo that each sync has been successfully activated.
 
-=item B<deactivate>
+=head2 deactivate
 
   bucardo deactivate syncname [syncname2 syncname3 ...] [timeout]
 
 Deactivates one or more named syncs. If given a timeout argument, it will wait until it has received 
 confirmation from Bucardo that the sync has been successfully deactivated.
 
-=item B<message>
+=head2 message
 
   bucardo message 'I WAS HERE'
 
@@ -10249,7 +9839,7 @@ Sends a message to the running Bucardo logs. This message will appear prefixed w
 Bucardo is not running, the message will go to the logs the next time Bucardo runs and someone 
 adds another message.
 
-=item B<reload>
+=head2 reload
 
   bucardo reload [syncname2 syncname3 ...]
 
@@ -10258,7 +9848,7 @@ Waits for each to reload before going on to the next. Reloading consists of
 deactivating a sync, reloading its information from the database, and
 activating it again.
 
-=item B<update>
+=head2 update
 
   bucardo update <type> <name> <parameters>
 
@@ -10284,7 +9874,7 @@ for each type are the same as those for L</add>. The supported types are:
 
 =back
 
-=item B<inspect>
+=head2 inspect
 
   bucardo inspect <type> <name> [<name2>...]
 
@@ -10301,22 +9891,22 @@ C<STDOUT>. The supported types include:
 
 =back
 
-=item B<validate>
+=head2 validate
 
-  bucardo validate <all|sync1> [sync2..]
+  bucardo validate all|<sync> [<sync>...]
 
 Validates one or more syncs. Use the keyword "all" to validate all syncs, or
 specify one or more syncs to validate.
 
-=item B<purge>
+=head2 purge
 
-  bucardo purge <all|table1> [table2..]
+  bucardo purge all|<table> [<table>...]
 
 Purgess the delta and track tables for one or more tables, for one or more
 databases. Use the keyword "all" to validate all tables, or specify one or
 more tables to validate.
 
-=item B<help>
+=head2 help
 
   bucardo help
   bucardo help <command>
@@ -10328,36 +9918,34 @@ or a command and its action. Some examples:
   bucard help list
   bucard help add table
 
-=back
-
 =head1 OPTIONS
 
 It is usually easier to set most of these options at the top of the script, or make an alias for them, 
 as they will not change very often if at all.
 
-=over 4
+=over
 
-=item B<--dbport=number>
+=item C<--dbport=number>
 
-=item B<--dbhost=string>
+=item C<--dbhost=string>
 
-=item B<--dbname=string>
+=item C<--dbname=string>
 
-=item B<--dbuser=string>
+=item C<--dbuser=string>
 
-=item B<--dbpass=string>
+=item C<--dbpass=string>
 
 The port, host, and name of the Bucardo database, the user to connect as, and the password to use.
 
-=item B<--verbose>
+=item C<--verbose>
 
 Makes bucardo run verbosely. Default is off.
 
-=item B<--quiet>
+=item C<--quiet>
 
 Tells bucardo to be as quiet as possible. Default is off.
 
-=item B<--help>
+=item C<--help>
 
 Shows a brief summary of usage for bucardo.
 
@@ -10367,17 +9955,17 @@ Shows a brief summary of usage for bucardo.
 
 The following arguments are only used with the 'kick' command:
 
-=over 4
+=over
 
-=item B<--retry>
+=item C<--retry>
 
 The number of times to retry a sync if it fails. Defaults to 0.
 
-=item B<--retrysleep>
+=item C<--retrysleep>
 
 How long to sleep, in seconds, between each retry attempt.
 
-=item B<--notimer>
+=item C<--notimer>
 
 By default, kicks with a timeout argument give a running real-time summary of time elapsed by 
 using the backspace character. This may not be wanted if running a kick, for example, 
@@ -10389,19 +9977,19 @@ via a cronjob, so turning --notimer on will simply print the entire message with
 
 The following arguments are only used with the 'status' command:
 
-=over 4
+=over
 
-=item B<--showdays>
+=item C<--showdays>
 
 Specifies whether or not do list the time interval with days, or simply show the hours. For example, 
 "3d 12h 6m 3s" vs. "48h 6m 3s"
 
-=item B<--compress>
+=item C<--compress>
 
 Specifies whether or not to compress the time interval by removing spaces. Mostly used to limit 
 the width of the 'status' display.
 
-=item B<--sort=#>
+=item C<--sort=#>
 
 Requests sorting of the 'status' output by one of the nine columns. Use a negative number to reverse 
 the sort order.
@@ -10412,48 +10000,48 @@ the sort order.
 
 The following arguments are only applicable when using the "start" command:
 
-=over 4
+=over
 
-=item B<--sendmail>
+=item C<--sendmail>
 
 Tells Bucardo whether or not to send mail on interesting events: startup, shutdown, and errors. Default is on.
-Only applicable when using ./bucardo start.
+Only applicable when using C<bucardo start>.
 
-=item B<--extraname=string>
+=item C<--extraname=string>
 
 A short string that will be appended to the version string as output by the Bucardo process names. Mostly 
 useful for debugging.
 
-=item B<--debugfilesep>
+=item C<--debugfilesep>
 
 Forces creation of separate log files for each Bucardo process of the form "log.bucardo.X.Y", 
 where X is the type of process (MCP, CTL, or KID), and Y is the process ID.
 
-=item B<--debugsyslog>
+=item C<--debugsyslog>
 
 Sends all log messages to the syslog daemon. On by default. The facility used is controlled by 
 the row "syslog_facility" in the bucardo_config table, and defaults to "LOG_LOCAL1".
 
-=item B<--debugfile>
+=item C<--debugfile>
 
 If set, writes detailed debugging information to one or more files.
 
-=item B<--debugdir=directory name>
+=item C<--debugdir=directory name>
 
 Directory where the debug files should go.
 
-=item B<--debugname=string>
+=item C<--debugname=string>
 
 Appends the given string to the end of the default debug file name, "log.bucardo". A dot is added 
 before the name as well, so a debugname of "rootdb" would produce a log file named "log.bucardo.rootdb".
 
-=item B<--cleandebugs>
+=item C<--cleandebugs>
 
 Forces removal of all old debug files before running.
 
-=item B<--exit-on-nosync>
+=item C<--exit-on-nosync>
 
-=item B<--no-exit-on-nosync>
+=item C<--no-exit-on-nosync>
 
 On startup, if Bucardo finds no active syncs, it normally will continue to
 run, requiring a restart once syncs are added. This is useful for startup
