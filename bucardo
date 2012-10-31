@@ -129,7 +129,7 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'quiet+',
      'notimer',
      'help|?',
-     'debug',
+     'debug!',
      'version',
      'sort=i',
      'showdays|show-days',
@@ -8845,6 +8845,12 @@ Appends the given string to the end of the default debug file name,
 =item C<--cleandebugs>
 
 Forces removal of all old debug files before running.
+
+=item C<--debug>
+
+=item C<--no-debug>
+
+Enable or disable debugging output. Disabled by default.
 
 =item C<--exit-on-nosync>
 
