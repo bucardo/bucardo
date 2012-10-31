@@ -614,7 +614,7 @@ sub superhelp {
         push @command, join ' ', @names;
     } else {
         ## Don't show subsections for commands that have them.
-        $command[0] .= "/!.+" if $command[0] eq 'add';
+        push @command, => '!.+' if $names[0] eq 'add' || $names[0] eq 'update';
     }
     usage_exit(join('/' => @command), 0);
 
@@ -1155,7 +1155,7 @@ sub update_item {
     ## Arguments: none (but parses nouns)
     ## Returns: undef
 
-    my $doc_section = 'update';
+    my $doc_section = 'update/!.+';
 
     ## Must have at least three nouns
     usage_exit($doc_section) if @nouns < 3;
@@ -1652,7 +1652,7 @@ sub update_database {
     my @actions = @_;
 
     ## Grab our generic usage message
-    my $doc_section = 'update';
+    my $doc_section = 'update/update db';
     usage_exit($doc_section) unless @actions;
 
     my $name = shift @actions;
@@ -2106,7 +2106,7 @@ sub update_dbgroup {
 
     my @actions = @_;
 
-    my $doc_section = 'update';
+    my $doc_section = 'update/update dbgroup';
     usage_exit($doc_section) unless @actions;
 
     my $name = shift @actions;
@@ -3080,7 +3080,7 @@ sub update_table {
 
     my @actions = @_;
 
-    my $doc_section = 'update';
+    my $doc_section = 'update/update table';
     usage_exit($doc_section) unless @actions;
 
     my $name = shift @actions;
@@ -3895,7 +3895,7 @@ sub update_sync {
 
     my @actions = @_;
 
-    my $doc_section = 'update';
+    my $doc_section = 'update/update sync';
     usage_exit($doc_section) unless @actions;
 
     my $name = shift @actions;
@@ -6678,6 +6678,8 @@ sub upgrade {
         ['bucardo', 'sync', 'rebuild_index',     'BOOL2SMALLINT1'],
         ['bucardo', 'sync', 'standard_conflict', 'RENAME conflict_strategy'],
         ['bucardo', 'sync', 'ping',              'RENAME autokick'],
+        ['bucardo', 'goat', 'ping',              'RENAME autokick'],
+        ['bucardo', 'goat', 'standard_conflict', 'RENAME conflict_strategy'],
     );
 
     my @row_values = (
@@ -7263,6 +7265,15 @@ sub usage_exit {
 
     my $name = shift or die;
     my $exitval = defined $_[0] ? shift : 1;
+
+    if ($name =~ m{/!}) {
+        # Bug in Pod::Usage prevents these from working properly. Force it
+        # to use Pod::PlainText.
+        # https://rt.perl.org/rt3//Public/Bug/Display.html?id=115534
+        require Pod::Usage;
+        require Pod::PlainText;
+        unshift @Pod::Usage::ISA => 'Pod::PlainText';
+    }
 
     _pod2usage(
         '-sections' => "COMMAND DETAILS/$name",
@@ -8807,6 +8818,8 @@ the reason log, which has the same name as the the C<reason_file> but ends in F<
 
 The options for the C<start> command are:
 
+=over
+
 =item C<--sendmail>
 
 Tells Bucardo whether or not to send mail on interesting events: startup,
@@ -8861,8 +8874,6 @@ exit when there are no syncs by passing C<--no-exit-on-nosync>. This is the
 default value.
 
 =back
-
-=over
 
 =head2 stop
 
@@ -9099,10 +9110,11 @@ to "on".
 
 =head3 add dbgroup
 
-  bucardo add dbgroup name db1 db2 db3 ...
+  bucardo add dbgroup name db1:source db2:source db3:target ...
 
 Adds one or more databases to the named database group. If the database group
-doesn't exist, it will be created.
+doesn't exist, it will be created. The database parameters should specify
+their roles, either "source" or "target".
 
 =head3 add table
 
@@ -9133,6 +9145,11 @@ default. Optional.
 
 Boolean indicating whether or not to analyze the table after every sync. Off
 by default. Optional.
+
+=item C<vaccuum_after_copy>
+
+Boolean indicating whether or not to vacuum the table after every sync. Off by
+default. Optional.
 
 =item C<relgroup>
 
@@ -9336,7 +9353,8 @@ The rows on the "target" database always win.
 
 =item C<bucardo_skip>
 
-Any conflicting rows are simply not replicated. Not recommended for most cases.
+Any conflicting rows are simply not replicated. Not recommended for most
+cases.
 
 =item C<bucardo_random>
 
@@ -9391,13 +9409,11 @@ triggers.
 
 =item C<source_makedelta>
 
-Indicates which that source databases should get manual delta rows.
-XXX WHA?
+Indicates which that source databases should get manual delta rows. XXX WHA?
 
 =item C<target_makedelta>
 
-Indicates which that target databases should get manual delta rows.
-XXX WHA?
+Indicates which that target databases should get manual delta rows. XXX WHA?
 
 =item C<priority>
 
@@ -9665,6 +9681,363 @@ An example:
   $info->{message} = 'IN UR DATABASEZ NORMALIZIN UR RELAYSHUNS';
   return;
 
+=head2 update
+
+  bucardo update <type> <name> <parameters>
+
+Updates a Bucardo object. The C<type> sepcifies the type of object to update,
+while the C<name> should be the name of the object. The supported parameters
+for each type are the same as those for L</add>. The supported types are:
+
+=over
+
+=item C<db>
+
+=item C<dbgroup>
+
+=item C<sync>
+
+=item C<table>
+
+=item C<sequence>
+
+=back
+
+=head3 update db
+
+  bucardo udpate db <name> port=xxx host=xxx user=xxx pass=xxx
+
+Updates a database. The C<name> is the name by which the database is known to
+Bucardo. This may vary from the actual database name, as multiple hosts might
+have databases with the same name.
+
+The supported named parameters are:
+
+=over
+
+=item C<dbname>
+
+=item C<db>
+
+The actual name of the database.
+
+=item C<type>
+
+=item C<dbtype>
+
+The type of the database. Currently supported values are:
+
+=over
+
+=item * C<postgres>
+
+=item * C<drizzle>
+
+=item * C<mongo>
+
+=item * C<mysql>
+
+=item * C<maria>
+
+=item * C<oracle>
+
+=item * C<redis>
+
+=item * C<sqlite>
+
+=back
+
+=item C<username>
+
+=item C<dbuser>
+
+=item C<user>
+
+The username Bucardo should use to connect to the database.
+
+=item C<password>
+
+=item C<dbpass>
+
+=item C<pass>
+
+The password Bucardo should use when connecting to the database.
+
+=item C<dbhost>
+
+=item C<pghost>
+
+=item C<host>
+
+The host name to which to connect.
+
+=item C<dbport>
+
+=item C<pgport>
+
+=item C<port>
+
+The port to which to connect.
+
+=item C<dbconn>
+
+=item C<pgconn>
+
+=item C<conn>
+
+Additional connection parameters, e.g., C<sslmode=require>. Optional.
+
+=item C<status>
+
+Status of the database in Bucardo. Must be either "active" or "inactive".
+
+=item C<dbgroup>
+
+=item C<server_side_prepares>
+
+=item C<ssp>
+
+Enable or disable server-side prepares. Pass 1 to enable them or 0 to disable
+them.
+
+=item C<dbservice>
+
+=item C<service>
+
+The service name to use for a Postgres database.
+
+=item C<makedelta>
+
+Turns makedelta magic on or off. Value must be one of "on" or "off".
+
+=item C<group>
+
+A comma-separated list of database groups to which to add the database. The
+database will be removed from any other groups of which it was previously a
+member.
+
+=back
+
+=head3 update dbgroup
+
+  bucardo update dbgroup name=newname
+  bucardo update dbgroup db1:source db2:source db3:target ...
+
+Updates a database group. The name can be changed, or the databases in the
+group updated. The database parameters should specify their roles, either
+"source" or "target". If database parameters are specified, they will replace
+the existing list of databases in the group. If you just want to add
+databases, use L<C<add dbgroup>|/add dbgroup> instead.
+
+=head3 update sync
+
+  bucardo update sync syncname relgroup=xxx dbs=xxx
+
+Updates a sync, which is a named replication event containing information about
+what to replicate from where to where. The supported parameters are:
+
+=over
+
+=item C<name>
+
+The name of the sync.
+
+=item C<dbs>
+
+The name of a database group or comma-delimited list of databases.
+
+=item C<relgroup>
+
+The name of a relation group to synchronize.
+
+=item C<status>
+
+Indicates whether or not the sync is active. Must be either "active" or
+"inactive".
+
+=item C<rebuild_index>
+
+Boolean indicating whether or not to rebuild indexes after every sync.
+
+=item C<lifetime>
+
+Number of seconds a KID can live before being reaped.
+
+=item C<maxkicks>
+
+Numger of times a KID may be kicked before being reaped.
+
+=item C<conflict_strategy>
+
+The conflict resolution strategy to use in the sync. Supported values:
+
+=over
+
+=item C<bucardo_source>
+
+The rows on the "source" database always "win". In other words, in a conflict,
+Bucardo copies rows from source to target.
+
+=item C<bucardo_target>
+
+The rows on the "target" database always win.
+
+=item C<bucardo_skip>
+
+Any conflicting rows are simply not replicated. Not recommended for most
+cases.
+
+=item C<bucardo_random>
+
+Each database has an equal chance of winning each time.
+
+=item C<bucardo_latest>
+
+The row that was most recently changed wins.
+
+=item C<bucardo_abort>
+
+The sync is aborted on a conflict.
+
+=back
+
+=item C<onetimecopy>
+
+Determines whether or not a sync should switch to a full copy mode for a
+single run. Supported values are:
+
+=over
+
+=item 0: off
+
+=item 1: always full copy
+
+=item 2: only copy tables that are empty on the target
+
+=back
+
+=item C<stayalive>
+
+Boolean indicating whether or not the sync processes (CTL) should be
+persisent.
+
+=item C<kidsalive>
+
+Boolean indicating whether or not the sync child processes (KID) should be
+persisent.
+
+=item C<autokick>
+
+Boolean indicating whether or not tables in the sync should automatically send
+kick messages when they're modified. May be overridden by the C<autokick>
+parameter of individual tables.
+
+=item C<checktime>
+
+An interval specifying's the maximum time a sync should go before being
+kicked. Useful for busy systems where you don't want the overhead of notify
+triggers.
+
+=item C<priority>
+
+An integer indicating the priority of the sync. Lower numbers are higher
+priority. Currently used only for display purposes.
+
+=item C<analyze_after_copy>
+
+Boolean indicating whether or not to analyze tables after every sync. Off by
+default.
+
+=item C<overdue>
+
+An interval specifying the amount of time after which the sync has not run
+that it should be considered overdue. C<check_bucardo_sync> issues a warning
+when a sync has not been run in this amount of time.
+
+=item C<expired>
+
+An interval specifying the amount of time after which the sync has not run
+that it should be considered expired. C<check_bucardo_sync> issues a critical
+messagewhen a sync has not been run in this amount of time.
+
+=item C<track_rates>
+
+Boolean indicating whether or not to track syncrhonization rates.
+
+=item C<rebuild_index>
+
+Boolean indicating whether or not to rebuild indexes after every sync.
+
+=back
+
+=head3 update table
+
+  bucardo update table [schema].table db=actual_db_name
+
+Updates a table object. The table information will be read from the specified
+database. Supported parameters:
+
+=over
+
+=item C<db>
+
+The name of the database from which to read the table information. Should be a
+name known to Bucardo.
+
+=item C<schemaname>
+
+The name of the schema in which the table is found.
+
+=item C<tablename>
+
+The actual name of the table.
+
+=item C<autokick>
+
+Boolean indicating whether or not the table should automatically send kick
+messages when it's modified. Overrides the C<autokick> parameter of any syncs
+of which the table is a part.
+
+=item C<rebuild_index>
+
+Boolean indicating whether or not to rebuild indexes after every sync.
+
+=item C<analyze_after_copy>
+
+Boolean indicating whether or not to analyze the table after every sync.
+
+=item C<vaccuum_after_copy>
+
+Boolean indicating whether or not to vacuum the table after every sync.
+
+=item C<relgroup>
+
+Adds the table to the named relation group. May be specified more than once.
+The table will be removed from any other relation groups.
+
+=back
+
+=head3 update sequence
+
+  bucardo update sequence [schema].sequence relgroup=xxx
+
+=over
+
+=item C<db>
+
+The name of the database where the sequence lives.
+
+=item C<schemaname>
+
+The name of the schema in which the sequence is found.
+
+=item C<relgroup>
+
+Adds the sequence to the named relation group. May be specified more than
+once. The sequence will be removed from any other relation groups.
+
+=back
+
 =head2 remove
 
   bucardo remove <item_type> <item_name>
@@ -9832,6 +10205,8 @@ How long it has been since the last sync failure
 
 The options for C<status> are:
 
+=over
+
 =item C<--show-days>
 
 Specifies whether or not do list the time interval with days, or simply show
@@ -9879,32 +10254,6 @@ Sends a message to one or more sync processes, instructing them to reload.
 Waits for each to reload before going on to the next. Reloading consists of
 deactivating a sync, reloading its information from the database, and
 activating it again.
-
-=head2 update
-
-  bucardo update <type> <name> <parameters>
-
-Updates a Bucardo object. The C<type> sepcifies the type of object to update,
-while the C<name> should be the name of the object. The supported parameters
-for each type are the same as those for L</add>. The supported types are:
-
-=over
-
-=item C<db>
-
-=item C<dbgroup>
-
-=item C<relgroup> (unimplemented)
-
-=item C<sync>
-
-=item C<table>
-
-=item C<sequence>
-
-=item C<customcode> (unimplemented)
-
-=back
 
 =head2 inspect
 
@@ -10058,4 +10407,3 @@ Copyright 2006-2012 Greg Sabino Mullane <greg@endpoint.com>
 This program is free to use, subject to the limitations in the LICENSE file.
 
 =cut
-

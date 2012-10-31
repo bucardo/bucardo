@@ -191,10 +191,10 @@ like ($res, qr/Could not find a database named "foobar"/, $t);
 
 $t = q{Update database gives proper error with invalid format};
 $res = $bct->ctl('bucardo update db A blah blah');
-like ($res, qr/bucardo update/, $t);
+like ($res, qr/update db:/, $t);
 
 $res = $bct->ctl('bucardo update db A blah123#=123');
-like ($res, qr/bucardo update/, $t);
+like ($res, qr/update db:/, $t);
 
 $t = q{Update database gives proper error with invalid items};
 $res = $bct->ctl('bucardo update db A foobar=123');
