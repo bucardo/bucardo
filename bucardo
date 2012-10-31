@@ -2928,6 +2928,7 @@ sub add_table {
         autokick|ping            autokick             TF               null
         rebuild_index            rebuild_index        numeric          null
         analyze_after_copy       analyze_after_copy   TF               null
+        makedelta                makedelta            =on|off          null
         herd|relgroup            herd                 0                skip
     };
 
@@ -3089,12 +3090,11 @@ sub update_table {
     exit 0 if ! check_recurse($GOAT, $name, @actions);
 
     ## Make sure this table exists!
-    if (! exists $GOAT->{$name}) {
-        die qq{Could not find a table named "$name"\nUse 'list tables' to see all available.\n};
-    }
+    my $table = $GOAT->{$name} or die qq{Could not find a table named "$name"\n}
+        . "Use 'list tables' to see all available.\n";
 
     ## Store the id so we work with that alone whenever possible
-    my $id = $GOAT->{$name}[0]{id};
+    my $id = $table->{id};
 
     ## Everything is a name=value setting after this point
     ## We will ignore and allow noise word "set"
@@ -3134,7 +3134,7 @@ sub update_table {
             my @herdchanges;
 
             ## Grab the current hash of herds
-            my $oldherd = $GOAT->{$name}[0]{herd} || '';
+            my $oldherd = $table->{herd} || '';
 
             ## Keep track of what groups they end up in, so we can remove as needed
             my %doneherd;
@@ -3193,11 +3193,11 @@ sub update_table {
         ## This must exist in our hash
         ## We assume it is the first entry for now
         ## Someday be more intelligent about walking and adjusting all matches
-        if (! exists $GOAT->{$name}[0]{$newname}) {
+        if (! exists $table->{$newname}) {
             print qq{Cannot change "$newname"\n};
             next;
         }
-        my $oldvalue = $GOAT->{$name}[0]{$newname};
+        my $oldvalue = $table->{$newname};
 
         ## May be undef!
         $oldvalue = 'NULL' if ! defined $oldvalue;
@@ -9130,6 +9130,11 @@ default. Optional.
 Adds the table to the named relation group. If the relation group does not
 exist, it will be created. Optional.
 
+=item C<makedelta>
+
+Turns makedelta magic on or off. Value must be one of "on" or "off". Defaults
+to "on".
+
 =back
 
 =head3 add sequence
@@ -9980,6 +9985,10 @@ Boolean indicating whether or not to vacuum the table after every sync.
 
 Adds the table to the named relation group. May be specified more than once.
 The table will be removed from any other relation groups.
+
+=item C<makedelta>
+
+Turns makedelta magic on or off. Value must be one of "on" or "off".
 
 =back
 
