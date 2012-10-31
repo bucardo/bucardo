@@ -10139,10 +10139,10 @@ case-insensitive. The available settings are:
 
 How to generate this list:
 
-  psql -U bucardo -d bucardo -AXtc "SELECT format(
+  psql -U bucardo -d bucardo -AXtc "SELECT replace(format(
       E'=item C<%s>\n\n%s. Default: C<%s>.\n',
       name, about, setting
-  ) FROM bucardo_config ORDER BY name;" | pbcopy
+  ), '..', '.') FROM bucardo_config ORDER BY name;" | pbcopy
 
 =end comment
 
@@ -10234,7 +10234,7 @@ Name of the conflict detail log file. Default: C<bucardo_conflict.log>.
 
 =item C<log_level>
 
-How verbose to make the logging. Higher is more verbose.. Default: C<normal>.
+How verbose to make the logging. Higher is more verbose. Default: C<normal>.
 
 =item C<log_microsecond>
 
@@ -10302,15 +10302,15 @@ Which syslog facility level to use. Default: C<log_local1>.
 
 =item C<tcp_keepalives_count>
 
-How many probes to send. 0 indicates sticking with system defaults.. Default: C<0>.
+How many probes to send. 0 indicates sticking with system defaults. Default: C<0>.
 
 =item C<tcp_keepalives_idle>
 
-How long to wait between each keepalive probe.. Default: C<0>.
+How long to wait between each keepalive probe. Default: C<0>.
 
 =item C<tcp_keepalives_interval>
 
-How long to wait for a response to a keepalive probe.. Default: C<0>.
+How long to wait for a response to a keepalive probe. Default: C<0>.
 
 =item C<vac_run>
 
