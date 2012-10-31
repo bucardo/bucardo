@@ -9407,14 +9407,6 @@ An interval specifying's the maximum time a sync should go before being
 kicked. Useful for busy systems where you don't want the overhead of notify
 triggers.
 
-=item C<source_makedelta>
-
-Indicates which that source databases should get manual delta rows. XXX WHA?
-
-=item C<target_makedelta>
-
-Indicates which that target databases should get manual delta rows. XXX WHA?
-
 =item C<priority>
 
 An integer indicating the priority of the sync. Lower numbers are higher
