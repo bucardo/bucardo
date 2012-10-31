@@ -3578,8 +3578,6 @@ sub add_sync {
         checktime                checktime            interval         null
         status                   status               =active|inactive null
         conflict_strategy|standard_conflict conflict_strategy  0       null
-        source_makedelta         source_makedelta     =inherits|on|off null
-        target_makedelta         target_makedelta     =inherits|on|off null
         priority                 priority             numeric          null
         analyze_after_copy       analyze_after_copy   TF               null
         overdue                  overdue              interval         null
@@ -6940,30 +6938,6 @@ sub upgrade {
         else {
             die qq{Do not know how to handle altered column spec of "$change"};
         }
-    }
-
-    ## Special cases
-    if (! column_exists('bucardo', 'goat', 'source_makedelta')) {
-        #upgrade_and_log(q{ALTER TABLE bucardo.goat ADD COLUMN source_makedelta ONOFF NOT NULL DEFAULT 'inherits'});
-        #upgrade_and_log(q{ALTER TABLE bucardo.goat ADD COLUMN target_makedelta ONOFF NOT NULL DEFAULT 'inherits'});
-        if (column_exists('bucardo', 'goat', 'makedelta')) {
-        #    upgrade_and_log(q{UPDATE goat SET source_makedelta='on', target_makedelta='on' WHERE makedelta IS TRUE});
-        #    upgrade_and_log(q{UPDATE goat SET source_makedelta='off', target_makedelta='off' WHERE makedelta IS FALSE});
-        #    upgrade_and_log('ALTER TABLE bucardo.goat DROP COLUMN makedelta');
-        }
-        #clog('Added columns goat.source_makedelta and goat.target_makedelta');
-        #$changes++;
-    }
-    if (! column_exists('bucardo', 'sync', 'source_makedelta')) {
-        #upgrade_and_log(q{ALTER TABLE bucardo.sync ADD COLUMN source_makedelta ONOFF NOT NULL DEFAULT 'inherits'});
-        #upgrade_and_log(q{ALTER TABLE bucardo.sync ADD COLUMN target_makedelta ONOFF NOT NULL DEFAULT 'inherits'});
-        if (column_exists('bucardo', 'sync', 'makedelta')) {
-         #   upgrade_and_log(q{UPDATE sync SET source_makedelta='on', target_makedelta='on' WHERE makedelta IS TRUE});
-         #   upgrade_and_log(q{UPDATE sync SET source_makedelta='off', target_makedelta='off' WHERE makedelta IS FALSE});
-         #   upgrade_and_log('ALTER TABLE bucardo.sync DROP COLUMN makedelta');
-        }
-        #clog('Added columns sync.source_makedelta and sync.target_makedelta');
-        #$changes++;
     }
 
     ## Drop any old columns
