@@ -3021,51 +3021,63 @@ sub add_table {
 } ## end of add_table
 
 
-sub remove_table {
-
-    ## Usage: remove table tablename [t2 t3 ...]
-    ## Arguments: none, parses nouns for tables
-    ## Returns: never, exits
+sub _remove_relation {
+    my $reltype = shift;
 
     my $doc_section = 'remove';
     usage_exit($doc_section) unless @nouns;
 
     ## Prepare our SQL
-    $SQL = q{DELETE FROM bucardo.goat WHERE schemaname||'.'||tablename = ?};
+    $SQL = q{DELETE FROM bucardo.goat WHERE reltype = ? AND schemaname||'.'||tablename = ?};
     $sth = $dbh->prepare($SQL);
+    my @removed;
 
     for my $name (@nouns) {
         if ($name =~ /^\w[\w\d]*\.\w[\w\d]*$/) {
             if (! exists $GOAT->{$name}) {
-                print qq{No such table: $name\n};
+                print qq{No such $reltype: $name\n};
+                next;
             }
             eval {
-                $sth->execute($name);
+                $sth->execute($reltype, $name);
             };
             if ($@) {
-                die qq{Could not delete relation "$name"\n$@\n};
+                die qq{Could not delete $reltype "$name"\n$@\n};
             }
+            push @removed, $name;
         }
         else {
-            die qq{Please use the full schema.table name\n};
+            die qq{Please use the full schema.$reltype name\n};
         }
     }
 
-    print "Removed the following tables:\n";
-    for my $name (sort numbered_relations @nouns) {
-        print qq{  $name\n};
+    if (@removed) {
+        print "Removed the following ${reltype}s:\n";
+        for my $name (sort numbered_relations @removed) {
+            print qq{  $name\n};
+        }
     }
 
     confirm_commit();
 
     exit 0;
 
+} ## end of _remove_relation
+
+sub remove_table {
+    ## Usage: remove table tablename [t2 t3 ...]
+    ## Arguments: none, parses nouns for tables
+    ## Returns: never, exits
+    _remove_relation('table');
+
 } ## end of remove_table
 
+
 sub remove_sequence {
-
-    die 'Write me';
-
+    ## Usage: remove sequence sequencename [t2 t3 ...]
+    ## Arguments: none, parses nouns for sequences
+    ## Returns: never, exits
+    _remove_relation('sequence');
 } ## end of remove_sequence
 
 
@@ -10034,7 +10046,7 @@ erroring out.
 
 =item * C<table>
 
-=item * C<sequence> (not implemented)
+=item * C<sequence>
 
 =item * C<customcols>
 
