@@ -570,7 +570,7 @@ sub help {
         '-message'  => $msg,
         '-sections' => '^(?:USAGE|COMMANDS|OPTIONS)$',
         '-exitval'  => $exitval || 0,
-    ) unless $QUIET;
+    );
 
 } ## end of help
 
@@ -10246,7 +10246,7 @@ How long to sleep in seconds when restarting a kid? Default: C<1>.
 
 =item C<kid_serial_sleep>
 
-How long to sleep in seconds if we hit a serialization error. Default: C<10>.
+How long to sleep in seconds if we hit a serialization error. Default: C<0.5>.
 
 =item C<kid_sleep>
 

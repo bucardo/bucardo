@@ -1060,7 +1060,6 @@ sub setup_bucardo {
     $count = $sth->execute('reason_file' => "$PIDDIR/reason");
     $count = $sth->execute('sendmail_file' => 'debug.sendmail.txt');
     $count = $sth->execute('audit_pid' => 1);
-    $count = $sth->execute('kid_serial_sleep' => 1);
     $dbh->commit();
 
     ## Adjust a second way

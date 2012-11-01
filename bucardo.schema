@@ -104,7 +104,7 @@ mcp_vactime|60|How often in seconds do we check that a VAC is still running?
 ctl_sleep|0.2|How long does the controller loop sleep?
 kid_sleep|0.5|How long does a kid loop sleep?
 kid_nodeltarows_sleep|0.5|How long do kids sleep if no delta rows are found?
-kid_serial_sleep|10|How long to sleep in seconds if we hit a serialization error
+kid_serial_sleep|0.5|How long to sleep in seconds if we hit a serialization error
 kid_restart_sleep|1|How long to sleep in seconds when restarting a kid?
 endsync_sleep|1.0|How long do we sleep when custom code requests an endsync?
 vac_sleep|120|How long does VAC process sleep between runs?
