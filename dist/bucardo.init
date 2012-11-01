@@ -29,16 +29,16 @@ fi
 SYSUSER=${SYSUSER-postgres}
 DBNAME=${DBNAME-bucardo}
 DBUSER=${DBUSER-bucardo}
-LOGDIR=${LOGDIR-/var/log/${NAME}}
+LOGDEST=${LOGDEST-/var/log/${NAME}}
 PIDDIR=${PIDDIR-/var/run/${NAME}}
 
 # Override defaults from /etc/sysconfig/bucardo, if file is present:
 [ -f /etc/sysconfig/${NAME} ] && . /etc/sysconfig/${NAME}
 
-if [ -z "$DBHOST" ]; then hostopt=""; else hostopt="--dbhost $DBHOST"; fi
-if [ -z "$DBPORT" ]; then portopt=""; else portopt="--dbport $DBPORT"; fi
+if [ -z "$DBHOST" ]; then hostopt=""; else hostopt="--db-host $DBHOST"; fi
+if [ -z "$DBPORT" ]; then portopt=""; else portopt="--db-port $DBPORT"; fi
 
-bucardo_flags="--quiet ${hostopt} ${portopt} --dbname ${DBNAME} --dbuser ${DBUSER} --debugdir ${LOGDIR} --piddir ${PIDDIR}"
+bucardo_flags="--quiet ${hostopt} ${portopt} --db-name ${DBNAME} --db-user ${DBUSER} --log-dest ${LOGDEST} --pid-dir ${PIDDIR}"
 RETVAL=0
 
 start() {
