@@ -1383,7 +1383,7 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
             }
         }
 
-        if ($count < 1) {
+        if ($newschema || $count < 1) {
             ## We may override this later on with a custom function from bucardo_custom_trigger
             ## and we may not even use it all, but no harm in creating the stock one here
             my $notice = $dbh->{pg_server_version} >= 90000
@@ -1405,12 +1405,12 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
         }
 
         ## Create the bucardo_tablename_maker function as needed
-        $newschema and goto TMAKER;
-        $sth = $sth{hazfunc};
-        $count = $sth->execute('bucardo', 'bucardo_tablename_maker');
-        $sth->finish();
-        if ($count < 1) {
-            TMAKER:
+        unless ($newschema) {
+            $sth = $sth{hazfunc};
+            $count = $sth->execute('bucardo', 'bucardo_tablename_maker');
+            $sth->finish();
+        }
+        if ($newschema || $count < 1) {
               $SQL = qq{
                         CREATE OR REPLACE FUNCTION bucardo.bucardo_tablename_maker(TEXT)
 RETURNS TEXT
@@ -1469,12 +1469,12 @@ END;
         }
               
         ## Create the bucardo_delta_targets table as needed
-        $newschema and goto DELTAT;
-        $sth = $sth{haztable};
-        $count = $sth->execute('bucardo', 'bucardo_delta_targets');
-        $sth->finish();
-        if ($count < 1) {
-          DELTAT:
+        unless ($newschema) {
+            $sth = $sth{haztable};
+            $count = $sth->execute('bucardo', 'bucardo_delta_targets');
+            $sth->finish();
+        }
+        if ($newschema || $count < 1) {
             $SQL = qq{
                     CREATE TABLE bucardo.bucardo_delta_targets (
                         tablename  OID         NOT NULL,
@@ -1569,12 +1569,12 @@ END;
         }
 
         ## Create the bucardo_truncate_trigger table as needed
-        $newschema and goto TRUNCATET;
-        $sth = $sth{haztable};
-        $count = $sth->execute('bucardo', 'bucardo_truncate_trigger');
-        $sth->finish();
-        if ($count < 1) {
-          TRUNCATET:
+        unless ($newschema) {
+            $sth = $sth{haztable};
+            $count = $sth->execute('bucardo', 'bucardo_truncate_trigger');
+            $sth->finish();
+        }
+        if ($newschema || $count < 1) {
             $SQL = qq{
                     CREATE TABLE bucardo.bucardo_truncate_trigger (
                         tablename   OID         NOT NULL,
@@ -1593,12 +1593,12 @@ END;
         }
 
         ## Create the bucardo_truncate_trigger_log table as needed
-        $newschema and goto TTLOG;
-        $sth = $sth{haztable};
-        $count = $sth->execute('bucardo', 'bucardo_truncate_trigger_log');
-        $sth->finish();
-        if ($count < 1) {
-          TTLOG:
+        unless ($newschema) {
+            $sth = $sth{haztable};
+            $count = $sth->execute('bucardo', 'bucardo_truncate_trigger_log');
+            $sth->finish();
+        }
+        if ($newschema || $count < 1) {
             $SQL = qq{
                     CREATE TABLE bucardo.bucardo_truncate_trigger_log (
                         tablename   OID         NOT NULL,
@@ -1614,12 +1614,12 @@ END;
         }
 
         ## Create the bucardo_compress_delta function as needed
-        $newschema and goto COMPRESSD;
-        $sth = $sth{hazfunc};
-        $count = $sth->execute('bucardo', 'bucardo_compress_delta');
-        $sth->finish();
-        if ($count < 1) {
-          COMPRESSD:
+        unless ($newschema) {
+            $sth = $sth{hazfunc};
+            $count = $sth->execute('bucardo', 'bucardo_compress_delta');
+            $sth->finish();
+        }
+        if ($newschema || $count < 1) {
             $SQL = qq{
                   CREATE OR REPLACE FUNCTION bucardo.bucardo_compress_delta(text, text)
                   RETURNS TEXT
@@ -1758,12 +1758,12 @@ SELECT 'Fixme'::TEXT;
         } ## end of bucardo_compress_delta creations
 
         ## Create the bucardo_purge_delta functions as needed
-        $newschema and goto PURGE;
-        $sth = $sth{hazfunc};
-        $count = $sth->execute('bucardo', 'bucardo_purge_delta');
-        $sth->finish();
-        if ($count < 1) {
-          PURGE:
+        unless ($newschema) {
+            $sth = $sth{hazfunc};
+            $count = $sth->execute('bucardo', 'bucardo_purge_delta');
+            $sth->finish();
+        }
+        if ($newschema || $count < 1) {
             $SQL = qq{
                     CREATE OR REPLACE FUNCTION bucardo.bucardo_purge_delta(text,text)
                     RETURNS TEXT
@@ -1882,23 +1882,25 @@ SELECT 'Fixme'::TEXT;
                 };
             run_sql($SQL,$dbh);
         }
-                    
-        $newschema and goto SEQUENCE;
-        $sth = $sth{haztable};
-        $count = $sth->execute('bucardo', 'bucardo_sequences');
-        $sth->finish();
-        if ($count < 1) {
-            ## Check for older version of bucardo_sequences table
-            $SQL = q{SELECT count(*) FROM pg_attribute WHERE attname = 'targetname' }
-                .q{ AND attrelid = (SELECT c.oid FROM pg_class c, pg_namespace n }
-                .q{ WHERE n.oid = c.relnamespace AND n.nspname = 'bucardo' }
-                .q{ AND c.relname = 'bucardo_sequences')};
-            $count = $dbh->selectall_arrayref($SQL)->[0][0];
+
+        unless ($newschema) {
+            $sth = $sth{haztable};
+            $count = $sth->execute('bucardo', 'bucardo_sequences');
+            $sth->finish();
             if ($count < 1) {
-                warn "Dropping older version of bucardo_sequences, then recreating empty\n";
-                $dbh->do('DROP TABLE bucardo.bucardo_sequences');
+                ## Check for older version of bucardo_sequences table
+                $SQL = q{SELECT count(*) FROM pg_attribute WHERE attname = 'targetname' }
+                      .q{ AND attrelid = (SELECT c.oid FROM pg_class c, pg_namespace n }
+                      .q{ WHERE n.oid = c.relnamespace AND n.nspname = 'bucardo' }
+                      .q{ AND c.relname = 'bucardo_sequences')};
+                $count = $dbh->selectall_arrayref($SQL)->[0][0];
+                if ($count < 1) {
+                    warn "Dropping older version of bucardo_sequences, then recreating empty\n";
+                    $dbh->do('DROP TABLE bucardo.bucardo_sequences');
+                }
             }
-          SEQUENCE:
+        }
+        if ($newschema || $count < 1) {
             $SQL = qq{
                     CREATE TABLE bucardo.bucardo_sequences (
                         schemaname   TEXT        NOT NULL,
@@ -1922,12 +1924,12 @@ SELECT 'Fixme'::TEXT;
         }
 
         ## Create the bucardo_audit function as needed
-        $newschema and goto AUDIT;
-        $sth = $sth{hazfunc};
-        $count = $sth->execute('bucardo', 'bucardo_audit');
-        $sth->finish();
-        if ($count < 1) {
-          AUDIT:
+        unless ($newschema) {
+            $sth = $sth{hazfunc};
+            $count = $sth->execute('bucardo', 'bucardo_audit');
+            $sth->finish();
+        }
+        if ($newschema || $count < 1) {
             $SQL = q{fillin later fixme};
         }                        ## end of adding bucardo_audit()
 
