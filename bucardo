@@ -10163,10 +10163,10 @@ case-insensitive. The available settings are:
 
 How to generate this list:
 
-  psql -U bucardo -d bucardo -AXtc "SELECT replace(format(
-      E'=item C<%s>\n\n%s. Default: C<%s>.\n',
-      name, about, setting
-  ), '..', '.') FROM bucardo_config ORDER BY name;" | pbcopy
+  psql -U bucardo -d bucardo -AXtc "SELECT regexp_replace(format(
+      E'=item C<%s>\n\n%s. Default: %s.\n',
+      name, about, CASE WHEN setting = '' THEN 'None' ELSE 'C<' || setting || '>' END
+  ), '([.?])[.]', E'\\\\1') FROM bucardo_config ORDER BY name;"
 
 =end comment
 
@@ -10174,7 +10174,7 @@ How to generate this list:
 
 =item C<autosync_ddl>
 
-Which DDL changing conditions do we try to remedy automatically?. Default: C<newcol>.
+Which DDL changing conditions do we try to remedy automatically? Default: C<newcol>.
 
 =item C<bucardo_current_version>
 
@@ -10182,7 +10182,7 @@ Current version of Bucardo. Default: C<4.99.5>.
 
 =item C<bucardo_vac>
 
-Do we want the automatic VAC daemon to run?. Default: C<1>.
+Do we want the automatic VAC daemon to run? Default: C<1>.
 
 =item C<bucardo_version>
 
@@ -10190,15 +10190,15 @@ Bucardo version this schema was created with. Default: C<4.99.5>.
 
 =item C<ctl_checkonkids_time>
 
-How often does the controller check on the kids health?. Default: C<10>.
+How often does the controller check on the kids health? Default: C<10>.
 
 =item C<ctl_createkid_time>
 
-How long do we sleep to allow kids-on-demand to get on their feet?. Default: C<0.5>.
+How long do we sleep to allow kids-on-demand to get on their feet? Default: C<0.5>.
 
 =item C<ctl_sleep>
 
-How long does the controller loop sleep?. Default: C<0.2>.
+How long does the controller loop sleep? Default: C<0.2>.
 
 =item C<default_conflict_strategy>
 
@@ -10218,11 +10218,11 @@ Who to send alert emails to. Default: C<nobody@example.com>.
 
 =item C<email_debug_file>
 
-File to save a copy of all outgoing emails to. Default: C<>.
+File to save a copy of all outgoing emails to. Default: None.
 
 =item C<endsync_sleep>
 
-How long do we sleep when custom code requests an endsync?. Default: C<1.0>.
+How long do we sleep when custom code requests an endsync? Default: C<1.0>.
 
 =item C<flatfile_dir>
 
@@ -10230,19 +10230,19 @@ Directory to store the flatfile output inside of. Default: C<.>.
 
 =item C<host_safety_check>
 
-Regex to make sure we don't accidentally run where we should not. Default: C<>.
+Regex to make sure we don't accidentally run where we should not. Default: None.
 
 =item C<kid_nodeltarows_sleep>
 
-How long do kids sleep if no delta rows are found?. Default: C<0.5>.
+How long do kids sleep if no delta rows are found? Default: C<0.5>.
 
 =item C<kid_pingtime>
 
-How often do we ping check the KID?. Default: C<60>.
+How often do we ping check the KID? Default: C<60>.
 
 =item C<kid_restart_sleep>
 
-How long to sleep in seconds when restarting a kid?. Default: C<1>.
+How long to sleep in seconds when restarting a kid? Default: C<1>.
 
 =item C<kid_serial_sleep>
 
@@ -10250,7 +10250,7 @@ How long to sleep in seconds if we hit a serialization error. Default: C<10>.
 
 =item C<kid_sleep>
 
-How long does a kid loop sleep?. Default: C<0.5>.
+How long does a kid loop sleep? Default: C<0.5>.
 
 =item C<log_conflict_file>
 
@@ -10262,19 +10262,19 @@ How verbose to make the logging. Higher is more verbose. Default: C<normal>.
 
 =item C<log_microsecond>
 
-Show microsecond output in the timestamps?. Default: C<0>.
+Show microsecond output in the timestamps? Default: C<0>.
 
 =item C<log_showlevel>
 
-Show log level in the log output?. Default: C<0>.
+Show log level in the log output? Default: C<0>.
 
 =item C<log_showline>
 
-Show line number in the log output?. Default: C<0>.
+Show line number in the log output? Default: C<0>.
 
 =item C<log_showpid>
 
-Show PID in the log output?. Default: C<1>.
+Show PID in the log output? Default: C<1>.
 
 =item C<log_showtime>
 
@@ -10286,19 +10286,19 @@ How many seconds to sleep before trying to respawn. Default: C<15>.
 
 =item C<mcp_loop_sleep>
 
-How long does the main MCP daemon sleep between loops?. Default: C<0.2>.
+How long does the main MCP daemon sleep between loops? Default: C<0.2>.
 
 =item C<mcp_pingtime>
 
-How often do we ping check the MCP?. Default: C<60>.
+How often do we ping check the MCP? Default: C<60>.
 
 =item C<mcp_vactime>
 
-How often in seconds do we check that a VAC is still running?. Default: C<60>.
+How often in seconds do we check that a VAC is still running? Default: C<60>.
 
 =item C<piddir>
 
-Directory holding Bucardo PID files. Default: C</tmp>.
+Directory holding Bucardo PID files. Default: C</var/run/bucardo>.
 
 =item C<reason_file>
 
@@ -10338,11 +10338,11 @@ How long to wait for a response to a keepalive probe. Default: C<0>.
 
 =item C<vac_run>
 
-How often does the VAC process run?. Default: C<30>.
+How often does the VAC process run? Default: C<30>.
 
 =item C<vac_sleep>
 
-How long does VAC process sleep between runs?. Default: C<120>.
+How long does VAC process sleep between runs? Default: C<120>.
 
 =item C<warning_file>
 
