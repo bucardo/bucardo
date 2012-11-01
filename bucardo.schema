@@ -1211,7 +1211,7 @@ if (! $is_fullcopy) {
     }
 }
 
-sub run_sql {
+my $run_sql = sub {
     my ($sql,$dbh) = @_;
     $sql =~ s/\t/    /gsm;
     if ($sql =~ /^(\s+)/m) {
@@ -1221,9 +1221,9 @@ sub run_sql {
     }
     elog(DEBUG, "SQL: $sql");
     $dbh->do($sql);
-}
+};
 
-sub fetch1_sql {
+my $fetch1_sql = sub {
     my ($sql,$dbh,@items) = @_;
     $sql =~ s/\t/    /gsm;
     if ($sql =~ /^(\s+)/m) {
@@ -1234,7 +1234,7 @@ sub fetch1_sql {
     my $sth = $dbh->prepare($sql);
     $sth->execute(@items);
     return $sth->fetchall_arrayref()->[0][0];
-}
+};
 
 ## Determine the name of some functions we may need
 my $namelen = length($syncname);
@@ -1401,7 +1401,7 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
                   END;
                   \$notify\$;
                  };
-            run_sql($SQL,$dbh);
+            $run_sql->($SQL,$dbh);
         }
 
         ## Create the bucardo_tablename_maker function as needed
@@ -1439,7 +1439,7 @@ END;
 \$clone\$;
 
           };
-          run_sql($SQL,$dbh);
+          $run_sql->($SQL,$dbh);
 
               $SQL = qq{
                         CREATE OR REPLACE FUNCTION bucardo.bucardo_tablename_maker(TEXT,TEXT)
@@ -1465,7 +1465,7 @@ END;
 \$clone\$;
 
           };
-          run_sql($SQL,$dbh);
+          $run_sql->($SQL,$dbh);
         }
               
         ## Create the bucardo_delta_targets table as needed
@@ -1482,7 +1482,7 @@ END;
                         cdate      TIMESTAMPTZ NOT NULL DEFAULT now()
                     );
                 };
-            run_sql($SQL,$dbh);
+            $run_sql->($SQL,$dbh);
         }
 
 		## Check for missing 'sync' column in the bucardo_delta_target table
@@ -1493,12 +1493,12 @@ END;
             ## As the new column cannot be null, we have to delete existing entries!
 			## However, missing this column is a pretty obscure corner-case
             $SQL = qq{DELETE FROM bucardo.bucardo_delta_targets};
-            run_sql($SQL,$dbh);
+            $run_sql->($SQL,$dbh);
             $SQL = qq{
                     ALTER TABLE bucardo.bucardo_delta_targets
                       ADD COLUMN sync TEXT NOT NULL;
             };
-            run_sql($SQL,$dbh);
+            $run_sql->($SQL,$dbh);
         }
 
         ## Populate bucardo_delta_targets with this sync name
@@ -1565,7 +1565,7 @@ END;
                   END;
                   \$clone\$;
                 };
-            run_sql($SQL,$dbh);
+            $run_sql->($SQL,$dbh);
         }
 
         ## Create the bucardo_truncate_trigger table as needed
@@ -1585,11 +1585,11 @@ END;
                         cdate       TIMESTAMPTZ NOT NULL DEFAULT now()
                     );
                 };
-            run_sql($SQL,$dbh);
+            $run_sql->($SQL,$dbh);
 
             $SQL = q{CREATE INDEX bucardo_truncate_trigger_index ON }
                 . q{bucardo.bucardo_truncate_trigger (sync, tablename) WHERE replicated IS NULL};
-            run_sql($SQL,$dbh);
+            $run_sql->($SQL,$dbh);
         }
 
         ## Create the bucardo_truncate_trigger_log table as needed
@@ -1610,7 +1610,7 @@ END;
                         cdate       TIMESTAMPTZ NOT NULL DEFAULT now()
                     );
                 };
-            run_sql($SQL,$dbh);
+            $run_sql->($SQL,$dbh);
         }
 
         ## Create the bucardo_compress_delta function as needed
@@ -1713,7 +1713,7 @@ END;
                   END;
                   \$clone\$;
                 };
-            run_sql($SQL,$dbh);
+            $run_sql->($SQL,$dbh);
 
             $SQL = qq{
                   CREATE OR REPLACE FUNCTION bucardo.bucardo_compress_delta(text)
@@ -1726,7 +1726,7 @@ END;
                   WHERE relname = \$1 AND pg_table_is_visible(c.oid);
                   \$clone\$;
                 };
-            run_sql($SQL,$dbh);
+            $run_sql->($SQL,$dbh);
 
             $SQL = qq{
                   CREATE OR REPLACE FUNCTION bucardo.bucardo_compress_delta(oid)
@@ -1739,7 +1739,7 @@ END;
                   WHERE c.oid = \$1;
                   \$clone\$;
                 };
-            run_sql($SQL,$dbh);
+            $run_sql->($SQL,$dbh);
 
             $SQL = qq{
                   CREATE OR REPLACE FUNCTION bucardo.bucardo_compress_delta()
@@ -1753,7 +1753,7 @@ END;
 SELECT 'Fixme'::TEXT;
                   \$clone\$;
                 };
-            run_sql($SQL,$dbh);
+            $run_sql->($SQL,$dbh);
 
         } ## end of bucardo_compress_delta creations
 
@@ -1847,7 +1847,7 @@ SELECT 'Fixme'::TEXT;
                     END;
                     \$clone\$;
                 };
-            run_sql($SQL,$dbh);
+            $run_sql->($SQL,$dbh);
 
             $SQL = qq{
                     CREATE OR REPLACE FUNCTION bucardo.bucardo_purge_delta(text)
@@ -1880,7 +1880,7 @@ SELECT 'Fixme'::TEXT;
                     END;
                     \$clone\$;
                 };
-            run_sql($SQL,$dbh);
+            $run_sql->($SQL,$dbh);
         }
 
         unless ($newschema) {
@@ -1916,11 +1916,11 @@ SELECT 'Fixme'::TEXT;
                         is_called    BOOL        NOT NULL
                     );
                 };
-            run_sql($SQL,$dbh);
+            $run_sql->($SQL,$dbh);
 
             $SQL = q{CREATE UNIQUE INDEX bucardo_sequences_tablename ON }
                 . q{bucardo.bucardo_sequences (schemaname, seqname, syncname, targetname)};
-            run_sql($SQL,$dbh);
+            $run_sql->($SQL,$dbh);
         }
 
         ## Create the bucardo_audit function as needed
@@ -2135,12 +2135,12 @@ SELECT 'Fixme'::TEXT;
           AFTER TRUNCATE ON "$schema"."$table"
           FOR EACH STATEMENT EXECUTE PROCEDURE bucardo.bucardo_note_truncation('$syncname')
         };
-                    run_sql($SQL,$dbh);
+                    $run_sql->($SQL,$dbh);
                 }
             }
 
             $SQL = "SELECT bucardo.bucardo_tablename_maker(?)";
-            my $makername = fetch1_sql($SQL,$dbh,$schema.'_'.$table);
+            my $makername = $fetch1_sql->($SQL,$dbh,$schema.'_'.$table);
             ## Create this table if needed, with one column per PK columns
             $sth = $sth{haztable};
             my $delta_table = "delta_$makername";
@@ -2178,13 +2178,13 @@ SELECT 'Fixme'::TEXT;
                      AS SELECT $pkcols, now()::TIMESTAMPTZ AS txntime
                         FROM "$schema"."$table" LIMIT 0
                };
-               run_sql($SQL,$dbh);
+               $run_sql->($SQL,$dbh);
                $SQL = qq{
                    ALTER TABLE bucardo.$delta_table
                      ALTER txntime SET NOT NULL,
                      ALTER txntime SET DEFAULT now()
                };
-               run_sql($SQL, $dbh);
+               $run_sql->($SQL, $dbh);
             }
 
             ## Need an index on the txntime column
@@ -2193,7 +2193,7 @@ SELECT 'Fixme'::TEXT;
             $sth->finish();
             if ($count < 1) {
                 $SQL = qq{CREATE INDEX $index1_name ON bucardo.$delta_table(txntime)};
-                run_sql($SQL, $dbh);
+                $run_sql->($SQL, $dbh);
             }
 
             ## Need an index on all other columns
@@ -2203,7 +2203,7 @@ SELECT 'Fixme'::TEXT;
             if ($count < 1) {
                 my $pkcols = join ',' => map { qq{"$_"} } split (/\|/ => $tinfo->{pkey});
                 $SQL = qq{CREATE INDEX $index2_name ON bucardo.$delta_table($pkcols)};
-                run_sql($SQL, $dbh);
+                $run_sql->($SQL, $dbh);
             }
 
             ## Track any change (insert/update/delete) with an entry in bucardo_delta
@@ -2244,7 +2244,7 @@ SELECT 'Fixme'::TEXT;
         END;
         \$clone\$;
       };
-                run_sql($SQL,$dbh);
+                $run_sql->($SQL,$dbh);
             }
 
             ## Check if the bucardo_delta is a custom function, and create if needed
@@ -2273,7 +2273,7 @@ SELECT 'Fixme'::TEXT;
          };
                     $SQL .= qq{ $rv->{rows}[0]{trigger_body} };
                     $SQL .= qq{ \$clone\$; };
-                    run_sql($SQL,$dbh);
+                    $run_sql->($SQL,$dbh);
                 }
             }
 
@@ -2287,7 +2287,7 @@ SELECT 'Fixme'::TEXT;
         AFTER INSERT OR UPDATE OR DELETE ON "$schema"."$table"
         FOR EACH ROW EXECUTE PROCEDURE bucardo.$func()
       };
-                run_sql($SQL,$dbh);
+                $run_sql->($SQL,$dbh);
             }
 
 
@@ -2302,7 +2302,7 @@ SELECT 'Fixme'::TEXT;
                       target     TEXT
                    );
                 };
-                run_sql($SQL,$dbh);
+                $run_sql->($SQL,$dbh);
             }
 
             ## Need to index both columns of the txntime table
@@ -2311,7 +2311,7 @@ SELECT 'Fixme'::TEXT;
             $sth->finish();
             if ($count < 1) {
                 $SQL = qq{CREATE INDEX $index3_name ON bucardo.$track_table(target, txntime)};
-                run_sql($SQL,$dbh);
+                $run_sql->($SQL,$dbh);
             }
 
             ## The 'stage' table, which feeds 'track' once targets have committed
@@ -2326,7 +2326,7 @@ SELECT 'Fixme'::TEXT;
                       target     TEXT
                    );
                 };
-                run_sql($SQL,$dbh);
+                $run_sql->($SQL,$dbh);
             }
 
             $count = $sth->execute('bucardo','bucardo_delta_target_unique');
@@ -2385,7 +2385,7 @@ SELECT 'Fixme'::TEXT;
                     FOR EACH STATEMENT EXECUTE PROCEDURE bucardo."$kickfunc"()
                     };
                 }
-                run_sql($SQL,$dbh);
+                $run_sql->($SQL,$dbh);
             }
         } ## end each TABLE
     }     ## end each SCHEMA
