@@ -1369,20 +1369,21 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
         my $newschema = $count < 1 ? 1 : 0;
 
         ## Create the 'kickfunc' function as needed
-        $newschema and goto KICKFUNC;
-        ## We need a function for the kick notification
-        $sth = $sth{hazfunc};
-        $count = $sth->execute('bucardo',$kickfunc);
-        $sth->finish();
-        if ($count >= 1) {
-            ## We may want to recreate this function
-            if ($force{all} or $force{funcs} or $force{kickfunc}) {
-                $dbh->do(qq{DROP FUNCTION bucardo."$kickfunc"()});
-                $count = 0;
+        unless ($newschema) {
+            ## We need a function for the kick notification
+            $sth = $sth{hazfunc};
+            $count = $sth->execute('bucardo',$kickfunc);
+            $sth->finish();
+            if ($count >= 1) {
+                ## We may want to recreate this function
+                if ($force{all} or $force{funcs} or $force{kickfunc}) {
+                    $dbh->do(qq{DROP FUNCTION bucardo."$kickfunc"()});
+                    $count = 0;
+                }
             }
         }
+
         if ($count < 1) {
-          KICKFUNC:
             ## We may override this later on with a custom function from bucardo_custom_trigger
             ## and we may not even use it all, but no harm in creating the stock one here
             my $notice = $dbh->{pg_server_version} >= 90000
