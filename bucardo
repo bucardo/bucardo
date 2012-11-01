@@ -1457,6 +1457,7 @@ sub add_database {
 
         ## Handle all of the ones that do not use standard DBI first
 
+        my @users;
         if ('mongo' eq $dbtype) {
 
             my $dsn = {};
@@ -1499,8 +1500,8 @@ sub add_database {
 
         ## Anything else must be something with a standard DBI driver
         else {
-
           DBICONNTEST: {
+              push @users => $user;
                 eval {
                     $testdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
                     $evalok = 1;
@@ -1520,11 +1521,12 @@ sub add_database {
                 goto DBICONNTEST;
             }
 
+            my $as = join ' or ', @users;
             if ($bcargs->{force}) {
-                print "Connection to $fullname failed, but will add anyway.\nError was: $@\n\n";
+                print "Connection to $fullname as $as failed, but will add anyway.\nError was: $@\n\n";
             }
             else {
-                die "Connection to $fullname failed. You may force add it with the --force argument. Error was: $@\n\n";
+                die "Connection to $fullname as $as failed. You may force add it with the --force argument. Error was: $@\n\n";
             }
         }
         else {
