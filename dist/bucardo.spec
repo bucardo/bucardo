@@ -24,6 +24,8 @@ BuildRequires:  perl(IO::Handle)
 BuildRequires:  perl(Sys::Hostname)
 BuildRequires:  perl(Sys::Syslog)
 BuildRequires:  perl(Net::SMTP)
+BuildRequires:  perl(List::Util)
+BuildRequires:  perl(Pod::Usage)
 # available from fedora 10
 BuildRequires:  perl(DBIx::Safe)
 BuildRequires:  perl(boolean)
