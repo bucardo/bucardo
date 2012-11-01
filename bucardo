@@ -69,12 +69,9 @@ my $bcargs = {
               dbpass       => '',
               sendmail     => 0,
               extraname    => '',
-              debugfilesep => 0,
-              debugdir     => '.',
-              debugname    => '',
-              debugsyslog  => 1,
-              debugfile    => 1,
-              cleandebugs  => 0,
+              logseparate  => 0,
+              logextension => '',
+              logclean     => 0,
               batch        => 0,
           };
 
@@ -151,12 +148,17 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'dbpass|db-pass|P=s',
      'sendmail=i',
      'extraname|extra-name=s',
-     'debugfilesep',
-     'debugname=s',
-     'debugsyslog=i',
-     'debugdir=s',
-     'debugfile=i',
-     'cleandebugs=i',
+
+     'debugsyslog=i', # legacy
+     'debugdir=s',    # legacy
+     'debugfile=i',   # legacy
+     'cleandebugs=i', # legacy
+
+
+     'logdest|log-dest|log-destination=s@', # stderr, syslog, or file path
+     'logseparate|log-sep|log-separate|debugfilesep!',
+     'logextension|log-extension|log-ext|debugname=s',
+     'logclean|log-clean!',
 
      ## Used internally
      'force',
@@ -177,6 +179,29 @@ if ($bcargs->{version}) {
     print "$progname version $VERSION\n";
     exit 0;
 }
+
+# Determine the logging destination.
+unless (exists $bcargs->{logdest}) {
+    if (exists $bcargs->{debugfile} && !delete $bcargs->{debugfile}) {
+        # Old --debugfile option can disable logging.
+        $bcargs->{logdest} = [];
+    } elsif (my $dir = $bcargs->{debugdir}) {
+        # Old --debugdir option determins log directory.
+        $bcargs->{logdest} = [$dir];
+    } else {
+        # Default value.
+        $bcargs->{logdest} = ['/var/log/bucardo'];
+    }
+
+    if ($bcargs->{debugsyslog}) {
+        # Old --debugsyslog option enables syslog logging.
+        push @{ $bcargs->{logdest} } => 'syslog';
+    }
+}
+
+# Handle legacy --cleandebugs option.
+$bcargs->{logclean} = 1
+    if delete $bcargs->{cleandebugs} && !exists $bcargs->{logclean};
 
 ## Sometimes we want to be as quiet as possible
 my $QUIET = delete $bcargs->{quiet};
@@ -754,8 +779,6 @@ sub start {
         ## We are the kid, do nothing
     }
     else {
-        close STDERR or warn "Could not close STDERR\n";
-        close STDOUT or warn "Could not close STDOUT\n";
         setsid() or die;
         ## Here we go!
         $bc->start_mcp( \@opts );
@@ -8816,35 +8839,43 @@ shutdown, and errors. Default is on.
 A short string that will be appended to the version string as output by the
 Bucardo process names. Mostly useful for debugging.
 
-=item C<--debugfilesep>
+=item C<--log-destination destination>
+
+Determines the destinotion for logging output. The supported values are:
+
+=over
+
+=item C<stderr>
+
+=item C<stdout>
+
+=item C<syslog>
+
+=item C<none>
+
+=item A file system directory.
+
+=back
+
+May be specified more than once, which is useful for, e.g., logging both to a
+directory and to syslog. If C<--log-destination> is not specified at all, the
+default is to log to files in F</var/log/bucardo>.
+
+=item C<--log-separate>
 
 Forces creation of separate log files for each Bucardo process of the form
 "log.bucardo.X.Y", where X is the type of process (MCP, CTL, or KID), and Y is
 the process ID.
 
-=item C<--debugsyslog>
+=item C<--log-extension string>
 
-Sends all log messages to the syslog daemon. On by default. The facility used
-is controlled by the row "syslog_facility" in the bucardo_config table, and
-defaults to "LOG_LOCAL1".
+Appends the given string to the end of the default log file name,
+F<log.bucardo>. A dot is added before the name as well, so a log extension of
+"rootdb" would produce a log file named F<log.bucardo.rootdb>.
 
-=item C<--debugfile>
+=item C<--log-clean>
 
-If set, writes detailed debugging information to one or more files.
-
-=item C<--debugdir directory name>
-
-Directory where the debug files should go.
-
-=item C<--debugname string>
-
-Appends the given string to the end of the default debug file name,
-"log.bucardo". A dot is added before the name as well, so a debugname of
-"rootdb" would produce a log file named "log.bucardo.rootdb".
-
-=item C<--cleandebugs>
-
-Forces removal of all old debug files before running.
+Forces removal of all old log files before running.
 
 =item C<--debug>
 

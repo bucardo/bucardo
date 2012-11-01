@@ -191,13 +191,11 @@ sub new {
         created      => scalar localtime,
         mcppid       => $$,
         verbose      => 1,
-        debugsyslog  => 1,
-        debugdir     => './tmp',
-        debugfile    => 0,
+        logdest      => ['/var/log/bucardo'],
         warning_file => '',
-        debugfilesep => 0,
-        debugname    => '',
-        cleandebugs  => 0,
+        logseparate  => 0,
+        logextension => '',
+        logclean     => 0,
         dryrun       => 0,
         sendmail     => 1,
         extraname    => '',
@@ -217,16 +215,19 @@ sub new {
     ## Transform our hash into a genuine 'Bucardo' object:
     bless $self, $class;
 
-    ## Remove any previous debugging files if requested
-    if ($self->{cleandebugs}) {
+    ## Remove any previous log files if requested
+    if ($self->{logclean} && (my @dirs = grep {
+        $_ !~ /^(?:std(?:out|err)|none|syslog)/
+    } @{ $self->{logdest} }) ) {
         ## If the dir does not exists, silently proceed
-        if (opendir my $dh, $self->{debugdir}) {
+        for my $dir (@dirs) {
+            opendir my $dh, $dir or next;
             ## We look for any files that start with 'log.bucardo' plus another dot
             for my $file (grep { /^log\.bucardo\./ } readdir $dh) {
-                my $fullfile = File::Spec->catfile( $self->{debugdir} => $file );
+                my $fullfile = File::Spec->catfile( $dir => $file );
                 unlink $fullfile or warn qq{Could not remove "$fullfile": $!\n};
             }
-            closedir $dh or warn qq{Could not closedir "$self->{debugdir}": $!\n};
+            closedir $dh or warn qq{Could not closedir "$dir": $!\n};
         }
     }
 
@@ -253,11 +254,6 @@ sub new {
 
     ## Load in the configuration information
     $self->reload_config_database();
-
-    ## If using syslog, open with the current facility
-    if ($self->{debugsyslog}) {
-        openlog 'Bucardo', 'pid nowait', $config{syslog_facility};
-    }
 
     ## Figure out if we are writing emails to a file
     $self->{sendmail_file} = $ENV{BUCARDO_EMAIL_DEBUG_FILE} || $config{email_debug_file} || '';
@@ -377,6 +373,14 @@ sub start_mcp {
     ## We are clear to start. Output a quick hello and version to the logfile
     $self->glog("Starting Bucardo version $VERSION", LOG_WARN);
     $self->glog("Log level: $config{log_level}", LOG_WARN);
+
+    ## Close unused file handles.
+    unless (grep { $_ eq 'stderr' } @{ $self->{logdest} }) {
+        close STDERR or warn "Could not close STDERR\n";
+    }
+    unless (grep { $_ eq 'stdout' } @{ $self->{logdest} }) {
+        close STDOUT or warn "Could not close STDOUT\n";
+    }
 
     ## Create a new (temporary) PID file
     ## We will overwrite later with a new PID once we do the initial fork
@@ -4834,6 +4838,49 @@ sub log_config {
 } ## end of log_config
 
 
+sub _logto {
+    my $self = shift;
+    if ($self->{logpid} && $self->{logpid} != $$) {
+        # We've forked! Get rid of any existing handles.
+        delete $self->{logcodes};
+    }
+    return @{ $self->{logcodes} } if $self->{logcodes};
+
+    # Do no logging if any destination is "none".
+    return @{ $self->{logcodes} = [] }
+        if grep { $_ eq 'none' } @{ $self->{logdest} };
+
+    $self->{logpid} = $$;
+    my %code_for;
+    for my $dest (@{ $self->{logdest}} ) {
+        next if $code_for{$dest};
+        if ($dest eq 'syslog') {
+            openlog 'Bucardo', 'pid nowait', $config{syslog_facility};
+            ## Ignore the header argument for syslog output.
+            $code_for{syslog} = sub { shift; syslog 'info', @_ };
+        } elsif ($dest eq 'stderr') {
+            $code_for{stderr} = sub { print STDERR @_, $/ };
+        } elsif ($dest eq 'stdout') {
+            $code_for{stdout} = sub { print STDOUT @_, $/ };
+        } else {
+            my $fn = File::Spec->catfile($dest, 'log.bucardo');
+            $fn .= ".$self->{logextension}" if length $self->{logextension};
+
+            ## If we are writing each process to a separate file,
+            ## append the prefix and the PID to the file name
+            $fn .= "$self->{logprefix}.$$"  if $self->{logseparate};
+
+            open my $fh, '>>', $fn or die qq{Could not append to "$fn": $!\n};
+            ## Turn off buffering on this handle
+            $fh->autoflush(1);
+
+            $code_for{$dest} = sub { print {$fh} @_, $/ };
+        }
+    }
+
+    return @{ $self->{logcodes} = [ values %code_for ] };
+}
+
 sub glog { ## no critic (RequireArgUnpacking)
 
     ## Reformat and log internal messages to the correct place
@@ -4847,14 +4894,19 @@ sub glog { ## no critic (RequireArgUnpacking)
 
     my $self = shift;
     my $msg = shift;
-    ## Remove newline from the end of the message, in case it has one
-    chomp $msg;
 
     ## Grab the log level: defaults to 0 (LOG_WARN)
     my $loglevel = shift || 0;
 
     ## Return and do nothing, if we have not met the minimum log level
     return if $loglevel > $config{log_level_number};
+
+    ## Just return if there is no place to log to.
+    my @logs = $self->_logto;
+    return unless @logs || ($loglevel == LOG_WARN && $self->{warning_file});
+
+    ## Remove newline from the end of the message, in case it has one
+    chomp $msg;
 
     ## We should always have a prefix, either BC!, MCP, CTL, KID, or VAC
     ## Prepend it to our message
@@ -4889,52 +4941,17 @@ sub glog { ## no critic (RequireArgUnpacking)
         $header = "$loglevel $header";
     }
 
-    ## If using syslog, send the message at the 'info' priority
-    ## Using syslog does not rule out using other things as well
-    $self->{debugsyslog} and syslog 'info', $msg;
-
     ## Warning messages may also get written to a separate file
     ## Note that a 'warning message' is simply anything starting with "Warning"
-    if ($self->{warning_file} and index($msg, 'Warning') == 0) {
+    if ($self->{warning_file} and $loglevel == LOG_WARN) {
         my $file = $self->{warning_file};
         open my $fh, , '>>', $file or die qq{Could not append to "$file": $!\n};
         print {$fh} "$header$msg\n";
         close $fh or warn qq{Could not close "$file": $!\n};
     }
 
-    ## Possibly send the message to a debug file
-    if ($self->{debugfile}) {
-
-        ## If we've not set the name yet, do so now
-        if (!exists $self->{debugfilename}) {
-            $self->{debugfilename} = "$self->{debugdir}/log.bucardo";
-            ## e.g. for when you don't want to overwrite an existing log.bucardo:
-            if ($self->{debugname}) {
-                $self->{debugfilename} .= ".$self->{debugname}";
-            }
-        }
-        my $file = $self->{debugfilename};
-
-        ## If we are writing each process to a separate file,
-        ## append the prefix and the PID to the file name
-        if ($self->{debugfilesep}) {
-            $file = $self->{debugfilename} . ".$prefix.$$";
-        }
-
-        ## If this file has not been opened yet, do so now
-        if (!exists $self->{debugfilehandle}{$$}{$file}) {
-            open $self->{debugfilehandle}{$$}{$file}, '>>', $file
-                or die qq{Could not append to "$file": $!\n};
-            ## Turn off buffering on this handle
-            $self->{debugfilehandle}{$$}{$file}->autoflush(1);
-        }
-
-        ## Write the header, the message, and a newline to the log file.
-        printf {$self->{debugfilehandle}{$$}{$file}} "%s%s\n",
-            $header,
-            $msg;
-    }
-
+    # Send it to all logs.
+    $_->($header, $msg) for @logs;
     return;
 
 } ## end of glog
