@@ -8,15 +8,21 @@ Bucardo version 5.0.0, released ??, 2012
   - Allow alternate targets: Drizzle, MariaDB, MongoDB, MySQL, Oracle, Redis, 
     SQLite, as well as "flat files" [GSM]
 
-  - Rename bucardo_ctl to simply bucardo [Jon Jensen, GSM]
+  - Rename "bucardo_ctl" to simply "bucardo" [Jon Jensen, GSM]
+
+  - Rename "goat" to "relation" or, more commonly, "table" and "sequence".
+    [David Wheeler]
+
+  - Rename "standard_conflict" option to "conflict_strategy".
+
+  - Rename "herd" to "relgroup". [David Wheeler]
 
   - Change the way that swap syncs work: should be much faster [GSM]
 
   - Use asynchronous queries when possible [GSM]
 
-  - Redo the makedelta system, and break into source_makedelta and target_makedelta 
-    options for both syncs and goats, which inherit from the higher level (goat 
-    inherits from sync inherits from db). Add makedelta as on/off for db. [GSM]
+  - Redo the makedelta system, and add makedelta option for relations, which
+    inherit from db. Add makedelta as on/off for db. [GSM]
 
   - Overhaul of sequence handling: now allows for all attributes to be replicated, 
     such as INCREMENT_BY and MAXVALUE [GSM]
@@ -45,9 +51,9 @@ Bucardo version 5.0.0, released ??, 2012
 
   - Do not replicate null values to MongoDB [Ali Asad Lotia]
 
-  - Add 'default_standard_conflict' option, per idea from Franz Dürr. [GSM]
+  - Add 'default_conflict_strategy' option, per idea from Franz Dürr. [GSM]
 
-  - Force time zone to GMT to resolve timestamptz issues with bucardo_delta
+  - Force time zone to UTC to resolve timestamptz issues with bucardo_delta
     [GSM, Michelle Sullivan]
 
   - Add a log_level parameter, and classify all messages inside Bucardo.pm
@@ -99,14 +105,18 @@ Bucardo version 5.0.0, released ??, 2012
 
   - Add 'bucardo list all' feature [Christian Recktenwald]
 
-  - Allow removal of tables from herds via bucardo. [GSM]
+  - Allow removal of tables from relgroups via bucardo. [GSM]
 
   - Add create_child_q_table() function. [GSM]
 
-  - Allow 'bucardo update herd foo remove <table(s)>'
-    and 'bucardo update herd foo add <table(s)>' [GSM]
+  - Allow 'bucardo update relgroup foo remove <table(s)>'
+    and 'bucardo update relgroup foo add <table(s)>' [GSM]
 
-  - Better formatting of bucardo.reason.log, and log startup failures. [GSM]
+  - Rename the default reason_file to bucardo.restart.reason.txt. The reason
+    log is then named bucardo.restart.reason.log (instead of
+    bucardo.restart.reason.log.log as before). [David Wheeler]
+
+  - Better formatting of bucardo.reason.txt.log, and log startup failures. [GSM]
 
   - Log the current configuration settings on startup. [GSM]
 
@@ -114,13 +124,92 @@ Bucardo version 5.0.0, released ??, 2012
 
   - Remove unused 'kick_sleep' config variable. [GSM]
 
-  - Show the database name when listing herds via bucardo. [GSM]
+  - Show the database name when listing relgroups via bucardo. [GSM]
 
   - Show the database name when listing sequences via bucardo. [Douglas Tan]
 
   - Show each target's Postgres version, time, and timezone on first connect. [GSM]
 
   - Change main trigger names to 'bucardo_delta' and 'bucardo_kick' [GSM]
+
+  - Allow databases to have the same dsn, as we are moving towards in-database
+    replication. [GSM]
+
+  - Add complete documentation of all public commands, actions, parameters,
+    and options to the bucardo Pod (and therefore the man page, as well).
+    [David Wheeler]
+
+  - Use the Pod docs to show the output of 'help command' and 'help command action'
+    instead of duplicating that informoatin in code. [David Wheeler]
+
+  - Fixed PostgreSQL 9.2 compatability issues. [David Wheeler]
+
+  - Fix syntax issues to restore support for PostgreSQL 8.1 [GSM]
+
+  - Fix "arguments of row IN must all be row expressions" error [GSM]
+
+  - Fix empty primary key join/split bug [GSM]
+
+  - Add Linux int script and RPM spec file [Devrim GÜNDÜZ and David Wheeler]
+
+  - Add --exit-on-nosync option. Bucardo no longer exits from 'start' when
+    there are no syncs. Use this option to restore that behavior. [David
+    Wheeler]
+
+  - Switch to pg_ctl in tests for more reliable (and faster!) Postgres
+    startup and shutdown. [David Wheeler]
+
+  - Fix incorrect shutdown when Postgres is not running. The pid file is now
+    properly cleaned up on shutdown even if Postgres is down. [David Wheeler]
+
+  - Tests now properly report the reasons for failed bucardo commands. [David
+    Wheeler]
+
+  - Revamp retry on serialization failure so that it actually works. The KID
+    no longer sleeps and exits, but sleeps and retries the sync on its own,
+    only sending a NOTICE to other processes that it is doing so. [GSM and
+    David Wheeler]
+
+  - Change the default serialization failure sleep time from 10s to 0.5s.
+
+  - The 'update' command no longer exits with an error code on success.
+
+  - Fixed issue with missing database handles when a KID shuts down. [David
+    Wheeler]
+
+  - Remove the customselect parameter. Use the customcols command, instead.
+    [David Wheeler]
+
+  - Remove the do_listen parameter, which was just another name for ping.
+
+  - Rename the 'ping' parameter to 'autokick', to better describe what it does
+    and to prevent confusion with the 'ping' command, which does something
+    totally different. [David Wheeler]
+
+  - Rename standard_conflict to conflict_strategy. [David Wheeler]
+
+  - Move conflict_strategy from add/update table to add/update sync. [David Wheeler]
+
+  - Fix issue that prevented the VAC process from shutting down immediately on
+    'stop'. [David Wheeler]
+
+  - Fix failure to restart after database disconnections.
+
+  - Add 'remove sequence' [David Wheeler]
+
+  - Rename most --debug* options to --log-*:
+      + --debugdir is now --log-destination
+      + --debugfile is deprecated; use '--log-destination none' to disable all logging
+      + --debugsyslog is deprecated; use --log-destination syslog'
+      + Allow logging to stderr or stdout via --log-destination
+      + --log-destination may be specified multiple times for multiple logs
+      + --debugfilesep is now --log-separate
+      + --debugname is now --log-extension
+      + --cleandebus is now --log-clean
+    [David Wheeler]
+
+  - Eliminated 'Use of "goto" to jump into a construct has been deprecated'
+    warnings on Perl 5.12 and higher.
 
 
 Bucardo version 4.4.8, released November 30, 2011
