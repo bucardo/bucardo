@@ -814,6 +814,48 @@ ALTER TABLE bucardo_fkey1
 
 } ## end of add_test_schema
 
+sub mock_serialization_failure {
+    my ($self, $dbh, $table) = @_;
+    return if $dbh->{pg_server_version} < 80401;
+    $table ||= 'bucardo_test1';
+
+    # Mock a serialization failure on every other INSERT. Runs only when
+    # `session_replica_role` is "replica", which it true for Bucardo targets.
+    $dbh->do(qq{
+        DROP SEQUENCE IF EXISTS serial_seq;
+        CREATE SEQUENCE serial_seq;
+
+        CREATE OR REPLACE FUNCTION mock_serial_fail(
+        ) RETURNS trigger LANGUAGE plpgsql AS \$_\$
+        BEGIN
+            IF nextval('serial_seq') % 2 = 0 THEN RETURN NEW; END IF;
+            RAISE EXCEPTION 'Serialization error'
+                  USING ERRCODE = 'serialization_failure';
+        END;
+        \$_\$;
+
+        CREATE TRIGGER mock_serial_fail AFTER INSERT ON "$table"
+            FOR EACH ROW EXECUTE PROCEDURE mock_serial_fail();
+        ALTER TABLE "$table" ENABLE REPLICA TRIGGER mock_serial_fail;
+    });
+    $dbh->commit;
+
+    return 1;
+} ## end of mock_serialization_failure
+
+sub unmock_serialization_failure {
+    my ($self, $dbh, $table) = @_;
+    return if $dbh->{pg_server_version} < 80401;
+    $table ||= 'bucardo_test1';
+
+    $dbh->do(qq{
+        DROP TRIGGER IF EXISTS mock_serial_fail ON "$table";
+        DROP FUNCTION IF EXISTS mock_serial_fail();
+        DROP SEQUENCE IF EXISTS serial_seq;
+    });
+
+    return 1;
+} ## end of unmock_serialization_failure
 
 sub add_test_databases {
 
@@ -1102,6 +1144,7 @@ sub wait_for_notice {
     ## 2. Seconds until we give up
     ## 3. Seconds we sleep between checks
     ## 4. Boolean: bail out if not found (defaults to true)
+    ## Returns true if the NOTIFY was recieved.
 
     my $self = shift;
     my $dbh = shift;
@@ -1144,7 +1187,7 @@ sub wait_for_notice {
             return;
         }
     }
-    return;
+    return 1;
 
 } ## end of wait_for_notice
 

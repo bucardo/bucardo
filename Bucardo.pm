@@ -4578,8 +4578,12 @@ sub start_kid {
         $err_handler->($err) unless first { $sync->{db}{$_}{dbh}->state eq '40001' } @dbs_dbi;
 
         ## We have a serialization failure and need to sleep on it.
-        $self->glog((sprintf "Could not serialize, will sleep for %d %s",
-                    $sleeptime, 1==$sleeptime ? 'second' : 'seconds'), LOG_TERSE);
+        if ($sleeptime) {
+            $self->glog((sprintf "Could not serialize, will sleep for %s %s",
+                         $sleeptime, 1==$sleeptime ? 'second' : 'seconds'), LOG_TERSE);
+        } else {
+            $self->glog('Could not serialize, will try again', LOG_TERSE);
+        }
 
         ## Roll everyone back
         for my $dbname (@dbs_dbi) {
@@ -4596,7 +4600,7 @@ sub start_kid {
         $maindbh->commit;
 
         ## Sleep and try again.
-        sleep $sleeptime;
+        sleep $sleeptime if $sleeptime;
         $kicked = 1;
         redo RUNKID;
     }
