@@ -5852,7 +5852,7 @@ sub add_all_goats {
         }
     }
 
-    $bcargs->{herd}|= delete $bcargs->{relgroup} || $bcargs->{herd};
+    $bcargs->{herd} = delete $bcargs->{relgroup} || $bcargs->{herd};
 
     ## If no databases, cowardly refuse to continue
     if (! keys %$DB) {
@@ -5903,6 +5903,7 @@ sub add_all_goats {
     ## We always exclude information_schema, system, and bucardo schemas
     $SQL .= q{AND n.nspname <> 'information_schema' AND nspname !~ '^pg' AND nspname !~ '^bucardo'};
 
+
     my @clause;
 
     ## If they gave a schema option, restrict the query by namespace
@@ -5940,7 +5941,7 @@ sub add_all_goats {
     ## Do we have a herd request? Process it if so
     my $herd = '';
     my $addtoherd;
-    if (exists $bcargs->{herd}) {
+    if ($bcargs->{herd}) {
         $herd = $bcargs->{herd};
         $SQL = 'SELECT 1 FROM bucardo.herd WHERE name = ?';
         my $herdcheck = $dbh->prepare($SQL);
