@@ -1894,7 +1894,7 @@ SELECT 'Fixme'::TEXT;
                       .q{ WHERE n.oid = c.relnamespace AND n.nspname = 'bucardo' }
                       .q{ AND c.relname = 'bucardo_sequences')};
                 $count = $dbh->selectall_arrayref($SQL)->[0][0];
-                if ($count < 1) {
+                if ($count) {
                     warn "Dropping older version of bucardo_sequences, then recreating empty\n";
                     $dbh->do('DROP TABLE bucardo.bucardo_sequences');
                 }
