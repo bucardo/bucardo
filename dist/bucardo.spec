@@ -39,6 +39,8 @@ Requires:  perl(IO::Handle)
 Requires:  perl(Sys::Hostname)
 Requires:  perl(Sys::Syslog)
 Requires:  perl(Net::SMTP)
+Requires:  perl(List::Util)
+Requires:  perl(Pod::Usage)
 Requires:  perl(boolean)
 
 #testsuite
