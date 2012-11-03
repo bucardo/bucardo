@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/perl
 # -*-mode:cperl; indent-tabs-mode: nil-*-
 
 ## Test bucardo_delta and bucardo_track table tasks

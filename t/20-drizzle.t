@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/perl
 # -*-mode:cperl; indent-tabs-mode: nil-*-
 
 ## Test using Drizzle as a database target

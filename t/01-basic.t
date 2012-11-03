@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/perl
 # -*-mode:cperl; indent-tabs-mode: nil-*-
 
 ## Basic tests of Things That Should Always Work
