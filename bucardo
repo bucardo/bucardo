@@ -1,4 +1,4 @@
-#!/usr/bin/env perl -w
+#!/usr/bin/env perl
 # -*-mode:cperl; indent-tabs-mode: nil; cperl-indent-level: 4-*-
 
 ## Script to control Bucardo
