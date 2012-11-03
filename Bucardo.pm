@@ -4891,11 +4891,14 @@ sub _logto {
             openlog 'Bucardo', 'pid nowait', $config{syslog_facility};
             ## Ignore the header argument for syslog output.
             $code_for{syslog} = sub { shift; syslog 'info', @_ };
-        } elsif ($dest eq 'stderr') {
+        }
+        elsif ($dest eq 'stderr') {
             $code_for{stderr} = sub { print STDERR @_, $/ };
-        } elsif ($dest eq 'stdout') {
+        }
+        elsif ($dest eq 'stdout') {
             $code_for{stdout} = sub { print STDOUT @_, $/ };
-        } else {
+        }
+        else {
             my $fn = File::Spec->catfile($dest, 'log.bucardo');
             $fn .= ".$self->{logextension}" if length $self->{logextension};
 

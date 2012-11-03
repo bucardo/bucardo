@@ -185,10 +185,12 @@ unless (exists $bcargs->{logdest}) {
     if (exists $bcargs->{debugfile} && !delete $bcargs->{debugfile}) {
         # Old --debugfile option can disable logging.
         $bcargs->{logdest} = [];
-    } elsif (my $dir = $bcargs->{debugdir}) {
+    }
+    elsif (my $dir = $bcargs->{debugdir}) {
         # Old --debugdir option determins log directory.
         $bcargs->{logdest} = [$dir];
-    } else {
+    }
+    else {
         # Default value.
         $bcargs->{logdest} = ['/var/log/bucardo'];
     }
@@ -637,7 +639,8 @@ sub superhelp {
     if (@names > 1) {
         ## Actions are documented in Pod as "=head3 $action $command".
         push @command, join ' ', @names;
-    } else {
+    }
+    else {
         ## Don't show subsections for commands that have them.
         push @command, => '!.+' if $names[0] eq 'add' || $names[0] eq 'update';
     }
