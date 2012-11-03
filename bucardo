@@ -10234,6 +10234,11 @@ Directory to store the flatfile output inside of. Default: C<.>.
 
 Regex to make sure we don't accidentally run where we should not. Default: None.
 
+=item C<kid_deadlock_sleep>
+
+How long to sleep in seconds if we hit a deadlock error. Default: C<0.5>.
+Set to -1 to prevent the kid from retrying.
+
 =item C<kid_nodeltarows_sleep>
 
 How long do kids sleep if no delta rows are found? Default: C<0.5>.
@@ -10249,6 +10254,7 @@ How long to sleep in seconds when restarting a kid? Default: C<1>.
 =item C<kid_serial_sleep>
 
 How long to sleep in seconds if we hit a serialization error. Default: C<0.5>.
+Set to -1 to prevent the kid from retrying.
 
 =item C<kid_sleep>
 

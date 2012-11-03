@@ -1020,7 +1020,7 @@ sub mcp_main {
                 }
             }
 
-            # Serialization failed and now the child is gonna sleep.
+            # Serialization/deadlock problems; now the child is gonna sleep.
             elsif ($name =~ /^syncsleep_(.+)/o) {
                 my $syncname = $1;
                 $self->glog("Sync $syncname could not serialize, will sleep", LOG_DEBUG);
@@ -4573,16 +4573,46 @@ sub start_kid {
         exit 0 if $didrun;
 
         my $err = $@;
-        $err_handler->($err) if $err !~ /DBD::Pg/;
-        $err_handler->($err) unless defined (my $sleeptime = $config{kid_serial_sleep});
-        $err_handler->($err) unless first { $sync->{db}{$_}{dbh}->state eq '40001' } @dbs_dbi;
 
-        ## We have a serialization failure and need to sleep on it.
-        if ($sleeptime) {
-            $self->glog((sprintf "Could not serialize, will sleep for %s %s",
-                         $sleeptime, 1==$sleeptime ? 'second' : 'seconds'), LOG_TERSE);
-        } else {
-            $self->glog('Could not serialize, will try again', LOG_TERSE);
+        ## Bail out unless this error came from DBD::Pg
+        $err_handler->($err) if $err !~ /DBD::Pg/;
+
+        ## We only do special things for certain errors, so check for those.
+        my ($sleeptime,$payload_detail) = (0,'');
+        if (first { $sync->{db}{$_}{dbh}->state eq '40001' }) {
+            $sleeptime = $config{kid_serial_sleep};
+            ## If set to -1, this means we never try again
+            if ($sleeptime < 1) {
+                $self->glog('Could not serialize, will not retry', LOG_VERBOSE);
+                $err_handler->($err);
+            }
+            elsif ($sleeptime) {
+                $self->glog((sprintf "Could not serialize, will sleep for %s %s",
+                             $sleeptime, 1==$sleeptime ? 'second' : 'seconds'), LOG_NORMAL);
+            }
+            else {
+                $self->glog('Could not serialize, will try again', LOG_NORMAL);
+            }
+            $payload_detail = "Serialization failure. Sleep=$sleeptime";
+        }
+        elsif (first { $sync->{db}{$_}{dbh}->state eq '40P01' }) {
+            $sleeptime = $config{kid_deadlock_sleep};
+            ## If set to -1, this means we never try again
+            if ($sleeptime < 1) {
+                $self->glog('Encountered a deadlock, will not retry', LOG_VERBOSE);
+                $err_handler->($err);
+            }
+            elsif ($sleeptime) {
+                $self->glog((sprintf "Encountered a deadlock, will sleep for %s %s",
+                             $sleeptime, 1==$sleeptime ? 'second' : 'seconds'), LOG_NORMAL);
+            }
+            else {
+                $self->glog('Encountered a deadlock, will try again', LOG_NORMAL);
+            }
+            $payload_detail = "Deadlock detected. Sleep=$sleeptime";
+        }
+        else {
+            $err_handler->($err);
         }
 
         ## Roll everyone back
@@ -4595,8 +4625,7 @@ sub start_kid {
 
         ## Tell listeners we are about to sleep
         ## TODO: Add some sweet payload information: sleep time, which dbs/tables failed, etc.
-        my $payload = "Sleep time: $sleeptime";
-        $self->db_notify($maindbh, "syncsleep_${syncname}", 0, $payload);
+        $self->db_notify($maindbh, "syncsleep_${syncname}", 0, $payload_detail);
         $maindbh->commit;
 
         ## Sleep and try again.
