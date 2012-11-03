@@ -4582,7 +4582,7 @@ sub start_kid {
         if (first { $sync->{db}{$_}{dbh}->state eq '40001' }) {
             $sleeptime = $config{kid_serial_sleep};
             ## If set to -1, this means we never try again
-            if ($sleeptime < 1) {
+            if ($sleeptime < 0) {
                 $self->glog('Could not serialize, will not retry', LOG_VERBOSE);
                 $err_handler->($err);
             }
@@ -4598,7 +4598,7 @@ sub start_kid {
         elsif (first { $sync->{db}{$_}{dbh}->state eq '40P01' }) {
             $sleeptime = $config{kid_deadlock_sleep};
             ## If set to -1, this means we never try again
-            if ($sleeptime < 1) {
+            if ($sleeptime < 0) {
                 $self->glog('Encountered a deadlock, will not retry', LOG_VERBOSE);
                 $err_handler->($err);
             }
