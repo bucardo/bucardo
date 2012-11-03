@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 # -*-mode:cperl; indent-tabs-mode: nil-*-
 
 ## Make sure the version number is consistent in all places

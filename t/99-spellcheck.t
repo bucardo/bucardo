@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 # -*-mode:cperl; indent-tabs-mode: nil-*-
 
 ## Spellcheck as much as we can

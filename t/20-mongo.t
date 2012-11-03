@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 # -*-mode:cperl; indent-tabs-mode: nil-*-
 
 ## Test using MongoDB as a database target
