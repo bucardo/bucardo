@@ -22,8 +22,12 @@ scripts/README
 scripts/bucardo_rrd
 scripts/bucardo-report
 scripts/check_bucardo_sync
-scripts/bucardo.rc
 scripts/slony_migrator.pl
+
+dist/bucardo.rc
+dist/bucardo.init
+dist/bucardo.spec
+dist/bucardo-logfiles.patch
 
 Bucardo.pm.html
 bucardo.html
