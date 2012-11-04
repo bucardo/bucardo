@@ -7689,16 +7689,6 @@ sub run_kid_custom_code {
         }
     }
 
-    ## In case the custom code wants to use other table's rules or triggers:
-    if ($c->{trigrules}) {
-        ## We assume the default is something other than replica, naturally
-        for my $dbname (keys %{ $sync->{db} } ) {
-            if ($sync->{db}{$dbname}{disable_trigrules} eq 'replica') {
-                $sync->{db}{$dbname}{dbh}->do(q{SET session_replication_role TO DEFAULT});
-            }
-        }
-    }
-
     ## Set all databases' InactiveDestroy to on, so the customcode doesn't mess things up
     for my $dbname (keys %{ $sync->{db} }) {
         $sync->{db}{$dbname}{dbh}->{InactiveDestroy} = 1;
@@ -7711,15 +7701,6 @@ sub run_kid_custom_code {
 
     for my $dbname (keys %{ $sync->{db} }) {
         $sync->{db}{$dbname}{dbh}->{InactiveDestroy} = 0;
-    }
-
-    ## If we allowed triggers on, disable them again
-    if ($c->{trigrules}) {
-        for my $dbname (keys %{ $sync->{db} }) {
-            if ($sync->{db}{$dbname}{disable_trigrules} eq 'replica') {
-                $sync->{db}{$dbname}{dbh}->do(q{SET session_replication_role = 'replica'});
-            }
-        }
     }
 
     ## Check for any messages set by the custom code

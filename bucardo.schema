@@ -428,7 +428,6 @@ CREATE TABLE bucardo.customcode (
   about     TEXT            NULL,
   whenrun   TEXT        NOT NULL,
   getdbh    BOOLEAN     NOT NULL DEFAULT 'true',
-  trigrules BOOLEAN     NOT NULL DEFAULT 'false',
   src_code  TEXT        NOT NULL,
   cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
 );

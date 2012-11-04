@@ -5444,10 +5444,10 @@ sub list_customcodes {
 
     for my $row (@$info) {
         my $name = $row->{name};
-        printf "Code: %-*s  When run: %-*s  Get dbh: %s  Get rows: %s Trigrules: %s\n",
+        printf "Code: %-*s  When run: %-*s  Get dbh: %s  Get rows: %s\n",
             $maxname, $name,
             $maxwhen, $row->{whenrun},
-            $row->{getdbh}, $row->{trigrules};
+            $row->{getdbh};
         if (defined $row->{about} and $VERBOSE) {
             (my $about = $row->{about}) =~ s/(.)^/$1    /gsm;
             print "  About: $about\n";
@@ -5660,7 +5660,6 @@ sub add_customcode {
         about                    about                0                null
         whenrun|when_run         whenrun              =$whenrun        null
         getdbh                   getdbh               TF               null
-        trigrules                trigrules            TF               null
         sync                     sync                 0                skip
         goat|relation            goat                 0                skip
         active                   active               TF               skip
@@ -9595,11 +9594,6 @@ provided to the custom code subroutine. If true, database handles will be
 provided under the C<dbh> key of the hash reference passed to the subroutine.
 The value under this key will be a hash reference mapping database names to
 their respective handles.
-
-=item C<trigrules>
-
-Boolean indicating whether or not to disable trigger rules during the
-execution of the custom code. Defaults to false.
 
 =item C<sync>
 

@@ -211,6 +211,9 @@ Bucardo version 5.0.0, released ??, 2012
   - Eliminated 'Use of "goto" to jump into a construct has been deprecated'
     warnings on Perl 5.12 and higher.
 
+  - Removed the 'trigrules' attribute for customcodes. Callers should 
+    (carefully!) change session_replication_role themselves. [GSM]
+
 
 Bucardo version 4.4.8, released November 30, 2011
 
