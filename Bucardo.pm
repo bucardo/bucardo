@@ -4610,6 +4610,7 @@ sub start_kid {
                 $self->glog('Encountered a deadlock, will try again', LOG_NORMAL);
             }
             $payload_detail = "Deadlock detected. Sleep=$sleeptime";
+            ## TODO: Get more information via gett_deadlock_details()
         }
         else {
             $err_handler->($err);
