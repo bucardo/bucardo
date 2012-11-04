@@ -8083,8 +8083,8 @@ sub delete_rows {
             else {
                 for my $key (keys %$rows) {
                     my $inner = length $key
-						? (join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0', $key, -1)
-						: q{''};
+                        ? (join ',' => map { s/\'/''/go; s{\\}{\\\\}; qq{'$_'}; } split '\0', $key, -1)
+                        : q{''};
                     $SQL[$round] .= "($inner),";
                     if (++$roundtotal >= $chunksize) {
                         $roundtotal = 0;
@@ -8387,8 +8387,8 @@ sub push_rows {
     my $roundtotal = 0;
     for my $key (keys %$rows) {
         my $inner = length $key
-			? (join ',' => map { s{\'}{''}go; s{\\}{\\\\}go; qq{'$_'}; } split '\0', $key, -1)
-			: q{''};
+            ? (join ',' => map { s{\'}{''}go; s{\\}{\\\\}go; qq{'$_'}; } split '\0', $key, -1)
+            : q{''};
         $pkvals[$round] .= $numpks > 1 ? "($inner)," : "$inner,";
         if (++$roundtotal >= $chunksize) {
             $roundtotal = 0;

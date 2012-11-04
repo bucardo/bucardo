@@ -103,7 +103,7 @@ for my $table (sort keys %tabletype) {
     $count = $dbhA->do($SQL);
     is ($count, '0E0', $t);
 
-	my $pkeyname = $table =~ /test5/ ? q{"id space"} : 'id';
+    my $pkeyname = $table =~ /test5/ ? q{"id space"} : 'id';
 
     $t = "The delta table $deltatable contains the correct id";
     $SQL = qq{SELECT $pkeyname FROM bucardo."$deltatable"};

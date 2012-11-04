@@ -1486,13 +1486,13 @@ END;
             $run_sql->($SQL,$dbh);
         }
 
-		## Check for missing 'sync' column in the bucardo_delta_target table
-		$sth = $sth{hazcol};
-		$count = $sth->execute('bucardo', 'bucardo_delta_targets', 'sync');
-		$sth->finish();
-		if ($count < 1) {
+        ## Check for missing 'sync' column in the bucardo_delta_target table
+        $sth = $sth{hazcol};
+        $count = $sth->execute('bucardo', 'bucardo_delta_targets', 'sync');
+        $sth->finish();
+        if ($count < 1) {
             ## As the new column cannot be null, we have to delete existing entries!
-			## However, missing this column is a pretty obscure corner-case
+            ## However, missing this column is a pretty obscure corner-case
             $SQL = qq{DELETE FROM bucardo.bucardo_delta_targets};
             $run_sql->($SQL,$dbh);
             $SQL = qq{
