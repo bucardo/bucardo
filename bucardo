@@ -9691,7 +9691,7 @@ An example:
   use warnings;
   use Data::Dumper;
 
-  # Bail if it's a dummy run (triggerd by validate_sync).
+  # Bail if it's a dummy run (triggered by validate_sync).
   my $info = shift;
   return if $info->{dummy};
 
