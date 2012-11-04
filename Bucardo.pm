@@ -5627,13 +5627,14 @@ sub validate_sync {
 
     ## Validate all (active) custom codes for this sync
     my $goatlistcodes = join ',' => map { $_->{id} } @{$s->{goatlist}};
+    my $goatclause = length $goatlistcodes ? "OR m.goat IN ($goatlistcodes)" : '';
 
     $SQL = qq{
             SELECT c.src_code, c.id, c.whenrun, c.getdbh, c.name, COALESCE(c.about,'?') AS about,
                    c.trigrules, m.active, m.priority, COALESCE(m.goat,0) AS goat
             FROM customcode c, customcode_map m
             WHERE c.id=m.code AND m.active IS TRUE
-            AND (m.sync = ? OR m.goat IN ($goatlistcodes))
+            AND (m.sync = ? $goatclause)
             ORDER BY priority ASC
         };
     $sth = $self->{masterdbh}->prepare($SQL);
