@@ -3641,6 +3641,7 @@ sub start_kid {
                     if ($g->{has_exception_code}) {
                         for my $dbname (keys %{ $sync->{db} }) {
                             $x = $sync->{db}{$dbname};
+
                             ## No need to rollback if we didn't make any changes
                             next if ! $x->{writtento};
 
@@ -3789,6 +3790,7 @@ sub start_kid {
 
                         ## Bail if we've already tried to handle this goat via an exception
                         if ($g->{exceptions}++ > 1) {
+                            ## XXX Does this get properly reset on a redo?
                             $self->glog("Warning! Exception custom code did not work for $S.$T:$pkval", LOG_WARN);
                             die qq{Error: too many exceptions to handle for $S.$T:$pkval};
                         }
@@ -3823,6 +3825,7 @@ sub start_kid {
                             tablename    => $T,
                             error_string => $err,
                             dbinfo       => \%dbinfo,
+                            deltabin     => \%deltabin,
                             attempts     => $delta_attempts,
                         };
 
@@ -3859,8 +3862,9 @@ sub start_kid {
                         }
 
                         ## The custom code wants to try again
+                        ## XXX Should probably reset session_replication_role
 
-                        ## Make sure the Postres database connections are still clean
+                        ## Make sure the Postgres database connections are still clean
                         for my $dbname (@dbs_postgres) {
 
                             $x = $sync->{db}{$dbname};
