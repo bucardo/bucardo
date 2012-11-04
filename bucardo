@@ -7730,15 +7730,19 @@ sub install {
         exit 1;
     }
 
-    ## This can actually happen for many reasons: lack of this message
-    ## simply means something went wrong somewhere
-    ## TODO: Parse other errors more gracefully
-    if ($res !~ m{Pl/PerlU was successfully installed}) {
+    if ($res =~ /"plperlu".*CREATE LANGUAGE/s) {
         warn "\nINSTALLATION FAILED! ($res)\n\n";
-        warn "This is often caused by the Pl/PerlU language not being available\n";
+        warn "The Pl/PerlU language needs to be available\n";
         warn "This is usually available as a separate package\n";
         warn "For example, you might try: yum install postgresql-plperl\n";
         warn "If compiling from source, add the --with-perl option to your ./configure command\n\n";
+        exit 1;
+    }
+
+    ## This can actually happen for many reasons: lack of this message
+    ## simply means something went wrong somewhere
+    if ($res !~ m{Pl/PerlU was successfully installed}) {
+        warn "\nINSTALLATION FAILED! ($res)\n\n";
         exit 1;
     }
 
