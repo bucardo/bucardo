@@ -1888,7 +1888,7 @@ SELECT 'Fixme'::TEXT;
             $sth = $sth{haztable};
             $count = $sth->execute('bucardo', 'bucardo_sequences');
             $sth->finish();
-            if ($count) {
+            if ($count > 1) {
                 ## Check for older version of bucardo_sequences table
                 $SQL = q{SELECT count(*) FROM pg_attribute WHERE attname = 'targetname' }
                       .q{ AND attrelid = (SELECT c.oid FROM pg_class c, pg_namespace n }
