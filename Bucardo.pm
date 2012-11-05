@@ -4569,7 +4569,8 @@ sub start_kid {
 
         ## We only do special things for certain errors, so check for those.
         my ($sleeptime,$payload_detail) = (0,'');
-        if (first { $sync->{db}{$_}{dbh}->state eq '40001' }) {
+        my @states = map { $sync->{db}{$_}{dbh}->state } @dbs_dbi;
+        if (first { $_ eq '40001' } @states) {
             $sleeptime = $config{kid_serial_sleep};
             ## If set to -1, this means we never try again
             if ($sleeptime < 0) {
@@ -4585,7 +4586,7 @@ sub start_kid {
             }
             $payload_detail = "Serialization failure. Sleep=$sleeptime";
         }
-        elsif (first { $sync->{db}{$_}{dbh}->state eq '40P01' }) {
+        elsif (first { $_ eq '40P01' } @states) {
             $sleeptime = $config{kid_deadlock_sleep};
             ## If set to -1, this means we never try again
             if ($sleeptime < 0) {
