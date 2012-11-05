@@ -53,6 +53,7 @@ t/20-sqlite.t
 t/30-delta.t
 t/40-conflict.t
 t/40-customcode-exception.t
+t/customcode.exception.bucardotest.pl
 t/40-serializable.t
 t/98-cleanup.t
 t/99-signature.t
