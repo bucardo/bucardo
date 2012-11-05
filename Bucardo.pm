@@ -3806,25 +3806,11 @@ sub start_kid {
                             $x->{dbh}->do("ROLLBACK TO SAVEPOINT bucardo_$$");
                         }
 
-                        ## Gather per-database information to pass to the handler
-                        my %dbinfo;
-                        for my $dbname (keys %{ $sync->{db} }) {
-
-                            $x = $sync->{db}{$dbname};
-
-                            $dbinfo{$dbname} = {
-                                dbh   => $x->{dbh},
-                                err   => $x->{dbh}->err || '',
-                                state => $x->{dbh}->state || ''
-                            };
-                        }
-
                         ## Prepare information to pass to the handler about this run
                         my $codeinfo = {
                             schemaname   => $S,
                             tablename    => $T,
                             error_string => $err,
-                            dbinfo       => \%dbinfo,
                             deltabin     => \%deltabin,
                             attempts     => $delta_attempts,
                         };
@@ -5631,7 +5617,7 @@ sub validate_sync {
 
     $SQL = qq{
             SELECT c.src_code, c.id, c.whenrun, c.getdbh, c.name, COALESCE(c.about,'?') AS about,
-                   c.trigrules, m.active, m.priority, COALESCE(m.goat,0) AS goat
+                   m.active, m.priority, COALESCE(m.goat,0) AS goat
             FROM customcode c, customcode_map m
             WHERE c.id=m.code AND m.active IS TRUE
             AND (m.sync = ? $goatclause)
@@ -5655,9 +5641,10 @@ sub validate_sync {
 
         ## Carefully compile the code and catch complications
         $c->{coderef} = sub { local $SIG{__DIE__} = sub {}; eval $c->{src_code}; }; ## no critic (ProhibitStringyEval)
-        &{$c->{coderef}}({ dummy => 1 });
+        $@ = '';
+        &{$c->{coderef}}( { dummy => 1 } );
         if ($@) {
-            $self->glog(qq{Warning! Custom code $c->{id} for sync "$syncname" did not compile: $@}, LOG_WARN);
+            $self->glog(qq{Warning! Custom code $c->{id} ($c->{name}) for sync "$syncname" did not compile: $@}, LOG_WARN);
             return 0;
         }
 
@@ -5671,6 +5658,11 @@ sub validate_sync {
         }
         else {
             push @{$s->{"code_$c->{whenrun}"}}, $c;
+            ## Every goat gets this code
+            for my $g ( @{$s->{goatlist}} ) {
+                push @{$g->{"code_$c->{whenrun}"}}, $c;
+                $g->{has_exception_code}++ if $c->{whenrun} eq 'exception';
+            }
         }
 
         ## Some custom code needs database handles - if so, gets one of two types
