@@ -9700,7 +9700,7 @@ Name of the table or sequence with which to associate the custom code.
 
 =item C<status>
 
-The current status of this customcode. Anything other than 'active' means the 
+The current status of this customcode. Anything other than "active" means the
 code is not run.
 
 =item C<priority>
@@ -9832,11 +9832,26 @@ Updates an existing customcode. Items that can be changed are:
 
 =item C<name>
 
+The name of the custom code object.
+
 =item C<status>
+
+The current status of this customcode. Anything other than "active" means the
+code is not run.
 
 =item C<getdbh>
 
+Boolean indicating whether or not Perl L<DBI> database handles should be
+provided to the custom code subroutine. If true, database handles will be
+provided under the C<dbh> key of the hash reference passed to the subroutine.
+The value under this key will be a hash reference mapping database names to
+their respective handles.
+
 =item C<priority>
+
+Number indicating the priority in which order to execute custom codes. Lower numbers
+are higher priority. Useful for subroutines that set C<lastcode> in order to
+cancel the execution of subsequent custom codes for the same C<when_run>.
 
 =back
 
