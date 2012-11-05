@@ -9686,13 +9686,13 @@ An example:
   use Data::Dumper;
 
   # Bail if it's a dummy run (triggered by validate_sync).
-  my $info = shift;
-  return if $info->{dummy};
+  my $info = $_[0];
+  return if exists $info->{dummy};
 
   # Let's open a file.
   my $file = '/tmp/bucardo_dump.txt';
   open my $fh, '>:encoding(UTF-8)', $file or do {
-      $info->{error} = "Cannot open $file: $!\n";
+      $info->{warning} = "Cannot open $file: $!\n";
       return;
   };
 
