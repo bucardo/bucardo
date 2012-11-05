@@ -7228,7 +7228,7 @@ sub run_ctl_custom_code {
 
     $self->{masterdbh}->{InactiveDestroy} = 1;
     $cc_sourcedbh->{InactiveDestroy} = 1;
-    &{$c->{coderef}}($input);
+    $c->{coderef}->($input);
     $self->{masterdbh}->{InactiveDestroy} = 0;
     $cc_sourcedbh->{InactiveDestroy} = 0;
     $self->glog("Finished custom code $c->{id}", LOG_VERBOSE);
