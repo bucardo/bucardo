@@ -7223,6 +7223,7 @@ sub run_ctl_custom_code {
         sourcedbh  => $sync->{safe_sourcedbh},
         syncname   => $sync->{name},
         goatlist   => $sync->{goatlist},
+        rellist    => $sync->{goatlist},
         sourcename => $sync->{sourcedb},
         targetname => '',
         message    => '',

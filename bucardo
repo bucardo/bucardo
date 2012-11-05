@@ -9745,9 +9745,57 @@ A code reference that can be used to send email messages.
 
 Boolean indicating that the subroutine should return without executing.
 
+=item C<sourcedbh>
+
+A L<DBI> database handle to the sync source database. Provided only to custom
+code executed by the controller.
+
+=item C<rellist>
+
+An array reference of hash references, each representing a relation in the
+sync. Proviced only to cusdtom code exectued by the controller. The keys in
+the hash are the same as the parameters supported by L</add table> and
+L</add sequence>, as appropriate.
+
+=item C<schemaname>
+
+The schema for the table that triggered the execption. Provided only to
+"exception" custom codes.
+
+=item C<tablename>
+
+The name of the table that triggered the execption. Provided only to
+"exception" custom codes.
+
+=item C<error_string>
+
+The string containing the actual error message. Provided only to "exception"
+custom codes.
+
+=item C<deltabin>
+
+A hash reference with the name of each source database as a key and a list of
+all primary keys joined together with "\0". Provided only to "exception"
+custom codes.
+
+=item C<attempts>
+
+The number of times the sync has been attempted. Provided only to "exception"
+custom codes.
+
+=item C<conflicts>
+
+A hash reference of conflicting rows. The keys are the primary key values, and
+the values are hash references with the names of the databases containing the
+conflicting rows and true values. Provided only to "conflict" custom codes.
+
+=item C<dummy>
+
+Boolean indicating that the subroutine should return without executing.
+
 =back
 
-In addition, the subroutine may set any of these keys in the hash reference to
+The custom code subroutine may set any of these keys in the hash reference to
 change the behavior of the sync:
 
 =over
@@ -9763,6 +9811,12 @@ A warning to emit after the subroutine has returned.
 =item C<error>
 
 An error to be thrown after the subroutine has returned.
+
+=item C<nextcode>
+
+Set to send execution to the next custom code of the same type. Mainly useful
+to exception custom codes, and supported only by custom codes executed by the
+controller.
 
 =item C<lastcode>
 
