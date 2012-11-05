@@ -5617,7 +5617,7 @@ sub validate_sync {
 
     $SQL = qq{
             SELECT c.src_code, c.id, c.whenrun, c.getdbh, c.name, COALESCE(c.about,'?') AS about,
-                   m.active, m.priority, COALESCE(m.goat,0) AS goat
+                   c.status, m.active, m.priority, COALESCE(m.goat,0) AS goat
             FROM customcode c, customcode_map m
             WHERE c.id=m.code AND m.active IS TRUE
             AND (m.sync = ? $goatclause)
@@ -5628,6 +5628,10 @@ sub validate_sync {
 
     ## Loop through all customcodes for this sync
     for my $c (@{$sth->fetchall_arrayref({})}) {
+        if ($c->{status} ne 'active') {
+            $self->glog(qq{ Skipping custom code $c->{id} ($c->{name}): not active });
+            next;
+        }
         $self->glog(qq{  Validating custom code $c->{id} ($c->{whenrun}) (goat=$c->{goat}): $c->{name}}, LOG_WARN);
         ## Make sure it has the required 'dummy' string
         my $dummy = q{->{dummy}};

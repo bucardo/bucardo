@@ -429,6 +429,7 @@ CREATE TABLE bucardo.customcode (
   whenrun   TEXT        NOT NULL,
   getdbh    BOOLEAN     NOT NULL DEFAULT 'true',
   src_code  TEXT        NOT NULL,
+  status    TEXT        NOT NULL DEFAULT 'true',    
   cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE bucardo.customcode IS $$Holds Perl subroutines that run via hooks in the replication process$$;
