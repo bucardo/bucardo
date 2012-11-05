@@ -5756,7 +5756,7 @@ sub add_customcode {
         getdbh                   getdbh               TF               null
         sync                     sync                 0                skip
         goat|relation            goat                 0                skip
-        active                   active               TF               skip
+        status                   status               =active|inactive skip
         priority                 priority             number           skip
         src_code                 src_code             0                skip
     };
