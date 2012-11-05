@@ -7,10 +7,7 @@ use strict;
 use warnings;
 use Data::Dumper;
 
-my $info = $_[0];
-
-## Do nothing if this is a dummy run (validate_sync syntax check)
-return if exists $info->{dummy};
+my $info = shift;
 
 ## Do nothing unless this is the exact error we were designed to handle
 return if $info->{error_string} !~ /violates unique constraint "employee_email_key"/o;

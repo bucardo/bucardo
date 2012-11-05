@@ -9835,9 +9835,7 @@ An example:
   use warnings;
   use Data::Dumper;
 
-  # Bail if it's a dummy run (triggered by validate_sync).
-  my $info = $_[0];
-  return if exists $info->{dummy};
+  my $info = shift;
 
   # Let's open a file.
   my $file = '/tmp/bucardo_dump.txt';

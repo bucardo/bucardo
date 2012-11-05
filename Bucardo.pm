@@ -5634,23 +5634,16 @@ sub validate_sync {
             next;
         }
         $self->glog(qq{  Validating custom code $c->{id} ($c->{whenrun}) (goat=$c->{goat}): $c->{name}}, LOG_WARN);
-        ## Make sure it has the required 'dummy' string
-        my $dummy = q{->{dummy}};
-        if ($c->{src_code} !~ /$dummy/) {
-            $self->glog(qq{Warning! Code $c->{id} ("$c->{name}") does not contain the string $dummy}, LOG_WARN);
-            return 0;
-        }
-        else {
-            $self->glog(q{    OK: code contains a dummy string}, LOG_DEBUG);
-        }
 
         ## Carefully compile the code and catch complications
-        $c->{coderef} = sub { local $SIG{__DIE__} = sub {}; eval $c->{src_code}; }; ## no critic (ProhibitStringyEval)
-        $@ = '';
-        &{$c->{coderef}}( { dummy => 1 } );
-        if ($@) {
-            $self->glog(qq{Warning! Custom code $c->{id} ($c->{name}) for sync "$syncname" did not compile: $@}, LOG_WARN);
-            return 0;
+        TRY: {
+            local $@;
+            local $_;
+            $c->{coderef} = eval qq{sub { $c->{src_code} } }; ## no critic (ProhibitStringyEval)
+            if ($@) {
+                $self->glog(qq{Warning! Custom code $c->{id} ($c->{name}) for sync "$syncname" did not compile: $@}, LOG_WARN);
+                return 0;
+            };
         }
 
         ## If this code is run at the goat level, push it to each goat's list of code
@@ -7693,7 +7686,7 @@ sub run_kid_custom_code {
     }
 
     ## Run the actual code!
-    &{$c->{coderef}}($info);
+    $c->{coderef}->($info);
 
     $self->glog("Finished custom code $c->{id}", LOG_VERBOSE);
 
