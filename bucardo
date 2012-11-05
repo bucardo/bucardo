@@ -5444,10 +5444,11 @@ sub list_customcodes {
 
     for my $row (@$info) {
         my $name = $row->{name};
-        printf "Code: %-*s  When run: %-*s  Get dbh: %s  Get rows: %s\n",
+        printf "Code: %-*s  When run: %-*s  Get dbh: %s  Status: %s\n",
             $maxname, $name,
             $maxwhen, $row->{whenrun},
-            $row->{getdbh};
+            $row->{getdbh},
+            $row->{status};
         if (defined $row->{about} and $VERBOSE) {
             (my $about = $row->{about}) =~ s/(.)^/$1    /gsm;
             print "  About: $about\n";
@@ -5459,9 +5460,102 @@ sub list_customcodes {
 
 } ## end of list_customcodes
 
+
 sub update_customcode {
 
-    die 'Write me';
+    ## Update one or more customcodes
+    ## Arguments: none (reads nouns for a list of customcodes)
+    ## Returns: never, exits
+
+    my @actions = @_;
+
+    my $doc_section = 'update/update customcode';
+    usage_exit($doc_section) unless @actions;
+
+    my $name = shift @actions;
+
+    ## Recursively call ourselves for wildcards and 'all'
+    exit 0 if ! check_recurse($SYNC, $name, @actions);
+
+    ## Make sure this customcode exists!
+    if (! exists $CUSTOMCODE->{$name}) {
+        die qq{Could not find a customcode named "$name"\nUse 'list customcodes' to see all available.\n};
+    }
+
+    my $cc = $CUSTOMCODE->{$name};
+
+    my $changes = 0;
+
+    for my $action (@actions) {
+        ## Look for a standard foo=bar or foo:bar format
+        if ($action =~ /(.+?)\s*[=:]\s*(.+)/) {
+            my ($setting,$value) = (lc $1,$2);
+
+            ## No funny characters please, just boring column names
+            $setting =~ /^[a-z_]+$/ or die "Invalid setting: $setting\n";
+
+            ## We only allow changing a strict subset of all the columns
+
+            if ($setting eq 'status') {
+                if ($value ne $cc->{status}) {
+                    $SQL = 'UPDATE customcode SET status=? WHERE name = ?';
+                    $sth = $dbh->prepare($SQL);
+                    $sth->execute($value, $name);
+                    $changes++;
+                    print "Changed customcode $name status from '$cc->{status}' to '$value'\n";
+                }
+            }
+
+            elsif ($setting eq 'name') {
+                if ($value ne $name) {
+                    $SQL = 'UPDATE customcode SET name=? WHERE name = ?';
+                    $sth = $dbh->prepare($SQL);
+                    $sth->execute($value, $name);
+                    $changes++;
+                    print "Changed customcode $name to a new name: $value\n";
+                }
+            }
+
+            elsif ($setting eq 'getdbh') {
+                my $old = $cc->{getdbh}; ## 0 or 1
+                my $new = $value =~ /^[1tTyY]/ ? 1 : 0;
+                if ($old ne $new) {
+                    $SQL = 'UPDATE customcode SET getdbh=? WHERE name = ?';
+                    $sth = $dbh->prepare($SQL);
+                    $sth->execute($new, $name);
+                    $changes++;
+                    print "Changed customcode $name getdbh from $old to $new\n";
+                }
+            }
+
+            elsif ($setting eq 'priority') {
+                if ($value !~ /^\d+$/) {
+                    die qq{ Priority must be a number!\n};
+                }
+                if ($value ne $cc->{priority}) {
+                    $SQL = 'UPDATE customcode SET priority=? WHERE name = ?';
+                    $sth = $dbh->prepare($SQL);
+                    $sth->execute($value, $name);
+                    $changes++;
+                    print "Changed customcode $name priority from '$cc->{priority}' to '$value'\n";
+                }
+            }
+
+            else {
+                warn "Cannot change attribute '$setting'\n";
+                usage_exit($doc_section);
+            }
+
+            next;
+        }
+
+        warn "\nUnknown action: $action\n";
+        usage_exit($doc_section);
+    }
+
+    confirm_commit() if $changes;
+
+    return;
 
 } ## end of update_customcode
 
@@ -9603,13 +9697,14 @@ Name of the sync with which to associate the custom code.
 
 Name of the table or sequence with which to associate the custom code.
 
-=item C<active>
+=item C<status>
 
-Boolean indicating whether or not the custom code is active.
+The current status of this customcode. Anything other than 'active' means the 
+code is not run.
 
 =item C<priority>
 
-Number indicating the priority in which to execute custom codes. Lower numbers
+Number indicating the priority in which order to execute custom codes. Lower numbers
 are higher priority. Useful for subroutines that set C<lastcode> in order to
 cancel the execution of subsequent custom codes for the same C<when_run>.
 
@@ -9723,6 +9818,24 @@ for each type are the same as those for L</add>. The supported types are:
 =item C<table>
 
 =item C<sequence>
+
+=back
+
+=head3 update customcode
+
+  bucardo update customcode <name> setting=value
+
+Updates an existing customcode. Items that can be changed are:
+
+=over
+
+=item C<name>
+
+=item C<status>
+
+=item C<getdbh>
+
+=item C<priority>
 
 =back
 

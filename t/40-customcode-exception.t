@@ -134,6 +134,11 @@ $res = $bct->ctl('bucardo add customcode email_exception whenrun=exception src_c
 $t = q{Customcode exception handler was added for sync exabc};
 like ($res, qr{Added customcode "email_exception"}, $t);
 
+$res = $bct->ctl('update customcode email_exception status=inactive');
+diag Dumper $res;
+exit;
+
+
 ## Reload the sync and verify the exception handler allows the sync to continue
 $bct->ctl('bucardo reload exabc');
 
@@ -170,6 +175,8 @@ for my $db (qw/ C /) {
 }
 
 ## Test disabling the customcode
+$bct->ctl('update customcode email_exception status=inactive');
+
 
 ## Test goat-level customcode
 
