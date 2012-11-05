@@ -7035,6 +7035,7 @@ sub upgrade {
     my $inside = 0;
     seek $fh, 0, 0;
     while (<$fh>) {
+        chomp;
         if (!$inside) {
             if (/^WITH DELIMITER/) {
                 $inside = 1;
