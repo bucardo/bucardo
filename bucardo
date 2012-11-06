@@ -5509,13 +5509,9 @@ sub update_customcode {
                 }
                 ## And some are very specific indeed
                 elsif ('whenrun' eq $setting) {
-                    my $whenrunlist = 'before_txn before_check_rows before_trigger_drop after_trigger_drop'
-                        . ' after_table_sync exception conflict before_trigger_enable after_trigger_enable'
-                        . ' after_txn before_sync after_sync';
-                    my $when = join '|' => split /\s+/ => $whenrunlist;
-                    if ($value !~ /^(?:$when)$/) {
-                        die qq{Invalid value for setting "whenrun"\n};
-                    }
+                    my %whenrun = map { $_ => 1 } _whenrun_values();
+                    die qq{Invalid value for setting "whenrun"\n}
+                        unless $whenrun{$value};
                 }
                 ## Make the change, if it has changed
                 if ($value ne $oldvalue) {
@@ -5543,6 +5539,24 @@ sub update_customcode {
     return;
 
 } ## end of update_customcode
+
+sub _whenrun_values {
+    return qw(
+        before_txn
+        before_check_rows
+        before_trigger_drop
+        after_trigger_drop
+        after_table_sync
+        exception
+        conflict
+        before
+        _trigger_enable
+        after_trigger_enable
+        after_txn
+        before_sync
+        after_sync
+    );
+}
 
 
 
@@ -5729,10 +5743,7 @@ sub add_customcode {
     usage_exit($doc_section) unless length $item_name;
 
     ## Inputs and aliases, database column name, flags, default
-    my $whenrunlist = 'before_txn before_check_rows before_trigger_drop after_trigger_drop'
-        . ' after_table_sync exception conflict before_trigger_enable after_trigger_enable'
-        . ' after_txn before_sync after_sync';
-    my $whenrun = join '|' => split /\s+/ => $whenrunlist;
+    my $whenrun = join '|' => _whenrun_values();
     my $validcols = qq{
         name                     name                 0                $item_name
         about                    about                0                null
