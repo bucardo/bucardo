@@ -45,7 +45,6 @@ t/20-postgres.t
 t/20-redis.t
 t/20-sqlite.t
 t/30-delta.t
-t/40-conflict.t
 t/40-customcode-exception.t
 t/40-serializable.t
 t/98-cleanup.t
