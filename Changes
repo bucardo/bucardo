@@ -140,9 +140,9 @@ Bucardo version 5.0.0, released ??, 2012
     [David Wheeler]
 
   - Use the Pod docs to show the output of 'help command' and 'help command action'
-    instead of duplicating that informoatin in code. [David Wheeler]
+    instead of duplicating that information in code. [David Wheeler]
 
-  - Fixed PostgreSQL 9.2 compatability issues. [David Wheeler]
+  - Fixed PostgreSQL 9.2 compatibility issues. [David Wheeler]
 
   - Fix syntax issues to restore support for PostgreSQL 8.1 [GSM]
 
@@ -205,7 +205,7 @@ Bucardo version 5.0.0, released ??, 2012
       + --log-destination may be specified multiple times for multiple logs
       + --debugfilesep is now --log-separate
       + --debugname is now --log-extension
-      + --cleandebus is now --log-clean
+      + --cleandebugs is now --log-clean
     [David Wheeler]
 
   - Eliminated 'Use of "goto" to jump into a construct has been deprecated'

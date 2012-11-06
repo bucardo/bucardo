@@ -29,7 +29,7 @@ else {
 
 	@commentfiles = qw{Makefile.PL Bucardo.pm bucardo};
 
-	push @commentfiles => qw{scripts/bucardo_rrd scripts/bucardo-report scripts/check_bucardo_sync scripts/bucardo.rc};
+	push @commentfiles => qw{scripts/bucardo_rrd scripts/bucardo-report scripts/check_bucardo_sync dist/bucardo.rc};
 
 	plan tests => @textfiles + @testfiles + @podfiles + @commentfiles;
 }
@@ -199,7 +199,9 @@ subdirectory
 addallsequences
 addalltables
 Aolmezov
+Asad
 attnums
+autokick
 Backcountry
 Bahlai
 Boes
@@ -213,19 +215,24 @@ cnt
 config
 ctl
 customcode
+customselect
 dbhost
 dbi
 dbproblem
 dbs
+debugdir
 debugstderr
 debugstdout
 Deckelmann
 DESTDIR
+Devrim
+dsn
 evals
 Farmawan
 FreeBSD
 getconn
 Goran
+goto
 GSM
 Gugic
 ident
@@ -236,6 +243,7 @@ Kebrt
 kidsalive
 Kiriakos
 localtime
+Lotia
 Machado
 Mathieu
 maxkicks
@@ -245,6 +253,7 @@ migrator
 Mousavi
 multi
 NAMEDATALEN
+nosync
 onetimecopy
 param
 pgbouncer
@@ -258,7 +267,10 @@ pids
 PIDs
 ppid
 rc
+Recktenwald
 Refactor
+relgroup
+relgroups
 respawn
 Rosser
 rowid
@@ -286,6 +298,7 @@ trigrules
 Tsourapas
 UNLISTEN
 upsert
+UTC
 Vilem
 vv
 Wendt
@@ -307,7 +320,9 @@ cronjobs
 ctl
 failover
 Flatfiles
+github
 gotos
+https
 intra
 Mongo
 multi
@@ -328,6 +343,7 @@ wildcard
 ## bucardo
 
 bucardo
+Bucardo's
 cleandebugs
 cronjob
 CTL
@@ -341,7 +357,13 @@ debugfilesep
 debugname
 debugsyslog
 dir
+endsync
+erroring
+flatfile
 GetOptions
+GitHub
+keepalive
+Metadata
 MCP
 msg
 notimer
@@ -415,9 +437,11 @@ spellcheck
 submitnews
 teardown
 testname
+timestamps
 tmp
 txt
 uniqueconstraint
+username
 weeklynews
 wildkick
 www
@@ -544,3 +568,21 @@ showsync
 showsyncinfo
 syncinfo
 targetdbname
+
+## t/20-postgres.t
+
+mtest
+relgroup
+relgroups
+samedb
+
+## t/40-conflict.t
+
+Dev
+cinflicting
+xab
+xabc
+
+## t/20-sqlite.t
+
+trelgroup

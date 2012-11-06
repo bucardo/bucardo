@@ -32,7 +32,8 @@ $dbhA = $bct->repopulate_cluster('A');
 $dbhB = $bct->repopulate_cluster('B');
 $dbhC = $bct->repopulate_cluster('C');
 
-## Store into hashes for convienence
+## Store into hashes for convenience
+
 my %dbh = (A=>$dbhA, B=>$dbhB, C=>$dbhC);
 
 ## Create a bucardo database, and install Bucardo into it

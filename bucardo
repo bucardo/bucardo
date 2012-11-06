@@ -8822,7 +8822,7 @@ Validates one or more syncs.
 
 =item C<< purge all|<table> [<table>...] >>
 
-Purgess the delta and track tables for one or more tables, for one or more
+Purges the delta and track tables for one or more tables, for one or more
 databases.
 
 =item C<< help [<command> [<action>]] >>
@@ -8856,7 +8856,7 @@ key/value pairs separated by an equal sign (C<=>). For example:
 Here C<dbname> and <host> are parameters.
 
 Many of the commands also use command-line options, which are specified in the
-normal way. For eample, the C<bucardo add db> command could also be written
+normal way. For example, the C<bucardo add db> command could also be written
 as:
 
   bucardo add db sea_widgets --dbname widgets --dbhost db.example.com
@@ -8928,7 +8928,7 @@ Bucardo process names. Mostly useful for debugging.
 
 =item C<--log-destination destination>
 
-Determines the destinotion for logging output. The supported values are:
+Determines the destination for logging output. The supported values are:
 
 =over
 
@@ -9063,7 +9063,7 @@ Aliases:
 
   bucardo add <type> <name> <parameters>
 
-Adds a new object to Bucardo. The C<type> sepcifies the type of object to add,
+Adds a new object to Bucardo. The C<type> specifies the type of object to add,
 while the C<name> should be the name of the object. The supported types
 include:
 
@@ -9380,7 +9380,7 @@ provided, sequences will be added from all known databases.
 
 =item C<-n>
 
-Limit to the sequenes in the specified comma-delimited list of schemas. The
+Limit to the sequences in the specified comma-delimited list of schemas. The
 options may be specified more than once.
 
 =item C<exclude-schema>
@@ -9449,7 +9449,7 @@ Number of seconds a KID can live before being reaped. No limit by default.
 
 =item C<maxkicks>
 
-Numger of times a KID may be kicked before being reaped. No limit by default.
+Number of times a KID may be kicked before being reaped. No limit by default.
 
 =item C<conflict_strategy>
 
@@ -9503,12 +9503,12 @@ single run. Supported values are:
 =item C<stayalive>
 
 Boolean indicating whether or not the sync processes (CTL) should be
-persisent. Defaults to false.
+persistent. Defaults to false.
 
 =item C<kidsalive>
 
 Boolean indicating whether or not the sync child processes (KID) should be
-persisent. Defaults to false.
+persistent. Defaults to false.
 
 =item C<autokick>
 
@@ -9518,7 +9518,7 @@ parameter of individual tables.
 
 =item C<checktime>
 
-An interval specifying's the maximum time a sync should go before being
+An interval specifying the maximum time a sync should go before being
 kicked. Useful for busy systems where you don't want the overhead of notify
 triggers.
 
@@ -9542,11 +9542,11 @@ when a sync has not been run in this amount of time.
 
 An interval specifying the amount of time after which the sync has not run
 that it should be considered expired. C<check_bucardo_sync> issues a critical
-messagewhen a sync has not been run in this amount of time.
+message when a sync has not been run in this amount of time.
 
 =item C<track_rates>
 
-Boolean indicating whether or not to track syncrhonization rates.
+Boolean indicating whether or not to track synchronization rates.
 
 =item C<rebuild_index>
 
@@ -9616,7 +9616,7 @@ A database for which to add the customcols. May be specified multiple times.
 Adds a customcode, which is a Perl subroutine that can be run at certain
 points in the sync process. It might handle exceptions, handle conflicts, or
 just run at certain times with no expectation of functionality (e.g., before
-Bucardo drops triggers). Metadata bout that point will be passed to the
+Bucardo drops triggers). Metadata about that point will be passed to the
 subroutine as a hash reference.
 
 Supported parameters:
@@ -9733,7 +9733,7 @@ code executed by the controller.
 =item C<rellist>
 
 An array reference of hash references, each representing a relation in the
-sync. Proviced only to custom code executed by the controller. The keys in
+sync. Provided only to custom code executed by the controller. The keys in
 the hash are the same as the parameters supported by L</add table> and
 L</add sequence>, as appropriate.
 
@@ -9832,7 +9832,7 @@ An example:
 
   bucardo update <type> <name> <parameters>
 
-Updates a Bucardo object. The C<type> sepcifies the type of object to update,
+Updates a Bucardo object. The C<type> specifies the type of object to update,
 while the C<name> should be the name of the object. The supported parameters
 for each type are the same as those for L</add>. The supported types are:
 
@@ -10081,7 +10081,7 @@ Number of seconds a KID can live before being reaped.
 
 =item C<maxkicks>
 
-Numger of times a KID may be kicked before being reaped.
+Number of times a KID may be kicked before being reaped.
 
 =item C<conflict_strategy>
 
@@ -10135,12 +10135,12 @@ single run. Supported values are:
 =item C<stayalive>
 
 Boolean indicating whether or not the sync processes (CTL) should be
-persisent.
+persistent.
 
 =item C<kidsalive>
 
 Boolean indicating whether or not the sync child processes (KID) should be
-persisent.
+persistent.
 
 =item C<autokick>
 
@@ -10150,7 +10150,7 @@ parameter of individual tables.
 
 =item C<checktime>
 
-An interval specifying's the maximum time a sync should go before being
+An interval specifying the maximum time a sync should go before being
 kicked. Useful for busy systems where you don't want the overhead of notify
 triggers.
 
@@ -10174,11 +10174,11 @@ when a sync has not been run in this amount of time.
 
 An interval specifying the amount of time after which the sync has not run
 that it should be considered expired. C<check_bucardo_sync> issues a critical
-messagewhen a sync has not been run in this amount of time.
+message when a sync has not been run in this amount of time.
 
 =item C<track_rates>
 
-Boolean indicating whether or not to track syncrhonization rates.
+Boolean indicating whether or not to track synchronization rates.
 
 =item C<rebuild_index>
 
@@ -10702,7 +10702,7 @@ specify one or more syncs to validate.
 
   bucardo purge all|<table> [<table>...]
 
-Purgess the delta and track tables for one or more tables, for one or more
+Purges the delta and track tables for one or more tables, for one or more
 databases. Use the keyword "all" to validate all tables, or specify one or
 more tables to validate.
 
