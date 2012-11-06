@@ -23,3 +23,5 @@ t/99-perlcritic.t
 t/99-spellcheck.t
 t/99-yaml.t
 notes.*
+.bak$
+.db$
