@@ -3310,6 +3310,9 @@ sub start_kid {
 
                     ## If we have a custom conflict handler for this goat, invoke it
                     if ($g->{code_conflict}) {
+
+                        $self->glog('Starting code_conflict', LOG_VERBOSE);
+
                         ## We pass it %conflict, and assume it will modify all the values therein
                         my $code = $g->{code_conflict};
                         $code->{info}{conflicts} = \%conflict;
@@ -3348,6 +3351,9 @@ sub start_kid {
                         ## The winner is the latest one to touch any of our tables
                         ## In theory, this is a little crappy.
                         ## In practice, it works out quite well. :)
+
+                        $self->glog("Starting 'bucardo_latest' conflict strategy", LOG_VERBOSE);
+
                         if (! exists $self->{conflictwinner}) {
 
                             for my $dbname (@dbs_delta) {
@@ -3388,6 +3394,8 @@ sub start_kid {
 
                                 $x = $sync->{db}{$dbname};
 
+                                $self->glog("Conflict check lastmod for $dbname is $x->{lastmod}", LOG_DEBUG);
+
                                 if ($x->{lastmod} > $highest) {
                                     $highest = $x->{lastmod};
                                     $self->{conflictwinner} = $dbname;
@@ -3396,6 +3404,7 @@ sub start_kid {
 
                             ## We now have a winning database inside self -> conflictwinner
                             ## This means we do not need to update %conflict at all
+                            $self->glog("Conflict winner is $self->{conflictwinner} with $highest", LOG_VERBOSE);
 
                         } ## end conflictwinner not set yet
 
@@ -3407,6 +3416,8 @@ sub start_kid {
                         ## The only reason *not* to use an entry is if it had
                         ## no updates at all for this run. Note: this does not
                         ## mean no conflicts, it means no insert/update/delete
+
+                        $self->glog("Starting default conflict strategy", LOG_VERBOSE);
 
                         if (! exists $self->{conflictwinner}) {
 
