@@ -39,38 +39,38 @@ for my $db (qw/ A B C /) {
     my $dbh = $info->{dbh}{$db};
     my $sth = $dbh->prepare($SQL);
     $sth->execute();
-	my $rows = $sth->fetchall_arrayref();
-	for my $row (@$rows) {
-		my ($id,$email) = @$row;
+    my $rows = $sth->fetchall_arrayref();
+    for my $row (@$rows) {
+        my ($id,$email) = @$row;
 
-		## This a new email? All is good, just move on
-		if (! exists $emailpk{$email}) {
-			$emailpk{$email} = [$id, $db];
-			next;
-		}
+        ## This a new email? All is good, just move on
+        if (! exists $emailpk{$email}) {
+            $emailpk{$email} = [$id, $db];
+            next;
+        }
 
-		## This email already exists. If the same PK, no problem
-		my ($oldid,$olddb) = @{ $emailpk{$email} };
-		if ($oldid == $id) {
-			next;
-		}
+        ## This email already exists. If the same PK, no problem
+        my ($oldid,$olddb) = @{ $emailpk{$email} };
+        if ($oldid == $id) {
+            next;
+        }
 
-		## We have the same email with different PKs! Time to get busy
-		$info->{message} .= "Found problem with email $email. ";
-		$info->{message} .= "Exists as PK $oldid on db $olddb, but as PK $id on $db!";
+        ## We have the same email with different PKs! Time to get busy
+        $info->{message} .= "Found problem with email $email. ";
+        $info->{message} .= "Exists as PK $oldid on db $olddb, but as PK $id on $db!";
 
-		## Store it away in a separate table
-		my $SQL = 'INSERT INTO employee_conflict SELECT * FROM employee WHERE id = ?';
-		$sth = $dbh->prepare($SQL);
-		$sth->execute($id);
+        ## Store it away in a separate table
+        my $SQL = 'INSERT INTO employee_conflict SELECT * FROM employee WHERE id = ?';
+        $sth = $dbh->prepare($SQL);
+        $sth->execute($id);
 
-		## Now delete it from this database!
-		$SQL = 'DELETE FROM employee WHERE id = ?';
-		$sth = $dbh->prepare($SQL);
-		$sth->execute($id);
+        ## Now delete it from this database!
+        $SQL = 'DELETE FROM employee WHERE id = ?';
+        $sth = $dbh->prepare($SQL);
+        $sth->execute($id);
 
-		## Note: we do not want to commit (and it is disallowed by DBIx::Safe)
-	}
+        ## Note: we do not want to commit (and it is disallowed by DBIx::Safe)
+    }
 }
 
 ## Let's retry now that things are cleaned up!
