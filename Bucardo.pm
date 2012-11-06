@@ -5630,7 +5630,7 @@ sub validate_sync {
     ## Loop through all customcodes for this sync
     for my $c (@{$sth->fetchall_arrayref({})}) {
         if ($c->{status} ne 'active') {
-            $self->glog(qq{ Skipping custom code $c->{id} ($c->{name}): not active });
+            $self->glog(qq{ Skipping custom code $c->{id} ($c->{name}): not active }. LOG_NORMAL);
             next;
         }
         $self->glog(qq{  Validating custom code $c->{id} ($c->{whenrun}) (goat=$c->{goat}): $c->{name}}, LOG_WARN);
