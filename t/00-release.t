@@ -162,7 +162,11 @@ sub file_is_clean {
 		if (/^\\./ and $inside_copy) {
 			$inside_copy = 0;
 		}
-		if (/\t/ and $file ne 'Makefile.PL' and $file !~ /\.html$/ and ! $inside_copy) {
+		if (/\t/
+                and $file ne 'Makefile.PL'
+                and $file !~ /\.html$/
+                and $file !~ /\bpatch\b/
+                and ! $inside_copy) {
 			diag "Found a tab at line $. of $file\n";
 			$good = 0;
 		}
