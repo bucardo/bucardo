@@ -176,7 +176,7 @@ for my $db (qw/ C /) {
 
 ## Test disabling the customcode
 like $bct->ctl('update customcode email_exception status=inactive'),
-    qr/\QChanged customcode email_exception status from 'active' to 'inactive'/,
+    qr/\QChanged customcode "email_exception" status from 'active' to 'inactive'/,
     'Change email_exception status to "inactive"';
 
 ## Test goat-level customcode
