@@ -1,6 +1,7 @@
 ## Build constructs:
 Makefile
 Makefile.old
+MANIFEST.bak
 *.gz
 blib/
 none/
