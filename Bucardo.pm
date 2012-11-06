@@ -5639,7 +5639,10 @@ sub validate_sync {
         TRY: {
             local $@;
             local $_;
-            $c->{coderef} = eval qq{sub { $c->{src_code} } }; ## no critic (ProhibitStringyEval)
+            $c->{coderef} = eval qq{
+                package Bucardo::CustomCode;
+                sub { $c->{src_code} }
+            }; ## no critic (ProhibitStringyEval)
             if ($@) {
                 $self->glog(qq{Warning! Custom code $c->{id} ($c->{name}) for sync "$syncname" did not compile: $@}, LOG_WARN);
                 return 0;
@@ -7228,6 +7231,7 @@ sub run_ctl_custom_code {
 
     $self->{masterdbh}->{InactiveDestroy} = 1;
     $cc_sourcedbh->{InactiveDestroy} = 1;
+    local $_ = $input;
     $c->{coderef}->($input);
     $self->{masterdbh}->{InactiveDestroy} = 0;
     $cc_sourcedbh->{InactiveDestroy} = 0;
@@ -7686,6 +7690,7 @@ sub run_kid_custom_code {
     }
 
     ## Run the actual code!
+    local $_ = $info;
     $c->{coderef}->($info);
 
     $self->glog("Finished custom code $c->{id}", LOG_VERBOSE);
