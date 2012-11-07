@@ -37,8 +37,9 @@ PIDDIR=${PIDDIR-/var/run/${NAME}}
 
 if [ -z "$DBHOST" ]; then hostopt=""; else hostopt="--db-host $DBHOST"; fi
 if [ -z "$DBPORT" ]; then portopt=""; else portopt="--db-port $DBPORT"; fi
+DESTOPTS=$(printf ' \055-log-dest %s ' "${LOGDEST[@]}")
 
-bucardo_flags="--quiet ${hostopt} ${portopt} --db-name ${DBNAME} --db-user ${DBUSER} --log-dest ${LOGDEST} --pid-dir ${PIDDIR}"
+bucardo_flags="--quiet ${hostopt} ${portopt} --db-name ${DBNAME} --db-user ${DBUSER} ${DESTOPTS} --pid-dir ${PIDDIR}"
 RETVAL=0
 
 start() {
@@ -122,6 +123,7 @@ case "$1" in
     ;;
   restart)
     stop
+    sleep 2
     start
     RETVAL=$?
     ;;

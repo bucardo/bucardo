@@ -2,7 +2,7 @@
 %define         sysuser postgres
 Name:           bucardo
 Version:        4.99.6
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Postgres replication system for both multi-master and multi-slave operations
 
 Group:          Applications/Databases
@@ -105,6 +105,11 @@ rm -rf %{buildroot}
 %{_initrddir}/%{name}
 
 %changelog
+* Wed Nov 7 2012 David E. Wheeler <david@justatheory.com> - 4.99.6-2
+- Changed LOGDEST to support multiple destinations.
+- Added a two-second sleep between stop and start in the init script restart
+  command.
+
 * Tue Nov 6 2012 David E. Wheeler <david@justatheory.com> - 4.99.6-1
 - Update to 4.99.6.
 
