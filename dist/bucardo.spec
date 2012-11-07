@@ -105,6 +105,9 @@ rm -rf %{buildroot}
 %{_initrddir}/%{name}
 
 %changelog
+* Tue Nov 6 2012 David E. Wheeler <david@justatheory.com> - 4.99.6-1
+- Update to 4.99.6.
+
 * Wed Oct 24 2012 David E. Wheeler <david@justatheory.com> - 4.99.5-3
 - Fixed the init script so that the `stop` command actually works.
 - Added a patch to point all of the log files to the log directory.
