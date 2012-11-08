@@ -7730,7 +7730,9 @@ sub install {
     }
 
     ## Try to connect
-    my $PSQL = "psql -p $port -U $user -d $dbname";
+    my $PSQL = sprintf '%s -p %d -U %s -d %s',
+        $ENV{PGBINDIR} ? "$ENV{PGBINDIR}/psql" : 'psql',
+            $port, $user, $dbname;
     $host !~ /</ and $PSQL .= " --host=$host";
 
     ## We also want the version, so we grab that as the initial connection test
