@@ -94,22 +94,22 @@ $command =
 $res = $bct->ctl($command);
 like ($res, qr/Added database "M"/, $t);
 
-## Teach Bucardo about all pushable tables, adding them to a new herd named "therd"
+## Teach Bucardo about all pushable tables, adding them to a new relgroup named "therd"
 $t = q{Adding all tables on the master works};
 $command =
-"bucardo add tables all db=A herd=therd pkonly";
+"bucardo add tables all db=A relgroup=therd pkonly";
 $res = $bct->ctl($command);
-like ($res, qr/Creating herd: therd.*New tables added: \d/s, $t);
+like ($res, qr/Creating relgroup: therd.*New tables added: \d/s, $t);
 
 ## Add a suffix to the end of each mongo target table
 $SQL = q{INSERT INTO bucardo.customname(goat,newname,db)
 SELECT id,tablename||'_pg','M' FROM goat};
 $dbhX->do($SQL);
 
-## Add all sequences, and add them to the newly created herd
+## Add all sequences, and add them to the newly created relgroup
 $t = q{Adding all sequences on the master works};
 $command =
-"bucardo add sequences all db=A herd=therd";
+"bucardo add sequences all db=A relgroup=therd";
 $res = $bct->ctl($command);
 like ($res, qr/New sequences added: \d/, $t);
 
@@ -123,7 +123,7 @@ like ($res, qr/Created database group "md"/, $t);
 ## Create a new sync
 $t = q{Created a new sync};
 $command =
-"bucardo add sync mongo herd=therd dbs=md autokick=false";
+"bucardo add sync mongo relgroup=therd dbs=md autokick=false";
 $res = $bct->ctl($command);
 like ($res, qr/Added sync "mongo"/, $t);
 

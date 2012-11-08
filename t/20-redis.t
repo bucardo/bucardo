@@ -83,14 +83,14 @@ for my $name (qw/ A B /) {
     like ($res, qr/Added database "$name"/, $t);
 }
 
-## Put all pk tables into a herd
+## Put all pk tables into a relgroup
 $t = q{Adding all PK tables on the master works};
-$res = $bct->ctl(q{bucardo add tables '*bucardo*test*' '*Bucardo*test*' db=A herd=allpk pkonly});
-like ($res, qr/Created the herd named "allpk".*are now part of/s, $t);
+$res = $bct->ctl(q{bucardo add tables '*bucardo*test*' '*Bucardo*test*' db=A relgroup=allpk pkonly});
+like ($res, qr/Created the relgroup named "allpk".*are now part of/s, $t);
 
 ## Add all sequences
-$t = q{Adding all sequences to the main herd};
-$res = $bct->ctl(q{bucardo add all sequences herd=allpk});
+$t = q{Adding all sequences to the main relgroup};
+$res = $bct->ctl(q{bucardo add all sequences relgroup=allpk});
 like ($res, qr/New sequences added/s, $t);
 
 my $dbname = 'bucardo_test';
@@ -107,7 +107,7 @@ $res = $bct->ctl('bucardo add dbgroup pg1 A:source B:source R:target');
 like ($res, qr/Created database group "pg1"/, $t);
 
 $t = q{Created a new sync for dbgroup pg1};
-$res = $bct->ctl('bucardo add sync pgtest1 herd=allpk dbs=pg1 status=active');
+$res = $bct->ctl('bucardo add sync pgtest1 relgroup=allpk dbs=pg1 status=active');
 like ($res, qr/Added sync "pgtest1"/, $t);
 
 ## Add a row to A, and one to B

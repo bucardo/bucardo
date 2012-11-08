@@ -132,17 +132,17 @@ $command =
 $res = $bct->ctl($command);
 like ($res, qr/Added database "Q"/, $t);
 
-## Teach Bucardo about all pushable tables, adding them to a new herd named "therd"
+## Teach Bucardo about all pushable tables, adding them to a new relgroup named "therd"
 $t = q{Adding all tables on the master works};
 $command =
-"bucardo add tables all db=A herd=therd pkonly";
+"bucardo add tables all db=A relgroup=therd pkonly";
 $res = $bct->ctl($command);
-like ($res, qr/Creating herd: therd.*New tables added: \d/s, $t);
+like ($res, qr/Creating relgroup: therd.*New tables added: \d/s, $t);
 
-## Add all sequences, and add them to the newly created herd
+## Add all sequences, and add them to the newly created relgroup
 $t = q{Adding all sequences on the master works};
 $command =
-"bucardo add sequences all db=A herd=therd";
+"bucardo add sequences all db=A relgroup=therd";
 $res = $bct->ctl($command);
 like ($res, qr/New sequences added: \d/, $t);
 
@@ -156,13 +156,13 @@ like ($res, qr/Created database group "qx"/, $t);
 ## Create a new sync
 $t = q{Created a new sync};
 $command =
-"bucardo add sync mysql herd=therd dbs=qx autokick=false";
+"bucardo add sync mysql relgroup=therd dbs=qx autokick=false";
 $res = $bct->ctl($command);
 like ($res, qr/Added sync "mysql"/, $t);
 
 ## Create a second sync, solely for multi-sync interaction issues
 $bct->ctl('bucardo add dbgroup t1 A:source B C');
-$bct->ctl('bucardo add sync tsync1 herd=therd dbs=t1 autokick=false status=inactive');
+$bct->ctl('bucardo add sync tsync1 relgroup=therd dbs=t1 autokick=false status=inactive');
 
 ## Start up Bucardo with these new syncs
 $bct->restart_bucardo($dbhX);
