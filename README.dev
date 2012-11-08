@@ -349,3 +349,20 @@ Update the latest_release.txt file
 Also known as, the section to put things that don't fit anywhere else. Anything 
 that may make life easier for other developers can go here.
 
+To test different versions of Bucardo, set two environment variables 
+before running the tests:
+
+PGBINDIR: Should be a directory holding Postgres binaries for the version you want, 
+especially initdb and pg_config.
+
+LD_LIBRARY_PATH: Should point to the "lib" directory of the Postgres version you 
+want. May not be needed if the currently installed version is close enough 
+to the one you want to test.
+
+Example:
+
+make clean
+export PGBINDIR=/home/greg/code/pg/8.0.26/bin/
+export LD_LIBRARY_PATH=/home/greg/code/pg/8.0.26/lib/
+prove --blib . t/20-postgres.t
+
