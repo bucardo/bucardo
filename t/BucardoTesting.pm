@@ -1612,7 +1612,7 @@ sub truncate_all_tables {
 
     ## Loop through each table we know about
     for my $table (sort keys %tabletype) {
-        $dbh->do(qq{TRUNCATE Table ONLY "$table"});
+        $dbh->do(qq{TRUNCATE Table "$table"});
     }
 
     $dbh->commit() if $commit;
