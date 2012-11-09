@@ -1622,6 +1622,33 @@ sub truncate_all_tables {
 } ## end of truncate_all_tables
 
 
+sub delete_all_tables {
+
+    ## Delete all the tables.
+    ## Mostly for old versions that do not support truncate triggers.
+    ## Arguments: two
+    ## 1. Database to use
+    ## 3. Do we commit or not? Boolean, defaults to true
+    ## Returns: undef
+
+    my ($self, $dbname, $commit) = @_;
+
+    $commit = 1 if ! defined $commit;
+
+    my $dbh = $gdbh{$dbname} or die "No such database: $dbname";
+
+    ## Loop through each table we know about
+    for my $table (sort keys %tabletype) {
+        $dbh->do(qq{DELETE FROM "$table"});
+    }
+
+    $dbh->commit() if $commit;
+
+    return undef;
+
+} ## end of delete_all_tables
+
+
 sub check_for_row {
 
     ## Check that a given row is on the database as expected: checks the inty column only

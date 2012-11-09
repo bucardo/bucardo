@@ -355,41 +355,65 @@ $t = 'Conflict resolution respects earliest transaction time for C';
 $val = $dbhC->selectall_arrayref($SQL, undef, 3)->[0][0];
 is ($val, 'Charlie', $t);
 
-## Truncate on A:source goes to all other nodes
-$bct->truncate_all_tables('A');
-## Just for fun, let C win a truncation "contest"
-$dbhC->do('TRUNCATE TABLE bucardo_test5');
-## We commit everyone as the truncates will block on open transactions
-$dbhX->commit(); $dbhA->commit(); $dbhB->commit(); $dbhC->commit(); $dbhD->commit();
+if ($dbhA->{pg_server_version} < 80400) {
+    ## Truncate triggers do not work, so we will delete instead
+    $bct->delete_all_tables('A');
+}
+else {
+    ## Truncate on A:source goes to all other nodes
+    $bct->truncate_all_tables('A');
+    ## Just for fun, let C win a truncation "contest"
+    $dbhC->do('TRUNCATE TABLE bucardo_test5');
+    ## We commit everyone as the truncates will block on open transactions
+    $dbhX->commit(); $dbhA->commit(); $dbhB->commit(); $dbhC->commit(); $dbhD->commit();
+}
+
 like $bct->ctl('bucardo kick sync pgtest3 0'),
     qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
     'Kick pgtest3 like a mofo' or die 'Sync failed, no point continuing';
 $bct->check_for_row([], [qw/A B C D/], 'truncate A');
 
-## A truncate plus delta rows will truncate all others but keep delta rows
-$bct->add_row_to_database('A', 1);
-$bct->add_row_to_database('B', 2);
-$bct->add_row_to_database('C', 3);
-$bct->add_row_to_database('D', 4);
-## Order matters: the last one should "win" and thus replicate subsequent changes
-for my $d (qw/ A B C D /) {
-    $bct->truncate_all_tables($d);
+if ($dbhA->{pg_server_version} < 80400) {
+    ## Truncate triggers do not work, so we will delete instead
+    $bct->delete_all_tables('A');
+    ## We do this to emulate all the stuff below
+    $bct->add_row_to_database('A', 7);
+    $bct->add_row_to_database('A', 3);
+  SKIP: {
+        skip 'Skipping truncate tests', 5;
+    }
+    $dbhA->commit();
 }
-## Now add some things back to each one
-$bct->add_row_to_database('A', 5);
-$bct->add_row_to_database('B', 6);
-$bct->add_row_to_database('C', 7);
-$bct->add_row_to_database('D', 8);
-## Kick off the sync. C should win (D is target), truncate the others, then propagate '7'
-like $bct->ctl('bucardo kick sync pgtest3 0'),
-    qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
-    'Kick pgtest3 like a it\'s going out of style'
-    or die 'Sync failed, no point continuing';
-$bct->check_for_row([[7]], [qw/A B C D/], 'truncate D');
+else {
+    ## A truncate plus delta rows will truncate all others but keep delta rows
+    $bct->add_row_to_database('A', 1);
+    $bct->add_row_to_database('B', 2);
+    $bct->add_row_to_database('C', 3);
+    $bct->add_row_to_database('D', 4);
+
+    ## Order matters: the last one should "win" and thus replicate subsequent changes
+    for my $d (qw/ A B C D /) {
+        $bct->truncate_all_tables($d);
+    }
+    ## Now add some things back to each one
+    $bct->add_row_to_database('A', 5);
+    $bct->add_row_to_database('B', 6);
+    $bct->add_row_to_database('C', 7);
+    $bct->add_row_to_database('D', 8);
+    ## Kick off the sync. C should win (D is target), truncate the others, then propagate '7'
+    like $bct->ctl('bucardo kick sync pgtest3 0'),
+        qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
+        'Kick pgtest3 like a it\'s going out of style'
+        or die 'Sync failed, no point continuing';
+    $bct->check_for_row([[7]], [qw/A B C D/], 'truncate D');
+
+}
 
 ## Make sure we can go back to normal mode after a truncate
 $bct->add_row_to_database('A', 2);
 $bct->add_row_to_database('B', 3);
+
+$bct->ctl('bucardo message XXXXXXX');
 like $bct->ctl('bucardo kick sync pgtest3 0'),
     qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
     'Kick pgtest3 like it hurts' or die 'Sync failed, no point continuing';
