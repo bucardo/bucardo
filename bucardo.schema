@@ -1481,9 +1481,7 @@ $bc$
         my $index4 = "bucardo_delta_targetdb_unique";
         my $index5 = "bucardo_delta_txntime";
         my $safeindex1 = $index1;
-        if ($safeindex1 =~ s/"/""/g or $safeindex1 =~ / /) {
-            $safeindex1 = qq{"$safeindex1"};
-        }
+        $safeindex1 =~ s/"/""/g;
 
         if (!$found{bucardo_delta}) {
             $found{index1} = $found{index2} = $found{index3} = $found{index4} = $found{index5} = 0;
