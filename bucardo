@@ -1195,8 +1195,6 @@ sub update_item {
     my $code = $thing eq 'customcode' ? \&update_customcode
              : $thing eq 'database'   ? \&update_database
              : $thing eq 'dbgroup'    ? \&update_dbgroup
-             : $thing eq 'relgroup'   ? \&update_herd
-             : $thing eq 'herd'       ? \&update_herd
              : $thing eq 'sync'       ? \&update_sync
              : $thing eq 'table'      ? \&update_table
              : $thing eq 'sequence'   ? \&update_table
@@ -3524,15 +3522,6 @@ sub remove_herd {
 
 } ## end of remove_herd
 
-
-sub update_herd {
-
-    ## Update one or more herds
-    ## Arguments: none, parses nouns
-    ## Returns: never, exits
-
-    die "update relgroup not implemented yet\n";
-} ## end of update_herd
 
 sub add_goat_to_herd {
     die "Adding to a relgroup not implemented yet\n";
@@ -9851,9 +9840,9 @@ for each type are the same as those for L</add>. The supported types are:
 
 =over
 
-=item C<db>
+=item C<customcode>
 
-=item C<dbgroup>
+=item C<db>
 
 =item C<sync>
 
@@ -10046,17 +10035,6 @@ database will be removed from any other groups of which it was previously a
 member.
 
 =back
-
-=head3 update dbgroup
-
-  bucardo update dbgroup name=newname
-  bucardo update dbgroup db1:source db2:source db3:target ...
-
-Updates a database group. The name can be changed, or the databases in the
-group updated. The database parameters should specify their roles, either
-"source" or "target". If database parameters are specified, they will replace
-the existing list of databases in the group. If you just want to add
-databases, use L<C<add dbgroup>|/add dbgroup> instead.
 
 =head3 update sync
 
