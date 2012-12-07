@@ -7607,9 +7607,6 @@ sub adjust_sequence {
             ## Skip things not set by ALTER SEQUENCE
             next if ! $syntax;
 
-            ## Skip if this version of the database does not have this column
-            next if ! defined $sourceinfo->{$name} or ! defined $targetinfo->{$name};
-
             ## Skip if these items are the exact same
             next if exists $targetinfo->{last_value} and $sourceinfo->{$name} eq $targetinfo->{$name};
 
