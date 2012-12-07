@@ -2135,8 +2135,10 @@ SELECT 'Fixme'::TEXT;
                     $SQL = qq{
           CREATE TRIGGER "$trunctrig"
           AFTER TRUNCATE ON "$schema"."$table"
-          FOR EACH STATEMENT EXECUTE PROCEDURE bucardo.bucardo_note_truncation('$syncname')
+          FOR EACH STATEMENT EXECUTE PROCEDURE bucardo.bucardo_note_truncation('$syncname');
         };
+                    $SQL .= qq{ALTER TABLE "$schema"."$table" ENABLE ALWAYS TRIGGER "$trunctrig";}
+                        if $dbh->{pg_server_version} >= 80300;
                     $run_sql->($SQL,$dbh);
                 }
             }
@@ -2287,8 +2289,10 @@ SELECT 'Fixme'::TEXT;
                 $SQL = qq{
         CREATE TRIGGER bucardo_delta
         AFTER INSERT OR UPDATE OR DELETE ON "$schema"."$table"
-        FOR EACH ROW EXECUTE PROCEDURE bucardo.$func()
+        FOR EACH ROW EXECUTE PROCEDURE bucardo.$func();
       };
+                $SQL .= qq{ALTER TABLE "$schema"."$table" ENABLE ALWAYS TRIGGER bucardo_delta;}
+                    if $dbh->{pg_server_version} >= 80300;
                 $run_sql->($SQL,$dbh);
             }
 
@@ -2377,16 +2381,18 @@ SELECT 'Fixme'::TEXT;
                     $SQL = qq{
                     CREATE TRIGGER "$kickfunc" FIXMENAME
                     AFTER INSERT OR UPDATE OR DELETE$ttrig ON $safeschema.$safetable
-                    FOR EACH $custom_trigger_level EXECUTE PROCEDURE bucardo."$custom_function_name"()
+                    FOR EACH $custom_trigger_level EXECUTE PROCEDURE bucardo."$custom_function_name"();
                     };
                 }
                 else {
                     $SQL = qq{
                     CREATE TRIGGER "$kickfunc"
                     AFTER INSERT OR UPDATE OR DELETE$ttrig ON $safeschema.$safetable
-                    FOR EACH STATEMENT EXECUTE PROCEDURE bucardo."$kickfunc"()
+                    FOR EACH STATEMENT EXECUTE PROCEDURE bucardo."$kickfunc"();
                     };
                 }
+                $SQL .= qq{ALTER TABLE $safeschema.$safetable ENABLE ALWAYS TRIGGER "$kickfunc";}
+                    if $dbh->{pg_server_version} >= 80300;
                 $run_sql->($SQL,$dbh);
             }
         } ## end each TABLE
