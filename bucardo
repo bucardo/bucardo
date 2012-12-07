@@ -600,7 +600,7 @@ sub superhelp {
             all
             config
             customcode
-            customcol
+            customcols
             customname
             dbgroup
             deactivate
