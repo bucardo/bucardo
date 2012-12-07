@@ -316,9 +316,14 @@ like $bct->ctl('bucardo kick sync pgtest3 0'),
 $bct->check_for_row([[1],[2],[3],[7]], [qw/A B C D/]);
 
 ## Change sequence information, make sure it gets out to everyone
-$dbhA->do('alter sequence bucardo_test_seq1 restart 25 minvalue 10 maxvalue 8675');
+if ($dbhA->{pg_server_version} < 80400) {
+    $dbhA->do('alter sequence bucardo_test_seq1 restart 25 minvalue 10 maxvalue 8675');
+    $dbhB->do('alter sequence bucardo_test_seq2 restart 250 minvalue 100 maxvalue 86753');
+} else {
+    $dbhA->do('alter sequence bucardo_test_seq1 start 20 restart 25 minvalue 10 maxvalue 8675');
+    $dbhB->do('alter sequence bucardo_test_seq2 start 200 restart 250 minvalue 100 maxvalue 86753');
+}
 $dbhA->commit();
-$dbhB->do('alter sequence bucardo_test_seq2 restart 250 minvalue 100 maxvalue 86753');
 $dbhB->commit();
 $dbhC->do(q{SELECT setval('bucardo_test_seq3', 12345)});
 $dbhC->commit();
