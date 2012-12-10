@@ -9,7 +9,7 @@ use warnings;
 use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 36;
+use Test::More tests => 48;
 #use Test::More 'no_plan';
 
 use BucardoTesting;
@@ -34,9 +34,10 @@ for my $db (qw(A B C)) {
 }
 
 # Let's just deal with table bucardo_test1 (sindle col pk) and bucardo_test2
-# (multi-col pk)
-for my $num (1, 2) {
-    like $bct->ctl("bucardo add table bucardo_test$num db=A relgroup=myrels"),
+# (multi-col pk). Create bucardo_test4 with makedelta off.
+for my $num (1, 2, 4) {
+    my $md = $num == 4 ? 'off' : 'on';
+    like $bct->ctl("bucardo add table bucardo_test$num db=A relgroup=myrels makedelta=$md"),
         qr/Added the following tables/, "Add table bucardo_test$num";
 }
 
@@ -68,7 +69,7 @@ ok $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest2'),
     'The sync deltatest2 sync should finish';
 
 # Should have no rows.
-$bct->check_for_row([], [qw(A B C)], undef, 'test[12]$');
+$bct->check_for_row([], [qw(A B C)], undef, 'test[124]$');
 
 # Let's add some data into A.bucardo_test1.
 ok $dbhA->do(q{INSERT INTO bucardo_test1 (id, data1) VALUES (1, 'foo')}),
@@ -80,6 +81,11 @@ ok $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1'),
 # XXX Uncomment once makedelta actually works.
 # ok $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest2'),
 #     'Second deltatest2 sync should finish';
+
+# Make sure we don't enter a circular repliation loop between A and B.
+eval { $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1', 1, 0, 0) };
+like $@, qr/\QGave up waiting for notice "bucardo_syncdone_deltatest1"/,
+    'Should not have another deltatest1 sync';
 
 # The row should be in all three databases.
 is_deeply $dbhB->selectall_arrayref(
@@ -100,6 +106,11 @@ ok $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1'),
 ok $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest2'),
     'Then the third deltatest2 sync should finish';
 
+# Make sure we don't enter a circular repliation loop between A and B.
+eval { $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1', 1, 0, 0) };
+like $@, qr/\QGave up waiting for notice "bucardo_syncdone_deltatest1"/,
+    'Again should not have a duplicate deltatest1 sync';
+
 is_deeply $dbhA->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test2'
 ), [[2, 'foo']], 'Should have the A test2 row in A';
@@ -107,3 +118,29 @@ is_deeply $dbhA->selectall_arrayref(
 is_deeply $dbhC->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test2'
 ), [[2, 'foo']], 'Should have the C test2 row in C';
+
+# Finally, try table 4, which has no makedelta.
+ok $dbhA->do(q{INSERT INTO bucardo_test4 (id, data1) VALUES (3, 'foo')}),
+    'Insert a row into test4 on A';
+$dbhA->commit;
+
+ok $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1'),
+    'Wait for the fourth deltatest1 sync should finish';
+
+# Make sure we don't enter a circular repliation loop between A and B.
+eval { $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1', 1, 0, 0) };
+like $@, qr/\QGave up waiting for notice "bucardo_syncdone_deltatest1"/,
+    'Again should not have a duplicate deltatest1 sync';
+
+# Should have no deltatest2 sync, either.
+eval { $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest2', 1, 0, 0) };
+like $@, qr/\QGave up waiting for notice "bucardo_syncdone_deltatest2"/,
+    'Should have no deltatest2 sync triggered from table 4';
+
+is_deeply $dbhB->selectall_arrayref(
+    'SELECT id, data1 FROM bucardo_test4'
+), [[3, 'foo']], 'Should have the test4 row in B';
+
+is_deeply $dbhC->selectall_arrayref(
+    'SELECT id, data1 FROM bucardo_test4'
+), [], 'Should have no test4 row row in C';
