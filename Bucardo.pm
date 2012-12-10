@@ -8383,16 +8383,11 @@ sub push_rows {
         my $inner = length $key
             ? (join ',' => map { s{\'}{''}go; s{\\}{\\\\}go; qq{'$_'}; } split '\0', $key, -1)
             : q{''};
-        $pkvals[$round] .= $numpks > 1 ? "($inner)," : "$inner,";
+        push @{ $pkvals[$round] ||= [] } => $numpks > 1 ? "($inner)" : $inner;
         if (++$roundtotal >= $chunksize) {
             $roundtotal = 0;
             $round++;
         }
-    }
-
-    ## Remove that final comma from each
-    for (@pkvals) {
-        chop;
     }
 
     ## Example: 1234, 221
@@ -8404,7 +8399,7 @@ sub push_rows {
     }
 
     ## This can happen if we truncated but had no delta activity
-    return 0 if (! defined $pkvals[0] or ! length $pkvals[0]) and ! $fullcopy;
+    return 0 if (! $pkvals[0] or ! length $pkvals[0]->[0] ) and ! $fullcopy;
 
     ## Get ready to export from the source
     ## This may have multiple versions depending on the customcols table
@@ -8495,7 +8490,7 @@ sub push_rows {
 
         ## Put dummy data into @pkvals if using fullcopy
         if ($fullcopy) {
-            push @pkvals => 'fullcopy';
+            push @pkvals => ['fullcopy'];
         }
 
         my $loop = 1;
@@ -8503,6 +8498,7 @@ sub push_rows {
 
         ## Loop through each chunk of primary keys to copy over
         for my $pkvs (@pkvals) {
+            $pkvs = join ',' => @{ $pkvs };
 
             ## Message to prepend to the statement if chunking
             my $pre = $pcount <= 1 ? '' : "/* $loop of $pcount */";
