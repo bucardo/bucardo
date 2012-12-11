@@ -194,7 +194,6 @@ CREATE TABLE bucardo.db (
   pgpass               TEXT            NULL,      -- local file with connection info same as pgpass
   status               TEXT        NOT NULL DEFAULT 'active',
   server_side_prepares BOOLEAN     NOT NULL DEFAULT 'true',
-  makedelta            BOOLEAN     NOT NULL DEFAULT 'false',
   cdate                TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE bucardo.db IS $$Holds information about each database used in replication$$;
