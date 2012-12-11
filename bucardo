@@ -1356,12 +1356,8 @@ sub add_database {
         addallsequences          none                 0                skip
         server_side_prepares|ssp server_side_prepares TF               null
         service|dbservice        dbservice            0                null
-        makedelta                makedelta            =on|off          null
     };
 
-
-    ## TODO: See if makedelta still needed
-    ## If so, add to wiki page: http://bucardo.org/wiki/Bucardo/add_database#Optional_arguments
 
     my ( $dbcols, $cols, $phs, $vals, $extra ) = process_simple_args({
         cols        => $validcols,
@@ -2954,7 +2950,7 @@ sub add_table {
         autokick|ping            autokick             TF               null
         rebuild_index            rebuild_index        numeric          null
         analyze_after_copy       analyze_after_copy   TF               null
-        makedelta                makedelta            =on|off          null
+        makedelta                makedelta            0                null
         herd|relgroup            herd                 0                skip
     };
 
@@ -6757,6 +6753,7 @@ sub upgrade {
     );
 
     my @old_columns = (
+        ['bucardo', 'db',    'makedelta'],
         ['bucardo', 'dbmap', 'makedelta'],
         ['bucardo', 'sync',  'disable_rules'],
         ['bucardo', 'sync',  'disable_triggers'],
@@ -9213,11 +9210,6 @@ them. Defaults to 1.
 
 The service name to use for a Postgres database. Optional.
 
-=item C<makedelta>
-
-Turns makedelta magic on or off. Value must be one of "on" or "off". Defaults
-to "on".
-
 =back
 
 =head3 add dbgroup
@@ -9270,8 +9262,9 @@ exist, it will be created. Optional.
 
 =item C<makedelta>
 
-Turns makedelta magic on or off. Value must be one of "on" or "off". Defaults
-to "on".
+Turns makedelta magic on or off. Value is a list of databases which need makedelta 
+for this table. Value can also be "on" to enable makedelta for all databases. 
+Defaults to "off".
 
 =back
 
@@ -10024,10 +10017,6 @@ them.
 
 The service name to use for a Postgres database.
 
-=item C<makedelta>
-
-Turns makedelta magic on or off. Value must be one of "on" or "off".
-
 =item C<group>
 
 A comma-separated list of database groups to which to add the database. The
@@ -10224,7 +10213,7 @@ The table will be removed from any other relation groups.
 
 =item C<makedelta>
 
-Turns makedelta magic on or off. Value must be one of "on" or "off".
+Specifies which databases need makedelta enabled for this table.
 
 =back
 
