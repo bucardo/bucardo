@@ -2442,13 +2442,7 @@ sub start_kid {
                     $sth{stage}{$dbname}{$g} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
 
                     ## Set the per database/per table makedelta setting now
-                    ## XXX Make this work on a per-database level too
-                    ## Ideas:
-                    ## 1. Just use db.makedelta
-                    ## 2. Use a mapping table
-                    ## 3. Have goat.makedelta name the tables
-                    ## 3a. Allow intra-sync introspection etc. for automatic updating
-                    if ($g->{makedelta} eq 'on') {
+                    if ($g->{makedelta} eq 'on' or $g->{makedelta} =~ /\b$dbname\b/) {
                         $x->{is_makedelta}{$S}{$T} = 1;
                     }
 
