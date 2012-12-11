@@ -3918,6 +3918,11 @@ sub start_kid {
                 }
 
                 ## For each database that had delta changes, insert rows to bucardo_track
+                ## We also need to consider makedelta:
+                ## For all tables that are marked as makedelta, we need to ensure
+                ## that we call the SQL below for each dbs_source in which
+                ## the deltacount for *any* other dbname is non-zero
+
                 for my $dbname (@dbs_source) {
 
                     if ($deltacount{dbtable}{$dbname}{$S}{$T}) {
@@ -8640,8 +8645,7 @@ sub push_rows {
                 $self->glog(qq{Rows copied to $t->{name}.$tname: $total}, LOG_VERBOSE);
                 $count += $total;
                 ## If this goat is set to makedelta, add rows to bucardo_delta to simulate the
-                ##   normal action of a tigger, and add rows to bucardo_track so the changed
-                ##   rows cannot flow back to us
+                ##   normal action of a trigger
                 if ($t->{makedelta} && !$fullcopy) {
                     my ($cols, $vals);
                     if ($numpks == 1) {
