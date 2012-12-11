@@ -8640,7 +8640,7 @@ sub push_rows {
                 $self->glog(qq{Rows copied to $t->{name}.$tname: $total}, LOG_VERBOSE);
                 $count += $total;
                 ## If this goat is set to makedelta, add rows to bucardo_delta to simulate the
-                ##   normal action of a tigger, and add rows to bucardo_track so they changed
+                ##   normal action of a tigger, and add rows to bucardo_track so the changed
                 ##   rows cannot flow back to us
                 if ($t->{makedelta} && !$fullcopy) {
                     my ($cols, $vals);
@@ -8659,11 +8659,6 @@ sub push_rows {
                         INSERT INTO bucardo.$goat->{tracktable}
                         VALUES (NOW(), ?)
                     }, undef, $t->{TARGETNAME});
-
-                    # Notify that the sync was done; add payload with host/table name?
-                    $self->db_notify($dbh, "deltadone_${syncname}");
-
-                    # XXX Kick it!
                 }
             }
             elsif ('flatpg' eq $type) {
