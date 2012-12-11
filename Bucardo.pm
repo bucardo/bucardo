@@ -1975,6 +1975,9 @@ sub start_kid {
         ## Can it be queried?
         $x->{does_append_only} = 0;
 
+        ## List of tables in this database that do makedelta
+        $x->{is_makedelta} = {};
+
         ## Start clumping into groups and adjust the attributes
 
         ## Postgres
@@ -3863,7 +3866,6 @@ sub start_kid {
 
                         ## Make sure the Postgres database connections are still clean
                         for my $dbname (@dbs_postgres) {
-
                             $x = $sync->{db}{$dbname};
 
                             my $ping = $sync->{db}{$dbname}{dbh}->ping();
@@ -3921,11 +3923,34 @@ sub start_kid {
                 ## We also need to consider makedelta:
                 ## For all tables that are marked as makedelta, we need to ensure
                 ## that we call the SQL below for each dbs_source in which
-                ## the deltacount for *any* other dbname is non-zero
-
+                ## the deltacount for *any* other source dbname is non-zero
                 for my $dbname (@dbs_source) {
+                    $x = $sync->{db}{$dbname};
+
+                    $x->{needs_track} = 0;
 
                     if ($deltacount{dbtable}{$dbname}{$S}{$T}) {
+                        $x->{needs_track} = 1;
+                    }
+                    elsif (exists $x->{is_makedelta}{$S}{$T}) { ## XXX set this earlier!
+                        ## We know that this particular table in this database is makedelta
+                        ## See if any of the other sources had deltas
+                        ## If they did, then rows were inserted here, so we need a track update
+                        my $found = 0;
+                        for my $dbname2 (@dbs_source) {
+                            if ($deltacount{dbtable}{$dbname}{$S}{$T}) {
+                                $found = 1;
+                                last;
+                            }
+                        }
+                    }
+                }
+
+                ## Kick off the track or stage update asynchronously
+                for my $dbname (@dbs_source) {
+                    $x = $sync->{db}{$dbname};
+
+                    if ($x->{needs_track}) {
                         ## This is async:
                         if ($x->{trackstage}) {
                             $sth{stage}{$dbname}{$g}->execute();
@@ -3941,7 +3966,7 @@ sub start_kid {
 
                     $x = $sync->{db}{$dbname};
 
-                    if ($deltacount{dbtable}{$dbname}{$S}{$T}) {
+                    if ($x->{needs_track}) {
                         ($count = $x->{dbh}->pg_result()) =~ s/0E0/0/o;
                         $self->{insertcount}{dbname}{$S}{$T} = $count;
                         $maxcount = $count if $count > $maxcount;
@@ -8644,9 +8669,10 @@ sub push_rows {
                 }
                 $self->glog(qq{Rows copied to $t->{name}.$tname: $total}, LOG_VERBOSE);
                 $count += $total;
-                ## If this goat is set to makedelta, add rows to bucardo_delta to simulate the
+                ## If this table is set to makedelta, add rows to bucardo_delta to simulate the
                 ##   normal action of a trigger
-                if ($t->{makedelta} && !$fullcopy) {
+                my $dbinfo = $sync->{db}{ $t->{name} };
+                if (!$fullcopy and exists $dbinfo->{is_makedelta}{$S}{$T}) {
                     my ($cols, $vals);
                     if ($numpks == 1) {
                         $cols = "($pkcols)";
