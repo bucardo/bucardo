@@ -258,7 +258,7 @@ CREATE TABLE bucardo.goat (
   has_delta          BOOLEAN     NOT NULL DEFAULT 'false',
   autokick           BOOLEAN         NULL,                 -- overrides sync-level autokick
   conflict_strategy  TEXT            NULL,
-  makedelta          BOOLEAN         NULL,
+  makedelta          TEXT            NULL,
   rebuild_index      SMALLINT        NULL DEFAULT 0,       -- overrides sync-level rebuild_index
   ghost              BOOLEAN     NOT NULL DEFAULT 'false', -- only drop triggers, do not replicate
   analyze_after_copy BOOLEAN     NOT NULL DEFAULT 'true',
