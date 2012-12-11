@@ -78,9 +78,8 @@ $dbhA->commit;
 
 ok $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1'),
     'Second deltatest1 sync should finish';
-# XXX Uncomment once makedelta actually works.
-# ok $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest2'),
-#     'Second deltatest2 sync should finish';
+ok $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest2'),
+    'Second deltatest2 sync should finish';
 
 # Make sure we don't enter a circular repliation loop between A and B.
 eval { $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1', 1, 0, 0) };
