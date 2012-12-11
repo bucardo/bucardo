@@ -8655,10 +8655,6 @@ sub push_rows {
                         INSERT INTO bucardo.$goat->{deltatable} $cols
                         VALUES $vals
                     });
-                    $dbh->do(qq{
-                        INSERT INTO bucardo.$goat->{tracktable}
-                        VALUES (NOW(), ?)
-                    }, undef, $t->{TARGETNAME});
                 }
             }
             elsif ('flatpg' eq $type) {
