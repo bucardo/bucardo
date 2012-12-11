@@ -2421,6 +2421,8 @@ sub start_kid {
 
                     next if $g->{reltype} ne 'table';
 
+                    ($S,$T) = ($g->{safeschema},$g->{safetable});
+
                     ## Replace with the target name for source delta querying
                     ($SQL = $SQL{delta}{$g}) =~ s/TARGETNAME/'$x->{TARGETNAME}'/o;
 
@@ -2438,6 +2440,8 @@ sub start_kid {
                     ## Same thing for stage
                     ($SQL = $SQL{stage}{$g}) =~ s/TARGETNAME/'$x->{TARGETNAME}'/go;
                     $sth{stage}{$dbname}{$g} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
+
+                    ## XXX: This is probably a good place to populate $x->{is_makedelta}{$S}{$T}
 
                 } ## end each table
 
