@@ -2441,7 +2441,16 @@ sub start_kid {
                     ($SQL = $SQL{stage}{$g}) =~ s/TARGETNAME/'$x->{TARGETNAME}'/go;
                     $sth{stage}{$dbname}{$g} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
 
-                    ## XXX: This is probably a good place to populate $x->{is_makedelta}{$S}{$T}
+                    ## Set the per database/per table makedelta setting now
+                    ## XXX Make this work on a per-database level too
+                    ## Ideas:
+                    ## 1. Just use db.makedelta
+                    ## 2. Use a mapping table
+                    ## 3. Have goat.makedelta name the tables
+                    ## 3a. Allow intra-sync introspection etc. for automatic updating
+                    if ($g->{makedelta} eq 'on') {
+                        $x->{is_makedelta}{$S}{$T} = 1;
+                    }
 
                 } ## end each table
 
@@ -5756,7 +5765,6 @@ sub validate_sync {
 
         $customname{$row->{goat}}{$row->{db}} = $row->{newname};
     }
-
 
     ## Go through each table and make sure it exists and matches everywhere
     for my $g (@{$s->{goatlist}}) {
