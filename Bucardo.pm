@@ -8675,8 +8675,9 @@ sub push_rows {
                 }
                 $self->glog(qq{Rows copied to $t->{name}.$tname: $total}, LOG_VERBOSE);
                 $count += $total;
-                ## If this table is set to makedelta, add rows to bucardo_delta to simulate the
-                ##   normal action of a trigger
+                ## If this table is set to makedelta, add rows to bucardo.delta to simulate the
+                ##   normal action of a trigger and add a row to bucardo.track to indicate that
+                ##   it has already been replicated here.
                 my $dbinfo = $sync->{db}{ $t->{name} };
                 if (!$fullcopy and exists $dbinfo->{is_makedelta}{$S}{$T}) {
                     my ($cols, $vals);
@@ -8691,6 +8692,11 @@ sub push_rows {
                         INSERT INTO bucardo.$goat->{deltatable} $cols
                         VALUES $vals
                     });
+                    # Make sure we track it!
+                    $dbh->do(qq{
+                        INSERT INTO bucardo.$goat->{tracktable}
+                        VALUES (NOW(), ?)
+                    }, undef, $t->{TARGETNAME});
                 }
             }
             elsif ('flatpg' eq $type) {

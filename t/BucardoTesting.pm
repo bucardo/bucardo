@@ -1140,7 +1140,7 @@ sub wait_for_notice {
 
     ## Wait until a named NOTIFY is issued
     ## Arguments:
-    ## 1. The listen string
+    ## 1. The listen string or array of strings
     ## 2. Seconds until we give up
     ## 3. Seconds we sleep between checks
     ## 4. Boolean: bail out if not found (defaults to true)
@@ -1154,6 +1154,11 @@ sub wait_for_notice {
     my $bail = shift;
     $bail = 1 if !defined($bail);
     my $n;
+    my %wait_for;
+    for my $str (ref $text ? @{ $text } : $text) {
+        $wait_for{$str}++;
+    }
+
     eval {
         local $SIG{ALRM} = sub { die "Lookout!\n"; };
         alarm $timeout;
@@ -1161,8 +1166,11 @@ sub wait_for_notice {
             while ($n = $dbh->func('pg_notifies')) {
                 my ($name, $pid, $payload) = @$n;
                 $name = $payload if length $payload;
-                if ($name eq $text) {
-                    last N;
+                if (exists $wait_for{$name}) {
+                    if (--$wait_for{$name} == 0) {
+                        delete $wait_for{$name};
+                        last N unless %wait_for;
+                    }
                 }
                 else {
                     debug("notice was $name", 1);
@@ -1177,7 +1185,9 @@ sub wait_for_notice {
         if ($@ =~ /Lookout/o) {
             my $line = (caller)[2];
             my $now = scalar localtime;
-            my $notice = qq{Gave up waiting for notice "$text": timed out at $timeout from line $line. Time=$now};
+            my $texts = join '", "', keys %wait_for;
+            my $pl = keys %wait_for > 1 ? 's' : '';
+            my $notice = qq{Gave up waiting for notice$pl "$texts": timed out at $timeout from line $line. Time=$now};
             if ($bail) {
                 Test::More::BAIL_OUT ($notice);
             }
@@ -1190,7 +1200,6 @@ sub wait_for_notice {
     return 1;
 
 } ## end of wait_for_notice
-
 
 ## Older methods:
 

@@ -6,10 +6,9 @@
 use 5.008003;
 use strict;
 use warnings;
-use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 48;
+use Test::More tests => 45;
 #use Test::More 'no_plan';
 
 use BucardoTesting;
@@ -63,10 +62,10 @@ ok $dbhX->do('LISTEN bucardo_syncdone_deltatest2'),
 
 # Start up Bucardo and wait for initial syncs to finish.
 ok $bct->restart_bucardo($dbhX), 'Bucardo should start';
-ok $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1'),
-    'The sync deltatest1 sync should finish';
-ok $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest2'),
-    'The sync deltatest2 sync should finish';
+ok $bct->wait_for_notice($dbhX, [qw(
+    bucardo_syncdone_deltatest1
+    bucardo_syncdone_deltatest2
+)]), 'The deltatest1 and deltatest2 syncs should finish';
 
 # Should have no rows.
 $bct->check_for_row([], [qw(A B C)], undef, 'test[124]$');
@@ -76,10 +75,11 @@ ok $dbhA->do(q{INSERT INTO bucardo_test1 (id, data1) VALUES (1, 'foo')}),
     'Insert a row into test1 on A';
 $dbhA->commit;
 
-ok $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1'),
-    'Second deltatest1 sync should finish';
-ok $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest2'),
-    'Second deltatest2 sync should finish';
+ok $bct->wait_for_notice($dbhX, [qw(
+    bucardo_syncdone_deltatest1
+    bucardo_syncdone_deltatest1
+    bucardo_syncdone_deltatest2
+)]), 'The second deltatest1 and deltatest2 & recursive deltatest1 syncs should finish';
 
 # Make sure we don't enter a circular repliation loop between A and B.
 eval { $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1', 1, 0, 0) };
@@ -100,10 +100,11 @@ ok $dbhB->do(q{INSERT INTO bucardo_test2 (id, data1) VALUES (2, 'foo')}),
     'Insert a row into test2 on B';
 $dbhB->commit;
 
-ok $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1'),
-    'Then the third deltatest1 sync should finish';
-ok $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest2'),
-    'Then the third deltatest2 sync should finish';
+ok $bct->wait_for_notice($dbhX, [qw(
+    bucardo_syncdone_deltatest1
+    bucardo_syncdone_deltatest2
+    bucardo_syncdone_deltatest1
+)]), 'The third deltatest1 and deltatest2 and 2nd reciprocal deltatest1 syncs should finish';
 
 # Make sure we don't enter a circular repliation loop between A and B.
 eval { $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1', 1, 0, 0) };
@@ -123,8 +124,10 @@ ok $dbhA->do(q{INSERT INTO bucardo_test4 (id, data1) VALUES (3, 'foo')}),
     'Insert a row into test4 on A';
 $dbhA->commit;
 
-ok $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1'),
-    'Wait for the fourth deltatest1 sync should finish';
+ok $bct->wait_for_notice($dbhX, [qw(
+    bucardo_syncdone_deltatest1
+    bucardo_syncdone_deltatest1
+)]), 'The 4th deltatest1 3rd reciprocal deltatest1 syncs should finish';
 
 # Make sure we don't enter a circular repliation loop between A and B.
 eval { $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1', 1, 0, 0) };
@@ -143,3 +146,21 @@ is_deeply $dbhB->selectall_arrayref(
 is_deeply $dbhC->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test4'
 ), [], 'Should have no test4 row row in C';
+
+# use Data::Dump 'pp';
+# sub dumpem {
+#     for my $spec (
+#         [A => $dbhA],
+#         [B => $dbhB],
+#     ) {
+#         my ($db, $dbh) = @{ $spec };
+#         diag $db;
+#         for my $i (1, 2, 4) {
+#             next if $i == 4;
+#             for my $prefix (qw(delta stage track)) {
+#                 my $table = "$prefix\_public_bucardo_test$i";
+#                 diag "$i $prefix: ", pp $dbh->selectall_arrayref("SELECT * FROM bucardo.$table");
+#             }
+#         }
+#     }
+# }
