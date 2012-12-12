@@ -8,7 +8,7 @@ use strict;
 use warnings;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 45;
+use Test::More tests => 55;
 #use Test::More 'no_plan';
 
 use BucardoTesting;
@@ -117,7 +117,7 @@ is_deeply $dbhA->selectall_arrayref(
 
 is_deeply $dbhC->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test2'
-), [[2, 'foo']], 'Should have the C test2 row in C';
+), [[2, 'foo']], 'Should have the A test2 row in C';
 
 # Finally, try table 4, which has no makedelta.
 ok $dbhA->do(q{INSERT INTO bucardo_test4 (id, data1) VALUES (3, 'foo')}),
@@ -146,6 +146,44 @@ is_deeply $dbhB->selectall_arrayref(
 is_deeply $dbhC->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test4'
 ), [], 'Should have no test4 row row in C';
+
+##############################################################################
+# Okay, what if we have C be a target from either A or B?
+like $bct->ctl('bucardo remove sync deltatest2'),
+    qr/Removed sync "deltatest2"/, 'Remove sync "deltatest2"';
+like $bct->ctl('bucardo remove dbgroup delta2'),
+    qr/Removed database group "delta2"/, 'Remove relgroup delta2';
+like $bct->ctl('bucardo add dbgroup delta2 A:source B:source C:target'),
+   qr/Created database group "delta2"/, 'Recreate relgroup delta2';
+like $bct->ctl('bucardo add sync deltatest2 relgroup=myrels dbs=delta2'),
+   qr/Added sync "deltatest2"/, 'Recreate sync "deltatest2"';
+
+ok $dbhA->do(q{INSERT INTO bucardo_test2 (id, data1) VALUES (3, 'howdy')}),
+    'Insert a row into test2 on A';
+$dbhA->commit;
+
+ok $bct->wait_for_notice($dbhX, [qw(
+    bucardo_syncdone_deltatest1
+    bucardo_syncdone_deltatest2
+    bucardo_syncdone_deltatest1
+    bucardo_syncdone_deltatest2
+)]), 'The third deltatest1 and deltatest2 and 2nd reciprocal deltatest1 syncs should finish';
+
+# Make sure we don't enter a circular repliation loop between A and B.
+eval { $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1', 1, 0, 0) };
+like $@, qr/\QGave up waiting for notice "bucardo_syncdone_deltatest1"/,
+    'Again should not have a duplicate deltatest1 sync';
+eval { $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest2', 1, 0, 0) };
+like $@, qr/\QGave up waiting for notice "bucardo_syncdone_deltatest2"/,
+    'Should not have a duplicate deltatest2 sync';
+
+is_deeply $dbhB->selectall_arrayref(
+    'SELECT id, data1 FROM bucardo_test2'
+), [[2, 'foo'], [3, 'howdy']], 'Should have the A test2 row in B';
+
+is_deeply $dbhC->selectall_arrayref(
+    'SELECT id, data1 FROM bucardo_test2'
+), [[2, 'foo'], [3, 'howdy']], 'Should have the A test2 row in C';
 
 # use Data::Dump 'pp';
 # sub dumpem {
