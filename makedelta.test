@@ -1,0 +1,74 @@
+## We want a quick test of makedelta (and all things related)
+
+## Uses: four databases, A, B, C, and D (aka mtest1 mtest2 mtest3 mtest4)
+## One table, foobar
+## Two syncs, A <=> B and (B <=> C) -> D
+## For safety, this runs on port 5492. Don't change this to 5432 :)
+
+export PGPORT=5492
+export PERL5LIB=.
+
+perl -c bucardo || exit
+perl -c Bucardo.pm || exit
+
+./bucardo stop --quiet
+
+psql -AX -qt -c "select pg_terminate_backend(pid) FROM pg_stat_activity where datname IN ('mtest1','mtest2','mtest3','mtest4','bucardo')" >/dev/null
+psql -qc 'drop database mtest1'
+psql -qc 'drop database mtest2'
+psql -qc 'drop database mtest3'
+psql -qc 'drop database mtest4'
+psql -qc 'drop database bucardo'
+
+psql -qc 'create database mtest1'
+psql mtest1 -qc 'create sequence mseq increment by 3 start with 1'
+psql mtest1 -qc "create table foobar(id int not null primary key default nextval('mseq'), email text)"
+
+psql -qc 'create database mtest2 template mtest1'
+psql mtest2 -qc 'alter sequence mseq restart with 2'
+
+psql -qc 'create database mtest3 template mtest1'
+psql mtest3 -qc 'alter sequence mseq restart with 3'
+
+psql -qc 'create database mtest4 template mtest1'
+
+./bucardo install --batch --quiet
+./bucardo set log_level=debug
+
+./bucardo add db A dbname=mtest1 
+./bucardo add db B dbname=mtest2 --quiet
+./bucardo add db C dbname=mtest3 --quiet
+./bucardo add db D dbname=mtest4 --quiet
+./bucardo add table foobar relgroup=mgroup --quiet
+./bucardo add sync AB relgroup=mgroup dbs=A:source,B:source --quiet
+./bucardo add sync BC relgroup=mgroup dbs=B:source,C:source,D:target --quiet
+
+rm -f log.bucardo
+./bucardo start --logdest=.
+sleep 2
+
+echo Makedelta is off, so rows added to A will not make it to C
+psql -AX -qt mtest1 -c "insert into foobar(email) values ('alice')"
+sleep 2
+
+echo Table foobar on A,B,C,D:
+psql -t mtest1 -c "select 'A:', * from foobar"
+psql -t mtest2 -c "select 'B:', * from foobar"
+psql -t mtest3 -c "select 'C:', * from foobar"
+psql -t mtest4 -c "select 'D:', * from foobar"
+
+./bucardo update table foobar makedelta=B
+
+./bucardo stop
+sleep 2
+./bucardo start --logdest=.
+
+echo Makedelta is on for B, so rows added to A will make it to C
+psql -AX -qt mtest1 -c "insert into foobar(email) values ('bob')"
+sleep 5
+
+psql -t mtest1 -c "select 'A:', * from foobar"
+psql -t mtest2 -c "select 'B:', * from foobar"
+psql -t mtest3 -c "select 'C:', * from foobar"
+psql -t mtest4 -c "select 'D:', * from foobar"
+
