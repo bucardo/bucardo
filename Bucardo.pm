@@ -629,8 +629,8 @@ sub start_mcp {
 
     ## We need KIDs to tell us their PID so we can [de]register them
     $self->{kidpid} = {};
-    $self->db_listen($masterdbh, 'kid_pid_start');
-    $self->db_listen($masterdbh, 'kid_pid_stop');
+    $self->db_listen($masterdbh, 'kid_pid_start', '', 1);
+    $self->db_listen($masterdbh, 'kid_pid_stop', '', 1);
 
     ## Let any listeners know we have gotten this far
     $self->db_notify($masterdbh, 'started', 1);
@@ -2122,7 +2122,7 @@ sub start_kid {
     $self->{pidmap}{$self->{master_backend}} = 'Bucardo DB';
 
     ## Register ourself with the MCP
-    $self->db_notify($maindbh, 'kid_pid_start');
+    $self->db_notify($maindbh, 'kid_pid_start', 1);
 
     ## SQL to enter a new database in the dbrun table
     $SQL = q{
@@ -2191,7 +2191,7 @@ sub start_kid {
         $sth{dbrun_delete} = $finaldbh->prepare($SQL{dbrun_delete});
 
         ## Deregister ourself with the MCP
-        $self->db_notify($maindbh, 'kid_pid_stop');
+        $self->db_notify($maindbh, 'kid_pid_stop', 1);
 
         ## Drop all open database connections, clear out the dbrun table
         for my $dbname (@dbs_dbi) {
@@ -2468,8 +2468,10 @@ sub start_kid {
                     $sth{stage}{$dbname}{$g} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
 
                     ## Set the per database/per table makedelta setting now
-                    if ($g->{makedelta} eq 'on' or $g->{makedelta} =~ /\b$dbname\b/) {
-                        $x->{is_makedelta}{$S}{$T} = 1;
+                    if (defined $g->{makedelta}) {
+                        if ($g->{makedelta} eq 'on' or $g->{makedelta} =~ /\b$dbname\b/) {
+                            $x->{is_makedelta}{$S}{$T} = 1;
+                        }
                     }
 
                 } ## end each table
@@ -6431,7 +6433,7 @@ sub fork_vac {
 
     ## Listen for an exit request from the MCP
     my $exitrequest = 'stop_vac';
-    $self->db_listen($maindbh, $exitrequest, 1); ## No payloads please
+    $self->db_listen($maindbh, $exitrequest, '', 1); ## No payloads please
 
     ## Commit so we start listening right away
     $maindbh->commit();
