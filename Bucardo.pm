@@ -627,6 +627,11 @@ sub start_mcp {
         $self->reload_mcp();
     };
 
+    ## We need KIDs to tell us their PID so we can [de]register them
+    $self->{kidpid} = {};
+    $self->db_listen($masterdbh, 'kid_pid_start');
+    $self->db_listen($masterdbh, 'kid_pid_stop');
+
     ## Let any listeners know we have gotten this far
     $self->db_notify($masterdbh, 'started', 1);
 
@@ -850,6 +855,11 @@ sub mcp_main {
                 elsif (! $self->{sync}{$syncname}{mcp_active}) {
                     $msg = qq{Cannot kick inactive sync "$syncname"};
                 }
+                ## We also won't kick if this was created by a kid
+                ## This can happen as our triggerkicks may be set to 'always'
+                elsif (exists $self->{kidpid}{$npid}) {
+                    $self->glog(qq{Not kicking sync "$syncname" as it came from KID $npid});
+                }
                 else {
                     ## Kick it!
                     $sync->{$syncname}{kick_on_startup} = 1;
@@ -1027,6 +1037,16 @@ sub mcp_main {
 
                 ## Echo out to anyone listening
                 $self->db_notify($maindbh, $name, 1);
+            }
+
+            ## A kid reporting in. We just store the PID
+            elsif ('kid_pid_start') {
+                $self->{kidpid}{$npid} = 1;
+            }
+
+            ## A kid leaving. We remove the stored PID.
+            elsif ('kid_pid_stop') {
+                delete $self->{kidpid}{$npid};
             }
 
             ## Should not happen, but let's at least log it
@@ -2101,6 +2121,9 @@ sub start_kid {
     ## Setup mapping so we can report in the log which things came from this backend
     $self->{pidmap}{$self->{master_backend}} = 'Bucardo DB';
 
+    ## Register ourself with the MCP
+    $self->db_notify($maindbh, 'kid_pid_start');
+
     ## SQL to enter a new database in the dbrun table
     $SQL = q{
         INSERT INTO bucardo.dbrun(sync,dbname,pgpid)
@@ -2166,6 +2189,9 @@ sub start_kid {
         my ($finalbackend, $finaldbh) = $self->connect_database();
         $self->glog("Final database backend PID: $finalbackend", LOG_VERBOSE);
         $sth{dbrun_delete} = $finaldbh->prepare($SQL{dbrun_delete});
+
+        ## Deregister ourself with the MCP
+        $self->db_notify($maindbh, 'kid_pid_stop');
 
         ## Drop all open database connections, clear out the dbrun table
         for my $dbname (@dbs_dbi) {
