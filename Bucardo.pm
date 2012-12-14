@@ -627,10 +627,9 @@ sub start_mcp {
         $self->reload_mcp();
     };
 
-    ## We need KIDs to tell us their PID so we can [de]register them
+    ## We need KIDs to tell us their PID so we can deregister them
     $self->{kidpid} = {};
-    $self->db_listen($masterdbh, 'kid_pid_start', '', 1);
-    $self->db_listen($masterdbh, 'kid_pid_stop', '', 1);
+    $self->db_listen($x->{dbh}, 'kid_pid_stop', '', 1);
 
     ## Let any listeners know we have gotten this far
     $self->db_notify($masterdbh, 'started', 1);
@@ -819,6 +818,13 @@ sub mcp_main {
             $x = $self->{sdb}{$dbname};
 
             next if $x->{dbtype} ne 'postgres';
+
+            ## Start listening for KIDs if we have not done so already
+            if (! exists $self->{kidpid}{$dbname}) {
+                $self->{kidpid}{$dbname} = 1;
+                $self->db_listen($x->{dbh}, 'kid_pid_start', '', 1);
+                $x->{dbh}->commit();
+            }
 
             my $nlist = $self->db_get_notices($x->{dbh});
             $x->{dbh}->rollback();
@@ -1041,12 +1047,16 @@ sub mcp_main {
 
             ## A kid reporting in. We just store the PID
             elsif ('kid_pid_start') {
-                $self->{kidpid}{$npid} = 1;
+                for my $lpid (keys %{ $notice->{$name}{pid} }) {
+                    $self->{kidpid}{$lpid} = 1;
+                }
             }
 
             ## A kid leaving. We remove the stored PID.
             elsif ('kid_pid_stop') {
-                delete $self->{kidpid}{$npid};
+                for my $lpid (keys %{ $notice->{$name}{pid} }) {
+                    delete $self->{kidpid}{$lpid};
+                }
             }
 
             ## Should not happen, but let's at least log it
@@ -2121,9 +2131,6 @@ sub start_kid {
     ## Setup mapping so we can report in the log which things came from this backend
     $self->{pidmap}{$self->{master_backend}} = 'Bucardo DB';
 
-    ## Register ourself with the MCP
-    $self->db_notify($maindbh, 'kid_pid_start', 1);
-
     ## SQL to enter a new database in the dbrun table
     $SQL = q{
         INSERT INTO bucardo.dbrun(sync,dbname,pgpid)
@@ -2368,6 +2375,10 @@ sub start_kid {
             ## This overwrites the items we inherited from the controller
             ($x->{backend}, $x->{dbh}) = $self->connect_database($dbname);
             $self->glog(qq{Database "$dbname" backend PID: $x->{backend}}, LOG_VERBOSE);
+
+            ## Register ourself with the MCP
+            $self->db_notify($x->{dbh}, 'kid_pid_start', 1);
+
         }
 
         ## Set the maximum length of the $dbname.$S.$T string.
