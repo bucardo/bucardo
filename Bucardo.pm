@@ -2482,6 +2482,7 @@ sub start_kid {
                     if (defined $g->{makedelta}) {
                         if ($g->{makedelta} eq 'on' or $g->{makedelta} =~ /\b$dbname\b/) {
                             $x->{is_makedelta}{$S}{$T} = 1;
+                            $self->glog("Set table $S.$T to makedelta", LOG_NORMAL);
                         }
                     }
 
