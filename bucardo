@@ -3127,6 +3127,15 @@ sub update_table {
     my $table = $GOAT->{$name} or die qq{Could not find a table named "$name"\n}
         . "Use 'list tables' to see all available.\n";
 
+    ## If this is an array, then see how many matches we have
+    if (ref $table eq 'ARRAY') {
+        my $matches = @$table;
+        if ($matches > 1) {
+            die qq{More than one matching table: please use a schema\n};
+        }
+        $table = $table->[0];
+    }
+
     ## Store the id so we work with that alone whenever possible
     my $id = $table->{id};
 
