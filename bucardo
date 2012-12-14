@@ -3802,7 +3802,7 @@ sub add_sync {
                     die qq{Unable to add database "$db" to group "$gname"\n};
                 }
             }
-            print qq{Created database group "$gname"\n};
+            $QUIET or print qq{Created database group "$gname"\n};
             $dbcols->{dbs} = $gname;
             $vals->{dbs} = $gname;
         }
