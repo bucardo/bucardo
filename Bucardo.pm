@@ -655,6 +655,10 @@ sub start_mcp {
         $self->reload_mcp();
     };
 
+    ## We need KIDs to tell us their PID so we can deregister them
+    $self->{kidpid} = {};
+    $self->db_listen($x->{dbh}, 'kid_pid_stop', '', 1);
+
     ## Let any listeners know we have gotten this far
     $self->db_notify($masterdbh, 'started', 1);
 
@@ -843,6 +847,13 @@ sub mcp_main {
 
             next if $x->{dbtype} ne 'postgres';
 
+            ## Start listening for KIDs if we have not done so already
+            if (! exists $self->{kidpid}{$dbname}) {
+                $self->{kidpid}{$dbname} = 1;
+                $self->db_listen($x->{dbh}, 'kid_pid_start', '', 1);
+                $x->{dbh}->commit();
+            }
+
             my $nlist = $self->db_get_notices($x->{dbh});
             $x->{dbh}->rollback();
             for my $name (keys %{ $nlist } ) {
@@ -877,6 +888,11 @@ sub mcp_main {
                 }
                 elsif (! $self->{sync}{$syncname}{mcp_active}) {
                     $msg = qq{Cannot kick inactive sync "$syncname"};
+                }
+                ## We also won't kick if this was created by a kid
+                ## This can happen as our triggerkicks may be set to 'always'
+                elsif (exists $self->{kidpid}{$npid}) {
+                    $self->glog(qq{Not kicking sync "$syncname" as it came from KID $npid});
                 }
                 else {
                     ## Kick it!
@@ -1055,6 +1071,20 @@ sub mcp_main {
 
                 ## Echo out to anyone listening
                 $self->db_notify($maindbh, $name, 1);
+            }
+
+            ## A kid reporting in. We just store the PID
+            elsif ('kid_pid_start') {
+                for my $lpid (keys %{ $notice->{$name}{pid} }) {
+                    $self->{kidpid}{$lpid} = 1;
+                }
+            }
+
+            ## A kid leaving. We remove the stored PID.
+            elsif ('kid_pid_stop') {
+                for my $lpid (keys %{ $notice->{$name}{pid} }) {
+                    delete $self->{kidpid}{$lpid};
+                }
             }
 
             ## Should not happen, but let's at least log it
@@ -2195,6 +2225,9 @@ sub start_kid {
         $self->glog("Final database backend PID: $finalbackend", LOG_VERBOSE);
         $sth{dbrun_delete} = $finaldbh->prepare($SQL{dbrun_delete});
 
+        ## Deregister ourself with the MCP
+        $self->db_notify($maindbh, 'kid_pid_stop', 1);
+
         ## Drop all open database connections, clear out the dbrun table
         for my $dbname (@dbs_dbi) {
             $x = $sync->{db}{$dbname};
@@ -2370,6 +2403,10 @@ sub start_kid {
             ## This overwrites the items we inherited from the controller
             ($x->{backend}, $x->{dbh}) = $self->connect_database($dbname);
             $self->glog(qq{Database "$dbname" backend PID: $x->{backend}}, LOG_VERBOSE);
+
+            ## Register ourself with the MCP
+            $self->db_notify($x->{dbh}, 'kid_pid_start', 1);
+
         }
 
         ## Set the maximum length of the $dbname.$S.$T string.
@@ -2470,8 +2507,11 @@ sub start_kid {
                     $sth{stage}{$dbname}{$g} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
 
                     ## Set the per database/per table makedelta setting now
-                    if ($g->{makedelta} eq 'on' or $g->{makedelta} =~ /\b$dbname\b/) {
-                        $x->{is_makedelta}{$S}{$T} = 1;
+                    if (defined $g->{makedelta}) {
+                        if ($g->{makedelta} eq 'on' or $g->{makedelta} =~ /\b$dbname\b/) {
+                            $x->{is_makedelta}{$S}{$T} = 1;
+                            $self->glog("Set table $S.$T to makedelta", LOG_NORMAL);
+                        }
                     }
 
                 } ## end each table
@@ -6433,7 +6473,7 @@ sub fork_vac {
 
     ## Listen for an exit request from the MCP
     my $exitrequest = 'stop_vac';
-    $self->db_listen($maindbh, $exitrequest, 1); ## No payloads please
+    $self->db_listen($maindbh, $exitrequest, '', 1); ## No payloads please
 
     ## Commit so we start listening right away
     $maindbh->commit();
@@ -8703,8 +8743,9 @@ sub push_rows {
                 }
                 $self->glog(qq{Rows copied to $t->{name}.$tname: $total}, LOG_VERBOSE);
                 $count += $total;
-                ## If this table is set to makedelta, add rows to bucardo_delta to simulate the
-                ##   normal action of a trigger
+                ## If this table is set to makedelta, add rows to bucardo.delta to simulate the
+                ##   normal action of a trigger and add a row to bucardo.track to indicate that
+                ##   it has already been replicated here.
                 my $dbinfo = $sync->{db}{ $t->{name} };
                 if (!$fullcopy and exists $dbinfo->{is_makedelta}{$S}{$T}) {
                     my ($cols, $vals);
@@ -8719,6 +8760,11 @@ sub push_rows {
                         INSERT INTO bucardo.$goat->{deltatable} $cols
                         VALUES $vals
                     });
+                    # Make sure we track it!
+                    $dbh->do(qq{
+                        INSERT INTO bucardo.$goat->{tracktable}
+                        VALUES (NOW(), ?)
+                    }, undef, $t->{TARGETNAME});
                 }
             }
             elsif ('flatpg' eq $type) {

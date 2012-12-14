@@ -3127,6 +3127,15 @@ sub update_table {
     my $table = $GOAT->{$name} or die qq{Could not find a table named "$name"\n}
         . "Use 'list tables' to see all available.\n";
 
+    ## If this is an array, then see how many matches we have
+    if (ref $table eq 'ARRAY') {
+        my $matches = @$table;
+        if ($matches > 1) {
+            die qq{More than one matching table: please use a schema\n};
+        }
+        $table = $table->[0];
+    }
+
     ## Store the id so we work with that alone whenever possible
     my $id = $table->{id};
 
@@ -3802,7 +3811,7 @@ sub add_sync {
                     die qq{Unable to add database "$db" to group "$gname"\n};
                 }
             }
-            print qq{Created database group "$gname"\n};
+            $QUIET or print qq{Created database group "$gname"\n};
             $dbcols->{dbs} = $gname;
             $vals->{dbs} = $gname;
         }
@@ -7587,13 +7596,16 @@ sub install {
   GOOEY:
     {
 
-        print "Current connection settings:\n";
+        ## We only don't print this in quiet batch mode
+        if (! $QUIET or ! $bcargs->{batch}) {
+            print "Current connection settings:\n";
 
-        print "1. Host:           $host\n";
-        print "2. Port:           $port\n";
-        print "3. User:           $user\n";
-        print "4. Database:       $dbname\n";
-        print "5. PID directory:  $piddir\n";
+            print "1. Host:           $host\n";
+            print "2. Port:           $port\n";
+            print "3. User:           $user\n";
+            print "4. Database:       $dbname\n";
+            print "5. PID directory:  $piddir\n";
+        }
 
         ## If in batch mode, we accept everything right away and move on
         last GOOEY if $bcargs->{batch};
@@ -7749,7 +7761,7 @@ sub install {
     $rev =~ s/^\.//;
     $rev =~ s/(\d+)\.\d+/$1/;
 
-    print "Postgres version is: $maj.$min\n";
+    $QUIET or print "Postgres version is: $maj.$min\n";
 
     ## Bare minimum for the install is 8.1
     if ($maj < 8 or (8 == $maj and $min < 1)) {
