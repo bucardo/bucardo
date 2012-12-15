@@ -1,28 +1,49 @@
-## We want a quick test of makedelta (and all things related)
+##!/bin/bash
+## A quick self-containted test of the makedelta system
 
-## Uses: four databases, A, B, C, and D (aka mtest1 mtest2 mtest3 mtest4)
-## One table, foobar
-## Two syncs, A <=> B and (B <=> C) -> D
-## For safety, this runs on port 5492. Don't change this to 5432 :)
+## Uses:
+## Four databases, A, B, C, and D (aka mtest1 mtest2 mtest3 mtest4)
+## One table: foobar
+## Two syncs: AB A <=> B and BC (B <=> C) -> D
+## For safety, this runs on port 5492.
+## Do not change it to 5432, as this drops the bucardo database! :)
+## This must be run from the root Bucardo source code directory
 
 export PGPORT=5492
+
+## Ensure we use the Bucardo.pm in the current directory
 export PERL5LIB=.
 
+## Quick check that our scripts compile cleanly
 perl -c bucardo || exit
 perl -c Bucardo.pm || exit
 
-./bucardo stop --quiet
+## Just in case, stop any running Bucardos
+./bucardo stop --quiet 2>/dev/null
 
+## Bail if the cluser is not reachable
+psql -q -c 'select 1' >/dev/null 2>/dev/null
+
+if [[ $? -ne 0 ]];then
+  echo Could not connect to Postgres on port $PGPORT
+  exit
+fi
+
+## Terminate any old connections, and drop databases
+echo Dropping existing test databases
 psql -AX -qt -c "select pg_terminate_backend(pid) FROM pg_stat_activity where datname IN ('mtest1','mtest2','mtest3','mtest4','bucardo')" >/dev/null
-psql -qc 'drop database mtest1'
-psql -qc 'drop database mtest2'
-psql -qc 'drop database mtest3'
-psql -qc 'drop database mtest4'
-psql -qc 'drop database bucardo'
+psql -qc 'drop database mtest1' 2>/dev/null
+psql -qc 'drop database mtest2' 2>/dev/null
+psql -qc 'drop database mtest3' 2>/dev/null
+psql -qc 'drop database mtest4' 2>/dev/null
+psql -qc 'drop database bucardo' 2>/dev/null
 
+echo Creating test databases
 psql -qc 'create database mtest1'
 psql mtest1 -qc 'create sequence mseq increment by 3 start with 1'
-psql mtest1 -qc "create table foobar(id int not null primary key default nextval('mseq'), email text)"
+psql mtest1 -qc "create table foobar(id int not null default nextval('mseq'), email text)"
+psql mtest1 -qc "create unique index foobar_unique on foobar(id)"
+
 
 psql -qc 'create database mtest2 template mtest1'
 psql mtest2 -qc 'alter sequence mseq restart with 2'
@@ -32,43 +53,48 @@ psql mtest3 -qc 'alter sequence mseq restart with 3'
 
 psql -qc 'create database mtest4 template mtest1'
 
+echo Installing Bucardo
 ./bucardo install --batch --quiet
-./bucardo set log_level=debug
+./bucardo set log_level=debug --quiet
 
-./bucardo add db A dbname=mtest1 
+echo Adding databases A B C D
+./bucardo add db A dbname=mtest1 --quiet
 ./bucardo add db B dbname=mtest2 --quiet
 ./bucardo add db C dbname=mtest3 --quiet
 ./bucardo add db D dbname=mtest4 --quiet
+echo Adding table, relgroup, and syncs
 ./bucardo add table foobar relgroup=mgroup --quiet
 ./bucardo add sync AB relgroup=mgroup dbs=A:source,B:source --quiet
 ./bucardo add sync BC relgroup=mgroup dbs=B:source,C:source,D:target --quiet
 
+echo Starting Bucardo
 rm -f log.bucardo
-./bucardo start --logdest=.
+./bucardo start --logdest=. --quiet
 sleep 2
 
-echo Makedelta is off, so rows added to A will not make it to C
+echo Makedelta is off, so row 'alice' added to A will not make it to C
 psql -AX -qt mtest1 -c "insert into foobar(email) values ('alice')"
 sleep 2
 
-echo Table foobar on A,B,C,D:
-psql -t mtest1 -c "select 'A:', * from foobar"
-psql -t mtest2 -c "select 'B:', * from foobar"
-psql -t mtest3 -c "select 'C:', * from foobar"
-psql -t mtest4 -c "select 'D:', * from foobar"
+psql -A -t mtest1 -c "select 'A:', * from foobar"
+psql -A -t mtest2 -c "select 'B:', * from foobar"
+psql -A -t mtest3 -c "select 'C:', * from foobar"
+psql -A -t mtest4 -c "select 'D:', * from foobar"
 
 ./bucardo update table foobar makedelta=B
 
-./bucardo stop
+./bucardo stop --quiet
 sleep 2
-./bucardo start --logdest=.
+./bucardo start --logdest=. --quiet
 
-echo Makedelta is on for B, so rows added to A will make it to C
+echo Makedelta is on for B, so row 'bob' added to A will make it to C
 psql -AX -qt mtest1 -c "insert into foobar(email) values ('bob')"
 sleep 5
 
-psql -t mtest1 -c "select 'A:', * from foobar"
-psql -t mtest2 -c "select 'B:', * from foobar"
-psql -t mtest3 -c "select 'C:', * from foobar"
-psql -t mtest4 -c "select 'D:', * from foobar"
+psql -At mtest1 -c "select 'A:', * from foobar"
+psql -At mtest2 -c "select 'B:', * from foobar"
+psql -At mtest3 -c "select 'C:', * from foobar"
+psql -At mtest4 -c "select 'D:', * from foobar"
 
+echo Stopping Bucardo
+./bucardo stop --quiet
