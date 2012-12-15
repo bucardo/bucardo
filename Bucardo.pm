@@ -657,7 +657,6 @@ sub start_mcp {
 
     ## We need KIDs to tell us their PID so we can deregister them
     $self->{kidpid} = {};
-    $self->db_listen($x->{dbh}, 'kid_pid_stop', '', 1);
 
     ## Let any listeners know we have gotten this far
     $self->db_notify($masterdbh, 'started', 1);
@@ -851,6 +850,7 @@ sub mcp_main {
             if (! exists $self->{kidpid}{$dbname}) {
                 $self->{kidpid}{$dbname} = 1;
                 $self->db_listen($x->{dbh}, 'kid_pid_start', '', 1);
+                $self->db_listen($x->{dbh}, 'kid_pid_stop', '', 1);
                 $x->{dbh}->commit();
             }
 
@@ -2225,9 +2225,6 @@ sub start_kid {
         $self->glog("Final database backend PID: $finalbackend", LOG_VERBOSE);
         $sth{dbrun_delete} = $finaldbh->prepare($SQL{dbrun_delete});
 
-        ## Deregister ourself with the MCP
-        $self->db_notify($maindbh, 'kid_pid_stop', 1);
-
         ## Drop all open database connections, clear out the dbrun table
         for my $dbname (@dbs_dbi) {
             $x = $sync->{db}{$dbname};
@@ -2237,6 +2234,10 @@ sub start_kid {
             };
 
             $dbh->rollback();
+
+            ## Deregister ourself with the MCP
+            $self->db_notify($dbh, 'kid_pid_stop', 1);
+
             $self->glog("Disconnecting from database $dbname", LOG_DEBUG);
             $_->finish for values %{ $dbh->{CachedKids} };
             $dbh->disconnect();
