@@ -7493,7 +7493,7 @@ sub config {
         }
 
         $sth->execute($val,$setting);
-        print qq{Set "$setting" to "$val"\n};
+        $QUIET or print qq{Set "$setting" to "$val"\n};
 
     }
 
@@ -7859,7 +7859,7 @@ sub install {
     }
     $dbh->commit();
 
-    print "Installation is now complete.\n";
+    $QUIET or print "Installation is now complete.\n";
     ## A little less verbose if in batch mode
     if (! $bcargs->{batch}) {
         print "If you see errors or need help, please email bucardo-general\@bucardo.org\n\n";
