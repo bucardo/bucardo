@@ -1,5 +1,7 @@
 ##!/bin/bash
+
 ## A quick self-containted test of the makedelta system
+## Not a replacement for the real tests so much as a development aid
 
 ## Uses:
 ## Four databases, A, B, C, and D (aka mtest1 mtest2 mtest3 mtest4)
@@ -72,7 +74,7 @@ rm -f log.bucardo
 ./bucardo start --logdest=. --quiet
 sleep 2
 
-echo Makedelta is off, so row 'alice' added to A will not make it to C
+echo Makedelta is off, so row \"alice\" added to A will not make it to C
 psql -AX -qt mtest1 -c "insert into foobar(email) values ('alice')"
 sleep 2
 
@@ -87,14 +89,55 @@ psql -A -t mtest4 -c "select 'D:', * from foobar"
 sleep 2
 ./bucardo start --logdest=. --quiet
 
-echo Makedelta is on for B, so row 'bob' added to A will make it to C
+echo Makedelta is on for B, so row \"bob\" added to A will make it to C
 psql -AX -qt mtest1 -c "insert into foobar(email) values ('bob')"
-sleep 5
+sleep 3
 
 psql -At mtest1 -c "select 'A:', * from foobar"
 psql -At mtest2 -c "select 'B:', * from foobar"
 psql -At mtest3 -c "select 'C:', * from foobar"
 psql -At mtest4 -c "select 'D:', * from foobar"
 
+./bucardo update table foobar set makedelta=A
+./bucardo message Changed makedelta
+./bucardo reload sync AB
+
+echo Makedelta is on for A only, so row \"bob\" deleted from A will not make it to C
+psql -AX -qt mtest1 -c "delete from foobar where email = 'bob'"
+sleep 3
+
+psql -At mtest1 -c "select 'A:', * from foobar"
+psql -At mtest2 -c "select 'B:', * from foobar"
+psql -At mtest3 -c "select 'C:', * from foobar"
+psql -At mtest4 -c "select 'D:', * from foobar"
+
+./bucardo update table foobar set makedelta=on
+./bucardo message Changed makedelta
+./bucardo reload sync AB
+
+echo Makedelta is on for everyone, so row \"mallory\" to A will not make it to B,C,D
+psql -AX -qt mtest1 -c "insert into foobar(email) values ('mallory')"
+sleep 3
+
+psql -At mtest1 -c "select 'A:', * from foobar"
+psql -At mtest2 -c "select 'B:', * from foobar"
+psql -At mtest3 -c "select 'C:', * from foobar"
+psql -At mtest4 -c "select 'D:', * from foobar"
+
+./bucardo update table foobar set makedelta=off
+./bucardo message Changed makedelta
+./bucardo reload sync AB
+
+echo Makedelta is off for everyone, so row \"mallory\" removed from A will stay on C
+psql -AX -qt mtest1 -c "delete from foobar where email = 'mallory'"
+sleep 3
+
+psql -At mtest1 -c "select 'A:', * from foobar"
+psql -At mtest2 -c "select 'B:', * from foobar"
+psql -At mtest3 -c "select 'C:', * from foobar"
+psql -At mtest4 -c "select 'D:', * from foobar"
+
+
 echo Stopping Bucardo
 ./bucardo stop --quiet
+
