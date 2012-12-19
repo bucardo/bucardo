@@ -29,6 +29,9 @@ my (%gsth, %gdbh);
 
 my $dbname = 'bucardo_test';
 
+## We need to use the local Bucardo.pm, not a system installed one!
+$ENV{PERL5LIB} = '.';
+
 ## Shortcuts for ease of changes and smaller text:
 our $addtable_msg = 'Added the following tables';
 our $deltable_msg = 'Removed the following tables';
