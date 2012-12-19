@@ -6454,7 +6454,7 @@ sub fork_vac {
         $self->glog(qq{${warn}VAC was killed at line $line: $diemsg}, LOG_WARN);
 
         ## Not a whole lot of cleanup to do on this one: just shut database connections and leave
-        $self->{masterdbhvac}->disconnect();
+        $self->{masterdbh}->disconnect() if exists $self->{masterdbhvac};
 
         ## Remove our pid file
         unlink $self->{vacpidfile} or $self->glog("Warning! Failed to unlink $self->{vacpidfile}", LOG_WARN);
@@ -6464,8 +6464,9 @@ sub fork_vac {
     }; ## end SIG{__DIE_} handler sub
 
     ## Connect to the master database (overwriting the pre-fork MCP connection)
-    ($self->{master_backend}, $self->{masterdbhvac}) = $self->connect_database();
-    my $maindbh = $self->{masterdbhvac};
+    ($self->{master_backend}, $self->{masterdbh}) = $self->connect_database();
+    $self->{masterdbhvac} = 1;
+    my $maindbh = $self->{masterdbh};
     $self->glog("Bucardo database backend PID: $self->{master_backend}", LOG_VERBOSE);
 
     ## Map the PIDs to common names for better log output
