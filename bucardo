@@ -3156,6 +3156,8 @@ sub update_table {
     ## Walk through and handle each argument pair
     for my $setting (sort keys %$args) {
 
+        next if $setting eq 'extraargs';
+
         ## Change the name to a more standard form, to better figure out what they really mean
         ## This also excludes all non-alpha characters
         my $newname = transform_name($setting);
