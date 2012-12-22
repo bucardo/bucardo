@@ -1676,6 +1676,16 @@ sub check_for_row {
     ## Get largest tablename
     my $maxtable = 1;
     for my $table (keys %tabletype) {
+        ## Allow skipping tables
+        if (defined $filter) {
+            my $f = $filter;
+            if ($f =~ s/^\!//) {
+                next if $table =~ /$f$/;
+            }
+            else {
+                next if $table !~ /$f$/;
+            }
+        }
         $maxtable = length $table if length $table > $maxtable;
     }
 
