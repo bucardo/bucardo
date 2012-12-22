@@ -1382,7 +1382,7 @@ sub start_controller {
 
     }; ## end SIG{__DIE_} handler sub
 
-    ## Connect to the master database (overwriting the pre-fork MCP connection)
+    ## Connect to the master database
     ($self->{master_backend}, $self->{masterdbh}) = $self->connect_database();
     my $maindbh = $self->{masterdbh};
     $self->glog("Bucardo database backend PID: $self->{master_backend}", LOG_VERBOSE);
@@ -1519,7 +1519,7 @@ sub start_controller {
         ## Do not need non-Postgres handles for the controller
         next if $x->{dbtype} ne 'postgres';
 
-        ## Overwrites the MCP database handles
+        ## Establish a new database handle
         ($x->{backend}, $x->{dbh}) = $self->connect_database($dbname);
         $self->glog(qq{Database "$dbname" backend PID: $x->{backend}}, LOG_NORMAL);
         $self->{pidmap}{$x->{backend}} = "DB $dbname";
@@ -2149,7 +2149,6 @@ sub start_kid {
     }
 
     ## Connect to the main database
-    ## Overwrites the previous handle from the controller
     ($self->{master_backend}, $self->{masterdbh}) = $self->connect_database();
 
     ## Set a shortcut for this handle, and log the details
@@ -2401,7 +2400,6 @@ sub start_kid {
 
             $x = $sync->{db}{$dbname};
 
-            ## This overwrites the items we inherited from the controller
             ($x->{backend}, $x->{dbh}) = $self->connect_database($dbname);
             $self->glog(qq{Database "$dbname" backend PID: $x->{backend}}, LOG_VERBOSE);
 
@@ -4867,6 +4865,12 @@ sub connect_database {
          {AutoCommit=>0, RaiseError=>1, PrintError=>0}
     );
 
+    ## Register this database in our global list
+    ## Note that we only worry about DBI-backed databases here,
+    ## as there is no particular cleanup needed (e.g. InactiveDestroy)
+    ## for other types.
+    $self->{dbhlist}{$dbh} = $dbh;
+
     if ($dbtype ne 'postgres') {
         return 0, $dbh;
     }
@@ -6335,10 +6339,7 @@ sub fork_controller {
 
     my ($self, $s, $syncname) = @_;
 
-    my $newpid = fork;
-    if (!defined $newpid) {
-        die qq{Warning: Fork for controller failed!\n};
-    }
+    my $newpid = $self->fork_and_inactivate('CTL');
 
     if ($newpid) { ## We are the parent
         $self->glog(qq{Created controller $newpid for sync "$syncname". Kick is $s->{kick_on_startup}}, LOG_NORMAL);
@@ -6357,17 +6358,6 @@ sub fork_controller {
     ## Sleep a hair so the MCP can finish the items above first
     sleep 0.05;
 
-    ## Make sure the controller exiting does not disrupt the MCP's database connections
-    ## The controller will overwrite all these handles of course
-    $self->{masterdbh}->{InactiveDestroy} = 1;
-    $self->{masterdbh} = 0;
-
-    for my $dbname (keys %{ $self->{sdb} }) {
-        $x = $self->{sdb}{$dbname};
-        next if $x->{dbtype} =~ /flat|mongo|redis/o;
-        $x->{dbh}->{InactiveDestroy} = 1;
-    }
-
     ## No need to keep information about other syncs around
     $self->{sync} = $s;
 
@@ -6376,6 +6366,76 @@ sub fork_controller {
     exit 0;
 
 } ## end of fork_controller
+
+
+sub fork_and_inactivate {
+
+    ## Call fork, and immediately inactivate open database handles
+    ## Arguments: one
+    ## 1. Type of thing we are forking (VAC, CTL, KID)
+    ## Returns: nothing
+
+    my $self = shift;
+    my $type = shift || '???';
+
+    my $newpid = fork;
+    if (!defined $newpid) {
+        die qq{Warning: Fork for $type failed!\n};
+    }
+
+    if ($newpid) { ## Parent
+        ## Very slight sleep to increase the chance of something happening to the kid
+        ## before InactiveDestroy is set
+        sleep 0.1;
+    }
+    else { ## Kid
+        ## Walk through the list of all known DBI databases
+        ## Inactivate each one, then undef it
+        ## It is probably still referenced elsewhere, so handle that - how?
+        for my $iname (keys %{ $self->{dbhlist} }) {
+            my $ldbh = $self->{dbhlist}{$iname};
+            $self->glog("Inactivating dbh $iname post-fork", LOG_DEBUG);
+            $ldbh->{InactiveDestroy} = 1;
+            delete $self->{dbhlist}{$iname};
+        }
+        ## Now go through common shared database handle locations, and delete them
+        delete $self->{masterdbh};
+
+        ## Clear the 'sdb' structure of any existing database handles
+        if (exists $self->{sdb}) {
+            for my $dbname (keys %{ $self->{sdb} }) {
+                for my $item (qw/ dbh backend kicked /) {
+                    delete $self->{sdb}{$dbname}{$item};
+                }
+            }
+        }
+
+        ## Clear any sync-specific database handles
+        if (exists $self->{sync}) {
+            if (exists $self->{sync}{name}) { ## This is a controller/kid with a single sync
+                for my $dbname (sort keys %{ $self->{sync}{db} }) {
+                    $self->glog("Removing reference to database $dbname", LOG_DEBUG);
+                        for my $item (qw/ dbh backend kicked /) {
+                            delete $self->{sync}{db}{$dbname}{$item};
+                        }
+                    }
+            }
+            else {
+                for my $syncname (keys %{ $self->{sync} }) {
+                    for my $dbname (sort keys %{ $self->{sync}{$syncname}{db} }) {
+                        $self->glog("Removing reference to database $dbname in sync $syncname", LOG_DEBUG);
+                        for my $item (qw/ dbh backend kicked /) {
+                            delete $self->{sync}{$syncname}{db}{$dbname}{$item};
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return $newpid;
+
+} ## end of fork_and_inactivate
 
 
 sub fork_vac {
@@ -6387,34 +6447,13 @@ sub fork_vac {
     my $self = shift;
 
     ## Fork it off
-    my $newpid = fork;
-    if (!defined $newpid) {
-        die qq{Warning: Fork for VAC failed!\n};
-    }
+    my $newpid = $self->fork_and_inactivate('VAC');
 
     ## Parent MCP just makes a note in the logs and returns
     if ($newpid) { ## We are the parent
         $self->glog(qq{Created VAC $newpid}, LOG_NORMAL);
         $self->{vacpid} = $newpid;
-        ## We sleep a bit here to increase the chance that the database connections
-        ## below are disassociated before the MCP can come back and possibly
-        ## kill the VAC, causing bad double-free libpq/libc errors
-        sleep 0.5;
         return;
-    }
-
-    ## We are now a VAC daemon - get to work!
-
-    ## We don't want to mess with any existing MCP database connections
-    $self->{masterdbh}->{InactiveDestroy} = 1;
-    $self->{masterdbh} = 0;
-
-    ## We also need to disassociate ourselves from any open database connections
-    for my $dbname (keys %{ $self->{sdb} }) {
-        $x = $self->{sdb}{$dbname};
-        next if $x->{dbtype} =~ /flat|mongo|redis/o;
-        $x->{dbh}->{InactiveDestroy} = 1;
-        $x->{dbh} = 0;
     }
 
     ## Prefix all log lines with this TLA (was MCP)
@@ -6463,7 +6502,7 @@ sub fork_vac {
 
     }; ## end SIG{__DIE_} handler sub
 
-    ## Connect to the master database (overwriting the pre-fork MCP connection)
+    ## Connect to the master database
     ($self->{master_backend}, $self->{masterdbh}) = $self->connect_database();
     $self->{masterdbhvac} = 1;
     my $maindbh = $self->{masterdbh};
@@ -6480,7 +6519,7 @@ sub fork_vac {
     ## Commit so we start listening right away
     $maindbh->commit();
 
-    ## Reconnect to all databases we care about: overwrites existing dbhs
+    ## Reconnect to all databases we care about
     for my $dbname (keys %{ $self->{sdb} }) {
 
         $x = $self->{sdb}{$dbname};
@@ -6490,7 +6529,7 @@ sub fork_vac {
         ## not a fullcopy sync, dbtype is postgres, role is source
         next if ! $x->{needsvac};
 
-        ## Overwrites the MCP database handles
+        ## Establish a new database handle
         ($x->{backend}, $x->{dbh}) = $self->connect_database($dbname);
         $self->glog(qq{Connected to database "$dbname" with backend PID of $x->{backend}}, LOG_NORMAL);
         $self->{pidmap}{$x->{backend}} = "DB $dbname";
@@ -7381,10 +7420,7 @@ sub create_newkid {
     $self->db_notify($self->{masterdbh}, "kid_stopsync_$self->{syncname}");
 
     ## Fork off a new process which will become the KID
-    my $newkid = fork;
-    if (! defined $newkid) {
-        die q{Fork failed for new kid in create_newkid};
-    }
+    my $newkid = $self->fork_and_inactivate('KID');
 
     if ($newkid) { ## We are the parent
         my $msg = sprintf q{Created new kid %s for sync "%s"},
@@ -7397,25 +7433,6 @@ sub create_newkid {
         sleep $config{ctl_createkid_time};
 
         return $newkid;
-    }
-
-    ## We are the child process
-
-    ## Make sure the kid exiting does not disrupt the controller's database connections
-    ## The kid will overwrite all these handles of course
-    $self->{masterdbh}->commit();
-    $self->{masterdbh}->{InactiveDestroy} = 1;
-    $self->{masterdbh} = 0;
-    for my $dbname (keys %{ $kidsync->{db} }) {
-        $x = $kidsync->{db}{$dbname};
-        next if ! exists $x->{dbh};
-
-        $x->{dbh}->{InactiveDestroy} = 1;
-        $x->{status} = 'gone';
-        ## Otherwise, clear out items the kid does not need
-        for my $var (qw/ dbh backend kicked /) {
-            delete $x->{$var};
-        }
     }
 
     ## Create the kid process
