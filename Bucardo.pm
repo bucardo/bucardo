@@ -656,7 +656,7 @@ sub start_mcp {
     };
 
     ## We need KIDs to tell us their PID so we can deregister them
-    $self->{kidpid} = {};
+    $self->{kidpidlist} = {};
 
     ## Let any listeners know we have gotten this far
     $self->db_notify($masterdbh, 'started', 1);
@@ -847,8 +847,8 @@ sub mcp_main {
             next if $x->{dbtype} ne 'postgres';
 
             ## Start listening for KIDs if we have not done so already
-            if (! exists $self->{kidpid}{$dbname}) {
-                $self->{kidpid}{$dbname} = 1;
+            if (! exists $self->{kidpidlist}{$dbname}) {
+                $self->{kidpidlist}{$dbname} = 1;
                 $self->db_listen($x->{dbh}, 'kid_pid_start', $dbname, 1);
                 $self->db_listen($x->{dbh}, 'kid_pid_stop', $dbname, 1);
                 $x->{dbh}->commit();
@@ -896,7 +896,7 @@ sub mcp_main {
                 }
                 ## We also won't kick if this was created by a kid
                 ## This can happen as our triggerkicks may be set to 'always'
-                elsif (exists $self->{kidpid}{$npid}) {
+                elsif (exists $self->{kidpidlist}{$npid}) {
                     $self->glog(qq{Not kicking sync "$syncname" as it came from KID $npid}, LOG_DEBUG);
                 }
                 else {
@@ -1081,14 +1081,14 @@ sub mcp_main {
             ## A kid reporting in. We just store the PID
             elsif ('kid_pid_start') {
                 for my $lpid (keys %{ $notice->{$name}{pid} }) {
-                    $self->{kidpid}{$lpid} = 1;
+                    $self->{kidpidlist}{$lpid} = 1;
                 }
             }
 
             ## A kid leaving. We remove the stored PID.
             elsif ('kid_pid_stop') {
                 for my $lpid (keys %{ $notice->{$name}{pid} }) {
-                    delete $self->{kidpid}{$lpid};
+                    delete $self->{kidpidlist}{$lpid};
                 }
             }
 
@@ -1862,11 +1862,11 @@ sub start_controller {
         ## XXX This is called too soon - recently created kids are not there yet!
 
         ## Check that our kids are alive and healthy
-        ## XXX Skip if we know the kids are busy? (cannot ping/pong!)
+          ## XXX Skip if we know the kids are busy? (cannot ping/pong!)
         ## XXX Maybe skip this entirely and just check on a kick?
         if ($sync->{stayalive}      ## CTL must be persistent
             and $kidsalive          ## KID must be persistent
-            and $self->{kidpid} ## KID must have been created at least once
+            and $self->{kidpid}     ## KID must have been created at least once
             and time() - $kidchecktime >= $config{ctl_checkonkids_time}) {
 
             my $pidfile = "$config{piddir}/bucardo.kid.sync.$syncname.pid";
