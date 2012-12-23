@@ -2391,7 +2391,7 @@ SELECT 'Fixme'::TEXT;
                 ## We want these to always fire, even in replica mode!
                 if ($dbh->{pg_server_version} >= 80300) {
                     $SQL = qq{ALTER TABLE $safeschema.$safetable ENABLE ALWAYS TRIGGER "$kickfunc"};
-					$run_sql->($SQL,$dbh);
+                    $run_sql->($SQL,$dbh);
                 }
 
             }
