@@ -2408,9 +2408,10 @@ sub start_kid {
             ($x->{backend}, $x->{dbh}) = $self->connect_database($dbname);
             $self->glog(qq{Database "$dbname" backend PID: $x->{backend}}, LOG_VERBOSE);
 
-            ## Register ourself with the MCP
-            $self->db_notify($x->{dbh}, 'kid_pid_start', 1);
-
+            ## Register ourself with the MCP (if we are Postgres)
+            if ($x->{dbtype} eq 'postgres') {
+                $self->db_notify($x->{dbh}, 'kid_pid_start', 1);
+            }
         }
 
         ## Set the maximum length of the $dbname.$S.$T string.
