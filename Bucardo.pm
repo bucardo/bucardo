@@ -897,7 +897,7 @@ sub mcp_main {
                 ## We also won't kick if this was created by a kid
                 ## This can happen as our triggerkicks may be set to 'always'
                 elsif (exists $self->{kidpid}{$npid}) {
-                    $self->glog(qq{Not kicking sync "$syncname" as it came from KID $npid});
+                    $self->glog(qq{Not kicking sync "$syncname" as it came from KID $npid}, LOG_DEBUG);
                 }
                 else {
                     ## Kick it!
