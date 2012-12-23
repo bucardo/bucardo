@@ -31,7 +31,7 @@ for my $db (qw(A B C)) {
     ), qr/Added database "$db"/, qq{Add database "$db" to Bucardo};
 }
 
-# Let's just deal with table bucardo_test1 (single column primar key)
+# Let's just deal with table bucardo_test1 (single column primary key)
 # and bucardo_test2 (multi-column primary key).
 # Create bucardo_test4 with makedelta off.
 for my $num (1, 2, 4) {

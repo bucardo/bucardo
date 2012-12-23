@@ -388,7 +388,9 @@ vate
 BucardoTesting
 Checksum
 DBIx
+Facebook
 IncludingOptionalDependencies
+LD
 PGP
 PlanetPostgresql
 PostgreSQL
@@ -568,6 +570,10 @@ showsync
 showsyncinfo
 syncinfo
 targetdbname
+
+## t/10-makedelta.t
+
+deltatest
 
 ## t/20-postgres.t
 
