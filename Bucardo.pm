@@ -860,6 +860,11 @@ sub mcp_main {
                 if (! exists $notice->{$name}) {
                     $notice->{$name} = $nlist->{$name};
                 }
+                else {
+                    for my $pid (keys %{ $nlist->{$name}{pid} }) {
+                        $notice->{$name}{pid}{$pid}++;
+                    }
+                }
             }
         }
 
