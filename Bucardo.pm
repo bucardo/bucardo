@@ -849,8 +849,8 @@ sub mcp_main {
             ## Start listening for KIDs if we have not done so already
             if (! exists $self->{kidpid}{$dbname}) {
                 $self->{kidpid}{$dbname} = 1;
-                $self->db_listen($x->{dbh}, 'kid_pid_start', '', 1);
-                $self->db_listen($x->{dbh}, 'kid_pid_stop', '', 1);
+                $self->db_listen($x->{dbh}, 'kid_pid_start', $dbname, 1);
+                $self->db_listen($x->{dbh}, 'kid_pid_stop', $dbname, 1);
                 $x->{dbh}->commit();
             }
 
