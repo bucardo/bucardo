@@ -8,7 +8,7 @@ use strict;
 use warnings;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 55;
+use Test::More tests => 53;
 #use Test::More 'no_plan';
 
 use BucardoTesting;
@@ -32,26 +32,21 @@ for my $db (qw(A B C)) {
     ), qr/Added database "$db"/, qq{Add database "$db" to Bucardo};
 }
 
-# Let's just deal with table bucardo_test1 (sindle col pk) and bucardo_test2
-# (multi-col pk). Create bucardo_test4 with makedelta off.
+# Let's just deal with table bucardo_test1 (single column primar key)
+# and bucardo_test2 (multi-column primary key).
+# Create bucardo_test4 with makedelta off.
 for my $num (1, 2, 4) {
     my $md = $num == 4 ? 'off' : 'on';
     like $bct->ctl("bucardo add table bucardo_test$num db=A relgroup=myrels makedelta=$md"),
         qr/Added the following tables/, "Add table bucardo_test$num";
 }
 
-# Create a new dbgroup for multi-master replication between A and B
-like $bct->ctl('bucardo add dbgroup delta1 A:source B:source'),
-    qr/Created database group "delta1"/, 'Create relgroup delta1';
-
-# Create a sync for this group.
-like $bct->ctl('bucardo add sync deltatest1 relgroup=myrels dbs=delta1'),
+# Create a sync for multi-master replication between A and B
+like $bct->ctl('bucardo add sync deltatest1 relgroup=myrels dbs=A:source,B:source'),
     qr/Added sync "deltatest1"/, 'Create sync "deltatest1"';
 
-# Create a new dbgroup and sync to copy the tables from B to C.
-like $bct->ctl('bucardo add dbgroup delta2 B:source C:target'),
-    qr/Created database group "delta2"/, 'Create relgroup delta2';
-like $bct->ctl('bucardo add sync deltatest2 relgroup=myrels dbs=delta2'),
+# Create a sync for replication from B to C
+like $bct->ctl('bucardo add sync deltatest2 relgroup=myrels dbs=B,C'),
     qr/Added sync "deltatest2"/, 'Create sync "deltatest2"';
 
 # Listen in on things.
@@ -59,6 +54,8 @@ ok $dbhX->do('LISTEN bucardo_syncdone_deltatest1'),
     'Listen for syncdone_deltatest1';
 ok $dbhX->do('LISTEN bucardo_syncdone_deltatest2'),
     'Listen for syncdone_deltatest2';
+ok $dbhX->do('LISTEN bucardo_syncdone_deltatest3'),
+    'Listen for syncdone_deltatest3';
 
 # Start up Bucardo and wait for initial syncs to finish.
 ok $bct->restart_bucardo($dbhX), 'Bucardo should start';
@@ -73,24 +70,26 @@ $bct->check_for_row([], [qw(A B C)], undef, 'test[124]$');
 # Let's add some data into A.bucardo_test1.
 ok $dbhA->do(q{INSERT INTO bucardo_test1 (id, data1) VALUES (1, 'foo')}),
     'Insert a row into test1 on A';
+$bct->ctl('bucardo message Adding new row to bucardo_test1');
 $dbhA->commit;
 
 ok $bct->wait_for_notice($dbhX, [qw(
     bucardo_syncdone_deltatest1
-    bucardo_syncdone_deltatest1
-    bucardo_syncdone_deltatest2
-)]), 'The second deltatest1 and deltatest2 & recursive deltatest1 syncs should finish';
+)]), 'The deltatest1 sync finished';
 
-# Make sure we don't enter a circular repliation loop between A and B.
-eval { $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1', 1, 0, 0) };
-like $@, qr/\QGave up waiting for notice "bucardo_syncdone_deltatest1"/,
-    'Should not have another deltatest1 sync';
-
-# The row should be in all three databases.
+# The row should be in A and B, but not C (as we have not kicked deltatest2 yet)
 is_deeply $dbhB->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test1'
 ), [[1, 'foo']], 'Should have the test1 row in B';
 
+is_deeply $dbhC->selectall_arrayref(
+    'SELECT id, data1 FROM bucardo_test1'
+), [], 'No rows in C yet';
+
+# Kick the second sync so that we get the row into C
+$bct->ctl('bucardo kick sync deltatest2 0');
+
+# Now the row should be in C
 is_deeply $dbhC->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test1'
 ), [[1, 'foo']], 'Should have the test1 row in C';
@@ -103,13 +102,7 @@ $dbhB->commit;
 ok $bct->wait_for_notice($dbhX, [qw(
     bucardo_syncdone_deltatest1
     bucardo_syncdone_deltatest2
-    bucardo_syncdone_deltatest1
-)]), 'The third deltatest1 and deltatest2 and 2nd reciprocal deltatest1 syncs should finish';
-
-# Make sure we don't enter a circular repliation loop between A and B.
-eval { $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1', 1, 0, 0) };
-like $@, qr/\QGave up waiting for notice "bucardo_syncdone_deltatest1"/,
-    'Again should not have a duplicate deltatest1 sync';
+)]), 'The deltatest1 and deltatest2 syncs finished';
 
 is_deeply $dbhA->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test2'
@@ -126,18 +119,10 @@ $dbhA->commit;
 
 ok $bct->wait_for_notice($dbhX, [qw(
     bucardo_syncdone_deltatest1
-    bucardo_syncdone_deltatest1
-)]), 'The 4th deltatest1 3rd reciprocal deltatest1 syncs should finish';
+)]), 'The deltatest1 sync finished';
 
-# Make sure we don't enter a circular repliation loop between A and B.
-eval { $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1', 1, 0, 0) };
-like $@, qr/\QGave up waiting for notice "bucardo_syncdone_deltatest1"/,
-    'Again should not have a duplicate deltatest1 sync';
-
-# Should have no deltatest2 sync, either.
-eval { $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest2', 1, 0, 0) };
-like $@, qr/\QGave up waiting for notice "bucardo_syncdone_deltatest2"/,
-    'Should have no deltatest2 sync triggered from table 4';
+# Kick off the second sync
+$bct->ctl('bucardo kick sync deltatest2 0');
 
 is_deeply $dbhB->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test4'
@@ -147,16 +132,18 @@ is_deeply $dbhC->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test4'
 ), [], 'Should have no test4 row row in C';
 
+$dbhA->commit();
+$dbhB->commit();
+$dbhC->commit();
+
 ##############################################################################
 # Okay, what if we have C be a target from either A or B?
 like $bct->ctl('bucardo remove sync deltatest2'),
     qr/Removed sync "deltatest2"/, 'Remove sync "deltatest2"';
-like $bct->ctl('bucardo remove dbgroup delta2'),
-    qr/Removed database group "delta2"/, 'Remove relgroup delta2';
-like $bct->ctl('bucardo add dbgroup delta2 A:source B:source C:target'),
-   qr/Created database group "delta2"/, 'Recreate relgroup delta2';
-like $bct->ctl('bucardo add sync deltatest2 relgroup=myrels dbs=delta2'),
-   qr/Added sync "deltatest2"/, 'Recreate sync "deltatest2"';
+like $bct->ctl('bucardo add sync deltatest3 relgroup=myrels dbs=A:source,B:source,C'),
+   qr/Added sync "deltatest3"/, 'Created sync "deltatest3"';
+
+ok $bct->restart_bucardo($dbhX), 'Bucardo restarted';
 
 ok $dbhA->do(q{INSERT INTO bucardo_test2 (id, data1) VALUES (3, 'howdy')}),
     'Insert a row into test2 on A';
@@ -164,18 +151,8 @@ $dbhA->commit;
 
 ok $bct->wait_for_notice($dbhX, [qw(
     bucardo_syncdone_deltatest1
-    bucardo_syncdone_deltatest2
-    bucardo_syncdone_deltatest1
-    bucardo_syncdone_deltatest2
-)]), 'The third deltatest1 and deltatest2 and 2nd reciprocal deltatest1 syncs should finish';
-
-# Make sure we don't enter a circular repliation loop between A and B.
-eval { $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest1', 1, 0, 0) };
-like $@, qr/\QGave up waiting for notice "bucardo_syncdone_deltatest1"/,
-    'Again should not have a duplicate deltatest1 sync';
-eval { $bct->wait_for_notice($dbhX, 'bucardo_syncdone_deltatest2', 1, 0, 0) };
-like $@, qr/\QGave up waiting for notice "bucardo_syncdone_deltatest2"/,
-    'Should not have a duplicate deltatest2 sync';
+    bucardo_syncdone_deltatest3
+)]), 'Syncs deltatest1 and deltatest3 finished';
 
 is_deeply $dbhB->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test2'
