@@ -8,8 +8,7 @@ use strict;
 use warnings;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 53;
-#use Test::More 'no_plan';
+use Test::More tests => 50;
 
 use BucardoTesting;
 my $bct = BucardoTesting->new({ location => 'makedelta' })
@@ -162,20 +161,3 @@ is_deeply $dbhC->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test2'
 ), [[2, 'foo'], [3, 'howdy']], 'Should have the A test2 row in C';
 
-# use Data::Dump 'pp';
-# sub dumpem {
-#     for my $spec (
-#         [A => $dbhA],
-#         [B => $dbhB],
-#     ) {
-#         my ($db, $dbh) = @{ $spec };
-#         diag $db;
-#         for my $i (1, 2, 4) {
-#             next if $i == 4;
-#             for my $prefix (qw(delta stage track)) {
-#                 my $table = "$prefix\_public_bucardo_test$i";
-#                 diag "$i $prefix: ", pp $dbh->selectall_arrayref("SELECT * FROM bucardo.$table");
-#             }
-#         }
-#     }
-# }
