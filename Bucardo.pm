@@ -4112,7 +4112,7 @@ sub start_kid {
                     $SQL = "SELECT * FROM $S.$T";
                     $sth = $sourcedbh->prepare($SQL);
                     $sth->execute();
-                    $g->{sequenceinfo}{$sourcename} =$sth->fetchall_arrayref({})->[0];
+                    $g->{sequenceinfo}{$sourcename} = $sth->fetchall_arrayref({})->[0];
                     $g->{winning_db} = $sourcename;
 
                     ## We want to modify all fullcopy targets only
@@ -5853,6 +5853,7 @@ sub validate_sync {
         $sth = $sth{checktable};
         $count = $sth->execute(qq{"$g->{schemaname}"."$g->{tablename}"});
         if ($count != 1) {
+            $sth->finish();
             my $msg = qq{Could not find $g->{reltype} "$g->{schemaname}"."$g->{tablename}"\n};
             $self->glog($msg, LOG_WARN);
             warn $msg;
@@ -7318,7 +7319,7 @@ sub end_syncrun {
         AND    sync = ?
         };
     $sth = $ldbh->prepare($SQL);
-    $count = $sth->execute($syncname);
+    $sth->execute($syncname);
 
     ## End the current row, and elevate it to a 'last' position
     $SQL = qq{
@@ -7327,7 +7328,7 @@ sub end_syncrun {
         WHERE  ctid = ?
         };
     $sth = $ldbh->prepare($SQL);
-    $count = $sth->execute($status, $ctid);
+    $sth->execute($status, $ctid);
 
     return;
 
