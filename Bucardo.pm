@@ -963,7 +963,7 @@ sub mcp_main {
             elsif ('log_message' eq $name) {
                 $self->glog('Checking for log messages', LOG_DEBUG);
                 $SQL = 'SELECT msg,cdate FROM bucardo_log_message ORDER BY cdate';
-                $sth = $maindbh->prepare_cached($SQL);
+                my $sth = $maindbh->prepare_cached($SQL);
                 $count = $sth->execute();
                 if ($count ne '0E0') {
                     for my $row (@{$sth->fetchall_arrayref()}) {
@@ -971,6 +971,9 @@ sub mcp_main {
                     }
                     $maindbh->do('TRUNCATE TABLE bucardo_log_message');
                     $maindbh->commit();
+                }
+                else {
+                    $sth->finish();
                 }
             }
 
@@ -994,7 +997,7 @@ sub mcp_main {
                         . q{COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs, }
                             . q{COALESCE(EXTRACT(epoch FROM lifetime),0) AS lifetimesecs }
                                 . q{FROM bucardo.sync WHERE name = ?};
-                    $sth = $maindbh->prepare($SQL);
+                    my $sth = $maindbh->prepare($SQL);
                     $count = $sth->execute($syncname);
                     if ($count eq '0E0') {
                         $sth->finish();
