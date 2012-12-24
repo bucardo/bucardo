@@ -1479,16 +1479,26 @@ END;
             $SQL = qq{
                     CREATE TABLE bucardo.bucardo_delta_targets (
                         tablename  OID         NOT NULL,
-                        sync       TEXT        NOT NULL,
+                        target     TEXT        NOT NULL,
                         cdate      TIMESTAMPTZ NOT NULL DEFAULT now()
                     );
                 };
             $run_sql->($SQL,$dbh);
         }
 
-        ## Check for missing 'sync' column in the bucardo_delta_target table
+        ## Rename the target column from 'sync' as older versions used that
         $sth = $sth{hazcol};
         $count = $sth->execute('bucardo', 'bucardo_delta_targets', 'sync');
+        $sth->finish();
+        if (1 == $count) {
+            ## Change the name!
+            $SQL = qq{ALTER TABLE bucardo.bucardo_delta_targets RENAME sync TO target};
+            $run_sql->($SQL,$dbh);
+        }
+
+        ## Check for missing 'target' column in the bucardo_delta_target table
+        $sth = $sth{hazcol};
+        $count = $sth->execute('bucardo', 'bucardo_delta_targets', 'target');
         $sth->finish();
         if ($count < 1) {
             ## As the new column cannot be null, we have to delete existing entries!
@@ -1497,15 +1507,15 @@ END;
             $run_sql->($SQL,$dbh);
             $SQL = qq{
                     ALTER TABLE bucardo.bucardo_delta_targets
-                      ADD COLUMN sync TEXT NOT NULL;
+                      ADD COLUMN target TEXT NOT NULL;
             };
             $run_sql->($SQL,$dbh);
         }
 
-        ## Populate bucardo_delta_targets with this sync name
-        $SQL = 'SELECT 1 FROM bucardo.bucardo_delta_targets WHERE tablename=? AND sync=?';
+        ## Populate bucardo_delta_targets with this dbgroup name
+        $SQL = 'SELECT 1 FROM bucardo.bucardo_delta_targets WHERE tablename=? AND target=?';
         my $sthc = $dbh->prepare($SQL);
-        $SQL = 'INSERT INTO bucardo.bucardo_delta_targets(tablename,sync) VALUES (?,?)';
+        $SQL = 'INSERT INTO bucardo.bucardo_delta_targets(tablename,target) VALUES (?,?)';
         my $stha = $dbh->prepare($SQL);
         for my $schema (sort keys %goat) {
             for my $table (sort keys %{$goat{$schema}}) {
@@ -1521,7 +1531,7 @@ END;
                 my $count = $sthc->execute($oid,$syncname);
                 $sthc->finish();
                 if ($count != 1) {
-                    $stha->execute($oid,$syncname);
+                    $stha->execute($oid,"dbgroup $info->{dbs}");
                     $dbh->commit();
                 }
             }
@@ -1784,7 +1794,7 @@ SELECT 'Fixme'::TEXT;
                       -- Clean out the search_path so the regclass casting works as expected
                       SET LOCAL search_path = pg_catalog;
                     
-                      -- See how many syncs are being used by this table
+                      -- See how many dbgroups are being used by this table
                       SELECT INTO drows 
                         COUNT(*)
                         FROM bucardo.bucardo_delta_targets
@@ -1792,9 +1802,9 @@ SELECT 'Fixme'::TEXT;
 
                       RESET search_path;
                     
-                      -- If no syncs, no point in going on, as we will never purge anything
+                      -- If no dbgroups, no point in going on, as we will never purge anything
                       IF drows < 1 THEN
-                        RETURN 'No syncs are using table '||\$2||', according to bucardo_delta_targets';
+                        RETURN 'Nobody is using table '||\$2||', according to bucardo_delta_targets';
                       END IF;
 
                       -- Figure out the names of the delta and track tables for this relation
@@ -1804,7 +1814,7 @@ SELECT 'Fixme'::TEXT;
                         bucardo.bucardo_tablename_maker(\$2, 'track_');
                     
                       -- Delete all txntimes from the delta table that:
-                      -- 1) Have been used by all syncs listed in bucardo_delta_targets
+                      -- 1) Have been used by all dbgroups listed in bucardo_delta_targets
                       -- 2) Have a matching txntime from the track table
                       -- 3) Are older than the first argument interval
                       myst = 'DELETE FROM bucardo.'
@@ -2333,7 +2343,7 @@ SELECT 'Fixme'::TEXT;
             $count = $sth->execute('bucardo','bucardo_delta_target_unique');
             $sth->finish();
             if ($count < 1) {
-                $dbh->do(qq{CREATE INDEX bucardo_delta_target_unique ON bucardo.bucardo_delta_targets(tablename,sync)});
+                $dbh->do(qq{CREATE INDEX bucardo_delta_target_unique ON bucardo.bucardo_delta_targets(tablename,target)});
             }
 
             ## Override the 'autokick' kick trigger if needed
