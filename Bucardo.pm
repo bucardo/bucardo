@@ -1979,6 +1979,8 @@ sub start_kid {
     my $extra = $sync->{onetimecopy} ? "OTC: $sync->{onetimecopy}" : '';
     $self->glog(qq{New kid, sync "$syncname" alive=$kidsalive Parent=$self->{ctlpid} PID=$$ kicked=$kicked $extra}, LOG_TERSE);
 
+$self->glog(Dumper $sync->{tableoid});
+
     ## Store our PID into a file
     ## Save the complete returned name for later cleanup
     $self->{kidpidfile} = $self->store_pid( "bucardo.kid.sync.$syncname.pid" );
@@ -5713,7 +5715,7 @@ sub validate_sync {
 
     ## Given a schema and table name, return safely quoted names
     $SQL{checktable} = q{
-            SELECT quote_ident(n.nspname), quote_ident(c.relname), quote_literal(n.nspname), quote_literal(c.relname)
+            SELECT c.oid, quote_ident(n.nspname), quote_ident(c.relname), quote_literal(n.nspname), quote_literal(c.relname)
             FROM   pg_class c, pg_namespace n
             WHERE  c.relnamespace = n.oid
             AND    c.oid = ?::regclass
@@ -5860,11 +5862,14 @@ sub validate_sync {
             return 0;
         }
 
-        ## Store quoted names for this goat
-        ($g->{safeschema},$g->{safetable},$g->{safeschemaliteral},$g->{safetableliteral})
+        ## Store oid and quoted names for this relation
+        ($g->{oid},$g->{safeschema},$g->{safetable},$g->{safeschemaliteral},$g->{safetableliteral})
             = @{$sth->fetchall_arrayref()->[0]};
 
         my ($S,$T) = ($g->{safeschema},$g->{safetable});
+
+        ## Plunk the oid into a hash for easy lookup below when saving FK information
+        $s->{tableoid}{$g->{oid}}{name} = "$S.$T";
 
         ## Determine the conflict method for each goat
         ## Use the syncs if it has one, otherwise the default
@@ -6072,6 +6077,7 @@ sub validate_sync {
             }
 
             $dbh->do('RESET search_path');
+            $dbh->rollback();
 
             my $t = "$g->{schemaname}.$g->{tablename}";
 
@@ -6203,6 +6209,42 @@ sub validate_sync {
         } ## end each target database
 
     } ## end each goat
+
+    ## Generate mapping of foreign keys
+    ## This helps us with conflict resolution later on
+    my $oidlist = join ',' => map { $_->{oid} } @{ $s->{goatlist} };
+    $SQL = q{SELECT conrelid, conrelid::regclass, confrelid, confrelid::regclass, conname }
+        . q{FROM pg_constraint WHERE contype = 'f' }
+        . qq{AND (conrelid IN ($oidlist) OR confrelid IN ($oidlist))};
+
+    ## We turn off search_path to get fully-qualified relation names
+    $srcdbh->do('SET LOCAL search_path = pg_catalog');
+
+    for my $row (@{ $srcdbh->selectall_arrayref($SQL) }) {
+
+        my ($oid,$tname,$oid2,$tname2,$conname) = @$row;
+
+        ## The referenced table is not being tracked in this sync
+        if (! exists $s->{tableoid}{$oid2}) {
+            ## Nothing to do except report this problem and move on
+            $self->glog("Table $tname references $tname2, which is not part of this sync!", LOG_NORMAL);
+            next;
+        }
+
+        ## A table referencing us is not being tracked in this sync
+        if (! exists $s->{tableoid}{$oid}) {
+            ## Nothing to do except report this problem and move on
+            $self->glog("Table $tname2 is referenced by $tname, which is not part of this sync!", LOG_NORMAL);
+            next;
+        }
+
+        ## Both exist, so tie them together
+        $s->{tableoid}{$oid}{references}{$oid2} = $conname;
+        $s->{tableoid}{$oid2}{referencedby}{$oid} = $conname;
+
+    }
+    $srcdbh->do('RESET search_path');
+    $srcdbh->commit();
 
     ## If autokick, listen for a triggerkick on all source databases
     if ($s->{autokick}) {
