@@ -1979,8 +1979,6 @@ sub start_kid {
     my $extra = $sync->{onetimecopy} ? "OTC: $sync->{onetimecopy}" : '';
     $self->glog(qq{New kid, sync "$syncname" alive=$kidsalive Parent=$self->{ctlpid} PID=$$ kicked=$kicked $extra}, LOG_TERSE);
 
-$self->glog(Dumper $sync->{tableoid});
-
     ## Store our PID into a file
     ## Save the complete returned name for later cleanup
     $self->{kidpidfile} = $self->store_pid( "bucardo.kid.sync.$syncname.pid" );
@@ -3145,6 +3143,11 @@ $self->glog(Dumper $sync->{tableoid});
                     $deltacount{table}{$S}{$T} += $count;
                     $deltacount{dbtable}{$dbname}{$S}{$T} = $count; ## NOT a +=
 
+                    ## Special versions for FK checks below
+                    if ($count) {
+                        $deltacount{tableoid}{$g->{oid}}{$dbname} = $count;
+                    }
+
                     ## For our pretty output below
                     $maxcount = $count if $count > $maxcount;
 
@@ -3181,7 +3184,11 @@ $self->glog(Dumper $sync->{tableoid});
             ## Report on the total number of deltas found
             $self->glog("Total delta count: $deltacount{all}", LOG_VERBOSE);
 
+            ## Reset our list of possible FK issues
+            $sync->{fkcheck} = {};
+
             ## If more than one total source db, break it down at that level
+            ## We also check for foreign key dependencies here
             if (keys %{ $deltacount{db} } > 1) {
 
                 ## Figure out the width for the per-db breakdown below
@@ -3203,7 +3210,61 @@ $self->glog(Dumper $sync->{tableoid});
                                  length $maxdbcount,
                                 $deltacount{db}{$dbname}), LOG_VERBOSE);
                 }
-            }
+
+                ## Since we have changes appearing on more than one database,
+                ## we need to see if any of the database-spanning tables involved
+                ## are linked via foreign keys. If they are, we may have to
+                ## change our replication strategy so that the foreign keys are
+                ## still intact at the end of our operation.
+                ## If we find tables that need to be checked, we add them to $self->{fkcheck}
+
+                ## Walk through each table with changes
+                for my $toid (sort keys %{ $deltacount{tableoid} }) {
+
+                    my $t1 = $deltacount{tableoid}{$toid};
+                    my $tname1 = $sync->{tableoid}{$toid}{name};
+
+                    ## Find all tables that this table references
+                    my $info = $sync->{tableoid}{$toid};
+                    ## Note that we really only need to check one of references or referencedby
+                  REFFER: for my $reftable (sort keys %{ $info->{references} } ) {
+
+                        ## Skip if it has no changes
+                        next if ! exists $deltacount{tableoid}{$reftable};
+
+                        ## At this point, we know that both linked tables have at
+                        ## least one source change. We also know that at least two
+                        ## source databases are involved in this sync.
+
+                        my $t2 = $deltacount{tableoid}{$reftable};
+                        my $tname2 = $sync->{tableoid}{$reftable}{name};
+
+                        ## The danger is if the changes come from different databases
+                        ## If this happens, the foreign key relationship may be violated
+                        ## when we push the changes both ways.
+
+                        ## Check if any of the dbs are mismatched. If so, instant FK marking
+                        for my $db1 (sort keys %$t1) {
+                            if (! exists $t2->{$db1}) {
+                                $self->glog("Table $tname1 and $tname2 may have FK issues", LOG_DEBUG);
+                                $sync->{fkcheck}{$tname1}{$tname2} = 1;
+                                next REFFER;
+                            }
+                        }
+
+                        ## So both tables have changes on the same source databases.
+                        ## Now the only danger is if either has more than one source
+                        if (keys %$t1 > 1 or keys %$t2 > 1) {
+                            $self->glog("Table $tname1 and $tname2 may have FK issues", LOG_DEBUG);
+                            $sync->{fkcheck}{$tname1}{$tname2} = 1;
+                            $sync->{fkcheck}{$tname2}{$tname1} = 2;
+                        }
+
+                    } ## end each reffed table
+
+                } ## end each changed table
+
+            } ## end if more than one source database has changes
 
             ## If there were no changes on any sources, rollback all databases,
             ## update the syncrun and dbrun tables, notify listeners,
@@ -3839,7 +3900,7 @@ $self->glog(Dumper $sync->{tableoid});
                                 }
                             }
 
-                            ## Wait for all REINDEXes to finish, then release the savepoint
+                            ## Wait for all REINDEXes to finish
                             for my $dbname (sort keys %{ $sync->{db} }) {
                                 $x = $sync->{db}{$dbname};
 
@@ -3849,9 +3910,13 @@ $self->glog(Dumper $sync->{tableoid});
                                     $x->{dbh}->pg_result();
                                     $x->{index_disabled} = 0;
                                 }
-                                if ($g->{has_exception_code}) {
-                                    $x->{dbh}->do("RELEASE SAVEPOINT bucardo_$$");
-                                }
+                            }
+
+                            ## If this table has a possible FK problem,
+                            ## we need to check things out
+                            ## Cannot do anything until both pairs have reported in!
+
+                            if (exists $sync->{fkcheck}{"$S.$T"}) {
                             }
 
                             ## We set this as we cannot rely on $@ alone
@@ -6213,36 +6278,45 @@ sub validate_sync {
     ## Generate mapping of foreign keys
     ## This helps us with conflict resolution later on
     my $oidlist = join ',' => map { $_->{oid} } @{ $s->{goatlist} };
-    $SQL = q{SELECT conrelid, conrelid::regclass, confrelid, confrelid::regclass, conname }
-        . q{FROM pg_constraint WHERE contype = 'f' }
-        . qq{AND (conrelid IN ($oidlist) OR confrelid IN ($oidlist))};
+    $SQL = qq{SELECT conname,
+                    conrelid, conrelid::regclass,
+                    confrelid, confrelid::regclass,
+                    array_agg(a.attname), array_agg(z.attname)
+             FROM pg_constraint c
+             JOIN pg_attribute a ON (a.attrelid = conrelid AND a.attnum = ANY(conkey))
+             JOIN pg_attribute z ON (z.attrelid = confrelid AND z.attnum = ANY (confkey))
+             WHERE contype = 'f'
+             AND (conrelid IN ($oidlist) OR confrelid IN ($oidlist))
+             GROUP BY 1,2,3,4,5
+};
 
     ## We turn off search_path to get fully-qualified relation names
     $srcdbh->do('SET LOCAL search_path = pg_catalog');
 
     for my $row (@{ $srcdbh->selectall_arrayref($SQL) }) {
 
-        my ($oid,$tname,$oid2,$tname2,$conname) = @$row;
+        my ($conname, $oid1,$t1, $oid2,$t2, $c1,$c2) = @$row;
 
         ## The referenced table is not being tracked in this sync
         if (! exists $s->{tableoid}{$oid2}) {
             ## Nothing to do except report this problem and move on
-            $self->glog("Table $tname references $tname2, which is not part of this sync!", LOG_NORMAL);
+            $self->glog("Table $t1 references $t2, which is not part of this sync!", LOG_NORMAL);
             next;
         }
 
         ## A table referencing us is not being tracked in this sync
-        if (! exists $s->{tableoid}{$oid}) {
+        if (! exists $s->{tableoid}{$oid1}) {
             ## Nothing to do except report this problem and move on
-            $self->glog("Table $tname2 is referenced by $tname, which is not part of this sync!", LOG_NORMAL);
+            $self->glog("Table $t2 is referenced by $t1, which is not part of this sync!", LOG_NORMAL);
             next;
         }
 
         ## Both exist, so tie them together
-        $s->{tableoid}{$oid}{references}{$oid2} = $conname;
-        $s->{tableoid}{$oid2}{referencedby}{$oid} = $conname;
+        $s->{tableoid}{$oid1}{references}{$oid2} = [$conname,$c1,$c2];
+        $s->{tableoid}{$oid2}{referencedby}{$oid1} = [$conname,$c1,$c2];
 
     }
+
     $srcdbh->do('RESET search_path');
     $srcdbh->commit();
 
