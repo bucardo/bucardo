@@ -34,6 +34,8 @@ Future
 
 These range the gamut from wildly speculative ideas to must-have features.
 
+- Merge bucardo_kick_%sync into a single trigger and function per table that
+  does 1+N NOTIFYs inside of it
 - Allow one log file per sync
 - Handle the case where newly created databases do not have a public schema
 - Add DB2 as a target
