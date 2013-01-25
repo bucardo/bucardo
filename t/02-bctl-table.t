@@ -10,7 +10,7 @@ use warnings;
 use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 32;
+use Test::More tests => 35;
 
 use vars qw/$t $res $expected $command $dbhX $dbhA $dbhB $SQL/;
 
@@ -182,6 +182,24 @@ qr{\d+\.\s* Table: public.bucardo_test1   DB: A  PK: id \(int2\)\s*
 \d+\.\s* Table: tschema.bucardo_test4  DB: A  PK: none\s*autokick:false  rebuild_index:true\s*
 };
 like ($res, $expected, $t);
+
+## Remove them all, then try 'all tables'
+empty_goat_table();
+$t = q{Add all tables};
+$res = $bct->ctl('bucardo add all tables --verbose');
+like ($res, qr{New tables added: 13}, $t);
+
+## Remove them all, then try 'all tables' with exclude table
+empty_goat_table();
+$t = q{Add all tables with exclude table};
+$res = $bct->ctl('bucardo add all tables -T droptest -vv --debug');
+like ($res, qr{New tables added: 12}, $t);
+
+## Remove them all, then try 'all tables' with exclude schema
+empty_goat_table();
+$t = q{Add all tables with exclude schema};
+$res = $bct->ctl('bucardo add all tables -N public -vv --debug');
+like ($res, qr{New tables added: 1\n}, $t);
 
 empty_goat_table();
 

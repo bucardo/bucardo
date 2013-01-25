@@ -5926,7 +5926,7 @@ sub add_all_goats {
     ## --schema or -n: limit to one or more comma-separated schemas
     ## --exclude-schema or -N: exclude these schemas
     ## --table or -t: limit to the given tables
-    ## --exclude-table or -t: exclude these tables
+    ## --exclude-table or -T: exclude these tables
     ## --relgroup: name of the herd to add new tables to
     ## pkonly: exclude tables with no pkey
     ## Returns: text string of results, with a newline
@@ -6001,13 +6001,13 @@ sub add_all_goats {
     push @clause => generate_clause({col => 'nspname', items => [$bcargs->{schema}]});
 
     ## If they have asked to exclude schemas, append that to the namespace clause
-    push @clause => generate_clause({col => 'nspname', items => [$bcargs->{'exclude-schema'}], not => 1});
+    push @clause => generate_clause({col => 'nspname', items => $bcargs->{'exclude-schema'}, not => 1});
 
     ## If they gave a table option, restrict the query by relname
     push @clause => generate_clause({col => 'relname', items => [$bcargs->{table}]});
 
     ## If they have asked to exclude tables, append that to the relname clause
-    push @clause => generate_clause({col => 'relname', items => [$bcargs->{'exclude-table'}], not => 1});
+    push @clause => generate_clause({col => 'relname', items => $bcargs->{'exclude-table'}, not => 1});
 
     for my $c (@clause) {
         next if ! $c;
