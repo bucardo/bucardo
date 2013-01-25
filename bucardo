@@ -77,7 +77,7 @@ my $bcargs = {
 
 ## These options must come before the GetOptions call
 my @opts = @ARGV;
-Getopt::Long::Configure(qw(pass_through));
+Getopt::Long::Configure(qw(pass_through no_autoabbrev));
 GetOptions(
     $bcargs,
     'no-bucardorc',
@@ -118,7 +118,7 @@ if (defined $file) {
     close $rc or die;
 }
 
-Getopt::Long::Configure(qw(no_pass_through));
+Getopt::Long::Configure(qw(no_pass_through autoabbrev));
 GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
     ($bcargs,
      'verbose+',
@@ -5998,13 +5998,13 @@ sub add_all_goats {
     my @clause;
 
     ## If they gave a schema option, restrict the query by namespace
-    push @clause => generate_clause({col => 'nspname', items => [$bcargs->{schema}]});
+    push @clause => generate_clause({col => 'nspname', items => $bcargs->{schema}});
 
     ## If they have asked to exclude schemas, append that to the namespace clause
     push @clause => generate_clause({col => 'nspname', items => $bcargs->{'exclude-schema'}, not => 1});
 
     ## If they gave a table option, restrict the query by relname
-    push @clause => generate_clause({col => 'relname', items => [$bcargs->{table}]});
+    push @clause => generate_clause({col => 'relname', items => $bcargs->{table}});
 
     ## If they have asked to exclude tables, append that to the relname clause
     push @clause => generate_clause({col => 'relname', items => $bcargs->{'exclude-table'}, not => 1});

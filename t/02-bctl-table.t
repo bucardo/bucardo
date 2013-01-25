@@ -10,7 +10,7 @@ use warnings;
 use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 35;
+use Test::More tests => 37;
 
 use vars qw/$t $res $expected $command $dbhX $dbhA $dbhB $SQL/;
 
@@ -186,8 +186,20 @@ like ($res, $expected, $t);
 ## Remove them all, then try 'all tables'
 empty_goat_table();
 $t = q{Add all tables};
-$res = $bct->ctl('bucardo add all tables --verbose');
+$res = $bct->ctl('bucardo add all tables -vv --debug');
 like ($res, qr{New tables added: 13}, $t);
+
+## Remove them all, then try 'all tables' with tables limit
+empty_goat_table();
+$t = q{Add all tables with tables limit};
+$res = $bct->ctl('bucardo add all tables -t bucardo_test1 -t bucardo_test2 -vv --debug');
+like ($res, qr{New tables added: 2\n}, $t);
+
+## Remove them all, then try 'all tables' with schema limit
+empty_goat_table();
+$t = q{Add all tables with schema limit};
+$res = $bct->ctl('bucardo add all tables -n public -vv --debug');
+like ($res, qr{New tables added: 12\n}, $t);
 
 ## Remove them all, then try 'all tables' with exclude table
 empty_goat_table();
