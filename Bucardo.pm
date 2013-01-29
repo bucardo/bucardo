@@ -7715,11 +7715,13 @@ sub table_has_rows {
 
     ## Some types do not have a count
     return 0 if $x->{does_append_only};
-
+ 
+    my $rv;
     if ($x->{does_limit}) {
         $SQL = "SELECT 1 FROM $tname LIMIT 1";
         $sth = $x->{dbh}->prepare($SQL);
-        $count = $sth->execute();
+        $rv = $sth->execute();
+        $count = $sth->rows();
         $sth->finish();
         return $count >= 1 ? 1 : 0;
     }
@@ -7731,7 +7733,8 @@ sub table_has_rows {
     elsif ('oracle' eq $x->{dbtype}) {
         $SQL = "SELECT 1 FROM $tname WHERE rownum > 1";
         $sth = $x->{dbh}->prepare($SQL);
-        $count = $sth->execute();
+        $rv = $sth->execute();
+        $count = $sth->rows();
         $sth->finish();
         return $count >= 1 ? 1 : 0;
     }
