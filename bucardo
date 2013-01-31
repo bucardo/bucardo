@@ -2194,7 +2194,7 @@ sub update_dbgroup {
         my $oldrole = $oldlist->{$db}{role};
         my $newrole = $dblist{$db};
         if ($oldrole ne $newrole) {
-            change_db_role($newrole, $db, $name);
+            change_db_role($newrole, $name, $db);
             $QUIET or print qq{Changed role of database "$db" in group "$name" from $oldrole to $newrole\n};
             $changes++;
         }
