@@ -10,7 +10,7 @@ use warnings;
 use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 24;
+use Test::More tests => 25;
 
 use vars qw/$t $res $command $dbhX $dbhA $dbhB/;
 
@@ -128,6 +128,8 @@ like ($res, qr/Added database "A" to group "foobar" as target/, $t);
 $t = 'Update dbgroup works with adding multiple databases';
 $res = $bct->ctl('bucardo update dbgroup foobar A:master B:master');
 like ($res, qr/Changed role of database "A" in group "foobar" from target to source.*Added database "B" to group "foobar" as source/s, $t);
+$res = $bct->ctl('bucardo list dbgroup');
+like ($res, qr/Database group: foobar  Members: A:source B:source/s, $t);
 
 $t = 'Update dbgroup fails when new name is invalid';
 $res = $bct->ctl('bucardo update dbgroup foobar newname=foobaz#');
