@@ -1,6 +1,6 @@
 ##!/bin/bash
 
-## A quick self-containted test of the makedelta system
+## A quick self-contained test of the makedelta system
 ## Not a replacement for the real tests so much as a development aid
 
 ## Uses:
