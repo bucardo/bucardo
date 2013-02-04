@@ -18,17 +18,64 @@
 
 	<li><a href="#name">NAME</a></li>
 	<li><a href="#version">VERSION</a></li>
-	<li><a href="#synopsis">SYNOPSIS</a></li>
+	<li><a href="#usage">USAGE</a></li>
 	<li><a href="#description">DESCRIPTION</a></li>
 	<li><a href="#commands">COMMANDS</a></li>
 	<li><a href="#options">OPTIONS</a></li>
+	<li><a href="#command_details">COMMAND DETAILS</a></li>
 	<ul>
 
-		<li><a href="#kick_arguments">Kick arguments</a></li>
-		<li><a href="#status_arguments">Status arguments</a></li>
-		<li><a href="#startup_arguments">Startup arguments</a></li>
+		<li><a href="#install">install</a></li>
+		<li><a href="#upgrade">upgrade</a></li>
+		<li><a href="#start">start</a></li>
+		<li><a href="#stop">stop</a></li>
+		<li><a href="#restart">restart</a></li>
+		<li><a href="#list">list</a></li>
+		<li><a href="#add">add</a></li>
+		<ul>
+
+			<li><a href="#add_db">add db</a></li>
+			<li><a href="#add_dbgroup">add dbgroup</a></li>
+			<li><a href="#add_table">add table</a></li>
+			<li><a href="#add_sequence">add sequence</a></li>
+			<li><a href="#add_all_tables">add all tables</a></li>
+			<li><a href="#add_all_sequences">add all sequences</a></li>
+			<li><a href="#add_relgroup">add relgroup</a></li>
+			<li><a href="#add_sync">add sync</a></li>
+			<li><a href="#add_customname">add customname</a></li>
+			<li><a href="#add_customcols">add customcols</a></li>
+			<li><a href="#add_customcode">add customcode</a></li>
+		</ul>
+
+		<li><a href="#update">update</a></li>
+		<ul>
+
+			<li><a href="#update_customcode">update customcode</a></li>
+			<li><a href="#update_db">update db</a></li>
+			<li><a href="#update_sync">update sync</a></li>
+			<li><a href="#update_table">update table</a></li>
+			<li><a href="#update_sequence">update sequence</a></li>
+		</ul>
+
+		<li><a href="#remove">remove</a></li>
+		<li><a href="#kick">kick</a></li>
+		<li><a href="#reload_config">reload config</a></li>
+		<li><a href="#set">set</a></li>
+		<li><a href="#show">show</a></li>
+		<li><a href="#config">config</a></li>
+		<li><a href="#ping">ping</a></li>
+		<li><a href="#status">status</a></li>
+		<li><a href="#activate">activate</a></li>
+		<li><a href="#deactivate">deactivate</a></li>
+		<li><a href="#message">message</a></li>
+		<li><a href="#reload">reload</a></li>
+		<li><a href="#inspect">inspect</a></li>
+		<li><a href="#validate">validate</a></li>
+		<li><a href="#purge">purge</a></li>
+		<li><a href="#help">help</a></li>
 	</ul>
 
+	<li><a href="#options_details">OPTIONS DETAILS</a></li>
 	<li><a href="#files">FILES</a></li>
 	<li><a href="#environment_variables">ENVIRONMENT VARIABLES</a></li>
 	<li><a href="#bugs">BUGS</a></li>
@@ -52,200 +99,2029 @@
 <p>
 </p>
 <hr />
-<h1><a name="synopsis">SYNOPSIS</a></h1>
+<h1><a name="usage">USAGE</a></h1>
 <pre>
-  ./bucardo install</pre>
-<pre>
-  ./bucardo list dbs</pre>
-<pre>
-  ./bucardo add sync testsync source=herd1 type=pushdelta targetdb=B</pre>
-<pre>
-  ./bucardo add sync testsync source=herd1 type=pushdelta targetdb=B tables=tab1,tab2,tab3</pre>
-<pre>
-  ./bucardo add database newdb dbname=internal_name port=5432 host=myserver</pre>
-<pre>
-  ./bucardo add all tables db=foo [herd=x] [pkonly]</pre>
-<pre>
-  ./bucardo add all sequences db=foo [herd=x]</pre>
-<pre>
-  ./bucardo add herd newherd table1 table2 table3 ...</pre>
-<pre>
-  ./bucardo add dbgroup name db1 db2 db3 ...</pre>
-<pre>
-  ./bucardo start &quot;Starting up - Greg&quot;</pre>
-<pre>
-  ./bucardo stop &quot;Bringing down for debugging - Raul E.&quot;</pre>
-<pre>
-  ./bucardo ping</pre>
-<pre>
-  ./bucardo status</pre>
-<pre>
-  ./bucardo status sync1 sync2</pre>
-<pre>
-  ./bucardo kick sync1 sync2</pre>
-<pre>
-  ./bucardo kick sync1 0</pre>
-<pre>
-  ./bucardo reload_config</pre>
-<pre>
-  ./bucardo upgrade</pre>
-<pre>
-  ./bucardo reload sync</pre>
-<pre>
-  ./bucardo validate sync</pre>
-<pre>
-  ./bucardo message &quot;Your message here&quot;</pre>
-<pre>
-  ./bucardo config show</pre>
-<pre>
-  ./bucardo config set foo=bar baz=123</pre>
+  bucardo [&lt;options&gt;] &lt;command&gt; [&lt;action&gt;] [&lt;command-options&gt;] [&lt;command-params&gt;]</pre>
 <p>
 </p>
 <hr />
 <h1><a name="description">DESCRIPTION</a></h1>
-<p>The bucardo script is the main interaction to a running Bucardo instance. It can 
-be used to start and stop Bucardo, add new items, kick syncs, and even install and 
-upgrade Bucardo itself. For more complete documentation, please view the wiki at:</p>
-<p><a href="http://bucardo.org/">http://bucardo.org/</a></p>
+<p>The bucardo script is the main interaction to a running Bucardo instance. It
+can be used to start and stop Bucardo, add new items, kick syncs, and even
+install and upgrade Bucardo itself. For more complete documentation, please
+view <em>the wiki</em>.</p>
 <p>
 </p>
 <hr />
 <h1><a name="commands">COMMANDS</a></h1>
+<p>Run <code>bucardo help &lt;command&gt;</code> for additional details</p>
 <dl>
-<dt><strong><a name="install" class="item"><strong>install</strong></a></strong></dt>
+<dt><strong><a name="install" class="item"><code>install</code></a></strong></dt>
 
 <dd>
-<p>Usage: ./bucardo install</p>
-<p>Attempts to install the Bucardo schema from the file 'bucardo.schema' into an existing 
-Postgres cluster. The user 'bucardo' and database 'bucardo' will be created first as needed.
-This is an interactive installer, but you can supply the following values from the command 
-line:</p>
-<dl>
-<dt><strong><a name="dbuser" class="item">--dbuser (defaults to postgres)</a></strong></dt>
-
-<dt><strong><a name="dbname" class="item">--dbname (defaults to postgres)</a></strong></dt>
-
-<dt><strong><a name="dbport" class="item">--dbport (defaults to 5432)</a></strong></dt>
-
-<dt><strong><a name="piddir" class="item">--piddir (defaults to /var/run/bucardo/)</a></strong></dt>
-
-</dl>
+<p>Installs the Bucardo configuration database.</p>
 </dd>
-<dt><strong><a name="upgrade" class="item"><strong>upgrade</strong></a></strong></dt>
+<dt><strong><a name="upgrade" class="item"><code>upgrade</code></a></strong></dt>
 
 <dd>
-<p>Usage: ./bucardo upgrade</p>
-<p>Upgrades an existing Bucardo installation to the current version of the bucardo script.
-Requires that the bucardo script and the bucardo.schema file be the same version. All
+<p>Upgrades the Bucardo configuration database to the latest schema.</p>
+</dd>
+<dt><strong><a name="start_start_options_reason" class="item"><code>start [&lt;start options&gt;] [&lt;reason&gt;]</code></a></strong></dt>
+
+<dd>
+<p>Starts Bucardo.</p>
+</dd>
+<dt><strong><a name="stop_reason" class="item"><code>stop [&lt;reason&gt;]</code></a></strong></dt>
+
+<dd>
+<p>Stops Bucardo.</p>
+</dd>
+<dt><strong><a name="restart_start_options_reason" class="item"><code>restart [&lt;start options&gt;] [&lt;reason&gt;]</code></a></strong></dt>
+
+<dd>
+<p>Stops and starts Bucardo.</p>
+</dd>
+<dt><strong><a name="list_type_regex" class="item"><code>list &lt;type&gt; [&lt;regex&gt;]</code></a></strong></dt>
+
+<dd>
+<p>Lists objects managed by Bucardo.</p>
+</dd>
+<dt><strong><a name="add_type_name_parameters" class="item"><code>add &lt;type&gt; &lt;name&gt; &lt;parameters&gt;</code></a></strong></dt>
+
+<dd>
+<p>Adds a new object.</p>
+</dd>
+<dt><strong><a name="update_type_name_parameters" class="item"><code>update &lt;type&gt; &lt;name&gt; &lt;parameters&gt;</code></a></strong></dt>
+
+<dd>
+<p>Updates an object.</p>
+</dd>
+<dt><strong><a name="remove_type_name_name" class="item"><code>remove &lt;type&gt; &lt;name&gt; [&lt;name&gt;...]</code></a></strong></dt>
+
+<dd>
+<p>Removes one or more objects.</p>
+</dd>
+<dt><strong><a name="kick_syncname_sync_options_syncname_timeout" class="item"><code>kick &lt;syncname&gt; [&lt;sync options&gt;] [&lt;syncname&gt;...] [&lt;timeout&gt;]</code></a></strong></dt>
+
+<dd>
+<p>Kicks off one or more syncs.</p>
+</dd>
+<dt><strong><a name="reload_config" class="item"><code>reload config</code></a></strong></dt>
+
+<dd>
+<p>Sends a message to all CTL and KID processes asking them to reload the Bucardo
+configuration.</p>
+</dd>
+<dt><strong><a name="show_all_setting_setting" class="item"><code>show all|&lt;setting&gt; [&lt;setting&gt;...]</code></a></strong></dt>
+
+<dd>
+<p>Shows the current Bucardo settings.</p>
+</dd>
+<dt><strong><a name="set_setting_value_setting_value" class="item"><code>&lt;set &lt;setting=value</code> [&lt;setting=value&gt;...] &gt;&gt;</a></strong></dt>
+
+<dd>
+<p>Sets one or more configuration setting..</p>
+</dd>
+<dt><strong><a name="ping_timeout" class="item"><code>ping [&lt;timeout&gt;]</code></a></strong></dt>
+
+<dd>
+<p>Sends a ping notice to the MCP process to see if it will respond.</p>
+</dd>
+<dt><strong><a name="status_status_options_syncname_syncname" class="item"><code>status [&lt;status options&gt;] &lt;syncname&gt; [&lt;syncname&gt;...]</code></a></strong></dt>
+
+<dd>
+<p>Shows the brief status of syncs in a tabular format.</p>
+</dd>
+<dt><strong><a name="activate_syncname_syncname_timeout" class="item"><code>activate &lt;syncname&gt; [&lt;syncname&gt;...] [&lt;timeout&gt;]</code></a></strong></dt>
+
+<dd>
+<p>Activates one or more named syncs.</p>
+</dd>
+<dt><strong><a name="deactivate_syncname_syncname_timeout" class="item"><code>deactivate &lt;syncname&gt; [&lt;syncname&gt;...] [&lt;timeout&gt;]</code></a></strong></dt>
+
+<dd>
+<p>Deactivates one or more named syncs.</p>
+</dd>
+<dt><strong><a name="message_body" class="item"><code>message &lt;body&gt;</code></a></strong></dt>
+
+<dd>
+<p>Sends a message to the running Bucardo logs.</p>
+</dd>
+<dt><strong><a name="reload_syncname_syncname" class="item"><code>reload [&lt;syncname&gt; [&lt;syncname&gt;...]]</code></a></strong></dt>
+
+<dd>
+<p>Sends a message to one or more sync processes, instructing them to reload.</p>
+</dd>
+<dt><strong><a name="inspect_type_name_name" class="item"><code>inspect &lt;type&gt; &lt;name&gt; [&lt;name&gt;...]</code></a></strong></dt>
+
+<dd>
+<p>Inspects one or more objects of a particular type.</p>
+</dd>
+<dt><strong><a name="validate_all_syncname_syncname" class="item"><code>validate all|&lt;syncname&gt; [&lt;syncname&gt;...]</code></a></strong></dt>
+
+<dd>
+<p>Validates one or more syncs.</p>
+</dd>
+<dt><strong><a name="purge_all_table_table" class="item"><code>purge all|&lt;table&gt; [&lt;table&gt;...]</code></a></strong></dt>
+
+<dd>
+<p>Purges the delta and track tables for one or more tables, for one or more
+databases.</p>
+</dd>
+<dt><strong><a name="help_command_action" class="item"><code>help [&lt;command&gt; [&lt;action&gt;]]</code></a></strong></dt>
+
+<dd>
+<p>Shows help.</p>
+</dd>
+</dl>
+<p>
+</p>
+<hr />
+<h1><a name="options">OPTIONS</a></h1>
+<pre>
+  -d --db-name       NAME  Database name.
+  -U --db-user       USER  Database user name.
+  -P --db-pass       PASS  Database password.
+  -h --db-host       HOST  Database server host name.
+  -p --db-port       PORT  Database server port number.
+     --bucardorc     FILE  Use specified .bucarorc file.
+     --no-bucardorc        Do not use .bucardorc file.
+     --quiet               Incremental quiet.
+     --verbose             Incremental verbose mode.
+  -? --help                Output basic help and exit.
+     --version             Print the version number and exit.</pre>
+<p>
+</p>
+<hr />
+<h1><a name="command_details">COMMAND DETAILS</a></h1>
+<p>Most of the commands take parameters. These may be passed after the command
+name and, where appropriate, an object name. Parameters take the form of
+key/value pairs separated by an equal sign (<code>=</code>). For example:</p>
+<pre>
+  bucardo add db sea_widgets dbname=widgets host=db.example.com</pre>
+<p>Here <a href="#dbname"><code>dbname</code></a> and &lt;host&gt; are parameters.</p>
+<p>Many of the commands also use command-line options, which are specified in the
+normal way. For example, the <code>bucardo add db</code> command could also be written
+as:</p>
+<pre>
+  bucardo add db sea_widgets --dbname widgets --dbhost db.example.com</pre>
+<p>However, parameters and options are not directly interchangeable in all cases.
+See the documentation for individual commands for their supported options.</p>
+<p>
+</p>
+<h2><a name="install">install</a></h2>
+<pre>
+  bucardo install</pre>
+<p>Installs the Bucardo schema from the file <em class="file">bucardo.schema</em> into an existing Postgres cluster.
+The user &quot;bucardo&quot; and database &quot;bucardo&quot; will be created first as needed. This is an
+interactive installer, but you can supply the following values from the command line:</p>
+<dl>
+<dt><strong><a name="dbuser" class="item"><code>--dbuser</code></a></strong></dt>
+
+<dd>
+<p>defaults to postgres</p>
+</dd>
+<dt><strong><a name="dbname" class="item"><code>--dbname</code></a></strong></dt>
+
+<dd>
+<p>defaults to postgres</p>
+</dd>
+<dt><strong><a name="dbport" class="item"><code>--dbport</code></a></strong></dt>
+
+<dd>
+<p>defaults to 5432</p>
+</dd>
+<dt><strong><a name="pid_dir" class="item"><code>--pid-dir</code></a></strong></dt>
+
+<dd>
+<p>defaults to /var/run/bucardo/</p>
+</dd>
+</dl>
+<p>
+</p>
+<h2><a name="upgrade">upgrade</a></h2>
+<pre>
+  bucardo upgrade</pre>
+<p>Upgrades an existing Bucardo installation to the current version of the bucardo database
+script. Requires that bucardo and the <em class="file">bucardo.schema</em> file be the same version. All
 changes should be backwards compatible, but you may need to re-validate existing scripts
 to make sure changes get propagated to all databases.</p>
-</dd>
-<dt><strong><a name="start" class="item"><strong>start</strong></a></strong></dt>
-
-<dd>
-<p>Usage: ./bucardo start &quot;Reason --name&quot;</p>
-<p>Restarts Bucardo cleanly by first issuing the equivalent of a stop to ask any existing Bucardo
+<p>
+</p>
+<h2><a name="start">start</a></h2>
+<pre>
+  bucardo start &quot;Reason&quot;</pre>
+<p>Starts Bucardo. Fails if the MCP process is running (determined if its PID file is present).
+Otherwise, starts cleanly by first issuing the equivalent of a stop to ask any existing Bucardo
 processes to exit, and then starting a new Bucardo MCP process. A short reason and name should
-be provided - these are logged in the reason_file file and sent in the email sent when Bucardo
-has been started up.</p>
-<p>Before attempting to kill any old processes, a ping command with a timeout of 5 seconds is issued.
-If this returns successfully (indicating an active MCP process already running), the script will
-exit with a return value of 2.</p>
-</dd>
-<dt><strong><a name="stop" class="item"><strong>stop</strong></a></strong></dt>
+be provided - these are written to the <a href="#reason_file"><code>reason_file</code></a> file (<em class="file">./bucardo.restart.reason.txt</em> by
+default) and sent in the email sent when Bucardo has been started up. It is also appended to
+the reason log, which has the same name as the the <a href="#reason_file"><code>reason_file</code></a> but ends in <em class="file">.log</em>.</p>
+<p>The options for the <code>start</code> command are:</p>
+<dl>
+<dt><strong><a name="sendmail" class="item"><code>--sendmail</code></a></strong></dt>
 
 <dd>
-<p>Usage: ./bucardo stop &quot;Reason --name&quot;</p>
+<p>Tells Bucardo whether or not to send mail on interesting events: startup,
+shutdown, and errors. Default is on.</p>
+</dd>
+<dt><strong><a name="extra_name_string" class="item"><code>--extra-name string</code></a></strong></dt>
+
+<dd>
+<p>A short string that will be appended to the version string as output by the
+Bucardo process names. Mostly useful for debugging.</p>
+</dd>
+<dt><strong><a name="log_destination_destination" class="item"><code>--log-destination destination</code></a></strong></dt>
+
+<dd>
+<p>Determines the destination for logging output. The supported values are:</p>
+<dl>
+<dt><strong><a name="stderr" class="item"><code>stderr</code></a></strong></dt>
+
+<dt><strong><a name="stdout" class="item"><code>stdout</code></a></strong></dt>
+
+<dt><strong><a name="syslog" class="item"><code>syslog</code></a></strong></dt>
+
+<dt><strong><a name="none" class="item"><code>none</code></a></strong></dt>
+
+<dt><strong><a name="a_file_system_directory" class="item">A file system directory.</a></strong></dt>
+
+</dl>
+<p>May be specified more than once, which is useful for, e.g., logging both to a
+directory and to syslog. If <code>--log-destination</code> is not specified at all, the
+default is to log to files in <em class="file">/var/log/bucardo</em>.</p>
+</dd>
+<dt><strong><a name="log_separate" class="item"><code>--log-separate</code></a></strong></dt>
+
+<dd>
+<p>Forces creation of separate log files for each Bucardo process of the form
+&quot;log.bucardo.X.Y&quot;, where X is the type of process (MCP, CTL, or KID), and Y is
+the process ID.</p>
+</dd>
+<dt><strong><a name="log_extension_string" class="item"><code>--log-extension string</code></a></strong></dt>
+
+<dd>
+<p>Appends the given string to the end of the default log file name,
+<em class="file">log.bucardo</em>. A dot is added before the name as well, so a log extension of
+&quot;rootdb&quot; would produce a log file named <em class="file">log.bucardo.rootdb</em>.</p>
+</dd>
+<dt><strong><a name="log_clean" class="item"><code>--log-clean</code></a></strong></dt>
+
+<dd>
+<p>Forces removal of all old log files before running.</p>
+</dd>
+<dt><strong><a name="debug" class="item"><code>--debug</code></a></strong></dt>
+
+<dt><strong><a name="no_debug" class="item"><code>--no-debug</code></a></strong></dt>
+
+<dd>
+<p>Enable or disable debugging output. Disabled by default.</p>
+</dd>
+<dt><strong><a name="exit_on_nosync" class="item"><code>--exit-on-nosync</code></a></strong></dt>
+
+<dt><strong><a name="no_exit_on_nosync" class="item"><code>--no-exit-on-nosync</code></a></strong></dt>
+
+<dd>
+<p>On startup, if Bucardo finds no active syncs, it normally will continue to
+run, requiring a restart once syncs are added. This is useful for startup
+scripts and whatnot.</p>
+<p>If, however, you want it to exit when there are no active syncs, pass the
+<a href="#exit_on_nosync"><code>--exit-on-nosync</code></a> option. You can also be explicit that it should <em>not</em>
+exit when there are no syncs by passing <a href="#no_exit_on_nosync"><code>--no-exit-on-nosync</code></a>. This is the
+default value.</p>
+</dd>
+</dl>
+<p>
+</p>
+<h2><a name="stop">stop</a></h2>
+<pre>
+  bucardo stop &quot;Reason&quot;</pre>
 <p>Forces Bucardo to quit by creating a stop file which all MCP, CTL, and KID processes should
 detect and cause them to exit. Note that active syncs will not exit right away, as they
 will not look for the stop file until they have finished their current run. Typically,
 you should scan the list of processes after running this program to make sure that all Bucardo
 processes have stopped. One should also provide a reason for issuing the stop - usually
-this is a short explanation and your name. This is logged in the reason_file file and
-is also used by Bucardo when it exits and sends out mail about its death.</p>
-</dd>
-<dt><strong><a name="list" class="item"><strong>list</strong></a></strong></dt>
+this is a short explanation and your name. This is written to the <a href="#reason_file"><code>reason_file</code></a> file
+(<em class="file">./bucardo.restart.reason.txt</em> by default) and is also used by Bucardo when it exits and
+sends out mail about its death. It is also appended to the reason log, which has the same name
+as the the <a href="#reason_file"><code>reason_file</code></a> but ends in <em class="file">.log</em>.</p>
+<p>
+</p>
+<h2><a name="restart">restart</a></h2>
+<pre>
+  bucardo restart &quot;Reason&quot;</pre>
+<p>Stops bucardo, waits for the stop to complete, and then starts it again.
+Supports the same options as &lt;<code>start</code>/start&gt;. Useful for start scripts. For
+getting just CTL and KID processes to recognize newly added, updated, or
+removed objects, use the <code>reload</code> command, instead.</p>
+<p>
+</p>
+<h2><a name="list">list</a></h2>
+<pre>
+  bucardo list &lt;type&gt; &lt;regex&gt;</pre>
+<p>Lists summary information about Bucardo objects. The supported types are:</p>
+<ul>
+<li><strong><a name="database" class="item"><code>database</code></a></strong>
+
+</li>
+<li><strong><a name="dbgroup" class="item"><code>dbgroup</code></a></strong>
+
+</li>
+<li><strong><a name="relgroup" class="item"><code>relgroup</code></a></strong>
+
+</li>
+<li><strong><a name="sync" class="item"><code>sync</code></a></strong>
+
+</li>
+<li><strong><a name="table" class="item"><code>table</code></a></strong>
+
+</li>
+<li><strong><a name="sequence" class="item"><code>sequence</code></a></strong>
+
+</li>
+<li><strong><a name="customcode" class="item"><code>customcode</code></a></strong>
+
+</li>
+<li><strong><a name="customname" class="item"><code>customname</code></a></strong>
+
+</li>
+<li><strong><a name="customcols" class="item"><code>customcols</code></a></strong>
+
+</li>
+<li><strong><a name="all" class="item"><code>all</code></a></strong>
+
+</li>
+</ul>
+<p>The <a href="#all"><code>all</code></a> option will list information about all object types.</p>
+<p>The optional <code>regex</code> option can be used to filter the list to only those
+matching a regular expression.</p>
+<p>Aliases:</p>
+<dl>
+<dt><strong><a name="l" class="item"><code>l</code></a></strong></dt>
+
+<dt><strong><a name="lsit" class="item"><code>lsit</code></a></strong></dt>
+
+<dt><strong><a name="liast" class="item"><code>liast</code></a></strong></dt>
+
+<dt><strong><a name="lisy" class="item"><code>lisy</code></a></strong></dt>
+
+<dt><strong><a name="lit" class="item"><code>lit</code></a></strong></dt>
+
+</dl>
+<p>
+</p>
+<h2><a name="add">add</a></h2>
+<pre>
+  bucardo add &lt;type&gt; &lt;name&gt; &lt;parameters&gt;</pre>
+<p>Adds a new object to Bucardo. The <a href="#type"><code>type</code></a> specifies the type of object to add,
+while the <a href="#name"><code>name</code></a> should be the name of the object. The supported types
+include:</p>
+<dl>
+<dt><strong><a name="db" class="item"><code>db</code></a></strong></dt>
+
+<dt><strong><code>dbgroup</code></strong></dt>
+
+<dt><strong><code>table</code></strong></dt>
+
+<dt><strong><code>sequence</code></strong></dt>
+
+<dt><strong><a name="all_tables" class="item"><code>all tables</code></a></strong></dt>
+
+<dt><strong><a name="all_sequences" class="item"><code>all sequences</code></a></strong></dt>
+
+<dt><strong><code>relgroup</code></strong></dt>
+
+<dt><strong><code>sync</code></strong></dt>
+
+<dt><strong><code>customname</code></strong></dt>
+
+<dt><strong><code>customcols</code></strong></dt>
+
+<dt><strong><code>customcols</code></strong></dt>
+
+</dl>
+<p>
+</p>
+<h3><a name="add_db">add db</a></h3>
+<pre>
+  bucardo add db &lt;name&gt; dbname=actual_name port=xxx host=xxx user=xxx pass=xxx</pre>
+<p>Adds a new database. The <a href="#name"><code>name</code></a> is the name by which the database will be
+known to Bucardo, and must be unique. This may vary from the actual database
+name, as multiple hosts might have databases with the same name.</p>
+<p>The supported named parameters are:</p>
+<dl>
+<dt><strong><code>dbname</code></strong></dt>
+
+<dt><strong><code>db</code></strong></dt>
 
 <dd>
-<p>Usage: ./bucardo list &lt;type&gt; &lt;regex&gt;</p>
-<p>Lists summary information about dbs, dbgroups, tables, sequences,
-syncs, herds, customnames, customcols or customcode. Adding anything
-after the type will look up all matching entries.</p>
+<p>The actual name of the database. Required.</p>
 </dd>
-<dt><strong><a name="add" class="item"><strong>add</strong></a></strong></dt>
+<dt><strong><a name="type" class="item"><code>type</code></a></strong></dt>
+
+<dt><strong><a name="dbtype" class="item"><code>dbtype</code></a></strong></dt>
 
 <dd>
-<p>Usage:  add &lt;item_type&gt; &lt;item_name&gt;</p>
-<p>Usage:  add db &lt;dbname&gt; dbname=internal_name port=xxx host=xxx user=xxx pass=xxx service=xxx conn=xxx ssp=1/0</p>
-<p>Usage:  add dbgroup name db1 db2 db3 ...</p>
-<p>Usage:  add table [schema].table db=internal_db_name ping=bool standard_conflict=xxx herd=xxx</p>
-<p>Usage:  add all tables [herd=xxx] [pkonly]</p>
-<p>Usage:  add sequence [schema].table herd=xxx</p>
-<p>Usage:  add all sequences herd=xxx</p>
-<p>Usage:  add sync syncname options</p>
-<p>Usage:  add herd name</p>
-<p>Usage:  add customname tablename newtablename [sync=x db=x]</p>
-<p>Usage:  add customcols tablename select_clause [sync=x db=x]</p>
-<p>Usage:  add customcode &lt;name&gt; &lt;whenrun=value&gt; &lt;src_code=filename&gt; [optional information]</p>
-<p>Tells Bucardo about new objects it should know about. These commands can
-replace direct manipulation of the tables in the bucardo schema for the
-supported object types (you'll still need to add things like the mappings between objects on your own).</p>
+<p>The type of the database. Defaults to <a href="#postgres"><code>postgres</code></a>. Currently supported values are:</p>
+<ul>
+<li><strong><a name="postgres" class="item"><code>postgres</code></a></strong>
+
+</li>
+<li><strong><a name="drizzle" class="item"><code>drizzle</code></a></strong>
+
+</li>
+<li><strong><a name="mongo" class="item"><code>mongo</code></a></strong>
+
+</li>
+<li><strong><a name="mysql" class="item"><code>mysql</code></a></strong>
+
+</li>
+<li><strong><a name="maria" class="item"><code>maria</code></a></strong>
+
+</li>
+<li><strong><a name="oracle" class="item"><code>oracle</code></a></strong>
+
+</li>
+<li><strong><a name="redis" class="item"><code>redis</code></a></strong>
+
+</li>
+<li><strong><a name="sqlite" class="item"><code>sqlite</code></a></strong>
+
+</li>
+</ul>
 </dd>
-<dt><strong><a name="remove" class="item"><strong>remove</strong></a></strong></dt>
+<dt><strong><a name="username" class="item"><code>username</code></a></strong></dt>
+
+<dt><strong><code>dbuser</code></strong></dt>
+
+<dt><strong><a name="user" class="item"><code>user</code></a></strong></dt>
 
 <dd>
-<p>Usage:  remove &lt;item_type&gt; &lt;item_name&gt;</p>
-<p>Removes one or more items from the Bucardo database. Valid item types are database, 
-dbgroup, herd, sync, table, and sequence.</p>
+<p>The username Bucardo should use to connect to the database. Optional.</p>
 </dd>
-<dt><strong><a name="kick" class="item"><strong>kick</strong></a></strong></dt>
+<dt><strong><a name="password" class="item"><code>password</code></a></strong></dt>
+
+<dt><strong><a name="dbpass" class="item"><code>dbpass</code></a></strong></dt>
+
+<dt><strong><a name="pass" class="item"><code>pass</code></a></strong></dt>
 
 <dd>
-<p>Usage: ./bucardo kick &lt;syncname(s)&gt; [timeout]</p>
+<p>The password Bucardo should use when connecting to the database. Optional.</p>
+</dd>
+<dt><strong><a name="dbhost" class="item"><code>dbhost</code></a></strong></dt>
+
+<dt><strong><a name="pghost" class="item"><code>pghost</code></a></strong></dt>
+
+<dt><strong><a name="host" class="item"><code>host</code></a></strong></dt>
+
+<dd>
+<p>The host name to which to connect. Defaults to the value of the <code>$PGHOSTADDR</code>
+or <code>$PGHOST</code> environment variables, if present. Optional.</p>
+</dd>
+<dt><strong><code>dbport</code></strong></dt>
+
+<dt><strong><a name="pgport" class="item"><code>pgport</code></a></strong></dt>
+
+<dt><strong><a name="port" class="item"><code>port</code></a></strong></dt>
+
+<dd>
+<p>The port to which to connect. Defaults to the value of the <code>$PGPORT</code>
+environment variable, if present. Optional.</p>
+</dd>
+<dt><strong><a name="dbconn" class="item"><code>dbconn</code></a></strong></dt>
+
+<dt><strong><a name="pgconn" class="item"><code>pgconn</code></a></strong></dt>
+
+<dt><strong><a name="conn" class="item"><code>conn</code></a></strong></dt>
+
+<dd>
+<p>Additional connection parameters, e.g., <code>sslmode=require</code>. Optional.</p>
+</dd>
+<dt><strong><a name="status" class="item"><code>status</code></a></strong></dt>
+
+<dd>
+<p>Initial status of the database in Bucardo. Must be either &quot;active&quot; or
+&quot;inactive&quot;. Defaults to &quot;active&quot;.</p>
+</dd>
+<dt><strong><code>dbgroup</code></strong></dt>
+
+<dt><strong><a name="group" class="item"><code>group</code></a></strong></dt>
+
+<dd>
+<p>Bucardo database group to which to add the database. Optional.</p>
+</dd>
+<dt><strong><a name="addalltables" class="item"><code>addalltables</code></a></strong></dt>
+
+<dd>
+<p>Automatically adds all tables once the database has been added. Optional.</p>
+</dd>
+<dt><strong><a name="addallsequences" class="item"><code>addallsequences</code></a></strong></dt>
+
+<dd>
+<p>Automatically adds all sequences once the database has been added. Optional.</p>
+</dd>
+<dt><strong><a name="server_side_prepares" class="item"><code>server_side_prepares</code></a></strong></dt>
+
+<dt><strong><a name="ssp" class="item"><code>ssp</code></a></strong></dt>
+
+<dd>
+<p>Enable or disable server-side prepares. Pass 1 to enable them or 0 to disable
+them. Defaults to 1.</p>
+</dd>
+<dt><strong><a name="dbservice" class="item"><code>dbservice</code></a></strong></dt>
+
+<dt><strong><a name="service" class="item"><code>service</code></a></strong></dt>
+
+<dd>
+<p>The service name to use for a Postgres database. Optional.</p>
+</dd>
+</dl>
+<p>
+</p>
+<h3><a name="add_dbgroup">add dbgroup</a></h3>
+<pre>
+  bucardo add dbgroup name db1:source db2:source db3:target ...</pre>
+<p>Adds one or more databases to the named database group. If the database group
+doesn't exist, it will be created. The database parameters should specify
+their roles, either &quot;source&quot; or &quot;target&quot;.</p>
+<p>
+</p>
+<h3><a name="add_table">add table</a></h3>
+<pre>
+  bucardo add table [schema].table db=actual_db_name</pre>
+<p>Adds a table object. The table information will be read from the specified
+database. Supported parameters:</p>
+<dl>
+<dt><strong><code>db</code></strong></dt>
+
+<dd>
+<p>The name of the database from which to read the table information. Should be a
+name known to Bucardo, thanks to a previous call to <code>add database</code>. Required.</p>
+</dd>
+<dt><strong><a name="autokick" class="item"><code>autokick</code></a></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not the table should automatically send kick
+messages when it's modified. Overrides the <a href="#autokick"><code>autokick</code></a> parameter of any syncs
+of which the table is a part.</p>
+</dd>
+<dt><strong><a name="rebuild_index" class="item"><code>rebuild_index</code></a></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not to rebuild indexes after every sync. Off by
+default. Optional.</p>
+</dd>
+<dt><strong><a name="analyze_after_copy" class="item"><code>analyze_after_copy</code></a></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not to analyze the table after every sync. Off
+by default. Optional.</p>
+</dd>
+<dt><strong><a name="vaccuum_after_copy" class="item"><code>vaccuum_after_copy</code></a></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not to vacuum the table after every sync. Off by
+default. Optional.</p>
+</dd>
+<dt><strong><code>relgroup</code></strong></dt>
+
+<dd>
+<p>Adds the table to the named relation group. If the relation group does not
+exist, it will be created. Optional.</p>
+</dd>
+<dt><strong><a name="makedelta" class="item"><code>makedelta</code></a></strong></dt>
+
+<dd>
+<p>Turns makedelta magic on or off. Value is a list of databases which need makedelta 
+for this table. Value can also be &quot;on&quot; to enable makedelta for all databases. 
+Defaults to &quot;off&quot;.</p>
+</dd>
+</dl>
+<p>
+</p>
+<h3><a name="add_sequence">add sequence</a></h3>
+<pre>
+  bucardo add sequence [schema].sequence relgroup=xxx</pre>
+<dl>
+<dt><strong><code>db</code></strong></dt>
+
+<dd>
+<p>The name of the database from which to read the sequence information. Should
+be a name known to Bucardo, thanks to a previous call to <code>add database</code>.
+Required.</p>
+</dd>
+<dt><strong><code>relgroup</code></strong></dt>
+
+<dd>
+<p>Adds the sequence to the named relation group. If the relation group does not
+exist, it will be created. Optional.</p>
+</dd>
+</dl>
+<p>
+</p>
+<h3><a name="add_all_tables">add all tables</a></h3>
+<pre>
+  bucardo add all tables [relgroup=xxx] [pkonly]</pre>
+<p>Adds all the tables in all known databases or in a specified database.
+Excludes tables in the <code>pg_catalog</code>, <code>information_schema</code>, and <code>bucardo</code>
+schemas. (Yes, this means that you cannot replicate the Bucardo configuration
+database using Bucardo. Sorry about that.) Supported options and parameters:</p>
+<dl>
+<dt><strong><code>db</code></strong></dt>
+
+<dt><strong><code>--db</code></strong></dt>
+
+<dd>
+<p>Name of the database from which to find all the tables to add. If not
+provided, tables will be added from all known databases.</p>
+</dd>
+<dt><strong><a name="schema" class="item"><code>schema</code></a></strong></dt>
+
+<dt><strong><code>--schema</code></strong></dt>
+
+<dt><strong><a name="n" class="item"><code>-n</code></a></strong></dt>
+
+<dd>
+<p>Limit to the tables in the specified comma-delimited list of schemas. The
+options may be specified more than once.</p>
+</dd>
+<dt><strong><a name="exclude_schema" class="item"><code>exclude-schema</code></a></strong></dt>
+
+<dt><strong><a name="exclude_schema2" class="item"><a href="#exclude_schema"><code>--exclude-schema</code></a></a></strong></dt>
+
+<dt><strong><a name="n" class="item"><code>-N</code></a></strong></dt>
+
+<dd>
+<p>Exclude tables in the specified comma-delimited list of schemas. The options
+may be specified more than once.</p>
+</dd>
+<dt><strong><code>table</code></strong></dt>
+
+<dt><strong><code>--table</code></strong></dt>
+
+<dt><strong><a name="t" class="item"><code>-t</code></a></strong></dt>
+
+<dd>
+<p>Limit to the specified tables. The options may be specified more than once.</p>
+</dd>
+<dt><strong><a name="exclude_table" class="item"><code>exclude-table</code></a></strong></dt>
+
+<dt><strong><a name="exclude_table2" class="item"><a href="#exclude_table"><code>--exclude-table</code></a></a></strong></dt>
+
+<dt><strong><a name="t" class="item"><code>-T</code></a></strong></dt>
+
+<dd>
+<p>Exclude the specified tables. The options may be specified more than once.</p>
+</dd>
+<dt><strong><code>relgroup</code></strong></dt>
+
+<dt><strong><code>--relgroup</code></strong></dt>
+
+<dd>
+<p>Name of the relation group to which to add new tables.</p>
+</dd>
+<dt><strong><a name="pkonly" class="item"><code>pkonly</code></a></strong></dt>
+
+<dd>
+<p>Exclude tables without primary keys.</p>
+</dd>
+</dl>
+<p>
+</p>
+<h3><a name="add_all_sequences">add all sequences</a></h3>
+<pre>
+  bucardo add all sequences relgroup=xxx</pre>
+<p>Adds all the sequences in all known databases or in a specified database.
+Excludes sequences in the <code>pg_catalog</code>, <code>information_schema</code>, and <code>bucardo</code>
+schemas. (Yes, this means that you cannot replicate the Bucardo configuration
+database using Bucardo. Sorry about that.) Supported options and parameters:</p>
+<dl>
+<dt><strong><code>db</code></strong></dt>
+
+<dt><strong><a name="db2" class="item"><a href="#db"><code>--db</code></a></a></strong></dt>
+
+<dd>
+<p>Name of the database from which to find all the sequences to add. If not
+provided, sequences will be added from all known databases.</p>
+</dd>
+<dt><strong><code>schema</code></strong></dt>
+
+<dt><strong><a name="schema2" class="item"><a href="#schema"><code>--schema</code></a></a></strong></dt>
+
+<dt><strong><a name="n2" class="item"><a href="#n"><code>-n</code></a></a></strong></dt>
+
+<dd>
+<p>Limit to the sequences in the specified comma-delimited list of schemas. The
+options may be specified more than once.</p>
+</dd>
+<dt><strong><a name="exclude_schema3" class="item"><a href="#exclude_schema"><code>exclude-schema</code></a></a></strong></dt>
+
+<dt><strong><a name="exclude_schema4" class="item"><a href="#exclude_schema"><code>--exclude-schema</code></a></a></strong></dt>
+
+<dt><strong><a name="n2" class="item"><a href="#n"><code>-N</code></a></a></strong></dt>
+
+<dd>
+<p>Exclude sequences in the specified comma-delimited list of schemas. The
+options may be specified more than once.</p>
+</dd>
+<dt><strong><code>relgroup</code></strong></dt>
+
+<dt><strong><a name="relgroup2" class="item"><a href="#relgroup"><code>--relgroup</code></a></a></strong></dt>
+
+<dd>
+<p>Name of the relation group to which to add new tables or sequences.</p>
+</dd>
+</dl>
+<p>
+</p>
+<h3><a name="add_relgroup">add relgroup</a></h3>
+<pre>
+  bucardo add relgroup name
+  bucardo add relgroup name table, sequence, ...</pre>
+<p>Adds a relation group. After the name, pass in an optional list of tables
+and/or sequences and they will be added to the group.</p>
+<p>
+</p>
+<h3><a name="add_sync">add sync</a></h3>
+<pre>
+  bucardo add sync syncname relgroup=xxx dbs=xxx</pre>
+<p>Adds a sync, which is a named replication event containing information about
+what to replicate from where to where. The supported parameters are:</p>
+<dl>
+<dt><strong><a name="dbs" class="item"><code>dbs</code></a></strong></dt>
+
+<dd>
+<p>The name of a database group or comma-delimited list of databases. All of the
+specified databases will be synchronized. Required.</p>
+</dd>
+<dt><strong><code>relgroup</code></strong></dt>
+
+<dd>
+<p>The name of a relation group to synchronize. All of the tables and/or
+sequences in the relgroup will be synchronized. Required unless <a href="#tables"><code>tables</code></a> is
+specified.</p>
+</dd>
+<dt><strong><a name="tables" class="item"><code>tables</code></a></strong></dt>
+
+<dd>
+<p>List of tables to add to the sync. This implicitly creates a relation group
+with the same name as the sync. Required unless <a href="#relgroup"><code>relgroup</code></a> is specified.</p>
+</dd>
+<dt><strong><code>status</code></strong></dt>
+
+<dd>
+<p>Indicates whether or not the sync is active. Must be either &quot;active&quot; or
+&quot;inactive&quot;. Defaults to &quot;active&quot;.</p>
+</dd>
+<dt><strong><code>rebuild_index</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not to rebuild indexes after every sync.
+Defaults to off.</p>
+</dd>
+<dt><strong><a name="lifetime" class="item"><code>lifetime</code></a></strong></dt>
+
+<dd>
+<p>Number of seconds a KID can live before being reaped. No limit by default.</p>
+</dd>
+<dt><strong><a name="maxkicks" class="item"><code>maxkicks</code></a></strong></dt>
+
+<dd>
+<p>Number of times a KID may be kicked before being reaped. No limit by default.</p>
+</dd>
+<dt><strong><a name="conflict_strategy" class="item"><code>conflict_strategy</code></a></strong></dt>
+
+<dd>
+<p>The conflict resolution strategy to use in the sync. Supported values:</p>
+<dl>
+<dt><strong><a name="bucardo_source" class="item"><code>bucardo_source</code></a></strong></dt>
+
+<dd>
+<p>The rows on the &quot;source&quot; database always &quot;win&quot;. In other words, in a conflict,
+Bucardo copies rows from source to target.</p>
+</dd>
+<dt><strong><a name="bucardo_target" class="item"><code>bucardo_target</code></a></strong></dt>
+
+<dd>
+<p>The rows on the &quot;target&quot; database always win.</p>
+</dd>
+<dt><strong><a name="bucardo_skip" class="item"><code>bucardo_skip</code></a></strong></dt>
+
+<dd>
+<p>Any conflicting rows are simply not replicated. Not recommended for most
+cases.</p>
+</dd>
+<dt><strong><a name="bucardo_random" class="item"><code>bucardo_random</code></a></strong></dt>
+
+<dd>
+<p>Each database has an equal chance of winning each time. This is the default.</p>
+</dd>
+<dt><strong><a name="bucardo_latest" class="item"><code>bucardo_latest</code></a></strong></dt>
+
+<dd>
+<p>The row that was most recently changed wins.</p>
+</dd>
+<dt><strong><a name="bucardo_abort" class="item"><code>bucardo_abort</code></a></strong></dt>
+
+<dd>
+<p>The sync is aborted on a conflict.</p>
+</dd>
+</dl>
+</dd>
+<dt><strong><a name="onetimecopy" class="item"><code>onetimecopy</code></a></strong></dt>
+
+<dd>
+<p>Determines whether or not a sync should switch to a full copy mode for a
+single run. Supported values are:</p>
+<ol>
+<li><strong><a name="off" class="item">: off</a></strong>
+
+</li>
+<li><strong><a name="always_full_copy" class="item">: always full copy</a></strong>
+
+</li>
+<li><strong><a name="only_copy_tables_that_are_empty_on_the_target" class="item">: only copy tables that are empty on the target</a></strong>
+
+</li>
+</ol>
+</dd>
+<dt><strong><a name="stayalive" class="item"><code>stayalive</code></a></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not the sync processes (CTL) should be
+persistent. Defaults to false.</p>
+</dd>
+<dt><strong><a name="kidsalive" class="item"><code>kidsalive</code></a></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not the sync child processes (KID) should be
+persistent. Defaults to false.</p>
+</dd>
+<dt><strong><code>autokick</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not tables in the sync should automatically send
+kick messages when they're modified. May be overridden by the <a href="#autokick"><code>autokick</code></a>
+parameter of individual tables.</p>
+</dd>
+<dt><strong><a name="checktime" class="item"><code>checktime</code></a></strong></dt>
+
+<dd>
+<p>An interval specifying the maximum time a sync should go before being
+kicked. Useful for busy systems where you don't want the overhead of notify
+triggers.</p>
+</dd>
+<dt><strong><a name="priority" class="item"><code>priority</code></a></strong></dt>
+
+<dd>
+<p>An integer indicating the priority of the sync. Lower numbers are higher
+priority. Currently used only for display purposes.</p>
+</dd>
+<dt><strong><code>analyze_after_copy</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not to analyze tables after every sync. Off by
+default. Optional.</p>
+</dd>
+<dt><strong><a name="overdue" class="item"><code>overdue</code></a></strong></dt>
+
+<dd>
+<p>An interval specifying the amount of time after which the sync has not run
+that it should be considered overdue. <code>check_bucardo_sync</code> issues a warning
+when a sync has not been run in this amount of time.</p>
+</dd>
+<dt><strong><a name="expired" class="item"><code>expired</code></a></strong></dt>
+
+<dd>
+<p>An interval specifying the amount of time after which the sync has not run
+that it should be considered expired. <code>check_bucardo_sync</code> issues a critical
+message when a sync has not been run in this amount of time.</p>
+</dd>
+<dt><strong><a name="track_rates" class="item"><code>track_rates</code></a></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not to track synchronization rates.</p>
+</dd>
+<dt><strong><code>rebuild_index</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not to rebuild indexes after every sync. Off by
+default. Optional.</p>
+</dd>
+</dl>
+<p>
+</p>
+<h3><a name="add_customname">add customname</a></h3>
+<pre>
+  bucardo add customname oldname newname [db=name] [sync=name]</pre>
+<p>Creates a new Bucardo custom name mapping. This allows the tables involved in
+replication to have different names on different databases. The <code>oldname</code>
+must contain the schema as well as the table name (if the source database
+supports schemas). The optional parameters limit it to one or more databases,
+and/or to one or more syncs. Supported parameters:</p>
+<dl>
+<dt><strong><code>sync</code></strong></dt>
+
+<dd>
+<p>A sync to which to add the customname. May be specified multiple times.</p>
+</dd>
+<dt><strong><code>database</code></strong></dt>
+
+<dt><strong><code>db</code></strong></dt>
+
+<dd>
+<p>A database for which to add the customname. May be specified multiple times.</p>
+</dd>
+</dl>
+<p>
+</p>
+<h3><a name="add_customcols">add customcols</a></h3>
+<pre>
+  bucardo add customcols tablename select_clause [sync=x db=x]</pre>
+<p>Specify the list of columns to select from when syncing. Rather than the
+default <code>SELECT *</code> behavior, you can specify any columns you want, including
+the use of function call return values and things not in the source column
+list. The optional parameters limit it to one or more databases, and/or to one
+or more syncs. Some examples:</p>
+<pre>
+  bucardo add customcols public.foobar &quot;select a, b, c&quot;
+  bucardo add customcols public.foobar &quot;select a, upper(b) AS b, c&quot; db=foo
+  bucardo add customcols public.foobar &quot;select a, b, c&quot; db=foo sync=abc</pre>
+<p>Supported parameters:</p>
+<dl>
+<dt><strong><code>sync</code></strong></dt>
+
+<dd>
+<p>A sync to which to add the customcols. May be specified multiple times.</p>
+</dd>
+<dt><strong><code>database</code></strong></dt>
+
+<dt><strong><code>db</code></strong></dt>
+
+<dd>
+<p>A database for which to add the customcols. May be specified multiple times.</p>
+</dd>
+</dl>
+<p>
+</p>
+<h3><a name="add_customcode">add customcode</a></h3>
+<pre>
+  bucardo add customcode &lt;name&gt; &lt;whenrun=value&gt; &lt;src_code=filename&gt; [optional information]</pre>
+<p>Adds a customcode, which is a Perl subroutine that can be run at certain
+points in the sync process. It might handle exceptions, handle conflicts, or
+just run at certain times with no expectation of functionality (e.g., before
+Bucardo drops triggers). Metadata about that point will be passed to the
+subroutine as a hash reference.</p>
+<p>Supported parameters:</p>
+<dl>
+<dt><strong><a name="name" class="item"><code>name</code></a></strong></dt>
+
+<dd>
+<p>The name of the custom code object.</p>
+</dd>
+<dt><strong><a name="about" class="item"><code>about</code></a></strong></dt>
+
+<dd>
+<p>A short description of the custom code.</p>
+</dd>
+<dt><strong><a name="whenrun" class="item"><code>whenrun</code></a></strong></dt>
+
+<dt><strong><a name="when_run" class="item"><code>when_run</code></a></strong></dt>
+
+<dd>
+<p>A string indicating when the custom code should be run. Supported values
+include:</p>
+<dl>
+<dt><strong><a name="before_txn" class="item"><code>before_txn</code></a></strong></dt>
+
+<dt><strong><a name="before_check_rows" class="item"><code>before_check_rows</code></a></strong></dt>
+
+<dt><strong><a name="before_trigger_drop" class="item"><code>before_trigger_drop</code></a></strong></dt>
+
+<dt><strong><a name="after_trigger_drop" class="item"><code>after_trigger_drop</code></a></strong></dt>
+
+<dt><strong><a name="after_table_sync" class="item"><code>after_table_sync</code></a></strong></dt>
+
+<dt><strong><a name="exception" class="item"><code>exception</code></a></strong></dt>
+
+<dt><strong><a name="conflict" class="item"><code>conflict</code></a></strong></dt>
+
+<dt><strong><a name="before_trigger_enable" class="item"><code>before_trigger_enable</code></a></strong></dt>
+
+<dt><strong><a name="after_trigger_enable" class="item"><code>after_trigger_enable</code></a></strong></dt>
+
+<dt><strong><a name="after_txn" class="item"><code>after_txn</code></a></strong></dt>
+
+<dt><strong><a name="before_sync" class="item"><code>before_sync</code></a></strong></dt>
+
+<dt><strong><a name="after_sync" class="item"><code>after_sync</code></a></strong></dt>
+
+</dl>
+</dd>
+<dt><strong><a name="getdbh" class="item"><code>getdbh</code></a></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not Perl <em>DBI</em> database handles should be
+provided to the custom code subroutine. If true, database handles will be
+provided under the <code>dbh</code> key of the hash reference passed to the subroutine.
+The value under this key will be a hash reference mapping database names to
+their respective handles.</p>
+</dd>
+<dt><strong><code>sync</code></strong></dt>
+
+<dd>
+<p>Name of the sync with which to associate the custom code.</p>
+</dd>
+<dt><strong><a name="relation" class="item"><code>relation</code></a></strong></dt>
+
+<dd>
+<p>Name of the table or sequence with which to associate the custom code.</p>
+</dd>
+<dt><strong><code>status</code></strong></dt>
+
+<dd>
+<p>The current status of this customcode. Anything other than &quot;active&quot; means the
+code is not run.</p>
+</dd>
+<dt><strong><code>priority</code></strong></dt>
+
+<dd>
+<p>Number indicating the priority in which order to execute custom codes. Lower numbers
+are higher priority. Useful for subroutines that set <a href="#lastcode"><code>lastcode</code></a> in order to
+cancel the execution of subsequent custom codes for the same <a href="#when_run"><code>when_run</code></a>.</p>
+</dd>
+<dt><strong><a name="src_code" class="item"><code>src_code</code></a></strong></dt>
+
+<dd>
+<p>File from which to read the custom code Perl source.</p>
+</dd>
+</dl>
+<p>The body of the Perl subroutine should be implemented in the <a href="#src_code"><code>src_code</code></a> file,
+and not inside a <code>sub</code> declaration. When called, it will be passed a single
+hash reference with the following keys:</p>
+<dl>
+<dt><strong><a name="syncname" class="item"><code>syncname</code></a></strong></dt>
+
+<dd>
+<p>The name of the currently-executing sync.</p>
+</dd>
+<dt><strong><a name="version" class="item"><code>version</code></a></strong></dt>
+
+<dd>
+<p>The version of Bucardo executing the sync.</p>
+</dd>
+<dt><strong><a name="sourcename" class="item"><code>sourcename</code></a></strong></dt>
+
+<dd>
+<p>The name of the source database.</p>
+</dd>
+<dt><strong><a name="targetname" class="item"><code>targetname</code></a></strong></dt>
+
+<dd>
+<p>The name of the target database.</p>
+</dd>
+<dt><strong><code>sendmail</code></strong></dt>
+
+<dd>
+<p>A code reference that can be used to send email messages.</p>
+</dd>
+<dt><strong><a name="sourcedbh" class="item"><code>sourcedbh</code></a></strong></dt>
+
+<dd>
+<p>A <em>DBI</em> database handle to the sync source database. Provided only to custom
+code executed by the controller.</p>
+</dd>
+<dt><strong><a name="rellist" class="item"><code>rellist</code></a></strong></dt>
+
+<dd>
+<p>An array reference of hash references, each representing a relation in the
+sync. Provided only to custom code executed by the controller. The keys in
+the hash are the same as the parameters supported by <a href="#add_table">add table</a> and
+<a href="#add_sequence">add sequence</a>, as appropriate.</p>
+</dd>
+<dt><strong><a name="schemaname" class="item"><code>schemaname</code></a></strong></dt>
+
+<dd>
+<p>The schema for the table that triggered the exception. Provided only to
+&quot;exception&quot; custom codes.</p>
+</dd>
+<dt><strong><a name="tablename" class="item"><code>tablename</code></a></strong></dt>
+
+<dd>
+<p>The name of the table that triggered the exception. Provided only to
+&quot;exception&quot; custom codes.</p>
+</dd>
+<dt><strong><a name="error_string" class="item"><code>error_string</code></a></strong></dt>
+
+<dd>
+<p>The string containing the actual error message. Provided only to &quot;exception&quot;
+custom codes.</p>
+</dd>
+<dt><strong><a name="deltabin" class="item"><code>deltabin</code></a></strong></dt>
+
+<dd>
+<p>A hash reference with the name of each source database as a key and a list of
+all primary keys joined together with &quot;\0&quot;. Provided only to &quot;exception&quot;
+custom codes.</p>
+</dd>
+<dt><strong><a name="attempts" class="item"><code>attempts</code></a></strong></dt>
+
+<dd>
+<p>The number of times the sync has been attempted. Provided only to &quot;exception&quot;
+custom codes.</p>
+</dd>
+<dt><strong><a name="conflicts" class="item"><code>conflicts</code></a></strong></dt>
+
+<dd>
+<p>A hash reference of conflicting rows. The keys are the primary key values, and
+the values are hash references with the names of the databases containing the
+conflicting rows and true values. Provided only to &quot;conflict&quot; custom codes.</p>
+</dd>
+</dl>
+<p>The custom code subroutine may set any of these keys in the hash reference to
+change the behavior of the sync:</p>
+<dl>
+<dt><strong><a name="message" class="item"><code>message</code></a></strong></dt>
+
+<dd>
+<p>Message to send to the logs.</p>
+</dd>
+<dt><strong><a name="warning" class="item"><code>warning</code></a></strong></dt>
+
+<dd>
+<p>A warning to emit after the subroutine has returned.</p>
+</dd>
+<dt><strong><a name="error" class="item"><code>error</code></a></strong></dt>
+
+<dd>
+<p>An error to be thrown after the subroutine has returned.</p>
+</dd>
+<dt><strong><a name="nextcode" class="item"><code>nextcode</code></a></strong></dt>
+
+<dd>
+<p>Set to send execution to the next custom code of the same type. Mainly useful
+to exception custom codes, and supported only by custom codes executed by the
+controller.</p>
+</dd>
+<dt><strong><a name="lastcode" class="item"><code>lastcode</code></a></strong></dt>
+
+<dd>
+<p>Set to true to have any subsequent custom codes of the same type to be
+skipped.</p>
+</dd>
+<dt><strong><a name="endsync" class="item"><code>endsync</code></a></strong></dt>
+
+<dd>
+<p>Cancels the sync altogether.</p>
+</dd>
+</dl>
+<p>An example:</p>
+<pre>
+  use strict;
+  use warnings;
+  use Data::Dumper;</pre>
+<pre>
+  my $info = shift;</pre>
+<pre>
+  # Let's open a file.
+  my $file = '/tmp/bucardo_dump.txt';
+  open my $fh, '&gt;:encoding(UTF-8)', $file or do {
+      $info-&gt;{warning} = &quot;Cannot open $file: $!\n&quot;;
+      return;
+  };</pre>
+<pre>
+  # Inspect $info for fun.
+  print $fh Dumper $info;
+  close $fh or $info-&gt;{warning} = &quot;Error closing $file: $!\n&quot;;</pre>
+<pre>
+  # Log a message and return.
+  $info-&gt;{message} = 'IN UR DATABASEZ NORMALIZIN UR RELAYSHUNS';
+  return;</pre>
+<p>
+</p>
+<h2><a name="update">update</a></h2>
+<pre>
+  bucardo update &lt;type&gt; &lt;name&gt; &lt;parameters&gt;</pre>
+<p>Updates a Bucardo object. The <a href="#type"><code>type</code></a> specifies the type of object to update,
+while the <a href="#name"><code>name</code></a> should be the name of the object. The supported parameters
+for each type are the same as those for <a href="#add">add</a>. The supported types are:</p>
+<dl>
+<dt><strong><code>customcode</code></strong></dt>
+
+<dt><strong><code>db</code></strong></dt>
+
+<dt><strong><code>sync</code></strong></dt>
+
+<dt><strong><code>table</code></strong></dt>
+
+<dt><strong><code>sequence</code></strong></dt>
+
+</dl>
+<p>
+</p>
+<h3><a name="update_customcode">update customcode</a></h3>
+<pre>
+  bucardo update customcode &lt;name&gt; setting=value</pre>
+<p>Updates an existing customcode. Items that can be changed are:</p>
+<dl>
+<dt><strong><code>about</code></strong></dt>
+
+<dd>
+<p>A short description of the custom code.</p>
+</dd>
+<dt><strong><code>getdbh</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not Perl <em>DBI</em> database handles should be
+provided to the custom code subroutine. If true, database handles will be
+provided under the <code>dbh</code> key of the hash reference passed to the subroutine.
+The value under this key will be a hash reference mapping database names to
+their respective handles.</p>
+</dd>
+<dt><strong><code>name</code></strong></dt>
+
+<dd>
+<p>The name of the custom code object.</p>
+</dd>
+<dt><strong><code>priority</code></strong></dt>
+
+<dd>
+<p>Number indicating the priority in which order to execute custom codes. Lower numbers
+are higher priority. Useful for subroutines that set <a href="#lastcode"><code>lastcode</code></a> in order to
+cancel the execution of subsequent custom codes for the same <a href="#when_run"><code>when_run</code></a>.</p>
+</dd>
+</dl>
+<dl>
+<dt><strong><code>status</code></strong></dt>
+
+<dd>
+<p>The current status of this customcode. Anything other than &quot;active&quot; means the
+code is not run.</p>
+</dd>
+<dt><strong><code>whenrun</code></strong></dt>
+
+<dd>
+<p>A string indicating when the custom code should be run. Supported values include:</p>
+<dl>
+<dt><strong><code>before_txn</code></strong></dt>
+
+<dt><strong><code>before_check_rows</code></strong></dt>
+
+<dt><strong><code>before_trigger_drop</code></strong></dt>
+
+<dt><strong><code>after_trigger_drop</code></strong></dt>
+
+<dt><strong><code>after_table_sync</code></strong></dt>
+
+<dt><strong><code>exception</code></strong></dt>
+
+<dt><strong><code>conflict</code></strong></dt>
+
+<dt><strong><code>before_trigger_enable</code></strong></dt>
+
+<dt><strong><code>after_trigger_enable</code></strong></dt>
+
+<dt><strong><code>after_txn</code></strong></dt>
+
+<dt><strong><code>before_sync</code></strong></dt>
+
+<dt><strong><code>after_sync</code></strong></dt>
+
+</dl>
+</dd>
+</dl>
+<p>
+</p>
+<h3><a name="update_db">update db</a></h3>
+<pre>
+  bucardo udpate db &lt;name&gt; port=xxx host=xxx user=xxx pass=xxx</pre>
+<p>Updates a database. The <a href="#name"><code>name</code></a> is the name by which the database is known to
+Bucardo. This may vary from the actual database name, as multiple hosts might
+have databases with the same name.</p>
+<p>The supported named parameters are:</p>
+<dl>
+<dt><strong><code>dbname</code></strong></dt>
+
+<dt><strong><code>db</code></strong></dt>
+
+<dd>
+<p>The actual name of the database.</p>
+</dd>
+<dt><strong><code>type</code></strong></dt>
+
+<dt><strong><code>dbtype</code></strong></dt>
+
+<dd>
+<p>The type of the database. Currently supported values are:</p>
+<ul>
+<li><strong><code>postgres</code></strong>
+
+</li>
+<li><strong><code>drizzle</code></strong>
+
+</li>
+<li><strong><code>mongo</code></strong>
+
+</li>
+<li><strong><code>mysql</code></strong>
+
+</li>
+<li><strong><code>maria</code></strong>
+
+</li>
+<li><strong><code>oracle</code></strong>
+
+</li>
+<li><strong><code>redis</code></strong>
+
+</li>
+<li><strong><code>sqlite</code></strong>
+
+</li>
+</ul>
+</dd>
+<dt><strong><code>username</code></strong></dt>
+
+<dt><strong><code>dbuser</code></strong></dt>
+
+<dt><strong><code>user</code></strong></dt>
+
+<dd>
+<p>The username Bucardo should use to connect to the database.</p>
+</dd>
+<dt><strong><code>password</code></strong></dt>
+
+<dt><strong><code>dbpass</code></strong></dt>
+
+<dt><strong><code>pass</code></strong></dt>
+
+<dd>
+<p>The password Bucardo should use when connecting to the database.</p>
+</dd>
+<dt><strong><code>dbhost</code></strong></dt>
+
+<dt><strong><code>pghost</code></strong></dt>
+
+<dt><strong><code>host</code></strong></dt>
+
+<dd>
+<p>The host name to which to connect.</p>
+</dd>
+<dt><strong><code>dbport</code></strong></dt>
+
+<dt><strong><code>pgport</code></strong></dt>
+
+<dt><strong><code>port</code></strong></dt>
+
+<dd>
+<p>The port to which to connect.</p>
+</dd>
+<dt><strong><code>dbconn</code></strong></dt>
+
+<dt><strong><code>pgconn</code></strong></dt>
+
+<dt><strong><code>conn</code></strong></dt>
+
+<dd>
+<p>Additional connection parameters, e.g., <code>sslmode=require</code>. Optional.</p>
+</dd>
+<dt><strong><code>status</code></strong></dt>
+
+<dd>
+<p>Status of the database in Bucardo. Must be either &quot;active&quot; or &quot;inactive&quot;.</p>
+</dd>
+<dt><strong><code>dbgroup</code></strong></dt>
+
+<dt><strong><code>server_side_prepares</code></strong></dt>
+
+<dt><strong><code>ssp</code></strong></dt>
+
+<dd>
+<p>Enable or disable server-side prepares. Pass 1 to enable them or 0 to disable
+them.</p>
+</dd>
+<dt><strong><code>dbservice</code></strong></dt>
+
+<dt><strong><code>service</code></strong></dt>
+
+<dd>
+<p>The service name to use for a Postgres database.</p>
+</dd>
+<dt><strong><code>group</code></strong></dt>
+
+<dd>
+<p>A comma-separated list of database groups to which to add the database. The
+database will be removed from any other groups of which it was previously a
+member.</p>
+</dd>
+</dl>
+<p>
+</p>
+<h3><a name="update_sync">update sync</a></h3>
+<pre>
+  bucardo update sync syncname relgroup=xxx dbs=xxx</pre>
+<p>Updates a sync, which is a named replication event containing information about
+what to replicate from where to where. The supported parameters are:</p>
+<dl>
+<dt><strong><code>name</code></strong></dt>
+
+<dd>
+<p>The name of the sync.</p>
+</dd>
+<dt><strong><code>dbs</code></strong></dt>
+
+<dd>
+<p>The name of a database group or comma-delimited list of databases.</p>
+</dd>
+<dt><strong><code>relgroup</code></strong></dt>
+
+<dd>
+<p>The name of a relation group to synchronize.</p>
+</dd>
+<dt><strong><code>status</code></strong></dt>
+
+<dd>
+<p>Indicates whether or not the sync is active. Must be either &quot;active&quot; or
+&quot;inactive&quot;.</p>
+</dd>
+<dt><strong><code>rebuild_index</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not to rebuild indexes after every sync.</p>
+</dd>
+<dt><strong><code>lifetime</code></strong></dt>
+
+<dd>
+<p>Number of seconds a KID can live before being reaped.</p>
+</dd>
+<dt><strong><code>maxkicks</code></strong></dt>
+
+<dd>
+<p>Number of times a KID may be kicked before being reaped.</p>
+</dd>
+<dt><strong><code>conflict_strategy</code></strong></dt>
+
+<dd>
+<p>The conflict resolution strategy to use in the sync. Supported values:</p>
+<dl>
+<dt><strong><code>bucardo_source</code></strong></dt>
+
+<dd>
+<p>The rows on the &quot;source&quot; database always &quot;win&quot;. In other words, in a conflict,
+Bucardo copies rows from source to target.</p>
+</dd>
+<dt><strong><code>bucardo_target</code></strong></dt>
+
+<dd>
+<p>The rows on the &quot;target&quot; database always win.</p>
+</dd>
+<dt><strong><code>bucardo_skip</code></strong></dt>
+
+<dd>
+<p>Any conflicting rows are simply not replicated. Not recommended for most
+cases.</p>
+</dd>
+<dt><strong><code>bucardo_random</code></strong></dt>
+
+<dd>
+<p>Each database has an equal chance of winning each time.</p>
+</dd>
+<dt><strong><code>bucardo_latest</code></strong></dt>
+
+<dd>
+<p>The row that was most recently changed wins.</p>
+</dd>
+<dt><strong><code>bucardo_abort</code></strong></dt>
+
+<dd>
+<p>The sync is aborted on a conflict.</p>
+</dd>
+</dl>
+</dd>
+<dt><strong><code>onetimecopy</code></strong></dt>
+
+<dd>
+<p>Determines whether or not a sync should switch to a full copy mode for a
+single run. Supported values are:</p>
+<ol>
+<li><strong><a name="off2" class="item">: off</a></strong>
+
+</li>
+<li><strong><a name="always_full_copy2" class="item">: always full copy</a></strong>
+
+</li>
+<li><strong><a name="only_copy_tables_that_are_empty_on_the_target2" class="item">: only copy tables that are empty on the target</a></strong>
+
+</li>
+</ol>
+</dd>
+<dt><strong><code>stayalive</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not the sync processes (CTL) should be
+persistent.</p>
+</dd>
+<dt><strong><code>kidsalive</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not the sync child processes (KID) should be
+persistent.</p>
+</dd>
+<dt><strong><code>autokick</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not tables in the sync should automatically send
+kick messages when they're modified. May be overridden by the <a href="#autokick"><code>autokick</code></a>
+parameter of individual tables.</p>
+</dd>
+<dt><strong><code>checktime</code></strong></dt>
+
+<dd>
+<p>An interval specifying the maximum time a sync should go before being
+kicked. Useful for busy systems where you don't want the overhead of notify
+triggers.</p>
+</dd>
+<dt><strong><code>priority</code></strong></dt>
+
+<dd>
+<p>An integer indicating the priority of the sync. Lower numbers are higher
+priority. Currently used only for display purposes.</p>
+</dd>
+<dt><strong><code>analyze_after_copy</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not to analyze tables after every sync. Off by
+default.</p>
+</dd>
+<dt><strong><code>overdue</code></strong></dt>
+
+<dd>
+<p>An interval specifying the amount of time after which the sync has not run
+that it should be considered overdue. <code>check_bucardo_sync</code> issues a warning
+when a sync has not been run in this amount of time.</p>
+</dd>
+<dt><strong><code>expired</code></strong></dt>
+
+<dd>
+<p>An interval specifying the amount of time after which the sync has not run
+that it should be considered expired. <code>check_bucardo_sync</code> issues a critical
+message when a sync has not been run in this amount of time.</p>
+</dd>
+<dt><strong><code>track_rates</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not to track synchronization rates.</p>
+</dd>
+<dt><strong><code>rebuild_index</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not to rebuild indexes after every sync.</p>
+</dd>
+</dl>
+<p>
+</p>
+<h3><a name="update_table">update table</a></h3>
+<pre>
+  bucardo update table [schema].table db=actual_db_name</pre>
+<p>Updates a table object. The table information will be read from the specified
+database. Supported parameters:</p>
+<dl>
+<dt><strong><code>db</code></strong></dt>
+
+<dd>
+<p>The name of the database from which to read the table information. Should be a
+name known to Bucardo.</p>
+</dd>
+<dt><strong><code>schemaname</code></strong></dt>
+
+<dd>
+<p>The name of the schema in which the table is found.</p>
+</dd>
+<dt><strong><code>tablename</code></strong></dt>
+
+<dd>
+<p>The actual name of the table.</p>
+</dd>
+<dt><strong><code>autokick</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not the table should automatically send kick
+messages when it's modified. Overrides the <a href="#autokick"><code>autokick</code></a> parameter of any syncs
+of which the table is a part.</p>
+</dd>
+<dt><strong><code>rebuild_index</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not to rebuild indexes after every sync.</p>
+</dd>
+<dt><strong><code>analyze_after_copy</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not to analyze the table after every sync.</p>
+</dd>
+<dt><strong><code>vaccuum_after_copy</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not to vacuum the table after every sync.</p>
+</dd>
+<dt><strong><code>relgroup</code></strong></dt>
+
+<dd>
+<p>Adds the table to the named relation group. May be specified more than once.
+The table will be removed from any other relation groups.</p>
+</dd>
+<dt><strong><code>makedelta</code></strong></dt>
+
+<dd>
+<p>Specifies which databases need makedelta enabled for this table.</p>
+</dd>
+</dl>
+<p>
+</p>
+<h3><a name="update_sequence">update sequence</a></h3>
+<pre>
+  bucardo update sequence [schema].sequence relgroup=xxx</pre>
+<dl>
+<dt><strong><code>db</code></strong></dt>
+
+<dd>
+<p>The name of the database where the sequence lives.</p>
+</dd>
+<dt><strong><code>schemaname</code></strong></dt>
+
+<dd>
+<p>The name of the schema in which the sequence is found.</p>
+</dd>
+<dt><strong><code>relgroup</code></strong></dt>
+
+<dd>
+<p>Adds the sequence to the named relation group. May be specified more than
+once. The sequence will be removed from any other relation groups.</p>
+</dd>
+</dl>
+<p>
+</p>
+<h2><a name="remove">remove</a></h2>
+<pre>
+  bucardo remove &lt;item_type&gt; &lt;item_name&gt;</pre>
+<p>Removes one or more objects from Bucardo. Valid item types are;</p>
+<ul>
+<li><strong><a name="db_or_database" class="item"><a href="#db"><code>db</code></a> or <a href="#database"><code>database</code></a></a></strong>
+
+<p>Use the <code>--force</code> option to clear out related tables and groups instead of
+erroring out.</p>
+</li>
+<li><strong><code>dbgroup</code></strong>
+
+</li>
+<li><strong><code>relgroup</code></strong>
+
+</li>
+<li><strong><code>sync</code></strong>
+
+</li>
+<li><strong><code>table</code></strong>
+
+</li>
+<li><strong><code>sequence</code></strong>
+
+</li>
+<li><strong><code>customcols</code></strong>
+
+</li>
+<li><strong><code>customname</code></strong>
+
+</li>
+<li><strong><code>customcode</code></strong>
+
+</li>
+</ul>
+<p>Aliases:</p>
+<dl>
+<dt><strong><a name="delete" class="item"><code>delete</code></a></strong></dt>
+
+<dt><strong><a name="del" class="item"><code>del</code></a></strong></dt>
+
+</dl>
+<p>
+</p>
+<h2><a name="kick">kick</a></h2>
+<pre>
+  bucardo kick &lt;syncname(s)&gt; [timeout]</pre>
 <p>Tells one or more named syncs to fire as soon as possible. Note that this simply sends a request that 
 the sync fire: it may not start right away if the same sync is already running, or if the source or 
 target database has exceeded the number of allowed Bucardo connections. If the final argument is a 
 number, it is treated as a timeout. If this number is zero, the bucardo command will not return 
 until the sync has finished. For any other number, the sync will wait at most that number of seconds. 
-If any sync has not finished before the timeout, a false value is returned. In all other cases, a 
-true value is returned.</p>
+If any sync has not finished before the timeout, an exit value of 1 will be returned. Errors will
+cause exit values of 2 or 3. In all other cases, an exit value of 0 will be returned.</p>
 <p>If a timeout is given, the total completion time in seconds is also displayed. If the sync is going to 
 multiple targets, the time that each target takes from the start of the kick is also shown as each 
-target finishes.</p>
-</dd>
-<dt><strong><a name="reload_config" class="item"><strong>reload_config</strong></a></strong></dt>
+target finishes. Options:</p>
+<dl>
+<dt><strong><a name="retry" class="item"><code>--retry</code></a></strong></dt>
 
 <dd>
-<p>Forces Bucardo to reload the bucardo_config file, and then restart all processes to ensure that the new 
-information is loaded.</p>
+<p>The number of times to retry a sync if it fails. Defaults to 0.</p>
 </dd>
-<dt><strong><a name="show" class="item"><strong>show</strong></a></strong></dt>
+<dt><strong><a name="retry_sleep" class="item"><code>--retry-sleep</code></a></strong></dt>
 
 <dd>
-<p>Usage: ./bucardo show &lt;all|setting1&gt; [setting2..]</p>
-<p>Shows the current settings in the bucardo_config table. Use the keyword 'all' to see all the settings, or 
-specify one or more search terms.</p>
+<p>How long to sleep, in seconds, between each retry attempt.</p>
 </dd>
-<dt><strong><a name="set" class="item"><strong>set</strong></a></strong></dt>
+<dt><strong><a name="notimer" class="item"><code>--notimer</code></a></strong></dt>
 
 <dd>
-<p>Usage: ./bucardo set setting1=value [setting2=value]</p>
-<p>Sets one or more items inside the bucardo_config table. Setting names are case-insensitive.</p>
+<p>By default, kicks with a timeout argument give a running real-time summary of
+time elapsed by using the backspace character. This may not be wanted if
+running a kick, for example, via a cronjob, so turning --notimer on will
+simply print the entire message without backspaces.</p>
 </dd>
-<dt><strong><a name="ping" class="item"><strong>ping</strong></a></strong></dt>
+</dl>
+<p>
+</p>
+<h2><a name="reload_config">reload config</a></h2>
+<pre>
+  bucardo reload config
+  bucardo reload config 30</pre>
+<p>Sends a message to all CTL and KID processes asking them to reload the Bucardo
+configuration. This configuration is a series of key/value pairs that
+configure Bucardo's behavior, and not any of the objects managed by the
+<code>add</code>, <code>remove</code>, or <code>update</code> commands.</p>
+<p>By default, Bucardo will send the message and then exit. Pass an optional
+number and Bucardo will instead wait up to that length of time for all child
+processes to report completion.</p>
+<p>
+</p>
+<h2><a name="set">set</a></h2>
+<pre>
+  bucardo set setting1=value [setting2=value]</pre>
+<p>Sets one or more configuration setting table. Setting names are
+case-insensitive. The available settings are:</p>
+<dl>
+<dt><strong><a name="autosync_ddl" class="item"><code>autosync_ddl</code></a></strong></dt>
 
 <dd>
+<p>Which DDL changing conditions do we try to remedy automatically? Default: <code>newcol</code>.</p>
+</dd>
+<dt><strong><a name="bucardo_current_version" class="item"><code>bucardo_current_version</code></a></strong></dt>
+
+<dd>
+<p>Current version of Bucardo. Default: <code>4.99.6</code>.</p>
+</dd>
+<dt><strong><a name="bucardo_vac" class="item"><code>bucardo_vac</code></a></strong></dt>
+
+<dd>
+<p>Do we want the automatic VAC daemon to run? Default: <code>1</code>.</p>
+</dd>
+<dt><strong><a name="bucardo_version" class="item"><code>bucardo_version</code></a></strong></dt>
+
+<dd>
+<p>Bucardo version this schema was created with. Default: <code>4.99.6</code>.</p>
+</dd>
+<dt><strong><a name="ctl_checkonkids_time" class="item"><code>ctl_checkonkids_time</code></a></strong></dt>
+
+<dd>
+<p>How often does the controller check on the kids health? Default: <code>10</code>.</p>
+</dd>
+<dt><strong><a name="ctl_createkid_time" class="item"><code>ctl_createkid_time</code></a></strong></dt>
+
+<dd>
+<p>How long do we sleep to allow kids-on-demand to get on their feet? Default: <code>0.5</code>.</p>
+</dd>
+<dt><strong><a name="ctl_sleep" class="item"><code>ctl_sleep</code></a></strong></dt>
+
+<dd>
+<p>How long does the controller loop sleep? Default: <code>0.2</code>.</p>
+</dd>
+<dt><strong><a name="default_conflict_strategy" class="item"><code>default_conflict_strategy</code></a></strong></dt>
+
+<dd>
+<p>Default conflict strategy for all syncs. Default: <a href="#bucardo_latest"><code>bucardo_latest</code></a>.</p>
+</dd>
+<dt><strong><a name="default_email_from" class="item"><code>default_email_from</code></a></strong></dt>
+
+<dd>
+<p>Who the alert emails are sent as. Default: <code>nobody@example.com</code>.</p>
+</dd>
+<dt><strong><a name="default_email_host" class="item"><code>default_email_host</code></a></strong></dt>
+
+<dd>
+<p>Which host to send email through. Default: <code>localhost</code>.</p>
+</dd>
+<dt><strong><a name="default_email_to" class="item"><code>default_email_to</code></a></strong></dt>
+
+<dd>
+<p>Who to send alert emails to. Default: <code>nobody@example.com</code>.</p>
+</dd>
+<dt><strong><a name="email_debug_file" class="item"><code>email_debug_file</code></a></strong></dt>
+
+<dd>
+<p>File to save a copy of all outgoing emails to. Default: None.</p>
+</dd>
+<dt><strong><a name="endsync_sleep" class="item"><code>endsync_sleep</code></a></strong></dt>
+
+<dd>
+<p>How long do we sleep when custom code requests an endsync? Default: <code>1.0</code>.</p>
+</dd>
+<dt><strong><a name="flatfile_dir" class="item"><code>flatfile_dir</code></a></strong></dt>
+
+<dd>
+<p>Directory to store the flatfile output inside of. Default: <code>.</code>.</p>
+</dd>
+<dt><strong><a name="host_safety_check" class="item"><code>host_safety_check</code></a></strong></dt>
+
+<dd>
+<p>Regex to make sure we don't accidentally run where we should not. Default: None.</p>
+</dd>
+<dt><strong><a name="kid_deadlock_sleep" class="item"><code>kid_deadlock_sleep</code></a></strong></dt>
+
+<dd>
+<p>How long to sleep in seconds if we hit a deadlock error. Default: <code>0.5</code>.
+Set to -1 to prevent the kid from retrying.</p>
+</dd>
+<dt><strong><a name="kid_nodeltarows_sleep" class="item"><code>kid_nodeltarows_sleep</code></a></strong></dt>
+
+<dd>
+<p>How long do kids sleep if no delta rows are found? Default: <code>0.5</code>.</p>
+</dd>
+<dt><strong><a name="kid_pingtime" class="item"><code>kid_pingtime</code></a></strong></dt>
+
+<dd>
+<p>How often do we ping check the KID? Default: <code>60</code>.</p>
+</dd>
+<dt><strong><a name="kid_restart_sleep" class="item"><code>kid_restart_sleep</code></a></strong></dt>
+
+<dd>
+<p>How long to sleep in seconds when restarting a kid? Default: <code>1</code>.</p>
+</dd>
+<dt><strong><a name="kid_serial_sleep" class="item"><code>kid_serial_sleep</code></a></strong></dt>
+
+<dd>
+<p>How long to sleep in seconds if we hit a serialization error. Default: <code>0.5</code>.
+Set to -1 to prevent the kid from retrying.</p>
+</dd>
+<dt><strong><a name="kid_sleep" class="item"><code>kid_sleep</code></a></strong></dt>
+
+<dd>
+<p>How long does a kid loop sleep? Default: <code>0.5</code>.</p>
+</dd>
+<dt><strong><a name="log_conflict_file" class="item"><code>log_conflict_file</code></a></strong></dt>
+
+<dd>
+<p>Name of the conflict detail log file. Default: <code>bucardo_conflict.log</code>.</p>
+</dd>
+<dt><strong><a name="log_level" class="item"><code>log_level</code></a></strong></dt>
+
+<dd>
+<p>How verbose to make the logging. Higher is more verbose. Default: <code>normal</code>.</p>
+</dd>
+<dt><strong><a name="log_microsecond" class="item"><code>log_microsecond</code></a></strong></dt>
+
+<dd>
+<p>Show microsecond output in the timestamps? Default: <code>0</code>.</p>
+</dd>
+<dt><strong><a name="log_showlevel" class="item"><code>log_showlevel</code></a></strong></dt>
+
+<dd>
+<p>Show log level in the log output? Default: <code>0</code>.</p>
+</dd>
+<dt><strong><a name="log_showline" class="item"><code>log_showline</code></a></strong></dt>
+
+<dd>
+<p>Show line number in the log output? Default: <code>0</code>.</p>
+</dd>
+<dt><strong><a name="log_showpid" class="item"><code>log_showpid</code></a></strong></dt>
+
+<dd>
+<p>Show PID in the log output? Default: <code>1</code>.</p>
+</dd>
+<dt><strong><a name="log_showtime" class="item"><code>log_showtime</code></a></strong></dt>
+
+<dd>
+<p>Show timestamp in the log output?  0=off  1=seconds since epoch  2=scalar gmtime  3=scalar localtime. Default: <code>3</code>.</p>
+</dd>
+<dt><strong><a name="mcp_dbproblem_sleep" class="item"><code>mcp_dbproblem_sleep</code></a></strong></dt>
+
+<dd>
+<p>How many seconds to sleep before trying to respawn. Default: <code>15</code>.</p>
+</dd>
+<dt><strong><a name="mcp_loop_sleep" class="item"><code>mcp_loop_sleep</code></a></strong></dt>
+
+<dd>
+<p>How long does the main MCP daemon sleep between loops? Default: <code>0.2</code>.</p>
+</dd>
+<dt><strong><a name="mcp_pingtime" class="item"><code>mcp_pingtime</code></a></strong></dt>
+
+<dd>
+<p>How often do we ping check the MCP? Default: <code>60</code>.</p>
+</dd>
+<dt><strong><a name="mcp_vactime" class="item"><code>mcp_vactime</code></a></strong></dt>
+
+<dd>
+<p>How often in seconds do we check that a VAC is still running? Default: <code>60</code>.</p>
+</dd>
+<dt><strong><a name="piddir" class="item"><code>piddir</code></a></strong></dt>
+
+<dd>
+<p>Directory holding Bucardo PID files. Default: <code>/var/run/bucardo</code>.</p>
+</dd>
+<dt><strong><a name="reason_file" class="item"><code>reason_file</code></a></strong></dt>
+
+<dd>
+<p>File to hold reasons for stopping and starting. Default: <code>bucardo.restart.reason.txt</code>.</p>
+</dd>
+<dt><strong><a name="semaphore_table" class="item"><code>semaphore_table</code></a></strong></dt>
+
+<dd>
+<p>Table to let apps know a sync is ongoing. Default: <code>bucardo_status</code>.</p>
+</dd>
+<dt><strong><a name="statement_chunk_size" class="item"><code>statement_chunk_size</code></a></strong></dt>
+
+<dd>
+<p>How many primary keys to shove into a single statement. Default: <code>10000</code>.</p>
+</dd>
+<dt><strong><a name="stats_script_url" class="item"><code>stats_script_url</code></a></strong></dt>
+
+<dd>
+<p>Location of the stats script. Default: <code>http://www.bucardo.org/</code>.</p>
+</dd>
+<dt><strong><a name="stopfile" class="item"><code>stopfile</code></a></strong></dt>
+
+<dd>
+<p>Name of the semaphore file used to stop Bucardo processes. Default: <code>fullstopbucardo</code>.</p>
+</dd>
+<dt><strong><a name="syslog_facility" class="item"><code>syslog_facility</code></a></strong></dt>
+
+<dd>
+<p>Which syslog facility level to use. Default: <code>log_local1</code>.</p>
+</dd>
+<dt><strong><a name="tcp_keepalives_count" class="item"><code>tcp_keepalives_count</code></a></strong></dt>
+
+<dd>
+<p>How many probes to send. 0 indicates sticking with system defaults. Default: <code>0</code>.</p>
+</dd>
+<dt><strong><a name="tcp_keepalives_idle" class="item"><code>tcp_keepalives_idle</code></a></strong></dt>
+
+<dd>
+<p>How long to wait between each keepalive probe. Default: <code>0</code>.</p>
+</dd>
+<dt><strong><a name="tcp_keepalives_interval" class="item"><code>tcp_keepalives_interval</code></a></strong></dt>
+
+<dd>
+<p>How long to wait for a response to a keepalive probe. Default: <code>0</code>.</p>
+</dd>
+<dt><strong><a name="vac_run" class="item"><code>vac_run</code></a></strong></dt>
+
+<dd>
+<p>How often does the VAC process run? Default: <code>30</code>.</p>
+</dd>
+<dt><strong><a name="vac_sleep" class="item"><code>vac_sleep</code></a></strong></dt>
+
+<dd>
+<p>How long does VAC process sleep between runs? Default: <code>120</code>.</p>
+</dd>
+<dt><strong><a name="warning_file" class="item"><code>warning_file</code></a></strong></dt>
+
+<dd>
+<p>File containing all log lines starting with &quot;Warning&quot;. Default: <code>bucardo.warning.log</code>.</p>
+</dd>
+</dl>
+<p>
+</p>
+<h2><a name="show">show</a></h2>
+<pre>
+  bucardo show all|&lt;setting&gt; [&lt;setting&gt;...]</pre>
+<p>Shows the current Bucardo settings. Use the keyword &quot;all&quot; to see all the
+settings, or specify one or more search terms. See <a href="#set">set</a> for complete
+details on the configuration settings.</p>
+<p>
+</p>
+<h2><a name="config">config</a></h2>
+<pre>
+  bucardo config show all|&lt;setting&gt; [&lt;setting&gt;...]
+  bucardo config set &lt;setting=value&gt; [&lt;setting=value&gt;...]</pre>
+<p>Deprecated interface for showing and setting configuration settings. Use the
+<a href="#show">show</a> and <a href="#set">set</a> commands, instead.</p>
+<p>
+</p>
+<h2><a name="ping">ping</a></h2>
+<pre>
+  bucardo ping
+  bucardo ping 60
+  bucardo ping 0</pre>
 <p>Sends a ping notice to the MCP process to see if it will respond. By default, it will wait 15 seconds. A 
 numeric argument will change this timeout. Using a 0 as the timeout indicates waiting forever. If a response 
-was returned, the program will exit with a value of 0. If it times out, the value will be 1.</p>
-</dd>
-<dt><strong><a name="status" class="item"><strong>status</strong></a></strong></dt>
-
-<dd>
-<p>Usage: ./bucardo status [syncname(s)] [--sort=#] [--showdays] [--compress]</p>
-<p>Shows the brief status of all known syncs in a tabular format. If given one or more syncnames, 
+was returned, the program will exit with a value of 0. If it times out, the value will be 1.
+Returns a Nagios like message starting with &quot;OK&quot; or &quot;CRITICAL&quot; for success or failure.</p>
+<p>
+</p>
+<h2><a name="status">status</a></h2>
+<pre>
+  bucardo status [syncname(s)] [--sort=#] [--show-days] [--compress]</pre>
+<p>Shows the brief status of all known syncs in a tabular format. If given one or more sync names, 
 shows detailed information for each one. To see detailed information for all syncs, simply 
-use 'status all'.</p>
+use &quot;status all&quot;</p>
 <p>When showing brief information, the columns are:</p>
 <ol>
 <li><strong><a name="name" class="item"><strong>Name</strong></a></strong>
@@ -278,159 +2154,183 @@ the number of rows truncated (T) or conflicted (C), if applicable.</p>
 <p>How long it has been since the last sync failure</p>
 </li>
 </ol>
-</dd>
-<dt><strong><a name="activate_syncname_syncname2_syncname3_timeout" class="item"><strong>activate</strong> syncname [syncname2 syncname3 ...] [timeout]</a></strong></dt>
+<p>The options for <a href="#status"><code>status</code></a> are:</p>
+<dl>
+<dt><strong><a name="show_days" class="item"><code>--show-days</code></a></strong></dt>
 
 <dd>
-<p>Activates one or more named syncs. If given a timeout argument, it will wait until it has received 
-confirmation from Bucardo that each sync has been successfully activated.</p>
+<p>Specifies whether or not do list the time interval with days, or simply show
+the hours. For example, &quot;3d 12h 6m 3s&quot; vs. &quot;48h 6m 3s&quot;</p>
 </dd>
-<dt><strong><a name="deactivate_syncname_syncname2_syncname3_timeout" class="item"><strong>deactivate</strong> syncname [syncname2 syncname3 ...] [timeout]</a></strong></dt>
+<dt><strong><a name="compress" class="item"><code>--compress</code></a></strong></dt>
 
 <dd>
-<p>Deactivates one or more named syncs. If given a timeout argument, it will wait until it has received 
-confirmation from Bucardo that the sync has been successfully deactivated.</p>
+<p>Specifies whether or not to compress the time interval by removing spaces.
+Mostly used to limit the width of the 'status' display.</p>
 </dd>
-<dt><strong><a name="message" class="item"><strong>message</strong></a></strong></dt>
+<dt><strong><a name="sort" class="item"><code>--sort=#</code></a></strong></dt>
 
 <dd>
-<p>Adds a message to the running Bucardo logs. This message will appear prefixed with &quot;MESSAGE: &quot;. If 
-Bucardo is not running, the message will go to the logs the next time Bucardo is running and someone 
-adds another message.</p>
+<p>Requests sorting of the 'status' output by one of the nine columns. Use a
+negative number to reverse the sort order.</p>
 </dd>
 </dl>
 <p>
 </p>
+<h2><a name="activate">activate</a></h2>
+<pre>
+  bucardo activate syncname [syncname2 syncname3 ...] [timeout]</pre>
+<p>Activates one or more named syncs. If given a timeout argument, it will wait until it has received 
+confirmation from Bucardo that each sync has been successfully activated.</p>
+<p>
+</p>
+<h2><a name="deactivate">deactivate</a></h2>
+<pre>
+  bucardo deactivate syncname [syncname2 syncname3 ...] [timeout]</pre>
+<p>Deactivates one or more named syncs. If given a timeout argument, it will wait until it has received 
+confirmation from Bucardo that the sync has been successfully deactivated.</p>
+<p>
+</p>
+<h2><a name="message">message</a></h2>
+<pre>
+  bucardo message 'I WAS HERE'</pre>
+<p>Sends a message to the running Bucardo logs. This message will appear prefixed with &quot;MESSAGE: &quot;. If 
+Bucardo is not running, the message will go to the logs the next time Bucardo runs and someone 
+adds another message.</p>
+<p>
+</p>
+<h2><a name="reload">reload</a></h2>
+<pre>
+  bucardo reload [syncname2 syncname3 ...]</pre>
+<p>Sends a message to one or more sync processes, instructing them to reload.
+Waits for each to reload before going on to the next. Reloading consists of
+deactivating a sync, reloading its information from the database, and
+activating it again.</p>
+<p>
+</p>
+<h2><a name="inspect">inspect</a></h2>
+<pre>
+  bucardo inspect &lt;type&gt; &lt;name&gt; [&lt;name2&gt;...]</pre>
+<p>Inspects one or more objects of a particular type. The results are sent to
+<code>STDOUT</code>. The supported types include:</p>
+<dl>
+<dt><strong><code>table</code></strong></dt>
+
+<dt><strong><code>sync</code></strong></dt>
+
+<dt><strong><code>relgroup</code></strong></dt>
+
+</dl>
+<p>
+</p>
+<h2><a name="validate">validate</a></h2>
+<pre>
+  bucardo validate all|&lt;sync&gt; [&lt;sync&gt;...]</pre>
+<p>Validates one or more syncs. Use the keyword &quot;all&quot; to validate all syncs, or
+specify one or more syncs to validate.</p>
+<p>
+</p>
+<h2><a name="purge">purge</a></h2>
+<pre>
+  bucardo purge all|&lt;table&gt; [&lt;table&gt;...]</pre>
+<p>Purges the delta and track tables for one or more tables, for one or more
+databases. Use the keyword &quot;all&quot; to validate all tables, or specify one or
+more tables to validate.</p>
+<p>
+</p>
+<h2><a name="help">help</a></h2>
+<pre>
+  bucardo help
+  bucardo help &lt;command&gt;
+  bucardo help &lt;command&gt; &lt;action&gt;</pre>
+<p>Get help. General help can be returned, as well as help for a single command
+or a command and its action. Some examples:</p>
+<pre>
+  bucard help list
+  bucard help add table</pre>
+<p>
+</p>
 <hr />
-<h1><a name="options">OPTIONS</a></h1>
+<h1><a name="options_details">OPTIONS DETAILS</a></h1>
 <p>It is usually easier to set most of these options at the top of the script, or make an alias for them, 
 as they will not change very often if at all.</p>
 <dl>
-<dt><strong><a name="dbport_number" class="item"><strong>--dbport=number</strong></a></strong></dt>
+<dt><strong><a name="d" class="item"><code>-d</code></a></strong></dt>
 
-<dt><strong><a name="dbhost_string" class="item"><strong>--dbhost=string</strong></a></strong></dt>
-
-<dt><strong><a name="dbname_string" class="item"><strong>--dbname=string</strong></a></strong></dt>
-
-<dt><strong><a name="dbuser_string" class="item"><strong>--dbuser=string</strong></a></strong></dt>
-
-<dt><strong><a name="dbpass_string" class="item"><strong>--dbpass=string</strong></a></strong></dt>
+<dt><strong><a name="db_name" class="item"><code>--db-name</code></a></strong></dt>
 
 <dd>
-<p>The port, host, and name of the Bucardo database, the user to connect as, and the password to use.</p>
+<pre>
+  bucardo --db-name widgets
+  bucardo -d bricolage</pre>
+<p>Name of the Bucardo database to which to connect.</p>
 </dd>
-<dt><strong><a name="verbose" class="item"><strong>--verbose</strong></a></strong></dt>
+<dt><strong><a name="u" class="item"><code>-U</code></a></strong></dt>
+
+<dt><strong><a name="db_user" class="item"><code>--db-user</code></a></strong></dt>
+
+<dd>
+<pre>
+  bucardo --db-user postgres
+  bucardo -U Mom</pre>
+<p>User name to use when connecting to the Bucardo database.</p>
+</dd>
+<dt><strong><a name="p" class="item"><code>-P</code></a></strong></dt>
+
+<dt><strong><a name="db_pass" class="item"><code>--db-pass</code></a></strong></dt>
+
+<dd>
+<pre>
+  bucardo --db-pass s3cr1t
+  bucardo -P lolz</pre>
+<p>Password to use when connecting to the Bucardo database.</p>
+</dd>
+<dt><strong><a name="h" class="item"><code>-h</code></a></strong></dt>
+
+<dt><strong><a name="db_host" class="item"><code>--db-host</code></a></strong></dt>
+
+<dd>
+<pre>
+  bucardo --db-host db.example.com
+  bucardo -h db2.example.net</pre>
+<p>Host name to use when connecting to the Bucardo database.</p>
+</dd>
+<dt><strong><a name="p" class="item"><code>-p</code></a></strong></dt>
+
+<dt><strong><a name="db_port" class="item"><code>--db-port</code></a></strong></dt>
+
+<dd>
+<pre>
+  bucardo --db-port 7654</pre>
+<p>Port number to connect to when connecting to the Bucardo database.</p>
+</dd>
+<dt><strong><a name="bucardorc" class="item"><code>--bucardorc</code></a></strong></dt>
+
+<dd>
+<pre>
+  bucardo --bucardorc myrcfile</pre>
+<p>Use the specified file for configuration instead of the default
+<em class="file">./.bucardorc</em>.</p>
+</dd>
+<dt><strong><a name="no_bucardorc" class="item"><code>--no-bucardorc</code></a></strong></dt>
+
+<dd>
+<p>Do not use the <em class="file">./.bucardorc</em> configuration file.</p>
+</dd>
+<dt><strong><a name="verbose" class="item"><code>--verbose</code></a></strong></dt>
 
 <dd>
 <p>Makes bucardo run verbosely. Default is off.</p>
 </dd>
-<dt><strong><a name="quiet" class="item"><strong>--quiet</strong></a></strong></dt>
+<dt><strong><a name="quiet" class="item"><code>--quiet</code></a></strong></dt>
 
 <dd>
 <p>Tells bucardo to be as quiet as possible. Default is off.</p>
 </dd>
-<dt><strong><a name="help" class="item"><strong>--help</strong></a></strong></dt>
+<dt><strong><a name="help" class="item"><code>--help</code></a></strong></dt>
 
 <dd>
 <p>Shows a brief summary of usage for bucardo.</p>
-</dd>
-</dl>
-<p>
-</p>
-<h2><a name="kick_arguments">Kick arguments</a></h2>
-<p>The following arguments are only used with the 'kick' command:</p>
-<dl>
-<dt><strong><a name="retry" class="item"><strong>--retry=#</strong></a></strong></dt>
-
-<dd>
-<p>The number of times to retry a sync if it fails. Defaults to 0.</p>
-</dd>
-<dt><strong><a name="retrysleep" class="item"><strong>--retrysleep</strong></a></strong></dt>
-
-<dd>
-<p>How long to sleep, in seconds, between each retry attempt.</p>
-</dd>
-<dt><strong><a name="notimer" class="item"><strong>--notimer</strong></a></strong></dt>
-
-<dd>
-<p>By default, kicks with a timeout argument give a running real-time summary of time elapsed by 
-using the backspace character. This may not be wanted if running a kick, for example, 
-via a cronjob, so turning --notimer on will simply print the entire message without backspaces.</p>
-</dd>
-</dl>
-<p>
-</p>
-<h2><a name="status_arguments">Status arguments</a></h2>
-<p>The following arguments are only used with the 'status' command:</p>
-<dl>
-<dt><strong><a name="showdays" class="item"><strong>--showdays</strong></a></strong></dt>
-
-<dd>
-<p>Specifies whether or not do list the time interval with days, or simply show the hours. For example, 
-&quot;3d 12h 6m 3s&quot; vs. &quot;48h 6m 3s&quot;</p>
-</dd>
-<dt><strong><a name="compress" class="item"><strong>--compress</strong></a></strong></dt>
-
-<dd>
-<p>Specifies whether or not to compress the time interval by removing spaces. Mostly used to limit 
-the width of the 'status' display.</p>
-</dd>
-<dt><strong><a name="sort" class="item"><strong>--sort=#</strong></a></strong></dt>
-
-<dd>
-<p>Requests sorting of the 'status' output by one of the nine columns. Use a negative number to reverse 
-the sort order.</p>
-</dd>
-</dl>
-<p>
-</p>
-<h2><a name="startup_arguments">Startup arguments</a></h2>
-<p>The following arguments are only applicable when using the &quot;start&quot; command:</p>
-<dl>
-<dt><strong><a name="sendmail" class="item"><strong>--sendmail</strong></a></strong></dt>
-
-<dd>
-<p>Tells Bucardo whether or not to send mail on interesting events: startup, shutdown, and errors. Default is on.
-Only applicable when using ./bucardo start.</p>
-</dd>
-<dt><strong><a name="extraname_string" class="item"><strong>--extraname=string</strong></a></strong></dt>
-
-<dd>
-<p>A short string that will be appended to the version string as output by the Bucardo process names. Mostly 
-useful for debugging.</p>
-</dd>
-<dt><strong><a name="debugfilesep" class="item"><strong>--debugfilesep</strong></a></strong></dt>
-
-<dd>
-<p>Forces creation of separate log files for each Bucardo process of the form &quot;log.bucardo.X.Y&quot;, 
-where X is the type of process (MCP, CTL, or KID), and Y is the process ID.</p>
-</dd>
-<dt><strong><a name="debugsyslog" class="item"><strong>--debugsyslog</strong></a></strong></dt>
-
-<dd>
-<p>Sends all log messages to the syslog daemon. On by default. The facility used is controlled by 
-the row &quot;syslog_facility&quot; in the bucardo_config table, and defaults to &quot;LOG_LOCAL1&quot;.</p>
-</dd>
-<dt><strong><a name="debugfile" class="item"><strong>--debugfile</strong></a></strong></dt>
-
-<dd>
-<p>If set, writes detailed debugging information to one or more files.</p>
-</dd>
-<dt><strong><a name="debugdir_directory_name" class="item"><strong>--debugdir=directory name</strong></a></strong></dt>
-
-<dd>
-<p>Directory where the debug files should go.</p>
-</dd>
-<dt><strong><a name="debugname_string" class="item"><strong>--debugname=string</strong></a></strong></dt>
-
-<dd>
-<p>Appends the given string to the end of the default debug file name, &quot;log.bucardo&quot;. A dot is added 
-before the name as well, so a debugname of &quot;rootdb&quot; would produce a log file named &quot;log.bucardo.rootdb&quot;.</p>
-</dd>
-<dt><strong><a name="cleandebugs" class="item"><strong>--cleandebugs</strong></a></strong></dt>
-
-<dd>
-<p>Forces removal of all old debug files before running.</p>
 </dd>
 </dl>
 <p>
@@ -441,7 +2341,7 @@ before the name as well, so a debugname of &quot;rootdb&quot; would produce a lo
 the current directory will be used if found. If not found, then the file <em class="file">~/.bucardorc</em> will be used. Finally, 
 the file /etc/bucardorc will be used if available. The format of the file is option = value, one per line. Any 
 line starting with a '#' will be skipped. Any values loaded from a bucardorc file will be overwritten by 
-command-line options. All bucardorc files can be ignored by supplying a <code>--no-bucardorc</code> argument. A specific 
+command-line options. All bucardorc files can be ignored by supplying a <a href="#no_bucardorc"><code>--no-bucardorc</code></a> argument. A specific 
 file can be forced with the <code>--bucardorc=file</code> option; if this option is set, bucardo will refuse to run 
 unless that file can be read.</p>
 <p>
@@ -453,7 +2353,9 @@ unless that file can be read.</p>
 </p>
 <hr />
 <h1><a name="bugs">BUGS</a></h1>
-<p>Bug reports and feature requests are always welcome, please visit <a href="http://bucardo.org">http://bucardo.org</a> or email <a href="mailto:bucardo-general@bucardo.org.">bucardo-general@bucardo.org.</a></p>
+<p>Bug reports and feature requests are always welcome, please visit
+<em>bucardo.org</em>, file <em>GitHub Issues</em>, or post to our
+<em>email list</em>.</p>
 <p>
 </p>
 <hr />
@@ -463,7 +2365,7 @@ unless that file can be read.</p>
 </p>
 <hr />
 <h1><a name="copyright">COPYRIGHT</a></h1>
-<p>Copyright 2006-2012 Greg Sabino Mullane &lt;<a href="mailto:greg@endpoint.com">greg@endpoint.com</a>&gt;</p>
+<p>Copyright 2006-2013 Greg Sabino Mullane &lt;<a href="mailto:greg@endpoint.com">greg@endpoint.com</a>&gt;</p>
 <p>This program is free to use, subject to the limitations in the LICENSE file.</p>
 
 </body>

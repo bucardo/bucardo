@@ -1,6 +1,6 @@
 [ GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-Bucardo version 5.0.0, released ??, 2012
+Bucardo version 5.0.0, released ??, 2013
 
   - Complete rework of Bucardo: we now allow as many source and target 
     databases as wanted in a single sync. [GSM]
