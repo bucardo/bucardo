@@ -6278,7 +6278,9 @@ sub validate_sync {
     ## Generate mapping of foreign keys
     ## This helps us with conflict resolution later on
     my $oidlist = join ',' => map { $_->{oid} } @{ $s->{goatlist} };
-    $SQL = qq{SELECT conname,
+    if ($oidlist) {
+
+        $SQL = qq{SELECT conname,
                     conrelid, conrelid::regclass,
                     confrelid, confrelid::regclass,
                     array_agg(a.attname), array_agg(z.attname)
@@ -6288,37 +6290,39 @@ sub validate_sync {
              WHERE contype = 'f'
              AND (conrelid IN ($oidlist) OR confrelid IN ($oidlist))
              GROUP BY 1,2,3,4,5
-};
+		};
 
-    ## We turn off search_path to get fully-qualified relation names
-    $srcdbh->do('SET LOCAL search_path = pg_catalog');
+        ## We turn off search_path to get fully-qualified relation names
+        $srcdbh->do('SET LOCAL search_path = pg_catalog');
 
-    for my $row (@{ $srcdbh->selectall_arrayref($SQL) }) {
+        for my $row (@{ $srcdbh->selectall_arrayref($SQL) }) {
 
-        my ($conname, $oid1,$t1, $oid2,$t2, $c1,$c2) = @$row;
+            my ($conname, $oid1,$t1, $oid2,$t2, $c1,$c2) = @$row;
 
-        ## The referenced table is not being tracked in this sync
-        if (! exists $s->{tableoid}{$oid2}) {
-            ## Nothing to do except report this problem and move on
-            $self->glog("Table $t1 references $t2, which is not part of this sync!", LOG_NORMAL);
-            next;
+            ## The referenced table is not being tracked in this sync
+            if (! exists $s->{tableoid}{$oid2}) {
+                ## Nothing to do except report this problem and move on
+                $self->glog("Table $t1 references $t2, which is not part of this sync!", LOG_NORMAL);
+                next;
+            }
+
+            ## A table referencing us is not being tracked in this sync
+            if (! exists $s->{tableoid}{$oid1}) {
+                ## Nothing to do except report this problem and move on
+                $self->glog("Table $t2 is referenced by $t1, which is not part of this sync!", LOG_NORMAL);
+                next;
+            }
+
+            ## Both exist, so tie them together
+            $s->{tableoid}{$oid1}{references}{$oid2} = [$conname,$c1,$c2];
+            $s->{tableoid}{$oid2}{referencedby}{$oid1} = [$conname,$c1,$c2];
+
         }
 
-        ## A table referencing us is not being tracked in this sync
-        if (! exists $s->{tableoid}{$oid1}) {
-            ## Nothing to do except report this problem and move on
-            $self->glog("Table $t2 is referenced by $t1, which is not part of this sync!", LOG_NORMAL);
-            next;
-        }
-
-        ## Both exist, so tie them together
-        $s->{tableoid}{$oid1}{references}{$oid2} = [$conname,$c1,$c2];
-        $s->{tableoid}{$oid2}{referencedby}{$oid1} = [$conname,$c1,$c2];
+        $srcdbh->do('RESET search_path');
+        $srcdbh->commit();
 
     }
-
-    $srcdbh->do('RESET search_path');
-    $srcdbh->commit();
 
     ## If autokick, listen for a triggerkick on all source databases
     if ($s->{autokick}) {
