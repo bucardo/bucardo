@@ -6051,6 +6051,9 @@ sub validate_sync {
         ## Verify sequences or tables+columns on remote databases
         for my $dbname (sort keys %{ $self->{sdb} }) {
 
+            ## Only ones for this sync, please
+            next if ! exists $s->{db}{$dbname};
+
             $x = $self->{sdb}{$dbname};
 
             next if $x->{role} eq 'source';
