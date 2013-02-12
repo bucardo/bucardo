@@ -23,7 +23,7 @@ perl -c Bucardo.pm || exit
 ## Just in case, stop any running Bucardos
 ./bucardo stop --quiet 2>/dev/null
 
-## Bail if the cluser is not reachable
+## Bail if the cluster is not reachable
 psql -q -c 'select 1' >/dev/null 2>/dev/null
 
 if [[ $? -ne 0 ]];then
@@ -46,7 +46,6 @@ psql mtest1 -qc 'create sequence mseq increment by 3 start with 1'
 psql mtest1 -qc "create table foobar(id int not null default nextval('mseq'), email text)"
 psql mtest1 -qc "create unique index foobar_unique on foobar(id)"
 
-
 psql -qc 'create database mtest2 template mtest1'
 psql mtest2 -qc 'alter sequence mseq restart with 2'
 
@@ -65,7 +64,12 @@ echo Adding databases A B C D
 ./bucardo add db C dbname=mtest3 --quiet
 ./bucardo add db D dbname=mtest4 --quiet
 echo Adding table, relgroup, and syncs
-./bucardo add table foobar relgroup=mgroup --quiet
+./bucardo add table foobar db=A relgroup=mgroup --quiet
+./bucardo add table foobar db=B relgroup=mgroup2 --quiet
+
+
+exit
+
 ./bucardo add sync AB relgroup=mgroup dbs=A:source,B:source --quiet
 ./bucardo add sync BC relgroup=mgroup dbs=B:source,C:source,D:target --quiet
 

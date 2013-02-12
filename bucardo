@@ -7,27 +7,27 @@
 ##
 ## Please see http://bucardo.org/ for full documentation
 ##
-## Run as bucardo --help for some basic instructions
+## Run with a --help argument for some basic instructions
 
 package bucardo;
 use strict;
 use warnings;
 use 5.008003;
 use DBI;
-use IO::Handle;
-use Getopt::Long;
-Getopt::Long::Configure(qw/no_ignore_case/);
-use Time::HiRes 'sleep';
-use POSIX qw/ceil setsid localeconv/;
-use Data::Dumper 'Dumper';
+use IO::Handle    qw/ autoflush /;
+use Time::HiRes   qw/ sleep /;
+use POSIX         qw/ ceil setsid localeconv /;
+use Data::Dumper  qw/ Dumper /;
 $Data::Dumper::Indent = 1;
+use Getopt::Long;
+Getopt::Long::Configure(qw/ no_ignore_case pass_through no_autoabbrev /);
 
 our $VERSION = '4.99.6';
 
 ## For the tests, we want to check that it compiles without actually doing anything
 return 1 if $ENV{BUCARDO_TEST};
 
-## No buffering on the standard output streams
+## No buffering on the standard streams
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
 
@@ -36,11 +36,11 @@ use vars qw/$dbh $SQL $sth %sth $count $info %global $SYNC $GOAT $TABLE $SEQUENC
             $CUSTOMCODE $CUSTOMNAME $CUSTOMCOLS /;
 
 ## How to show dates from the database, e.g. start time of a sync
-my $DATEFORMAT       = q{Mon DD, YYYY HH24:MI:SS};
-my $SHORTDATEFORMAT  = q{HH24:MI:SS};
+my $DATEFORMAT       = $ENV{BUCARDO_DATEFORMAT} || q{Mon DD, YYYY HH24:MI:SS};
+my $SHORTDATEFORMAT  = $ENV{BUCARDO_SHORTDATEFORMAT} || q{HH24:MI:SS};
 
-## How long we hang out between checks after a kick or when waiting for notices
-my $WAITSLEEP        = 1;
+## How long we hang out between checks after a kick - or when waiting for notices
+my $WAITSLEEP = 1;
 
 ## Determine how we were called
 ## If we were called from a different directory, and the base directory is in our path,
@@ -75,9 +75,8 @@ my $bcargs = {
               batch        => 0,
           };
 
-## These options must come before the GetOptions call
+## These options must come before the main GetOptions call
 my @opts = @ARGV;
-Getopt::Long::Configure(qw(pass_through no_autoabbrev));
 GetOptions(
     $bcargs,
     'no-bucardorc',
@@ -110,8 +109,8 @@ if (defined $file) {
         ## Skip any lines starting with a hash
         next if /^\s*#/;
 
-        ## Format is foo=bar, with whitespace allowed
-        next unless /^\s*(\w+)\s*=\s*(.+?)\s*$/o;
+        ## Format is foo=bar or foo:bar, with whitespace allowed
+        next unless /^\s*(\w+)\s*[:=]\s*(.+?)\s*$/o;
         my ($name,$value) = ($1,$2); ## no critic (ProhibitCaptureWithoutTest)
         $bcargs->{$name} = $value;
     }
