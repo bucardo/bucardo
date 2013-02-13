@@ -15,7 +15,7 @@ use warnings;
 use 5.008003;
 use DBI;
 use IO::Handle    qw/ autoflush /;
-use Time::HiRes   qw/ sleep /;
+use Time::HiRes   qw/ sleep gettimeofday tv_interval /;
 use POSIX         qw/ ceil setsid localeconv /;
 use Data::Dumper  qw/ Dumper /;
 $Data::Dumper::Indent = 1;
@@ -110,7 +110,7 @@ if (defined $file) {
         next if /^\s*#/;
 
         ## Format is foo=bar or foo:bar, with whitespace allowed
-        next unless /^\s*(\w+)\s*[:=]\s*(.+?)\s*$/o;
+        next unless /^\s*(\w[\w-]+)\s*[:=]\s*(.+?)\s*$/o;
         my ($name,$value) = ($1,$2); ## no critic (ProhibitCaptureWithoutTest)
         $bcargs->{$name} = $value;
     }
@@ -180,7 +180,12 @@ if ($bcargs->{version}) {
 }
 
 # Determine the logging destination.
-unless (exists $bcargs->{logdest}) {
+if (exists $bcargs->{logdest}) {
+    if (! ref $bcargs->{logdest}) {
+        $bcargs->{logdest} = [$bcargs->{logdest}];
+    }
+}
+else {
     if (exists $bcargs->{debugfile} && !delete $bcargs->{debugfile}) {
         # Old --debugfile option can disable logging.
         $bcargs->{logdest} = [];
@@ -861,26 +866,30 @@ sub reload_config {
         }
     }
 
-    $QUIET or print q{Forcing Bucardo to reload the bucardo_config table};
+    $QUIET or print qq{Forcing Bucardo to reload the bucardo_config table\n};
 
-    ## We may want to wait to hear from the MCP that it is done
+    ## Is Bucardo active?
+    my $pong = 'bucardo_mcp_pong';
+    $dbh->do("LISTEN $pong");
+    $dbh->do('NOTIFY bucardo_mcp_ping');
+    $dbh->commit();
+    ## Wait a little bit, then scan for the confirmation message
+    sleep 0.1;
+    if (! wait_for_notice($dbh, $pong, 2)) {
+        die "Looks like Bucardo is not running, so there is no need to reload\n";
+    }
+
+    ## We want to wait to hear from the MCP that it is done
     my $done = 'bucardo_reload_config_finished';
     $dbh->do('NOTIFY bucardo_reload_config');
-    if (defined $adverb) {
-        print '...';
-        $dbh->do("LISTEN $done");
-    }
+    $dbh->do("LISTEN $done");
     $dbh->commit();
-
-    ## If we are not waiting around for a confirmation, just exit now
-    if (!defined $adverb) {
-        print "\n";
-        exit 0;
-    }
 
     ## Wait a little bit, then scan for the confirmation message
     sleep 0.1;
-    wait_for_notice($dbh, $done);
+    if (! wait_for_notice($dbh, $done, 5) ) {
+        die "Waited, but Bucardo never confirmed the configuration reload!\n";
+    }
     print "DONE!\n";
 
     exit 0;
@@ -891,24 +900,33 @@ sub reload_config {
 sub wait_for_notice {
 
     ## Keep hanging out until we get the notice we are waiting for
-    ## Arguments: two
+    ## Arguments: three
     ## 1. Database handle
     ## 2. String to listen for
+    ## 3. How long to wait (default is forever)
     ## Returns: undef
 
-    my ($ldbh, $string) = @_;
+    my ($ldbh, $string, $howlong) = @_;
+
+    my $start_time = [gettimeofday];
 
   WAITIN: {
         for my $notice (@{ db_get_notices($ldbh) }) {
             my ($name) = @$notice;
             last WAITIN if $name eq $string;
         }
+
+        if (defined $howlong) {
+            my $elapsed = tv_interval( $start_time );
+            return 0 if $elapsed >= $howlong;
+        }
+
         $dbh->commit();
         sleep($WAITSLEEP);
         redo;
     }
 
-    return;
+    return 1;
 
 } ## end of wait_for_notice
 
