@@ -6812,6 +6812,8 @@ sub reset_mcp_listeners {
 
     ## Unlisten everything
     $self->db_unlisten_all($maindbh);
+    ## Need to commit here to work around Postgres bug!
+    $maindbh->commit();
 
     ## Listen for MCP specific items
     for my $l
