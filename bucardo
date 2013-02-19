@@ -112,7 +112,7 @@ if (defined $file) {
         ## Format is foo=bar or foo:bar, with whitespace allowed
         next unless /^\s*(\w[\w-]+)\s*[:=]\s*(.+?)\s*$/o;
         my ($name,$value) = ($1,$2); ## no critic (ProhibitCaptureWithoutTest)
-        $bcargs->{$name} = $value;
+        $bcargs->{$name} = $name eq 'logdest' ? [$value] : $value;
     }
     close $rc or die;
 }
