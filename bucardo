@@ -3777,7 +3777,7 @@ sub add_sync {
             $type = 'source' if $type =~ /^s/i or $type =~ /^master/i;
             $type = 'target' if $type =~ /^t/i or $type =~ /^rep/i;
             $type = 'fullcopy' if $type =~ /^f/i;
-            if ($type !~ /^(source|target|fullcopy)$/) {
+            if ($type !~ /^(?:source|target|fullcopy)$/) {
                 die "Invalid database type: must be source, target, or fullcopy (not $type)\n";
             }
             $db{$db} = $type;

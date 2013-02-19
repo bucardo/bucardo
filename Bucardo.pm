@@ -3501,7 +3501,7 @@ sub start_kid {
                         ## In theory, this is a little crappy.
                         ## In practice, it works out quite well. :)
 
-                        $self->glog("Starting 'bucardo_latest' conflict strategy", LOG_VERBOSE);
+                        $self->glog(q{Starting 'bucardo_latest' conflict strategy}, LOG_VERBOSE);
 
                         if (! exists $self->{conflictwinner}) {
 
@@ -3566,7 +3566,7 @@ sub start_kid {
                         ## no updates at all for this run. Note: this does not
                         ## mean no conflicts, it means no insert/update/delete
 
-                        $self->glog("Starting default conflict strategy", LOG_VERBOSE);
+                        $self->glog(q{Starting default conflict strategy}, LOG_VERBOSE);
 
                         if (! exists $self->{conflictwinner}) {
 
@@ -7724,7 +7724,7 @@ sub table_has_rows {
 
     ## Some types do not have a count
     return 0 if $x->{does_append_only};
- 
+
     if ($x->{does_limit}) {
         $SQL = "SELECT 1 FROM $tname LIMIT 1";
         $sth = $x->{dbh}->prepare($SQL);
@@ -8684,7 +8684,7 @@ sub push_rows {
 
             ## The columns we are pushing to, both as an arrayref and a CSV:
             my $cols = $goat->{tcolumns}{$SELECT};
-            my $columnlist = $t->{does_sql} ? 
+            my $columnlist = $t->{does_sql} ?
                 ('(' . (join ',', map { $t->{dbh}->quote_identifier($_) } @$cols) . ')')
               : ('(' . (join ',', map { $_ } @$cols) . ')');
 
