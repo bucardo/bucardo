@@ -22,6 +22,8 @@ my @mfiles;
 open my $mfh, '<', $file or die qq{Could not open "$file": $!\n};
 while (<$mfh>) {
 	next if /^#/;
+    ## Skip generated files
+    next if /^MYMETA/;
 	push @mfiles => $1 if /(\S.+)/o;
 }
 close $mfh or warn qq{Could not close "$file": $!\n};
