@@ -6293,7 +6293,7 @@ sub validate_sync {
              WHERE contype = 'f'
              AND (conrelid IN ($oidlist) OR confrelid IN ($oidlist))
              GROUP BY 1,2,3,4,5
-		};
+        };
 
         ## We turn off search_path to get fully-qualified relation names
         $srcdbh->do('SET LOCAL search_path = pg_catalog');
