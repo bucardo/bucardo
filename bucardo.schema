@@ -1796,9 +1796,10 @@ SELECT 'Fixme'::TEXT;
                     
                       -- See how many dbgroups are being used by this table
                       SELECT INTO drows 
-                        COUNT(*)
+                        COUNT(DISTINCT target)
                         FROM bucardo.bucardo_delta_targets
                         WHERE tablename::regclass::text = \$2;
+                      RAISE DEBUG 'delta_targets rows found for %: %', \$2, drows;
 
                       RESET search_path;
                     
