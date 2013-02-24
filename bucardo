@@ -4296,6 +4296,8 @@ AND nspname !~ '^pg_'
             $sth = $rdbh->prepare($SQL);
             ($count = $sth->execute($item)) =~ s/0E0/0/;
             debug(qq{Searched live database "$bestdb" for arg "$item", count was $count});
+            debug(qq{SQL: $SQL}, 2);
+            debug(qq{Arg: $item}, 2);
             for my $row (@{ $sth->fetchall_arrayref({}) }) {
 
                 ## The 'name' is combined "schema.relname"
@@ -7904,13 +7906,17 @@ sub install {
 sub debug {
 
     ## Print a debug line if needed
-    ## Arguments: one
+    ## Arguments: one or two
     ## 1. String to be printed
+    ## 2. Required debug level: defaults to 1
     ## Returns: undef
 
     return if ! $DEBUG;
 
     my $string = shift;
+    my $level = shift || 1;
+
+    return if $DEBUG < $level;
 
     chomp $string;
 
