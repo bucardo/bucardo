@@ -3639,6 +3639,7 @@ sub add_sync {
         onetimecopy              onetimecopy          =0|1|2           null
         lifetime                 lifetime             interval         null
         maxkicks                 maxkicks             numeric          null
+        isolation_level|txnmode  isolation_level      0                null
         rebuild_index|rebuildindex   rebuild_index    numeric          null
         tables                   tables               0                skip
     };
@@ -3653,6 +3654,10 @@ sub add_sync {
             value => 'fullcopy',
             new_defaults => 'autokick|F stayalive|F kidsalive|F',
         },
+        {
+            field => 'isolation_level',
+            dash_to_white => 1,
+        }
     ];
 
     my ( $dbcols, $cols, $phs, $vals ) = process_simple_args({
@@ -3998,7 +4003,10 @@ sub update_sync {
                 die "Invalid setting: $setting\n";
             }
 
-            ## Normalize things like t/f 0/1 others?
+            ## Do any magic we need
+            if ($setting eq 'isolation_level') {
+                $value =~ s/_/ /g;
+            }
 
             ## Try setting it
             $SQL = "UPDATE sync SET $setting=? WHERE name = ?";
@@ -8102,11 +8110,15 @@ sub process_simple_args {
         for my $mline (@{$arg->{morph}}) {
             if (exists $mline->{field}) {
                 next unless exists $dbcol{$mline->{field}};
-                next if $dbcol{$mline->{field}} ne $mline->{value};
-                for my $change (split /\s+/ => $mline->{new_defaults}) {
-                    my ($f,$v) = split /\|/ => $change;
-                    next if exists $dbcol{$f};
-                    $dbcol{$f} = $v;
+                if (exists $mline->{new_defaults}) {
+                    for my $change (split /\s+/ => $mline->{new_defaults}) {
+                        my ($f,$v) = split /\|/ => $change;
+                        next if exists $dbcol{$f};
+                        $dbcol{$f} = $v;
+                    }
+                }
+                if (exists $mline->{dash_to_white}) {
+                    $dbcol{$mline->{field}} =~ s/_/ /g;
                 }
             }
             else {
@@ -10077,7 +10089,7 @@ what to replicate from where to where. The supported parameters are:
 
 =item C<name>
 
-The name of the sync.
+The name of the sync. Required.
 
 =item C<dbs>
 
@@ -10103,6 +10115,11 @@ Number of seconds a KID can live before being reaped.
 =item C<maxkicks>
 
 Number of times a KID may be kicked before being reaped.
+
+=item C<isolation_level>
+
+The transation isolation level this sync should use.
+Only choices are "serializable" and "repeatable read"
 
 =item C<conflict_strategy>
 
@@ -10448,6 +10465,11 @@ Directory to store the flatfile output inside of. Default: C<.>.
 =item C<host_safety_check>
 
 Regex to make sure we don't accidentally run where we should not. Default: None.
+
+=item C<isolation_level>
+
+The transaction isolation level all sync should use. Defaults to 'serializable'. 
+The only other valid option is 'repeatable read'
 
 =item C<kid_deadlock_sleep>
 

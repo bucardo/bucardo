@@ -2877,6 +2877,11 @@ sub start_kid {
         ## Add a note to the syncrun table
         $sth{kid_syncrun_update_status}->execute("Begin txn (KID $$)", $syncname);
 
+        ## Figure out our isolation level. Only used for Postgres
+        ## All others are hard-coded as 'serializable'
+        my $isolation_level = defined $sync->{isolation_level} ? $sync->{isolation_level} : 
+            $config{isolation_level} || 'serializable';
+
         ## Commit so our dbrun and syncrun stuff is visible to others
         ## This should be done just before we start transactions on all dbs
         $maindbh->commit();
@@ -2893,7 +2898,7 @@ sub start_kid {
             $x->{dbh}->rollback();
 
             if ($x->{dbtype} eq 'postgres') {
-                $x->{dbh}->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE');
+                $x->{dbh}->do(qq{SET TRANSACTION ISOLATION LEVEL $isolation_level READ WRITE});
                 $self->glog(qq{Set database "$dbname" to serializable read write}, LOG_DEBUG);
             }
 

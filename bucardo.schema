@@ -161,6 +161,7 @@ default_conflict_strategy|bucardo_latest|Default conflict strategy for all syncs
 email_debug_file||File to save a copy of all outgoing emails to
 flatfile_dir|.|Directory to store the flatfile output inside of
 host_safety_check||Regex to make sure we don't accidentally run where we should not
+isolation_level|serializable|Default isolation level: can be serializable or repeatable read
 piddir|/var/run/bucardo|Directory holding Bucardo PID files
 reason_file|bucardo.restart.reason.txt|File to hold reasons for stopping and starting
 semaphore_table|bucardo_status|Table to let apps know a sync is ongoing
@@ -405,6 +406,7 @@ CREATE TABLE bucardo.sync (
   onetimecopy        SMALLINT    NOT NULL DEFAULT 0,
   lifetime           INTERVAL        NULL,                   -- force controller and kids to restart
   maxkicks           INTEGER     NOT NULL DEFAULT 0,         -- force controller and kids to restart
+  isolation_level    TEXT            NULL DEFAULT 'serializable',
   cdate              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE bucardo.sync IS $$Defines a single replication event from a herd to one or more target databases$$;
@@ -418,6 +420,9 @@ ALTER TABLE bucardo.dbgroup ADD CONSTRAINT dbgroup_name_sane CHECK (name ~ E'^[a
 
 ALTER TABLE bucardo.sync    ADD CONSTRAINT sync_name_sane
   CHECK (name ~ E'^[a-zA-Z]\\w*$' AND lower(name) NOT IN ('pushdelta','fullcopy','swap'));
+
+ALTER TABLE bucardo.sync    ADD CONSTRAINT sync_isolation_level
+  CHECK (isolation_level IS NULL OR (LOWER(isolation_level) IN ('serializable', 'repeatable read')));
 
 CREATE SEQUENCE bucardo.customcode_id_seq;
 CREATE TABLE bucardo.customcode (
