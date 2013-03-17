@@ -6627,7 +6627,7 @@ sub fork_vac {
         my $line = (caller)[2];
 
         ## Don't issue a warning if this was simply a MCP request
-        my $warn = $diemsg =~ /MCP request|not needed/ ? '' : 'Warning! ';
+        my $warn = $diemsg =~ /MCP request|Not needed/ ? '' : 'Warning! ';
         $self->glog(qq{${warn}VAC was killed at line $line: $diemsg}, LOG_WARN);
 
         ## Not a whole lot of cleanup to do on this one: just shut database connections and leave
