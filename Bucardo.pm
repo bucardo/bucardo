@@ -6606,7 +6606,7 @@ sub fork_vac {
 
     ## Start normal log output for this controller: basic facts
     my $msg = qq{New VAC daemon. PID=$$};
-    $self->glog($msg, LOG_TERSE);
+    $self->glog($msg, LOG_NORMAL);
 
     ## Allow the MCP to signal us (request to exit)
     local $SIG{USR1} = sub {
@@ -6627,8 +6627,8 @@ sub fork_vac {
         my $line = (caller)[2];
 
         ## Don't issue a warning if this was simply a MCP request
-        my $warn = $diemsg =~ /MCP request|Not needed/ ? '' : 'Warning! ';
-        $self->glog(qq{${warn}VAC was killed at line $line: $diemsg}, LOG_WARN);
+        my $warn = ($diemsg =~ /MCP request|Not needed/ ? '' : 'Warning! ');
+        $self->glog(qq{${warn}VAC was killed at line $line: $diemsg}, $warn ? LOG_WARN :LOG_VERBOSE);
 
         ## Not a whole lot of cleanup to do on this one: just shut database connections and leave
         $self->{masterdbh}->disconnect() if exists $self->{masterdbhvac};
@@ -6760,7 +6760,7 @@ sub fork_vac {
             ## If we found no backends, we can leave right away, and not run again
             if (! $valid_backends) {
 
-                $self->glog("Warning! No valid backends, so disabling the VAC daemon", LOG_WARN);
+                $self->glog('No valid backends, so disabling the VAC daemon', LOG_VERBOSE);
 
                 $config{bucardo_vac} = 0;
 

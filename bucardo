@@ -191,7 +191,7 @@ else {
         $bcargs->{logdest} = [];
     }
     elsif (my $dir = $bcargs->{debugdir}) {
-        # Old --debugdir option determins log directory.
+        # Old --debugdir option determines log directory.
         $bcargs->{logdest} = [$dir];
     }
     else {
