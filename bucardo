@@ -2949,11 +2949,12 @@ sub list_customcols {
 ##
 
 sub add_table {
+    my $reltype = shift;
 
-    ## Add one or more tables. Inserts to the bucardo.goat table
+    ## Add one or more tables or sequences. Inserts to the bucardo.goat table
     ## May also update the bucardo.herd and bucardo.herdmap tables
-    ## Arguments: one or more
-    ## 1+ Names of tables to be added
+    ## Arguments: one. Also parses @nouns for table / sequence names
+    ## 1. Type of object to be added: table, or sequence
     ## Returns: undef
     ## Example: bucardo add table pgbench_accounts foo% myschema.abc
 
@@ -2979,7 +2980,7 @@ sub add_table {
 
     ## Loop through all the args and attempt to add the tables
     ## This returns a hash with the following keys: relations, match, nomatch
-    my $goatlist = get_goat_ids(args => \@nouns, dbcols => $dbcols);
+    my $goatlist = get_goat_ids(args => \@nouns, type => $reltype, dbcols => $dbcols);
 
     ## The final output. Store it up all at once for a single QUIET check
     my $message = '';
@@ -2994,7 +2995,7 @@ sub add_table {
 
     ## Now we need to output which ones were recently added
     if (keys %{ $goatlist->{new} }) {
-        $message .= "Added the following tables:\n";
+        $message .= "Added the following tables or sequences:\n";
         for (sort keys %{ $goatlist->{new} }) {
             $message .= "  $_\n";
         }
@@ -3011,7 +3012,7 @@ sub add_table {
         }
         ## Now load all of these tables into this herd
         $SQL = 'INSERT INTO bucardo.herdmap (herd,priority,goat) VALUES (?,?,'
-            . q{ (SELECT id FROM goat WHERE schemaname||'.'||tablename=? AND db=?))};
+            . qq{ (SELECT id FROM goat WHERE schemaname||'.'||tablename=? AND db=? AND reltype='$reltype'))};
 
         $sth = $dbh->prepare($SQL);
 
@@ -3020,7 +3021,8 @@ sub add_table {
 
         for my $name (sort keys %{ $goatlist->{relations} }) {
             ## Is it already part of this herd?
-            if (exists $HERD->{$herdname}{goat}{$name}) {
+            if (exists $HERD->{$herdname}{goat}{$name} and
+                    $HERD->{$herdname}{goat}{$name}{reltype} eq $reltype) {
                 push @oldnames => $name;
                 next;
             }
@@ -3034,14 +3036,14 @@ sub add_table {
         }
 
         if (@oldnames) {
-            $message .= qq{The following tables were already in the relgroup "$herdname":\n};
+            $message .= qq{The following tables or sequences were already in the relgroup "$herdname":\n};
             for (@oldnames) {
                 $message .= "  $_\n";
             }
         }
 
         if (@newnames) {
-            $message .= qq{The following tables are now part of the relgroup "$herdname":\n};
+            $message .= qq{The following tables or sequences are now part of the relgroup "$herdname":\n};
             for (sort numbered_relations @newnames) {
                 $message .= "  $_\n";
             }
@@ -3450,7 +3452,7 @@ sub add_herd {
 
     ## Now we need to output which ones were recently added
     if (keys %{ $goatlist->{new} }) {
-        $message .= "Added the following tables:\n";
+        $message .= "Added the following tables or sequences:\n";
         for (sort keys %{ $goatlist->{new} }) {
             $message .= "  $_\n";
         }
@@ -3481,14 +3483,14 @@ sub add_herd {
     }
 
     if (@oldnames) {
-        $message .= qq{The following tables were already in the relgroup "$herdname":\n};
+        $message .= qq{The following tables or sequences were already in the relgroup "$herdname":\n};
         for (@oldnames) {
             $message .= "  $_\n";
         }
     }
 
     if (@newnames) {
-        $message .= qq{The following tables are now part of the relgroup "$herdname":\n};
+        $message .= qq{The following tables or sequences are now part of the relgroup "$herdname":\n};
         for (@newnames) {
             $message .= "  $_\n";
         }
@@ -4165,6 +4167,7 @@ sub get_goat_ids {
     ## Also checks the live database and adds tables to the goat table as needed.
     ## Arguments: key-value pairs:
     ##  - args: arrayref of names to match against. Can have wildcards.
+    ##  - type: 'table' or 'sequence', depending on what we expect to find.
     ##  - dbcols: optional hashref of fields to populate goat table with (e.g. autokick=1)
     ## Returns: a hash with:
     ##  - relations: hash of goat objects, key is the fully qualified name
@@ -4175,6 +4178,7 @@ sub get_goat_ids {
     ##  - new: hash of newly added tables
 
     my %arg = @_;
+    my $reltype = $arg{type};
     my $names = $arg{args} or die;
     my $dbcols = $arg{dbcols} || {};
 
@@ -4205,13 +4209,18 @@ sub get_goat_ids {
 
     ## SQL to find a table or a sequence
     ## We do not want pg_table_is_visible(c.oid) here
-    my $BASESQL = q{
+    my $BASESQL = sub {
+        my $arg = shift || 'table';
+            ## Assume we're talking about tables unless we say "sequence" explicitly
+        my $type = ( $arg eq 'sequence' ? 'S' : 'r' );
+        return qq{
 SELECT nspname||'.'||relname AS name, relkind, c.oid
 FROM pg_class c
 JOIN pg_namespace n ON (n.oid = c.relnamespace)
-WHERE relkind IN ('r')
+WHERE relkind IN ('$type')
 AND nspname <> 'information_schema'
 AND nspname !~ '^pg_'
+};
 };
 
     ## Loop through each argument, and try and find matching goats
@@ -4264,7 +4273,7 @@ AND nspname !~ '^pg_'
             }
 
             ## Setup the SQL to search the live database
-            $SQL = $BASESQL . ($hasadot
+            $SQL = $BASESQL->($reltype) . ($hasadot
                 ? q{AND nspname||'.'||relname ~ ?}
                 : 'AND relname ~ ?');
 
@@ -4274,12 +4283,13 @@ AND nspname !~ '^pg_'
         ## TODO: Allow foobar. to mean foobar.% ??
         elsif ($hasadot) {
 
-            if (exists $GOAT->{$item}) {
+            if (exists $GOAT->{$item} 
+                    and $GOAT->{$item}{reltype} eq $reltype) {
                 push @matches => $item;
             }
 
             ## Setup the SQL to search the live database
-            $SQL = $BASESQL . q{AND nspname||'.'||relname = ?};
+            $SQL = $BASESQL->($reltype) . q{AND nspname||'.'||relname = ?};
         }
 
         ## No wildcards and no dot, so we match all tables regardless of the schema
@@ -4294,7 +4304,7 @@ AND nspname !~ '^pg_'
             }
 
             ## Setup the SQL to search the live database
-            $SQL = $BASESQL . 'AND relname = ?';
+            $SQL = $BASESQL->($reltype) . 'AND relname = ?';
         }
 
         ## We do not check the live database if the match was exact

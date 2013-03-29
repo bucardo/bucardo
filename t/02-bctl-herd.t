@@ -61,7 +61,7 @@ $t = q{Add relgroup works when adding a single table};
 $bct->ctl("bucardo add database bucardo_test user=$dbuserA port=$dbportA host=$dbhostA addalltables");
 $res = $bct->ctl('bucardo add relgroup foobar bucardo_test1');
 is ($res, qq{Relgroup "foobar" already exists
-Added the following tables:
+Added the following tables or sequences:
   public.bucardo_test1
 $newherd_msg "foobar":
   public.bucardo_test1\n}, $t);
