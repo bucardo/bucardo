@@ -95,7 +95,7 @@ if (! $bcargs->{'no-bucardorc'}) {
     elsif (-e '.bucardorc') {
         $file = '.bucardorc';
     }
-    elsif (-e "$ENV{HOME}/.bucardorc") {
+    elsif (defined $ENV{HOME} && -e "$ENV{HOME}/.bucardorc") {
         $file = "$ENV{HOME}/.bucardorc";
     }
     elsif (-e '/etc/bucardorc') {
