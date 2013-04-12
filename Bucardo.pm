@@ -2715,7 +2715,7 @@ sub start_kid {
         } ## end DBIX::Safe creations
         $did_setup = 1;
     };
-    $err_handler->(@_) if !$did_setup;
+    $err_handler->($@) if !$did_setup;
 
     ## Begin the main KID loop
     my $didrun = 0;

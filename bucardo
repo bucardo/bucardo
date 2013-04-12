@@ -4283,7 +4283,7 @@ AND nspname !~ '^pg_'
         ## TODO: Allow foobar. to mean foobar.% ??
         elsif ($hasadot) {
 
-            if (exists $GOAT->{$item} 
+            if (exists $GOAT->{$item}
                     and $GOAT->{$item}{reltype} eq $reltype) {
                 push @matches => $item;
             }
