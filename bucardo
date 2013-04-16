@@ -2343,13 +2343,21 @@ sub add_customname {
     usage_exit($doc_section) unless length $item_name && length $newname;
 
     ## Does this number or name exist?
-    if (! exists $GOAT->{$item_name}) {
+    my $goat;
+    if (exists $GOAT->{by_fullname}{$item_name}) {
+        $goat = $GOAT->{by_fullname}{$item_name};
+    }
+    elsif (exists $GOAT->{by_table}{$item_name}) {
+        $goat = $GOAT->{by_table}{$item_name};
+    }
+    elsif (exists $GOAT->{by_id}{$item_name}) {
+        $goat = $GOAT->{by_id}{$item_name};
+    }
+    else {
         print qq{Could not find a matching table for "$item_name"\n};
         exit 1;
     }
 
-    ## Gather the name variations
-    my $goat = $GOAT->{$item_name};
     ## If this is a ref due to it being an unqualified name, just use the first one
     $goat = $goat->[0] if ref $goat eq 'ARRAY';
     my ($sname,$tname) = ($goat->{schemaname},$goat->{tablename});
@@ -3026,7 +3034,8 @@ sub add_table {
                 push @oldnames => $name;
                 next;
             }
-            my $db = $goatlist->{relations}{$name}{goat}{db};
+            # XXX This [0] might cause problems... it's new behavior
+            my $db = $goatlist->{relations}{$name}{goat}[0]{db};
 
             my $pri = 0;
 
@@ -3075,7 +3084,7 @@ sub _remove_relation {
 
     for my $name (@nouns) {
         if ($name =~ /^\w[\w\d]*\.\w[\w\d]*$/) {
-            if (! exists $GOAT->{$name}) {
+            if (! exists $GOAT->{by_fullname}{$name}) {
                 print qq{No such $reltype: $name\n};
                 next;
             }
@@ -3143,6 +3152,7 @@ sub update_table {
     exit 0 if ! check_recurse($GOAT, $name, @actions);
 
     ## Make sure this table exists!
+    ## XXX JWT probably check database as well, not just name
     my $table = $GOAT->{$name} or die qq{Could not find a table named "$name"\n}
         . "Use 'list tables' to see all available.\n";
 
@@ -3687,7 +3697,7 @@ sub add_sync {
     if ($dbcols->{herd} =~ /,/) {
         my @tables = split /\s*,\s*/ => $dbcols->{herd};
         for my $table (sort @tables) {
-            if (! exists $global{goat}{$table}) {
+            if (! exists $global{goat}{by_fullname}{$table}) {
                 die "No such table or sequence: $table\n";
             }
         }
@@ -3698,7 +3708,8 @@ sub add_sync {
             my $schema = 'public';
 
             ## Maybe it's a table?
-            if (! exists $global{goat}{$name}) {
+            die Dumper($name, $global{goat});
+            if (! exists $global{goat}{by_fullname}{$name}) {
                 warn "No such relgroup or table: $name\n";
                 warn "To list all relgroups, use: list relgroups\n";
                 warn "To list all tables, use: list tables\n";
@@ -4257,7 +4268,7 @@ AND nspname !~ '^pg_'
             $item = "^$item" if $item !~ /^[\^\.\%]/;
             $item .= '$' if $item !~ /[\$\*]$/;
             ## Pull back all items from the GOAT hash that have a dot in them
-            for my $fullname (grep { /\./ } keys %{ $GOAT }) {
+            for my $fullname (grep { /\./ } keys %{ $GOAT->{by_fullname} }) {
 
                 ## We match against the whole thing if we have a dot
                 ## in our search term, otherwise we only match the table
@@ -4283,8 +4294,10 @@ AND nspname !~ '^pg_'
         ## TODO: Allow foobar. to mean foobar.% ??
         elsif ($hasadot) {
 
-            if (exists $GOAT->{$item} 
-                    and $GOAT->{$item}{reltype} eq $reltype) {
+            if ((exists $GOAT->{by_fullname}{$item} 
+                    and $GOAT->{by_fullname}{$item}{reltype} eq $reltype) ||
+                (exists $GOAT->{by_table}{$item} 
+                    and $GOAT->{by_table}{$item}{reltype} eq $reltype)) {
                 push @matches => $item;
             }
 
@@ -4296,7 +4309,7 @@ AND nspname !~ '^pg_'
         else {
 
             ## Pull back all items from the GOAT hash that have a dot in them
-            for my $fullname (grep { /\./ } keys %{ $GOAT }) {
+            for my $fullname (grep { /\./ } keys %{ $GOAT->{by_fullname} }) {
                 my ($schema,$table) = split /\./ => $fullname;
                 if ($table eq $item) {
                     push @matches => $fullname;
@@ -4322,7 +4335,7 @@ AND nspname !~ '^pg_'
                 my $name = $row->{name};
 
                 ## Don't bother if we have already added this!
-                next if exists $GOAT->{$name};
+                next if exists $GOAT->{by_fullname}{$name};
 
                 ## Document the string that led us to this one
                 $relation{$name}{original}{$item}++;
@@ -4350,7 +4363,7 @@ AND nspname !~ '^pg_'
         ## Populate the final hashes based on the match list
         for my $name (@matches) {
             $relation{$name}{original}{$original_item}++;
-            $relation{$name}{goat} ||= $GOAT->{$name};
+            $relation{$name}{goat} ||= $GOAT->{by_fullname}{$name};
             $match{$item}++;
         }
 
@@ -4428,7 +4441,7 @@ sub add_items_to_goat_table {
     ## Return a list of goat objects
     my %newlist;
     for my $id (@newid) {
-        my $goat = $global{goat}{$id};
+        my $goat = $global{goat}{by_id}{$id};
         my $name = "$goat->{schemaname}.$goat->{tablename}";
         $newlist{$name} = $goat;
     }
@@ -5286,7 +5299,7 @@ sub inspect_table {
             ## Make sure that each herd with this table also has this new table
             my $ggoat = $global{goat};
             my $hherd = $global{herd};
-            for my $herd (sort keys %{$ggoat->{$id}{herd}}) {
+            for my $herd (sort keys %{$ggoat->{by_id}{$id}{herd}}) {
                 $seenit{fktable} = 1;
                 next if exists $hherd->{$herd}{hasgoat}{$schema}{$table};
                 printf "Table %s.%s is in relgroup %s, but %s.%s (used as FK%s) is not\n",
@@ -5855,6 +5868,7 @@ sub add_customcode {
     }
 
     ## Is this a valid gaot?
+    die "There's a bug here";
     if ($extras->{relation} and ! exists $global{goat}{$extras->{relation}}) {
         die qq{Unknown relation: $extras->{relation}\n};
     }
@@ -8302,15 +8316,32 @@ sub load_bucardo_info {
     $SQL = 'SELECT * FROM bucardo.goat';
     $sth = $dbh->prepare($SQL);
     $sth->execute();
-    my $goat = $sth->fetchall_hashref('id');
-    ## Since relations cannot start with a number, we can also safely add the name to the hash
-    for my $key (%$goat) {
+
+    my $goat;
+    $goat->{by_id} = $sth->fetchall_hashref('id');
+    $goat->{by_table} = {};
+
+    for my $key (%{$goat->{by_id}}) {
         next if $key !~ /^\d/;
-        my $tname = $goat->{$key}{tablename};
-        my $name = "$goat->{$key}{schemaname}.$tname";
-        $goat->{$name} = $goat->{$key};
+        my $tname = $goat->{by_id}{$key}{tablename};
+        my $name = "$goat->{by_id}{$key}{schemaname}.$tname";
+        my $dbname = $goat->{by_id}{$key}{db};
+
+        ## Index by database, so different databases containing matching object
+        ##   names can be handled
+        $goat->{by_db}{$dbname}{$name} = $goat->{by_id}{$key};
+
+        ## Index by full object name
+        if (! exists $goat->{by_fullname}{$name}) {
+            $goat->{by_fullname}{$name} = [ $goat->{by_id}{$key} ];
+        }
+        else {
+            push @{$goat->{by_fullname}{$name}}, $goat->{by_id}{$key};
+        }
+
         ## Also want a table-only version:
-        push @{$goat->{$tname}} => $goat->{$key};
+        $goat->{by_table}{$tname} = [] unless exists $goat->{by_table}{$tname};
+        push @{$goat->{by_table}{$tname}} => $goat->{by_id}{$key};
     }
 
     ## Grab all herd information
@@ -8326,17 +8357,17 @@ sub load_bucardo_info {
     for my $row (@{$sth->fetchall_arrayref({})}) {
         my ($g,$h,$p) = @$row{qw/goat herd priority/};
         $goat->{$g}{herd}{$h} = $p;
-        $herd->{$h}{goat}{"$goat->{$g}{schemaname}.$goat->{$g}{tablename}"} = {
+        $herd->{$h}{goat}{"$goat->{by_id}{$g}{schemaname}.$goat->{by_id}{$g}{tablename}"} = {
             id       => $g,
             priority => $p,
-            reltype  => $goat->{$g}{reltype},
-            schema   => $goat->{$g}{schemaname},
-            table    => $goat->{$g}{tablename},
+            reltype  => $goat->{by_id}{$g}{reltype},
+            schema   => $goat->{by_id}{$g}{schemaname},
+            table    => $goat->{by_id}{$g}{tablename},
         };
-        my ($s,$t) = @{$goat->{$g}}{qw/schemaname tablename/};
+        my ($s,$t) = @{$goat->{by_id}{$g}}{qw/schemaname tablename/};
         $herd->{$h}{hasgoat}{$s}{$t} = $p;
         ## Assign each herd to a datbase via its included goats
-        $herd->{$h}{db} = $goat->{$g}{db};
+        $herd->{$h}{db} = $goat->{by_id}{$g}{db};
     }
 
     ## Grab all sync information
@@ -8359,7 +8390,7 @@ sub load_bucardo_info {
         }
         ## Note which syncs are used by each goat
         for my $row2 (sort keys %{$row->{herd}{goat}}) {
-            $goat->{$row2}{sync}{$name} = 1;
+            $goat->{by_id}{$row2}{sync}{$name} = 1;
         }
     }
 
@@ -8433,21 +8464,22 @@ JOIN goat g ON (g.id = c.goat)
     $global{sync}    = $SYNC = $sync;
 
     ## Separate goat into tables and sequences
-    for my $id (keys %$GOAT) {
+    for my $id (keys %{$GOAT->{by_id}}) {
         ## Ids only please
         next if $id !~ /^\d+$/;
-        my $type = $GOAT->{$id}{reltype};
+        my $type = $GOAT->{by_id}{$id}{reltype};
         if ($type eq 'table') {
-            $TABLE->{$id} = $GOAT->{$id};
+            $TABLE->{$id} = $GOAT->{by_id}{$id};
         }
         elsif ($type eq 'sequence') {
-            $SEQUENCE->{$id} = $GOAT->{$id};
+            $SEQUENCE->{$id} = $GOAT->{by_id}{$id};
         }
         else {
             die "Unknown relation type $type!";
         }
     }
 
+    warn Dumper($goat);
     return;
 
 } ## end of load_bucardo_info
