@@ -3034,7 +3034,7 @@ sub add_table {
                 push @oldnames => $name;
                 next;
             }
-            # XXX This [0] might cause problems... it's new behavior
+            # XXXJWT This [0] might cause problems... it's new behavior
             my $db = $goatlist->{relations}{$name}{goat}[0]{db};
 
             my $pri = 0;
@@ -3152,7 +3152,7 @@ sub update_table {
     exit 0 if ! check_recurse($GOAT, $name, @actions);
 
     ## Make sure this table exists!
-    ## XXX JWT probably check database as well, not just name
+    ## XXXJWT probably check database as well, not just name
     my $table = $GOAT->{$name} or die qq{Could not find a table named "$name"\n}
         . "Use 'list tables' to see all available.\n";
 
@@ -3483,13 +3483,23 @@ sub add_herd {
             push @oldnames => $name;
             next;
         }
-        my $db = $goatlist->{relations}{$name}{goat}{db};
 
-        my $pri = 0;
+        my @a;
+        if (ref $goatlist->{relations}{$name}{goat} ne 'ARRAY') {
+            @a = ($goatlist->{relations}{$name}{goat});
+        }
+        else {
+            @a = @{$goatlist->{relations}{$name}{goat}};
+        }
+        for my $tmpgoat (@a) {
+            my $db = $tmpgoat->{db};
 
-        $count = $sth->execute($herdname,$pri,$name, $db);
+            my $pri = 0;
 
-        push @newnames => $name;
+            $count = $sth->execute($herdname,$pri,$name, $db);
+
+            push @newnames => $name;
+        }
     }
 
     if (@oldnames) {
@@ -3708,6 +3718,7 @@ sub add_sync {
             my $schema = 'public';
 
             ## Maybe it's a table?
+# XXXJWT
             die Dumper($name, $global{goat});
             if (! exists $global{goat}{by_fullname}{$name}) {
                 warn "No such relgroup or table: $name\n";
@@ -5868,6 +5879,7 @@ sub add_customcode {
     }
 
     ## Is this a valid gaot?
+# XXXJWT
     die "There's a bug here";
     if ($extras->{relation} and ! exists $global{goat}{$extras->{relation}}) {
         die qq{Unknown relation: $extras->{relation}\n};
@@ -8479,7 +8491,6 @@ JOIN goat g ON (g.id = c.goat)
         }
     }
 
-    warn Dumper($goat);
     return;
 
 } ## end of load_bucardo_info
