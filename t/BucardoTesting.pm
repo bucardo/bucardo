@@ -1339,6 +1339,9 @@ sub shutdown_cluster {
     return if ! -e $pidfile;
     my @cmd = ($pg_ctl, '-D', $dirname, '-s', '-m', 'fast', 'stop');
     system(@cmd) == 0 or die "@cmd failed: $?\n";
+
+    delete $gdbh{$name};
+
     return;
 
 } ## end of shutdown_cluster
@@ -1691,7 +1694,11 @@ sub check_for_row {
 
     for my $dbname (@$dblist) {
 
-        my $dbh = $gdbh{$dbname} or die "Invalid database name: $dbname";
+        if (! $gdbh{$dbname}) {
+            $gdbh{$dbname} = $self->connect_database($dbname,$BucardoTesting::dbname);
+        }
+
+        my $dbh = $gdbh{$dbname};
 
         my $maxdbtable = $maxtable + 1 + length $dbname;
 
