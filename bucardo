@@ -9151,8 +9151,6 @@ include:
 
 =item C<customcols>
 
-=item C<customcols>
-
 =back
 
 =head3 add db
