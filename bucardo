@@ -21,6 +21,7 @@ use Data::Dumper  qw/ Dumper /;
 $Data::Dumper::Indent = 1;
 use Getopt::Long;
 Getopt::Long::Configure(qw/ no_ignore_case pass_through no_autoabbrev /);
+use Carp;
 
 our $VERSION = '4.99.7';
 
@@ -2641,6 +2642,83 @@ sub list_customnames {
 
 } ## end of list_customnames
 
+sub find_goat_by_item {
+    ## Finds a goat in the %GOAT hash, using one argument as a search key
+    ## Arguments: name. Can be a goat id or a name, possibly including schema, or wildcards
+    ##            nouns. Ref to array of other args; right now only supports "db=###"
+    ## Results: An array of goat objects that match these keys
+
+    my $name = shift;
+    my $nouns = shift;
+    my @nouns = @$nouns;
+
+    $DEBUG and warn "Finding goats with name $name, noun: " . Dumper(@nouns);
+
+    my @results;
+
+    ## Handle ID values
+    if ($name =~ /\d+/) {
+        $DEBUG and warn "\$name is an ID value";
+        push @results, $GOAT->{by_id}{$name};
+    }
+    ## Handle names, with or without schemas, and with or without wildcards
+    else {
+        $DEBUG and warn "\$name is a name value";
+
+        my @found_keys;
+
+        ## Find GOAT keys that may include matches
+        map {
+            if (exists $GOAT->{$_}{$name}) {
+                push @found_keys, [ $_, $name ];
+            }
+        } qw/by_table by_fullname/;
+
+        ## Handle wildcards
+        if (index($name, '*') >= 0 || index($name, '%') >= 0) {
+            my $reg_name = $name;
+
+            ## Change to a regexier form
+            $reg_name =~ s/\./\\./g;
+            $reg_name =~ s/[*%]/\.\*/g;
+            $reg_name = "$reg_name" if $reg_name !~ /^[\^\.\%]/;
+            $reg_name .= '$' if $reg_name !~ /[\$\*]$/;
+            $DEBUG and warn "There's a wildcard here. This is the regex version: $reg_name";
+
+            map {
+                push @found_keys, [ 'by_fullname', $_ ];
+            } grep { /$reg_name/ } keys %{$GOAT->{by_fullname}};
+        }
+
+        ## The found goat keys point to arrayrefs. Turn all that into a
+        ## one-dimensional array of goats
+        $DEBUG and warn "Found these candidate keys: ". Dumper(@found_keys);
+        map {
+            for my $b (@{$GOAT->{$_->[0]}{$_->[1]}}) {
+                push(@results, $b);
+            }
+        } @found_keys;
+        $DEBUG and warn "Here are the goats we've found, before filtering: " . Dumper(@results);
+    }
+
+    if (@results && defined $results[0] && @nouns && defined $nouns[0]) {
+        my @filters = grep(/^(?:db|database)\s*=/, @nouns);
+        if (@filters) {
+            ## The @nouns array will only contain one db= value, even if the command includes several
+            my $db_filter = $filters[0];
+
+            $DEBUG and warn "Database filter starting value: $db_filter";
+            $db_filter =~ /^(?:db|database)\s*=\s*(.+)/;
+            $db_filter = $1;
+            $DEBUG and warn "Database filter value: $db_filter";
+            @results = grep {
+                $DEBUG and warn "Comparing $_->{db} to filter value $db_filter";
+                $_->{db} eq $db_filter;
+            } @results;
+        }
+    }
+    return @results;
+} ## end of find_goat_by_item
 
 ##
 ## Customcols-related subroutines: add, exists, remove, list
@@ -2666,15 +2744,25 @@ sub add_customcols {
     usage_exit($doc_section) unless length $item_name && length $clause;
 
     ## Does this number or name exist?
-    if (! exists $GOAT->{$item_name}) {
+    $DEBUG = 10;
+    my @candidate_goats = find_goat_by_item($item_name, @nouns);
+    die Dumper(@candidate_goats);
+    if (! @candidate_goats) {
         print qq{Could not find a matching table for "$item_name"\n};
         exit 1;
     }
 
-    ## Gather the name variations
-    my $goat = $GOAT->{$item_name};
-    ## If this is a ref due to it being an unqualified name, just use the first one
-    $goat = $goat->[0] if ref $goat eq 'ARRAY';
+# The code lower in the function is meant to handle multiple matching goats,
+# but if we didn't want that, this would bleat when we ran into multiple goats.
+#    if ($#candidate_goats > 0) {
+#        print qq{Could not uniquely identify the desired table for "$item_name"\n};
+#        print qq{Possible choices:\n};
+#        print "\tdb: $_->{db}\tschema: $_->{schemaname}\ttable: $_->{tablename}\n"
+#            for @candidate_goats;
+#        exit 1;
+#    }
+
+    my $goat = $candidate_goats[0];
     my ($sname,$tname) = ($goat->{schemaname},$goat->{tablename});
 
     ## Make sure the clause looks sane
@@ -2710,6 +2798,7 @@ sub add_customcols {
 
     ## Loop through and start adding rows to customcols
     my $goatid = $goat->{id};
+    die Dumper($goat, $item_name, @candidate_goats, $GOAT) unless defined $goatid;
 
     $SQL = "INSERT INTO bucardo.customcols(goat,clause,db,sync) VALUES ($goatid,?,?,?)";
     $sth = $dbh->prepare($SQL);
@@ -3485,12 +3574,15 @@ sub add_herd {
         }
 
         my @a;
-        if (ref $goatlist->{relations}{$name}{goat} ne 'ARRAY') {
-            @a = ($goatlist->{relations}{$name}{goat});
-        }
-        else {
-            @a = @{$goatlist->{relations}{$name}{goat}};
-        }
+#        if (ref $goatlist->{relations}{$name}{goat} ne 'ARRAY') {
+#            @a = ($goatlist->{relations}{$name}{goat});
+#        }
+#        else {
+            eval {
+                @a = @{$goatlist->{relations}{$name}{goat}};
+            };
+            die Dumper($goatlist, $name, $@) if $@;
+#        }
         for my $tmpgoat (@a) {
             my $db = $tmpgoat->{db};
 
@@ -3718,8 +3810,6 @@ sub add_sync {
             my $schema = 'public';
 
             ## Maybe it's a table?
-# XXXJWT
-            die Dumper($name, $global{goat});
             if (! exists $global{goat}{by_fullname}{$name}) {
                 warn "No such relgroup or table: $name\n";
                 warn "To list all relgroups, use: list relgroups\n";
@@ -4267,34 +4357,40 @@ AND nspname !~ '^pg_'
         ## We may mutate the arg, so stow away the original
         my $original_item = $item;
 
-        ## On the first pass, we look for matches in the existing $GOAT hash
+        ## We look for matches in the existing $GOAT hash
         ## We may also check the live database afterwards
+        map {
+            push @matches, $_ if (! defined $reltype || $_->{reltype} eq $reltype);
+        } find_goat_by_item($item, \@nouns);
 
         ## Wildcards?
+        my $regex_item = $item;
         if ($hasstar) {
 
-            ## Change to a regexier form
-            $item =~ s/\./\\./g;
-            $item =~ s/[*%]/\.\*/g;
-            $item = "^$item" if $item !~ /^[\^\.\%]/;
-            $item .= '$' if $item !~ /[\$\*]$/;
-            ## Pull back all items from the GOAT hash that have a dot in them
-            for my $fullname (grep { /\./ } keys %{ $GOAT->{by_fullname} }) {
-
-                ## We match against the whole thing if we have a dot
-                ## in our search term, otherwise we only match the table
-                my $searchname = $fullname;
-                if (! $hasadot) {
-                    (undef,$searchname) = split /\./ => $fullname;
-                }
-
-                ## If we got a match, store the item from the GOAT that caused it
-                if ($searchname =~ /^$item$/) {
-                    push @matches => $fullname;
-                }
-            }
-
-            ## Setup the SQL to search the live database
+#            ## Change to a regexier form
+            $regex_item =~ s/\./\\./g;
+            $regex_item =~ s/[*%]/\.\*/g;
+            $regex_item = "^$regex_item" if $regex_item !~ /^[\^\.\%]/;
+            $regex_item .= '$' if $regex_item !~ /[\$\*]$/;
+#
+#            ## Pull back all full item names from $GOAT
+#            for my $fullname (keys %{ $GOAT->{by_fullname} }) {
+#                #find_goat_by_item 
+#
+#                ## We match against the whole thing if we have a dot
+#                ## in our search term, otherwise we only match the table
+#                my $searchname = $fullname;
+#                if (! $hasadot) {
+#                    (undef,$searchname) = split /\./ => $fullname;
+#                }
+#
+#                ## If we got a match, store the item from the GOAT that caused it
+#                if ($searchname =~ /^$item$/) {
+#                    push @matches => $fullname;
+#                }
+#            }
+#
+#            ## Setup the SQL to search the live database
             $SQL = $BASESQL->($reltype) . ($hasadot
                 ? q{AND nspname||'.'||relname ~ ?}
                 : 'AND relname ~ ?');
@@ -4305,12 +4401,12 @@ AND nspname !~ '^pg_'
         ## TODO: Allow foobar. to mean foobar.% ??
         elsif ($hasadot) {
 
-            if ((exists $GOAT->{by_fullname}{$item} 
-                    and $GOAT->{by_fullname}{$item}{reltype} eq $reltype) ||
-                (exists $GOAT->{by_table}{$item} 
-                    and $GOAT->{by_table}{$item}{reltype} eq $reltype)) {
-                push @matches => $item;
-            }
+#            my @found = find_goat_by_item($item, \@nouns);
+#            if (@found && defined $found[0]) {
+#                for (@found) {
+#                    push @matches, $_ if $_->{reltype} eq $reltype;
+#                }
+#            }
 
             ## Setup the SQL to search the live database
             $SQL = $BASESQL->($reltype) . q{AND nspname||'.'||relname = ?};
@@ -4319,13 +4415,13 @@ AND nspname !~ '^pg_'
         ## No wildcards and no dot, so we match all tables regardless of the schema
         else {
 
-            ## Pull back all items from the GOAT hash that have a dot in them
-            for my $fullname (grep { /\./ } keys %{ $GOAT->{by_fullname} }) {
-                my ($schema,$table) = split /\./ => $fullname;
-                if ($table eq $item) {
-                    push @matches => $fullname;
-                }
-            }
+#            ## Pull back all items from the GOAT hash that have a dot in them
+#            for my $fullname (grep { /\./ } keys %{ $GOAT->{by_fullname} }) {
+#                my ($schema,$table) = split /\./ => $fullname;
+#                if ($table eq $item) {
+#                    push @matches => $fullname;
+#                }
+#            }
 
             ## Setup the SQL to search the live database
             $SQL = $BASESQL->($reltype) . 'AND relname = ?';
@@ -4336,17 +4432,18 @@ AND nspname !~ '^pg_'
         if ($hasstar or !$hasadot or !@matches) {
             ## Search the live database for matches
             $sth = $rdbh->prepare($SQL);
-            ($count = $sth->execute($item)) =~ s/0E0/0/;
+            $regex_item ||= $item;
+            ($count = $sth->execute($regex_item)) =~ s/0E0/0/;
             debug(qq{Searched live database "$bestdb" for arg "$item", count was $count});
             debug(qq{SQL: $SQL}, 2);
-            debug(qq{Arg: $item}, 2);
+            debug(qq{Arg: $item ($regex_item)}, 2);
             for my $row (@{ $sth->fetchall_arrayref({}) }) {
 
                 ## The 'name' is combined "schema.relname"
                 my $name = $row->{name};
 
                 ## Don't bother if we have already added this!
-                next if exists $GOAT->{by_fullname}{$name};
+                next if find_goat_by_item($item, [ "db=$bestdb" ]);
 
                 ## Document the string that led us to this one
                 $relation{$name}{original}{$item}++;
@@ -4372,9 +4469,25 @@ AND nspname !~ '^pg_'
         }
 
         ## Populate the final hashes based on the match list
-        for my $name (@matches) {
+        for my $match (@matches) {
+            next unless defined $match;
+            my $name;
+            if (ref $match eq 'HASH') {
+                $name = "$match->{schemaname}.$match->{tablename}";
+            }
+            else {
+                $name = $match;
+            }
             $relation{$name}{original}{$original_item}++;
-            $relation{$name}{goat} ||= $GOAT->{by_fullname}{$name};
+            
+            ## This goat entry should be an array, if there are multiple goats
+            ## with that name (e.g. from different databases)
+            if (exists $relation{$name}{goat}) {
+                push @{$relation{$name}{goat}}, $match;
+            }
+            else {
+                $relation{$name}{goat} = [ $match ];
+            }
             $match{$item}++;
         }
 
@@ -5880,7 +5993,7 @@ sub add_customcode {
 
     ## Is this a valid gaot?
 # XXXJWT
-    die "There's a bug here";
+    die "There's a bug here: $extras->{relation}" if $extras->{relation};
     if ($extras->{relation} and ! exists $global{goat}{$extras->{relation}}) {
         die qq{Unknown relation: $extras->{relation}\n};
     }
@@ -8277,7 +8390,6 @@ sub extract_name_and_role {
 
 
 sub load_bucardo_info {
-
     ## Load of all information from the database into global hashes
     ## Arguments: one
     ## 1. Boolean: if true, force run even if we've run once already
@@ -8368,7 +8480,7 @@ sub load_bucardo_info {
     $sth->execute();
     for my $row (@{$sth->fetchall_arrayref({})}) {
         my ($g,$h,$p) = @$row{qw/goat herd priority/};
-        $goat->{$g}{herd}{$h} = $p;
+        $goat->{by_id}{$g}{herd}{$h} = $p;
         $herd->{$h}{goat}{"$goat->{by_id}{$g}{schemaname}.$goat->{by_id}{$g}{tablename}"} = {
             id       => $g,
             priority => $p,
