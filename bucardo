@@ -2650,7 +2650,7 @@ sub find_goat_by_item {
 
     my $name = shift;
     my $nouns = shift;
-    my @nouns = @$nouns;
+    my @nouns = ( defined $nouns ? @$nouns : ());
 
     $DEBUG and warn "Finding goats with name $name, noun: " . Dumper(@nouns);
 
@@ -2747,9 +2747,7 @@ sub add_customcols {
     usage_exit($doc_section) unless length $item_name && length $clause;
 
     ## Does this number or name exist?
-    $DEBUG = 10;
     my @candidate_goats = find_goat_by_item($item_name, @nouns);
-    die Dumper(@candidate_goats);
     if (! @candidate_goats) {
         print qq{Could not find a matching table for "$item_name"\n};
         exit 1;
