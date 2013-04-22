@@ -4448,7 +4448,7 @@ AND nspname !~ '^pg_'
                 my $name = $row->{name};
 
                 ## Don't bother if we have already added this!
-                next if find_goat_by_item($item, [ "db=$bestdb" ]);
+                next if find_goat_by_item($row->{name}, [ "db=$bestdb" ]);
 
                 ## Document the string that led us to this one
                 $relation{$name}{original}{$item}++;
