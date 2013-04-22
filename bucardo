@@ -2657,7 +2657,7 @@ sub find_goat_by_item {
     my @results;
 
     ## Handle ID values
-    if ($name =~ /\d+/) {
+    if ($name =~ /^\d+$/) {
         $DEBUG and warn "\$name is an ID value";
         push @results, $GOAT->{by_id}{$name};
     }
@@ -2717,6 +2717,9 @@ sub find_goat_by_item {
             } @results;
         }
     }
+
+    $DEBUG and warn "Here are the filtered results: " . Dumper(@results);
+    @results = () if (@results and !defined $results[0]);
     return @results;
 } ## end of find_goat_by_item
 
@@ -3581,7 +3584,6 @@ sub add_herd {
             eval {
                 @a = @{$goatlist->{relations}{$name}{goat}};
             };
-            die Dumper($goatlist, $name, $@) if $@;
 #        }
         for my $tmpgoat (@a) {
             my $db = $tmpgoat->{db};
@@ -4352,7 +4354,7 @@ AND nspname !~ '^pg_'
         my @matches;
 
         ## A list of tables to be bulk added to the goat table
-        my %addtable;
+        my @addtable;
 
         ## We may mutate the arg, so stow away the original
         my $original_item = $item;
@@ -4430,6 +4432,9 @@ AND nspname !~ '^pg_'
         ## We do not check the live database if the match was exact
         ## *and* something was found. In all other cases, we go live.
         if ($hasstar or !$hasadot or !@matches) {
+            debug(qq{NB! Found some existing matches; searching for other possibilities, because "$item" }
+                . ( $hasstar ? "includes wildcard characters " : '' )
+                . ( !$hasadot ? "doesn't include a dot" : '' )) if @matches;
             ## Search the live database for matches
             $sth = $rdbh->prepare($SQL);
             $regex_item ||= $item;
@@ -4455,17 +4460,22 @@ AND nspname !~ '^pg_'
                 $match{$item}++;
 
                 ## Set this table to be added to the goat table below
-                $addtable{$name} = {db => $bestdb, reltype => $row->{relkind}, dbcols => $dbcols};
+                push @addtable, {name => $name, db => $bestdb, reltype => $row->{relkind}, dbcols => $dbcols};
 
                 ## Add this to our matching list
-                push @matches => $name;
+                # This happens after add_items_to_goat_table now
+                #push @matches => $name;
 
             }
         }
 
         ## Add all the tables we just found from searching the live database
-        if (keys %addtable) {
-            add_items_to_goat_table(\%addtable);
+        my $added_tables;
+        if (@addtable) {
+            $added_tables = add_items_to_goat_table(\@addtable);
+        }
+        for my $tmp (@$added_tables) {
+            push @matches, $GOAT->{by_id}{$tmp};
         }
 
         ## Populate the final hashes based on the match list
@@ -4512,7 +4522,8 @@ sub add_items_to_goat_table {
 
     ## Given a list of tables, add them to the goat table as needed
     ## Arguments: one
-    ## 1. Hashref where keys are the relnames, and values are additional info:
+    ## 1. Arrayref where keys are:
+    ##   - name: name of relation to add (mandatory)
     ##   - db: the database name (mandatory)
     ##   - reltype: table or sequence (optional, defaults to table)
     ##   - dbcols: optional hashref of goat columns to set
@@ -4529,26 +4540,27 @@ sub add_items_to_goat_table {
 
     my @newid;
 
-    for my $name (sort keys %$info) {
+    for my $rel (sort { $a->{name} cmp $b->{name} } @$info) {
+        my $name = $rel->{name};
         if ($name !~ /^([\w ]+)\.([\w ]+)$/o) {
             die qq{Invalid name, got "$name", but expected format "schema.relname"};
         }
         my ($schema,$table) = ($1,$2);
 
-        my $db = $info->{$name}{db} or die q{Must provide a database};
+        my $db = $rel->{db} or die q{Must provide a database};
 
-        my $reltype = $info->{$name}{reltype} || 't';
+        my $reltype = $rel->{reltype} || 't';
         $reltype = $reltype =~ /s/i ? 'sequence' : 'table';
 
         ## Adjust the SQL as necessary for this goat
         $SQL = $NEWGOATSQL;
         my @args = ($schema, $table, $reltype, $db);
-        if (exists $info->{$name}{dbcols}) {
-            for my $newcol (sort keys %{ $info->{$name}{dbcols} }) {
+        if (exists $rel->{dbcols}) {
+            for my $newcol (sort keys %{ $rel->{dbcols} }) {
                 next if $newcol eq 'db';
                 $SQL =~ s/\)/,$newcol)/;
                 $SQL =~ s/\?,/?,?,/;
-                push @args => $info->{$name}{dbcols}{$newcol};
+                push @args => $rel->{dbcols}{$newcol};
             }
         }
         $sth = $dbh->prepare($SQL);
@@ -4562,15 +4574,15 @@ sub add_items_to_goat_table {
     ## Update the global
     load_bucardo_info('force_reload');
 
-    ## Return a list of goat objects
-    my %newlist;
-    for my $id (@newid) {
-        my $goat = $global{goat}{by_id}{$id};
-        my $name = "$goat->{schemaname}.$goat->{tablename}";
-        $newlist{$name} = $goat;
-    }
+    ## Return a list of goat IDs we've just added
+#    my %newlist;
+#    for my $id (@newid) {
+#        my $goat = $global{goat}{by_id}{$id};
+#        my $name = "$goat->{schemaname}.$goat->{tablename}";
+#        $newlist{$name} = $goat;
+#    }
 
-    return \%newlist;
+    return \@newid;
 
 
 } ## end of add_items_to_goat_table

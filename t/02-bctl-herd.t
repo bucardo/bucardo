@@ -58,7 +58,16 @@ for my $name (qw/ A B /) {
 }
 
 $t = q{Add relgroup works when adding a single table};
-$bct->ctl("bucardo add database bucardo_test user=$dbuserA port=$dbportA host=$dbhostA addalltables");
+
+# If we do this here, we'll have problems. The next test adds a table called
+# bucardo_test1, which will be found in this new bucardo_test database. But
+# because there's no dot in the table name in the call adding the foobar herd,
+# bucardo will try to find other tables with similar names, and will search in
+# the newly-added database A to do so, where it will find and add a
+# bucardo_test1 table. It will then try adding that table to the herd as well,
+# and fail, because you can't have tables from different databases in the same
+# herd. This behavior seems pessimal.
+#$res = $bct->ctl("bucardo add database bucardo_test db=bucardo_test user=$dbuserA port=$dbportA host=$dbhostA addalltables");
 $res = $bct->ctl('bucardo add relgroup foobar bucardo_test1');
 is ($res, qq{Relgroup "foobar" already exists
 Added the following tables or sequences:
