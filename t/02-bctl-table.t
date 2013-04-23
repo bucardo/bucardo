@@ -10,7 +10,7 @@ use warnings;
 use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 38;
+use Test::More tests => 43;
 
 use vars qw/$t $res $expected $command $dbhX $dbhA $dbhB $SQL/;
 
@@ -281,10 +281,27 @@ $t = q{List verbose single table};
 $res = $bct->ctl('bucardo list tables -vv public.bucardo_test1');
 like ($res, qr/ghost\s+= 0/ , $t);
 
-### Tests of 'update table' usage
-#$t = q{Update table works}
-#$res = $bct->ctl('bucardo update table public.bucardo_test1 autokick=t');
+## Tests of 'update table' usage
+$t = q{Update table changes a value properly};
+$bct->ctl('bucardo update table public.bucardo_test1 ghost=1');
+$res = $bct->ctl('bucardo list tables -vv public.bucardo_test1');
+like ($res, qr/ghost\s+= 1/, $t);
 
+$t = q{Update table returns correctly when the value doesn't need changing};
+$res = $bct->ctl('bucardo update table public.bucardo_test1 ghost=1');
+like ($res, qr/No change needed for ghost/, $t);
+
+$t = q{Update table doesn't try to set "db=" actions};
+$res = $bct->ctl('bucardo update table public.bucardo_test1 db=A ghost=1');
+unlike ($res, qr/No change needed for db/, $t);
+
+$t = q{Update table correctly filters by db when table exists};
+$res = $bct->ctl('bucardo update table public.bucardo_test1 db=A ghost=1');
+like ($res, qr/No change needed for ghost/, $t);
+
+$t = q{Update table correctly filters by db when table doesn't exist};
+$res = $bct->ctl('bucardo update table public.bucardo_test1 db=B ghost=1');
+like ($res, qr/Didn't find any matching tables/, $t);
 
 END {
     $bct->stop_bucardo($dbhX);

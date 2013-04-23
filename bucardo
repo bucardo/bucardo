@@ -3251,33 +3251,31 @@ sub update_table {
     exit 0 if ! check_recurse($GOAT, $name, @actions);
 
     ## Make sure this table exists!
-    ## XXXJWT probably check database as well, not just name
-    #my @tables = find_goat_by_item($name, @nouns);
-    my $table = $GOAT->{by_fullname}{$name} or die qq{Could not find a table named "$name"\n}
-        . "Use 'list tables' to see all available.\n";
+    my @tables = find_goat_by_item($name, \@nouns);
 
-    ## If this is an array, then see how many matches we have
-    if (ref $table eq 'ARRAY') {
-        my $matches = @$table;
-        if ($matches > 1) {
-            die qq{More than one matching table: please use a schema\n};
-        }
-        $table = $table->[0];
+    if (!@tables) {
+        die qq{Didn't find any matching tables\n};
     }
+    ## If this is an array, then see how many matches we have
+    if ($#tables > 0) {
+        die qq{More than one matching table: please use a schema\n};
+    }
+    my $table = $tables[0];
 
     ## Store the id so we work with that alone whenever possible
     my $id = $table->{id};
 
-    ## Everything is a name=value setting after this point
+    ## Everything is a name=value setting after this point, except stuff that
+    ##   matches /^db=/
     ## We will ignore and allow noise word "set"
-    for my $arg (@actions) {
+    for my $arg (grep { ! /^db=/ } @actions) {
         next if $arg =~ /set/i;
         next if $arg =~ /\w+=\w+/o;
         usage_exit($doc_section);
     }
 
     ## Change the arguments into a hash
-    my $args = process_args(join ' ' => @actions);
+    my $args = process_args(join ' ' => ( grep { ! /^db=/ } @actions));
 
     ## Track what changes we made
     my %change;
