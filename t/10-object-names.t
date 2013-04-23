@@ -8,7 +8,7 @@ use strict;
 use warnings;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 50;
+use Test::More tests => 14;
 
 use BucardoTesting;
 my $bct = BucardoTesting->new({ location => 'makedelta' })
@@ -34,132 +34,26 @@ for my $db (qw(A B C D)) {
 
 for my $arr ((['A','B'], ['C','D'])) {
     my ($src, $dest) = @$arr;
-    print STDERR "\$src: $src  \$dest: $dest\n";
     like $bct->ctl("bucardo add table bucardo_test1 db=$src relgroup=myrels_$src"),
         qr/Added the following tables/, "Added table in db $src ";
     like $bct->ctl("bucardo add sync test_$src relgroup=myrels_$src dbs=$src:source,$dest:target"),
         qr/Added sync "test_$src"/, "Create sync from $src to $dest";
 }
-die;
-# 
-# # Create a sync for multi-master replication between A and B
-# like $bct->ctl('bucardo add sync deltatest1 relgroup=myrels dbs=A:source,B:source'),
-#     qr/Added sync "deltatest1"/, 'Create sync "deltatest1"';
-# 
-# # Create a sync for replication from B to C
-# like $bct->ctl('bucardo add sync deltatest2 relgroup=myrels dbs=B,C'),
-#     qr/Added sync "deltatest2"/, 'Create sync "deltatest2"';
-# 
-# # Listen in on things.
-# ok $dbhX->do('LISTEN bucardo_syncdone_deltatest1'),
-#     'Listen for syncdone_deltatest1';
-# ok $dbhX->do('LISTEN bucardo_syncdone_deltatest2'),
-#     'Listen for syncdone_deltatest2';
-# ok $dbhX->do('LISTEN bucardo_syncdone_deltatest3'),
-#     'Listen for syncdone_deltatest3';
-# 
-# # Start up Bucardo and wait for initial syncs to finish.
-# ok $bct->restart_bucardo($dbhX), 'Bucardo should start';
-# ok $bct->wait_for_notice($dbhX, [qw(
-#     bucardo_syncdone_deltatest1
-#     bucardo_syncdone_deltatest2
-# )]), 'The deltatest1 and deltatest2 syncs should finish';
-# 
-# # Should have no rows.
-# $bct->check_for_row([], [qw(A B C)], undef, 'test[124]$');
-# 
-# # Let's add some data into A.bucardo_test1.
-# ok $dbhA->do(q{INSERT INTO bucardo_test1 (id, data1) VALUES (1, 'foo')}),
-#     'Insert a row into test1 on A';
-# $bct->ctl('bucardo message Adding new row to bucardo_test1');
-# $dbhA->commit;
-# 
-# ok $bct->wait_for_notice($dbhX, [qw(
-#     bucardo_syncdone_deltatest1
-# )]), 'The deltatest1 sync finished';
-# 
-# # The row should be in A and B, but not C (as we have not kicked deltatest2 yet)
-# is_deeply $dbhB->selectall_arrayref(
-#     'SELECT id, data1 FROM bucardo_test1'
-# ), [[1, 'foo']], 'Should have the test1 row in B';
-# 
-# is_deeply $dbhC->selectall_arrayref(
-#     'SELECT id, data1 FROM bucardo_test1'
-# ), [], 'No rows in C yet';
-# 
-# # Kick the second sync so that we get the row into C
-# $bct->ctl('bucardo kick sync deltatest2 0');
-# 
-# # Now the row should be in C
-# is_deeply $dbhC->selectall_arrayref(
-#     'SELECT id, data1 FROM bucardo_test1'
-# ), [[1, 'foo']], 'Should have the test1 row in C';
-# 
-# # Excellent. Now let's insert into test2 on B.
-# ok $dbhB->do(q{INSERT INTO bucardo_test2 (id, data1) VALUES (2, 'foo')}),
-#     'Insert a row into test2 on B';
-# $dbhB->commit;
-# 
-# ok $bct->wait_for_notice($dbhX, [qw(
-#     bucardo_syncdone_deltatest1
-#     bucardo_syncdone_deltatest2
-# )]), 'The deltatest1 and deltatest2 syncs finished';
-# 
-# is_deeply $dbhA->selectall_arrayref(
-#     'SELECT id, data1 FROM bucardo_test2'
-# ), [[2, 'foo']], 'Should have the A test2 row in A';
-# 
-# is_deeply $dbhC->selectall_arrayref(
-#     'SELECT id, data1 FROM bucardo_test2'
-# ), [[2, 'foo']], 'Should have the A test2 row in C';
-# 
-# # Finally, try table 4, which has no makedelta.
-# ok $dbhA->do(q{INSERT INTO bucardo_test4 (id, data1) VALUES (3, 'foo')}),
-#     'Insert a row into test4 on A';
-# $dbhA->commit;
-# 
-# ok $bct->wait_for_notice($dbhX, [qw(
-#     bucardo_syncdone_deltatest1
-# )]), 'The deltatest1 sync finished';
-# 
-# # Kick off the second sync
-# $bct->ctl('bucardo kick sync deltatest2 0');
-# 
-# is_deeply $dbhB->selectall_arrayref(
-#     'SELECT id, data1 FROM bucardo_test4'
-# ), [[3, 'foo']], 'Should have the test4 row in B';
-# 
-# is_deeply $dbhC->selectall_arrayref(
-#     'SELECT id, data1 FROM bucardo_test4'
-# ), [], 'Should have no test4 row row in C';
-# 
-# $dbhA->commit();
-# $dbhB->commit();
-# $dbhC->commit();
-# 
-# ##############################################################################
-# # Okay, what if we have C be a target from either A or B?
-# like $bct->ctl('bucardo remove sync deltatest2'),
-#     qr/Removed sync "deltatest2"/, 'Remove sync "deltatest2"';
-# like $bct->ctl('bucardo add sync deltatest3 relgroup=myrels dbs=A:source,B:source,C'),
-#    qr/Added sync "deltatest3"/, 'Created sync "deltatest3"';
-# 
-# ok $bct->restart_bucardo($dbhX), 'Bucardo restarted';
-# 
-# ok $dbhA->do(q{INSERT INTO bucardo_test2 (id, data1) VALUES (3, 'howdy')}),
-#     'Insert a row into test2 on A';
-# $dbhA->commit;
-# 
-# ok $bct->wait_for_notice($dbhX, [qw(
-#     bucardo_syncdone_deltatest1
-#     bucardo_syncdone_deltatest3
-# )]), 'Syncs deltatest1 and deltatest3 finished';
-# 
-# is_deeply $dbhB->selectall_arrayref(
-#     'SELECT id, data1 FROM bucardo_test2'
-# ), [[2, 'foo'], [3, 'howdy']], 'Should have the A test2 row in B';
-# 
-# is_deeply $dbhC->selectall_arrayref(
-#     'SELECT id, data1 FROM bucardo_test2'
-# ), [[2, 'foo'], [3, 'howdy']], 'Should have the A test2 row in C';
-# 
+
+# Now remove syncs, for easier testing
+map { $bct->ctl('bucardo remove sync $_') } qw/A C/;
+
+# Remove a table from just database C
+like $bct->ctl('bucardo remove table bucardo_test1 db=C'),
+    qr/Removed the following tables:\s+\n\s+public.bucardo_test1/,
+    "Removed table from just one database";
+
+
+END {
+    $bct and $bct->stop_bucardo();
+    $dbhX and $dbhX->disconnect();
+    $dbhA and $dbhA->disconnect();
+    $dbhB and $dbhB->disconnect();
+    $dbhC and $dbhC->disconnect();
+    $dbhD and $dbhD->disconnect();
+}
