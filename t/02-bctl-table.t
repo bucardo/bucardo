@@ -10,7 +10,7 @@ use warnings;
 use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 37;
+use Test::More tests => 38;
 
 use vars qw/$t $res $expected $command $dbhX $dbhA $dbhB $SQL/;
 
@@ -275,6 +275,15 @@ qq{$deltable_msg:
   public.bucardo_test2
 };
 is ($res, $expected, $t);
+
+## Tests to list a single table
+$t = q{List verbose single table};
+$res = $bct->ctl('bucardo list tables -vv public.bucardo_test1');
+like ($res, qr/ghost\s+= 0/ , $t);
+
+### Tests of 'update table' usage
+#$t = q{Update table works}
+#$res = $bct->ctl('bucardo update table public.bucardo_test1 autokick=t');
 
 
 END {

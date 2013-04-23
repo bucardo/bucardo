@@ -21,7 +21,6 @@ use Data::Dumper  qw/ Dumper /;
 $Data::Dumper::Indent = 1;
 use Getopt::Long;
 Getopt::Long::Configure(qw/ no_ignore_case pass_through no_autoabbrev /);
-use Carp;
 
 our $VERSION = '4.99.7';
 
@@ -2799,7 +2798,6 @@ sub add_customcols {
 
     ## Loop through and start adding rows to customcols
     my $goatid = $goat->{id};
-    die Dumper($goat, $item_name, @candidate_goats, $GOAT) unless defined $goatid;
 
     $SQL = "INSERT INTO bucardo.customcols(goat,clause,db,sync) VALUES ($goatid,?,?,?)";
     $sth = $dbh->prepare($SQL);
@@ -3124,7 +3122,6 @@ sub add_table {
                 push @oldnames => $name;
                 next;
             }
-            # XXXJWT This [0] might cause problems... it's new behavior
             my $db = $goatlist->{relations}{$name}{goat}[0]{db};
 
             my $pri = 0;
@@ -3167,19 +3164,31 @@ sub _remove_relation {
     my $doc_section = 'remove';
     usage_exit($doc_section) unless @nouns;
 
+    my $db_filter;
+    for my $name ( @nouns ) {
+        next unless $name =~ /^db=(.*)/;
+        $db_filter = $1;
+    }
+
     ## Prepare our SQL
     $SQL = q{DELETE FROM bucardo.goat WHERE reltype = ? AND schemaname||'.'||tablename = ?};
+    $SQL .= ' AND db = ?' if $db_filter;
     $sth = $dbh->prepare($SQL);
     my @removed;
 
-    for my $name (@nouns) {
+    ## Bucardo won't fully support a table name that starts with "db=". Darn.
+    for my $name (grep { ! /^db=/ } @nouns) {
         if ($name =~ /^\w[\w\d]*\.\w[\w\d]*$/) {
             if (! exists $GOAT->{by_fullname}{$name}) {
                 print qq{No such $reltype: $name\n};
                 next;
             }
             eval {
-                $sth->execute($reltype, $name);
+                if ($db_filter) {
+                    $sth->execute($reltype, $name, $db_filter);
+                } else {
+                    $sth->execute($reltype, $name);
+                }
             };
             if ($@) {
                 die qq{Could not delete $reltype "$name"\n$@\n};
@@ -3243,7 +3252,8 @@ sub update_table {
 
     ## Make sure this table exists!
     ## XXXJWT probably check database as well, not just name
-    my $table = $GOAT->{$name} or die qq{Could not find a table named "$name"\n}
+    #my @tables = find_goat_by_item($name, @nouns);
+    my $table = $GOAT->{by_fullname}{$name} or die qq{Could not find a table named "$name"\n}
         . "Use 'list tables' to see all available.\n";
 
     ## If this is an array, then see how many matches we have
@@ -3424,7 +3434,8 @@ sub list_tables {
     ## If not doing all, keep track of which to show
     my %matchtable;
 
-    for my $term (@nouns) {
+    my @filters = grep { /^db=/ } @nouns;
+    for my $term (grep { ! /^db=/ } @nouns) {
 
         ## Special case for all: same as no nouns at all, so simply remove them!
         if ($term =~ /\ball\b/i) {
@@ -3433,18 +3444,7 @@ sub list_tables {
             last;
         }
 
-        ## Check for wildcards
-        if ($term =~ s/[*%]/.*/) {
-            for my $id (keys %$TABLE) {
-                $matchtable{$id} = 1 if $TABLE->{$id}{tablename} =~ /^$term$/;
-            }
-            next;
-        }
-
-        ## Must be an exact match
-        for my $id (keys %$TABLE) {
-            $matchtable{$id} = 1 if $TABLE->{$id}{tablename} eq $term;
-        }
+        map { $matchtable{$_->{id}} = 1; } find_goat_by_item($term, \@filters);
 
     } ## end each term
 
@@ -3553,6 +3553,8 @@ sub add_herd {
     ## Now we need to output which ones were recently added
     if (keys %{ $goatlist->{new} }) {
         $message .= "Added the following tables or sequences:\n";
+        # XXXJWT
+        die Dumper($goatlist);
         for (sort keys %{ $goatlist->{new} }) {
             $message .= "  $_\n";
         }
@@ -3575,14 +3577,9 @@ sub add_herd {
         }
 
         my @a;
-#        if (ref $goatlist->{relations}{$name}{goat} ne 'ARRAY') {
-#            @a = ($goatlist->{relations}{$name}{goat});
-#        }
-#        else {
-            eval {
-                @a = @{$goatlist->{relations}{$name}{goat}};
-            };
-#        }
+        eval {
+            @a = @{$goatlist->{relations}{$name}{goat}};
+        };
         for my $tmpgoat (@a) {
             my $db = $tmpgoat->{db};
 
@@ -4365,65 +4362,28 @@ AND nspname !~ '^pg_'
 
         ## Wildcards?
         my $regex_item = $item;
-        if ($hasstar) {
 
-#            ## Change to a regexier form
+        ## Setup the SQL to search the live database
+        if ($hasstar) {
+            ## Change to a regexier form
             $regex_item =~ s/\./\\./g;
             $regex_item =~ s/[*%]/\.\*/g;
             $regex_item = "^$regex_item" if $regex_item !~ /^[\^\.\%]/;
             $regex_item .= '$' if $regex_item !~ /[\$\*]$/;
-#
-#            ## Pull back all full item names from $GOAT
-#            for my $fullname (keys %{ $GOAT->{by_fullname} }) {
-#                #find_goat_by_item 
-#
-#                ## We match against the whole thing if we have a dot
-#                ## in our search term, otherwise we only match the table
-#                my $searchname = $fullname;
-#                if (! $hasadot) {
-#                    (undef,$searchname) = split /\./ => $fullname;
-#                }
-#
-#                ## If we got a match, store the item from the GOAT that caused it
-#                if ($searchname =~ /^$item$/) {
-#                    push @matches => $fullname;
-#                }
-#            }
-#
-#            ## Setup the SQL to search the live database
+
+            ## Setup the SQL to search the live database
             $SQL = $BASESQL->($reltype) . ($hasadot
                 ? q{AND nspname||'.'||relname ~ ?}
                 : 'AND relname ~ ?');
 
         } ## end wildcards
-
-        ## A dot with no wildcards: exact match
-        ## TODO: Allow foobar. to mean foobar.% ??
         elsif ($hasadot) {
-
-#            my @found = find_goat_by_item($item, \@nouns);
-#            if (@found && defined $found[0]) {
-#                for (@found) {
-#                    push @matches, $_ if $_->{reltype} eq $reltype;
-#                }
-#            }
-
-            ## Setup the SQL to search the live database
+            ## A dot with no wildcards: exact match
+            ## TODO: Allow foobar. to mean foobar.% ??
             $SQL = $BASESQL->($reltype) . q{AND nspname||'.'||relname = ?};
         }
-
-        ## No wildcards and no dot, so we match all tables regardless of the schema
         else {
-
-#            ## Pull back all items from the GOAT hash that have a dot in them
-#            for my $fullname (grep { /\./ } keys %{ $GOAT->{by_fullname} }) {
-#                my ($schema,$table) = split /\./ => $fullname;
-#                if ($table eq $item) {
-#                    push @matches => $fullname;
-#                }
-#            }
-
-            ## Setup the SQL to search the live database
+            ## No wildcards and no dot, so we match all tables regardless of the schema
             $SQL = $BASESQL->($reltype) . 'AND relname = ?';
         }
 
@@ -4487,7 +4447,7 @@ AND nspname !~ '^pg_'
                 $name = $match;
             }
             $relation{$name}{original}{$original_item}++;
-            
+
             ## This goat entry should be an array, if there are multiple goats
             ## with that name (e.g. from different databases)
             if (exists $relation{$name}{goat}) {
@@ -6002,8 +5962,6 @@ sub add_customcode {
     }
 
     ## Is this a valid gaot?
-# XXXJWT
-    die "There's a bug here: $extras->{relation}" if $extras->{relation};
     if ($extras->{relation} and ! exists $global{goat}{$extras->{relation}}) {
         die qq{Unknown relation: $extras->{relation}\n};
     }
