@@ -3552,9 +3552,9 @@ sub add_herd {
     if (keys %{ $goatlist->{new} }) {
         $message .= "Added the following tables or sequences:\n";
         # XXXJWT
-        die Dumper($goatlist);
+        #die Dumper($goatlist);
         for (sort keys %{ $goatlist->{new} }) {
-            $message .= "  $_\n";
+            $message .= "  $_ (DB: $goatlist->{relations}{$_}{goat}[0]{db})\n";
         }
     }
 
