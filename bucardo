@@ -3203,7 +3203,7 @@ sub _remove_relation {
     if (@removed) {
         print "Removed the following ${reltype}s:\n";
         for my $name (sort numbered_relations @removed) {
-            print qq{  $name\n};
+            print qq{  $name} . ($db_filter ? " (DB: $db_filter)" : '') . "\n";
         }
     }
 
@@ -3551,8 +3551,6 @@ sub add_herd {
     ## Now we need to output which ones were recently added
     if (keys %{ $goatlist->{new} }) {
         $message .= "Added the following tables or sequences:\n";
-        # XXXJWT
-        #die Dumper($goatlist);
         for (sort keys %{ $goatlist->{new} }) {
             $message .= "  $_ (DB: $goatlist->{relations}{$_}{goat}[0]{db})\n";
         }
