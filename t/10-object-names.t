@@ -44,8 +44,8 @@ for my $arr ((['A','B'], ['C','D'])) {
 map { $bct->ctl('bucardo remove sync $_') } qw/A C/;
 
 # Remove a table from just database C
-like $bct->ctl('bucardo remove table bucardo_test1 db=C'),
-    qr/Removed the following tables:\s+\n\s+public.bucardo_test1/,
+like $bct->ctl('bucardo remove table public.bucardo_test1 db=C'),
+    qr/Removed the following tables:\s*\n\s+public.bucardo_test1 \(DB: C\)/,
     "Removed table from just one database";
 
 
