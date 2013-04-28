@@ -5,7 +5,7 @@
 ##
 ## This script should only be called via the 'bucardo' program
 ##
-## Copyright 2006-2012 Greg Sabino Mullane <greg@endpoint.com>
+## Copyright 2006-2013 Greg Sabino Mullane <greg@endpoint.com>
 ##
 ## Please visit http://bucardo.org for more information
 
@@ -15,7 +15,7 @@ use strict;
 use warnings;
 use utf8;
 
-our $VERSION = '4.99.6';
+our $VERSION = '4.99.7';
 
 use DBI 1.51;                               ## How Perl talks to databases
 use DBD::Pg 2.0   qw( :async             ); ## How Perl talks to Postgres databases
@@ -2715,7 +2715,7 @@ sub start_kid {
         } ## end DBIX::Safe creations
         $did_setup = 1;
     };
-    $err_handler->(@_) if !$did_setup;
+    $err_handler->($@) if !$did_setup;
 
     ## Begin the main KID loop
     my $didrun = 0;
@@ -2877,6 +2877,11 @@ sub start_kid {
         ## Add a note to the syncrun table
         $sth{kid_syncrun_update_status}->execute("Begin txn (KID $$)", $syncname);
 
+        ## Figure out our isolation level. Only used for Postgres
+        ## All others are hard-coded as 'serializable'
+        my $isolation_level = defined $sync->{isolation_level} ? $sync->{isolation_level} : 
+            $config{isolation_level} || 'serializable';
+
         ## Commit so our dbrun and syncrun stuff is visible to others
         ## This should be done just before we start transactions on all dbs
         $maindbh->commit();
@@ -2893,7 +2898,7 @@ sub start_kid {
             $x->{dbh}->rollback();
 
             if ($x->{dbtype} eq 'postgres') {
-                $x->{dbh}->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE');
+                $x->{dbh}->do(qq{SET TRANSACTION ISOLATION LEVEL $isolation_level READ WRITE});
                 $self->glog(qq{Set database "$dbname" to serializable read write}, LOG_DEBUG);
             }
 
@@ -3501,7 +3506,7 @@ sub start_kid {
                         ## In theory, this is a little crappy.
                         ## In practice, it works out quite well. :)
 
-                        $self->glog("Starting 'bucardo_latest' conflict strategy", LOG_VERBOSE);
+                        $self->glog(q{Starting 'bucardo_latest' conflict strategy}, LOG_VERBOSE);
 
                         if (! exists $self->{conflictwinner}) {
 
@@ -3566,7 +3571,7 @@ sub start_kid {
                         ## no updates at all for this run. Note: this does not
                         ## mean no conflicts, it means no insert/update/delete
 
-                        $self->glog("Starting default conflict strategy", LOG_VERBOSE);
+                        $self->glog(q{Starting default conflict strategy}, LOG_VERBOSE);
 
                         if (! exists $self->{conflictwinner}) {
 
@@ -6051,6 +6056,9 @@ sub validate_sync {
         ## Verify sequences or tables+columns on remote databases
         for my $dbname (sort keys %{ $self->{sdb} }) {
 
+            ## Only ones for this sync, please
+            next if ! exists $s->{db}{$dbname};
+
             $x = $self->{sdb}{$dbname};
 
             next if $x->{role} eq 'source';
@@ -6278,7 +6286,9 @@ sub validate_sync {
     ## Generate mapping of foreign keys
     ## This helps us with conflict resolution later on
     my $oidlist = join ',' => map { $_->{oid} } @{ $s->{goatlist} };
-    $SQL = qq{SELECT conname,
+    if ($oidlist) {
+
+        $SQL = qq{SELECT conname,
                     conrelid, conrelid::regclass,
                     confrelid, confrelid::regclass,
                     array_agg(a.attname), array_agg(z.attname)
@@ -6288,37 +6298,39 @@ sub validate_sync {
              WHERE contype = 'f'
              AND (conrelid IN ($oidlist) OR confrelid IN ($oidlist))
              GROUP BY 1,2,3,4,5
-};
+        };
 
-    ## We turn off search_path to get fully-qualified relation names
-    $srcdbh->do('SET LOCAL search_path = pg_catalog');
+        ## We turn off search_path to get fully-qualified relation names
+        $srcdbh->do('SET LOCAL search_path = pg_catalog');
 
-    for my $row (@{ $srcdbh->selectall_arrayref($SQL) }) {
+        for my $row (@{ $srcdbh->selectall_arrayref($SQL) }) {
 
-        my ($conname, $oid1,$t1, $oid2,$t2, $c1,$c2) = @$row;
+            my ($conname, $oid1,$t1, $oid2,$t2, $c1,$c2) = @$row;
 
-        ## The referenced table is not being tracked in this sync
-        if (! exists $s->{tableoid}{$oid2}) {
-            ## Nothing to do except report this problem and move on
-            $self->glog("Table $t1 references $t2, which is not part of this sync!", LOG_NORMAL);
-            next;
+            ## The referenced table is not being tracked in this sync
+            if (! exists $s->{tableoid}{$oid2}) {
+                ## Nothing to do except report this problem and move on
+                $self->glog("Table $t1 references $t2, which is not part of this sync!", LOG_NORMAL);
+                next;
+            }
+
+            ## A table referencing us is not being tracked in this sync
+            if (! exists $s->{tableoid}{$oid1}) {
+                ## Nothing to do except report this problem and move on
+                $self->glog("Table $t2 is referenced by $t1, which is not part of this sync!", LOG_NORMAL);
+                next;
+            }
+
+            ## Both exist, so tie them together
+            $s->{tableoid}{$oid1}{references}{$oid2} = [$conname,$c1,$c2];
+            $s->{tableoid}{$oid2}{referencedby}{$oid1} = [$conname,$c1,$c2];
+
         }
 
-        ## A table referencing us is not being tracked in this sync
-        if (! exists $s->{tableoid}{$oid1}) {
-            ## Nothing to do except report this problem and move on
-            $self->glog("Table $t2 is referenced by $t1, which is not part of this sync!", LOG_NORMAL);
-            next;
-        }
-
-        ## Both exist, so tie them together
-        $s->{tableoid}{$oid1}{references}{$oid2} = [$conname,$c1,$c2];
-        $s->{tableoid}{$oid2}{referencedby}{$oid1} = [$conname,$c1,$c2];
+        $srcdbh->do('RESET search_path');
+        $srcdbh->commit();
 
     }
-
-    $srcdbh->do('RESET search_path');
-    $srcdbh->commit();
 
     ## If autokick, listen for a triggerkick on all source databases
     if ($s->{autokick}) {
@@ -6594,7 +6606,7 @@ sub fork_vac {
 
     ## Start normal log output for this controller: basic facts
     my $msg = qq{New VAC daemon. PID=$$};
-    $self->glog($msg, LOG_TERSE);
+    $self->glog($msg, LOG_NORMAL);
 
     ## Allow the MCP to signal us (request to exit)
     local $SIG{USR1} = sub {
@@ -6615,8 +6627,8 @@ sub fork_vac {
         my $line = (caller)[2];
 
         ## Don't issue a warning if this was simply a MCP request
-        my $warn = $diemsg =~ /MCP request|not needed/ ? '' : 'Warning! ';
-        $self->glog(qq{${warn}VAC was killed at line $line: $diemsg}, LOG_WARN);
+        my $warn = ($diemsg =~ /MCP request|Not needed/ ? '' : 'Warning! ');
+        $self->glog(qq{${warn}VAC was killed at line $line: $diemsg}, $warn ? LOG_WARN :LOG_VERBOSE);
 
         ## Not a whole lot of cleanup to do on this one: just shut database connections and leave
         $self->{masterdbh}->disconnect() if exists $self->{masterdbhvac};
@@ -6748,7 +6760,7 @@ sub fork_vac {
             ## If we found no backends, we can leave right away, and not run again
             if (! $valid_backends) {
 
-                $self->glog("Warning! No valid backends, so disabling the VAC daemon", LOG_WARN);
+                $self->glog('No valid backends, so disabling the VAC daemon', LOG_VERBOSE);
 
                 $config{bucardo_vac} = 0;
 
@@ -6805,6 +6817,8 @@ sub reset_mcp_listeners {
 
     ## Unlisten everything
     $self->db_unlisten_all($maindbh);
+    ## Need to commit here to work around Postgres bug!
+    $maindbh->commit();
 
     ## Listen for MCP specific items
     for my $l
@@ -7188,7 +7202,7 @@ sub kill_bucardo_pid {
         if ($info !~ /^COMMAND/) {
             $self->glog(qq{Could not determine ps information for pid $pid}, LOG_VERBOSE);
         }
-        elsif ($info !~ /\bBucardo\s+/o) {
+        elsif ($info !~ /\bbucardo\s+/o) {
             $self->glog(qq{Will not kill process $pid: ps args is not 'Bucardo', got: $info}, LOG_TERSE);
             return 0;
         }
@@ -7719,7 +7733,8 @@ sub table_has_rows {
     if ($x->{does_limit}) {
         $SQL = "SELECT 1 FROM $tname LIMIT 1";
         $sth = $x->{dbh}->prepare($SQL);
-        $count = $sth->execute();
+        $sth->execute();
+        $count = $sth->rows();
         $sth->finish();
         return $count >= 1 ? 1 : 0;
     }
@@ -7731,7 +7746,8 @@ sub table_has_rows {
     elsif ('oracle' eq $x->{dbtype}) {
         $SQL = "SELECT 1 FROM $tname WHERE rownum > 1";
         $sth = $x->{dbh}->prepare($SQL);
-        $count = $sth->execute();
+        $sth->execute();
+        $count = $sth->rows();
         $sth->finish();
         return $count >= 1 ? 1 : 0;
     }
@@ -8673,7 +8689,7 @@ sub push_rows {
 
             ## The columns we are pushing to, both as an arrayref and a CSV:
             my $cols = $goat->{tcolumns}{$SELECT};
-            my $columnlist = $t->{does_sql} ? 
+            my $columnlist = $t->{does_sql} ?
                 ('(' . (join ',', map { $t->{dbh}->quote_identifier($_) } @$cols) . ')')
               : ('(' . (join ',', map { $_ } @$cols) . ')');
 
@@ -9241,7 +9257,7 @@ Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This document describes version 4.99.6 of Bucardo
+This document describes version 4.99.7 of Bucardo
 
 =head1 WEBSITE
 
@@ -9293,7 +9309,7 @@ Greg Sabino Mullane <greg@endpoint.com>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2005-2012 Greg Sabino Mullane <greg@endpoint.com>.
+Copyright (c) 2005-2013 Greg Sabino Mullane <greg@endpoint.com>.
 
 This software is free to use: see the LICENSE file for details.
 

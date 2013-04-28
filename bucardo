@@ -3,31 +3,31 @@
 
 ## Script to control Bucardo
 ##
-## Copyright 2006-2012 Greg Sabino Mullane <greg@endpoint.com>
+## Copyright 2006-2013 Greg Sabino Mullane <greg@endpoint.com>
 ##
 ## Please see http://bucardo.org/ for full documentation
 ##
-## Run as bucardo --help for some basic instructions
+## Run with a --help argument for some basic instructions
 
 package bucardo;
 use strict;
 use warnings;
 use 5.008003;
 use DBI;
-use IO::Handle;
-use Getopt::Long;
-Getopt::Long::Configure(qw/no_ignore_case/);
-use Time::HiRes 'sleep';
-use POSIX qw/ceil setsid localeconv/;
-use Data::Dumper 'Dumper';
+use IO::Handle    qw/ autoflush /;
+use Time::HiRes   qw/ sleep gettimeofday tv_interval /;
+use POSIX         qw/ ceil setsid localeconv /;
+use Data::Dumper  qw/ Dumper /;
 $Data::Dumper::Indent = 1;
+use Getopt::Long;
+Getopt::Long::Configure(qw/ no_ignore_case pass_through no_autoabbrev /);
 
-our $VERSION = '4.99.6';
+our $VERSION = '4.99.7';
 
 ## For the tests, we want to check that it compiles without actually doing anything
 return 1 if $ENV{BUCARDO_TEST};
 
-## No buffering on the standard output streams
+## No buffering on the standard streams
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
 
@@ -36,11 +36,11 @@ use vars qw/$dbh $SQL $sth %sth $count $info %global $SYNC $GOAT $TABLE $SEQUENC
             $CUSTOMCODE $CUSTOMNAME $CUSTOMCOLS /;
 
 ## How to show dates from the database, e.g. start time of a sync
-my $DATEFORMAT       = q{Mon DD, YYYY HH24:MI:SS};
-my $SHORTDATEFORMAT  = q{HH24:MI:SS};
+my $DATEFORMAT       = $ENV{BUCARDO_DATEFORMAT} || q{Mon DD, YYYY HH24:MI:SS};
+my $SHORTDATEFORMAT  = $ENV{BUCARDO_SHORTDATEFORMAT} || q{HH24:MI:SS};
 
-## How long we hang out between checks after a kick or when waiting for notices
-my $WAITSLEEP        = 1;
+## How long we hang out between checks after a kick - or when waiting for notices
+my $WAITSLEEP = 1;
 
 ## Determine how we were called
 ## If we were called from a different directory, and the base directory is in our path,
@@ -75,9 +75,8 @@ my $bcargs = {
               batch        => 0,
           };
 
-## These options must come before the GetOptions call
+## These options must come before the main GetOptions call
 my @opts = @ARGV;
-Getopt::Long::Configure(qw(pass_through no_autoabbrev));
 GetOptions(
     $bcargs,
     'no-bucardorc',
@@ -96,7 +95,7 @@ if (! $bcargs->{'no-bucardorc'}) {
     elsif (-e '.bucardorc') {
         $file = '.bucardorc';
     }
-    elsif (-e "$ENV{HOME}/.bucardorc") {
+    elsif (defined $ENV{HOME} && -e "$ENV{HOME}/.bucardorc") {
         $file = "$ENV{HOME}/.bucardorc";
     }
     elsif (-e '/etc/bucardorc') {
@@ -110,10 +109,10 @@ if (defined $file) {
         ## Skip any lines starting with a hash
         next if /^\s*#/;
 
-        ## Format is foo=bar, with whitespace allowed
-        next unless /^\s*(\w+)\s*=\s*(.+?)\s*$/o;
+        ## Format is foo=bar or foo:bar, with whitespace allowed
+        next unless /^\s*(\w[\w-]+)\s*[:=]\s*(.+?)\s*$/o;
         my ($name,$value) = ($1,$2); ## no critic (ProhibitCaptureWithoutTest)
-        $bcargs->{$name} = $value;
+        $bcargs->{$name} = $name eq 'logdest' ? [$value] : $value;
     }
     close $rc or die;
 }
@@ -181,13 +180,18 @@ if ($bcargs->{version}) {
 }
 
 # Determine the logging destination.
-unless (exists $bcargs->{logdest}) {
+if (exists $bcargs->{logdest}) {
+    if (! ref $bcargs->{logdest}) {
+        $bcargs->{logdest} = [$bcargs->{logdest}];
+    }
+}
+else {
     if (exists $bcargs->{debugfile} && !delete $bcargs->{debugfile}) {
         # Old --debugfile option can disable logging.
         $bcargs->{logdest} = [];
     }
     elsif (my $dir = $bcargs->{debugdir}) {
-        # Old --debugdir option determins log directory.
+        # Old --debugdir option determines log directory.
         $bcargs->{logdest} = [$dir];
     }
     else {
@@ -862,26 +866,30 @@ sub reload_config {
         }
     }
 
-    $QUIET or print q{Forcing Bucardo to reload the bucardo_config table};
+    $QUIET or print qq{Forcing Bucardo to reload the bucardo_config table\n};
 
-    ## We may want to wait to hear from the MCP that it is done
+    ## Is Bucardo active?
+    my $pong = 'bucardo_mcp_pong';
+    $dbh->do("LISTEN $pong");
+    $dbh->do('NOTIFY bucardo_mcp_ping');
+    $dbh->commit();
+    ## Wait a little bit, then scan for the confirmation message
+    sleep 0.1;
+    if (! wait_for_notice($dbh, $pong, 2)) {
+        die "Looks like Bucardo is not running, so there is no need to reload\n";
+    }
+
+    ## We want to wait to hear from the MCP that it is done
     my $done = 'bucardo_reload_config_finished';
     $dbh->do('NOTIFY bucardo_reload_config');
-    if (defined $adverb) {
-        print '...';
-        $dbh->do("LISTEN $done");
-    }
+    $dbh->do("LISTEN $done");
     $dbh->commit();
-
-    ## If we are not waiting around for a confirmation, just exit now
-    if (!defined $adverb) {
-        print "\n";
-        exit 0;
-    }
 
     ## Wait a little bit, then scan for the confirmation message
     sleep 0.1;
-    wait_for_notice($dbh, $done);
+    if (! wait_for_notice($dbh, $done, 5) ) {
+        die "Waited, but Bucardo never confirmed the configuration reload!\n";
+    }
     print "DONE!\n";
 
     exit 0;
@@ -892,24 +900,33 @@ sub reload_config {
 sub wait_for_notice {
 
     ## Keep hanging out until we get the notice we are waiting for
-    ## Arguments: two
+    ## Arguments: three
     ## 1. Database handle
     ## 2. String to listen for
+    ## 3. How long to wait (default is forever)
     ## Returns: undef
 
-    my ($ldbh, $string) = @_;
+    my ($ldbh, $string, $howlong) = @_;
+
+    my $start_time = [gettimeofday];
 
   WAITIN: {
         for my $notice (@{ db_get_notices($ldbh) }) {
             my ($name) = @$notice;
             last WAITIN if $name eq $string;
         }
+
+        if (defined $howlong) {
+            my $elapsed = tv_interval( $start_time );
+            return 0 if $elapsed >= $howlong;
+        }
+
         $dbh->commit();
         sleep($WAITSLEEP);
         redo;
     }
 
-    return;
+    return 1;
 
 } ## end of wait_for_notice
 
@@ -2932,11 +2949,12 @@ sub list_customcols {
 ##
 
 sub add_table {
+    my $reltype = shift;
 
-    ## Add one or more tables. Inserts to the bucardo.goat table
+    ## Add one or more tables or sequences. Inserts to the bucardo.goat table
     ## May also update the bucardo.herd and bucardo.herdmap tables
-    ## Arguments: one or more
-    ## 1+ Names of tables to be added
+    ## Arguments: one. Also parses @nouns for table / sequence names
+    ## 1. Type of object to be added: table, or sequence
     ## Returns: undef
     ## Example: bucardo add table pgbench_accounts foo% myschema.abc
 
@@ -2962,7 +2980,7 @@ sub add_table {
 
     ## Loop through all the args and attempt to add the tables
     ## This returns a hash with the following keys: relations, match, nomatch
-    my $goatlist = get_goat_ids(args => \@nouns, dbcols => $dbcols);
+    my $goatlist = get_goat_ids(args => \@nouns, type => $reltype, dbcols => $dbcols);
 
     ## The final output. Store it up all at once for a single QUIET check
     my $message = '';
@@ -2977,7 +2995,7 @@ sub add_table {
 
     ## Now we need to output which ones were recently added
     if (keys %{ $goatlist->{new} }) {
-        $message .= "Added the following tables:\n";
+        $message .= "Added the following tables or sequences:\n";
         for (sort keys %{ $goatlist->{new} }) {
             $message .= "  $_\n";
         }
@@ -2994,7 +3012,7 @@ sub add_table {
         }
         ## Now load all of these tables into this herd
         $SQL = 'INSERT INTO bucardo.herdmap (herd,priority,goat) VALUES (?,?,'
-            . q{ (SELECT id FROM goat WHERE schemaname||'.'||tablename=? AND db=?))};
+            . qq{ (SELECT id FROM goat WHERE schemaname||'.'||tablename=? AND db=? AND reltype='$reltype'))};
 
         $sth = $dbh->prepare($SQL);
 
@@ -3003,7 +3021,8 @@ sub add_table {
 
         for my $name (sort keys %{ $goatlist->{relations} }) {
             ## Is it already part of this herd?
-            if (exists $HERD->{$herdname}{goat}{$name}) {
+            if (exists $HERD->{$herdname}{goat}{$name} and
+                    $HERD->{$herdname}{goat}{$name}{reltype} eq $reltype) {
                 push @oldnames => $name;
                 next;
             }
@@ -3017,14 +3036,14 @@ sub add_table {
         }
 
         if (@oldnames) {
-            $message .= qq{The following tables were already in the relgroup "$herdname":\n};
+            $message .= qq{The following tables or sequences were already in the relgroup "$herdname":\n};
             for (@oldnames) {
                 $message .= "  $_\n";
             }
         }
 
         if (@newnames) {
-            $message .= qq{The following tables are now part of the relgroup "$herdname":\n};
+            $message .= qq{The following tables or sequences are now part of the relgroup "$herdname":\n};
             for (sort numbered_relations @newnames) {
                 $message .= "  $_\n";
             }
@@ -3433,7 +3452,7 @@ sub add_herd {
 
     ## Now we need to output which ones were recently added
     if (keys %{ $goatlist->{new} }) {
-        $message .= "Added the following tables:\n";
+        $message .= "Added the following tables or sequences:\n";
         for (sort keys %{ $goatlist->{new} }) {
             $message .= "  $_\n";
         }
@@ -3464,14 +3483,14 @@ sub add_herd {
     }
 
     if (@oldnames) {
-        $message .= qq{The following tables were already in the relgroup "$herdname":\n};
+        $message .= qq{The following tables or sequences were already in the relgroup "$herdname":\n};
         for (@oldnames) {
             $message .= "  $_\n";
         }
     }
 
     if (@newnames) {
-        $message .= qq{The following tables are now part of the relgroup "$herdname":\n};
+        $message .= qq{The following tables or sequences are now part of the relgroup "$herdname":\n};
         for (@newnames) {
             $message .= "  $_\n";
         }
@@ -3622,6 +3641,7 @@ sub add_sync {
         onetimecopy              onetimecopy          =0|1|2           null
         lifetime                 lifetime             interval         null
         maxkicks                 maxkicks             numeric          null
+        isolation_level|txnmode  isolation_level      0                null
         rebuild_index|rebuildindex   rebuild_index    numeric          null
         tables                   tables               0                skip
     };
@@ -3636,6 +3656,10 @@ sub add_sync {
             value => 'fullcopy',
             new_defaults => 'autokick|F stayalive|F kidsalive|F',
         },
+        {
+            field => 'isolation_level',
+            dash_to_white => 1,
+        }
     ];
 
     my ( $dbcols, $cols, $phs, $vals ) = process_simple_args({
@@ -3760,7 +3784,7 @@ sub add_sync {
             $type = 'source' if $type =~ /^s/i or $type =~ /^master/i;
             $type = 'target' if $type =~ /^t/i or $type =~ /^rep/i;
             $type = 'fullcopy' if $type =~ /^f/i;
-            if ($type !~ /^(source|target|fullcopy)$/) {
+            if ($type !~ /^(?:source|target|fullcopy)$/) {
                 die "Invalid database type: must be source, target, or fullcopy (not $type)\n";
             }
             $db{$db} = $type;
@@ -3981,7 +4005,10 @@ sub update_sync {
                 die "Invalid setting: $setting\n";
             }
 
-            ## Normalize things like t/f 0/1 others?
+            ## Do any magic we need
+            if ($setting eq 'isolation_level') {
+                $value =~ s/_/ /g;
+            }
 
             ## Try setting it
             $SQL = "UPDATE sync SET $setting=? WHERE name = ?";
@@ -4140,6 +4167,7 @@ sub get_goat_ids {
     ## Also checks the live database and adds tables to the goat table as needed.
     ## Arguments: key-value pairs:
     ##  - args: arrayref of names to match against. Can have wildcards.
+    ##  - type: 'table' or 'sequence', depending on what we expect to find.
     ##  - dbcols: optional hashref of fields to populate goat table with (e.g. autokick=1)
     ## Returns: a hash with:
     ##  - relations: hash of goat objects, key is the fully qualified name
@@ -4150,6 +4178,7 @@ sub get_goat_ids {
     ##  - new: hash of newly added tables
 
     my %arg = @_;
+    my $reltype = $arg{type};
     my $names = $arg{args} or die;
     my $dbcols = $arg{dbcols} || {};
 
@@ -4180,13 +4209,18 @@ sub get_goat_ids {
 
     ## SQL to find a table or a sequence
     ## We do not want pg_table_is_visible(c.oid) here
-    my $BASESQL = q{
+    my $BASESQL = sub {
+        my $arg = shift || 'table';
+            ## Assume we're talking about tables unless we say "sequence" explicitly
+        my $type = ( $arg eq 'sequence' ? 'S' : 'r' );
+        return qq{
 SELECT nspname||'.'||relname AS name, relkind, c.oid
 FROM pg_class c
 JOIN pg_namespace n ON (n.oid = c.relnamespace)
-WHERE relkind IN ('r')
+WHERE relkind IN ('$type')
 AND nspname <> 'information_schema'
 AND nspname !~ '^pg_'
+};
 };
 
     ## Loop through each argument, and try and find matching goats
@@ -4239,7 +4273,7 @@ AND nspname !~ '^pg_'
             }
 
             ## Setup the SQL to search the live database
-            $SQL = $BASESQL . ($hasadot
+            $SQL = $BASESQL->($reltype) . ($hasadot
                 ? q{AND nspname||'.'||relname ~ ?}
                 : 'AND relname ~ ?');
 
@@ -4249,12 +4283,13 @@ AND nspname !~ '^pg_'
         ## TODO: Allow foobar. to mean foobar.% ??
         elsif ($hasadot) {
 
-            if (exists $GOAT->{$item}) {
+            if (exists $GOAT->{$item}
+                    and $GOAT->{$item}{reltype} eq $reltype) {
                 push @matches => $item;
             }
 
             ## Setup the SQL to search the live database
-            $SQL = $BASESQL . q{AND nspname||'.'||relname = ?};
+            $SQL = $BASESQL->($reltype) . q{AND nspname||'.'||relname = ?};
         }
 
         ## No wildcards and no dot, so we match all tables regardless of the schema
@@ -4269,7 +4304,7 @@ AND nspname !~ '^pg_'
             }
 
             ## Setup the SQL to search the live database
-            $SQL = $BASESQL . 'AND relname = ?';
+            $SQL = $BASESQL->($reltype) . 'AND relname = ?';
         }
 
         ## We do not check the live database if the match was exact
@@ -4279,6 +4314,8 @@ AND nspname !~ '^pg_'
             $sth = $rdbh->prepare($SQL);
             ($count = $sth->execute($item)) =~ s/0E0/0/;
             debug(qq{Searched live database "$bestdb" for arg "$item", count was $count});
+            debug(qq{SQL: $SQL}, 2);
+            debug(qq{Arg: $item}, 2);
             for my $row (@{ $sth->fetchall_arrayref({}) }) {
 
                 ## The 'name' is combined "schema.relname"
@@ -7384,7 +7421,7 @@ sub usage_exit {
         '-exitval'  => $exitval,
     );
 
-} ## end of usage
+} ## end of usage_exit
 
 
 sub connect_database {
@@ -7887,13 +7924,17 @@ sub install {
 sub debug {
 
     ## Print a debug line if needed
-    ## Arguments: one
+    ## Arguments: one or two
     ## 1. String to be printed
+    ## 2. Required debug level: defaults to 1
     ## Returns: undef
 
     return if ! $DEBUG;
 
     my $string = shift;
+    my $level = shift || 1;
+
+    return if $DEBUG < $level;
 
     chomp $string;
 
@@ -8079,11 +8120,15 @@ sub process_simple_args {
         for my $mline (@{$arg->{morph}}) {
             if (exists $mline->{field}) {
                 next unless exists $dbcol{$mline->{field}};
-                next if $dbcol{$mline->{field}} ne $mline->{value};
-                for my $change (split /\s+/ => $mline->{new_defaults}) {
-                    my ($f,$v) = split /\|/ => $change;
-                    next if exists $dbcol{$f};
-                    $dbcol{$f} = $v;
+                if (exists $mline->{new_defaults}) {
+                    for my $change (split /\s+/ => $mline->{new_defaults}) {
+                        my ($f,$v) = split /\|/ => $change;
+                        next if exists $dbcol{$f};
+                        $dbcol{$f} = $v;
+                    }
+                }
+                if (exists $mline->{dash_to_white}) {
+                    $dbcol{$mline->{field}} =~ s/_/ /g;
                 }
             }
             else {
@@ -8733,7 +8778,7 @@ bucardo - utility script for controlling the Bucardo program
 
 =head1 VERSION
 
-This document describes version 4.99.6 of bucardo
+This document describes version 4.99.7 of bucardo
 
 =head1 USAGE
 
@@ -9103,8 +9148,6 @@ include:
 =item C<sync>
 
 =item C<customname>
-
-=item C<customcols>
 
 =item C<customcols>
 
@@ -10054,7 +10097,7 @@ what to replicate from where to where. The supported parameters are:
 
 =item C<name>
 
-The name of the sync.
+The name of the sync. Required.
 
 =item C<dbs>
 
@@ -10080,6 +10123,11 @@ Number of seconds a KID can live before being reaped.
 =item C<maxkicks>
 
 Number of times a KID may be kicked before being reaped.
+
+=item C<isolation_level>
+
+The transation isolation level this sync should use.
+Only choices are "serializable" and "repeatable read"
 
 =item C<conflict_strategy>
 
@@ -10372,7 +10420,7 @@ Which DDL changing conditions do we try to remedy automatically? Default: C<newc
 
 =item C<bucardo_current_version>
 
-Current version of Bucardo. Default: C<4.99.6>.
+Current version of Bucardo. Default: C<4.99.7>.
 
 =item C<bucardo_vac>
 
@@ -10380,7 +10428,7 @@ Do we want the automatic VAC daemon to run? Default: C<1>.
 
 =item C<bucardo_version>
 
-Bucardo version this schema was created with. Default: C<4.99.6>.
+Bucardo version this schema was created with. Default: C<4.99.7>.
 
 =item C<ctl_checkonkids_time>
 
@@ -10425,6 +10473,11 @@ Directory to store the flatfile output inside of. Default: C<.>.
 =item C<host_safety_check>
 
 Regex to make sure we don't accidentally run where we should not. Default: None.
+
+=item C<isolation_level>
+
+The transaction isolation level all sync should use. Defaults to 'serializable'. 
+The only other valid option is 'repeatable read'
 
 =item C<kid_deadlock_sleep>
 
@@ -10819,7 +10872,7 @@ Bucardo
 
 =head1 COPYRIGHT
 
-Copyright 2006-2012 Greg Sabino Mullane <greg@endpoint.com>
+Copyright 2006-2013 Greg Sabino Mullane <greg@endpoint.com>
 
 This program is free to use, subject to the limitations in the LICENSE file.
 

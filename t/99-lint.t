@@ -69,27 +69,27 @@ sub check_subroutines {
                 ## Is there a comment indicating the end of the sub?
                 my $end = $1;
                 if ($end !~ /^ ## end of (\w+)$/) {
-                    fail "No ending comment for sub $subname at line $.";
+                    fail "No ending comment for sub ${filename}::$subname at line $.";
                 }
                 my $endname = $1;
                 if ($endname ne $subname) {
-                    fail "End of sub $subname has wrong name at line $.";
+                    fail "End of sub ${filename}::$subname has wrong name at line $.";
                 }
 
                 ## Did this subroutine have an 'Arguments' comment?
                 if (! exists $found{argument}) {
-                    fail "No argument line found for sub $subname";
+                    fail "No argument line found for sub ${filename}::$subname";
                 }
                 delete $found{argument};
 
                 ## Did this subroutine have a 'Returns' comment?
                 if (! exists $found{returns}) {
-                    fail "No returns line found for sub $subname";
+                    fail "No returns line found for sub ${filename}::$subname";
                 }
                 delete $found{returns};
 
                 if (! keys %found) {
-                    pass "Subroutine $subname passed all tests";
+                    pass "Subroutine ${filename}::$subname passed all tests";
                 }
                 undef %found;
                 $subname = '';
@@ -102,7 +102,7 @@ sub check_subroutines {
             ## Make sure we have a description as the first comment
             if (1 == $step) {
                 if (! /^\s*## [A-Z]/) {
-                    fail "No description at start of sub $subname";
+                    fail "No description at start of sub ${filename}::$subname";
                 }
                 $step = 2;
                 next;
@@ -114,7 +114,7 @@ sub check_subroutines {
                 if (/^\s*## Arguments: (\w+)/) {
                     my $word = $1;
                     if ($word !~ /^[a-z]/) {
-                        fail "Argument line does not start with a lowercase letter for sub $subname";
+                        fail "Argument line does not start with a lowercase letter for sub ${filename}::$subname";
                     }
                     $found{argument} = 1;
                     $step = 3;

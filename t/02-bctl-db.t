@@ -50,7 +50,7 @@ like ($res, qr/Connection .+ failed.*could not connect to server/s, $t);
 
 $t = q{Add database fails for non-existent host};
 $res = $bct->ctl("bucardo add database bucardo_test dbname=bucardo_test user=$dbuserA port=$dbportA host=badbucardohost");
-like ($res, qr/Connection .+ failed.*could not translate host name/s, $t);
+like ($res, qr/Connection .+ failed/s, $t); ## Could be timeout or bad hostname...
 
 $t = q{Add database fails for non-existent database};
 $res = $bct->ctl("bucardo add database foo dbname=bar user=$dbuserA port=$dbportA host=$dbhostA");
@@ -86,7 +86,7 @@ my $statA = qq{Database: A\\s+Status: active\\s+Conn: psql -p $dbportA -U $dbuse
 my $statA2 = qq{Database: A2\\s+Status: active\\s+Conn: psql -p $dbportA -U $dbuserA -d bucardo_test -h $dbhostA};
 my $statB = qq{Database: B\\s+Status: active\\s+Conn: psql -p $dbportB -U $dbuserB -d bucardo_test -h $dbhostB \\(SSP is off\\)};
 my $statz = qq{Database: foo\\s+Status: active\\s+Conn: psql .*-d bar};
-my $regex = qr{$statA\n$statA2\n$statB\n$statz$}s;
+my $regex = qr{$statA\n$statA2\n$statB\n$statz}s;
 like ($res, $regex, $t);
 
 ## Clear them out for some more testing

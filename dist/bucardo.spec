@@ -1,7 +1,7 @@
 %define         realname Bucardo
 %define         sysuser postgres
 Name:           bucardo
-Version:        4.99.6
+Version:        4.99.7
 Release:        2%{?dist}
 Summary:        Postgres replication system for both multi-master and multi-slave operations
 

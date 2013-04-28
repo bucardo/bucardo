@@ -33,11 +33,11 @@ my $dbname = 'bucardo_test';
 $ENV{PERL5LIB} = '.';
 
 ## Shortcuts for ease of changes and smaller text:
-our $addtable_msg = 'Added the following tables';
+our $addtable_msg = 'Added the following tables or sequences';
 our $deltable_msg = 'Removed the following tables';
 our $nomatch_msg = 'Did not find matches for the following terms';
-our $oldherd_msg = 'The following tables are now part of the relgroup';
-our $newherd_msg = 'The following tables are now part of the relgroup';
+our $oldherd_msg = 'The following tables or sequences are now part of the relgroup';
+our $newherd_msg = 'The following tables or sequences are now part of the relgroup';
 
 our $location = 'setup';
 my $testmsg  = ' ?';
@@ -965,7 +965,7 @@ sub ctl {
     eval {
         local $SIG{ALRM} = sub { die "Alarum!\n"; };
         alarm $ALARM_BUCARDO;
-        debug("Connection options: $connopts Args: $args", 3);
+        debug("Script: $ctl Connection options: $connopts Args: $args", 3);
         $info = qx{$ctl $connopts $args 2>&1};
         debug("Exit value: $?", 3);
         die $info if $? != 0;
@@ -1339,6 +1339,9 @@ sub shutdown_cluster {
     return if ! -e $pidfile;
     my @cmd = ($pg_ctl, '-D', $dirname, '-s', '-m', 'fast', 'stop');
     system(@cmd) == 0 or die "@cmd failed: $?\n";
+
+    delete $gdbh{$name};
+
     return;
 
 } ## end of shutdown_cluster
@@ -1691,7 +1694,11 @@ sub check_for_row {
 
     for my $dbname (@$dblist) {
 
-        my $dbh = $gdbh{$dbname} or die "Invalid database name: $dbname";
+        if (! $gdbh{$dbname}) {
+            $gdbh{$dbname} = $self->connect_database($dbname,$BucardoTesting::dbname);
+        }
+
+        my $dbh = $gdbh{$dbname};
 
         my $maxdbtable = $maxtable + 1 + length $dbname;
 
