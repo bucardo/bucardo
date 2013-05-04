@@ -18,7 +18,10 @@ Version 5
 * Get customcode working, with tests
   https://github.com/bucardo/bucardo/issues/20
 
+* See about the VAC daemon cleaning up pg_listener
+
 * Make sure all outstanding mailing list questions are handled.
+
 
 Version 5.1
 -----------
