@@ -5021,6 +5021,7 @@ sub status_detail {
         push @items => ['Autokick'             => $s->{autokick}];
         push @items => ['Onetimecopy'          => $s->{onetimecopy} ? 'Yes' : 'No'];
         push @items => ['Data rate (per second)' => "insert: $s->{rates}->{inserts}, delete: $s->{rates}->{deletes}, truncte: $s->{rates}->{truncates}, conflict: $s->{rates}->{conflicts}"];
+        push @items => ['Lag seconds/deltas'   => "$s->{lag}->{seconds} / $s->{lag}->{deltas}"];
 
         ## Only show these if enabled
         if ($s->{analyze_after_copy} eq 'Yes') {
@@ -5206,8 +5207,10 @@ AND (   lastgood  IS TRUE
         $s->{lastbad} = exists $s->{rowbad} ? $s->{rowbad}{ended_time} : 'none';
         $s->{timebad} = exists $s->{rowbad} ? pretty_time($s->{rowbad}{total_time_ended}) : '';
 
+warn "S: " . Dumper($s);
+
         # Check the replication Lag
-        get_replication_lag($sync);
+        $s->{lag} = get_replication_lag($s);
 
         # Check the data rates
         $s->{rates} = get_date_rates($sync);
@@ -5222,13 +5225,74 @@ AND (   lastgood  IS TRUE
 
 } ## end of set_sync_status
 
-
 sub get_replication_lag {
-    my $sync = shift;
+    my $s = shift;
 
+    my $tables = [];
+    my $max_lag_seconds = 0;
+    my $total_lag_deltas = 0;
 
+    foreach my $table (sort keys %{$s->{herd}->{goat}}) {
+        if ($s->{herd}->{goat}->{$table}->{reltype} eq 'table') {
+            $table =~ s/^bucardo\.delta_//;
+            $table =~ s/\./_/;
+            push @$tables, $table;
+        }
+    }
+
+    foreach my $db (sort keys %{$s->{dblist}}) {
+        my $rdbh = connect_database({name => $db}); # there could be a speed issue here if the db is offline
+
+        for my $table (@$tables) {
+            my ($lag_deltas, $lag_seconds) = get_replication_lag_per_table($rdbh, $table);
+            $max_lag_seconds = $lag_seconds if $lag_seconds > $max_lag_seconds;
+            $total_lag_deltas += $lag_deltas;
+        }
+        return {
+            seconds => $max_lag_seconds,
+            deltas => $total_lag_deltas
+        };
+    }
 }
 
+sub get_replication_lag_per_table {
+    my ($rdbh, $table) = @_;
+
+    my $delta_table = "bucardo.delta_$table";
+    my $track_table = "bucardo.track_$table";
+
+    # do we have any delta / track rows?
+    my ($outstanding_deltas) = $rdbh->selectrow_array("select count(*) from $delta_table where txntime not in (select txntime from $track_table)");
+    my ($track_count) = $rdbh->selectrow_array("select count(*) from $track_table");
+
+warn "DELTAS: $outstanding_deltas / $track_count";
+
+    my $lag_seconds = 0;
+
+    if ($outstanding_deltas) {
+        my $sql = "SELECT round(extract( epoch from current_timestamp - (SELECT MAX(txntime) AS delta_ts FROM $delta_table) ))";
+        ($lag_seconds) = $rdbh->selectrow_array($sql);
+    }
+warn "LAG: $lag_seconds";
+    if ($track_count) {
+
+        my $sql = qq{
+SELECT date_part( 'seconds', delta.delta_ts - track.track_ts )
+as lag_seconds
+FROM
+(SELECT MAX(txntime) AS track_ts FROM $track_table where txntime > (current_timestamp - interval '$STATS_INTERVAL minutes'))
+AS track,
+(SELECT MAX(txntime) AS delta_ts FROM $delta_table where txntime > (current_timestamp - interval '$STATS_INTERVAL minutes'))
+AS delta
+};
+
+       my ($track_lag_seconds) = $rdbh->selectrow_array($sql);
+warn "LAG: $lag_seconds, TRACK: $track_lag_seconds";
+       $lag_seconds = $track_lag_seconds if $track_lag_seconds && $track_lag_seconds > $lag_seconds;
+    }
+
+    return ($outstanding_deltas, $lag_seconds);
+}
 
 sub get_date_rates {
     my $sync = shift;
