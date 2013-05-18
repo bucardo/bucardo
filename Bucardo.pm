@@ -634,7 +634,7 @@ sub start_mcp {
         { exec $RUNME, @{ $opts }, 'start', $reason };
         $self->glog("Could not exec $RUNME: $!", LOG_WARN);
 
-    }; ## end SIG{__DIE_} handler sub
+    }; ## end SIG{__DIE__} handler sub
 
     ## This resets listeners, kills kids, and loads/activates syncs
     my $active_syncs = $self->reload_mcp();
@@ -6638,7 +6638,7 @@ sub fork_vac {
 
         exit 0;
 
-    }; ## end SIG{__DIE_} handler sub
+    }; ## end SIG{__DIE__} handler sub
 
     ## Connect to the master database
     ($self->{master_backend}, $self->{masterdbh}) = $self->connect_database();
