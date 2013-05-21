@@ -10445,16 +10445,16 @@ Aliases:
 
   bucardo kick <syncname(s)> [timeout]
 
-Tells one or more named syncs to fire as soon as possible. Note that this simply sends a request that
-the sync fire: it may not start right away if the same sync is already running, or if the source or
-target database has exceeded the number of allowed Bucardo connections. If the final argument is a
-number, it is treated as a timeout. If this number is zero, the bucardo command will not return
-until the sync has finished. For any other number, the sync will wait at most that number of seconds.
+Tells one or more named syncs to fire as soon as possible. Note that this simply sends a request that 
+the sync fire: it may not start right away if the same sync is already running, or if the source or 
+target database has exceeded the number of allowed Bucardo connections. If the final argument is a 
+number, it is treated as a timeout. If this number is zero, the bucardo command will not return 
+until the sync has finished. For any other number, the sync will wait at most that number of seconds. 
 If any sync has not finished before the timeout, an exit value of 1 will be returned. Errors will
 cause exit values of 2 or 3. In all other cases, an exit value of 0 will be returned.
 
-If a timeout is given, the total completion time in seconds is also displayed. If the sync is going to
-multiple targets, the time that each target takes from the start of the kick is also shown as each
+If a timeout is given, the total completion time in seconds is also displayed. If the sync is going to 
+multiple targets, the time that each target takes from the start of the kick is also shown as each 
 target finishes. Options:
 
 =over
@@ -10572,7 +10572,7 @@ Regex to make sure we don't accidentally run where we should not. Default: None.
 
 =item C<isolation_level>
 
-The transaction isolation level all sync should use. Defaults to 'serializable'.
+The transaction isolation level all sync should use. Defaults to 'serializable'. 
 The only other valid option is 'repeatable read'
 
 =item C<kid_deadlock_sleep>
@@ -10721,8 +10721,8 @@ L</show> and L</set> commands, instead.
   bucardo ping 60
   bucardo ping 0
 
-Sends a ping notice to the MCP process to see if it will respond. By default, it will wait 15 seconds. A
-numeric argument will change this timeout. Using a 0 as the timeout indicates waiting forever. If a response
+Sends a ping notice to the MCP process to see if it will respond. By default, it will wait 15 seconds. A 
+numeric argument will change this timeout. Using a 0 as the timeout indicates waiting forever. If a response 
 was returned, the program will exit with a value of 0. If it times out, the value will be 1.
 Returns a Nagios like message starting with "OK" or "CRITICAL" for success or failure.
 
@@ -10730,8 +10730,8 @@ Returns a Nagios like message starting with "OK" or "CRITICAL" for success or fa
 
   bucardo status [syncname(s)] [--sort=#] [--show-days] [--compress]
 
-Shows the brief status of all known syncs in a tabular format. If given one or more sync names,
-shows detailed information for each one. To see detailed information for all syncs, simply
+Shows the brief status of all known syncs in a tabular format. If given one or more sync names, 
+shows detailed information for each one. To see detailed information for all syncs, simply 
 use "status all"
 
 When showing brief information, the columns are:
@@ -10756,7 +10756,7 @@ How long it has been since the last sync success
 
 =item 5. B<Last I/U>
 
-The number of insert and deletes performed by the last successful sync. May also show
+The number of insert and deletes performed by the last successful sync. May also show 
 the number of rows truncated (T) or conflicted (C), if applicable.
 
 =item 6. B<Last bad>
@@ -10794,22 +10794,22 @@ negative number to reverse the sort order.
 
   bucardo activate syncname [syncname2 syncname3 ...] [timeout]
 
-Activates one or more named syncs. If given a timeout argument, it will wait until it has received
+Activates one or more named syncs. If given a timeout argument, it will wait until it has received 
 confirmation from Bucardo that each sync has been successfully activated.
 
 =head2 deactivate
 
   bucardo deactivate syncname [syncname2 syncname3 ...] [timeout]
 
-Deactivates one or more named syncs. If given a timeout argument, it will wait until it has received
+Deactivates one or more named syncs. If given a timeout argument, it will wait until it has received 
 confirmation from Bucardo that the sync has been successfully deactivated.
 
 =head2 message
 
   bucardo message 'I WAS HERE'
 
-Sends a message to the running Bucardo logs. This message will appear prefixed with "MESSAGE: ". If
-Bucardo is not running, the message will go to the logs the next time Bucardo runs and someone
+Sends a message to the running Bucardo logs. This message will appear prefixed with "MESSAGE: ". If 
+Bucardo is not running, the message will go to the logs the next time Bucardo runs and someone 
 adds another message.
 
 =head2 reload
@@ -10867,7 +10867,7 @@ or a command and its action. Some examples:
 
 =head1 OPTIONS DETAILS
 
-It is usually easier to set most of these options at the top of the script, or make an alias for them,
+It is usually easier to set most of these options at the top of the script, or make an alias for them, 
 as they will not change very often if at all.
 
 =over
@@ -10943,12 +10943,12 @@ Shows a brief summary of usage for bucardo.
 
 =head1 FILES
 
-In addition to command-line configurations, you can put any options inside of a file. The file F<.bucardorc> in
-the current directory will be used if found. If not found, then the file F<~/.bucardorc> will be used. Finally,
-the file /etc/bucardorc will be used if available. The format of the file is option = value, one per line. Any
-line starting with a '#' will be skipped. Any values loaded from a bucardorc file will be overwritten by
-command-line options. All bucardorc files can be ignored by supplying a C<--no-bucardorc> argument. A specific
-file can be forced with the C<--bucardorc=file> option; if this option is set, bucardo will refuse to run
+In addition to command-line configurations, you can put any options inside of a file. The file F<.bucardorc> in 
+the current directory will be used if found. If not found, then the file F<~/.bucardorc> will be used. Finally, 
+the file /etc/bucardorc will be used if available. The format of the file is option = value, one per line. Any 
+line starting with a '#' will be skipped. Any values loaded from a bucardorc file will be overwritten by 
+command-line options. All bucardorc files can be ignored by supplying a C<--no-bucardorc> argument. A specific 
+file can be forced with the C<--bucardorc=file> option; if this option is set, bucardo will refuse to run 
 unless that file can be read.
 
 =head1 ENVIRONMENT VARIABLES
