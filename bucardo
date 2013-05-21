@@ -9419,8 +9419,8 @@ exist, it will be created. Optional.
 
 =item C<makedelta>
 
-Turns makedelta magic on or off. Value is a list of databases which need makedelta
-for this table. Value can also be "on" to enable makedelta for all databases.
+Turns makedelta magic on or off. Value is a list of databases which need makedelta 
+for this table. Value can also be "on" to enable makedelta for all databases. 
 Defaults to "off".
 
 =back
