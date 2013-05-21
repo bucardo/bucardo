@@ -5020,7 +5020,7 @@ sub status_detail {
         push @items => ['Rebuild index'        => $s->{rebuild_index} ? 'Yes' : 'No'];
         push @items => ['Autokick'             => $s->{autokick}];
         push @items => ['Onetimecopy'          => $s->{onetimecopy} ? 'Yes' : 'No'];
-        push @items => ['Data rate (per second)' => "insert: $s->{rates}->{inserts}, delete: $s->{rates}->{deletes}, truncte: $s->{rates}->{truncates}, conflict: $s->{rates}->{conflicts}"];
+        push @items => ['Data rate (per second)' => "insert: $s->{rates}->{inserts}, delete: $s->{rates}->{deletes}, truncate: $s->{rates}->{truncates}, conflict: $s->{rates}->{conflicts}"];
         push @items => ['Lag seconds/deltas'   => "$s->{lag}->{seconds} / $s->{lag}->{deltas}"];
 
         ## Only show these if enabled
@@ -5207,8 +5207,6 @@ AND (   lastgood  IS TRUE
         $s->{lastbad} = exists $s->{rowbad} ? $s->{rowbad}{ended_time} : 'none';
         $s->{timebad} = exists $s->{rowbad} ? pretty_time($s->{rowbad}{total_time_ended}) : '';
 
-warn "S: " . Dumper($s);
-
         # Check the replication Lag
         $s->{lag} = get_replication_lag($s);
 
@@ -5241,18 +5239,30 @@ sub get_replication_lag {
     }
 
     foreach my $db (sort keys %{$s->{dblist}}) {
+        next unless $s->{dblist}->{$db}->{role} eq 'source';
+
         my $rdbh = connect_database({name => $db}); # there could be a speed issue here if the db is offline
+
+        unless ($rdbh) {
+            warn "Failed to connect to database: $db";
+            next;
+        }
 
         for my $table (@$tables) {
             my ($lag_deltas, $lag_seconds) = get_replication_lag_per_table($rdbh, $table);
             $max_lag_seconds = $lag_seconds if $lag_seconds > $max_lag_seconds;
             $total_lag_deltas += $lag_deltas;
         }
-        return {
-            seconds => $max_lag_seconds,
-            deltas => $total_lag_deltas
-        };
     }
+    if ($total_lag_deltas == 0) {
+        # There are no outstanding deltas, so we can get the lag from the lastgood row in the syncrun table
+        $max_lag_seconds = sprintf("%.2f", $s->{rowgood}->{total_time});
+    }
+
+    return {
+        seconds => $max_lag_seconds,
+        deltas => $total_lag_deltas
+    };
 }
 
 sub get_replication_lag_per_table {
@@ -5263,32 +5273,12 @@ sub get_replication_lag_per_table {
 
     # do we have any delta / track rows?
     my ($outstanding_deltas) = $rdbh->selectrow_array("select count(*) from $delta_table where txntime not in (select txntime from $track_table)");
-    my ($track_count) = $rdbh->selectrow_array("select count(*) from $track_table");
-
-warn "DELTAS: $outstanding_deltas / $track_count";
 
     my $lag_seconds = 0;
 
     if ($outstanding_deltas) {
-        my $sql = "SELECT round(extract( epoch from current_timestamp - (SELECT MAX(txntime) AS delta_ts FROM $delta_table) ))";
+        my $sql = "select round(extract(epoch from current_timestamp - (select min(txntime) AS delta_ts from $delta_table where txntime not in (select txntime from $track_table))))";
         ($lag_seconds) = $rdbh->selectrow_array($sql);
-    }
-warn "LAG: $lag_seconds";
-    if ($track_count) {
-
-        my $sql = qq{
-SELECT date_part( 'seconds', delta.delta_ts - track.track_ts )
-as lag_seconds
-FROM
-(SELECT MAX(txntime) AS track_ts FROM $track_table where txntime > (current_timestamp - interval '$STATS_INTERVAL minutes'))
-AS track,
-(SELECT MAX(txntime) AS delta_ts FROM $delta_table where txntime > (current_timestamp - interval '$STATS_INTERVAL minutes'))
-AS delta
-};
-
-       my ($track_lag_seconds) = $rdbh->selectrow_array($sql);
-warn "LAG: $lag_seconds, TRACK: $track_lag_seconds";
-       $lag_seconds = $track_lag_seconds if $track_lag_seconds && $track_lag_seconds > $lag_seconds;
     }
 
     return ($outstanding_deltas, $lag_seconds);
@@ -5305,9 +5295,9 @@ SELECT sum(inserts) as inserts, sum(deletes) as deletes,
     my $stats = $dbh->selectrow_hashref($SQL, {}, $sync);
 
     # get rate per seconds
-    foreach my $key (keys %$stats) {
+    foreach my $key (qw/inserts deletes truncates conflicts/) {
         if ($stats->{$key} && $stats->{$key} > 0) {
-            $stats->{$key} = $stats->{$key} / ($STATS_INTERVAL * 60);
+            $stats->{$key} = sprintf("%.2f", $stats->{$key} / ($STATS_INTERVAL * 60));
         }
         else {
             $stats->{$key} = 0;
