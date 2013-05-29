@@ -37,7 +37,7 @@ provides:
 resources:
   homepage          : http://bucardo.org/index.html
   MailingList       : http://bucardo.org/list.html
-  bugtracker        : http://bucardo.org/bugzilla/
+  bugtracker        : https://github.com/bucardo/bucardo/issues
   repository        : http://bucardo.org/repo.html
   license           : http://bucardo.org/license.html
 meta-spec:
