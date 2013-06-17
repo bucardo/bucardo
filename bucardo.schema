@@ -422,7 +422,7 @@ ALTER TABLE bucardo.sync    ADD CONSTRAINT sync_name_sane
   CHECK (name ~ E'^[a-zA-Z]\\w*$' AND lower(name) NOT IN ('pushdelta','fullcopy','swap'));
 
 ALTER TABLE bucardo.sync    ADD CONSTRAINT sync_isolation_level
-  CHECK (isolation_level IS NULL OR (LOWER(isolation_level) IN ('serializable', 'repeatable read')));
+  CHECK ((isolation_level IS NULL) OR (lower(isolation_level) IN ('serializable', 'repeatable read')));
 
 CREATE SEQUENCE bucardo.customcode_id_seq;
 CREATE TABLE bucardo.customcode (

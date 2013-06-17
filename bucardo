@@ -6527,7 +6527,7 @@ sub constraint_definition {
 
     ## Do some cleanups to standardize across versions and match bucardo.schema cleanly
     $def =~ s/\((\(.+\))\)/$1/;
-    $def =~ s/\"?(\w+)\"? = ANY \(ARRAY\[(.+)\]\)/$1 IN ($2)/;
+    $def =~ s/= ANY \(ARRAY\[(.+)\]\)/IN ($1)/;
     $def =~ s/<> ALL \(ARRAY\[(.+)\]\)/NOT IN ($1)/;
     $def =~ s/::text//g;
     $def =~ s/(\w+) ~ '/$1 ~ E'/g;
@@ -7264,6 +7264,8 @@ sub upgrade {
             next;
         }
 
+##CHECK ((isolation_level IS NULL) OR (lower(isolation_level) = ANY (ARRAY['serializable', 'repeatable read']))) vs CHECK (isolation_level IS NULL OR (LOWER(isolation_level) IN ('serializable', 'repeatable read')))
+
         ## Clean up the constraint to make it match what comes back from the database:
         $cdef =~ s/;$//;
         $cdef =~ s/','/', '/g;
@@ -7276,6 +7278,7 @@ sub upgrade {
             upgrade_and_log("ALTER TABLE $tcname DROP CONSTRAINT $cname");
             upgrade_and_log("ALTER TABLE $tcname ADD CONSTRAINT $cname $cdef");
             clog "Altered constraint $cname on $tcname";
+            clog "$condef vs\n$cdef";
             $changes++;
         }
     }
