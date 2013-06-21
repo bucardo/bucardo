@@ -7202,7 +7202,7 @@ sub kill_bucardo_pid {
         if ($info !~ /^COMMAND/) {
             $self->glog(qq{Could not determine ps information for pid $pid}, LOG_VERBOSE);
         }
-        elsif ($info !~ /\bbucardo\s+/o) {
+        elsif ($info !~ /\bbucardo\s+/oi) {
             $self->glog(qq{Will not kill process $pid: ps args is not 'Bucardo', got: $info}, LOG_TERSE);
             return 0;
         }
