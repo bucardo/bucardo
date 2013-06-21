@@ -2899,7 +2899,7 @@ sub start_kid {
 
             if ($x->{dbtype} eq 'postgres') {
                 $x->{dbh}->do(qq{SET TRANSACTION ISOLATION LEVEL $isolation_level READ WRITE});
-                $self->glog(qq{Set database "$dbname" to serializable read write}, LOG_DEBUG);
+                $self->glog(qq{Set database "$dbname" to $isolation_level read write}, LOG_DEBUG);
             }
 
             if ($x->{dbtype} eq 'mysql' or $x->{dbtype} eq 'mariadb') {
