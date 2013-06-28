@@ -2448,36 +2448,40 @@ sub start_kid {
                                SELECT 1
                                FROM   bucardo.$g->{tracktable} t
                                WHERE  d.txntime = t.txntime
-                               AND    t.target = TARGETNAME::text
+                               AND    (t.target = DBGROUP::text OR t.target ~ '^T:')
+                            )
+                    };
+
+                ## We also need secondary queries to catch the case of partial replications
+                ## This is a per-target check
+                $SQL{deltatarget}{$g} = qq{
+                    SELECT  DISTINCT $g->{pklist}
+                    FROM    bucardo.$g->{deltatable} d
+                    WHERE   NOT EXISTS (
+                               SELECT 1
+                               FROM   bucardo.$g->{tracktable} t
+                               WHERE  d.txntime = t.txntime
+                               AND    (t.target = TARGETNAME::text)
                             )
                     };
 
                 ## Mark all unclaimed visible delta rows as done in the track table
                 $SQL{track}{$g} = qq{
                     INSERT INTO bucardo.$g->{tracktable} (txntime,target)
-                    SELECT DISTINCT txntime, TARGETNAME::text
+                    SELECT DISTINCT txntime, DBGROUP::text
                     FROM bucardo.$g->{deltatable} d
                     WHERE NOT EXISTS (
                         SELECT 1
                         FROM   bucardo.$g->{tracktable} t
                         WHERE  d.txntime = t.txntime
-                        AND    t.target = TARGETNAME::text
+                        AND    (t.target = DBGROUP::text OR t.target ~ '^T:')
                     );
                 };
 
                 ## The same thing, but to the staging table instead, as we have to
                 ## wait for all targets to succesfully commit in multi-source situations
-                $SQL{stage}{$g} = qq{
-                    INSERT INTO bucardo.$g->{stagetable} (txntime,target)
-                    SELECT DISTINCT txntime, TARGETNAME::text
-                    FROM bucardo.$g->{deltatable} d
-                    WHERE NOT EXISTS (
-                        SELECT 1
-                        FROM   bucardo.$g->{tracktable} t
-                        WHERE  d.txntime = t.txntime
-                        AND    t.target = TARGETNAME::text
-                    );
-                };
+                ($SQL{stage}{$g} = $SQL{track}{$g}) =~ s/$g->{tracktable}/$g->{stagetable}/;
+
 
             } ## end each table
 
@@ -2486,9 +2490,8 @@ sub start_kid {
 
                 $x = $sync->{db}{$dbname};
 
-                ## Set the TARGETNAME for each database: the bucardo.track_* target entry
-                ## Unless we start using gangs again, just use the dbgroup
-                $x->{TARGETNAME} = "dbgroup $dbs";
+                ## Set the DBGROUP for each database: the bucardo.track_* target entry
+                $x->{DBGROUPNAME} = "dbgroup $dbs";
 
                 for my $g (@$goatlist) {
 
@@ -2497,7 +2500,7 @@ sub start_kid {
                     ($S,$T) = ($g->{safeschema},$g->{safetable});
 
                     ## Replace with the target name for source delta querying
-                    ($SQL = $SQL{delta}{$g}) =~ s/TARGETNAME/'$x->{TARGETNAME}'/o;
+                    ($SQL = $SQL{delta}{$g}) =~ s/DBGROUP/'$x->{DBGROUPNAME}'/o;
 
                     ## As these can be expensive, make them asynchronous
                     $sth{getdelta}{$dbname}{$g} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
@@ -2506,12 +2509,12 @@ sub start_kid {
                     ## There is no way to know beforehand which we will need, so we prepare both
 
                     ## Replace with the target name for source track updating
-                    ($SQL = $SQL{track}{$g}) =~ s/TARGETNAME/'$x->{TARGETNAME}'/go;
+                    ($SQL = $SQL{track}{$g}) =~ s/DBGROUP/'$x->{DBGROUPNAME}'/go;
                     ## Again, async as they may be slow
                     $sth{track}{$dbname}{$g} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
 
                     ## Same thing for stage
-                    ($SQL = $SQL{stage}{$g}) =~ s/TARGETNAME/'$x->{TARGETNAME}'/go;
+                    ($SQL = $SQL{stage}{$g}) =~ s/DBGROUP/'$x->{DBGROUPNAME}'/go;
                     $sth{stage}{$dbname}{$g} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
 
                     ## Set the per database/per table makedelta setting now
@@ -3613,7 +3616,7 @@ sub start_kid {
                                             $SQL = qq{SELECT COUNT(*) FROM bucardo.$g->{deltatable} d }
                                                  . qq{WHERE d.txntime > }
                                                  . qq{(SELECT MAX(txntime) FROM bucardo.$g->{tracktable} }
-                                                 . qq{WHERE target = '$x->{TARGETNAME}')};
+                                                 . qq{WHERE target = '$x->{SYNCNAME}')};
                                             $g->{sql_got_delta} = $SQL;
                                         }
                                         $sth = $x->{dbh}->prepare($g->{sql_got_delta});
@@ -8925,7 +8928,7 @@ sub push_rows {
                     $dbh->do(qq{
                         INSERT INTO bucardo.$goat->{tracktable}
                         VALUES (NOW(), ?)
-                    }, undef, $t->{TARGETNAME});
+                    }, undef, $t->{SYNCNAME});
                 }
             }
             elsif ('flatpg' eq $type) {
