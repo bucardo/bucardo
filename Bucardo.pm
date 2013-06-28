@@ -4332,30 +4332,49 @@ sub start_kid {
 
         ## We may want to lock all the tables
         ## TODO: alternate ways to trigger this
-        my $lock_table_mode = '';
+        my %lock_table_mode;
         my $force_lock_file = "/tmp/bucardo-force-lock-$syncname";
-        if (-e $force_lock_file) {
-            $lock_table_mode = 'EXCLUSIVE';
-            if (-s _ and (open my $fh, '<', "$force_lock_file")) {
-                my $newmode = <$fh>;
-                close $fh or warn qq{Could not close "$force_lock_file": $!\n};
-                if (defined $newmode) {
-                    chomp $newmode;
-                    $lock_table_mode = $newmode if $newmode =~ /^\s*\w[ \w]+\s*$/o;
-                }
-            }
-            $self->glog(qq{Found lock control file "$force_lock_file". Mode: $lock_table_mode});
-        }
+		for my $ext ('all', 'source', 'target') {
+			my $lockfile = "$force_lock_file";
+			$lockfile .= ".$ext" if $ext ne 'all';
+			if (-e $lockfile) {
+				## Default mode is simply EXCLUSIVE - but can specify others in the file itself
+				my $mode = 'EXCLUSIVE';
+				if (-s _ and (open my $fh, '<', "$lockfile")) {
+					my $newmode = <$fh>;
+					close $fh or warn qq{Could not close "$lockfile": $!\n};
+					if (defined $newmode) {
+						chomp $newmode;
+						$mode = $newmode if $newmode =~ /^\s*\w[ \w]+\s*$/o;
+					}
+				}
+				$self->glog(qq{Found lock control file "$lockfile". Mode: $mode});
+				$lock_table_mode{$ext} = $mode;
+			}
+		}
 
-        if ($lock_table_mode) {
-            $self->glog("Locking all table in $lock_table_mode MODE");
-            for my $g (@$goatlist) {
-                next if $g->{reltype} ne 'table';
-                my $com = "$g->{safeschema}.$g->{safetable} IN $lock_table_mode MODE";
-                $self->glog("$sourcedb: Locking table $com");
-                $sourcedbh->do("LOCK TABLE $com");
-                $self->glog("$targetdb: Locking table $com");
-                $targetdbh->do("LOCK TABLE $com");
+        if (keys %lock_table_mode) {
+			## Source locking
+			my $mode = $lock_table_mode{'source'} || $lock_table_mode{'all'} || '';
+			if ($mode) {
+				$self->glog("Locking all source tables: $mode");
+				for my $g (@$goatlist) {
+					next if $g->{reltype} ne 'table';
+					my $com = "$g->{safeschema}.$g->{safetable} IN $mode MODE";
+					$self->glog("$sourcedb: Locking table $com");
+					$sourcedbh->do("LOCK TABLE $com");
+				}
+            }
+			## Target locking
+			$mode = $lock_table_mode{'target'} || $lock_table_mode{'all'} || '';
+			if ($mode) {
+				$self->glog("Locking all target tables: $mode");
+				for my $g (@$goatlist) {
+					next if $g->{reltype} ne 'table';
+					my $com = "$g->{safeschema}.$g->{safetable} IN $mode MODE";
+					$self->glog("$targetdb: Locking table $com");
+					$targetdbh->do("LOCK TABLE $com");
+				}
             }
         }
 
@@ -6104,11 +6123,17 @@ sub start_kid {
             $self->glog("Finished syncing to $targetdb. Time: $total_time. Updates: $dmlcount{allupdates}{target} Inserts: $dmlcount{allinserts}{target} Deletes: $dmlcount{alldeletes}{target} Sync: $syncname. Keepalive: $kidsalive");
         }
 
-        ## Remove lock file if we used it
-        if ($lock_table_mode and -e $force_lock_file) {
-            $self->glog("Removing lock control file $force_lock_file");
-            unlink $force_lock_file or $self->glog("Warning! Failed to unlink $force_lock_file");
-        }
+        ## Remove any lock files we might have come across
+        if (keys %lock_table_mode) {
+			for my $ext ('all', 'source', 'target') {
+				my $lockfile = "$force_lock_file";
+				$lockfile .= ".$ext" if $ext ne 'all';
+				if (-e $lockfile) {
+					$self->glog("Removing lock control file $lockfile");
+					unlink $lockfile or $self->glog("Warning! Failed to unlink $lockfile");
+				}
+			}
+		}
 
         # Run all 'after_txn' code
         for my $code (@{$sync->{code_after_txn}}) {
