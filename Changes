@@ -1,7 +1,9 @@
 [GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
 
-Bucardo version 4.5.1
+Bucardo version 4.6.0
+
+  - Allow emergency table locking to be done for source or target only. [GSM]
 
   - Remove the use of 'trigrules' inside customcode: deemed too dangerous.
     Same effect can be done dierectly inside the customcodes. [GSM]
