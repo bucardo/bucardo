@@ -95,7 +95,7 @@
 </p>
 <hr />
 <h1><a name="version">VERSION</a></h1>
-<p>This document describes version 4.99.7 of bucardo</p>
+<p>This document describes version 5.0.0 of bucardo</p>
 <p>
 </p>
 <hr />
@@ -494,8 +494,6 @@ include:</p>
 <dt><strong><code>sync</code></strong></dt>
 
 <dt><strong><code>customname</code></strong></dt>
-
-<dt><strong><code>customcols</code></strong></dt>
 
 <dt><strong><code>customcols</code></strong></dt>
 
@@ -1526,7 +1524,7 @@ what to replicate from where to where. The supported parameters are:</p>
 <dt><strong><code>name</code></strong></dt>
 
 <dd>
-<p>The name of the sync.</p>
+<p>The name of the sync. Required.</p>
 </dd>
 <dt><strong><code>dbs</code></strong></dt>
 
@@ -1558,6 +1556,12 @@ what to replicate from where to where. The supported parameters are:</p>
 
 <dd>
 <p>Number of times a KID may be kicked before being reaped.</p>
+</dd>
+<dt><strong><a name="isolation_level" class="item"><code>isolation_level</code></a></strong></dt>
+
+<dd>
+<p>The transation isolation level this sync should use.
+Only choices are &quot;serializable&quot; and &quot;repeatable read&quot;</p>
 </dd>
 <dt><strong><code>conflict_strategy</code></strong></dt>
 
@@ -1867,7 +1871,7 @@ case-insensitive. The available settings are:</p>
 <dt><strong><a name="bucardo_current_version" class="item"><code>bucardo_current_version</code></a></strong></dt>
 
 <dd>
-<p>Current version of Bucardo. Default: <code>4.99.7</code>.</p>
+<p>Current version of Bucardo. Default: <code>5.0.0</code>.</p>
 </dd>
 <dt><strong><a name="bucardo_vac" class="item"><code>bucardo_vac</code></a></strong></dt>
 
@@ -1877,7 +1881,7 @@ case-insensitive. The available settings are:</p>
 <dt><strong><a name="bucardo_version" class="item"><code>bucardo_version</code></a></strong></dt>
 
 <dd>
-<p>Bucardo version this schema was created with. Default: <code>4.99.7</code>.</p>
+<p>Bucardo version this schema was created with. Default: <code>5.0.0</code>.</p>
 </dd>
 <dt><strong><a name="ctl_checkonkids_time" class="item"><code>ctl_checkonkids_time</code></a></strong></dt>
 
@@ -1933,6 +1937,12 @@ case-insensitive. The available settings are:</p>
 
 <dd>
 <p>Regex to make sure we don't accidentally run where we should not. Default: None.</p>
+</dd>
+<dt><strong><code>isolation_level</code></strong></dt>
+
+<dd>
+<p>The transaction isolation level all sync should use. Defaults to 'serializable'. 
+The only other valid option is 'repeatable read'</p>
 </dd>
 <dt><strong><a name="kid_deadlock_sleep" class="item"><code>kid_deadlock_sleep</code></a></strong></dt>
 
