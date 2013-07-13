@@ -5014,7 +5014,7 @@ sub start_kid {
                         if ($@) {
                             chomp $@;
                             (my $err = $@) =~ s/\n/\\n/g;
-                            $self->glog("Warning! Aborting due to exception for $S.$T:$pkval Error was $err");
+                            $self->glog("Warning! Aborting due to exception for $S.$T:$pkval ($sourcedb -> $targetdb) Error was $err");
                             die $@;
                         }
                     }
@@ -5855,7 +5855,7 @@ sub start_kid {
                         if ($@) {
                             chomp $@;
                             (my $err = $@) =~ s/\n/\\n/g;
-                            $self->glog("Warning! Aborting due to exception for $S.$T.$qnamepk: $pkval Error was $err");
+                            $self->glog("Warning! Aborting due to exception for $S.$T.$qnamepk: $pkval ($sourcedb -> $targetdb) Error was $err");
                             die $@;
                         }
                     }
