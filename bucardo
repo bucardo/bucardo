@@ -253,6 +253,9 @@ my $adverb;
 ## Installation must happen before we try to connect!
 install() if $verb =~ /instal/i;
 
+## Display more detailed help than --help
+superhelp() if $verb eq 'help';
+
 ## For everything else, we need to connect to a previously installed Bucardo database
 
 ## Create a quick data source name
@@ -320,9 +323,6 @@ my $re_dbname = qr{\w[\w\d]*};
 
 ## Send a ping to the MCP to make sure it is alive and responding
 ping() if $verb eq 'ping';
-
-## Display more detailed help than --help
-superhelp() if $verb eq 'help';
 
 ## Make sure the Bucardo database has the latest schema
 upgrade() if $verb eq 'upgrade' or $verb eq 'uprgade' or $verb eq 'ugprade';
