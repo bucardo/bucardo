@@ -1085,11 +1085,6 @@ CREATE TRIGGER validate_goat
 -- Check that the goat tables are ready and compatible
 --
 
-
-
-
-
--- this is spaced so the func starts at at at even lint for debugging help
 CREATE OR REPLACE FUNCTION bucardo.validate_sync(text,integer)
 RETURNS TEXT
 LANGUAGE plperlu
