@@ -1387,9 +1387,7 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
         if ($newschema || $count < 1) {
             ## We may override this later on with a custom function from bucardo_custom_trigger
             ## and we may not even use it all, but no harm in creating the stock one here
-            my $notice = $dbh->{pg_server_version} >= 90000
-                ? qq{bucardo, 'kick_sync_$syncname'}
-                : qq{"bucardo_kick_sync_$syncname"};
+            my $notice = qq{"bucardo_kick_sync_$syncname"};
             $SQL = qq{
                   CREATE OR REPLACE FUNCTION bucardo."$kickfunc"()
                   RETURNS TRIGGER

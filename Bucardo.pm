@@ -6342,7 +6342,7 @@ sub validate_sync {
             $x = $self->{sdb}{$dbname};
             next if $x->{role} ne 'source';
 
-            $self->db_listen($x->{dbh}, $l, $dbname, 0);
+            $self->db_listen($x->{dbh}, $l, $dbname, 1);
             $x->{dbh}->commit();
         }
     }
@@ -6451,7 +6451,7 @@ sub deactivate_sync {
         $x->{dbh}->commit();
         if ($s->{autokick}) {
             my $l = "kick_sync_$syncname";
-            $self->db_unlisten($x->{dbh}, $l, $dbname, 0);
+            $self->db_unlisten($x->{dbh}, $l, $dbname, 1);
             $x->{dbh}->commit();
         }
     }
