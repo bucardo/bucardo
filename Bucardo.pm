@@ -6340,12 +6340,13 @@ sub validate_sync {
     ## If autokick, listen for a triggerkick on all source databases
     if ($s->{autokick}) {
         my $l = "kick_sync_$syncname";
-        for my $dbname (sort keys %{ $self->{sdb} }) {
-            $x = $self->{sdb}{$dbname};
+        for my $dbname (sort keys %{ $s->{db} }) {
+            $x = $s->{db}{$dbname};
+            $self->glog("Listen for $l on $dbname ($x->{role})");
             next if $x->{role} ne 'source';
-
-            $self->db_listen($x->{dbh}, $l, $dbname, 0);
-            $x->{dbh}->commit();
+            my $dbh = $self->{sdb}{$dbname}{dbh};
+            $self->db_listen($dbh, $l, $dbname, 0);
+            $dbh->commit;
         }
     }
 
