@@ -5163,7 +5163,7 @@ AND (   lastgood  IS TRUE
             my $highepoch = 0;
             undef $s->{latestrow};
             my $wintype;
-            for my $type (qw/ bad good /) {
+            for my $type (qw/ bad good empty /) {
                 my $r = $s->{"row$type"};
                 next if ! defined $r;
                 my $etime = $r->{ended_epoch};
@@ -5178,10 +5178,7 @@ AND (   lastgood  IS TRUE
                 $max{state} = length($s->{state}) if length($s->{state}) > $max{state};
                 next;
             }
-            $s->{state} =
-                $wintype eq 'empty' ? 'Empty'
-                : $wintype eq 'bad' ? 'Bad'
-                : 'Good';
+            $s->{state} = ucfirst $wintype;
         }
 
         ## deletes/inserts/truncates/conflicts
