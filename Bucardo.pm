@@ -5507,6 +5507,7 @@ sub db_unlisten_all {
     $ldbh->do('UNLISTEN *');
 
     delete $self->{listening}{$ldbh};
+    delete $self->{listen_payload}{$ldbh};
 
     return;
 
