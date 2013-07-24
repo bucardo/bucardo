@@ -4961,7 +4961,8 @@ sub connect_database {
 
     ## Set the application name if we can
     if ($dbh->{pg_server_version} >= 90000) {
-        $dbh->do(q{SET application_name='bucardo'});
+        my $role = $self->{logprefix} || '???';
+        $dbh->do("SET application_name='bucardo $role'");
         $dbh->commit();
     }
 
