@@ -11,7 +11,7 @@ my $bct = BucardoTesting->new({location => 'postgres'})
 
 END { $bct->stop_bucardo if $bct }
 
-my $dbh = $bct->connect_database('A');
+my $dbh = $bct->empty_cluster('A');
 END { $dbh->disconnect if $dbh }
 
 # Skip the tests if we can't mock the serialization failure.
@@ -19,7 +19,7 @@ plan skip_all => "Cannot mock serialization failure on Postgres $dbh->{pg_server
     if $dbh->{pg_server_version} < 80400;
 
 # We are a go!
-plan tests => 27;
+plan tests => 45;
 $dbh->disconnect;
 $dbh = undef;
 
@@ -74,7 +74,19 @@ ok $bct->wait_for_notice($dbhX, 'bucardo_syncdone_serialtest1'),
 # Should have no rows.
 $bct->check_for_row([], [qw(A B)], undef, 'test[12]$');
 
+# Make sure the sync was recorded.
+ok my $runs = $dbhX->selectall_arrayref(
+    'SELECT * FROM syncrun ORDER BY started',
+    { Slice => {} },
+), 'Get list of syncruns';
+is @{ $runs }, 1, 'Should have one syncrun';
+ok $runs->[0]{ended}, 'It should have an "ended" value';
+ok $runs->[0]{lastempty}, 'It should be marked "last empty"';
+like $runs->[0]{status}, qr/^No delta rows found/,
+    'Its status should be "No delta rows found"';
+
 # Let's add some data into A.bucardo_test1.
+$dbhX->commit;
 ok $dbhA->do(q{INSERT INTO bucardo_test1 (id, data1) VALUES (1, 'foo')}),
     'Insert a row into test1';
 $dbhA->commit;
@@ -87,7 +99,18 @@ is_deeply $dbhB->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test1'
 ), [[1, 'foo']], 'Should have the test1 row in B';
 
+# Should have two syncrun records now.
+ok $runs = $dbhX->selectall_arrayref(
+    'SELECT * FROM syncrun ORDER BY started',
+    { Slice => {} },
+), 'Get list of syncruns';
+is @{ $runs }, 2, 'Should have two syncruns';
+ok $runs->[1]{ended}, 'New run should have an "ended" value';
+ok $runs->[1]{lastgood}, 'It should be marked "last good"';
+like $runs->[1]{status}, qr/^Complete/, 'Its status should be "Complete"';
+
 # Excellent. Now let's insert into test2.
+$dbhX->commit;
 ok $dbhA->do(q{INSERT INTO bucardo_test2 (id, data1) VALUES (2, 'foo')}),
     'Insert a row into test2';
 $dbhA->commit;
@@ -101,3 +124,17 @@ ok $bct->wait_for_notice($dbhX, 'bucardo_syncdone_serialtest1'),
 is_deeply $dbhB->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test2'
 ), [[2, 'foo']], 'Should have the B test2 row despite serialization failure';
+
+# Should have four syncrun records now.
+ok $runs = $dbhX->selectall_arrayref(
+    'SELECT * FROM syncrun ORDER BY started',
+    { Slice => {} },
+), 'Get list of syncruns';
+is @{ $runs }, 4, 'Should have four syncruns';
+ok $runs->[2]{ended}, 'Third run should have an "ended" value';
+ok $runs->[2]{lastbad}, 'Third run should be marked "last bad"';
+like $runs->[2]{status}, qr/^Failed/, 'Third run status should be "Bad"';
+
+ok $runs->[3]{ended}, 'Fourth run should have an "ended" value';
+ok $runs->[3]{lastgood}, 'Fourth run should be marked "last good"';
+like $runs->[3]{status}, qr/^Complete/, 'Fourth run status should be "Complete"';

@@ -4765,7 +4765,7 @@ sub start_kid {
         $err_handler->($err) if $err !~ /DBD::Pg/;
 
         ## We only do special things for certain errors, so check for those.
-        my ($sleeptime,$payload_detail) = (0,'');
+        my ($sleeptime, $fail_msg) = (0,'');
         my @states = map { $sync->{db}{$_}{dbh}->state } @dbs_dbi;
         if (first { $_ eq '40001' } @states) {
             $sleeptime = $config{kid_serial_sleep};
@@ -4781,7 +4781,7 @@ sub start_kid {
             else {
                 $self->glog('Could not serialize, will try again', LOG_NORMAL);
             }
-            $payload_detail = "Serialization failure. Sleep=$sleeptime";
+            $fail_msg = "Serialization failure";
         }
         elsif (first { $_ eq '40P01' } @states) {
             $sleeptime = $config{kid_deadlock_sleep};
@@ -4797,7 +4797,7 @@ sub start_kid {
             else {
                 $self->glog('Encountered a deadlock, will try again', LOG_NORMAL);
             }
-            $payload_detail = "Deadlock detected. Sleep=$sleeptime";
+            $fail_msg = "Deadlock detected";
             ## TODO: Get more information via gett_deadlock_details()
         }
         else {
@@ -4810,12 +4810,14 @@ sub start_kid {
             $dbh->pg_cancel if $dbh->{pg_async_status} > 0;
             $dbh->rollback;
         }
-        $maindbh->rollback;
+
+        # End the syncrun.
+        $self->end_syncrun($maindbh, 'bad', $syncname, "Failed : $fail_msg (KID $$)" );
+        $maindbh->commit;
 
         ## Tell listeners we are about to sleep
         ## TODO: Add some sweet payload information: sleep time, which dbs/tables failed, etc.
-        $self->db_notify($maindbh, "syncsleep_${syncname}", 0, $payload_detail);
-        $maindbh->commit;
+        $self->db_notify($maindbh, "syncsleep_${syncname}", 0, "$fail_msg. Sleep=$sleeptime");
 
         ## Sleep and try again.
         sleep $sleeptime if $sleeptime;
