@@ -5178,6 +5178,11 @@ AND (   lastgood  IS TRUE
                 $max{state} = length($s->{state}) if length($s->{state}) > $max{state};
                 next;
             }
+            if ($wintype eq 'empty') {
+                # Empty is good, as far as status is concerned.
+                $s->{rowgood} = $s->{latestrow};
+                $wintype = 'good';
+            }
             $s->{state} = ucfirst $wintype;
         }
 
