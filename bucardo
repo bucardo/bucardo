@@ -10648,7 +10648,8 @@ The name of the sync
 
 =item 2. B<State>
 
-The state of the sync. Can be 'Good', 'Bad', 'Empty', or 'No records found'
+The state of the sync. Can be 'Good', 'Bad', 'Empty', 'No records found', or
+the run state for a currently-running sync.
 
 =item 3. B<Last good>
 
