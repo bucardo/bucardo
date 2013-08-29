@@ -2632,7 +2632,7 @@ sub start_kid {
                 $xdbh->do('SET statement_timeout = 0');
 
                 ## Using the same time zone everywhere keeps us sane
-                $xdbh->do(q{SET TIME ZONE 'UTC'});
+                $xdbh->do(q{SET TIME ZONE 'GMT'});
 
                 ## Rare, but allow for tcp fiddling
                 if ($config{tcp_keepalives_idle}) { ## e.g. not 0, should always exist
