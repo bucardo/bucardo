@@ -3953,7 +3953,8 @@ sub start_kid {
                         ## XXX no possible conflicting changes.
                         ## XXX Finally, we skip if the first run already had a canonical winner
                         if (!$g->{has_exception_code}) {
-                            $self->glog("Warning! Aborting due to exception for $S.$T:$pkval Error was $err", LOG_WARN);
+                            $self->glog("Warning! Aborting due to exception for $S.$T:$pkval Error was $err",
+                                        $err =~ /serialize|deadlock/ ? LOG_VERBOSE : LOG_WARN);
                             die "$err\n";
                         }
 
