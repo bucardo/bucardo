@@ -1727,6 +1727,7 @@ sub start_mcp {
             ## If swap, verify the standard_conflict
             if ($s->{synctype} eq 'swap' and $g->{standard_conflict}) {
                 my $sc = $g->{standard_conflict};
+				$sc =~ s/^bucardo_//;
                 if ($g->{reltype} eq 'table') {
                     die qq{Unknown standard_conflict for $syncname $g->{schemaname}.$g->{tablename}: $sc\n}
                         unless
@@ -5398,6 +5399,7 @@ sub start_kid {
                     ## Standard conflict handlers don't need info to make a decision
                     if (!exists $g->{code_conflict}) {
                         my $sc = $g->{standard_conflict};
+						$sc =~ s/^bucardo_//;
                         $self->glog(qq{Conflict detected for $S.$T:$pkval. Using standard conflict "$sc"});
                         if ('source' eq $sc) {
                             $info1->{$pkval}{BUCARDO_ACTION} = 1; ## copy source to target
