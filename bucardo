@@ -887,7 +887,7 @@ sub reload_config {
 
     ## Wait a little bit, then scan for the confirmation message
     sleep 0.1;
-    if (! wait_for_notice($dbh, $done, $adverb || 5) ) {
+    if (! wait_for_notice($dbh, $done, $adverb || 30) ) {
         die "Waited, but Bucardo never confirmed the configuration reload!\n";
     }
     print "DONE!\n";
