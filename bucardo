@@ -10136,7 +10136,10 @@ The name of a relation group to synchronize.
 =item C<status>
 
 Indicates whether or not the sync is active. Must be either "active" or
-"inactive".
+"inactive". Note that this will not change the current run status of the sync,
+just mark whether it should be active or inactive on the next reload. Use the
+C<activate sync> and <deactivate sync> commands to actually activate or
+deactivate a sync.
 
 =item C<rebuild_index>
 
