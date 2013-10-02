@@ -1537,6 +1537,11 @@ END;
             }
         }
 
+        ## Delete any tables that are no longer in the database.
+        $dbh->do(q{
+            DELETE FROM bucardo.bucardo_delta_targets
+             WHERE tablename NOT IN (select oid from pg_class)
+        });
 
         ## Create the bucardo_note_truncation function as needed
         $sth = $sth{hazfunc};
