@@ -3634,6 +3634,7 @@ sub add_sync {
         kidsalive                kidsalive            TF               null
         autokick|ping            autokick             TF               null
         checktime                checktime            interval         null
+        strict_checking          strict_checking      TF               1
         status                   status               =active|inactive null
         conflict_strategy|standard_conflict conflict_strategy  0       null
         priority                 priority             numeric          null
@@ -9617,6 +9618,14 @@ Boolean indicating whether or not to track synchronization rates.
 Boolean indicating whether or not to rebuild indexes after every sync. Off by
 default. Optional.
 
+=item C<strict_check>
+
+Boolean indicating whether or not to be strict when comparing tables in the
+sync. If the columns have different names or data types, the sync will fail.
+But perhaps the columns are allowed to have different names or data types. If
+so, disable C<strict_check> and column diffrences will result in warnings
+rather than failing the validation. Defaults to true.
+
 =back
 
 =head3 add customname
@@ -10237,6 +10246,14 @@ Boolean indicating whether or not to track synchronization rates.
 =item C<rebuild_index>
 
 Boolean indicating whether or not to rebuild indexes after every sync.
+
+=item C<strict_check>
+
+Boolean indicating whether or not to be strict when comparing tables in the
+sync. If the columns have different names or data types, the sync will fail.
+But perhaps the columns are allowed to have different names or data types. If
+so, disable C<strict_check> and column diffrences will result in warnings
+rather than failing the validation. Defaults to true.
 
 =back
 
