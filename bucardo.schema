@@ -124,6 +124,7 @@ ctl_createkid_time|0.5|How long do we sleep to allow kids-on-demand to get on th
 tcp_keepalives_idle|0|How long to wait between each keepalive probe.
 tcp_keepalives_interval|0|How long to wait for a response to a keepalive probe.
 tcp_keepalives_count|0|How many probes to send. 0 indicates sticking with system defaults.
+reload_config_timeout|30|How long to wait for reload_config to finish.
 \.
 
 

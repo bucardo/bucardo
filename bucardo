@@ -887,8 +887,11 @@ sub reload_config {
 
     ## Wait a little bit, then scan for the confirmation message
     sleep 0.1;
-    if (! wait_for_notice($dbh, $done, $adverb || 30) ) {
-        die "Waited, but Bucardo never confirmed the configuration reload!\n";
+    my $timeout = $adverb || get_config('reload_config_timeout') || 30;
+    if (! wait_for_notice($dbh, $done, $timeout) ) {
+        die "Waited ${timeout}s, but Bucardo never confirmed the configuration reload!\n"
+          . "HINT: Pass a longer timeout to the reload_config command or set the\n"
+          . "reload_config_timeout configuration setting to wait longer\n";
     }
     print "DONE!\n";
 
@@ -10561,6 +10564,11 @@ Directory holding Bucardo PID files. Default: C</var/run/bucardo>.
 =item C<reason_file>
 
 File to hold reasons for stopping and starting. Default: C<bucardo.restart.reason.txt>.
+
+=item C<reload_config_timeout>
+
+Number of seconds the C<reload_config> command should wait for the reload to complete.
+Default: C<30>.
 
 =item C<semaphore_table>
 
