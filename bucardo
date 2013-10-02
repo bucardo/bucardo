@@ -2973,6 +2973,7 @@ sub add_table {
         analyze_after_copy       analyze_after_copy   TF               null
         makedelta                makedelta            0                null
         herd|relgroup            herd                 0                skip
+        strict_checking          strict_checking      TF               1
     };
 
     my ( $dbcols, $cols, $phs, $vals, $extra ) = process_simple_args({
@@ -9336,6 +9337,14 @@ Turns makedelta magic on or off. Value is a list of databases which need makedel
 for this table. Value can also be "on" to enable makedelta for all databases. 
 Defaults to "off".
 
+=item C<strict_check>
+
+Boolean indicating whether or not to be strict when comparing the table
+between syncs. If the columns have different names or data types, the
+validation will fail. But perhaps the columns are allowed to have different
+names or data types. If so, disable C<strict_check> and column diffrences will
+result in warnings rather than failing the validation. Defaults to true.
+
 =back
 
 =head3 add sequence
@@ -9621,10 +9630,10 @@ default. Optional.
 =item C<strict_check>
 
 Boolean indicating whether or not to be strict when comparing tables in the
-sync. If the columns have different names or data types, the sync will fail.
-But perhaps the columns are allowed to have different names or data types. If
-so, disable C<strict_check> and column diffrences will result in warnings
-rather than failing the validation. Defaults to true.
+sync. If the columns have different names or data types, the validation will
+fail. But perhaps the columns are allowed to have different names or data
+types. If so, disable C<strict_check> and column diffrences will result in
+warnings rather than failing the validation. Defaults to true.
 
 =back
 
@@ -10250,10 +10259,10 @@ Boolean indicating whether or not to rebuild indexes after every sync.
 =item C<strict_check>
 
 Boolean indicating whether or not to be strict when comparing tables in the
-sync. If the columns have different names or data types, the sync will fail.
-But perhaps the columns are allowed to have different names or data types. If
-so, disable C<strict_check> and column diffrences will result in warnings
-rather than failing the validation. Defaults to true.
+sync. If the columns have different names or data types, the validation will
+fail. But perhaps the columns are allowed to have different names or data
+types. If so, disable C<strict_check> and column diffrences will result in
+warnings rather than failing the validation. Defaults to true.
 
 =back
 
@@ -10305,6 +10314,14 @@ The table will be removed from any other relation groups.
 =item C<makedelta>
 
 Specifies which databases need makedelta enabled for this table.
+
+=item C<strict_check>
+
+Boolean indicating whether or not to be strict when comparing the table
+between syncs. If the columns have different names or data types, the
+validation will fail. But perhaps the columns are allowed to have different
+names or data types. If so, disable C<strict_check> and column diffrences will
+result in warnings rather than failing the validation. Defaults to true.
 
 =back
 
