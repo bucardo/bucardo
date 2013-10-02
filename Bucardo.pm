@@ -1050,13 +1050,14 @@ sub mcp_main {
                     $self->glog(qq{Sync "$syncname" is already activated}, LOG_TERSE);
                     $self->db_notify($maindbh, "activated_sync_$syncname", 1);
                 }
-                else {
-                    if ($self->activate_sync($sync->{$syncname})) {
-                        $sync->{$syncname}{mcp_active} = 1;
-                    }
+                elsif ($self->activate_sync($sync->{$syncname})) {
+                    $sync->{$syncname}{mcp_active} = 1;
+                    $maindbh->do(
+                        'UPDATE sync SET status = ? WHERE name = ?',
+                        undef, 'active', $syncname
+                    );
                 }
             }
-
             ## Request that a named sync get deactivated
             elsif ($name =~ /^deactivate_sync_(.+)/o) {
                 my $syncname = $1;
@@ -1069,6 +1070,10 @@ sub mcp_main {
                 }
                 elsif ($self->deactivate_sync($sync->{$syncname})) {
                     $sync->{$syncname}{mcp_active} = 0;
+                    $maindbh->do(
+                        'UPDATE sync SET status = ? WHERE name = ?',
+                        undef, 'inactive', $syncname
+                    );
                 }
             }
 
