@@ -907,7 +907,7 @@ sub wait_for_notice {
     ## 1. Database handle
     ## 2. String to listen for
     ## 3. How long to wait (default is forever)
-    ## Returns: undef
+    ## Returns: 1
 
     my ($ldbh, $string, $howlong) = @_;
 
