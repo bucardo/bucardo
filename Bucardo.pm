@@ -6551,12 +6551,16 @@ sub fork_and_inactivate {
             delete $self->{dbhlist}{$iname};
         }
         ## Now go through common shared database handle locations, and delete them
+        $self->{masterdbh}->{InactiveDestroy} = 1
+            if $self->{masterdbh};
         delete $self->{masterdbh};
 
         ## Clear the 'sdb' structure of any existing database handles
         if (exists $self->{sdb}) {
             for my $dbname (keys %{ $self->{sdb} }) {
-                for my $item (qw/ dbh backend kicked /) {
+                for my $item (qw/ dbh /) {
+                    $self->{sdb}{$dbname}{$item}->{InactiveDestroy} = 1
+                        if exists $self->{sdb}{$dbname}{$item};
                     delete $self->{sdb}{$dbname}{$item};
                 }
             }
@@ -6567,7 +6571,9 @@ sub fork_and_inactivate {
             if (exists $self->{sync}{name}) { ## This is a controller/kid with a single sync
                 for my $dbname (sort keys %{ $self->{sync}{db} }) {
                     $self->glog("Removing reference to database $dbname", LOG_DEBUG);
-                        for my $item (qw/ dbh backend kicked /) {
+                        for my $item (qw/ dbh /) {
+                            $self->{sync}{db}{$dbname}{$item}->{InactiveDestroy} = 1
+                                if exists $self->{sync}{db}{$dbname}{$item};
                             delete $self->{sync}{db}{$dbname}{$item};
                         }
                     }
@@ -6576,7 +6582,9 @@ sub fork_and_inactivate {
                 for my $syncname (keys %{ $self->{sync} }) {
                     for my $dbname (sort keys %{ $self->{sync}{$syncname}{db} }) {
                         $self->glog("Removing reference to database $dbname in sync $syncname", LOG_DEBUG);
-                        for my $item (qw/ dbh backend kicked /) {
+                        for my $item (qw/ dbh /) {
+                            $self->{sync}{$syncname}{db}{$dbname}{$item}->{InactiveDestroy} = 1
+                                if exists $self->{sync}{$syncname}{db}{$dbname}{$item};
                             delete $self->{sync}{$syncname}{db}{$dbname}{$item};
                         }
                     }
