@@ -162,9 +162,14 @@ my $DEBUGDIR = ".";
 my $PIDDIR = "/tmp/bucardo_testing_$ENV{USER}";
 mkdir $PIDDIR if ! -e $PIDDIR;
 
+## Let pg_config guide us to a likely initdb/pg_ctl location
+my $output = qx{pg_config --bindir};
+chomp $output;
+my $bindir = $output =~ m{^/} ? $1 : '';
+
 ## Location of files
-my $initdb = $ENV{PGBINDIR} ? "$ENV{PGBINDIR}/initdb" : 'initdb';
-my $pg_ctl = $ENV{PGBINDIR} ? "$ENV{PGBINDIR}/pg_ctl" : 'pg_ctl';
+my $initdb = $ENV{PGBINDIR} ? "$ENV{PGBINDIR}/initdb" : $bindir ? "$bindir/initdb" : 'initdb';
+my $pg_ctl = $ENV{PGBINDIR} ? "$ENV{PGBINDIR}/pg_ctl" : $bindir ? "$bindir/pg_ctl" : 'pg_ctl';
 
 ## Get the default initdb location
 my $pgversion = qx{$initdb -V};
