@@ -208,6 +208,7 @@ ALTER TABLE bucardo.db ADD CONSTRAINT db_status CHECK (status IN ('active','inac
 CREATE TABLE bucardo.dbgroup (
   name      TEXT        NOT NULL,
               CONSTRAINT dbgroup_name_pk PRIMARY KEY (name),
+  about     TEXT            NULL,
   cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE bucardo.dbgroup IS $$Named groups of databases: used as 'targetgroup' for syncs$$;
@@ -311,6 +312,7 @@ CREATE UNIQUE INDEX bucardo_custom_trigger_goat_type_unique ON bucardo.bucardo_c
 CREATE TABLE bucardo.herd (
   name       TEXT        NOT NULL,
                CONSTRAINT herd_name_pk PRIMARY KEY (name),
+  about      TEXT            NULL,
   cdate      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE bucardo.herd IS $$Named group of tables or sequences from the goat table: used as the 'source' for syncs$$;
