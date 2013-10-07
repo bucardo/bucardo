@@ -4810,6 +4810,16 @@ sub start_kid {
             $err_handler->($err);
         }
 
+        if ($config{log_level_number} >= LOG_DEBUG) {
+            ## Show complete error information in debug mode.
+            for my $dbh (grep { $dbh->err } map { $sync->{db}{$_}{dbh} } @dbs_dbi) {
+                $self->glog(
+                    sprintf('*  %s: %s - %s', $dbh->{Name}, $dbh->state, $dbh->errstr),
+                    LOG_DEBUG
+                );
+            }
+        }
+
         ## Roll everyone back
         for my $dbname (@dbs_dbi) {
             my $dbh = $sync->{db}{$dbname}{dbh};
