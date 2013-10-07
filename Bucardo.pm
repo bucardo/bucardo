@@ -5188,7 +5188,7 @@ sub glog { ## no critic (RequireArgUnpacking)
 
     ## Prepend the loglevel to the message
     if ($config{log_showlevel}) {
-        $header = "$loglevel $header";
+        $header = sprintf "%s $header", qw(WARN TERSE NORMAL VERBOSE DEBUG)[$loglevel];
     }
 
     ## Warning messages may also get written to a separate file
