@@ -4810,12 +4810,12 @@ sub start_kid {
             $err_handler->($err);
         }
 
-        if ($config{log_level_number} >= LOG_DEBUG) {
+        if ($config{log_level_number} >= LOG_VERBOSE) {
             ## Show complete error information in debug mode.
             for my $dbh (map { $sync->{db}{$_}{dbh} } @dbs_dbi) {
                 $self->glog(
                     sprintf('*  %s: %s - %s', $dbh->{Name}, $dbh->state, $dbh->errstr),
-                    LOG_DEBUG
+                    LOG_VERBOSE
                 ) if $dbh->err;
             }
         }
