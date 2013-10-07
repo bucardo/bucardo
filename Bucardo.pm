@@ -4812,11 +4812,11 @@ sub start_kid {
 
         if ($config{log_level_number} >= LOG_DEBUG) {
             ## Show complete error information in debug mode.
-            for my $dbh (grep { $_->err } map { $sync->{db}{$_}{dbh} } @dbs_dbi) {
+            for my $dbh (map { $sync->{db}{$_}{dbh} } @dbs_dbi) {
                 $self->glog(
                     sprintf('*  %s: %s - %s', $dbh->{Name}, $dbh->state, $dbh->errstr),
                     LOG_DEBUG
-                );
+                ) if $dbh->err;
             }
         }
 
