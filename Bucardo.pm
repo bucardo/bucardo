@@ -4065,24 +4065,26 @@ sub start_kid {
 
                 ## Gather up our rate information - just store for now, we can write it after the commits
                 ## XX Redo with sourcename etc.
-                if ($deltacount{source}{$S}{$T} and $sync->{track_rates}) {
-                    $self->glog('Gathering source rate information', LOG_VERBOSE);
-                    my $sth = $sth{source}{$g}{deltarate};
-                    $count = $sth->execute();
-                    $g->{rateinfo}{source} = $sth->fetchall_arrayref();
-                }
-
-                for my $dbname (@dbs_source) {
-
-                    if ($deltacount{dbtable}{$dbname}{$S}{$T} and $sync->{track_rates}) {
-                        $self->glog('Gathering target rate information', LOG_VERBOSE);
-                        my $sth = $sth{target}{$g}{deltarate};
+                ## Skip as {deltarate} is not even defined!
+                if (0) {
+                    if ($deltacount{source}{$S}{$T} and $sync->{track_rates}) {
+                        $self->glog('Gathering source rate information', LOG_VERBOSE);
+                        my $sth = $sth{source}{$g}{deltarate};
                         $count = $sth->execute();
-                        $g->{rateinfo}{target} = $sth->fetchall_arrayref();
+                        $g->{rateinfo}{source} = $sth->fetchall_arrayref();
                     }
 
-                }
+                    for my $dbname (@dbs_source) {
 
+                        if ($deltacount{dbtable}{$dbname}{$S}{$T} and $sync->{track_rates}) {
+                            $self->glog('Gathering target rate information', LOG_VERBOSE);
+                            my $sth = $sth{target}{$g}{deltarate};
+                            $count = $sth->execute();
+                            $g->{rateinfo}{target} = $sth->fetchall_arrayref();
+                        }
+
+                    }
+	            }
                 ## For each database that had delta changes, insert rows to bucardo_track
                 ## We also need to consider makedelta:
                 ## For all tables that are marked as makedelta, we need to ensure
