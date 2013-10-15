@@ -4627,7 +4627,7 @@ sub start_kid {
                     $dmlcount{allinserts}{target} ? LOG_NORMAL : LOG_VERBOSE);
 
         ## Update our rate information as needed
-        if ($sync->{track_rates}) {
+        if (0 and $sync->{track_rates}) {
             $SQL = 'INSERT INTO bucardo_rate(sync,goat,target,mastercommit,slavecommit,total) VALUES (?,?,?,?,?,?)';
             $sth = $maindbh->prepare($SQL);
             for my $g (@$goatlist) {
