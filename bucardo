@@ -1026,26 +1026,38 @@ sub validate {
 
     ## Loop through and validate each in turn,
     ## waiting for a positive response from the MCP
+    my $exitval = 0;
     for my $name (@synclist) {
 
-        printf "Validating sync $name%s",
+        printf "Validating sync $name %s ",
             '.' x ($maxsize - length $name);
 
-        my $done = "bucardo_validated_sync_$name";
-        $dbh->do(qq{LISTEN "$done"});
+        my ($evalok, $success);
+        eval {
+            my ($msg) = $dbh->selectrow_array(
+                'SELECT validate_sync(?)',
+                undef, $name
+            );
+            $dbh->commit;
+            if ($msg eq 'MODIFY') {
+                $success = 1;
+            } else {
+                warn "$msg\n";
+                $exitval++;
+            }
+            $evalok = 1;
+        };
 
-        $SQL = 'SELECT validate_sync(?)';
-        $sth = $dbh->prepare($SQL);
-        $sth->execute($name);
-        $dbh->commit();
+        if ($evalok) {
+            print "OK\n" if $success;
+        } else {
+            warn $dbh->errstr || $@;
+            $exitval++;
+        }
 
-        ## Wait a bit, then hang out until the MCP confirms the validation
-        sleep 0.1;
-        wait_for_notice($dbh, $done);
-        print "DONE!\n";
     }
 
-    exit 0;
+    exit $exitval;
 
 } ## end of validate
 
@@ -10917,6 +10929,9 @@ C<STDOUT>. The supported types include:
 
 Validates one or more syncs. Use the keyword "all" to validate all syncs, or
 specify one or more syncs to validate.
+
+Note that this command executes a subset of all the validation done when a
+sync is started or activated.
 
 =head2 purge
 
