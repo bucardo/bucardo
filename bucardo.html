@@ -95,7 +95,7 @@
 </p>
 <hr />
 <h1><a name="version">VERSION</a></h1>
-<p>This document describes version 5.0.0 of bucardo</p>
+<p>This document describes version 4.99.8 of bucardo</p>
 <p>
 </p>
 <hr />
@@ -634,6 +634,12 @@ them. Defaults to 1.</p>
 <p>The service name to use for a Postgres database. Optional.</p>
 </dd>
 </dl>
+<p><strong>Note:</strong> As a convenience, if the <a href="#dbuser"><code>dbuser</code></a> value is its default value,
+&quot;bucardo&quot;, in the event that Bucardo cannot connect to the database, it will
+try connecting as &quot;postgres&quot; and create a superuser named &quot;bucardo&quot;. This is
+to make things easier for folks getting started with Bucardo, but will not
+work if it cannot connect as &quot;postgres&quot;, or if it the connection failed due to
+an authentication failure.</p>
 <p>
 </p>
 <h3><a name="add_dbgroup">add dbgroup</a></h3>
@@ -693,6 +699,15 @@ exist, it will be created. Optional.</p>
 <p>Turns makedelta magic on or off. Value is a list of databases which need makedelta 
 for this table. Value can also be &quot;on&quot; to enable makedelta for all databases. 
 Defaults to &quot;off&quot;.</p>
+</dd>
+<dt><strong><a name="strict_check" class="item"><code>strict_check</code></a></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not to be strict when comparing the table
+between syncs. If the columns have different names or data types, the
+validation will fail. But perhaps the columns are allowed to have different
+names or data types. If so, disable <a href="#strict_check"><code>strict_check</code></a> and column diffrences will
+result in warnings rather than failing the validation. Defaults to true.</p>
 </dd>
 </dl>
 <p>
@@ -1005,6 +1020,15 @@ message when a sync has not been run in this amount of time.</p>
 <dd>
 <p>Boolean indicating whether or not to rebuild indexes after every sync. Off by
 default. Optional.</p>
+</dd>
+<dt><strong><code>strict_check</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not to be strict when comparing tables in the
+sync. If the columns have different names or data types, the validation will
+fail. But perhaps the columns are allowed to have different names or data
+types. If so, disable <a href="#strict_check"><code>strict_check</code></a> and column diffrences will result in
+warnings rather than failing the validation. Defaults to true.</p>
 </dd>
 </dl>
 <p>
@@ -1348,8 +1372,6 @@ their respective handles.</p>
 are higher priority. Useful for subroutines that set <a href="#lastcode"><code>lastcode</code></a> in order to
 cancel the execution of subsequent custom codes for the same <a href="#when_run"><code>when_run</code></a>.</p>
 </dd>
-</dl>
-<dl>
 <dt><strong><code>status</code></strong></dt>
 
 <dd>
@@ -1540,7 +1562,10 @@ what to replicate from where to where. The supported parameters are:</p>
 
 <dd>
 <p>Indicates whether or not the sync is active. Must be either &quot;active&quot; or
-&quot;inactive&quot;.</p>
+&quot;inactive&quot;. Note that this will not change the current run status of the sync,
+just mark whether it should be active or inactive on the next reload. Use the
+<code>activate sync</code> and &lt;deactivate sync&gt; commands to actually activate or
+deactivate a sync.</p>
 </dd>
 <dt><strong><code>rebuild_index</code></strong></dt>
 
@@ -1681,6 +1706,15 @@ message when a sync has not been run in this amount of time.</p>
 <dd>
 <p>Boolean indicating whether or not to rebuild indexes after every sync.</p>
 </dd>
+<dt><strong><code>strict_check</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not to be strict when comparing tables in the
+sync. If the columns have different names or data types, the validation will
+fail. But perhaps the columns are allowed to have different names or data
+types. If so, disable <a href="#strict_check"><code>strict_check</code></a> and column diffrences will result in
+warnings rather than failing the validation. Defaults to true.</p>
+</dd>
 </dl>
 <p>
 </p>
@@ -1738,6 +1772,15 @@ The table will be removed from any other relation groups.</p>
 
 <dd>
 <p>Specifies which databases need makedelta enabled for this table.</p>
+</dd>
+<dt><strong><code>strict_check</code></strong></dt>
+
+<dd>
+<p>Boolean indicating whether or not to be strict when comparing the table
+between syncs. If the columns have different names or data types, the
+validation will fail. But perhaps the columns are allowed to have different
+names or data types. If so, disable <a href="#strict_check"><code>strict_check</code></a> and column diffrences will
+result in warnings rather than failing the validation. Defaults to true.</p>
 </dd>
 </dl>
 <p>
@@ -1871,7 +1914,7 @@ case-insensitive. The available settings are:</p>
 <dt><strong><a name="bucardo_current_version" class="item"><code>bucardo_current_version</code></a></strong></dt>
 
 <dd>
-<p>Current version of Bucardo. Default: <code>5.0.0</code>.</p>
+<p>Current version of Bucardo. Default: <code>4.99.8</code>.</p>
 </dd>
 <dt><strong><a name="bucardo_vac" class="item"><code>bucardo_vac</code></a></strong></dt>
 
@@ -1881,7 +1924,7 @@ case-insensitive. The available settings are:</p>
 <dt><strong><a name="bucardo_version" class="item"><code>bucardo_version</code></a></strong></dt>
 
 <dd>
-<p>Bucardo version this schema was created with. Default: <code>5.0.0</code>.</p>
+<p>Bucardo version this schema was created with. Default: <code>4.99.8</code>.</p>
 </dd>
 <dt><strong><a name="ctl_checkonkids_time" class="item"><code>ctl_checkonkids_time</code></a></strong></dt>
 
@@ -2041,6 +2084,12 @@ Set to -1 to prevent the kid from retrying.</p>
 <dd>
 <p>File to hold reasons for stopping and starting. Default: <code>bucardo.restart.reason.txt</code>.</p>
 </dd>
+<dt><strong><a name="reload_config_timeout" class="item"><code>reload_config_timeout</code></a></strong></dt>
+
+<dd>
+<p>Number of seconds the <a href="#reload_config"><code>reload_config</code></a> command should wait for the reload to complete.
+Default: <code>30</code>.</p>
+</dd>
 <dt><strong><a name="semaphore_table" class="item"><code>semaphore_table</code></a></strong></dt>
 
 <dd>
@@ -2140,7 +2189,8 @@ use &quot;status all&quot;</p>
 </li>
 <li><strong><a name="state" class="item"><strong>State</strong></a></strong>
 
-<p>The state of the sync. Can be 'Good', 'Bad', 'Empty', or 'No records found'</p>
+<p>The state of the sync. Can be 'Good', 'Bad', 'Empty', 'No records found',
+'Unknown', or the run state for a currently-running sync.</p>
 </li>
 <li><strong><a name="last_good" class="item"><strong>Last good</strong></a></strong>
 
@@ -2238,6 +2288,8 @@ activating it again.</p>
   bucardo validate all|&lt;sync&gt; [&lt;sync&gt;...]</pre>
 <p>Validates one or more syncs. Use the keyword &quot;all&quot; to validate all syncs, or
 specify one or more syncs to validate.</p>
+<p>Note that this command executes a subset of all the validation done when a
+sync is started or activated.</p>
 <p>
 </p>
 <h2><a name="purge">purge</a></h2>
