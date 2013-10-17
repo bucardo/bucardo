@@ -10092,8 +10092,6 @@ Number indicating the priority in which order to execute custom codes. Lower num
 are higher priority. Useful for subroutines that set C<lastcode> in order to
 cancel the execution of subsequent custom codes for the same C<when_run>.
 
-=back
-
 =item C<status>
 
 The current status of this customcode. Anything other than "active" means the
@@ -10128,6 +10126,8 @@ A string indicating when the custom code should be run. Supported values include
 =item C<before_sync>
 
 =item C<after_sync>
+
+=back
 
 =back
 
