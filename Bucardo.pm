@@ -4084,7 +4084,7 @@ sub start_kid {
                         }
 
                     }
-	            }
+                }
                 ## For each database that had delta changes, insert rows to bucardo_track
                 ## We also need to consider makedelta:
                 ## For all tables that are marked as makedelta, we need to ensure
