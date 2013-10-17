@@ -6362,7 +6362,7 @@ sub validate_sync {
         my $l = "kick_sync_$syncname";
         for my $dbname (sort keys %{ $s->{db} }) {
             $x = $s->{db}{$dbname};
-            $self->glog("Listen for $l on $dbname ($x->{role})");
+            $self->glog("Listen for $l on $dbname ($x->{role})", LOG_DEBUG);
             next if $x->{role} ne 'source';
             my $dbh = $self->{sdb}{$dbname}{dbh};
             $self->db_listen($dbh, $l, $dbname, 0);
