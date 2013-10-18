@@ -63,6 +63,9 @@ CREATE UNIQUE INDEX bucardo_config_unique_name ON bucardo.bucardo_config(name,it
 
 ALTER TABLE bucardo.bucardo_config ADD CONSTRAINT valid_config_type CHECK (type IN ('sync','goat'));
 
+ALTER TABLE bucardo.bucardo_config ADD CONSTRAINT valid_config_isolation_level
+  CHECK (name <> 'isolation_level' OR setting IN ('serializable','repeatable read'));
+
 CREATE FUNCTION bucardo.check_bucardo_config()
 RETURNS TRIGGER
 LANGUAGE plpgsql
