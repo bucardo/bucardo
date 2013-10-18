@@ -1982,6 +1982,10 @@ sub start_kid {
     ## Adjust the process name, start logging
     $0 = qq{Bucardo Kid.$self->{extraname} Sync "$syncname"};
     my $extra = $sync->{onetimecopy} ? "OTC: $sync->{onetimecopy}" : '';
+    if ($config{log_showsyncname}) {
+        $self->{logprefix} .= " ($syncname)";
+    }
+
     $self->glog(qq{New kid, sync "$syncname" alive=$kidsalive Parent=$self->{ctlpid} PID=$$ kicked=$kicked $extra}, LOG_TERSE);
 
     ## Store our PID into a file
@@ -5119,8 +5123,9 @@ sub _logto {
             $fn .= ".$self->{logextension}" if length $self->{logextension};
 
             ## If we are writing each process to a separate file,
-            ## append the prefix and the PID to the file name
-            $fn .= "$self->{logprefix}.$$"  if $self->{logseparate};
+            ## append the prefix (first three letters) and the PID to the file name
+            my $tla = substr($self->{logprefix},0,3);
+            $fn .= "$tla.$$"  if $self->{logseparate};
 
             open my $fh, '>>', $fn or die qq{Could not append to "$fn": $!\n};
             ## Turn off buffering on this handle
