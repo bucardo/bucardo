@@ -533,9 +533,16 @@ sub start_mcp {
 
     ## Print each object, aligned, and show 'undef' for undefined values
     ## Yes, this prints things like HASH(0x8fbfc84), but we're okay with that
+    $Data::Dumper::Indent = 0;
+    $Data::Dumper::Terse = 1;
     for (sort keys %$self) {
-        $objdump .= sprintf " %-*s => %s\n", $maxlen, $_, (defined $self->{$_}) ? qq{'$self->{$_}'} : 'undef';
+        $objdump .= sprintf " %-*s => %s\n", $maxlen, $_,
+            (defined $self->{$_}) ?
+                (ref $self->{$_} eq 'ARRAY') ? Dumper($self->{$_})
+                    : qq{'$self->{$_}'} : 'undef';
     }
+    $Data::Dumper::Indent = 1;
+    $Data::Dumper::Terse = 0;
     $self->glog($objdump, LOG_TERSE);
 
     ## Restore the password
