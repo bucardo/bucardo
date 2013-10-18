@@ -5726,7 +5726,7 @@ sub list_sequences {
     $count = $sth->execute();
     if ($count < 1) {
         $sth->finish();
-        printf "There are no%s squences.\n",
+        printf "There are no%s sequences.\n",
             $WHERE ? ' matching' : '';
         return -1;
     }
