@@ -1535,9 +1535,9 @@ END;
                 my ($relkind,$oid) = @{$sth->fetchall_arrayref()->[0]};
                 next if $relkind ne 'r';
 
-                my $count = $sthc->execute($oid,$syncname);
+                my $count = $sthc->execute($oid,"dbgroup $info->{dbs}");
                 $sthc->finish();
-                if ($count != 1) {
+                if ($count < 1) {
                     $stha->execute($oid,"dbgroup $info->{dbs}");
                     $dbh->commit();
                 }
