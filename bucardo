@@ -1942,9 +1942,10 @@ sub list_databases {
             $showtypes ? $type : '',
             $maxstat, $info->{status};
         my $showhost = length $info->{dbhost} ? " -h $info->{dbhost}" : '';
+        my $showport = $info->{dbport} =~ /\d/ ? " -p $info->{dbport}" : '';
         my $dbtype = $info->{dbtype};
         if ($dbtype eq 'postgres') {
-            print "Conn: psql -p $info->{dbport} -U $info->{dbuser} -d $info->{dbname}$showhost";
+            print "Conn: psql$showport -U $info->{dbuser} -d $info->{dbname}$showhost";
             if (! $info->{server_side_prepares}) {
                 print ' (SSP is off)';
             }
