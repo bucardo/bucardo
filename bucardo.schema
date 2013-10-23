@@ -1317,24 +1317,9 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
     $SQL = q{SELECT 1 FROM pg_namespace WHERE nspname = ?};
     $sth{hazschema} = $dbh->prepare($SQL);
 
-    ## Does a named schema/relation exist? Return its OID and kind if so
-    $SQL = q{SELECT relkind,c.oid FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace) }
-        .q{WHERE nspname = ? AND relname = ?};
-    $sth{haztable} = $dbh->prepare($SQL);
-
-    ## Does a named function exist? Don't care about the args
-    $SQL = q{SELECT 1 FROM pg_proc p JOIN pg_namespace n ON (n.oid = p.pronamespace) }
-        .q{WHERE nspname = ? AND proname = ?};
-    $sth{hazfunc} = $dbh->prepare($SQL);
-
     ## Does a named trigger on a certain table exist?
     $SQL = q{SELECT 1 FROM pg_trigger WHERE tgrelid = ?::regclass AND tgname = ?};
     $sth{haztrig} = $dbh->prepare($SQL);
-
-    ## Does a named index exist?
-    $SQL = q{SELECT 1 FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace) }
-        .q{WHERE nspname = ? AND relname = ? AND relkind = 'i'};
-    $sth{hazindex} = $dbh->prepare($SQL);
 
     ## Does a named column exist on a specific table?
     $SQL = q{SELECT 1 FROM pg_attribute WHERE attrelid = }
@@ -1353,6 +1338,29 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
             ORDER BY attnum
         };
     $sth{hazcols} = $dbh->prepare($SQL);
+
+    ## Get a list of all tables and indexes in the bucardo schema for ease below
+    $SQL = q{SELECT c.oid,relkind,relname FROM pg_class c JOIN pg_namespace n ON (n.oid=c.relnamespace) WHERE nspname='bucardo'};
+    $sth = $dbh->prepare($SQL);
+    $sth->execute();
+    my (%btableoid, %bindexoid);
+    for my $row (@{$sth->fetchall_arrayref()}) {
+		if ($row->[1] eq 'r') {
+			$btableoid{$row->[2]} = $row->[0];
+		}
+		if ($row->[1] eq 'i') {
+			$bindexoid{$row->[2]} = $row->[0];
+		}
+    }
+
+    ## Get a list of all functions in the bucardo schema
+    $SQL = q{SELECT p.oid,proname FROM pg_proc p JOIN pg_namespace n ON (n.oid=p.pronamespace) WHERE nspname='bucardo'};
+    $sth = $dbh->prepare($SQL);
+    $sth->execute();
+    my (%bfunctionoid);
+    for my $row (@{$sth->fetchall_arrayref()}) {
+		$bfunctionoid{$row->[1]} = $row->[0];
+    }
 
     ## Unless we are strictly fullcopy, put plpgsql in place on all source dbs
     ## We also will need a bucardo schema
@@ -1377,21 +1385,15 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
         my $newschema = $count < 1 ? 1 : 0;
 
         ## Create the 'kickfunc' function as needed
-        unless ($newschema) {
-            ## We need a function for the kick notification
-            $sth = $sth{hazfunc};
-            $count = $sth->execute('bucardo',$kickfunc);
-            $sth->finish();
-            if ($count >= 1) {
-                ## We may want to recreate this function
-                if ($force{all} or $force{funcs} or $force{kickfunc}) {
-                    $dbh->do(qq{DROP FUNCTION bucardo."$kickfunc"()});
-                    $count = 0;
-                }
-            }
+		if (exists $bfunctionoid{$kickfunc}) {
+			## We may want to recreate this function
+			if ($force{all} or $force{funcs} or $force{kickfunc}) {
+				$dbh->do(qq{DROP FUNCTION bucardo."$kickfunc"()});
+				delete $bfunctionoid{$kickfunc};
+			}
         }
 
-        if ($newschema || $count < 1) {
+        if (! exists $bfunctionoid{$kickfunc}) {
             ## We may override this later on with a custom function from bucardo_custom_trigger
             ## and we may not even use it all, but no harm in creating the stock one here
             my $notice = $dbh->{pg_server_version} >= 90000
@@ -1413,12 +1415,7 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
         }
 
         ## Create the bucardo_tablename_maker function as needed
-        unless ($newschema) {
-            $sth = $sth{hazfunc};
-            $count = $sth->execute('bucardo', 'bucardo_tablename_maker');
-            $sth->finish();
-        }
-        if ($newschema || $count < 1) {
+        if (! exists $bfunctionoid{'bucardo_tablename_maker'}) {
               $SQL = qq{
                         CREATE OR REPLACE FUNCTION bucardo.bucardo_tablename_maker(TEXT)
 RETURNS TEXT
@@ -1475,14 +1472,9 @@ END;
           };
           $run_sql->($SQL,$dbh);
         }
-              
+
         ## Create the bucardo_delta_targets table as needed
-        unless ($newschema) {
-            $sth = $sth{haztable};
-            $count = $sth->execute('bucardo', 'bucardo_delta_targets');
-            $sth->finish();
-        }
-        if ($newschema || $count < 1) {
+        if (! exists $btableoid{'bucardo_delta_targets'}) {
             $SQL = qq{
                     CREATE TABLE bucardo.bucardo_delta_targets (
                         tablename  OID         NOT NULL,
@@ -1519,29 +1511,49 @@ END;
             $run_sql->($SQL,$dbh);
         }
 
+		## Get a list of oids and relkinds for all of our goats
+		## This is much faster than doing individually
+		$SQL = q{SELECT n.nspname,c.relname,relkind,c.oid FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace) WHERE };
+		my @args;
+
+        for my $schema (sort keys %goat) {
+			for my $table (sort keys %{$goat{$schema}}) {
+				$SQL .= '(nspname = ? AND relname = ?) OR ';
+				push @args => $schema, $table;
+			}
+		}
+        $SQL =~ s/OR $//;
+        $sth = $dbh->prepare($SQL);
+        $sth->execute(@args);
+
+		my %tableoid;
+		my %sequenceoid;
+		for my $row (@{$sth->fetchall_arrayref()}) {
+			if ($row->[2] eq 'r') {
+				$tableoid{"$row->[0].$row->[1]"} = $row->[3];
+			}
+			if ($row->[2] eq 'S') {
+				$sequenceoid{"$row->[0].$row->[1]"} = $row->[3];
+			}
+		}
+
+		## Grab all the information inside of bucardo_delta_targets
+		my $targetname = "dbgroup $info->{dbs}";
+		$SQL = 'SELECT DISTINCT tablename FROM bucardo.bucardo_delta_targets WHERE target = ?';
+		$sth = $dbh->prepare($SQL);
+		$sth->execute($targetname);
+		my $targetoid = $sth->fetchall_hashref('tablename');
+
         ## Populate bucardo_delta_targets with this dbgroup name
-        $SQL = 'SELECT 1 FROM bucardo.bucardo_delta_targets WHERE tablename=? AND target=?';
-        my $sthc = $dbh->prepare($SQL);
         $SQL = 'INSERT INTO bucardo.bucardo_delta_targets(tablename,target) VALUES (?,?)';
         my $stha = $dbh->prepare($SQL);
         for my $schema (sort keys %goat) {
             for my $table (sort keys %{$goat{$schema}}) {
-                $sth = $sth{haztable};
-                $count = $sth->execute($schema,$table);
-                if ($count < 1) {
-                    $sth->finish();
-                    next;
-                }
-                my ($relkind,$oid) = @{$sth->fetchall_arrayref()->[0]};
-                next if $relkind ne 'r';
-
-                my $count = $sthc->execute($oid,"dbgroup $info->{dbs}");
-                $sthc->finish();
-                if ($count < 1) {
-                    $stha->execute($oid,"dbgroup $info->{dbs}");
-                    $dbh->commit();
-                }
-            }
+				next if ! exists $tableoid{"$schema.$table"};
+				my $oid = $tableoid{"$schema.$table"};
+				next if exists $targetoid->{$oid};
+				$stha->execute($oid, $targetname);
+			}
         }
 
         ## Delete any tables that are no longer in the database.
@@ -1551,10 +1563,7 @@ END;
         });
 
         ## Create the bucardo_note_truncation function as needed
-        $sth = $sth{hazfunc};
-        $count = $sth->execute('bucardo', 'bucardo_note_truncation');
-        $sth->finish();
-        if ($count < 1) {
+        if (! exists $bfunctionoid{'bucardo_note_truncation'}) {
             $SQL = qq{
                   CREATE OR REPLACE FUNCTION bucardo.bucardo_note_truncation()
                   RETURNS TRIGGER
@@ -1592,12 +1601,7 @@ END;
         }
 
         ## Create the bucardo_truncate_trigger table as needed
-        unless ($newschema) {
-            $sth = $sth{haztable};
-            $count = $sth->execute('bucardo', 'bucardo_truncate_trigger');
-            $sth->finish();
-        }
-        if ($newschema || $count < 1) {
+        if (! exists $btableoid{'bucardo_truncate_trigger'}) {
             $SQL = qq{
                     CREATE TABLE bucardo.bucardo_truncate_trigger (
                         tablename   OID         NOT NULL,
@@ -1616,12 +1620,7 @@ END;
         }
 
         ## Create the bucardo_truncate_trigger_log table as needed
-        unless ($newschema) {
-            $sth = $sth{haztable};
-            $count = $sth->execute('bucardo', 'bucardo_truncate_trigger_log');
-            $sth->finish();
-        }
-        if ($newschema || $count < 1) {
+        if (! exists $btableoid{'bucardo_truncate_trigger_log'}) {
             $SQL = qq{
                     CREATE TABLE bucardo.bucardo_truncate_trigger_log (
                         tablename   OID         NOT NULL,
@@ -1637,12 +1636,7 @@ END;
         }
 
         ## Create the bucardo_compress_delta function as needed
-        unless ($newschema) {
-            $sth = $sth{hazfunc};
-            $count = $sth->execute('bucardo', 'bucardo_compress_delta');
-            $sth->finish();
-        }
-        if ($newschema || $count < 1) {
+        if (! exists $btableoid{'bucardo_compress_delta'}) {
             $SQL = qq{
                   CREATE OR REPLACE FUNCTION bucardo.bucardo_compress_delta(text, text)
                   RETURNS TEXT
@@ -1781,12 +1775,7 @@ SELECT 'Fixme'::TEXT;
         } ## end of bucardo_compress_delta creations
 
         ## Create the bucardo_purge_delta functions as needed
-        unless ($newschema) {
-            $sth = $sth{hazfunc};
-            $count = $sth->execute('bucardo', 'bucardo_purge_delta');
-            $sth->finish();
-        }
-        if ($newschema || $count < 1) {
+        if (! exists $bfunctionoid{'bucardo_purge_delta'}) {
             $SQL = qq{
                     CREATE OR REPLACE FUNCTION bucardo.bucardo_purge_delta(text,text)
                     RETURNS TEXT
@@ -1898,7 +1887,7 @@ SELECT 'Fixme'::TEXT;
                         total = total + 1;
                       END LOOP;
 
-                    RESET search_path;                    
+                    RESET search_path;
 
                     RETURN 'Tables processed: ' || total;
                     END;
@@ -1907,24 +1896,19 @@ SELECT 'Fixme'::TEXT;
             $run_sql->($SQL,$dbh);
         }
 
-        unless ($newschema) {
-            $sth = $sth{haztable};
-            $count = $sth->execute('bucardo', 'bucardo_sequences');
-            $sth->finish();
-            if ($count > 1) {
-                ## Check for older version of bucardo_sequences table
-                $SQL = q{SELECT count(*) FROM pg_attribute WHERE attname = 'targetname' }
-                      .q{ AND attrelid = (SELECT c.oid FROM pg_class c, pg_namespace n }
-                      .q{ WHERE n.oid = c.relnamespace AND n.nspname = 'bucardo' }
-                      .q{ AND c.relname = 'bucardo_sequences')};
-                if ($dbh->selectall_arrayref($SQL)->[0][0] < 1) {
-                    warn "Dropping older version of bucardo_sequences, then recreating empty\n";
-                    $dbh->do('DROP TABLE bucardo.bucardo_sequences');
-                    $count = 0;
-                }
-            }
-        }
-        if ($newschema || $count < 1) {
+        if (exists $btableoid{'bucardo_sequences'}) {
+			## Check for older version of bucardo_sequences table
+			$SQL = q{SELECT count(*) FROM pg_attribute WHERE attname = 'targetname' }
+				  .q{ AND attrelid = (SELECT c.oid FROM pg_class c, pg_namespace n }
+                  .q{ WHERE n.oid = c.relnamespace AND n.nspname = 'bucardo' }
+                  .q{ AND c.relname = 'bucardo_sequences')};
+			if ($dbh->selectall_arrayref($SQL)->[0][0] < 1) {
+				warn "Dropping older version of bucardo_sequences, then recreating empty\n";
+				$dbh->do('DROP TABLE bucardo.bucardo_sequences');
+				delete $btableoid{'bucardo_sequences'};
+			}
+		}
+        if (! exists $btableoid{'bucardo_sequences'}) {
             $SQL = qq{
                     CREATE TABLE bucardo.bucardo_sequences (
                         schemaname   TEXT        NOT NULL,
@@ -1948,16 +1932,56 @@ SELECT 'Fixme'::TEXT;
         }
 
         ## Create the bucardo_audit function as needed
-        unless ($newschema) {
-            $sth = $sth{hazfunc};
-            $count = $sth->execute('bucardo', 'bucardo_audit');
-            $sth->finish();
-        }
-        if ($newschema || $count < 1) {
+        if (! exists $bfunctionoid{'bucardo_audit'}) {
             $SQL = q{fillin later fixme};
-        }                        ## end of adding bucardo_audit()
+        }
 
-    }                            ## end not fullcopy / all global items
+    } ## end not fullcopy / all global items
+
+    ## Build another list of information for each table
+    ## This saves us multiple lookups
+    $SQL = q{SELECT n.nspname,c.relname,relkind,c.oid FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace) WHERE };
+    my @args;
+
+    for my $schema (sort keys %goat) {
+		for my $table (sort keys %{$goat{$schema}}) {
+			## Map to the actual table name used, via the customname table
+			my ($remoteschema,$remotetable) = ($schema,$table);
+
+			## The internal ID for this table
+			my $id = $goat{$schema}{$table}{id};
+
+			## Is this a source or target database?
+			## Only pure targets can have a customname
+			my $is_target = $role eq 'target';
+
+			if ($is_target and exists $customname{$id}) {
+				## If there is an entry for this particular database, use that
+				## Otherwise, if there is a database-wide one, use that
+				if (exists $customname{$id}{$dbname} or exists $customname{$id}{''}) {
+					$remotetable = $customname{$id}{$dbname} || $customname{$id}{''};
+
+					## If this has a dot, change the schema as well
+					## Otherwise, we simply use the existing schema
+					if ($remotetable =~ s/(.+)\.//) {
+						$remoteschema = $1;
+					}
+				}
+			}
+
+			$SQL .= '(nspname = ? AND relname = ?) OR ';
+			push @args => $remoteschema, $remotetable;
+		} ## end each table
+
+    } ## end each schema
+
+    $SQL =~ s/OR $//;
+    $sth = $dbh->prepare($SQL);
+    $sth->execute(@args);
+    my %goatoid;
+    for my $row (@{$sth->fetchall_arrayref()}) {
+		$goatoid{"$row->[0].$row->[1]"} = [$row->[2],$row->[3]];
+    }
 
     ## Check out each table in turn
 
@@ -1997,46 +2021,44 @@ SELECT 'Fixme'::TEXT;
            }
          }
 
-            $sth = $sth{haztable};
-            $count = $sth->execute($remoteschema,$remotetable);
-            if ($count < 1) {
-                die qq{Could not find "$remotetable" inside the "$remoteschema" schema on database "$dbname"!\n};
-            }
-            my ($relkind,$oid) = @{$sth->fetchall_arrayref()->[0]};
+		 if (! exists $goatoid{"$remoteschema.$remotetable"}) {
+			 die qq{Could not find "$remotetable" inside the "$remoteschema" schema on database "$dbname"!\n};
+		 }
+		 my ($relkind,$oid) = @{ $goatoid{"$remoteschema.$remotetable"} };
 
-            ## Verify that this is the kind of relation we expect it to be
-            my $tinfo = $goat{$schema}{$table};
-            if ('r' eq $relkind) {
-                if ('table' ne $tinfo->{reltype}) {
-                    die qq{Found "$remoteschema.$remotetable" on database "$dbname", but it's a table, not a $tinfo->{reltype}!};
-                }
-            }
-            elsif ('S' eq $relkind) {
-                if ('sequence' ne $tinfo->{reltype}) {
-                    die qq{Found "$remoteschema.$remotetable" on database "$dbname", but it's a sequence, not a $tinfo->{reltype}!};
-                }
-            }
-            else {
-                die qq{Found "$remoteschema.$remotetable" on database "$dbname", but it's neither a table nor a sequence!};
-            }
+		 ## Verify that this is the kind of relation we expect it to be
+		 my $tinfo = $goat{$schema}{$table};
+		 if ('r' eq $relkind) {
+			 if ('table' ne $tinfo->{reltype}) {
+				 die qq{Found "$remoteschema.$remotetable" on database "$dbname", but it's a table, not a $tinfo->{reltype}!};
+             }
+         }
+         elsif ('S' eq $relkind) {
+             if ('sequence' ne $tinfo->{reltype}) {
+                 die qq{Found "$remoteschema.$remotetable" on database "$dbname", but it's a sequence, not a $tinfo->{reltype}!};
+             }
+         }
+		 else {
+             die qq{Found "$remoteschema.$remotetable" on database "$dbname", but it's neither a table nor a sequence!};
+         }
 
-            ## Nothing further needed if it's a sequence
-            next TABLE if $tinfo->{reltype} eq 'sequence';
+		 ## Nothing further needed if it's a sequence
+		 next TABLE if $tinfo->{reltype} eq 'sequence';
 
-            ## Get the escaped version of things
-            my $safeschema = $tinfo->{safeschema};
-            my $safetable = $tinfo->{safetable};
+		 ## Get the escaped version of things
+		 my $safeschema = $tinfo->{safeschema};
+		 my $safetable = $tinfo->{safetable};
 
-            ## Go through each column in the tables to check against the other databases
+		 ## Go through each column in the tables to check against the other databases
 
-            $sth = $sth{hazcols};
-            $count = $sth->execute($oid);
-            if ($count < 1) {
-                $sth->finish();
-                die qq{Could not determine column information for table "$remoteschema.$remotetable"!\n};
-            }
+		 $sth = $sth{hazcols};
+		 $count = $sth->execute($oid);
+		 if ($count < 1) {
+			 $sth->finish();
+			 die qq{Could not determine column information for table "$remoteschema.$remotetable"!\n};
+		 }
 
-            $dbh->do('RESET search_path');
+		 $dbh->do('RESET search_path');
 
             my $colinfo = $sth->fetchall_hashref('attname');
             ## Allow for 'dead' columns in the attnum ordering
@@ -2166,7 +2188,6 @@ SELECT 'Fixme'::TEXT;
             $SQL = "SELECT bucardo.bucardo_tablename_maker(?)";
             my $makername = $fetch1_sql->($SQL,$dbh,$schema.'_'.$table);
             ## Create this table if needed, with one column per PK columns
-            $sth = $sth{haztable};
             my $delta_table = "delta_$makername";
             my $index1_name = "dex1_$makername";
             my $index2_name = "dex2_$makername";
@@ -2193,8 +2214,7 @@ SELECT 'Fixme'::TEXT;
             (my $noquote_index3_name = $index3_name) =~ s/^"(.+)"$/$1/;
             (my $noquote_stage_table = $stage_table) =~ s/^"(.+)"$/$1/;
 
-            $count = $sth->execute('bucardo',$noquote_delta_table);
-            if ($count < 1) {
+            if (! exists $btableoid{$noquote_delta_table}) {
                ## Create that table!
                my $pkcols = join ',' => map { qq{"$_"} } split (/\|/ => $tinfo->{pkey});
                $SQL = qq{
@@ -2212,19 +2232,13 @@ SELECT 'Fixme'::TEXT;
             }
 
             ## Need an index on the txntime column
-            $sth = $sth{hazindex};
-            $count = $sth->execute('bucardo',$noquote_index1_name);
-            $sth->finish();
-            if ($count < 1) {
+            if (! exists $bindexoid{$noquote_index1_name}) {
                 $SQL = qq{CREATE INDEX $index1_name ON bucardo.$delta_table(txntime)};
                 $run_sql->($SQL, $dbh);
             }
 
             ## Need an index on all other columns
-            $sth = $sth{hazindex};
-            $count = $sth->execute('bucardo',$noquote_index2_name);
-            $sth->finish();
-            if ($count < 1) {
+            if (! exists $bindexoid{$noquote_index2_name}) {
                 my $pkcols = join ',' => map { qq{"$_"} } split (/\|/ => $tinfo->{pkey});
                 $SQL = qq{CREATE INDEX $index2_name ON bucardo.$delta_table($pkcols)};
                 $run_sql->($SQL, $dbh);
@@ -2238,10 +2252,7 @@ SELECT 'Fixme'::TEXT;
 
             my @pkeys = split (/\|/ => $tinfo->{pkey});
 
-            $sth = $sth{hazfunc};
-            $count = $sth->execute('bucardo', $noquote_deltafunc);
-            $sth->finish();
-            if ($count < 1) {
+		 if (! exists $bfunctionoid{$noquote_deltafunc}) {
                  my $new = join ',' => map { qq{NEW."$_"} } @pkeys;
                  my $old = join ',' => map { qq{OLD."$_"} } @pkeys;
                  my $clause = join ' OR ' => map { qq{OLD."$_" <> NEW."$_"} } @pkeys;
@@ -2282,10 +2293,8 @@ SELECT 'Fixme'::TEXT;
             my $customdeltafunc = '';
             if ($rv->{processed}) {
                 my $customdeltafunc = "bucardo_delta_$tinfo->{id}";
-                $sth = $sth{hazfunc};
-                $count = $sth->execute('bucardo', $customdeltafunc);
-                $sth->finish();
-                if ($count < 1) {
+
+				if (! exists $bfunctionoid{$customdeltafunc}) {
                     $SQL = qq{
                CREATE OR REPLACE FUNCTION bucardo."$customdeltafunc"()
                RETURNS TRIGGER
@@ -2316,10 +2325,7 @@ SELECT 'Fixme'::TEXT;
 
 
             ## Now the 'track' table
-            $sth = $sth{haztable};
-            $count = $sth->execute('bucardo',$noquote_track_table);
-            $sth->finish();
-            if ($count < 1) {
+            if (! exists $btableoid{$noquote_track_table}) {
                 $SQL = qq{
                    CREATE TABLE bucardo.$track_table (
                       txntime    TIMESTAMPTZ,
@@ -2330,19 +2336,13 @@ SELECT 'Fixme'::TEXT;
             }
 
             ## Need to index both columns of the txntime table
-            $sth = $sth{hazindex};
-            $count = $sth->execute('bucardo', $noquote_index3_name);
-            $sth->finish();
-            if ($count < 1) {
+            if (! exists $bindexoid{$noquote_index3_name}) {
                 $SQL = qq{CREATE INDEX $index3_name ON bucardo.$track_table(target, txntime)};
                 $run_sql->($SQL,$dbh);
             }
 
             ## The 'stage' table, which feeds 'track' once targets have committed
-            $sth = $sth{haztable};
-            $count = $sth->execute('bucardo',$noquote_stage_table);
-            $sth->finish();
-            if ($count < 1) {
+		 if (! exists $btableoid{$noquote_stage_table}) {
                 my $unlogged = $dbh->{pg_server_version} >= 90100 ? 'UNLOGGED' : '';
                 $SQL = qq{
                    CREATE $unlogged TABLE bucardo.$stage_table (
@@ -2353,10 +2353,9 @@ SELECT 'Fixme'::TEXT;
                 $run_sql->($SQL,$dbh);
             }
 
-            $count = $sth->execute('bucardo','bucardo_delta_target_unique');
-            $sth->finish();
-            if ($count < 1) {
-                $dbh->do(qq{CREATE INDEX bucardo_delta_target_unique ON bucardo.bucardo_delta_targets(tablename,target)});
+		 my $indexname = 'bucardo_delta_target_unique';
+            if (! exists $bindexoid{$indexname}) {
+                $dbh->do(qq{CREATE INDEX $indexname ON bucardo.bucardo_delta_targets(tablename,target)});
             }
 
             ## Override the 'autokick' kick trigger if needed
@@ -2369,10 +2368,7 @@ SELECT 'Fixme'::TEXT;
             $rv = spi_exec_query($SQL);
             if ($rv->{processed}) {
                 my $custom_function_name = "bucardo_triggerkick_$tinfo->{id}";
-                $sth = $sth{hazfunc};
-                $count = $sth->execute('bucardo', $custom_function_name);
-                $sth->finish();
-                if ($count < 1) {
+				if (! exists $bfunctionoid{$custom_function_name}) {
                     my $custom_trigger_level = $rv->{rows}[0]{trigger_level};
                     $SQL = qq{
                CREATE OR REPLACE FUNCTION bucardo."$custom_function_name"()
