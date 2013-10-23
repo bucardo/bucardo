@@ -2356,6 +2356,7 @@ SELECT 'Fixme'::TEXT;
 		 my $indexname = 'bucardo_delta_target_unique';
             if (! exists $bindexoid{$indexname}) {
                 $dbh->do(qq{CREATE INDEX $indexname ON bucardo.bucardo_delta_targets(tablename,target)});
+                $bindexoid{$indexname} = 1;
             }
 
             ## Override the 'autokick' kick trigger if needed
