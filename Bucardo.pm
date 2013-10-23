@@ -5450,7 +5450,7 @@ sub db_listen {
         $self->{listen_payload}{$ldbh} = 1;
 
         ## We use 'bucardo', 'bucardo_ctl', or 'bucardo_kid'
-        my $suffix = $self->{logprefix} =~ /KID|CTL/ ? ('_' . lc $self->{logprefix}) : '';
+        my $suffix = $self->{logprefix} =~ /(KID|CTL)/ ? ('_' . lc $1) : '';
         $string = "bucardo$suffix";
     }
     elsif (exists $self->{listening}{$ldbh}{$string}) {
