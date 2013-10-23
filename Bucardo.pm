@@ -3333,10 +3333,17 @@ sub start_kid {
                 $self->db_notify($maindbh, "ctl_syncdone_${syncname}");
                 $maindbh->commit();
 
+                ## Even with no changes, we like to know how long this took
+                my $synctime = sprintf '%.2f', tv_interval($kid_start_time);
+                $self->glog((sprintf 'Total time for sync "%s" (no rows): %s%s',
+                    $syncname,
+                    pretty_time($synctime),
+                    $synctime < 120 ? '' : " ($synctime seconds)",),
+                    LOG_DEBUG);
+
                 ## Sleep a hair
                 sleep $config{kid_nodeltarows_sleep};
 
-                $self->glog('No changes made this round', LOG_DEBUG);
                 redo KID if $kidsalive;
                 last KID;
 
