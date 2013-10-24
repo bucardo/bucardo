@@ -4979,6 +4979,8 @@ sub connect_database {
         $ssp = $d->{server_side_prepares};
     }
 
+    $self->glog("DSN: $dsn", LOG_VERBOSE);
+
     $dbh = DBI->connect
         (
          $dsn,
