@@ -1341,12 +1341,12 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
     $sth->execute();
     my (%btableoid, %bindexoid);
     for my $row (@{$sth->fetchall_arrayref()}) {
-		if ($row->[1] eq 'r') {
-			$btableoid{$row->[2]} = $row->[0];
-		}
-		if ($row->[1] eq 'i') {
-			$bindexoid{$row->[2]} = $row->[0];
-		}
+        if ($row->[1] eq 'r') {
+            $btableoid{$row->[2]} = $row->[0];
+        }
+        if ($row->[1] eq 'i') {
+            $bindexoid{$row->[2]} = $row->[0];
+        }
     }
 
     ## Get a list of all functions in the bucardo schema
@@ -1393,12 +1393,12 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
         my $newschema = $count < 1 ? 1 : 0;
 
         ## Create the 'kickfunc' function as needed
-		if (exists $bfunctionoid{$kickfunc}) {
-			## We may want to recreate this function
-			if ($force{all} or $force{funcs} or $force{kickfunc}) {
-				$dbh->do(qq{DROP FUNCTION bucardo."$kickfunc"()});
-				delete $bfunctionoid{$kickfunc};
-			}
+        if (exists $bfunctionoid{$kickfunc}) {
+            ## We may want to recreate this function
+            if ($force{all} or $force{funcs} or $force{kickfunc}) {
+                $dbh->do(qq{DROP FUNCTION bucardo."$kickfunc"()});
+                delete $bfunctionoid{$kickfunc};
+            }
         }
 
         if (! exists $bfunctionoid{$kickfunc}) {
@@ -1519,49 +1519,49 @@ END;
             $run_sql->($SQL,$dbh);
         }
 
-		## Get a list of oids and relkinds for all of our goats
-		## This is much faster than doing individually
-		$SQL = q{SELECT n.nspname,c.relname,relkind,c.oid FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace) WHERE };
-		my @args;
+        ## Get a list of oids and relkinds for all of our goats
+        ## This is much faster than doing individually
+        $SQL = q{SELECT n.nspname,c.relname,relkind,c.oid FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace) WHERE };
+        my @args;
 
         for my $schema (sort keys %goat) {
-			for my $table (sort keys %{$goat{$schema}}) {
-				$SQL .= '(nspname = ? AND relname = ?) OR ';
-				push @args => $schema, $table;
-			}
-		}
+            for my $table (sort keys %{$goat{$schema}}) {
+                $SQL .= '(nspname = ? AND relname = ?) OR ';
+                push @args => $schema, $table;
+            }
+        }
         $SQL =~ s/OR $//;
         $sth = $dbh->prepare($SQL);
         $sth->execute(@args);
 
-		my %tableoid;
-		my %sequenceoid;
-		for my $row (@{$sth->fetchall_arrayref()}) {
-			if ($row->[2] eq 'r') {
-				$tableoid{"$row->[0].$row->[1]"} = $row->[3];
-			}
-			if ($row->[2] eq 'S') {
-				$sequenceoid{"$row->[0].$row->[1]"} = $row->[3];
-			}
-		}
+        my %tableoid;
+        my %sequenceoid;
+        for my $row (@{$sth->fetchall_arrayref()}) {
+            if ($row->[2] eq 'r') {
+                $tableoid{"$row->[0].$row->[1]"} = $row->[3];
+            }
+            if ($row->[2] eq 'S') {
+                $sequenceoid{"$row->[0].$row->[1]"} = $row->[3];
+            }
+        }
 
-		## Grab all the information inside of bucardo_delta_targets
-		my $targetname = "dbgroup $info->{dbs}";
-		$SQL = 'SELECT DISTINCT tablename FROM bucardo.bucardo_delta_targets WHERE target = ?';
-		$sth = $dbh->prepare($SQL);
-		$sth->execute($targetname);
-		my $targetoid = $sth->fetchall_hashref('tablename');
+        ## Grab all the information inside of bucardo_delta_targets
+        my $targetname = "dbgroup $info->{dbs}";
+        $SQL = 'SELECT DISTINCT tablename FROM bucardo.bucardo_delta_targets WHERE target = ?';
+        $sth = $dbh->prepare($SQL);
+        $sth->execute($targetname);
+        my $targetoid = $sth->fetchall_hashref('tablename');
 
         ## Populate bucardo_delta_targets with this dbgroup name
         $SQL = 'INSERT INTO bucardo.bucardo_delta_targets(tablename,target) VALUES (?,?)';
         my $stha = $dbh->prepare($SQL);
         for my $schema (sort keys %goat) {
             for my $table (sort keys %{$goat{$schema}}) {
-				next if ! exists $tableoid{"$schema.$table"};
-				my $oid = $tableoid{"$schema.$table"};
-				next if exists $targetoid->{$oid};
-				$stha->execute($oid, $targetname);
-			}
+                next if ! exists $tableoid{"$schema.$table"};
+                my $oid = $tableoid{"$schema.$table"};
+                next if exists $targetoid->{$oid};
+                $stha->execute($oid, $targetname);
+            }
         }
 
         ## Delete any tables that are no longer in the database.
@@ -1905,17 +1905,17 @@ SELECT 'Fixme'::TEXT;
         }
 
         if (exists $btableoid{'bucardo_sequences'}) {
-			## Check for older version of bucardo_sequences table
-			$SQL = q{SELECT count(*) FROM pg_attribute WHERE attname = 'targetname' }
-				  .q{ AND attrelid = (SELECT c.oid FROM pg_class c, pg_namespace n }
+            ## Check for older version of bucardo_sequences table
+            $SQL = q{SELECT count(*) FROM pg_attribute WHERE attname = 'targetname' }
+                  .q{ AND attrelid = (SELECT c.oid FROM pg_class c, pg_namespace n }
                   .q{ WHERE n.oid = c.relnamespace AND n.nspname = 'bucardo' }
                   .q{ AND c.relname = 'bucardo_sequences')};
-			if ($dbh->selectall_arrayref($SQL)->[0][0] < 1) {
-				warn "Dropping older version of bucardo_sequences, then recreating empty\n";
-				$dbh->do('DROP TABLE bucardo.bucardo_sequences');
-				delete $btableoid{'bucardo_sequences'};
-			}
-		}
+            if ($dbh->selectall_arrayref($SQL)->[0][0] < 1) {
+                warn "Dropping older version of bucardo_sequences, then recreating empty\n";
+                $dbh->do('DROP TABLE bucardo.bucardo_sequences');
+                delete $btableoid{'bucardo_sequences'};
+            }
+        }
         if (! exists $btableoid{'bucardo_sequences'}) {
             $SQL = qq{
                     CREATE TABLE bucardo.bucardo_sequences (
@@ -1952,34 +1952,34 @@ SELECT 'Fixme'::TEXT;
     my @args;
 
     for my $schema (sort keys %goat) {
-		for my $table (sort keys %{$goat{$schema}}) {
-			## Map to the actual table name used, via the customname table
-			my ($remoteschema,$remotetable) = ($schema,$table);
+        for my $table (sort keys %{$goat{$schema}}) {
+            ## Map to the actual table name used, via the customname table
+            my ($remoteschema,$remotetable) = ($schema,$table);
 
-			## The internal ID for this table
-			my $id = $goat{$schema}{$table}{id};
+            ## The internal ID for this table
+            my $id = $goat{$schema}{$table}{id};
 
-			## Is this a source or target database?
-			## Only pure targets can have a customname
-			my $is_target = $role eq 'target';
+            ## Is this a source or target database?
+            ## Only pure targets can have a customname
+            my $is_target = $role eq 'target';
 
-			if ($is_target and exists $customname{$id}) {
-				## If there is an entry for this particular database, use that
-				## Otherwise, if there is a database-wide one, use that
-				if (exists $customname{$id}{$dbname} or exists $customname{$id}{''}) {
-					$remotetable = $customname{$id}{$dbname} || $customname{$id}{''};
+            if ($is_target and exists $customname{$id}) {
+                ## If there is an entry for this particular database, use that
+                ## Otherwise, if there is a database-wide one, use that
+                if (exists $customname{$id}{$dbname} or exists $customname{$id}{''}) {
+                    $remotetable = $customname{$id}{$dbname} || $customname{$id}{''};
 
-					## If this has a dot, change the schema as well
-					## Otherwise, we simply use the existing schema
-					if ($remotetable =~ s/(.+)\.//) {
-						$remoteschema = $1;
-					}
-				}
-			}
+                    ## If this has a dot, change the schema as well
+                    ## Otherwise, we simply use the existing schema
+                    if ($remotetable =~ s/(.+)\.//) {
+                        $remoteschema = $1;
+                    }
+                }
+            }
 
-			$SQL .= '(nspname = ? AND relname = ?) OR ';
-			push @args => $remoteschema, $remotetable;
-		} ## end each table
+            $SQL .= '(nspname = ? AND relname = ?) OR ';
+            push @args => $remoteschema, $remotetable;
+        } ## end each table
 
     } ## end each schema
 
@@ -1988,7 +1988,7 @@ SELECT 'Fixme'::TEXT;
     $sth->execute(@args);
     my %goatoid;
     for my $row (@{$sth->fetchall_arrayref()}) {
-		$goatoid{"$row->[0].$row->[1]"} = [$row->[2],$row->[3]];
+        $goatoid{"$row->[0].$row->[1]"} = [$row->[2],$row->[3]];
     }
 
     ## Check out each table in turn
@@ -2029,16 +2029,16 @@ SELECT 'Fixme'::TEXT;
            }
          }
 
-		 if (! exists $goatoid{"$remoteschema.$remotetable"}) {
-			 die qq{Could not find "$remotetable" inside the "$remoteschema" schema on database "$dbname"!\n};
-		 }
-		 my ($relkind,$oid) = @{ $goatoid{"$remoteschema.$remotetable"} };
+         if (! exists $goatoid{"$remoteschema.$remotetable"}) {
+             die qq{Could not find "$remotetable" inside the "$remoteschema" schema on database "$dbname"!\n};
+         }
+         my ($relkind,$oid) = @{ $goatoid{"$remoteschema.$remotetable"} };
 
-		 ## Verify that this is the kind of relation we expect it to be
-		 my $tinfo = $goat{$schema}{$table};
-		 if ('r' eq $relkind) {
-			 if ('table' ne $tinfo->{reltype}) {
-				 die qq{Found "$remoteschema.$remotetable" on database "$dbname", but it's a table, not a $tinfo->{reltype}!};
+         ## Verify that this is the kind of relation we expect it to be
+         my $tinfo = $goat{$schema}{$table};
+         if ('r' eq $relkind) {
+             if ('table' ne $tinfo->{reltype}) {
+                 die qq{Found "$remoteschema.$remotetable" on database "$dbname", but it's a table, not a $tinfo->{reltype}!};
              }
          }
          elsif ('S' eq $relkind) {
@@ -2046,27 +2046,27 @@ SELECT 'Fixme'::TEXT;
                  die qq{Found "$remoteschema.$remotetable" on database "$dbname", but it's a sequence, not a $tinfo->{reltype}!};
              }
          }
-		 else {
+         else {
              die qq{Found "$remoteschema.$remotetable" on database "$dbname", but it's neither a table nor a sequence!};
          }
 
-		 ## Nothing further needed if it's a sequence
-		 next TABLE if $tinfo->{reltype} eq 'sequence';
+         ## Nothing further needed if it's a sequence
+         next TABLE if $tinfo->{reltype} eq 'sequence';
 
-		 ## Get the escaped version of things
-		 my $safeschema = $tinfo->{safeschema};
-		 my $safetable = $tinfo->{safetable};
+         ## Get the escaped version of things
+         my $safeschema = $tinfo->{safeschema};
+         my $safetable = $tinfo->{safetable};
 
-		 ## Go through each column in the tables to check against the other databases
+         ## Go through each column in the tables to check against the other databases
 
-		 $sth = $sth{hazcols};
-		 $count = $sth->execute($oid);
-		 if ($count < 1) {
-			 $sth->finish();
-			 die qq{Could not determine column information for table "$remoteschema.$remotetable"!\n};
-		 }
+         $sth = $sth{hazcols};
+         $count = $sth->execute($oid);
+         if ($count < 1) {
+             $sth->finish();
+             die qq{Could not determine column information for table "$remoteschema.$remotetable"!\n};
+         }
 
-		 $dbh->do('RESET search_path');
+         $dbh->do('RESET search_path');
 
             my $colinfo = $sth->fetchall_hashref('attname');
             ## Allow for 'dead' columns in the attnum ordering
@@ -2258,7 +2258,7 @@ SELECT 'Fixme'::TEXT;
 
             my @pkeys = split (/\|/ => $tinfo->{pkey});
 
-		 if (! exists $bfunctionoid{$noquote_deltafunc}) {
+         if (! exists $bfunctionoid{$noquote_deltafunc}) {
                  my $new = join ',' => map { qq{NEW."$_"} } @pkeys;
                  my $old = join ',' => map { qq{OLD."$_"} } @pkeys;
                  my $clause = join ' OR ' => map { qq{OLD."$_" <> NEW."$_"} } @pkeys;
@@ -2300,7 +2300,7 @@ SELECT 'Fixme'::TEXT;
             if ($rv->{processed}) {
                 my $customdeltafunc = "bucardo_delta_$tinfo->{id}";
 
-				if (! exists $bfunctionoid{$customdeltafunc}) {
+                if (! exists $bfunctionoid{$customdeltafunc}) {
                     $SQL = qq{
                CREATE OR REPLACE FUNCTION bucardo."$customdeltafunc"()
                RETURNS TRIGGER
@@ -2345,7 +2345,7 @@ SELECT 'Fixme'::TEXT;
             }
 
             ## The 'stage' table, which feeds 'track' once targets have committed
-		 if (! exists $btableoid{$noquote_stage_table}) {
+            if (! exists $btableoid{$noquote_stage_table}) {
                 my $unlogged = $dbh->{pg_server_version} >= 90100 ? 'UNLOGGED' : '';
                 $SQL = qq{
                    CREATE $unlogged TABLE bucardo.$stage_table (
@@ -2356,7 +2356,7 @@ SELECT 'Fixme'::TEXT;
                 $run_sql->($SQL,$dbh);
             }
 
-		 my $indexname = 'bucardo_delta_target_unique';
+            my $indexname = 'bucardo_delta_target_unique';
             if (! exists $bindexoid{$indexname}) {
                 $dbh->do(qq{CREATE INDEX $indexname ON bucardo.bucardo_delta_targets(tablename,target)});
                 $bindexoid{$indexname} = 1;
@@ -2367,12 +2367,12 @@ SELECT 'Fixme'::TEXT;
               WHERE goat=$tinfo->{id}
               AND status='active'
               AND trigger_type='triggerkick'
-    };
+            };
             elog(DEBUG, "Running $SQL");
             $rv = spi_exec_query($SQL);
             if ($rv->{processed}) {
                 my $custom_function_name = "bucardo_triggerkick_$tinfo->{id}";
-				if (! exists $bfunctionoid{$custom_function_name}) {
+                if (! exists $bfunctionoid{$custom_function_name}) {
                     my $custom_trigger_level = $rv->{rows}[0]{trigger_level};
                     $SQL = qq{
                CREATE OR REPLACE FUNCTION bucardo."$custom_function_name"()
