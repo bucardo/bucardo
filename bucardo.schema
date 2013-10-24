@@ -1317,10 +1317,6 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
     $SQL = q{SELECT 1 FROM pg_namespace WHERE nspname = ?};
     $sth{hazschema} = $dbh->prepare($SQL);
 
-    ## Does a named trigger on a certain table exist?
-    $SQL = q{SELECT 1 FROM pg_trigger WHERE tgrelid = ?::regclass AND tgname = ?};
-    $sth{haztrig} = $dbh->prepare($SQL);
-
     ## Does a named column exist on a specific table?
     $SQL = q{SELECT 1 FROM pg_attribute WHERE attrelid = }
           .q{(SELECT c.oid FROM pg_class c JOIN pg_namespace n ON (n.oid=c.relnamespace)}
@@ -1359,7 +1355,19 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
     $sth->execute();
     my (%bfunctionoid);
     for my $row (@{$sth->fetchall_arrayref()}) {
-		$bfunctionoid{$row->[1]} = $row->[0];
+        $bfunctionoid{$row->[1]} = $row->[0];
+    }
+
+    ## Get a list of all triggers that start with 'bucardo'
+    $SQL = q{SELECT nspname, relname, tgname FROM pg_trigger t
+       JOIN pg_class c ON (c.oid=t.tgrelid)
+       JOIN pg_namespace n ON (n.oid = c.relnamespace)
+       WHERE tgname ~ '^bucardo'};
+    $sth = $dbh->prepare($SQL);
+    $sth->execute();
+    my (%btriggerinfo);
+    for my $row (@{$sth->fetchall_arrayref()}) {
+        $btriggerinfo{$row->[0]}{$row->[1]}{$row->[2]} = 1;
     }
 
     ## Unless we are strictly fullcopy, put plpgsql in place on all source dbs
@@ -2173,9 +2181,7 @@ SELECT 'Fixme'::TEXT;
                     ? "bucardo_note_trunc_$syncname" : $namelen <= 54
                         ? "btrunc_$syncname"
                             : sprintf 'bucardo_note_trunc_%d', int (rand(88888) + 11111);
-                $sth = $sth{haztrig};
-                $count = $sth->execute(qq{"$schema"."$table"},$trunctrig);
-                if ($count < 1) {
+                if (! exists $btriggerinfo{$schema}{$table}{$trunctrig}) {
                     $SQL = qq{
           CREATE TRIGGER "$trunctrig"
           AFTER TRUNCATE ON "$schema"."$table"
@@ -2310,11 +2316,8 @@ SELECT 'Fixme'::TEXT;
                 }
             }
 
-            $sth = $sth{haztrig};
-            $count = $sth->execute(qq{"$schema"."$table"}, 'bucardo_delta');
-            $sth->finish();
-            my $func = $customdeltafunc || $deltafunc;
-            if ($count < 1) {
+            if (! exists $btriggerinfo{$schema}{$table}{'bucardo_delta'}) {
+                my $func = $customdeltafunc || $deltafunc;
                 $SQL = qq{
         CREATE TRIGGER bucardo_delta
         AFTER INSERT OR UPDATE OR DELETE ON "$schema"."$table"
@@ -2385,10 +2388,7 @@ SELECT 'Fixme'::TEXT;
             ## Add in the autokick triggers as needed
             ## Skip if autokick is false
             $info->{autokick} eq 'f' and next TABLE;
-            $sth = $sth{haztrig};
-            $count = $sth->execute(qq{"$schema"."$table"}, $kickfunc);
-            $sth->finish();
-            if ($count < 1) {
+            if (! exists $btriggerinfo{$schema}{$table}{$kickfunc}) {
                 my $ttrig = $dbh->{pg_server_version} >= 80400 ? ' OR TRUNCATE' : '';
                 my $custom_trigger_level = '';
                 my $custom_function_name = '';
