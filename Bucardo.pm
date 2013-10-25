@@ -115,6 +115,9 @@ $shorthost =~ s/^(.+?)\..*/$1/;
 our %config;
 our %config_about;
 
+## Set a default in case we call glog before we load the configs:
+$config{log_level_number} = LOG_NORMAL;
+
 ## Sequence columns we care about and how to change them via ALTER:
 my @sequence_columns = (
     ['last_value'   => ''],
@@ -4979,7 +4982,7 @@ sub connect_database {
         $ssp = $d->{server_side_prepares};
     }
 
-    $self->glog("DSN: $dsn", LOG_VERBOSE);
+    $self->glog("DSN: $dsn", LOG_NORMAL);
 
     $dbh = DBI->connect
         (
