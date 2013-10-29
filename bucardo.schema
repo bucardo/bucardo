@@ -1323,18 +1323,6 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
           .q{ AND nspname=? AND relname=?) AND attname = ?};
     $sth{hazcol} = $dbh->prepare($SQL);
 
-    ## Given a table oid, return detailed column information
-    $SQL = q{
-            SELECT   attname, quote_ident(attname) AS qattname, atttypid, format_type(atttypid, atttypmod) AS ftype,
-                     attnotnull, atthasdef, attnum,
-                     (SELECT pg_get_expr(adbin, adrelid) FROM pg_attrdef WHERE adrelid=attrelid
-                      AND adnum=attnum AND atthasdef) AS def
-            FROM     pg_attribute
-            WHERE    attrelid = ? AND attnum > 0 AND NOT attisdropped
-            ORDER BY attnum
-        };
-    $sth{hazcols} = $dbh->prepare($SQL);
-
     ## Get a list of all tables and indexes in the bucardo schema for ease below
     $SQL = q{SELECT c.oid,relkind,relname FROM pg_class c JOIN pg_namespace n ON (n.oid=c.relnamespace) WHERE nspname='bucardo'};
     $sth = $dbh->prepare($SQL);
@@ -1986,9 +1974,29 @@ SELECT 'Fixme'::TEXT;
     $SQL =~ s/OR $//;
     $sth = $dbh->prepare($SQL);
     $sth->execute(@args);
-    my %goatoid;
+    my (%goatoid,@tableoids);
     for my $row (@{$sth->fetchall_arrayref()}) {
         $goatoid{"$row->[0].$row->[1]"} = [$row->[2],$row->[3]];
+	push @tableoids => $row->[3] if $row->[2] eq 'r';
+    }
+
+    ## Get column information about all of our tables
+    $SQL = q{
+            SELECT   attrelid, attname, quote_ident(attname) AS qattname, atttypid, format_type(atttypid, atttypmod) AS ftype,
+                     attnotnull, atthasdef, attnum,
+                     (SELECT pg_get_expr(adbin, adrelid) FROM pg_attrdef WHERE adrelid=attrelid
+                      AND adnum=attnum AND atthasdef) AS def
+            FROM     pg_attribute
+            WHERE    attrelid IN (COLIST) AND attnum > 0 AND NOT attisdropped
+            ORDER BY attnum
+        };
+    $SQL =~ s/COLIST/join ',' => @tableoids/e;
+    $sth = $dbh->prepare($SQL);
+    $sth->execute();
+    my $columninfo;
+    for my $row (@{ $sth->fetchall_arrayref({}) }) {
+        my $oid = $row->{attrelid};
+        $columninfo->{$oid}{$row->{attname}} = $row;
     }
 
     ## Check out each table in turn
@@ -2059,16 +2067,14 @@ SELECT 'Fixme'::TEXT;
 
          ## Go through each column in the tables to check against the other databases
 
-         $sth = $sth{hazcols};
-         $count = $sth->execute($oid);
-         if ($count < 1) {
+         if (! exists $columninfo->{$oid}) {
              $sth->finish();
              die qq{Could not determine column information for table "$remoteschema.$remotetable"!\n};
          }
 
          $dbh->do('RESET search_path');
 
-            my $colinfo = $sth->fetchall_hashref('attname');
+	 my $colinfo = $columninfo->{$oid};
             ## Allow for 'dead' columns in the attnum ordering
             ## Turn the old keys (attname) into new keys (number)
             $x=1;
