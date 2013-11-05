@@ -1632,7 +1632,7 @@ END;
         }
 
         ## Create the bucardo_compress_delta function as needed
-        if (! exists $btableoid{'bucardo_compress_delta'}) {
+        if (! exists $bfunctionoid{'bucardo_compress_delta'}) {
             $SQL = qq{
                   CREATE OR REPLACE FUNCTION bucardo.bucardo_compress_delta(text, text)
                   RETURNS TEXT
