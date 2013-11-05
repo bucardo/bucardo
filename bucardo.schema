@@ -1239,7 +1239,7 @@ my $fetch1_sql = sub {
         my $leading = length($ws);
         $sql =~ s/^\s{$leading}//gsm;
     }
-    my $sth = $dbh->prepare($sql);
+    my $sth = $dbh->prepare_cached($sql);
     $sth->execute(@items);
     return $sth->fetchall_arrayref()->[0][0];
 };
