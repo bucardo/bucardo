@@ -170,7 +170,7 @@ isolation_level|repeatable read|Default isolation level: can be serializable or 
 piddir|/var/run/bucardo|Directory holding Bucardo PID files
 reason_file|bucardo.restart.reason.txt|File to hold reasons for stopping and starting
 semaphore_table|bucardo_status|Table to let apps know a sync is ongoing
-statement_chunk_size|10000|How many primary keys to shove into a single statement
+statement_chunk_size|8000|How many primary keys to shove into a single statement
 stats_script_url|http://www.bucardo.org/|Location of the stats script
 stopfile|fullstopbucardo|Name of the semaphore file used to stop Bucardo processes
 syslog_facility|LOG_LOCAL1|Which syslog facility level to use
