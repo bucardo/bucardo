@@ -8827,7 +8827,7 @@ sub push_rows {
             $fromdbh->do($srccmd);
 
             my $buffer = '';
-            $self->glog(qq{$pre}Copying from $fromname.$S.$T}, LOG_VERBOSE);
+            $self->glog(qq${pre}Copying from $fromname.$S.$T}, LOG_VERBOSE);
 
             ## Loop through all changed rows on the source, and push to the target(s)
             my $multirow = 0;
