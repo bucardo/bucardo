@@ -3175,10 +3175,9 @@ sub start_kid {
 
                     $x = $sync->{db}{$dbname};
 
-                    ## No need to grab information if we know there are no deltas in this database,
-                    ## or for just this database/table combination
+                    ## No need to grab information if we know there are no deltas for this table
                     if ($config{quick_delta_check}) {
-                        next if ! $x->{deltatotal} or ! $x->{deltaquick}{"$S.$T"};
+                        next if ! $x->{deltaquick}{"$S.$T"};
                     }
 
                     ## Gets all relevant rows from bucardo_deltas: runs asynchronously
@@ -3197,7 +3196,7 @@ sub start_kid {
 
                     ## If we skipped this, set the deltacount to zero and move on
                     if ($config{quick_delta_check}) {
-                        if (! $x->{deltatotal} or ! $x->{deltaquick}{"$S.$T"}) {
+                        if (! $x->{deltaquick}{"$S.$T"}) {
                             $self->glog("Skipping $S.$T: no delta rows", LOG_DEBUG);
                             $deltacount{dbtable}{$dbname}{$S}{$T} = 0;
                             next;
