@@ -168,6 +168,7 @@ flatfile_dir|.|Directory to store the flatfile output inside of
 host_safety_check||Regex to make sure we don't accidentally run where we should not
 isolation_level|repeatable read|Default isolation level: can be serializable or repeatable read
 piddir|/var/run/bucardo|Directory holding Bucardo PID files
+quick_delta_check|1|Whether to do a quick scan of delta activity
 reason_file|bucardo.restart.reason.txt|File to hold reasons for stopping and starting
 semaphore_table|bucardo_status|Table to let apps know a sync is ongoing
 statement_chunk_size|8000|How many primary keys to shove into a single statement
@@ -1469,6 +1470,98 @@ END;
           $run_sql->($SQL,$dbh);
         }
 
+        if (! exists $bfunctionoid{'bucardo_delta_names_helper'}) {
+            $SQL = q{
+CREATE OR REPLACE FUNCTION bucardo.bucardo_delta_names_helper()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+IMMUTABLE
+AS $bcc$
+BEGIN
+IF NEW.deltaname IS NULL THEN
+  NEW.deltaname = 'delta_' || bucardo.bucardo_tablename_maker(NEW.tablename);
+END IF;
+IF NEW.trackname IS NULL THEN
+  NEW.trackname = 'track_' || bucardo.bucardo_tablename_maker(NEW.tablename);
+END IF;
+RETURN NEW;
+END;
+$bcc$;
+            };
+            $run_sql->($SQL,$dbh);
+        }
+
+        ## Create the bucardo_delta_names table as needed
+        if (! exists $btableoid{'bucardo_delta_names'}) {
+            $SQL = qq{
+                    CREATE TABLE bucardo.bucardo_delta_names (
+                        sync TEXT,
+                        tablename TEXT,
+                        deltaname TEXT,
+                        trackname TEXT,
+                        cdate TIMESTAMPTZ NOT NULL DEFAULT now()
+                    );
+                };
+            $run_sql->($SQL,$dbh);
+
+            $SQL = qq{CREATE UNIQUE INDEX bucardo_delta_names_unique ON bucardo.bucardo_delta_names (sync,tablename)};
+            $run_sql->($SQL,$dbh);
+
+            $SQL = qq{
+CREATE TRIGGER bucardo_delta_namemaker
+BEFORE INSERT OR UPDATE
+ON bucardo.bucardo_delta_names
+FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
+            };
+            $run_sql->($SQL,$dbh);
+        }
+
+        ## Function to do a quick check of all deltas for a given sync
+        if (! exists $bfunctionoid{'bucardo_delta_check'}) {
+            $SQL = q{
+CREATE OR REPLACE FUNCTION bucardo.bucardo_delta_check(TEXT,TEXT) 
+RETURNS SETOF TEXT
+LANGUAGE plpgsql
+AS $bcc$
+DECLARE
+ myst TEXT;
+ myrec RECORD;
+ mycount INT;
+BEGIN
+  FOR myrec IN
+    SELECT * FROM bucardo_delta_names
+      WHERE sync = $1 
+      ORDER BY tablename
+  LOOP
+
+    RAISE DEBUG 'GOT % and %', myrec.deltaname, myrec.tablename;
+
+    myst = $$
+      SELECT  1
+      FROM    bucardo.$$ || myrec.deltaname || $$ d
+      WHERE   NOT EXISTS (
+        SELECT 1
+        FROM   bucardo.$$ || myrec.trackname || $$ t
+        WHERE  d.txntime = t.txntime
+        AND    (t.target = '$$ || $2 || $$'::text OR t.target ~ '^T:')
+      ) LIMIT 1$$;
+    EXECUTE myst;
+    GET DIAGNOSTICS mycount = ROW_COUNT;
+
+    IF mycount>=1 THEN
+      RETURN NEXT '1,' || myrec.tablename;
+    ELSE
+      RETURN NEXT '0,' || myrec.tablename;
+    END IF;
+
+  END LOOP;
+  RETURN;
+END;
+$bcc$;
+            };
+            $run_sql->($SQL,$dbh);
+        }
+
         ## Create the bucardo_delta_targets table as needed
         if (! exists $btableoid{'bucardo_delta_targets'}) {
             $SQL = qq{
@@ -1937,7 +2030,9 @@ SELECT 'Fixme'::TEXT;
     ## Build another list of information for each table
     ## This saves us multiple lookups
     $SQL = q{SELECT n.nspname,c.relname,relkind,c.oid FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace) WHERE };
-    my @args;
+    my $SQL2 = q{INSERT INTO bucardo.bucardo_delta_names VALUES };
+
+    my (@args,@args2);
 
     for my $schema (sort keys %goat) {
         for my $table (sort keys %{$goat{$schema}}) {
@@ -1967,6 +2062,8 @@ SELECT 'Fixme'::TEXT;
 
             $SQL .= '(nspname = ? AND relname = ?) OR ';
             push @args => $remoteschema, $remotetable;
+            push @args2 => $syncname, "$remoteschema.$remotetable";
+
         } ## end each table
 
     } ## end each schema
@@ -1977,9 +2074,20 @@ SELECT 'Fixme'::TEXT;
     my (%goatoid,@tableoids);
     for my $row (@{$sth->fetchall_arrayref()}) {
         $goatoid{"$row->[0].$row->[1]"} = [$row->[2],$row->[3]];
-	push @tableoids => $row->[3] if $row->[2] eq 'r';
+        push @tableoids => $row->[3] if $row->[2] eq 'r';
     }
 
+    ## Populate the bucardo_delta_names table for this sync
+    $SQL = 'DELETE FROM bucardo.bucardo_delta_names WHERE sync = ?';
+    $sth = $dbh->prepare($SQL);
+    $sth->execute($syncname);
+    $SQL = $SQL2;
+    my $number = @args2 / 2;
+    $SQL .= '(?,?),' x $number;
+    chop $SQL;
+    $sth = $dbh->prepare($SQL);
+    $sth->execute(@args2);
+   
     ## Get column information about all of our tables
     $SQL = q{
             SELECT   attrelid, attname, quote_ident(attname) AS qattname, atttypid, format_type(atttypid, atttypmod) AS ftype,
@@ -2074,7 +2182,7 @@ SELECT 'Fixme'::TEXT;
 
          $dbh->do('RESET search_path');
 
-	 my $colinfo = $columninfo->{$oid};
+         my $colinfo = $columninfo->{$oid};
             ## Allow for 'dead' columns in the attnum ordering
             ## Turn the old keys (attname) into new keys (number)
             $x=1;
