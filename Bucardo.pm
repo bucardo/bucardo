@@ -5045,7 +5045,7 @@ sub connect_database {
         $ssp = $d->{server_side_prepares};
     }
 
-    $self->glog("DSN: $dsn", LOG_NORMAL);
+    $self->glog("DSN: $dsn", LOG_NORMAL) if exists $config{log_level};
 
     $dbh = DBI->connect
         (
