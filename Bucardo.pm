@@ -6426,14 +6426,14 @@ sub validate_sync {
             ## The referenced table is not being tracked in this sync
             if (! exists $s->{tableoid}{$oid2}) {
                 ## Nothing to do except report this problem and move on
-                $self->glog("Table $t1 references $t2, which is not part of this sync!", LOG_NORMAL);
+                $self->glog("Table $t1 references $t2($conname), which is not part of this sync!", LOG_NORMAL);
                 next;
             }
 
             ## A table referencing us is not being tracked in this sync
             if (! exists $s->{tableoid}{$oid1}) {
                 ## Nothing to do except report this problem and move on
-                $self->glog("Table $t2 is referenced by $t1, which is not part of this sync!", LOG_NORMAL);
+                $self->glog("Table $t2 is referenced by $t1($conname), which is not part of this sync!", LOG_NORMAL);
                 next;
             }
 
