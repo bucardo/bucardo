@@ -2259,6 +2259,9 @@ sub start_kid {
                 next;
             };
 
+            ## Just in case we were in the middle of an async call:
+            $dbh->pg_cancel();
+
             $dbh->rollback();
 
             ## Deregister ourself with the MCP
