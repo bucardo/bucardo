@@ -5359,6 +5359,7 @@ sub show_db_version_and_time {
     $self->glog("${prefix}Local timezone: $systemtime  DB timezone: $dbtime->[2]", LOG_WARN);
     $self->glog("${prefix}Postgres version: " . $ldbh->{pg_server_version}, LOG_WARN);
     $self->glog("${prefix}Database port: " . $ldbh->{pg_port}, LOG_WARN);
+    $ldbh->{pg_host} and $self->glog("${prefix}Database host: " . $ldbh->{pg_host}, LOG_WARN);
 
     return;
 
