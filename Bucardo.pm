@@ -3139,7 +3139,7 @@ sub start_kid {
                     $SQL = 'SELECT * FROM bucardo.bucardo_delta_check(?,?)';
                     $sth = $x->{dbh}->prepare($SQL);
                     $sth->execute($syncname, $x->{DBGROUPNAME});
-                    $x->{deltazero} = 0;
+                    $x->{deltazero} = $x->{deltatotal} = 0;
                     for my $row (@{$sth->fetchall_arrayref()}) {
                         my ($number,$tablename) = split /,/ => $row->[0], 2;
                         $x->{deltaquick}{$tablename} = $number;
