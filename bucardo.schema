@@ -1529,7 +1529,7 @@ DECLARE
  mycount INT;
 BEGIN
   FOR myrec IN
-    SELECT * FROM bucardo_delta_names
+    SELECT * FROM bucardo.bucardo_delta_names
       WHERE sync = $1 
       ORDER BY tablename
   LOOP
