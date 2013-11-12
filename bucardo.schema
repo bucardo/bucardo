@@ -2078,15 +2078,17 @@ SELECT 'Fixme'::TEXT;
     }
 
     ## Populate the bucardo_delta_names table for this sync
-    $SQL = 'DELETE FROM bucardo.bucardo_delta_names WHERE sync = ?';
-    $sth = $dbh->prepare($SQL);
-    $sth->execute($syncname);
-    $SQL = $SQL2;
-    my $number = @args2 / 2;
-    $SQL .= '(?,?),' x $number;
-    chop $SQL;
-    $sth = $dbh->prepare($SQL);
-    $sth->execute(@args2);
+    if ($role eq 'source' and ! $is_fullcopy) {
+	    $SQL = 'DELETE FROM bucardo.bucardo_delta_names WHERE sync = ?';
+        $sth = $dbh->prepare($SQL);
+        $sth->execute($syncname);
+        $SQL = $SQL2;
+        my $number = @args2 / 2;
+        $SQL .= '(?,?),' x $number;
+        chop $SQL;
+        $sth = $dbh->prepare($SQL);
+        $sth->execute(@args2);
+    }
    
     ## Get column information about all of our tables
     $SQL = q{
