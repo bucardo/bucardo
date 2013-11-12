@@ -2260,7 +2260,7 @@ sub start_kid {
             };
 
             ## Just in case we were in the middle of an async call:
-            $dbh->pg_cancel();
+            $dbh->pg_cancel() if $dbh->{pg_async_status} > 0;
 
             $dbh->rollback();
 
