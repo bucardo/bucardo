@@ -1479,10 +1479,10 @@ IMMUTABLE
 AS $bcc$
 BEGIN
 IF NEW.deltaname IS NULL THEN
-  NEW.deltaname = 'delta_' || bucardo.bucardo_tablename_maker(NEW.tablename);
+  NEW.deltaname = bucardo.bucardo_tablename_maker(NEW.tablename, 'delta_');
 END IF;
 IF NEW.trackname IS NULL THEN
-  NEW.trackname = 'track_' || bucardo.bucardo_tablename_maker(NEW.tablename);
+  NEW.trackname = bucardo.bucardo_tablename_maker(NEW.tablename, 'track_');
 END IF;
 RETURN NEW;
 END;
@@ -2062,7 +2062,9 @@ SELECT 'Fixme'::TEXT;
 
             $SQL .= '(nspname = ? AND relname = ?) OR ';
             push @args => $remoteschema, $remotetable;
-            push @args2 => $syncname, "$remoteschema.$remotetable";
+            if ($goat{$schema}{$table}{reltype} eq 'table') {
+                push @args2 => $syncname, "$remoteschema.$remotetable";
+            }
 
         } ## end each table
 
