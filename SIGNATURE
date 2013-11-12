@@ -1,5 +1,5 @@
 This file contains message digests of all files listed in MANIFEST,
-signed via the Module::Signature module, version 0.68.
+signed via the Module::Signature module, version 0.73.
 
 To verify the content in this distribution, first make sure you have
 Module::Signature installed, then type:
@@ -16,23 +16,23 @@ Hash: RIPEMD160
 
 SHA1 a08ef624fdf78f8cda9985e08be5e8daa76dea12 .gitignore
 SHA1 42760bd0168fc56cf07f900b9ac431c0bf4360db .perlcriticrc
-SHA1 cf74dc3c17d09872efb21df918fa777274aeda82 Bucardo.pm
-SHA1 1a35006e37005c85f7e6029a4ab24d90bc79a601 Bucardo.pm.html
+SHA1 09a8931282a4639afe08e67db37b50f2bbcfccd3 Bucardo.pm
+SHA1 bdc6e4e010710c7eb77632bc103248d9f81add5a Bucardo.pm.html
 SHA1 75659120b4c16ad11e43ab18ae594b63e915516a Changes
 SHA1 39ab30574117e0cf08161bea36e89e73f892034d INSTALL
 SHA1 3b02067c5eff9bdb284ce821d52dfbcde51a64af LICENSE
 SHA1 2b37b30b16ddba16be24e2f2b6e478ca44e53f5e MANIFEST
 SHA1 44eba3a3779f5c7d8d331ac65e1efee2acf66770 MANIFEST.SKIP
-SHA1 681352df384ed719fc6771def13a38a926126863 META.yml
-SHA1 bcc91390fecc4fec949460e48fb6d76772dbb4e9 MYMETA.yml
-SHA1 ecab514a37f0dcd0936c834acd59cd1ab1fd200f Makefile.PL
-SHA1 96c9466c38a4c959f12ee3d34410ead616c9dee0 README
+SHA1 19209dc512d2524000a976df39b5139fa7c128c0 META.yml
+SHA1 5e2a3f73c3137dda258990bf70805297b0dbb4e8 MYMETA.yml
+SHA1 3f3cd9e193b4b35cdb58240e03c729fa4c34bb51 Makefile.PL
+SHA1 c8e44b6ac037e064795db10111a9fd31a5f363d3 README
 SHA1 7774ef51edd0b283802a5d73af94691c134262d5 README.dev
-SHA1 44bbaf271bdd5a8c2b3a8b760615fca9315ed665 TODO
+SHA1 b6194d95ae8ffbe2a6c9fc9b697f41d689c9bb28 TODO
 SHA1 31609418af80896bd4e853c36aecff8747e103da UPGRADE
-SHA1 df7629a7f1f1071a47dc9108f4b53cf22688d5c3 bucardo
-SHA1 38a720852766e95ea60fa8ab4ea77a0379e0a74d bucardo.html
-SHA1 ff02b3849d30ed5e5941fead8331a5a2a62f4bf5 bucardo.schema
+SHA1 81a2af7eeb3e35c3cd8d5ede74b2c187c94bb501 bucardo
+SHA1 0615eeefef0d8e5cf8849a9f5186ae60a9f9e3e2 bucardo.html
+SHA1 9cd9e691914fbc6089796da6b1483ccaed5c798b bucardo.schema
 SHA1 664d7c1b0980c457a2c68e99836fefefe2b9885d dist/README
 SHA1 e19aa6109330c654b5bef7bd0c4460d0d11dbdaa dist/bucardo-logfiles.patch
 SHA1 43c18bb939bdac1b0544c1327eb30b07cd8abcc3 dist/bucardo.init
@@ -48,9 +48,9 @@ SHA1 08bf94756b328028e50b5cd4f48fe859f0f54b22 t/01-basic.t
 SHA1 e08568d51bf87fa6de04c7566a42ee66c905058a t/02-bctl-customname.t
 SHA1 a1c6956546c0e8caa3f08b8c294035c60bbf4860 t/02-bctl-db.t
 SHA1 f2f4976e7169ff74a445ad3e2280d560274263eb t/02-bctl-dbg.t
-SHA1 79eda62a8918a064ea7e8f7c762ded5efd313e2d t/02-bctl-herd.t
+SHA1 37729c122486c41b83e857b831aca823e3c9c352 t/02-bctl-herd.t
 SHA1 b587340368c5343769d8c3b3bcacb0c197d0bc37 t/02-bctl-sync.t
-SHA1 1b0a78da06426ce8aa56188ee58a794b04db860f t/02-bctl-table.t
+SHA1 2acab21f916daeac551acbaa3bb54a94bfc16004 t/02-bctl-table.t
 SHA1 4a10cbd172194bdcd00e9b7b2dc90891962aed9c t/10-fullcopy.t
 SHA1 d60f3a5e6aaff26469a558ae6f42b83e2cac9fbe t/20-drizzle.t
 SHA1 5df8d5bbf3572e0fd4e569b31c2f81944da30372 t/20-mariadb.t
@@ -62,15 +62,15 @@ SHA1 8bb457ac2c292e90be85664361ebd376ef516939 t/20-redis.t
 SHA1 c4be250148ec49a439b97691ef770a7f7f456871 t/20-sqlite.t
 SHA1 8403c5ff26920c64c973f1fa537dd4db922f9b68 t/30-delta.t
 SHA1 fbfbe5ac0c4134c0ace28b4d42bcdfdb507e83e0 t/40-customcode-exception.t
-SHA1 0314d53f48213f5d41e36566a9a7be8c50cc6a75 t/40-serializable.t
+SHA1 bafe9583e55abf90b3699a3a3c4852b141610db7 t/40-serializable.t
 SHA1 5af80965369a3cbe3eebba76cfb439c17626e4fa t/98-cleanup.t
 SHA1 14e82dad75a2ef2e261f9cb3c07c0e87d9ef8651 t/99-signature.t
-SHA1 831b0c159a107123db51d90d739679d70a3bd538 t/BucardoTesting.pm
+SHA1 e2569aa022c400d5b9ffbaf4fc78e4c1a866a7c9 t/BucardoTesting.pm
 SHA1 c8acd172c97d2df71ab8b4b3378be2bb59a872ef t/customcode.exception.bucardotest.pl
 SHA1 87bf175b3ad3949ee6d81d772161fe87cc08f2b4 test_setup.sh
 -----BEGIN PGP SIGNATURE-----
 
-iEYEAREDAAYFAlElfWcACgkQvJuQZxSWSsjpCgCcDaedRDs3c6kkr/XSNPZdzF4c
-UTcAnR2M1N4SbynJhigHW9nM+4N640SK
-=d9WY
+iEYEAREDAAYFAlKCb8MACgkQvJuQZxSWSsg5HQCgsDeBRAxtjid3BniTkklvfYGD
+J08AnjPG+8r7Dh9Q+flvXaXudgP1Sa+U
+=eGC2
 -----END PGP SIGNATURE-----
