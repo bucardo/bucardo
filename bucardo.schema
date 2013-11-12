@@ -2036,6 +2036,7 @@ SELECT 'Fixme'::TEXT;
 
     for my $schema (sort keys %goat) {
         for my $table (sort keys %{$goat{$schema}}) {
+
             ## Map to the actual table name used, via the customname table
             my ($remoteschema,$remotetable) = ($schema,$table);
 
@@ -2063,7 +2064,7 @@ SELECT 'Fixme'::TEXT;
             $SQL .= '(nspname = ? AND relname = ?) OR ';
             push @args => $remoteschema, $remotetable;
             if ($goat{$schema}{$table}{reltype} eq 'table') {
-                push @args2 => $syncname, "$remoteschema.$remotetable";
+                push @args2 => $syncname, $remoteschema, $remotetable;
             }
 
         } ## end each table
@@ -2085,8 +2086,8 @@ SELECT 'Fixme'::TEXT;
         $sth = $dbh->prepare($SQL);
         $sth->execute($syncname);
         $SQL = $SQL2;
-        my $number = @args2 / 2;
-        $SQL .= '(?,?),' x $number;
+        my $number = @args2 / 3;
+        $SQL .= q{(?,quote_ident(?)||'.'||quote_ident(?)),} x $number;
         chop $SQL;
         $sth = $dbh->prepare($SQL);
         $sth->execute(@args2);
