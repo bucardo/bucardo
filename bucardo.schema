@@ -2081,7 +2081,7 @@ SELECT 'Fixme'::TEXT;
     }
 
     ## Populate the bucardo_delta_names table for this sync
-    if ($role eq 'source' and ! $is_fullcopy) {
+    if ($role eq 'source' and ! $is_fullcopy and @args2) {
         $SQL = 'DELETE FROM bucardo.bucardo_delta_names WHERE sync = ?';
         $sth = $dbh->prepare($SQL);
         $sth->execute($syncname);
