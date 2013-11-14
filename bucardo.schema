@@ -2032,7 +2032,7 @@ SELECT 'Fixme'::TEXT;
     $SQL = q{SELECT n.nspname,c.relname,relkind,c.oid FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace) WHERE };
     my $SQL2 = q{INSERT INTO bucardo.bucardo_delta_names VALUES };
 
-    my (@args,@args2);
+    my (@args,@tablelist);
 
     for my $schema (sort keys %goat) {
         for my $table (sort keys %{$goat{$schema}}) {
@@ -2064,7 +2064,7 @@ SELECT 'Fixme'::TEXT;
             $SQL .= '(nspname = ? AND relname = ?) OR ';
             push @args => $remoteschema, $remotetable;
             if ($goat{$schema}{$table}{reltype} eq 'table') {
-                push @args2 => $syncname, $remoteschema, $remotetable;
+                push @tablelist => $syncname, $remoteschema, $remotetable;
             }
 
         } ## end each table
@@ -2081,16 +2081,16 @@ SELECT 'Fixme'::TEXT;
     }
 
     ## Populate the bucardo_delta_names table for this sync
-    if ($role eq 'source' and ! $is_fullcopy and @args2) {
+    if ($role eq 'source' and ! $is_fullcopy and @tablelist) {
         $SQL = 'DELETE FROM bucardo.bucardo_delta_names WHERE sync = ?';
         $sth = $dbh->prepare($SQL);
         $sth->execute($syncname);
         $SQL = $SQL2;
-        my $number = @args2 / 3;
+        my $number = @tablelist / 3;
         $SQL .= q{(?,quote_ident(?)||'.'||quote_ident(?)),} x $number;
         chop $SQL;
         $sth = $dbh->prepare($SQL);
-        $sth->execute(@args2);
+        $sth->execute(@tablelist);
     }
    
     ## Get column information about all of our tables
@@ -2103,13 +2103,15 @@ SELECT 'Fixme'::TEXT;
             WHERE    attrelid IN (COLIST) AND attnum > 0 AND NOT attisdropped
             ORDER BY attnum
         };
-    $SQL =~ s/COLIST/join ',' => @tableoids/e;
-    $sth = $dbh->prepare($SQL);
-    $sth->execute();
     my $columninfo;
-    for my $row (@{ $sth->fetchall_arrayref({}) }) {
-        my $oid = $row->{attrelid};
-        $columninfo->{$oid}{$row->{attname}} = $row;
+    if (@tablelist) {
+        $SQL =~ s/COLIST/join ',' => @tableoids/e;
+        $sth = $dbh->prepare($SQL);
+        $sth->execute();
+        for my $row (@{ $sth->fetchall_arrayref({}) }) {
+            my $oid = $row->{attrelid};
+            $columninfo->{$oid}{$row->{attname}} = $row;
+        }
     }
 
     ## Check out each table in turn
