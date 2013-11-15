@@ -977,7 +977,7 @@ sub mcp_main {
                 $count = $sth->execute();
                 if ($count ne '0E0') {
                     for my $row (@{$sth->fetchall_arrayref()}) {
-                        $self->glog("MESSAGE ($row->[1]): $row->[0]", LOG_VERBOSE);
+                        $self->glog("MESSAGE ($row->[1]): $row->[0]", LOG_TERSE);
                     }
                     $maindbh->do('TRUNCATE TABLE bucardo_log_message');
                     $maindbh->commit();
