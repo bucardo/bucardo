@@ -6796,6 +6796,8 @@ sub fork_vac {
         ($x->{backend}, $x->{dbh}) = $self->connect_database($dbname);
         $self->glog(qq{Connected to database "$dbname" with backend PID of $x->{backend}}, LOG_NORMAL);
         $self->{pidmap}{$x->{backend}} = "DB $dbname";
+        ## We don't want details about the purging
+        $x->{dbh}->do(q{SET client_min_messages = 'warning'});
     }
 
     ## Track how long since we last came to life for vacuuming
