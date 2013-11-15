@@ -17,7 +17,7 @@ my $bct = BucardoTesting->new({sync => 'fctest', location => 'fullcopy'})
 
 my $numtables = keys %tabletype;
 my $numsequences = keys %sequences;
-my $single_tests = 12;
+my $single_tests = 14;
 my $table_tests = 2;
 my $numdatabases = 3;
 plan tests => $single_tests +
@@ -67,6 +67,11 @@ $t = q{Adding all tables on the master works};
 $res = $bct->ctl(q{bucardo add sequences all herd=all});
 like ($res, qr/New sequences added/s, $t);
 
+## Add sequences to their own herd and sync
+$t = q{Adding all sequences to a new sync works};
+$res = $bct->ctl(q{bucardo add sequences all herd=seqonly});
+like ($res, qr/Creating relgroup: seqonly/s, $t);
+
 ## Create a new database group going from A to B and C and D
 $t = q{Created a new fullcopy database group A -> B C D};
 $res = $bct->ctl('bucardo add dbgroup pg A:source B:fullcopy C:fullcopy D:fullcopy');
@@ -76,6 +81,11 @@ like ($res, qr/Created database group "pg"/, $t);
 $t = q{Created a new sync};
 $res = $bct->ctl('bucardo add sync fctest herd=all dbs=pg');
 like ($res, qr/Added sync "fctest"/, $t);
+
+## Create a new sync for the sequences only
+$t = q{Created a new sync};
+$res = $bct->ctl('bucardo add sync seqtest herd=seqonly dbs=A:source,B:Source,C:target');
+like ($res, qr/Added sync "seqtest"/, $t);
 
 ## Start up Bucardo with this new sync.
 ## No need to wait for the sync, as fullcopy syncs don't auto-run
@@ -103,6 +113,9 @@ $bct->ctl('bucardo kick fctest 0');
 $bct->check_for_row([[2]], [qw/ B C D/]);
 
 $bct->check_sequences_same([qw/A B C D/]);
+
+## Test a sequence-only sync
+$bct->ctl('bucardo kick seqtest 0');
 
 pass("*** End 'fullcopy' tests");
 
