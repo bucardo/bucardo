@@ -25,3 +25,4 @@ t/99-yaml.t
 notes.*
 .bak$
 .db$
+MYMETA.*
