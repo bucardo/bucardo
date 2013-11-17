@@ -1910,6 +1910,16 @@ sub start_controller {
             ## At this point, the PID file does not exist or the kid is not responding
             if ($resurrect) {
                 ## XXX Try harder to kill it?
+                ## First clear out any old entries in the syncrun table
+                $sth = $sth{ctl_syncrun_end_now};
+                $count = $sth->execute("Old entry died (CTL $$)", $syncname);
+                if (1 == $count) {
+                    $info = $sth->fetchall_arrayref()->[0][0];
+                    $self->glog("Old syncrun entry removed during resurrection, start time was $info", LOG_NORMAL);
+                }
+                else {
+                    $sth->finish();
+                }
                 $self->glog("Resurrecting kid $syncname, resurrect was $resurrect", LOG_DEBUG);
                 $self->{kidpid} = $self->create_newkid($sync);
 
@@ -4912,8 +4922,10 @@ sub start_kid {
         ## Roll everyone back
         for my $dbname (@dbs_dbi) {
             my $dbh = $sync->{db}{$dbname}{dbh};
-            $dbh->pg_cancel if $dbh->{pg_async_status} > 0;
-            $dbh->rollback;
+            ## Wrapped in an eval as a failure to serialise can cause an abort() and the KID will die.
+            eval { $dbh->pg_cancel if $dbh->{pg_async_status} > 0; };
+            ## Seperate eval{} for the rollback as we are probably still connected to the transaction.
+            eval { $dbh->rollback; };
         }
 
         # End the syncrun.
