@@ -2050,6 +2050,15 @@ sub start_kid {
             $found_first_source = 1;
         }
 
+        ## If this is inactive, we've already checked that if it is a souce in validate_sync
+        ## Thus, if we made it this far, it is a target and should be skipped
+        if ($x->{status} eq 'inactive') {
+            $self->glog(qq{Skipping inactive database "$dbname" entirely});
+            ## Don't just skip it: nuke it from orbit! It's the only way to be sure.
+            delete $sync->{db}{$dbname};
+            next;
+        }
+
         ## Now set the default attributes
 
         ## Is this a SQL database?
@@ -6673,10 +6682,12 @@ sub fork_and_inactivate {
         ## Clear the 'sdb' structure of any existing database handles
         if (exists $self->{sdb}) {
             for my $dbname (keys %{ $self->{sdb} }) {
-                for my $item (qw/ dbh /) {
-                    $self->{sdb}{$dbname}{$item}->{InactiveDestroy} = 1
-                        if exists $self->{sdb}{$dbname}{$item};
-                    delete $self->{sdb}{$dbname}{$item};
+                if (exists $self->{sync}{sdb}{$dbname}{dbh}) {
+                    if (ref $self->{sync}{sdb}{$dbname}{dbh}) {
+                        $self->glog("Removing sdb reference to database $dbname", LOG_DEBUG);
+                        $self->{sync}{sdb}{$dbname}{dbh}->{InactiveDestroy} = 1;
+                    }
+                    delete $self->{sync}{sdb}{$dbname}{dbh};
                 }
             }
         }
@@ -6685,22 +6696,24 @@ sub fork_and_inactivate {
         if (exists $self->{sync}) {
             if (exists $self->{sync}{name}) { ## This is a controller/kid with a single sync
                 for my $dbname (sort keys %{ $self->{sync}{db} }) {
-                    $self->glog("Removing reference to database $dbname", LOG_DEBUG);
-                        for my $item (qw/ dbh /) {
-                            $self->{sync}{db}{$dbname}{$item}->{InactiveDestroy} = 1
-                                if exists $self->{sync}{db}{$dbname}{$item};
-                            delete $self->{sync}{db}{$dbname}{$item};
+                    if (exists $self->{sync}{db}{$dbname}{dbh}) {
+                        if (ref $self->{sync}{db}{$dbname}{dbh}) {
+                            $self->glog("Removing reference to database $dbname", LOG_DEBUG);
+                            $self->{sync}{db}{$dbname}{dbh}->{InactiveDestroy} = 1;
                         }
+                        delete $self->{sync}{db}{$dbname}{dbh};
                     }
+                }
             }
             else {
                 for my $syncname (keys %{ $self->{sync} }) {
                     for my $dbname (sort keys %{ $self->{sync}{$syncname}{db} }) {
-                        $self->glog("Removing reference to database $dbname in sync $syncname", LOG_DEBUG);
-                        for my $item (qw/ dbh /) {
-                            $self->{sync}{$syncname}{db}{$dbname}{$item}->{InactiveDestroy} = 1
-                                if exists $self->{sync}{$syncname}{db}{$dbname}{$item};
-                            delete $self->{sync}{$syncname}{db}{$dbname}{$item};
+                        if (exists $self->{sync}{$syncname}{db}{$dbname}{dbh}) {
+                            if (ref $self->{sync}{$syncname}{db}{$dbname}{dbh}) {
+                                $self->glog("Removing reference to database $dbname in sync $syncname", LOG_DEBUG);
+                                $self->{sync}{$syncname}{db}{$dbname}{dbh}->{InactiveDestroy} = 1;
+                            }
+                            delete $self->{sync}{$syncname}{db}{$dbname}{dbh};
                         }
                     }
                 }
