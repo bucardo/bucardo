@@ -60,7 +60,7 @@ if ($FRESHLOG) {
 }
 
 ## Test databases are labelled as A, B, C, etc.
-my @dbs = qw/A B C D/;
+my @dbs = qw/A B C D E/;
 
 ### TODO: Add point type (which has no natural ordering operator!)
 

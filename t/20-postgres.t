@@ -12,7 +12,7 @@ use DBD::Pg;
 use Test::More;
 use MIME::Base64;
 
-use vars qw/ $dbhX $dbhA $dbhB $dbhC $dbhD $res $command $t $SQL %pkey %sth %sql $sth $count $val /;
+use vars qw/ $dbhX $dbhA $dbhB $dbhC $dbhD $dbhE $res $command $t $SQL %pkey %sth %sql $sth $count $val /;
 
 use BucardoTesting;
 my $bct = BucardoTesting->new({location => 'postgres'})
@@ -46,6 +46,7 @@ END {
     $dbhB and $dbhB->disconnect();
     $dbhC and $dbhC->disconnect();
     $dbhD and $dbhD->disconnect();
+    $dbhE and $dbhE->disconnect();
 }
 
 ## Get A, B, C, and D created, emptied out, and repopulated with sample data
@@ -53,15 +54,17 @@ $dbhA = $bct->repopulate_cluster('A');
 $dbhB = $bct->repopulate_cluster('B');
 $dbhC = $bct->repopulate_cluster('C');
 $dbhD = $bct->repopulate_cluster('D');
+$dbhE = $bct->repopulate_cluster('E');
 
 ## Create a bucardo database, and install Bucardo into it
 $dbhX = $bct->setup_bucardo('A');
 
-## Teach Bucardo about four databases
-for my $name (qw/ A B C D A1 /) {
+## Teach Bucardo about five databases
+for my $name (qw/ A B C D A1 E /) {
     $t = "Adding database from cluster $name works";
     my ($dbuser,$dbport,$dbhost) = $bct->add_db_args($name);
-    $command = "bucardo add db $name dbname=bucardo_test user=$dbuser port=$dbport host=$dbhost";
+    my $status = $name eq 'E' ? 'inactive' : 'active';
+    $command = "bucardo add db $name dbname=bucardo_test user=$dbuser port=$dbport host=$dbhost status=$status";
     $res = $bct->ctl($command);
     like ($res, qr/Added database "$name"/, $t);
 }
@@ -76,9 +79,9 @@ $t = q{Adding all sequences to the main relgroup};
 $res = $bct->ctl(q{bucardo add all sequences relgroup=allpk});
 like ($res, qr/New sequences added/s, $t);
 
-## Create a new database group going from A to B and C and D
-$t = q{Created a new database group A -> B C D};
-$res = $bct->ctl('bucardo add dbgroup pg1 A:source B:target C:target D:target');
+## Create a new database group going from A to B and C and D and E
+$t = q{Created a new database group A -> B C D E};
+$res = $bct->ctl('bucardo add dbgroup pg1 A:source B:target C:target D:target E:target');
 like ($res, qr/Created database group "pg1"/, $t);
 
 ## Create a new database group going from A and B to C and D
