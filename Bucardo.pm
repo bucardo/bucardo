@@ -2079,8 +2079,8 @@ sub start_kid {
         ## Can it be queried?
         $x->{does_append_only} = 0;
 
-        ## List of tables in this database that do makedelta
-        $x->{is_makedelta} = {};
+        ## List of tables in this database that need makedelta inserts
+        $x->{needs_makedelta} = {};
 
         ## Start clumping into groups and adjust the attributes
 
@@ -2561,7 +2561,7 @@ sub start_kid {
                     ## Set the per database/per table makedelta setting now
                     if (defined $g->{makedelta}) {
                         if ($g->{makedelta} eq 'on' or $g->{makedelta} =~ /\b$dbname\b/) {
-                            $x->{is_makedelta}{$S}{$T} = 1;
+                            $x->{needs_makedelta}{$S}{$T} = 1;
                             $self->glog("Set table $dbname.$S.$T to makedelta", LOG_NORMAL);
                         }
                     }
@@ -4174,38 +4174,15 @@ sub start_kid {
                     }
                 }
                 ## For each database that had delta changes, insert rows to bucardo_track
-                ## We also need to consider makedelta:
-                ## For all tables that are marked as makedelta, we need to ensure
-                ## that we call the SQL below for each dbs_source in which
-                ## the deltacount for *any* other source dbname is non-zero
                 for my $dbname (@dbs_source) {
+
                     $x = $sync->{db}{$dbname};
 
                     $x->{needs_track} = 0;
 
                     if ($deltacount{dbtable}{$dbname}{$S}{$T}) {
                         $x->{needs_track} = 1;
-                    }
-                    elsif (exists $x->{is_makedelta}{$S}{$T}) { ## XXX set this earlier!
-                        ## We know that this particular table in this database is makedelta
-                        ## See if any of the other sources had deltas
-                        ## If they did, then rows were inserted here, so we need a track update
-                        my $found = 0;
-                        for my $dbname2 (@dbs_source) {
-                            if ($deltacount{dbtable}{$dbname}{$S}{$T}) {
-                                $found = 1;
-                                last;
-                            }
-                        }
-                    }
-                }
-
-                ## Kick off the track or stage update asynchronously
-                for my $dbname (@dbs_source) {
-                    $x = $sync->{db}{$dbname};
-
-                    if ($x->{needs_track}) {
-                        ## This is async:
+                        ## Kick off the track or stage update asynchronously
                         if ($x->{trackstage}) {
                             $sth{stage}{$dbname}{$g}->execute();
                         }
@@ -4224,6 +4201,31 @@ sub start_kid {
                         ($count = $x->{dbh}->pg_result()) =~ s/0E0/0/o;
                         $self->{insertcount}{dbname}{$S}{$T} = $count;
                         $maxcount = $count if $count > $maxcount;
+                    }
+                }
+
+                ## Do makedelta here: no sense in doing it before all the changes above
+                ## We only need to call makedelta if there is a positive delta 
+                ## count for any other database
+                for my $dbname (@dbs_source) {
+
+                    $x = $sync->{db}{$dbname};
+
+                    if ($x->{needs_makedelta}{$S}{$T}) {
+                        my $found = 0;
+                        for my $dbname2 (@dbs_source) {
+                            next if $dbname eq $dbname2;
+                            if ($deltacount{dbtable}{$dbname}{$S}{$T}) {
+                                $found = 1;
+                                last;
+                            }
+                        }
+                        if ($found) {
+                            $self->glog("Setting makdelta for table $S.$T because others updated it", LOG_VERBOSE);
+                        }
+                        else {
+                            $x->{needs_makedelta}{$S}{$T} = 0;
+                        }
                     }
                 }
 
@@ -9060,7 +9062,8 @@ sub push_rows {
                 ##   normal action of a trigger and add a row to bucardo.track to indicate that
                 ##   it has already been replicated here.
                 my $dbinfo = $sync->{db}{ $t->{name} };
-                if (!$fullcopy and exists $dbinfo->{is_makedelta}{$S}{$T}) {
+                if (!$fullcopy and $dbinfo->{needs_makedelta}{$S}{$T}) {
+                    $self->glog("Using makedelta to populate delta and track tables", LOG_VERBOSE);
                     my ($cols, $vals);
                     if ($numpks == 1) {
                         $cols = "($pkcols)";
