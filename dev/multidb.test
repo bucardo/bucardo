@@ -1,0 +1,196 @@
+##!/bin/bash
+
+## A quick self-contained test of the makedelta system
+## With multiple databases!
+## Not a replacement for the real tests so much as a development aid
+
+## Uses:
+## Four databases, A, B, C, and D (aka mtest1 mtest2 mtest3 mtest4)
+## One table: foobar
+## Two syncs: AB A <=> B and BC (B <=> C) -> D
+## For safety, this runs on port 5492.
+## Do not change it to 5432, as this drops the bucardo database! :)
+## This must be run from the root Bucardo source code directory
+
+export PGPORT=5492
+
+## Ensure we use the Bucardo.pm in the current directory
+export PERL5LIB=.
+
+## Quick check that our scripts compile cleanly
+perl -c bucardo || exit
+perl -c Bucardo.pm || exit
+
+## Just in case, stop any running Bucardos
+./bucardo stop --quiet 2>/dev/null
+
+## Bail if the cluster is not reachable
+psql -q -c 'select 1' >/dev/null 2>/dev/null
+
+if [[ $? -ne 0 ]];then
+  echo Could not connect to Postgres on port $PGPORT
+  echo Tried: psql -q -c 'select 1'
+  exit
+fi
+
+## Terminate any old connections, and drop databases
+echo Dropping existing test databases
+psql -AX -qt -c "select pg_terminate_backend(pid) FROM pg_stat_activity where datname IN ('mtest1','mtest2','mtest3','mtest4','bucardo')" >/dev/null
+psql -qc 'drop database mtest1' 2>/dev/null
+psql -qc 'drop database mtest2' 2>/dev/null
+psql -qc 'drop database mtest3' 2>/dev/null
+psql -qc 'drop database mtest4' 2>/dev/null
+psql -qc 'drop database bucardo' 2>/dev/null
+
+echo Creating test databases
+psql -qc 'create database mtest1'
+
+## Create tables foobar and foobar2. The latter will be removed from certain dbs
+psql mtest1 -qc 'create sequence mseq increment by 3 start with 1'
+psql mtest1 -qc "create table foobar(id int not null default nextval('mseq'), email text)"
+psql mtest1 -qc "create unique index foobar_unique on foobar(id)"
+psql mtest1 -qc 'create sequence mseq2 increment by 3 start with 1'
+psql mtest1 -qc "create table foobar2(id int not null default nextval('mseq2'), email text)"
+psql mtest1 -qc "create unique index foobar_unique2 on foobar2(id)"
+
+psql -qc 'create database mtest2 template mtest1'
+psql mtest2 -qc 'alter sequence mseq restart with 2'
+
+psql -qc 'create database mtest3 template mtest1'
+psql mtest3 -qc 'alter sequence mseq restart with 3'
+
+psql -qc 'create database mtest4 template mtest1'
+
+## Remove foobar from C and D
+#psql mtest3 -qc 'drop table foobar cascade'
+#psql mtest4 -qc 'drop table foobar cascade'
+
+## Now remove foobar2 from A and B
+psql mtest1 -qc 'drop table foobar2 cascade'
+psql mtest2 -qc 'drop table foobar2 cascade'
+
+echo Installing Bucardo
+./bucardo install --batch --quiet >/tmp/foobar
+if [[ $? -ne 0 ]];then
+  echo Failed to install Bucardo
+  exit
+fi
+
+./bucardo set log_level=debug --quiet
+
+./bucardo add db source_sg dbname=mtest1 --quiet
+./bucardo add db target_sg dbname=mtest2 --quiet
+./bucardo add table foobar relgroup=sgherd --quiet
+./bucardo add dbgroup sggroup source_sg:source target_sg:target
+./bucardo add sync sg_sync herd=sgherd dbs=sggroup
+
+./bucardo add db source_lg dbname=mtest3 --quiet
+./bucardo add db target_lg dbname=mtest4 --quiet
+./bucardo add table foobar2 relgroup=lgherd db=source_lg 
+./bucardo add dbgroup lggroup source_lg:source target_lg:target
+./bucardo add sync lg_sync herd=lgherd dbs=lggroup
+
+rm -f log.bucardo
+./bucardo start --logdest=.  --no-exit-on-nosync
+sleep 2
+
+./bucardo activate sync sg_sync
+./bucardo activate sync lg_sync
+
+./bucardo stop 
+sleep 2
+
+echo Restarting
+./bucardo start --logdest=.  --no-exit-on-nosync
+sleep 3
+./bucardo stop 
+sleep 2
+
+exit
+
+
+
+
+## Make a simple sync for table foobar2 going from B to C
+./bucardo add table foobar2 relgroup=mgroup2 db=B
+./bucardo add sync BC relgroup=mgroup2 dbs=C:source,B:source --quiet
+
+echo Starting Bucardo
+rm -f log.bucardo
+./bucardo start --logdest=. --quiet
+sleep 4
+
+./bucardo stop --quiet
+sleep 2
+./bucardo start --logdest=. --quiet
+sleep 4
+
+exit
+
+echo Makedelta is off, so row \"alice\" added to A will not make it to C
+psql -AX -qt mtest1 -c "insert into foobar(email) values ('alice')"
+sleep 2
+
+psql -A -t mtest1 -c "select 'A:', * from foobar"
+psql -A -t mtest2 -c "select 'B:', * from foobar"
+psql -A -t mtest3 -c "select 'C:', * from foobar"
+psql -A -t mtest4 -c "select 'D:', * from foobar"
+
+./bucardo update table foobar makedelta=B
+
+./bucardo stop --quiet
+sleep 2
+./bucardo start --logdest=. --quiet
+
+echo Makedelta is on for B, so row \"bob\" added to A will make it to C
+psql -AX -qt mtest1 -c "insert into foobar(email) values ('bob')"
+sleep 3
+
+psql -At mtest1 -c "select 'A:', * from foobar"
+psql -At mtest2 -c "select 'B:', * from foobar"
+psql -At mtest3 -c "select 'C:', * from foobar"
+psql -At mtest4 -c "select 'D:', * from foobar"
+
+./bucardo update table foobar set makedelta=A
+./bucardo message Changed makedelta
+./bucardo reload sync AB
+
+echo Makedelta is on for A only, so row \"bob\" deleted from A will not make it to C
+psql -AX -qt mtest1 -c "delete from foobar where email = 'bob'"
+sleep 3
+
+psql -At mtest1 -c "select 'A:', * from foobar"
+psql -At mtest2 -c "select 'B:', * from foobar"
+psql -At mtest3 -c "select 'C:', * from foobar"
+psql -At mtest4 -c "select 'D:', * from foobar"
+
+./bucardo update table foobar set makedelta=on
+./bucardo message Changed makedelta
+./bucardo reload sync AB
+
+echo Makedelta is on for everyone, so row \"mallory\" to A will not make it to B,C,D
+psql -AX -qt mtest1 -c "insert into foobar(email) values ('mallory')"
+sleep 3
+
+psql -At mtest1 -c "select 'A:', * from foobar"
+psql -At mtest2 -c "select 'B:', * from foobar"
+psql -At mtest3 -c "select 'C:', * from foobar"
+psql -At mtest4 -c "select 'D:', * from foobar"
+
+./bucardo update table foobar set makedelta=off
+./bucardo message Changed makedelta
+./bucardo reload sync AB
+
+echo Makedelta is off for everyone, so row \"mallory\" removed from A will stay on C
+psql -AX -qt mtest1 -c "delete from foobar where email = 'mallory'"
+sleep 3
+
+psql -At mtest1 -c "select 'A:', * from foobar"
+psql -At mtest2 -c "select 'B:', * from foobar"
+psql -At mtest3 -c "select 'C:', * from foobar"
+psql -At mtest4 -c "select 'D:', * from foobar"
+
+
+echo Stopping Bucardo
+./bucardo stop --quiet
+
