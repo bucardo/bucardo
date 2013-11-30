@@ -144,6 +144,7 @@ t/99-spellcheck.t - Spell checks all files and comments
 
 t/99-yaml.t - Uses Test::YAML::Meta to verify the META.yml file.
 
+* Developer test files are in the dev/ directory
 
 =============
 == Editing ==
