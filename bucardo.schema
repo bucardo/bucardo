@@ -2104,7 +2104,7 @@ SELECT 'Fixme'::TEXT;
             ORDER BY attnum
         };
     my $columninfo;
-    if (@tablelist) {
+    if (@tableoids) {
         $SQL =~ s/COLIST/join ',' => @tableoids/e;
         $sth = $dbh->prepare($SQL);
         $sth->execute();
