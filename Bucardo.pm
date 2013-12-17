@@ -2050,7 +2050,7 @@ sub start_kid {
             $found_first_source = 1;
         }
 
-        ## If this is inactive, we've already checked that if it is a souce in validate_sync
+        ## If this is inactive, we've already checked that if it is a source in validate_sync
         ## Thus, if we made it this far, it is a target and should be skipped
         if ($x->{status} eq 'inactive') {
             $self->glog(qq{Skipping inactive database "$dbname" entirely});
