@@ -4880,77 +4880,83 @@ sub start_kid {
         ## Bail out unless this error came from DBD::Pg
         $err_handler->($err) if $err !~ /DBD::Pg/;
 
-        ## We only do special things for certain errors, so check for those.
-        my ($sleeptime, $fail_msg) = (0,'');
-        my @states = map { $sync->{db}{$_}{dbh}->state } @dbs_dbi;
-        if (first { $_ eq '40001' } @states) {
-            $sleeptime = $config{kid_serial_sleep};
-            ## If set to -1, this means we never try again
-            if ($sleeptime < 0) {
-                $self->glog('Could not serialize, will not retry', LOG_VERBOSE);
-                $err_handler->($err);
+        eval {
+            ## We only do special things for certain errors, so check for those.
+            my ($sleeptime, $fail_msg) = (0,'');
+            my @states = map { $sync->{db}{$_}{dbh}->state } @dbs_dbi;
+            if (first { $_ eq '40001' } @states) {
+                $sleeptime = $config{kid_serial_sleep};
+                ## If set to -1, this means we never try again
+                if ($sleeptime < 0) {
+                    $self->glog('Could not serialize, will not retry', LOG_VERBOSE);
+                    $err_handler->($err);
+                }
+                elsif ($sleeptime) {
+                    $self->glog((sprintf "Could not serialize, will sleep for %s %s",
+                                 $sleeptime, 1==$sleeptime ? 'second' : 'seconds'), LOG_NORMAL);
+                }
+                else {
+                    $self->glog('Could not serialize, will try again', LOG_NORMAL);
+                }
+                $fail_msg = "Serialization failure";
             }
-            elsif ($sleeptime) {
-                $self->glog((sprintf "Could not serialize, will sleep for %s %s",
-                             $sleeptime, 1==$sleeptime ? 'second' : 'seconds'), LOG_NORMAL);
+            elsif (first { $_ eq '40P01' } @states) {
+                $sleeptime = $config{kid_deadlock_sleep};
+                ## If set to -1, this means we never try again
+                if ($sleeptime < 0) {
+                    $self->glog('Encountered a deadlock, will not retry', LOG_VERBOSE);
+                    $err_handler->($err);
+                }
+                elsif ($sleeptime) {
+                    $self->glog((sprintf "Encountered a deadlock, will sleep for %s %s",
+                                 $sleeptime, 1==$sleeptime ? 'second' : 'seconds'), LOG_NORMAL);
+                }
+                else {
+                    $self->glog('Encountered a deadlock, will try again', LOG_NORMAL);
+                }
+                $fail_msg = "Deadlock detected";
+                ## TODO: Get more information via gett_deadlock_details()
             }
             else {
-                $self->glog('Could not serialize, will try again', LOG_NORMAL);
-            }
-            $fail_msg = "Serialization failure";
-        }
-        elsif (first { $_ eq '40P01' } @states) {
-            $sleeptime = $config{kid_deadlock_sleep};
-            ## If set to -1, this means we never try again
-            if ($sleeptime < 0) {
-                $self->glog('Encountered a deadlock, will not retry', LOG_VERBOSE);
                 $err_handler->($err);
             }
-            elsif ($sleeptime) {
-                $self->glog((sprintf "Encountered a deadlock, will sleep for %s %s",
-                             $sleeptime, 1==$sleeptime ? 'second' : 'seconds'), LOG_NORMAL);
+
+            if ($config{log_level_number} >= LOG_VERBOSE) {
+                ## Show complete error information in debug mode.
+                for my $dbh (map { $sync->{db}{$_}{dbh} } @dbs_dbi) {
+                    $self->glog(
+                        sprintf('*  %s: %s - %s', $dbh->{Name}, $dbh->state, $dbh->errstr),
+                        LOG_VERBOSE
+                    ) if $dbh->err;
+                }
             }
-            else {
-                $self->glog('Encountered a deadlock, will try again', LOG_NORMAL);
+
+            ## Roll everyone back
+            for my $dbname (@dbs_dbi) {
+                my $dbh = $sync->{db}{$dbname}{dbh};
+                ## Wrapped in an eval as a failure to serialise can cause an abort() and the KID will die.
+                eval { $dbh->pg_cancel if $dbh->{pg_async_status} > 0; };
+                ## Seperate eval{} for the rollback as we are probably still connected to the transaction.
+                eval { $dbh->rollback; };
             }
-            $fail_msg = "Deadlock detected";
-            ## TODO: Get more information via gett_deadlock_details()
-        }
-        else {
+
+            # End the syncrun.
+            $self->end_syncrun($maindbh, 'bad', $syncname, "Failed : $fail_msg (KID $$)" );
+            $maindbh->commit;
+
+            ## Tell listeners we are about to sleep
+            ## TODO: Add some sweet payload information: sleep time, which dbs/tables failed, etc.
+            $self->db_notify($maindbh, "syncsleep_${syncname}", 0, "$fail_msg. Sleep=$sleeptime");
+
+            ## Sleep and try again.
+            sleep $sleeptime if $sleeptime;
+            $kicked = 1;
+            redo RUNKID;
+        };
+        if (my $err = $@) {
+            # Our recovery failed. :-(
             $err_handler->($err);
         }
-
-        if ($config{log_level_number} >= LOG_VERBOSE) {
-            ## Show complete error information in debug mode.
-            for my $dbh (map { $sync->{db}{$_}{dbh} } @dbs_dbi) {
-                $self->glog(
-                    sprintf('*  %s: %s - %s', $dbh->{Name}, $dbh->state, $dbh->errstr),
-                    LOG_VERBOSE
-                ) if $dbh->err;
-            }
-        }
-
-        ## Roll everyone back
-        for my $dbname (@dbs_dbi) {
-            my $dbh = $sync->{db}{$dbname}{dbh};
-            ## Wrapped in an eval as a failure to serialise can cause an abort() and the KID will die.
-            eval { $dbh->pg_cancel if $dbh->{pg_async_status} > 0; };
-            ## Seperate eval{} for the rollback as we are probably still connected to the transaction.
-            eval { $dbh->rollback; };
-        }
-
-        # End the syncrun.
-        $self->end_syncrun($maindbh, 'bad', $syncname, "Failed : $fail_msg (KID $$)" );
-        $maindbh->commit;
-
-        ## Tell listeners we are about to sleep
-        ## TODO: Add some sweet payload information: sleep time, which dbs/tables failed, etc.
-        $self->db_notify($maindbh, "syncsleep_${syncname}", 0, "$fail_msg. Sleep=$sleeptime");
-
-        ## Sleep and try again.
-        sleep $sleeptime if $sleeptime;
-        $kicked = 1;
-        redo RUNKID;
     }
 
 } ## end of start_kid
