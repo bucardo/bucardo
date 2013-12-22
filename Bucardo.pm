@@ -2053,7 +2053,7 @@ sub start_kid {
         ## If this is inactive, we've already checked that if it is a source in validate_sync
         ## Thus, if we made it this far, it is a target and should be skipped
         if ($x->{status} eq 'inactive') {
-            $self->glog(qq{Skipping inactive database "$dbname" entirely});
+            $self->glog(qq{Skipping inactive database "$dbname" entirely}, LOG_NORMAL);
             ## Don't just skip it: nuke it from orbit! It's the only way to be sure.
             delete $sync->{db}{$dbname};
             next;
