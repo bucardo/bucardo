@@ -15,7 +15,7 @@ use strict;
 use warnings;
 use utf8;
 
-our $VERSION = '4.99.10';
+our $VERSION = '4.99.11';
 
 use DBI 1.51;                               ## How Perl talks to databases
 use DBD::Pg 2.0   qw( :async             ); ## How Perl talks to Postgres databases
@@ -9418,7 +9418,7 @@ Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This document describes version 4.99.10 of Bucardo
+This document describes version 4.99.11 of Bucardo
 
 =head1 WEBSITE
 
