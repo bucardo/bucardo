@@ -8523,7 +8523,11 @@ sub delete_rows {
             my $count = 1==$numpks ? @{ $SQL{ANYargs} } : @{ $SQL{IN} };
             for my $loop (1..$count) {
                 my $async = $loop==$count ? PG_ASYNC : 0;
-                my $pre = $count > 1 ? "/* $loop of $count */ " : '';
+                my $A = $async ? 'async:on' : 'async:off';
+                my $pre = $count > 1 ? "/* $loop of $count $A */ " : "/* $A */";
+
+                $self->glog("Deleting target $tname. $loop of $count $A", LOG_DEBUG);
+
                 if (1 == $numpks) {
                     $t->{deletesth} = $tdbh->prepare("$pre$SQL{ANY}{$tname}", { pg_async => $async });
                     my $res = $t->{deletesth}->execute($SQL{ANYargs}->[$loop-1]);
