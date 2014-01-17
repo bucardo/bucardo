@@ -4484,7 +4484,6 @@ sub start_kid {
                 } ## end each database to be truncated/deleted
 
 
-
                 ## For this table, copy all rows from source to target(s)
                 $dmlcount{inserts} += $dmlcount{I}{target}{$S}{$T} = $self->push_rows(
                     'fullcopy', $S, $T, $g, $sync, $sourcedbh, $sourcename,
@@ -8383,7 +8382,7 @@ sub delete_rows {
     ## The number of items before we break it into a separate statement
     ## This is inexact, as we don't know how large each key is,
     ## but should be good enough as long as not set too high.
-    my $chunksize = $config{statement_chunk_size} || 10_000;
+    my $chunksize = $config{statement_chunk_size} || 8_000;
 
     ## Setup our deletion SQL as needed
     my %SQL;
