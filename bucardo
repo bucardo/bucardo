@@ -1397,7 +1397,7 @@ sub add_database {
         doc_section => $doc_section,
     });
 
-    ## Must have a database name
+    ## Must have a database name unless, possibly, there's a service given
     if (! exists $vals->{dbname}) {
         print qq{Cannot add database: must supply a database name to connect to\n};
         exit 1;
@@ -9452,7 +9452,7 @@ default. Optional.
 Boolean indicating whether or not to analyze the table after every sync. Off
 by default. Optional.
 
-=item C<vaccuum_after_copy>
+=item C<vacuum_after_copy>
 
 Boolean indicating whether or not to vacuum the table after every sync. Off by
 default. Optional.
@@ -10436,7 +10436,7 @@ Boolean indicating whether or not to rebuild indexes after every sync.
 
 Boolean indicating whether or not to analyze the table after every sync.
 
-=item C<vaccuum_after_copy>
+=item C<vacuum_after_copy>
 
 Boolean indicating whether or not to vacuum the table after every sync.
 
