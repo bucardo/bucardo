@@ -935,9 +935,11 @@ sub ctl {
     ## Emulates a command-line invocation
     ## Arguments:
     ## 1. String to pass to bucardo
+    ## 2. Database name to connect to. Used only when we're not confident the bucardo database exists already.
     ## Returns: answer as a string
 
-    my ($self,$args) = @_;
+    my ($self,$args, $db) = @_;
+    $db ||= 'bucardo';
 
     my $info;
     my $ctl = $self->{bucardo};
@@ -950,7 +952,7 @@ sub ctl {
         next unless exists $bc->{$val} and length $bc->{$val};
         $connopts .= " --db$arg=$bc->{$val}";
     }
-    $connopts .= " --dbname=bucardo --log-dest .";
+    $connopts .= " --dbname=$db --log-dest .";
     $connopts .= " --dbuser=$user";
     ## Just hard-code these, no sense in multiple Bucardo base dbs yet:
     $connopts .= " --dbport=58921";
@@ -1095,7 +1097,7 @@ sub setup_bucardo {
 
     ## Now run the install. Timeout after a few seconds
     debug(qq{Running bucardo install on cluster $clustername});
-    my $info = $self->ctl('install --batch');
+    my $info = $self->ctl('install --batch', 'postgres');
 
     if ($info !~ /Installation is now complete/) {
         die "Installation failed: $info\n";
