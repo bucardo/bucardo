@@ -1398,7 +1398,7 @@ sub add_database {
     });
 
     ## Must have a database name unless, possibly, there's a service given
-    if (! exists $vals->{dbname}) {
+    if (! exists $vals->{dbname} && ! exists $vals->{dbservice}) {
         print qq{Cannot add database: must supply a database name to connect to\n};
         exit 1;
     }

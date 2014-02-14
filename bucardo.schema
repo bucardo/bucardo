@@ -193,7 +193,7 @@ CREATE TABLE bucardo.db (
   dbtype               TEXT        NOT NULL DEFAULT 'postgres',
   dbhost               TEXT        NOT NULL DEFAULT '',
   dbport               TEXT        NOT NULL DEFAULT '',
-  dbname               TEXT        NOT NULL, -- the actual name of the database, not the primary key 'local' name
+  dbname               TEXT            NULL, -- the actual name of the database, not the primary key 'local' name
   dbuser               TEXT        NOT NULL,
   dbpass               TEXT            NULL,
   dbconn               TEXT        NOT NULL DEFAULT '',  -- string to add to the generated dsn
@@ -201,7 +201,8 @@ CREATE TABLE bucardo.db (
   pgpass               TEXT            NULL,      -- local file with connection info same as pgpass
   status               TEXT        NOT NULL DEFAULT 'active',
   server_side_prepares BOOLEAN     NOT NULL DEFAULT 'true',
-  cdate                TIMESTAMPTZ NOT NULL DEFAULT now()
+  cdate                TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK                (dbservice IS NOT NULL OR dbname IS NOT NULL)
 );
 COMMENT ON TABLE bucardo.db IS $$Holds information about each database used in replication$$;
 
@@ -675,7 +676,7 @@ if (!$rv->{processed}) {
 }
 $row = $rv->{rows}[0];
 
-for (qw(host port name user pass conn)) {
+for (qw(host port name user pass conn service)) {
     $db{$_} = exists $row->{"db$_"} ? $row->{"db$_"} : '';
 }
 
@@ -707,14 +708,17 @@ if ($dbtype eq 'postgres') {
         }
     }
 
-    length $db{name} or elog(ERROR, qq{Database name is mandatory\n});
-    length $db{user} or elog(ERROR, qq{Database username is mandatory\n});
+    ## These may be specified in the service name
+    if (! length($db{service})) {
+        length $db{name} or elog(ERROR, qq{Database name is mandatory\n});
+        length $db{user} or elog(ERROR, qq{Database username is mandatory\n});
+    }
 
-    my $connstring = "dbi:Pg:dbname=$db{name}";
+    my $connstring = "dbi:Pg:";
     $db{host} ||= ''; $db{port} ||= ''; $db{pass} ||= '';
-    length $db{host} and $connstring .= ";host=$db{host}";
-    length $db{port} and $connstring .= ";port=$db{port}";
-    length $db{conn} and $connstring .= ";$db{conn}";
+    $connstring .= join ';', map {
+        ( $_ eq 'name' ? 'dbname' : $_ ) . "=$db{$_}";
+    } grep { length $db{$_} } qw/name host port conn service/;
 
     my $ssp = $row->{server_side_prepares};
     $ssp = 1 if ! defined $ssp;

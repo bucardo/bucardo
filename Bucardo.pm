@@ -5009,7 +5009,10 @@ sub connect_database {
         }
 
         if ('postgres' eq $dbtype) {
-            $dsn = "dbi:Pg:dbname=$d->{dbname}";
+            $dsn = "dbi:Pg:";
+            $dsn .= join ';', map {
+                ($_ eq 'dbservice' ? 'service' : $_ ) . "=$d->{$_}";
+            } grep { defined $d->{$_} and length $d->{$_} } qw/dbname dbservice/;
         }
         elsif ('drizzle' eq $dbtype) {
             $dsn = "dbi:drizzle:database=$d->{dbname}";
