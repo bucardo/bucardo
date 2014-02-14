@@ -7725,10 +7725,10 @@ sub install {
     }
 
     ## Setup our default arguments for the installation choices
-    my $host   = $bcargs->{dbhost} || $ENV{PGHOST} || '<none>';
-    my $port   = $bcargs->{dbport} || $ENV{PGPORT} || 5432;
-    my $user   = $bcargs->{dbuser} || $ENV{DBUSER} || 'postgres';
-    my $dbname = $bcargs->{dbname} || $ENV{DBNAME} || 'postgres';
+    my $host = $bcargs->{dbhost} || $ENV{PGHOST} || '<none>';
+    my $port = $bcargs->{dbport} || $ENV{PGPORT} || 5432;
+    my $user = $ENV{DBUSER} || 'postgres';
+    my $dbname = $ENV{DBNAME} || 'postgres';
 
     ## Make sure the bucardo.schema file is available, and extract some config items
     my ($fh, $schema_file) = find_bucardo_schema();
