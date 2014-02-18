@@ -8521,11 +8521,10 @@ sub delete_rows {
             ## In most cases, this means always async
             my $count = 1==$numpks ? @{ $SQL{ANYargs} } : @{ $SQL{IN} };
             for my $loop (1..$count) {
-                my $async = $loop==$count ? PG_ASYNC : 0;
-                my $A = $async ? 'async:on' : 'async:off';
-                my $pre = $count > 1 ? "/* $loop of $count $A */ " : "/* $A */";
+                my $async = PG_ASYNC;
+                my $pre = $count > 1 ? "/* $loop of $count */ " : '';
 
-                $self->glog("Deleting target $tname. $loop of $count $A", LOG_DEBUG);
+                $self->glog("Deleting target $tname. $loop of $count", LOG_DEBUG);
 
                 if (1 == $numpks) {
                     $t->{deletesth} = $tdbh->prepare("$pre$SQL{ANY}{$tname}", { pg_async => $async });
@@ -8727,6 +8726,7 @@ sub delete_rows {
         }
     }
 
+    ## Generate our final deletion counts
     $count = 0;
     for my $t (@$deldb) {
 
