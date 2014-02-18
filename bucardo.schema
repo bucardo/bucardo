@@ -191,10 +191,10 @@ CREATE TABLE bucardo.db (
   name                 TEXT        NOT NULL,  -- local name for convenience, not necessarily database name
                          CONSTRAINT db_name_pk PRIMARY KEY (name),
   dbtype               TEXT        NOT NULL DEFAULT 'postgres',
-  dbhost               TEXT        NOT NULL DEFAULT '',
-  dbport               TEXT        NOT NULL DEFAULT '',
+  dbhost               TEXT            NULL DEFAULT '',
+  dbport               TEXT            NULL DEFAULT '',
   dbname               TEXT            NULL, -- the actual name of the database, not the primary key 'local' name
-  dbuser               TEXT        NOT NULL,
+  dbuser               TEXT            NULL,
   dbpass               TEXT            NULL,
   dbconn               TEXT        NOT NULL DEFAULT '',  -- string to add to the generated dsn
   dbservice            TEXT            NULL,
@@ -202,7 +202,14 @@ CREATE TABLE bucardo.db (
   status               TEXT        NOT NULL DEFAULT 'active',
   server_side_prepares BOOLEAN     NOT NULL DEFAULT 'true',
   cdate                TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK                (dbservice IS NOT NULL OR dbname IS NOT NULL)
+  CHECK                (
+    dbservice IS NOT NULL OR (
+        dbname IS NOT NULL AND
+        dbuser IS NOT NULL AND
+        dbhost IS NOT NULL AND
+        dbport IS NOT NULL
+    )
+  )
 );
 COMMENT ON TABLE bucardo.db IS $$Holds information about each database used in replication$$;
 
@@ -715,7 +722,7 @@ if ($dbtype eq 'postgres') {
     }
 
     my $connstring = "dbi:Pg:";
-    $db{host} ||= ''; $db{port} ||= ''; $db{pass} ||= '';
+    $db{host} ||= ''; $db{port} ||= ''; $db{pass} ||= ''; $db{user} ||= '';
     $connstring .= join ';', map {
         ( $_ eq 'name' ? 'dbname' : $_ ) . "=$db{$_}";
     } grep { length $db{$_} } qw/name host port conn service/;

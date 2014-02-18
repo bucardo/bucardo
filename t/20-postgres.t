@@ -11,6 +11,8 @@ use lib 't','.';
 use DBD::Pg;
 use Test::More;
 use MIME::Base64;
+use File::Temp qw/ tempfile /;
+use Cwd;
 
 use vars qw/ $dbhX $dbhA $dbhB $dbhC $dbhD $dbhE $res $command $t $SQL %pkey %sth %sql $sth $count $val /;
 
@@ -29,6 +31,11 @@ my $check_for_row_2 = 2;
 my $check_for_row_3 = 3;
 my $check_for_row_4 = 7;
 my $check_sequences_same = 1;
+
+## We have to set up the PGSERVICEFILE early on, so the proper
+## environment variable is set for all processes from the beginning.
+my ($fh, $service_temp_filename) = tempfile("bucardo_pgservice.tmp.XXXX", UNLINK => 0);
+$ENV{PGSERVICEFILE} = getcwd . '/' . $service_temp_filename;
 
 plan tests => $single_tests +
     ( $check_sequences_same * $numsequences ) + ## Simple sequence testing
@@ -59,8 +66,8 @@ $dbhE = $bct->repopulate_cluster('E');
 ## Create a bucardo database, and install Bucardo into it
 $dbhX = $bct->setup_bucardo('A');
 
-## Teach Bucardo about five databases
-for my $name (qw/ A B C D A1 E /) {
+## Teach Bucardo about the first four databases
+for my $name (qw/ A B C D A1 /) {
     $t = "Adding database from cluster $name works";
     my ($dbuser,$dbport,$dbhost) = $bct->add_db_args($name);
     my $status = $name eq 'E' ? 'inactive' : 'active';
@@ -68,6 +75,14 @@ for my $name (qw/ A B C D A1 E /) {
     $res = $bct->ctl($command);
     like ($res, qr/Added database "$name"/, $t);
 }
+
+## Teach Bucardo about the fifth database using a service file
+$t = "Adding database E via a service name works";
+my ($dbuser,$dbport,$dbhost) = $bct->add_db_args('E');
+print $fh "[dbE]\ndbname=bucardo_test\nuser=$dbuser\nport=$dbport\nhost=$dbhost\n";
+close $fh;
+$res = $bct->ctl("add db E service=dbE");
+like ($res, qr/Added database "E"/, $t);
 
 ## Put all pk tables into a relgroup
 $t = q{Adding all PK tables on the master works};
@@ -442,5 +457,7 @@ like $bct->ctl('bucardo kick sync pgtest3 0'),
 $bct->check_for_row([[1],[2],[3],[7]], [qw/A B C/]);
 $bct->check_for_row([[1],[2],[3],[7]], [qw/D/], 'customcols', '!test1');
 $bct->check_for_row([[2],[3],[7],[30]], [qw/D/], 'customcols', 'test1');
+
+unlink $service_temp_filename;
 
 exit;

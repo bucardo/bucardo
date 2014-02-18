@@ -1376,7 +1376,6 @@ sub add_database {
     my $validcols = qq{
         null                     name                 0                $item_name
         type|dbtype              dbtype               0                postgres
-        user|username|dbuser     dbuser               0                bucardo
         pass|password|dbpass     dbpass               0                null
         db|dbname                dbname               0                null
         port|dbport|pgport       dbport               numeric          ENV:PGPORT
@@ -1390,6 +1389,11 @@ sub add_database {
         service|dbservice        dbservice            0                null
     };
 
+    ## Include the value for the dbuser only if a service is not specified, or
+    ## a user was explicitly included. In other words, don't default the user
+    ## name when there's a service.
+    $validcols .= "user|username|dbuser     dbuser               0                bucardo\n"
+        if ((! grep { /^(db)?service=/ } @nouns) || grep { /^(db)?user(name)?=/ } @nouns);
 
     my ( $dbcols, $cols, $phs, $vals, $extra ) = process_simple_args({
         cols        => $validcols,
