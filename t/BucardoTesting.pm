@@ -8,6 +8,10 @@ package BucardoTesting;
 
 use strict;
 use warnings;
+use utf8;
+
+use Encode qw/ decode /;
+use Encode::Locale;
 use DBI;
 use DBD::Pg;
 use Time::HiRes qw/sleep gettimeofday tv_interval/;
@@ -973,7 +977,7 @@ sub ctl {
         local $SIG{ALRM} = sub { die "Alarum!\n"; };
         alarm $ALARM_BUCARDO;
         debug("Script: $ctl Connection options: $connopts Args: $args", 3);
-        $info = qx{$ctl $connopts $args 2>&1};
+        $info = decode( locale => qx{$ctl $connopts $args 2>&1} );
         debug("Exit value: $?", 3);
         die $info if $? != 0;
         alarm 0;
@@ -983,7 +987,7 @@ sub ctl {
         return __PACKAGE__ . ' timeout hit, giving up';
     }
     if ($@) {
-        return "Error running bucardo: $@\n";
+        return "Error running bucardo: " . decode( locale => $@ ) . "\n";
     }
 
     debug("bucardo said: $info", 3);

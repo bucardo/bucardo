@@ -14,6 +14,7 @@ use 5.008003;
 use strict;
 use warnings;
 use utf8;
+use open qw( :std :utf8 );
 
 our $VERSION = '4.99.11';
 

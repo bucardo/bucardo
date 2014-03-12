@@ -12,12 +12,16 @@
 package bucardo;
 use strict;
 use warnings;
+use utf8;
 use 5.008003;
+use open qw( :std :utf8 );
 use DBI;
-use IO::Handle    qw/ autoflush /;
-use Time::HiRes   qw/ sleep gettimeofday tv_interval /;
-use POSIX         qw/ ceil setsid localeconv /;
-use Data::Dumper  qw/ Dumper /;
+use IO::Handle      qw/ autoflush /;
+use Time::HiRes     qw/ sleep gettimeofday tv_interval /;
+use POSIX           qw/ ceil setsid localeconv /;
+use Encode          qw/ decode /;
+use Encode::Locale;
+use Data::Dumper    qw/ Dumper /;
 $Data::Dumper::Indent = 1;
 use Getopt::Long;
 Getopt::Long::Configure(qw/ no_ignore_case pass_through no_autoabbrev /);
@@ -27,9 +31,12 @@ our $VERSION = '4.99.11';
 ## For the tests, we want to check that it compiles without actually doing anything
 return 1 if $ENV{BUCARDO_TEST};
 
-## No buffering on the standard streams
+## No buffering on the standard streams, and let each accept UTF8
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
+
+## Treat ARGV values as utf8
+@ARGV = map { decode(locale => $_, 1) } @ARGV;
 
 ## All the variables we use often and want to declare here without 'my'
 use vars qw/$dbh $SQL $sth %sth $count $info %global $SYNC $GOAT $TABLE $SEQUENCE $DB $DBGROUP $HERD
@@ -4509,6 +4516,7 @@ sub add_items_to_goat_table {
     my @newid;
 
     for my $rel (sort { $a->{name} cmp $b->{name} } @$info) {
+        # XXX Is it safe to assume UTF8 encoding here? Probably not
         my $name = $rel->{name};
         if ($name !~ /^([\w ]+)\.([\w ]+)$/o) {
             die qq{Invalid name, got "$name", but expected format "schema.relname"};
