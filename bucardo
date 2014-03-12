@@ -31,7 +31,7 @@ our $VERSION = '4.99.11';
 ## For the tests, we want to check that it compiles without actually doing anything
 return 1 if $ENV{BUCARDO_TEST};
 
-## No buffering on the standard streams, and let each accept UTF8
+## No buffering on the standard streams
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
 
