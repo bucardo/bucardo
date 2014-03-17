@@ -197,7 +197,7 @@ CREATE TABLE bucardo.db (
   dbuser               TEXT            NULL,
   dbpass               TEXT            NULL,
   dbconn               TEXT        NOT NULL DEFAULT '',  -- string to add to the generated dsn
-  dbservice            TEXT            NULL,
+  dbservice            TEXT            NULL DEFAULT '',
   pgpass               TEXT            NULL,      -- local file with connection info same as pgpass
   status               TEXT        NOT NULL DEFAULT 'active',
   server_side_prepares BOOLEAN     NOT NULL DEFAULT 'true',
