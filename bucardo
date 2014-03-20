@@ -1423,6 +1423,12 @@ sub add_database {
     ## Clean up and standardize the type name
     my $dbtype = $vals->{dbtype} = standardize_rdbms_name($vals->{dbtype});
 
+    ## If we have a service, strip the host and port as they may have been set via ENV
+    if (exists $vals->{dbservice}) {
+        delete $vals->{dbport};
+        delete $vals->{dbhost};
+    }
+
     ## Attempt to insert this into the database
     $SQL = "INSERT INTO bucardo.db ($cols) VALUES ($phs)";
     debug("SQL: $SQL");
