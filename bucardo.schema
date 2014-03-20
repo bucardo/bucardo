@@ -201,19 +201,17 @@ CREATE TABLE bucardo.db (
   pgpass               TEXT            NULL,      -- local file with connection info same as pgpass
   status               TEXT        NOT NULL DEFAULT 'active',
   server_side_prepares BOOLEAN     NOT NULL DEFAULT 'true',
-  cdate                TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK                (
-    dbservice IS NOT NULL OR (
-        dbname IS NOT NULL AND
-        dbuser IS NOT NULL AND
-        dbhost IS NOT NULL AND
-        dbport IS NOT NULL
-    )
-  )
+  cdate                TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE bucardo.db IS $$Holds information about each database used in replication$$;
 
 ALTER TABLE bucardo.db ADD CONSTRAINT db_status CHECK (status IN ('active','inactive'));
+
+ALTER TABLE bucardo.db ADD CONSTRAINT db_service_valid CHECK (
+    dbservice IS NOT NULL OR (
+        dbname IS NOT NULL AND dbuser IS NOT NULL AND dbhost IS NOT NULL AND dbport IS NOT NULL
+    )
+);
 
 --
 -- Databases can belong to zero or more named groups
