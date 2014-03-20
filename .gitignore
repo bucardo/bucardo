@@ -27,6 +27,7 @@ bucardo_test_database_*
 log.bucardo
 bucardo.restart.reason.*
 test.*
+bucardo_pgservice.tmp.*
 
 ## Temporary files:
 tmp/
