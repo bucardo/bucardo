@@ -10,7 +10,7 @@ use warnings;
 use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 48;
+use Test::More tests => 49;
 
 use vars qw/$t $res $command $dbhX $dbhA $dbhB/;
 
@@ -67,6 +67,10 @@ like ($res, qr/add anyway.*Added database "foo"/s, $t);
 $t = 'Add database works for cluster A';
 $res = $bct->ctl("bucardo add db A dbname=bucardo_test user=$dbuserA port=$dbportA host=$dbhostA");
 is ($res, qq{Added database "A"\n}, $t);
+
+$t = 'Upgrade correctly reports no schema changes are needed';
+$res = $bct->ctl("bucardo upgrade");
+like ($res, qr/No schema changes were needed/, $t);
 
 $t = q{Add database fails if using the same internal name};
 $res = $bct->ctl("bucardo add db A dbname=postgres user=$dbuserA port=$dbportA host=$dbhostA");
