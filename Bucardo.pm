@@ -5,7 +5,7 @@
 ##
 ## This script should only be called via the 'bucardo' program
 ##
-## Copyright 2006-2013 Greg Sabino Mullane <greg@endpoint.com>
+## Copyright 2006-2014 Greg Sabino Mullane <greg@endpoint.com>
 ##
 ## Please visit http://bucardo.org for more information
 
@@ -223,7 +223,7 @@ sub new {
         created      => scalar localtime,
         mcppid       => $$,
         verbose      => 1,
-        logdest      => ['/var/log/bucardo'],
+        logdest      => ['.'],#'/var/log/bucardo'],
         warning_file => '',
         logseparate  => 0,
         logextension => '',
@@ -5014,6 +5014,7 @@ sub connect_database {
             $dsn .= join ';', map {
                 ($_ eq 'dbservice' ? 'service' : $_ ) . "=$d->{$_}";
             } grep { defined $d->{$_} and length $d->{$_} } qw/dbname dbservice/;
+            $self->glog("DDSSNN=$dsn");
         }
         elsif ('drizzle' eq $dbtype) {
             $dsn = "dbi:drizzle:database=$d->{dbname}";
@@ -5082,6 +5083,7 @@ sub connect_database {
 
     $self->glog("DSN: $dsn", LOG_NORMAL) if exists $config{log_level};
 
+warn "DSN=$dsn\n";
     $dbh = DBI->connect
         (
          $dsn,
@@ -9477,7 +9479,7 @@ Greg Sabino Mullane <greg@endpoint.com>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2005-2013 Greg Sabino Mullane <greg@endpoint.com>.
+Copyright (c) 2005-2014 Greg Sabino Mullane <greg@endpoint.com>.
 
 This software is free to use: see the LICENSE file for details.
 

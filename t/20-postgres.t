@@ -34,7 +34,7 @@ my $check_sequences_same = 1;
 
 ## We have to set up the PGSERVICEFILE early on, so the proper
 ## environment variable is set for all processes from the beginning.
-my ($fh, $service_temp_filename) = tempfile("bucardo_pgservice.tmp.XXXX", UNLINK => 0);
+my ($service_fh, $service_temp_filename) = tempfile("bucardo_pgservice.tmp.XXXX", UNLINK => 0);
 $ENV{PGSERVICEFILE} = getcwd . '/' . $service_temp_filename;
 
 plan tests => $single_tests +
@@ -70,8 +70,7 @@ $dbhX = $bct->setup_bucardo('A');
 for my $name (qw/ A B C D A1 /) {
     $t = "Adding database from cluster $name works";
     my ($dbuser,$dbport,$dbhost) = $bct->add_db_args($name);
-    my $status = $name eq 'E' ? 'inactive' : 'active';
-    $command = "bucardo add db $name dbname=bucardo_test user=$dbuser port=$dbport host=$dbhost status=$status";
+    $command = "bucardo add db $name dbname=bucardo_test user=$dbuser port=$dbport host=$dbhost status=active";
     $res = $bct->ctl($command);
     like ($res, qr/Added database "$name"/, $t);
 }
@@ -79,10 +78,12 @@ for my $name (qw/ A B C D A1 /) {
 ## Teach Bucardo about the fifth database using a service file
 $t = "Adding database E via a service name works";
 my ($dbuser,$dbport,$dbhost) = $bct->add_db_args('E');
-print $fh "[dbE]\ndbname=bucardo_test\nuser=$dbuser\nport=$dbport\nhost=$dbhost\n";
-close $fh;
-$res = $bct->ctl("add db E service=dbE");
+print $service_fh "[dbE]\ndbname=bucardo_test\nuser=$dbuser\nport=$dbport\nhost=$dbhost\n";
+close $service_fh;
+$res = $bct->ctl("add db E service=dbE status=inactive");
 like ($res, qr/Added database "E"/, $t);
+
+exit;
 
 ## Put all pk tables into a relgroup
 $t = q{Adding all PK tables on the master works};
