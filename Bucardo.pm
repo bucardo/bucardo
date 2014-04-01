@@ -740,10 +740,6 @@ sub start_mcp {
 
     die 'We should never reach this point!';
 
-    ##
-    ## Everything from this point forward in start_mcp is subroutines
-    ##
-
     return; ## no critic
 
 } ## end of start_mcp
