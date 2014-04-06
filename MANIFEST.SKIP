@@ -12,9 +12,11 @@ log$
 log.bucardo
 .git/
 outgoingmail.
+.bucardorc
 bucardo_test_database_*
 none/
 .tmp$
+.diff$
 .blame$
 bucardo.warning.log
 t/00-release.t
