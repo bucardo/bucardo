@@ -83,8 +83,6 @@ close $service_fh;
 $res = $bct->ctl("add db E service=dbE status=inactive");
 like ($res, qr/Added database "E"/, $t);
 
-exit;
-
 ## Put all pk tables into a relgroup
 $t = q{Adding all PK tables on the master works};
 $res = $bct->ctl(q{bucardo add tables '*bucardo*test*' '*Bucardo*test*' db=A relgroup=allpk pkonly});
