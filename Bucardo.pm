@@ -986,6 +986,7 @@ sub mcp_main {
             ## Request that a named sync get reloaded
             elsif ($name =~ /^reload_sync_(.+)/o) {
                 my $syncname = $1;
+                my $succeeded = 0;
 
                 ## Skip if the sync does not exist or is inactive
                 if (! exists $sync->{$syncname}) {
@@ -1041,9 +1042,14 @@ sub mcp_main {
                     else {
                         ## Let anyone listening know the sync is now ready
                         $self->db_notify($maindbh, "reloaded_sync_$syncname", 1);
+                        $succeeded = 1;
                     }
                     $maindbh->commit();
+
+                    $self->glog("Succeeded: $succeeded", LOG_WARN);
                 }
+                $self->db_notify($maindbh, "reload_error_sync_$syncname", 1)
+                    if ($succeeded != 1);
             }
 
             ## Request that a named sync get activated
@@ -5941,7 +5947,14 @@ sub validate_sync {
     ## Call validate_sync: checks tables, columns, sets up supporting
     ## schemas, tables, functions, and indexes as needed
 
-    $self->{masterdbh}->do("SELECT validate_sync('$syncname')");
+    eval {
+        local $SIG{__DIE__} = undef;
+        $self->{masterdbh}->do("SELECT validate_sync('$syncname')");
+    };
+    if ($@) {
+        $self->{masterdbh}->rollback;
+        return 0;
+    }
 
     ## Prepare some SQL statements for immediate and future use
     my %SQL;

@@ -912,23 +912,42 @@ sub wait_for_notice {
     ## Keep hanging out until we get the notice we are waiting for
     ## Arguments: three
     ## 1. Database handle
-    ## 2. String to listen for
+    ## 2. String(s) to listen for
     ## 3. How long to wait (default is forever)
     ## Returns: 1
+    ## If the strings argument is an array ref, this will return a hash ref
+    ## where each key is a string we found, and the value is how many times we
+    ## found it. Note that we return as soon as we've found at least one
+    ## matching NOTIFY; we don't wait for the full timeout to see which
+    ## messages show up.
 
     my ($ldbh, $string, $howlong) = @_;
+    my ($num_strings, %search_strings, %matches);
+    my $found = 0;
+    if (ref $string eq 'ARRAY') {
+        $num_strings = scalar @$string;
+        map { $search_strings{$_} = 1 } @$string;
+    }
+    else {
+        $num_strings = 1;
+        $search_strings{$string} = 1;
+    }
 
     my $start_time = [gettimeofday];
 
   WAITIN: {
         for my $notice (@{ db_get_notices($ldbh) }) {
             my ($name) = @$notice;
-            last WAITIN if $name eq $string;
+            if (exists $search_strings{$name}) {
+                $found = 1;
+                $matches{$name}++;
+            }
         }
+        last WAITIN if $found;
 
         if (defined $howlong) {
             my $elapsed = tv_interval( $start_time );
-            return 0 if $elapsed >= $howlong;
+            return 0 if ($elapsed >= $howlong and (scalar keys %matches == 0));
         }
 
         $dbh->commit();
@@ -936,8 +955,22 @@ sub wait_for_notice {
         redo;
     }
 
-    return 1;
-
+    if (scalar keys %matches) {
+        if ($num_strings == 1) {
+            return 1;
+        }
+        else {
+            return \%matches;
+        }
+    }
+    else {
+        if ($num_strings == 1) {
+            return 0;
+        }
+        else {
+            return {};
+        }
+    }
 } ## end of wait_for_notice
 
 
@@ -974,14 +1007,28 @@ sub reload {
 
         ## We wait for the MCP to tell us that each sync is done reloading
         my $done = "bucardo_reloaded_sync_$syncname";
+        my $err  = "bucardo_reload_error_sync_$syncname";
         print "Reloading sync $syncname...";
         $dbh->do(qq{LISTEN "$done"});
+        $dbh->do(qq{LISTEN "$err"});
         $dbh->do(qq{NOTIFY "bucardo_reload_sync_$syncname"});
         $dbh->commit();
 
         ## Sleep a little, then wait until we hear a confirmation from the MCP
         sleep 0.1;
-        wait_for_notice($dbh, $done);
+        my $res = wait_for_notice($dbh, [$err, $done], 10);
+        if ($res == 0 or scalar keys %$res == 0) {
+            print "Reload of sync $syncname failed; reload response message never received\n";
+        }
+        elsif (exists $res->{$done}) {
+            print "Reload of sync $syncname successful\n";
+        }
+        elsif (exists $res->{$err}) {
+            print "Reload of sync $syncname failed\n";
+        }
+        else {
+            print "ERROR. Reload results unavailable, because something weird happened.\n";
+        }
         print "\n";
 
     } ## end each sync to be reloaded
