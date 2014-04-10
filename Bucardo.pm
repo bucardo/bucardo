@@ -2294,7 +2294,7 @@ sub start_kid {
             $dbh->rollback();
 
             ## Deregister ourself with the MCP
-            $self->db_notify($dbh, 'kid_pid_stop', 1);
+            $self->db_notify($dbh, 'kid_pid_stop', 1, $dbname);
 
             $self->glog("Disconnecting from database $dbname", LOG_DEBUG);
             $_->finish for values %{ $dbh->{CachedKids} };
@@ -2464,7 +2464,7 @@ sub start_kid {
 
             ## Register ourself with the MCP (if we are Postgres)
             if ($x->{dbtype} eq 'postgres') {
-                $self->db_notify($x->{dbh}, 'kid_pid_start', 1);
+                $self->db_notify($x->{dbh}, 'kid_pid_start', 1, $dbname);
             }
         }
 
@@ -5673,19 +5673,19 @@ sub db_notify {
     ## 1. Database handle
     ## 2. The string to send
     ## 3. Whether to skip payloads. Optional boolean, defaults to false
+    ## 4. Name of the database (as defined in bucardo.db). Optional
     ## Returns: undef
 
-    my ($self, $ldbh, $string, $skip_payload) = @_;
+    my ($self, $ldbh, $string, $skip_payload, $dbname) = @_;
 
     ## We make some exceptions to the payload system, mostly for early MCP notices
     ## This is because we don't want to complicate external clients with payload decisions
     $skip_payload = 0 if ! defined $skip_payload;
 
-    ## XXX TODO: We should make this log level test more generic and apply it elsewhere
-    ## Basically, there is no reason to invoke caller() if we are not going to use it
     if ($config{log_level_number} <= LOG_DEBUG) {
         my $line = (caller)[2];
-        $self->glog(qq{Sending NOTIFY "$string" (line $line)}, LOG_DEBUG);
+        my $showdb = defined $dbname ? " to db $dbname" : '';
+        $self->glog(qq{Sending NOTIFY "$string"$showdb (line $line)}, LOG_DEBUG);
     }
 
     if ($ldbh->{pg_server_version} < 90000 or $skip_payload) {
