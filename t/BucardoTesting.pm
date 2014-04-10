@@ -424,8 +424,9 @@ sub create_cluster {
     my $localinitdb = $info->{initdb};
 
     debug(qq{Running $localinitdb for cluster "$clustername"});
-
-    my $res = qx{$localinitdb -D $dirname 2>&1};
+    my $com = qq{$localinitdb -D $dirname 2>&1};
+    debug($com);
+    my $res = qx{$com};
     die $res if $? != 0;
     if ($DEBUG) {
         warn Dumper $res;
