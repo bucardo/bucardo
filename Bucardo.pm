@@ -857,7 +857,6 @@ sub mcp_main {
             if (! exists $self->{kidpidlist}{$dbname}) {
                 $self->{kidpidlist}{$dbname} = 1;
                 $self->db_listen($x->{dbh}, 'kid_pid_start', $dbname, 1);
-                $self->db_listen($x->{dbh}, 'kid_pid_stop', $dbname, 1);
                 $x->{dbh}->commit();
             }
 
@@ -2270,6 +2269,8 @@ sub start_kid {
         }
         $msg .= "\n";
 
+        $self->glog("Kid has died, error is: $msg", LOG_TERSE);
+
         ## Drop connection to the main database, then reconnect
         if (defined $maindbh and $maindbh) {
             $maindbh->rollback;
@@ -2280,6 +2281,8 @@ sub start_kid {
         $self->glog("Final database backend PID: $finalbackend", LOG_VERBOSE);
         $sth{dbrun_delete} = $finaldbh->prepare($SQL{dbrun_delete});
 
+        $self->db_notify($finaldbh, 'kid_pid_stop', 1);
+
         ## Drop all open database connections, clear out the dbrun table
         for my $dbname (@dbs_dbi) {
             $x = $sync->{db}{$dbname};
@@ -2288,17 +2291,20 @@ sub start_kid {
                 next;
             };
 
-            ## Just in case we were in the middle of an async call:
-            $dbh->pg_cancel() if $dbh->{pg_async_status} > 0;
+            ## Is this still around?
+            if (!$dbh->ping) {
+                $self->glog("Ping failed for database $dbname", LOG_TERSE);
+            }
+            else {
+                ## Just in case we were in the middle of an async call:
+                $dbh->pg_cancel() if $dbh->{pg_async_status} > 0;
 
-            $dbh->rollback();
+                $dbh->rollback();
 
-            ## Deregister ourself with the MCP
-            $self->db_notify($dbh, 'kid_pid_stop', 1, $dbname);
-
-            $self->glog("Disconnecting from database $dbname", LOG_DEBUG);
-            $_->finish for values %{ $dbh->{CachedKids} };
-            $dbh->disconnect();
+                $self->glog("Disconnecting from database $dbname", LOG_DEBUG);
+                $_->finish for values %{ $dbh->{CachedKids} };
+                $dbh->disconnect();
+            }
 
             ## Clear out the entry from the dbrun table
             $sth = $sth{dbrun_delete};
@@ -7000,6 +7006,7 @@ sub reset_mcp_listeners {
             'reload_config',
             'log_message',
             'mcp_ping',
+            'kid_pid_stop',
     ) {
         $self->db_listen($maindbh, $l, '', 1);
     }
