@@ -623,6 +623,19 @@ sub connect_database {
 
     $dbh->do(q{SET TIME ZONE 'UTC'});
 
+    if ($DEBUG) {
+        my $file = 'bucardo.debug.dsns.txt';
+        if (open my $fh, '>>', $file) {
+            print {$fh} "\n$dsn\n";
+            my ($host,$port,$db);
+            $dsn =~ /port=(\d+)/ and $port=$1;
+            $dsn =~ /dbname=(.+?);/ and $db=$1;
+            $dsn =~ /host=(.+)/ and $host=$1;
+            printf {$fh} "psql%s%s%s\n", " -h $host", " -p $port", " $db";
+            close $fh or die qq{Could not close file "$file": $!\n};
+        }
+    }
+
     $dbh->commit();
 
     return $dbh;
