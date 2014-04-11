@@ -41,4 +41,6 @@ if (-d $dir) {
 
 pass "Removed directory $dir";
 
+unlink <bucardo_pgservice.tmp.*>;
+
 exit;
