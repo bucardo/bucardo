@@ -192,7 +192,7 @@ $bct->restart_bucardo($dbhX, 'bucardo_stopped');
 # Nothing should have been copied to B, C, or D, yet.
 $bct->check_for_row([], [qw/B C D/]);
 
-## Activate the pg1, mtest, and samedb syncs
+## Activate the pgtest1 and samedb syncs
 is $bct->ctl('bucardo update sync pgtest1 status=active'), '', 'Activate pgtest1';
 is $bct->ctl('bucardo update sync samedb status=active'),  '', 'Activate samedb';
 
