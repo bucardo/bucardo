@@ -111,7 +111,7 @@ for my $table (sort keys %tabletype) {
     $res = $dbhA->selectall_arrayref($SQL);
     my $type = $tabletype{$table};
     my $val1 = $val{$type}{1};
-    is_deeply ($res, [[$val1]], $t);
+    is_deeply ($res, [[$val1]], $t) or die;
 }
 
 ## Kick off the sync
