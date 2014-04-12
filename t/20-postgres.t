@@ -56,7 +56,7 @@ END {
     $dbhE and $dbhE->disconnect();
 }
 
-## Get A, B, C, and D created, emptied out, and repopulated with sample data
+## Get A, B, C, D, and E created, emptied out, and repopulated with sample data
 $dbhA = $bct->repopulate_cluster('A');
 $dbhB = $bct->repopulate_cluster('B');
 $dbhC = $bct->repopulate_cluster('C');

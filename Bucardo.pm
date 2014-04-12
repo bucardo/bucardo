@@ -853,13 +853,6 @@ sub mcp_main {
 
             next if $x->{dbtype} ne 'postgres';
 
-            ## Start listening for KIDs if we have not done so already
-            if (! exists $self->{kidpidlist}{$dbname}) {
-                $self->{kidpidlist}{$dbname} = 1;
-                $self->db_listen($x->{dbh}, 'kid_pid_start', $dbname, 1);
-                $x->{dbh}->commit();
-            }
-
             my $nlist = $self->db_get_notices($x->{dbh});
             $x->{dbh}->rollback();
             for my $name (keys %{ $nlist } ) {
@@ -2476,7 +2469,7 @@ sub start_kid {
 
             ## Register ourself with the MCP (if we are Postgres)
             if ($x->{dbtype} eq 'postgres') {
-                $self->db_notify($x->{dbh}, 'kid_pid_start', 1, $dbname);
+                $self->db_notify($maindbh, 'kid_pid_start', 1, $dbname);
             }
         }
 
@@ -7007,6 +7000,7 @@ sub reset_mcp_listeners {
             'reload_config',
             'log_message',
             'mcp_ping',
+            'kid_pid_start',
             'kid_pid_stop',
     ) {
         $self->db_listen($maindbh, $l, '', 1);
