@@ -3632,29 +3632,17 @@ sub start_kid {
 
                                 $x = $sync->{db}{$dbname};
 
-                                ## Start by assuming this DB has no changes
-                                $x->{lastmod} = 0;
+                                ## Find the maximum txntime across all tables in this sync
+                                my $maxsql = 'SELECT extract(epoch FROM MAX(txntime)) FROM';
+                                $SQL = join " UNION\n" =>
+                                    map { "$maxsql bucardo.$_->{deltatable}" }
+                                    grep { $_->{reltype} eq 'table'}
+                                        @$goatlist;
+                                $SQL .= ' ORDER BY 1 DESC LIMIT 1';
 
-                                for my $g (@$goatlist) {
-
-                                    ## This only makes sense for tables
-                                    next if $g->{reltype} ne 'table';
-
-                                    ## Prep our SQL: find the epoch of the latest transaction for this table
-                                    if (!exists $g->{sql_max_delta}) {
-                                        $SQL = qq{SELECT extract(epoch FROM MAX(txntime)) FROM bucardo.$g->{deltatable} };
-                                        $g->{sql_max_delta} = $SQL;
-                                    }
-                                    $sth = $x->{dbh}->prepare($g->{sql_max_delta});
-                                    $sth->execute();
-                                    ## Keep in mind we don't really care which table this is
-                                    my $epoch = $sth->fetchall_arrayref()->[0][0];
-                                    ## May be undefined if no rows in the table yet: MAX forces a row back
-                                    if (defined $epoch and $epoch > $x->{lastmod}) {
-                                        $x->{lastmod} = $epoch;
-                                    }
-
-                                } ## end checking each table in the sync
+                                $sth = $x->{dbh}->prepare($SQL);
+                                $sth->execute();
+                                $x->{lastmod} = $sth->fetchall_arrayref()->[0][0] || 0;
 
                             } ## end checking each source database
 
