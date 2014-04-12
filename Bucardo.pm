@@ -2988,7 +2988,8 @@ sub start_kid {
 
         ## We may want to lock all the tables. Use sparingly
         my $lock_table_mode = '';
-        my $force_lock_file = "/tmp/bucardo-force-lock-$syncname";
+        my $force_lock_file = File::Spec->catfile( $config{piddir} => "bucardo-force-lock-$syncname" );
+
         ## If the file exists, pull the mode from inside it
         if (-e $force_lock_file) {
             $lock_table_mode = 'EXCLUSIVE';
@@ -3021,7 +3022,7 @@ sub start_kid {
                         $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
                         $x->{dbh}->do("LOCK TABLE $com");
                     }
-                    elsif ('mysql' eq $x->{dbtype} or 'drizzle' eq $x->{dbtype} or 'mariadb' eq $x->{dbtype}) {
+                    elsif ('mysql' eq $x->{dbtype } or 'drizzle' eq $x->{dbtype} or 'mariadb' eq $x->{dbtype}) {
                         my $com = "$tname WRITE";
                         $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
                         $x->{dbh}->do("LOCK TABLE $com");
