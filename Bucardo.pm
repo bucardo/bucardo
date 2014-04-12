@@ -2939,7 +2939,7 @@ sub start_kid {
 
         ## Figure out our isolation level. Only used for Postgres
         ## All others are hard-coded as 'serializable'
-        my $isolation_level = defined $sync->{isolation_level} ? $sync->{isolation_level} : 
+        my $isolation_level = defined $sync->{isolation_level} ? $sync->{isolation_level} :
             $config{isolation_level} || 'serializable';
 
         ## Commit so our dbrun and syncrun stuff is visible to others
@@ -2963,7 +2963,7 @@ sub start_kid {
             }
 
             if ($x->{dbtype} eq 'mysql' or $x->{dbtype} eq 'mariadb') {
-                $x->{dbh}->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE');
+                $x->{dbh}->do('SET TRANSACTION READ WRITE ISOLATION LEVEL SERIALIZABLE');
                 $self->glog(qq{Set database "$dbname" to serializable}, LOG_DEBUG);
             }
 
@@ -2972,8 +2972,8 @@ sub start_kid {
             }
 
             if ($x->{dbtype} eq 'oracle') {
-                $x->{dbh}->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE');
-                ## READ WRITE - can we set serializable and read write at the same time??
+                $x->{dbh}->do('SET TRANSACTION READ WRITE');
+                $x->{dbh}->do(q{SET TRANSACTION ISOLATION LEVEL SERIALIZABLE NAME 'bucardo'});
                 $self->glog(qq{Set database "$dbname" to serializable and read write}, LOG_DEBUG);
             }
 
