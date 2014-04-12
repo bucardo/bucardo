@@ -3033,7 +3033,7 @@ sub start_kid {
                         $x->{dbh}->do("LOCK TABLE $com");
                     }
                     elsif ('sqlite' eq $x->{dbtype}) {
-                        ## BEGIN EXCLUSIVE? May not be needed...
+                        $x->{dbh}->do('BEGIN EXCLUSIVE TRANSACTION');
                     }
                 }
             }
