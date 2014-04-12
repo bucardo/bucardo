@@ -2703,8 +2703,6 @@ sub start_kid {
 
             elsif ($x->{dbtype} eq 'mysql' or $x->{dbtype} eq 'mariadb') {
 
-                ## Serialize for this session
-                $xdbh->do('SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE');
                 ## ANSI mode: mostly because we want ANSI_QUOTES
                 $xdbh->do(q{SET sql_mode = 'ANSI'});
                 ## Use the same time zone everywhere
