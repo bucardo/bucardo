@@ -17,10 +17,12 @@ use 5.008003;
 use open qw( :std :utf8 );
 use DBI;
 use IO::Handle      qw/ autoflush /;
+use File::Basename  qw/ dirname /;
 use Time::HiRes     qw/ sleep gettimeofday tv_interval /;
 use POSIX           qw/ ceil setsid localeconv /;
 use Encode          qw/ decode /;
 use Encode::Locale;
+use File::Spec;
 use Data::Dumper    qw/ Dumper /;
 $Data::Dumper::Indent = 1;
 use Getopt::Long;
@@ -757,6 +759,11 @@ sub start {
     }
 
     ## Create a new Bucardo daemon
+    ## If we are a symlink, put the source directory in our path
+    if (-s $progname) {
+        my $dir = dirname( readlink $progname );
+        unshift @INC, $dir;
+    }
     require Bucardo;
     $bcargs->{exit_on_nosync} = delete $bcargs->{'exit-on-nosync'}
         if exists $bcargs->{'exit-on-nosync'};
@@ -1603,14 +1610,19 @@ sub add_database {
         if ($evalok) {
             ## Disconnect from DBI.
             $testdbh->disconnect if $module =~ /DBD/;
-        } else {
+        }
+        else {
             my $err = $DBI::errstr || $@;
             my $msg;
 
             ## For Postgres, we get a little fancy and try to account for instances
             ## where the bucardo user may not exist yet, by reconnecting and
             ## creating said user if needed.
-            if ($DBI::errstr && 'postgres' eq $dbtype && $user eq 'bucardo' && eval { require Digest::MD5; 1 }) {
+            if ($DBI::errstr
+                and 'postgres' eq $dbtype
+                and $user eq 'bucardo'
+                and $DBI::errstr =~ /bucardo/
+                and eval { require Digest::MD5; 1 }) {
 
                 # Try connecting as postgres instead.
                 print "Connection to $fullname as bucardo failed.\nError was: $DBI::errstr\n\n";
@@ -3575,7 +3587,7 @@ sub list_tables {
 
 sub add_herd {
 
-    ## Add a herd. Inserts to the bucardo.herd table
+    ## Add a herd aka relgroup. Inserts to the bucardo.herd table
     ## May also insert to the bucardo.herdmap and bucardo.goat tables
     ## Arguments: one or more
     ## 1. Name of the herd
@@ -3611,7 +3623,7 @@ sub add_herd {
     }
 
     ## Get the list of all requested tables, adding as needed
-    my $goatlist = get_goat_ids(args => \@nouns);
+    my $goatlist = get_goat_ids(args => \@nouns, noherd => $herdname);
 
     ## The final output. Store it up all at once for a single QUIET check
     my $message = '';
@@ -3631,7 +3643,6 @@ sub add_herd {
             $message .= "  $_ (DB: $goatlist->{relations}{$_}{goat}[0]{db})\n";
         }
     }
-
 
     ## Now load all of these tables into this herd
     $SQL = 'INSERT INTO bucardo.herdmap (herd,priority,goat) VALUES (?,?,'
@@ -4351,6 +4362,7 @@ sub get_goat_ids {
     ##  - args: arrayref of names to match against. Can have wildcards.
     ##  - type: 'table' or 'sequence', depending on what we expect to find.
     ##  - dbcols: optional hashref of fields to populate goat table with (e.g. autokick=1)
+    ##  - noherd: do not consider items if already in this herd for "all"
     ## Returns: a hash with:
     ##  - relations: hash of goat objects, key is the fully qualified name
     ##    - original: hash of search term(s) used to find this
@@ -4363,6 +4375,7 @@ sub get_goat_ids {
     my $reltype = $arg{type};
     my $names = $arg{args} or die;
     my $dbcols = $arg{dbcols} || {};
+    my $noherd = $arg{noherd} || '';
 
     ## The final hash we return
     my %relation;
@@ -4385,6 +4398,11 @@ sub get_goat_ids {
     ## This check still makes sense: if no databases, there should be nothing in $GOAT!
     if (! defined $bestdb) {
         die "No databases have been added yet, so we cannot add tables!\n";
+    }
+
+    ## Allow "tables=all" to become "all"
+    for my $item (@$names) {
+        $item = 'all' if $item =~ /^tables?=all/i;
     }
 
     my $rdbh = connect_database({name => $bestdb}) or die;
@@ -4509,6 +4527,14 @@ AND nspname !~ '^pg_'
             push @matches, $GOAT->{by_id}{$tmp};
         }
 
+        ## If we asked for "all", add in all of our known tables (not already in this herd)
+        if ($names->[0] eq 'all') {
+            for (values %{ $GOAT->{by_db}{$bestdb} }) {
+                next if exists $_->{herd}{$noherd};
+                push @matches, $_;
+            }
+        }
+
         ## Populate the final hashes based on the match list
         for my $match (@matches) {
             next unless defined $match;
@@ -4533,7 +4559,7 @@ AND nspname !~ '^pg_'
         }
 
         ## If this item did not match anything, note that as well
-        if (! @matches) {
+        if (! @matches and $names->[0] ne 'all') {
             $nomatch{$original_item}++;
         }
 
@@ -6783,6 +6809,13 @@ sub find_bucardo_schema {
     my $schema_file = 'bucardo.schema';
     return ($fh, $schema_file) if open $fh, '<', $schema_file;
 
+    ## Check for a symlink path back to the right directory
+    if (-s $progname) {
+        my $dir = dirname( readlink $progname );
+        $schema_file = File::Spec->catfile( $dir, 'bucardo.schema' );
+        return ($fh, $schema_file) if open $fh, '<', $schema_file;
+    }
+
     ## Try /usr/local/share/bucardo
     $schema_file = '/usr/local/share/bucardo/bucardo.schema';
     return ($fh, $schema_file) if open $fh, '<', $schema_file;
@@ -7975,11 +8008,13 @@ sub install {
     ## Check for some common errors
     if ($res =~ /role ".+" does not exist/) {
         print "-->Sorry, please try using a different user\n\n";
+        exit 1 if $bcargs->{batch};
         goto GOOEY;
     }
 
     if ($res !~ /(\d+)\.(\d+)(\S+)/) {
         print "-->Sorry, unable to connect to the database\n\n";
+        exit 1 if $bcargs->{batch};
         goto GOOEY;
     }
 
