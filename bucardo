@@ -1481,8 +1481,11 @@ sub add_database {
     if (exists $vals->{dbservice}) {
         delete $vals->{dbport};
         delete $vals->{dbhost};
-        if ($cols =~ s/dbhost,dbport,//) {
-            $phs =~ s/\Q?,?,//;
+        if ($cols =~ s/dbport,//) {
+            $phs =~ s/\Q?,//;
+        }
+        if ($cols =~ s/dbhost,//) {
+            $phs =~ s/\Q?,//;
         }
     }
 
