@@ -760,7 +760,7 @@ sub start {
 
     ## Create a new Bucardo daemon
     ## If we are a symlink, put the source directory in our path
-    if (-s $progname) {
+    if (-s $progname and readlink $progname) {
         my $dir = dirname( readlink $progname );
         unshift @INC, $dir;
     }
