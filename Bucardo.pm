@@ -2295,8 +2295,11 @@ sub start_kid {
                 $self->glog("Ping failed for database $dbname", LOG_TERSE);
             }
             else {
-                ## Just in case we were in the middle of an async call:
-                $dbh->pg_cancel() if $dbh->{pg_async_status} > 0;
+                ## If in the middle of an async, clear it out
+                if ($x->{async_active}) {
+                    $dbh->pg_cancel();
+                    $x->{async_active} = 0;
+                }
 
                 $dbh->rollback();
 
@@ -4933,9 +4936,15 @@ sub start_kid {
 
             ## Roll everyone back
             for my $dbname (@dbs_dbi) {
-                my $dbh = $sync->{db}{$dbname}{dbh};
+                my $x = $sync->{db}{$dbname}{dbh};
+                my $dbh = $x->{dbh};
                 ## Wrapped in an eval as a failure to serialise can cause an abort() and the KID will die.
-                eval { $dbh->pg_cancel if $dbh->{pg_async_status} > 0; };
+                eval {
+                    if ($x->{async_active}) {
+                        $dbh->pg_cancel;
+                        $x->{async_active} = 0;
+                    }
+                };
                 ## Seperate eval{} for the rollback as we are probably still connected to the transaction.
                 eval { $dbh->rollback; };
             }
