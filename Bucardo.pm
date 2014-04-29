@@ -4938,15 +4938,17 @@ sub start_kid {
             for my $dbname (@dbs_dbi) {
                 my $x = $sync->{db}{$dbname};
                 my $dbh = $x->{dbh};
+                $self->glog("Attempting cleanup of database $dbname, async is $x->{async_active}", NORMAL);
                 ## Wrapped in an eval as a failure to serialise can cause an abort() and the KID will die.
-                eval {
-                    if ($x->{async_active}) {
-                        $dbh->pg_cancel;
-                        $x->{async_active} = 0;
-                    }
-                };
+                if ($x->{async_active}) {
+                    $dbh->pg_cancel;
+                    $x->{async_active} = 0;
+                }
                 ## Seperate eval{} for the rollback as we are probably still connected to the transaction.
                 eval { $dbh->rollback; };
+                if ($@) {
+                    $self->glog("Result of eval for rollback: $@", LOG_DEBUG);
+                }
             }
 
             # End the syncrun.
