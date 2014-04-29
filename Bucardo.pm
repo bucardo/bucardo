@@ -4936,7 +4936,7 @@ sub start_kid {
 
             ## Roll everyone back
             for my $dbname (@dbs_dbi) {
-                my $x = $sync->{db}{$dbname}{dbh};
+                my $x = $sync->{db}{$dbname};
                 my $dbh = $x->{dbh};
                 ## Wrapped in an eval as a failure to serialise can cause an abort() and the KID will die.
                 eval {
