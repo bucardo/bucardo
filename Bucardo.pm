@@ -4938,7 +4938,7 @@ sub start_kid {
             for my $dbname (@dbs_dbi) {
                 my $x = $sync->{db}{$dbname};
                 my $dbh = $x->{dbh};
-                $self->glog("Attempting cleanup of database $dbname, async is $x->{async_active}", NORMAL);
+                $self->glog("Attempting cleanup of database $dbname, async is $x->{async_active}", LOG_NORMAL);
                 ## Wrapped in an eval as a failure to serialise can cause an abort() and the KID will die.
                 if ($x->{async_active}) {
                     $dbh->pg_cancel;
