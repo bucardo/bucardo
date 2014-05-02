@@ -2305,20 +2305,21 @@ sub start_kid {
             ## Is this still around?
             if (!$dbh->ping) {
                 $self->glog("Ping failed for database $dbname", LOG_TERSE);
+                ## We'll assume no disconnect is necessary - but we'll undef it below just in case
             }
             else {
-                ## If in the middle of an async, clear it out
-                if ($x->{async_active}) {
-                    $dbh->pg_cancel();
-                    $x->{async_active} = 0;
-                }
-
+                ## Rollback, finish all statement handles, and disconnect
                 $dbh->rollback();
-
                 $self->glog("Disconnecting from database $dbname", LOG_DEBUG);
                 $_->finish for values %{ $dbh->{CachedKids} };
                 $dbh->disconnect();
             }
+
+            ## Make sure we don't think we are still in the middle of an async query
+            $x->{async_active} = 0;
+
+            ## Make sure we never access this connection again
+            undef $dbh;
 
             ## Clear out the entry from the dbrun table
             $sth = $sth{dbrun_delete};
