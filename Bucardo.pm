@@ -593,6 +593,18 @@ sub start_mcp {
         my $line = (caller)[2];
         $self->glog("Warning: Killed (line $line): $msg", LOG_WARN);
 
+        ## If this is a dead database, we may want to carry on if there are other
+        ## syncs that are not using this database.
+        ## if (dead_db) {
+        ##   mark_as_dead
+        ##   disable all syncs using this database, marking as stalled
+        ##   return if there are still syns left
+        ## }
+        ## back in main loop:
+        ##   try reconnecting to dead databases periodically
+        ##   if its back, see if we have all dbs needed for each stalled sync
+        ##   if so, mark the sync as active, fire it up
+
         ## The error message determines if we try to resurrect ourselves or not
         my $respawn = (
                        $msg =~  /DBI connect/         ## From DBI
