@@ -7523,13 +7523,13 @@ sub cleanup_controller {
         $reason = 'Normal exit';
     }
 
-    ## Ask all kids to exit as well
-    my $exitname = "kid_stopsync_$self->{syncname}";
-    $self->{masterdbh}->rollback();
-    $self->db_notify($self->{masterdbh}, $exitname);
-
     ## Disconnect from the master database
     if ($self->{masterdbh}) {
+        ## Ask all kids to exit as well
+        my $exitname = "kid_stopsync_$self->{syncname}";
+        $self->{masterdbh}->rollback();
+        $self->db_notify($self->{masterdbh}, $exitname);
+
         # Quick debug to find active statement handles
         # for my $s (@{$self->{masterdbh}{ChildHandles}}) {
         #    next if ! ref $s or ! $s->{Active};
