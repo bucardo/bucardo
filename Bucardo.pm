@@ -4608,7 +4608,7 @@ sub start_kid {
         ## If doing truncate, do some cleanup
         if (exists $self->{truncateinfo}) {
             ## For each source database that had a truncate entry, mark them all as done
-            $SQL  = 'UPDATE bucardo.bucardo_truncate_trigger SET replicated = now() WHERE sync = ?';
+            $SQL  = 'UPDATE bucardo.bucardo_truncate_trigger SET replicated = now() WHERE sync = ? AND replicated IS NULL';
             for my $dbname (@dbs_source) {
                 $x = $sync->{db}{$dbname};
                 $x->{sth} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
