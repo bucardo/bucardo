@@ -748,7 +748,7 @@ sub start {
     }
 
     ## Verify that the version in the database matches our version
-    my $dbversion = get_config('bucardo_current_version')
+    my $dbversion = get_config('bucardo_version')
         or die "Could not find Bucardo version!\n";
     if ($dbversion ne $VERSION) {
         my $message = "Version mismatch: bucardo is $VERSION, but bucardo database is $dbversion\n";
@@ -7372,6 +7372,14 @@ sub upgrade {
         $changes++;
     }
 
+    ## Special case config renaming
+    if (config_exists('bucardo_current_version')) {
+        ## was version and current_version; became initial_version and version
+        clog('Renaming bucardo_current_version to bucardo_version, and bucardo_version to bucardo_initial_version');
+        upgrade_and_log(qq{UPDATE bucardo.bucardo_config SET name = 'bucardo_initial_version' WHERE name = 'bucardo_version'});
+        upgrade_and_log(qq{UPDATE bucardo.bucardo_config SET name = 'bucardo_version' WHERE name = 'bucardo_current_version'});
+    }
+
     ## Check for any new config items
     $SQL = 'SELECT setting FROM bucardo.bucardo_config WHERE lower(name) = ?';
     my $cfgsth = $dbh->prepare($SQL);
@@ -7541,18 +7549,18 @@ sub upgrade {
     }
 
     ## Make sure bucardo_config has the new schema version
-    $count = $cfgsth->execute('bucardo_current_version');
+    $count = $cfgsth->execute('bucardo_version');
     if ($count eq '0E0') {
         $cfgsth->finish();
-        warn "Weird: could not find bucardo_current_version in the bucardo_config table!\n";
+        warn "Weird: could not find bucardo_version in the bucardo_config table!\n";
     }
     else {
         my $curval = $cfgsth->fetchall_arrayref()->[0][0];
         if ($curval ne $schema_version) {
             $SQL = 'UPDATE bucardo.bucardo_config SET setting = ? WHERE name = ?';
             my $updatecfg = $dbh->prepare($SQL);
-            $updatecfg->execute($schema_version, 'bucardo_current_version');
-            clog "Set bucardo_config.bucardo_current_version to $schema_version";
+            $updatecfg->execute($schema_version, 'bucardo_version');
+            clog "Set bucardo_config.bucardo_version to $schema_version";
             $changes++;
         }
     }
@@ -10700,7 +10708,7 @@ How to generate this list:
 
 Which DDL changing conditions do we try to remedy automatically? Default: C<newcol>.
 
-=item C<bucardo_current_version>
+=item C<bucardo_version>
 
 Current version of Bucardo. Default: C<4.99.12>.
 
@@ -10708,7 +10716,7 @@ Current version of Bucardo. Default: C<4.99.12>.
 
 Do we want the automatic VAC daemon to run? Default: C<1>.
 
-=item C<bucardo_version>
+=item C<bucardo_initial_version>
 
 Bucardo version this schema was created with. Default: C<4.99.12>.
 

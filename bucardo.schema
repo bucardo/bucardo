@@ -150,8 +150,8 @@ warning_file|bucardo.warning.log|File containing all log lines starting with "Wa
 COPY bucardo.bucardo_config(name,setting,about)
 FROM STDIN
 WITH DELIMITER '|';
-bucardo_version|4.99.12|Bucardo version this schema was created with
-bucardo_current_version|4.99.12|Current version of Bucardo
+bucardo_initial_version|4.99.12|Bucardo version this schema was created with
+bucardo_version|4.99.12|Current version of Bucardo
 \.
 
 -- Other settings:
@@ -2767,7 +2767,7 @@ COMMENT ON TABLE bucardo.upgrade_log IS $$Historical record of upgrade actions$$
 INSERT INTO bucardo.upgrade_log(action,summary,version)
   SELECT 'Initial install', '', setting
   FROM bucardo.bucardo_config
-  WHERE name = 'bucardo_version';
+  WHERE name = 'bucardo_initial_version';
 
 -- Allow users to insert messages in the Bucardo logs
 
