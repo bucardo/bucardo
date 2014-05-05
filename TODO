@@ -13,15 +13,6 @@ Version 5
 * Note minimum Postgres version requirements (source and target)
   https://github.com/bucardo/bucardo/issues/18
 
-* Fix bug with checking wrong tables in databases on startup reported to list
-
-* Get customcode working, with tests
-  https://github.com/bucardo/bucardo/issues/20
-
-* See about the VAC daemon cleaning up pg_listener
-
-* Make sure all outstanding mailing list questions are handled.
-
 
 Version 5.1
 -----------
