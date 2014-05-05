@@ -710,6 +710,7 @@ if ($dbtype eq 'postgres') {
     }
 
     ## These may be specified in the service name
+    $db{service} = '' if ! defined $db{service};
     if (! length($db{service})) {
         length $db{name} or elog(ERROR, qq{Database name is mandatory\n});
         length $db{user} or elog(ERROR, qq{Database username is mandatory\n});
