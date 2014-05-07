@@ -521,6 +521,16 @@ sub start_mcp {
                  $DBIx::Safe::VERSION),
                 LOG_WARN);
 
+    ## Attempt to print the git hash to help with debugging if running a dev version
+    if (-d '.git') {
+        my $COM = 'git log -1';
+        my $log = '';
+        eval { $log = qx{$COM}; };
+        if ($log =~ /^commit ([a-f0-9]{40}).+Date:\s+(.+?)$/ms) {
+            $self->glog("Last git commit sha and date: $1 $2", LOG_NORMAL);
+        }
+    }
+
     ## Store some PIDs for later debugging use
     $self->{pidmap}{$$} = 'MCP';
     $self->{pidmap}{$self->{mcp_backend}} = 'Bucardo DB';
