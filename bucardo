@@ -20,6 +20,7 @@ use IO::Handle      qw/ autoflush /;
 use File::Basename  qw/ dirname /;
 use Time::HiRes     qw/ sleep gettimeofday tv_interval /;
 use POSIX           qw/ ceil setsid localeconv /;
+use Config          qw/ %Config /;
 use Encode          qw/ decode /;
 use Encode::Locale;
 use File::Spec;
@@ -354,6 +355,9 @@ reload_config() if $verb eq 'reload' && $nouns[0] eq 'config';
 
 ## Reload the whole daemon
 reload()        if $verb eq 'reload';
+
+# Reopen the log files
+reopen()        if $verb eq 'reopen';
 
 ## Show information about something: database, table, sync, etc.
 list_item()     if $verb eq 'list' or $verb eq 'l' or $verb eq 'lsit' or $verb eq 'liast'
@@ -1043,6 +1047,48 @@ sub reload {
     exit 0;
 
 } ## end of reload
+
+
+sub reopen {
+
+    ## Signal the bucardo processes that they should reopen any log files
+    ## Used after a log rotation
+    ## Sends a USR2 to all Bucardo processes
+    ## Arguments: none
+    ## Returns: never, exits
+
+    open my $fh, '<', $PIDFILE
+        or die qq{Could not open pid file $PIDFILE: is Bucardo running?\n};
+
+    ## Grab the PID of the MCP
+    if (<$fh> !~ /(\d+)/) { ## no critic
+        die qq{Could not find a PID in file $PIDFILE!\n};
+    }
+    close $fh or warn qq{Could not close $PIDFILE: $!\n};
+
+    my $gid = getpgrp $1;
+    $gid =~ /^\d+$/ or die qq{Unable to obtain the process group\n};
+
+    ## Quick mapping of names to numbers so we can kill effectively
+    my $x = 0;
+    my %signumber;
+    for (split(' ', $Config{sig_name})) {
+        $signumber{$_} = $x++;
+    }
+
+    my $signumber = $signumber{USR2};
+
+    ## The minus indicates we are sending to the whole group
+    my $num = kill -$signumber, $gid;
+    if ($num < 1) {
+        warn "Unable to signal any processed with USR2\n";
+        exit 1;
+    }
+    $QUIET or print "Sent USR2 to Bucardo processes\n";
+
+    exit 0;
+
+} ## end of reopen
 
 
 sub validate {
@@ -9089,6 +9135,11 @@ Kicks off one or more syncs.
 
 Sends a message to all CTL and KID processes asking them to reload the Bucardo
 configuration.
+
+=item C<reopen>
+
+Sends a message to all Bucardo processes asking them to reopen any log files 
+they may have open. Call this after you have rotated the log file(s).
 
 =item C<< show all|<setting> [<setting>...] >>
 
