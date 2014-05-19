@@ -172,6 +172,10 @@ Bucardo version 5.0.0, released ??, 2013
 
   - Change the default serialization failure sleep time from 10s to 0.5s.
 
+  - Added new 'bucardo reopen' command to reopen all open file handles
+    Useful for log rotation.
+    [Greg Sabino Mullane].
+
   - The 'update' command no longer exits with an error code on success.
 
   - Fixed issue with missing database handles when a KID shuts down. [David

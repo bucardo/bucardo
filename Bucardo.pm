@@ -591,6 +591,44 @@ sub start_mcp {
         }
     }
 
+    local $SIG{USR2} = sub {
+
+        $self->glog("Received USR2 from pid $$, who is a $self->{logprefix}", LOG_DEBUG);
+
+        ## Go through and reopen anything that needs reopening
+        ## For now, that is only plain text files
+        for my $logdest (sort keys %{$self->{logcodes}}) {
+            my $loginfo = $self->{logcodes}{$logdest};
+
+            next if $loginfo->{type} ne 'textfile';
+
+            my $filename = $loginfo->{filename};
+
+            ## Reopen the same (named) file with a new filehandle
+            my $newfh;
+            if (! open $newfh, '>>', $filename) {
+                $self->glog("Warning! Unable to open new filehandle for $filename", LOG_WARN);
+                next;
+            }
+
+            ## Turn off buffering on this handle
+            $newfh->autoflush(1);
+
+            ## Overwrite the old sub and point to the new filehandle
+            my $oldfh = $loginfo->{filehandle};
+
+            $self->glog("Switching to new filehandle for log file $filename", LOG_NORMAL);
+            $loginfo->{code} = sub { print {$newfh} @_, $/ };
+            $self->glog("Completed reopen of file $filename", LOG_NORMAL);
+
+            ## Close the old filehandle, then remove it from our records
+            close $oldfh or warn "Could not close old filehandle for $filename: $!\n";
+            $loginfo->{filehandle} = $newfh;
+
+        }
+
+     };
+
     ## From this point forward, we want to die gracefully
     ## We setup our own subroutine to catch any die signals
     local $SIG{__DIE__} = sub {
@@ -2290,7 +2328,8 @@ sub start_kid {
         }
         $msg .= "\n";
 
-        $self->glog("Kid has died, error is: $msg", LOG_TERSE);
+        (my $flatmsg = $msg) =~ s/\n/ /g;
+        $self->glog("Kid has died, error is: $flatmsg", LOG_TERSE);
 
         ## Drop connection to the main database, then reconnect
         if (defined $maindbh and $maindbh) {
@@ -2361,8 +2400,6 @@ sub start_kid {
             }
         }
 
-        (my $flatmsg = $msg) =~ s/\n/ /g;
-
         ## Mark this syncrun as aborted if needed, replace the 'lastbad'
         my $status = "Failed : $flatmsg (KID $$)";
         $self->end_syncrun($finaldbh, 'bad', $syncname, $status);
@@ -2378,10 +2415,6 @@ sub start_kid {
 
         ## Done with database cleanups, so disconnect
         $finaldbh->disconnect();
-
-        if ($msg =~ /DBD::Pg/) {
-            $self->glog($flatmsg, LOG_TERSE);
-        }
 
         ## Send an email as needed (never for clean exit)
         if (! $self->{clean_exit} and $self->{sendmail} or $self->{sendmail_file}) {
@@ -5239,33 +5272,42 @@ sub log_config {
 
 
 sub _logto {
+
     my $self = shift;
+
     if ($self->{logpid} && $self->{logpid} != $$) {
         # We've forked! Get rid of any existing handles.
         delete $self->{logcodes};
     }
-    return @{ $self->{logcodes} } if $self->{logcodes};
+
+    return $self->{logcodes} if $self->{logcodes};
 
     # Do no logging if any destination is "none".
-    return @{ $self->{logcodes} = [] }
-        if grep { $_ eq 'none' } @{ $self->{logdest} };
+    if (grep { $_ eq 'none' } @{ $self->{logdest} }) {
+        $self->{logcodes} = {};
+        return $self->{logcodes};
+    }
 
     $self->{logpid} = $$;
-    my %code_for;
+    my %logger;
     for my $dest (@{ $self->{logdest}} ) {
-        next if $code_for{$dest};
+
+        next if exists $logger{$dest};
+
         if ($dest eq 'syslog') {
+            ## Use Sys::Syslog to open a new syslog connection
             openlog 'Bucardo', 'pid nowait', $config{syslog_facility};
             ## Ignore the header argument for syslog output.
-            $code_for{syslog} = sub { shift; syslog 'info', @_ };
+            $logger{syslog} = { type => 'syslog', code => sub { shift; syslog 'info', @_ } };
         }
         elsif ($dest eq 'stderr') {
-            $code_for{stderr} = sub { print STDERR @_, $/ };
+            $logger{stderr} = { type => 'stderr', code => sub { print STDERR @_, $/ } };
         }
         elsif ($dest eq 'stdout') {
-            $code_for{stdout} = sub { print STDOUT @_, $/ };
+            $logger{stdout} = { type => 'stdout', code => sub { print STDOUT @_, $/ } };
         }
         else {
+            ## Just a plain text file
             my $fn = File::Spec->catfile($dest, 'log.bucardo');
             $fn .= ".$self->{logextension}" if length $self->{logextension};
 
@@ -5278,11 +5320,20 @@ sub _logto {
             ## Turn off buffering on this handle
             $fh->autoflush(1);
 
-            $code_for{$dest} = sub { print {$fh} @_, $/ };
+            $logger{$dest} = {
+                type       => 'textfile',
+                code       => sub { print {$fh} @_, $/ },
+                filename   => $fn,
+                filehandle => $fh,
+            };
+
         }
     }
 
-    return @{ $self->{logcodes} = [ values %code_for ] };
+    ## Store this away so the reopening via USR2 works
+    $self->{logcodes} = \%logger;
+
+    return \%logger;
 }
 
 sub glog { ## no critic (RequireArgUnpacking)
@@ -5306,8 +5357,8 @@ sub glog { ## no critic (RequireArgUnpacking)
     return if $loglevel > $config{log_level_number};
 
     ## Just return if there is no place to log to.
-    my @logs = $self->_logto;
-    return unless @logs || ($loglevel == LOG_WARN && $self->{warning_file});
+    my $logs = $self->_logto;
+    return unless keys %$logs || ($loglevel == LOG_WARN && $self->{warning_file});
 
     ## Remove newline from the end of the message, in case it has one
     chomp $msg;
@@ -5355,7 +5406,10 @@ sub glog { ## no critic (RequireArgUnpacking)
     }
 
     # Send it to all logs.
-    $_->($header, $msg) for @logs;
+    for my $log (sort keys %$logs) {
+        next if ! exists $logs->{$log}{code};
+        $logs->{$log}{code}->($header, $msg);
+    }
     return;
 
 } ## end of glog
@@ -7760,6 +7814,9 @@ sub create_newkid {
 
     ## Just in case, ask any existing kid processes to exit
     $self->db_notify($self->{masterdbh}, "kid_stopsync_$self->{syncname}");
+
+    ## Sleep a hair so we don't have the newly created kid get the message above
+#    sleep 1;
 
     ## Fork off a new process which will become the KID
     my $newkid = $self->fork_and_inactivate('KID');
