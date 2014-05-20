@@ -5099,10 +5099,6 @@ sub connect_database {
         }
         elsif ('oracle' eq $dbtype) {
             $dsn = "dbi:Oracle:dbname=$d->{dbname}";
-            $d->{dbhost} ||= ''; $d->{dbport} ||= ''; $d->{conn} ||= '';
-            defined $d->{dbhost} and length $d->{dbhost} and $dsn .= ";host=$d->{dbhost}";
-            defined $d->{dbport} and length $d->{dbport} and $dsn .= ";port=$d->{dbport}";
-            defined $d->{dbconn} and length $d->{dbconn} and $dsn .= ";$d->{dbconn}";
         }
         elsif ('redis' eq $dbtype) {
             my $dsn = {};
@@ -5159,6 +5155,7 @@ sub connect_database {
     ## for other types.
     $self->{dbhlist}{$dbh} = $dbh;
 
+    ## From here on out we are setting Postgres-specific items, so everyone else is done
     if ($dbtype ne 'postgres') {
         return 0, $dbh;
     }
