@@ -691,6 +691,26 @@ sub start_mcp {
         $self->glog("Sleep time: $config{mcp_dbproblem_sleep}", LOG_TERSE);
         sleep($config{mcp_dbproblem_sleep});
 
+        ## Do a quick check for a stopfile
+        ## Bail if the stopfile exists
+        if (-e $self->{stopfile}) {
+            $self->glog(qq{Found stopfile "$self->{stopfile}": exiting}, LOG_WARN);
+            my $msg = 'Found stopfile';
+
+            ## Grab the reason, if it exists, so we can propagate it onward
+            my $mcpreason = get_reason(0);
+            if ($mcpreason) {
+                $msg .= ": $mcpreason";
+            }
+
+            ## Stop controllers, disconnect, remove PID file, etc.
+            $self->cleanup_mcp("$msg\n");
+
+            $self->glog('Exiting', LOG_WARN);
+            exit 0;
+        }
+
+
         ## We assume this is bucardo, and that we are in same directory as when called
         my $RUNME = $old0;
         ## Check to see if $RUNME is executable as is, before we assume we're in the same directory
