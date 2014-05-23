@@ -205,7 +205,7 @@ CREATE TABLE bucardo.db (
 );
 COMMENT ON TABLE bucardo.db IS $$Holds information about each database used in replication$$;
 
-ALTER TABLE bucardo.db ADD CONSTRAINT db_status CHECK (status IN ('active','inactive'));
+ALTER TABLE bucardo.db ADD CONSTRAINT db_status CHECK (status IN ('active','inactive','stalled'));
 
 ALTER TABLE bucardo.db ADD CONSTRAINT db_service_valid CHECK ((dbservice IS NOT NULL) OR ((((dbname IS NOT NULL) AND (dbuser IS NOT NULL)) AND (dbhost IS NOT NULL)) AND (dbport IS NOT NULL)));
 
