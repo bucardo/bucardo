@@ -2813,7 +2813,7 @@ sub start_kid {
                                SELECT 1
                                FROM   bucardo.$g->{tracktable} t
                                WHERE  d.txntime = t.txntime
-                               AND    (t.target = DBGROUP::text OR t.target ~ '^T:')
+                               AND    (t.target = DBGROUP::text)
                             )
                     };
 
@@ -2839,7 +2839,7 @@ sub start_kid {
                         SELECT 1
                         FROM   bucardo.$g->{tracktable} t
                         WHERE  d.txntime = t.txntime
-                        AND    (t.target = DBGROUP::text OR t.target ~ '^T:')
+                        AND    (t.target = DBGROUP::text)
                     );
                 };
 
