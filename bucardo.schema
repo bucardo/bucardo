@@ -2467,7 +2467,7 @@ SELECT 'Fixme'::TEXT;
 
             ## Need to index both columns of the txntime table
             if (! exists $bindexoid{$noquote_index3_name}) {
-                $SQL = qq{CREATE INDEX $index3_name ON bucardo.$track_table(target, txntime)};
+                $SQL = qq{CREATE INDEX $index3_name ON bucardo.$track_table(target text_pattern_ops, txntime)};
                 $run_sql->($SQL,$dbh);
             }
 
