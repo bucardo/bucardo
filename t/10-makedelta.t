@@ -103,9 +103,14 @@ ok $bct->wait_for_notice($dbhX, [qw(
     bucardo_syncdone_deltatest2
 )]), 'The deltatest1 and deltatest2 syncs finished';
 
+## Why is a sleep needed?!?
+sleep 5;
+
 is_deeply $dbhA->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test2'
 ), [[2, 'foo']], 'Should have the A test2 row in A';
+
+exit;
 
 is_deeply $dbhC->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test2'
