@@ -5149,7 +5149,7 @@ sub start_kid {
 
         redo KID;
 
-      } ## end KID
+    } ## end KID
 
         ## Disconnect from all the databases used in this sync
         for my $dbname (@dbs_dbi) {
@@ -5264,12 +5264,15 @@ sub start_kid {
             ## Sleep and try again.
             sleep $sleeptime if $sleeptime;
             $kicked = 1;
-            redo RUNKID;
         };
         if (my $err = $@) {
             # Our recovery failed. :-(
             $err_handler->($err);
         }
+        else {
+            redo RUNKID;
+        }
+
     }
 
 } ## end of start_kid
@@ -8570,7 +8573,7 @@ sub run_kid_custom_code {
         my $maindbh = $self->{masterdbh};
         $self->db_notify($maindbh, $notify);
         sleep $config{endsync_sleep};
-        redo KID;
+        return 'redo';
     }
 
     ## The custom code has requested we retry this sync (exception code only)
