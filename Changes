@@ -258,7 +258,7 @@ Bucardo version 4.4.4, released May 14, 2011
 
 Bucardo version 4.4.3, released April 15, 2011
 
-  - Fix rare race condition when slave database dies. [GSM]
+  - Fix rare race condition when target database dies. [GSM]
     Thanks to Kaveh Mousavi Zamani for the report.
 
 
@@ -566,7 +566,7 @@ New features:
   - Add support for multi-column primary keys. Thanks to Backcountry.com. [GSM]
 
   - Add new 'onetimecopy' attribute to sync table, to allow recreation on 
-    demand of pushdelta tables on slaves via COPY. [GSM]
+    demand of pushdelta tables on targets via COPY. [GSM]
 
   - Support for replication after TRUNCATE. This will only work on 
     Postgres version 8.4 and higher, and only pushdelta syncs. [GSM]

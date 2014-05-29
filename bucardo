@@ -2277,7 +2277,7 @@ sub update_dbgroup {
     ## 1. Group to be updated
     ## 2. Databases to be adjusted, or name change request (name=newname)
     ## Returns: undef
-    ## Example: bucardo update dbgroup sales A:slave
+    ## Example: bucardo update dbgroup sales A:target
 
     my @actions = @_;
 
@@ -8472,7 +8472,7 @@ sub check_recurse {
 sub extract_name_and_role {
 
     ## Given a group or db name with optional role information, return both
-    ## Also returns optional list of other items, e.g. ABC:slave:pri=2:gangs=2
+    ## Also returns optional list of other items, e.g. ABC:target:pri=2:gangs=2
     ## Arguments: one
     ## 1. Group or database name: 'foo' or 'foo:master'
     ## Returns: name, role name, and hashref of 'extra' info
