@@ -103,6 +103,7 @@ SKIP: {
 ## Now the comments
 SKIP: {
 	if (!eval { require File::Comments; 1 }) {
+        warn 'Cannot spellcheck unless File::Comments module is available';
 		skip ('Need File::Comments to test the spelling inside comments',@testfiles+@commentfiles);
 	}
 
@@ -163,6 +164,7 @@ MongoDB
 Mullane
 mysql
 MySQL
+NOTIFYs
 perl
 PGBINDIR
 pgsql
@@ -174,6 +176,7 @@ pushable
 pushdelta
 qw
 rdbms
+readonly
 recurse
 Redis
 Sabino

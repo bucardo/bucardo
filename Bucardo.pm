@@ -4017,7 +4017,7 @@ sub start_kid {
                                             ## We need to know if any have run since the last time we ran this sync
                                             ## In other words, any deltas newer than the highest track entry
                                             $SQL = qq{SELECT COUNT(*) FROM bucardo.$g->{deltatable} d }
-                                                 . qq{WHERE d.txntime > }
+                                                 . q{WHERE d.txntime > }
                                                  . qq{(SELECT MAX(txntime) FROM bucardo.$g->{tracktable} }
                                                  . qq{WHERE target = '$x->{SYNCNAME}')};
                                             $g->{sql_got_delta} = $SQL;
@@ -5201,13 +5201,13 @@ sub start_kid {
                     $err_handler->($err);
                 }
                 elsif ($sleeptime) {
-                    $self->glog((sprintf "Could not serialize, will sleep for %s %s",
+                    $self->glog((sprintf 'Could not serialize, will sleep for %s %s',
                                  $sleeptime, 1==$sleeptime ? 'second' : 'seconds'), LOG_NORMAL);
                 }
                 else {
                     $self->glog('Could not serialize, will try again', LOG_NORMAL);
                 }
-                $fail_msg = "Serialization failure";
+                $fail_msg = 'Serialization failure';
             }
             elsif (first { $_ eq '40P01' } @states) {
                 $sleeptime = $config{kid_deadlock_sleep};
@@ -5217,14 +5217,14 @@ sub start_kid {
                     $err_handler->($err);
                 }
                 elsif ($sleeptime) {
-                    $self->glog((sprintf "Encountered a deadlock, will sleep for %s %s",
+                    $self->glog((sprintf 'Encountered a deadlock, will sleep for %s %s',
                                  $sleeptime, 1==$sleeptime ? 'second' : 'seconds'), LOG_NORMAL);
                 }
                 else {
                     $self->glog('Encountered a deadlock, will try again', LOG_NORMAL);
                 }
-                $fail_msg = "Deadlock detected";
-                ## TODO: Get more information via gett_deadlock_details()
+                $fail_msg = 'Deadlock detected';
+                ## TODO: Get more information via get_deadlock_details()
             }
             else {
                 $err_handler->($err);
@@ -5326,7 +5326,7 @@ sub connect_database {
         }
 
         if ('postgres' eq $dbtype) {
-            $dsn = "dbi:Pg:";
+            $dsn = 'dbi:Pg:';
             $dsn .= join ';', map {
                 ($_ eq 'dbservice' ? 'service' : $_ ) . "=$d->{$_}";
             } grep { defined $d->{$_} and length $d->{$_} } qw/dbname dbservice/;
@@ -7336,7 +7336,7 @@ sub fork_vac {
                 $config{bucardo_vac} = 0;
 
                 ## Caught by handler above
-                die "Not needed";
+                die 'Not needed';
 
             }
 
@@ -9512,7 +9512,7 @@ sub push_rows {
                 ##   it has already been replicated here.
                 my $dbinfo = $sync->{db}{ $t->{name} };
                 if (!$fullcopy and $dbinfo->{needs_makedelta}{$S}{$T}) {
-                    $self->glog("Using makedelta to populate delta and track tables", LOG_VERBOSE);
+                    $self->glog('Using makedelta to populate delta and track tables', LOG_VERBOSE);
                     my ($cols, $vals);
                     if ($numpks == 1) {
                         $cols = "($pkcols)";

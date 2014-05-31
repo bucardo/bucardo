@@ -573,6 +573,7 @@ sub _pod2usage {
         '-exitval' => 2,
         @_
     );
+    return;
 }
 
 sub help {
@@ -590,6 +591,8 @@ sub help {
         '-sections' => '^(?:USAGE|COMMANDS|OPTIONS)$',
         '-exitval'  => $exitval || 0,
     );
+
+    return;
 
 } ## end of help
 
@@ -649,7 +652,7 @@ sub superhelp {
     my @names;
     for my $noun (@nouns) {
         push @names => $names{ lc $noun } || $names{ standardize_name($noun) }
-            || help( 1, "Unknown command: " . join ' ' => @nouns );
+            || help( 1, 'Unknown command: ' . join ' ' => @nouns );
     }
 
     my @command = ($names[0]);
@@ -662,6 +665,8 @@ sub superhelp {
         push @command, => '!.+' if $names[0] eq 'add' || $names[0] eq 'update';
     }
     usage_exit(join('/' => @command), 0);
+
+    return;
 
 } ## end of superhelp
 
@@ -1310,6 +1315,8 @@ sub add_item {
 
     usage_exit($doc_section);
 
+    return;
+
 } ## end of add_item
 
 
@@ -1342,7 +1349,9 @@ sub update_item {
 
     ## The update function returns, due to recursion, so we must exit.
     $code->(@nouns);
+
     exit 0;
+
 } ## end of update_item
 
 
@@ -1420,6 +1429,7 @@ sub list_item {
     } # SWITCH
 
     exit 0;
+
 } ## end of list_item
 
 
@@ -1452,6 +1462,8 @@ sub remove_item {
 
     ## Do not know how to remove anything else
     usage_exit($doc_section);
+
+    return;
 
 } ## end of remove_item
 
@@ -2793,12 +2805,12 @@ sub find_goat_by_item {
 
     ## Handle ID values
     if ($name =~ /^\d+$/) {
-        $DEBUG and warn "\$name is an ID value";
+        $DEBUG and warn "$name is an ID value";
         push @results, $GOAT->{by_id}{$name};
     }
     ## Handle names, with or without schemas, and with or without wildcards
     else {
-        $DEBUG and warn "\$name is a name value";
+        $DEBUG and warn "$name is a name value";
 
         my @found_keys;
 
@@ -2833,7 +2845,7 @@ sub find_goat_by_item {
                 push(@results, $b);
             }
         } @found_keys;
-        $DEBUG and warn "Here are the goats we've found, before filtering: " . Dumper(@results);
+        $DEBUG and warn q{Here are the goats we've found, before filtering: } . Dumper(@results);
     }
 
     if (@results && defined $results[0] && @nouns && defined $nouns[0]) {
@@ -2853,7 +2865,7 @@ sub find_goat_by_item {
         }
     }
 
-    $DEBUG and warn "Here are the filtered results: " . Dumper(@results);
+    $DEBUG and warn 'Here are the filtered results: ' . Dumper(@results);
     @results = () if (@results and !defined $results[0]);
     return @results;
 } ## end of find_goat_by_item
@@ -3296,6 +3308,7 @@ sub add_table {
 
 
 sub _remove_relation {
+
     my $reltype = shift;
 
     my $doc_section = 'remove';
@@ -3354,7 +3367,8 @@ sub remove_table {
     ## Usage: remove table tablename [t2 t3 ...]
     ## Arguments: none, parses nouns for tables
     ## Returns: never, exits
-    _remove_relation('table');
+
+    return _remove_relation('table');
 
 } ## end of remove_table
 
@@ -3363,7 +3377,9 @@ sub remove_sequence {
     ## Usage: remove sequence sequencename [t2 t3 ...]
     ## Arguments: none, parses nouns for sequences
     ## Returns: never, exits
-    _remove_relation('sequence');
+
+    return _remove_relation('sequence');
+
 } ## end of remove_sequence
 
 
@@ -4531,8 +4547,8 @@ AND nspname !~ '^pg_'
         ## *and* something was found. In all other cases, we go live.
         if ($hasstar or !$hasadot or !@matches) {
             debug(qq{NB! Found some existing matches; searching for other possibilities, because "$item" }
-                . ( $hasstar ? "includes wildcard characters " : '' )
-                . ( !$hasadot ? "doesn't include a dot" : '' )) if @matches;
+                . ( $hasstar ? 'includes wildcard characters ' : '' )
+                . ( !$hasadot ? 'does not include a dot' : '' )) if @matches;
             ## Search the live database for matches
             $sth = $rdbh->prepare($SQL);
             $regex_item ||= $item;
@@ -5485,6 +5501,9 @@ sub inspect {
     inspect_herd()  if $thing =~ /(?:relgr|herd)/i or $thing eq 'h';
 
     usage_exit($doc_section);
+
+    return;
+
 } ## end of inspect
 
 
@@ -9638,7 +9657,7 @@ Defaults to "off".
 Boolean indicating whether or not to be strict when comparing the table
 between syncs. If the columns have different names or data types, the
 validation will fail. But perhaps the columns are allowed to have different
-names or data types. If so, disable C<strict_check> and column diffrences will
+names or data types. If so, disable C<strict_check> and column differences will
 result in warnings rather than failing the validation. Defaults to true.
 
 =back
@@ -9928,7 +9947,7 @@ default. Optional.
 Boolean indicating whether or not to be strict when comparing tables in the
 sync. If the columns have different names or data types, the validation will
 fail. But perhaps the columns are allowed to have different names or data
-types. If so, disable C<strict_check> and column diffrences will result in
+types. If so, disable C<strict_check> and column differences will result in
 warnings rather than failing the validation. Defaults to true.
 
 =back
@@ -10451,7 +10470,7 @@ Number of times a KID may be kicked before being reaped.
 
 =item C<isolation_level>
 
-The transation isolation level this sync should use.
+The transaction isolation level this sync should use.
 Only choices are "serializable" and "repeatable read"
 
 =item C<conflict_strategy>
@@ -10560,7 +10579,7 @@ Boolean indicating whether or not to rebuild indexes after every sync.
 Boolean indicating whether or not to be strict when comparing tables in the
 sync. If the columns have different names or data types, the validation will
 fail. But perhaps the columns are allowed to have different names or data
-types. If so, disable C<strict_check> and column diffrences will result in
+types. If so, disable C<strict_check> and column differences will result in
 warnings rather than failing the validation. Defaults to true.
 
 =back
@@ -10619,7 +10638,7 @@ Specifies which databases need makedelta enabled for this table.
 Boolean indicating whether or not to be strict when comparing the table
 between syncs. If the columns have different names or data types, the
 validation will fail. But perhaps the columns are allowed to have different
-names or data types. If so, disable C<strict_check> and column diffrences will
+names or data types. If so, disable C<strict_check> and column differences will
 result in warnings rather than failing the validation. Defaults to true.
 
 =back
