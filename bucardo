@@ -39,7 +39,7 @@ return 1 if $ENV{BUCARDO_TEST};
 *STDERR->autoflush(1);
 
 ## Treat ARGV values as utf8
-@ARGV = map { decode(locale => $_, 1) } @ARGV;
+decode_argv();
 
 ## All the variables we use often and want to declare here without 'my'
 use vars qw/$dbh $SQL $sth %sth $count $info %global $SYNC $GOAT $TABLE $SEQUENCE $DB $DBGROUP $HERD
