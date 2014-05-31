@@ -6215,16 +6215,16 @@ sub validate_sync {
                 ## Normally, we won't get here as the sync should not be active
                 ## Mark the syncs as stalled and move on
                 $s->{status} = 'stalled';
-				$SQL = 'UPDATE bucardo.sync SET status = ? WHERE name = ?';
-				eval {
-					my $sth = $self->{masterdbh}->prepare($SQL);
-					$sth->execute('stalled',$syncname);
-					$self->{masterdbh}->commit();
-				};
-				if ($@) {
-					$self->glog("Failed to set sync $syncname as stalled: $@", LOG_WARN);
-					$self->{masterdbh}->rollback();
-				}
+                $SQL = 'UPDATE bucardo.sync SET status = ? WHERE name = ?';
+                eval {
+                    my $sth = $self->{masterdbh}->prepare($SQL);
+                    $sth->execute('stalled',$syncname);
+                    $self->{masterdbh}->commit();
+                };
+                if ($@) {
+                    $self->glog("Failed to set sync $syncname as stalled: $@", LOG_WARN);
+                    $self->{masterdbh}->rollback();
+                }
                 return 0;
             }
             ## Warn about non-source ones, but allow the sync to proceed
