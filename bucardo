@@ -22,7 +22,7 @@ use Time::HiRes     qw/ sleep gettimeofday tv_interval /;
 use POSIX           qw/ ceil setsid localeconv /;
 use Config          qw/ %Config /;
 use Encode          qw/ decode /;
-use Encode::Locale;
+use Encode::Locale  qw/ decode_argv /;
 use File::Spec;
 use Data::Dumper    qw/ Dumper /;
 $Data::Dumper::Indent = 1;
