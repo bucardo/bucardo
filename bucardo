@@ -3901,7 +3901,7 @@ sub add_sync {
         maxkicks                 maxkicks             numeric          null
         isolation_level|txnmode  isolation_level      0                null
         rebuild_index|rebuildindex   rebuild_index    numeric          null
-        tables                   tables               0                skip
+        relation|relations|table|tables                   tables               0                skip
     };
 
     ## Fullcopy syncs get some of their defaults overriden
@@ -5694,17 +5694,17 @@ sub process_args {
 
     my %arg;
 
-    while ($string =~ m/(\w+)\s*=\s*"(.+?)" /g) {
+    while ($string =~ m/(\w+)\s*[=:]\s*"(.+?)" /g) {
         $arg{lc $1} = $2;
     }
     $string =~ s/\w+\s*=\s*".+?" / /g;
 
-    while ($string =~ m/(\w+)\s*=\s*'(.+?)' /g) {
+    while ($string =~ m/(\w+)\s*[=:]\s*'(.+?)' /g) {
         $arg{lc $1} = $2;
     }
     $string =~ s/\w+\s*=\s*'.+?' / /g;
 
-    while ($string =~ m/(\w+)\s*=\s*(\S+)/g) {
+    while ($string =~ m/(\w+)\s*[=:]\s*(\S+)/g) {
         $arg{lc $1} = $2;
     }
     $string =~ s/\w+\s*=\s*\S+/ /g;
