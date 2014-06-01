@@ -7086,6 +7086,10 @@ sub fork_and_inactivate {
     else { ## Kid
         ## Walk through the list of all known DBI databases
         ## Inactivate each one, then undef it
+
+        ## Change to a better prefix, so 'MCP' does not appear in the logs
+        $self->{logprefix} = $type;
+
         ## It is probably still referenced elsewhere, so handle that - how?
         for my $iname (keys %{ $self->{dbhlist} }) {
             my $ldbh = $self->{dbhlist}{$iname};
