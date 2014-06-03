@@ -769,7 +769,7 @@ sub start {
 
     ## Create a new Bucardo daemon
     ## If we are a symlink, put the source directory in our path
-    if (-s $progname and readlink $progname) {
+    if (-l $progname and readlink $progname) {
         my $dir = dirname( readlink $progname );
         unshift @INC, $dir;
     }
@@ -6878,7 +6878,7 @@ sub find_bucardo_schema {
     return ($fh, $schema_file) if open $fh, '<', $schema_file;
 
     ## Check for a symlink path back to the right directory
-    if (-s $progname) {
+    if (-l $progname) {
         my $dir = dirname( readlink $progname );
         $schema_file = File::Spec->catfile( $dir, 'bucardo.schema' );
         return ($fh, $schema_file) if open $fh, '<', $schema_file;
