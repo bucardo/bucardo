@@ -4040,6 +4040,12 @@ sub add_sync {
 
         ## If this database is not known to us, throw an exception
         if (! exists $DB->{$db}) {
+            ## This may be a dbgroup: we allow this if it is the only entry!
+            if (exists $DBGROUP->{ $db } and ! defined $dblist[1]) {
+                $dbgroup_name = $db;
+                undef @dblist;
+                last;
+            }
             die qq{Unknown database "$db"\n};
         }
 
