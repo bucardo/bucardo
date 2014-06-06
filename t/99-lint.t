@@ -22,15 +22,29 @@ else {
 my $file = 'bucardo';
 my $fh;
 if (! open $fh, '<', $file) {
-    $file = '../bucardo';
+    $file = "../$file";
     if (! open $fh, '<', $file) {
-        BAIL OUT q{Could not find the 'bucardo' script!};
+        BAIL OUT qq{Could not find the file '$file'!};
     }
 }
 
 check_subroutines($file, $fh);
 
 check_whitespace($file, $fh);
+
+close $fh or die qq{Could not close filehandle for "$file": $!\n};
+
+
+$file = 'Bucardo.pm';
+if (! open $fh, '<', $file) {
+    $file = "../$file";
+    if (! open $fh, '<', $file) {
+        BAIL OUT qq{Could not find the file '$file'!};
+    }
+}
+
+check_whitespace($file, $fh);
+
 
 done_testing();
 
