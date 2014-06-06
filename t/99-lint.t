@@ -30,6 +30,8 @@ if (! open $fh, '<', $file) {
 
 check_subroutines($file, $fh);
 
+check_whitespace($file, $fh);
+
 done_testing();
 
 sub check_subroutines {
@@ -145,5 +147,39 @@ sub check_subroutines {
 
 
 } ## end of check_for_contract
+
+
+sub check_whitespace {
+
+    ## Check various whitespace rules
+    ## Arguments: two
+    ## 1. File name
+    ## 2. file handle
+    ## Returns: undef
+
+    my $filename = shift;
+    my $fh = shift;
+
+    ## Rewind to the beginning
+    seek $fh, 0, 0;
+
+    my %found;
+
+    ## Just in case, reset the line counter
+    $. = 0;
+
+    while (<$fh>) {
+
+        if (/ +$/) {
+            fail "Trailing whitespace found at line $. of file $filename";
+        }
+    }
+
+    ## Do *not* close the file handle!
+
+    return;
+
+
+} ## end of check_whitespace
 
 
