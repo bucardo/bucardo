@@ -4352,7 +4352,7 @@ sub start_kid {
                         ## XXX But this time, we want to enter a more aggressive conflict resolution mode
                         ## XXX Specifically, we need to ensure that a single database "wins" and that
                         ## XXX all table changes therein come from that database.
-                        ## XXX No need if we only have a single table, of course, or if there were 
+                        ## XXX No need if we only have a single table, of course, or if there were
                         ## XXX no possible conflicting changes.
                         ## XXX Finally, we skip if the first run already had a canonical winner
                         if (!$g->{has_exception_code}) {
@@ -4515,7 +4515,7 @@ sub start_kid {
                 }
 
                 ## Do makedelta here: no sense in doing it before all the changes above
-                ## We only need to call makedelta if there is a positive delta 
+                ## We only need to call makedelta if there is a positive delta
                 ## count for any other database
                 for my $dbname (@dbs_source) {
 
@@ -9875,12 +9875,12 @@ http://bucardo.org/
 
 =head1 DESCRIPTION
 
-Bucardo is a Perl module that replicates Postgres databases using a combination 
+Bucardo is a Perl module that replicates Postgres databases using a combination
 of Perl, a custom database schema, Pl/Perlu, and Pl/Pgsql.
 
 Bucardo is unapologetically extremely verbose in its logging.
 
-Full documentation can be found on the website, or in the files that came with 
+Full documentation can be found on the website, or in the files that came with
 this distribution. See also the documentation for the bucardo program.
 
 =head1 DEPENDENCIES
@@ -9903,12 +9903,12 @@ this distribution. See also the documentation for the bucardo program.
 
 =head1 BUGS
 
-Bugs should be reported to bucardo-general@bucardo.org. A list of bugs can be found at 
+Bugs should be reported to bucardo-general@bucardo.org. A list of bugs can be found at
 http://bucardo.org/bugs.html
 
 =head1 CREDITS
 
-Bucardo was originally developed and funded by Backcountry.com, who have been using versions 
+Bucardo was originally developed and funded by Backcountry.com, who have been using versions
 of it in production since 2002. Jon Jensen <jon@endpoint.com> wrote the original version.
 
 =head1 AUTHOR
