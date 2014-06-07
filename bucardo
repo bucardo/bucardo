@@ -4190,9 +4190,6 @@ sub add_sync {
         }
     }
 
-    ## TODO: get pkonly working pkonly allpks onlypks
-    ##
-
     ## Keep track of what we have already done
     my %table;
 
@@ -4209,6 +4206,10 @@ sub add_sync {
 
         my $result = get_goat_ids(args => [$table], dbcols => { db => $db_for_lookups} );
         my $found = keys %{ $result->{match} };
+
+        for my $name (sort keys %{ $result->{new} }) {
+            push @message => qq{  Table added: "$name"};
+        }
 
         ## If a specific table is not found, throw an exception
         if (!$found and $table !~ /^all/) {
@@ -4579,7 +4580,7 @@ sub get_goat_ids {
     ## Returns the ids from the goat table for matching relations
     ## Also checks the live database and adds tables to the goat table as needed.
     ## Arguments: key-value pairs:
-    ##  - args: arrayref of names to match against. Can have wildcards.
+    ##  - args: arrayref of names to match against. Can have wildcards. Can be 'all'
     ##  - type: 'table' or 'sequence', depending on what we expect to find.
     ##  - dbcols: optional hashref of fields to populate goat table with (e.g. autokick=1)
     ##  - noherd: do not consider items if already in this herd for "all"
@@ -4634,7 +4635,7 @@ sub get_goat_ids {
             ## Assume we're talking about tables unless we say "sequence" explicitly
         my $type = ( $arg eq 'sequence' ? 'S' : 'r' );
         return qq{
-SELECT nspname||'.'||relname AS name, relkind, c.oid
+SELECT nspname||'.'||relname AS name, relkind, c.oid, relhaspkey
 FROM pg_class c
 JOIN pg_namespace n ON (n.oid = c.relnamespace)
 WHERE relkind IN ('$type')
@@ -4695,7 +4696,8 @@ AND nspname !~ '^pg_'
         }
         else {
             ## No wildcards and no dot, so we match all tables regardless of the schema
-            $SQL = $BASESQL->($reltype) . 'AND relname = ?';
+            $SQL = $BASESQL->($reltype);
+            $item eq 'all' or $SQL .= 'AND relname = ?';
         }
 
         ## We do not check the live database if the match was exact
@@ -4707,8 +4709,13 @@ AND nspname !~ '^pg_'
             ## Search the live database for matches
             $sth = $rdbh->prepare($SQL);
             $regex_item ||= $item;
-            ($count = $sth->execute($regex_item)) =~ s/0E0/0/;
-            debug(qq{Searched live database "$bestdb" for arg "$item", count was $count});
+            if ('all' eq $item) {
+                ($count = $sth->execute()) =~ s/0E0/0/;
+            }
+            else {
+                ($count = $sth->execute($regex_item)) =~ s/0E0/0/;
+            }
+            debug(qq{Searched live database "$bestdb" for arg "$regex_item", count was $count});
             debug(qq{SQL: $SQL}, 2);
             debug(qq{Arg: $item ($regex_item)}, 2);
             for my $row (@{ $sth->fetchall_arrayref({}) }) {
@@ -4718,6 +4725,18 @@ AND nspname !~ '^pg_'
 
                 ## Don't bother if we have already added this!
                 next if find_goat_by_item($row->{name}, [ "db=$bestdb" ]);
+
+                ## If we are doing 'all', exclude the bucardo schema, and insist on a primary key
+                if ('all' eq $item) {
+                    next if $name =~ /^bucardo\./;
+                    if (!$row->{relhaspkey}) {
+                        ## Allow if we have a unique index on this table
+                        $SQL = q{SELECT 1 FROM pg_index WHERE indisunique AND indrelid=$1::regclass};
+                        my $sthunique = $rdbh->prepare_cached($SQL);
+                        $count = $sthunique->execute($name);
+                        next if $count < 1;
+                    }
+                }
 
                 ## Document the string that led us to this one
                 $relation{$name}{original}{$item}++;
