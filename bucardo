@@ -189,6 +189,11 @@ if ($bcargs->{version}) {
     exit 0;
 }
 
+## Allow some options to be set by env
+if ($ENV{BUCARDO_CONFIRM} and ! exists $bcargs->{confirm}) {
+    $bcargs->{confirm} = $ENV{BUCARDO_CONFIRM};
+}
+
 # Determine the logging destination.
 if (exists $bcargs->{logdest}) {
     if (! ref $bcargs->{logdest}) {
@@ -1821,7 +1826,7 @@ sub remove_database {
     ## Make sure all named databases exist
     for my $name (@nouns) {
         if (! exists $DB->{$name}) {
-            die qq{No such database: $name\n};
+            die qq{No such database "$name"\n};
         }
     }
 
