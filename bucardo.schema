@@ -1075,23 +1075,23 @@ my $found = 0;
 ## If the user is not trying a manual override, set the best one and leave
 if ((!defined $new->{pkey} or !length $new->{pkey}) or ($old and $new->{pkey} eq $old->{pkey})) {
     ($new->{pkey} = $uniq->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{attname} . ($2 ? '|' : '')/ge;
-	$found = 1;
+    $found = 1;
 }
 else {
-	## They've attempted a manual override of pkey. Make sure it is valid.
+    ## They've attempted a manual override of pkey. Make sure it is valid.
     for (@$cons) {
         (my $name = $_->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{attname} . ($2 ? '|' : '')/ge;
         next unless $name eq $new->{pkey};
-		last;
+        last;
     }
 }
 
 if ($found) {
     ($new->{qpkey} = $uniq->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{qattname} . ($2 ? '|' : '')/ge;
     ($new->{pkeytype} = $uniq->{indkey}) =~ s/(\d+)(\s+)?/$col->{$1}{typname} . ($2 ? '|' : '')/ge;
-	$new->{pkeytype} =~ s/int2/smallint/;
-	$new->{pkeytype} =~ s/int4/integer/;
-	$new->{pkeytype} =~ s/int8/bigint/;
+    $new->{pkeytype} =~ s/int2/smallint/;
+    $new->{pkeytype} =~ s/int4/integer/;
+    $new->{pkeytype} =~ s/int8/bigint/;
     return 'MODIFY';
 }
 
