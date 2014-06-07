@@ -1481,15 +1481,19 @@ sub add_database {
     ## 2+ name=value parameters, dash-dash arguments
     ## Returns: undef
     ## Example: bucardo add db nyc1 dbname=nyc1 dbhost=nyc1.example.com dbgroup=sales
+    ## Example: bucardo add dbs nyc1,nyc2 dbname=nyc1,nyc2 dbgroup=sales
 
     ## Grab our generic usage message
     my $doc_section = 'add/add db';
 
-    ## The first word is the internal name (bucardo.db.name)
+    ## The first word is the internal name (bucardo.db.name) - may have commas
     my $item_name = shift @nouns || '';
 
     ## No name is a problem
     usage_exit($doc_section) unless length $item_name;
+
+    ## We may have more than one database specified at once
+    my $db_names = [split /\s*,\s*/ => $item_name];
 
     ## Inputs and aliases, database column name, flags, default value
     my $validcols = qq{
@@ -1497,13 +1501,13 @@ sub add_database {
         type|dbtype              dbtype               0                postgres
         pass|password|dbpass     dbpass               0                null
         db|dbname                dbname               0                null
-        port|dbport|pgport       dbport               numeric          ENV:PGPORT
+        port|dbport|pgport       dbport               0                ENV:PGPORT
         host|dbhost|pghost       dbhost               0                ENV:PGHOSTADDR|PGHOST
         conn|dbconn|pgconn       dbconn               0                null
         stat|status              status               =active|inactive null
-        group|dbgroup            none                 0                skip
-        addalltables             none                 0                skip
-        addallsequences          none                 0                skip
+        group|dbgroup            dbgroup              0                null
+        addalltables             none                 0                null
+        addallsequences          none                 0                null
         server_side_prepares|ssp server_side_prepares TF               null
         service|dbservice        dbservice            0                null
     };
@@ -1514,54 +1518,77 @@ sub add_database {
     $validcols .= "user|username|dbuser     dbuser               0                bucardo\n"
         if ((! grep { /^(db)?service=/ } @nouns) || grep { /^(db)?user(name)?=/ } @nouns);
 
-    my ( $dbcols, $cols, $phs, $vals, $extra ) = process_simple_args({
+    my ($dbcols) = process_simple_args({
         cols        => $validcols,
         list        => \@nouns,
         doc_section => $doc_section,
     });
 
-    ## Must have a database name unless, possibly, there's a service given
-    if (! exists $vals->{dbname} && ! exists $vals->{dbservice}) {
+    ## Must have a database name unless using a service
+    if (! exists $dbcols->{dbname} && ! exists $dbcols->{dbservice}) {
         print qq{Cannot add database: must supply a database name to connect to\n};
         exit 1;
     }
 
     ## Cannot add if already there
-    if (exists $DB->{$item_name}) {
-        print qq{Cannot add database: the name "$item_name" already exists\n};
-        exit 1;
+    for my $db (@$db_names) {
+        if (exists $DB->{ $db }) {
+            print qq{Cannot add database: the name "$db" already exists\n};
+            exit 1;
+        }
     }
 
     ## Clean up and standardize the type name
-    my $dbtype = $vals->{dbtype} = standardize_rdbms_name($vals->{dbtype});
+    my $dbtype = $dbcols->{dbtype} = standardize_rdbms_name($dbcols->{dbtype});
 
     ## If we have a service, strip the host and port as they may have been set via ENV
-    if (exists $vals->{dbservice}) {
-        delete $vals->{dbport};
-        delete $vals->{dbhost};
-        if ($cols =~ s/dbport,//) {
-            $phs =~ s/\Q?,//;
-        }
-        if ($cols =~ s/dbhost,//) {
-            $phs =~ s/\Q?,//;
+    if (exists $dbcols->{dbservice}) {
+        delete $dbcols->{dbport};
+        delete $dbcols->{dbhost};
+    }
+
+    ## Do not need these values
+    delete $dbcols->{name};
+    my $dbgroup = delete $dbcols->{dbgroup};
+
+    ## Map each value into individual databases
+    my %dbinfo;
+    for my $k (sort keys %$dbcols) {
+        ## Each db in db_names needs to have an associated value for each dbcol entry
+        ## Hence, we only use dbcols to build list of columns: values are kept in a hash
+        next if $dbcols->{$k} !~ /,/;
+        my @list = split /\s*,\s*/ => $dbcols->{$k};
+        my $value;
+        for (my $x=0; defined $db_names->[$x]; $x++) {
+            $value = $list[$x] if defined $list[$x];
+            $dbinfo{$k}[$x] = $value;
         }
     }
 
-    ## Attempt to insert this into the database
-    $SQL = "INSERT INTO bucardo.db ($cols) VALUES ($phs)";
+    ## Attempt to insert into the bucardo.db table
+	my $columns = join ',' => keys %$dbcols;
+	my $qs = '?,' x keys %$dbcols;
+    $SQL = "INSERT INTO bucardo.db (name,$columns) VALUES (${qs}?)";
     debug("SQL: $SQL");
-    debug(Dumper $vals);
     $sth = $dbh->prepare($SQL);
-    my $evalok = 0;
-    eval {
-        $sth->execute(map { $vals->{$_} } sort keys %$vals);
-        $evalok = 1;
-    };
-    if (! $evalok) {
-        if ($@ =~ /"db_name_sane"/) {
-            die qq{Invalid name: you cannot refer to this database as "$item_name"\n};
+    for (my $x = 0; defined $db_names->[$x]; $x++) {
+        my @args;
+        for my $key (keys %$dbcols) {
+            push @args => exists $dbinfo{$key} ? $dbinfo{$key}->[$x] : $dbcols->{$key};
         }
-        die "Failed to add database: $@\n";
+        my $evalok = 0;
+        debug(Dumper $db_names->[$x]);
+        debug(Dumper \@args);
+        eval {
+            $sth->execute($db_names->[$x], @args);
+            $evalok = 1;
+        };
+        if (! $evalok) {
+            if ($@ =~ /"db_name_sane"/) {
+                die qq{Invalid name: you cannot refer to this database as "$db_names->[$x]"\n};
+            }
+            die "Failed to add database: $@\n";
+        }
     }
 
     ## Store certain messages so we can output them in a desired order
@@ -1570,13 +1597,13 @@ sub add_database {
     ## Test database handle
     my $testdbh;
 
-    ## May want to do a test connection to the database
+    ## May want to do a test connection to each databases
   TESTCONN: {
 
         ## Nothing else to do for flatfiles
         last TESTCONN if 'flatfile' eq $dbtype;
 
-        ## Get the module namem the way to refer to its database
+        ## Get the module name, the way to refer to its database
         ## This also makes sure we have a valid type
         my %dbtypeinfo = (
             drizzle  => ['DBD::drizzle',  'Drizzle database'],
@@ -1596,148 +1623,165 @@ sub add_database {
         ## Gather connection information from the database via db_getconn
         $SQL = 'SELECT bucardo.db_getconn(?)';
         $sth = $dbh->prepare($SQL);
-        $sth->execute($item_name);
-        my $dbconn = $sth->fetchall_arrayref()->[0][0];
+        for my $db (@$db_names) {
+            $sth->execute($db);
+            my $dbconn = $sth->fetchall_arrayref()->[0][0];
 
-        ## Must be able to load the Perl driver
-        $evalok = 0;
-        eval {
-            eval "require $module";
-            $evalok = 1;
-        };
-        if (! $evalok) {
-            die "Cannot add unless the Perl module '$module' is available: $@\n";
-        }
-
-        ## Reset for the evals below
-        $evalok = 0;
-
-        ## Standard args for the DBI databases
-        ## We put it here as we may move around with the Postgres bucardo user trick
-        my ($type,$dsn,$user,$pass) = split /\n/ => $dbconn;
-
-
-        ## Handle all of the ones that do not use standard DBI first
-
-        if ('mongo' eq $dbtype) {
-
-            my $dsn = {};
-            for my $line (split /\n/ => $dbconn) {
-                next if $line !~ /(\w+):\s+(.+)/;
-                $dsn->{$1} = $2;
-            }
-
+            ## Must be able to load the Perl driver
+            my $evalok = 0;
             eval {
-                $testdbh = MongoDB::Connection->new($dsn); ## no critic
+                eval "require $module";
                 $evalok = 1;
             };
-        }
-
-        elsif ('redis' eq $dbtype) {
-
-            my $tempdsn = {};
-            for my $line (split /\n/ => $dbconn) {
-                next if $line !~ /(\w+):\s+(.+)/;
-                $tempdsn->{$1} = $2;
-            }
-            my $server;
-            if (exists $tempdsn->{host}) {
-                $server = $tempdsn->{host};
-            }
-            if (exists $tempdsn->{port}) {
-                $server .= ":$tempdsn->{port}";
-            }
-            my @dsn;
-            if (defined $server) {
-                push @dsn => 'server', $server;
+            if (! $evalok) {
+                die "Cannot add unless the Perl module '$module' is available: $@\n";
             }
 
+            ## Reset for the evals below
             $evalok = 0;
-            eval {
-                $testdbh = Redis->new(@dsn);
-                $evalok = 1;
-            };
-        }
 
-        ## Anything else must be something with a standard DBI driver
-        else {
-            eval {
-                $testdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
-                $evalok = 1;
-            };
-        }
+            ## Standard args for the DBI databases
+            ## We put it here as we may move around with the Postgres bucardo user trick
+            my ($type,$dsn,$user,$pass) = split /\n/ => $dbconn;
 
-        ## At this point, we have eval'd a connection
-        if ($evalok) {
-            ## Disconnect from DBI.
-            $testdbh->disconnect if $module =~ /DBD/;
-        }
-        else {
-            my $err = $DBI::errstr || $@;
-            my $msg;
+            ## Handle all of the ones that do not use standard DBI first
 
-            ## For Postgres, we get a little fancy and try to account for instances
-            ## where the bucardo user may not exist yet, by reconnecting and
-            ## creating said user if needed.
-            if ($DBI::errstr
-                and 'postgres' eq $dbtype
-                and $user eq 'bucardo'
-                and $DBI::errstr =~ /bucardo/
-                and eval { require Digest::MD5; 1 }) {
+            if ('mongo' eq $dbtype) {
 
-                # Try connecting as postgres instead.
-                print "Connection to $fullname as bucardo failed.\nError was: $DBI::errstr\n\n";
-                print qq{Will try to connect as postgres and create superuser $user...\n\n};
-                my $dbh = eval {
-                    DBI->connect($dsn, 'postgres', $pass, {AutoCommit=>1,RaiseError=>1,PrintError=>0});
-                };
-                if ($dbh) {
-                    ## Create the bucardo user now. We'll need a password;
-                    ## create one if we don't have one.
-                    my $connok = 0;
-                    eval {
-                        my $newpass = $pass || generate_password();
-                        my $encpass = Digest::MD5::md5_hex($newpass);
-                        $dbh->do(qq{CREATE USER $user SUPERUSER ENCRYPTED PASSWORD '$encpass'});
-                        $dbh->disconnect;
-                        my $extrauser = $pass ? '' : qq{ with password "$newpass"};
-                        warn "Created superuser '$user'$extrauser\n\n";
-                        $pass = $newpass;
-                        $connok = 1;
-                    };
-                    goto TESTCONN if $connok;
-                    $err = $DBI::errstr || $@;
-                    $msg = "Unable to create superuser $user";
-                } else {
-                    $err = $DBI::errstr || $@;
-                    $msg = 'Connection as postgres failed, too';
+                my $dsn = {};
+                for my $line (split /\n/ => $dbconn) {
+                    next if $line !~ /(\w+):\s+(.+)/;
+                    $dsn->{$1} = $2;
                 }
-            } else {
-                $msg = "Connection to $fullname as $user failed";
+
+                eval {
+                    $testdbh = MongoDB::Connection->new($dsn); ## no critic
+                    $evalok = 1;
+                };
             }
 
-            die "$msg. You may force add it with the --force argument.\nError was: $err\n\n"
-                unless $bcargs->{force};
-            warn "$msg, but will add anyway.\nError was: $err\n";
-        }
+            elsif ('redis' eq $dbtype) {
+
+                my $tempdsn = {};
+                for my $line (split /\n/ => $dbconn) {
+                    next if $line !~ /(\w+):\s+(.+)/;
+                    $tempdsn->{$1} = $2;
+                }
+                my $server;
+                if (exists $tempdsn->{host}) {
+                    $server = $tempdsn->{host};
+                }
+                if (exists $tempdsn->{port}) {
+                    $server .= ":$tempdsn->{port}";
+                }
+                my @dsn;
+                if (defined $server) {
+                    push @dsn => 'server', $server;
+                }
+
+                $evalok = 0;
+                eval {
+                    $testdbh = Redis->new(@dsn);
+                    $evalok = 1;
+                };
+            }
+
+            ## Anything else must be something with a standard DBI driver
+            else {
+                eval {
+                    $testdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+                    $evalok = 1;
+                };
+            }
+
+            ## At this point, we have eval'd a connection
+            if ($evalok) {
+                ## Disconnect from DBI.
+                $testdbh->disconnect if $module =~ /DBD/;
+            }
+            else {
+                my $err = $DBI::errstr || $@;
+                my $msg;
+
+                ## For Postgres, we get a little fancy and try to account for instances
+                ## where the bucardo user may not exist yet, by reconnecting and
+                ## creating said user if needed.
+                if ($DBI::errstr
+                    and 'postgres' eq $dbtype
+                    and $user eq 'bucardo'
+                    and $DBI::errstr =~ /bucardo/
+                    and eval { require Digest::MD5; 1 }) {
+
+                    # Try connecting as postgres instead.
+                    print qq{Connection to "$db" ($fullname) as user bucardo failed.\nError was: $DBI::errstr\n\n};
+                    print qq{Will try to connect as user postgres and create superuser $user...\n\n};
+                    my $dbh = eval {
+                        DBI->connect($dsn, 'postgres', $pass, {AutoCommit=>1,RaiseError=>1,PrintError=>0});
+                    };
+                    if ($dbh) {
+                        ## Create the bucardo user now. We'll need a password;
+                        ## create one if we don't have one.
+                        my $connok = 0;
+                        eval {
+                            my $newpass = $pass || generate_password();
+                            my $encpass = Digest::MD5::md5_hex($newpass);
+                            $dbh->do(qq{CREATE USER $user SUPERUSER ENCRYPTED PASSWORD '$encpass'});
+                            $dbh->disconnect;
+                            my $extrauser = $pass ? '' : qq{ with password "$newpass"};
+                            warn "Created superuser '$user'$extrauser\n\n";
+                            $pass = $newpass;
+                            $connok = 1;
+                        };
+                        goto TESTCONN if $connok;
+                        $err = $DBI::errstr || $@;
+                        $msg = "Unable to create superuser $user";
+                    }
+                    else {
+                        $err = $DBI::errstr || $@;
+                        $msg = 'Connection as postgres failed, too';
+                    }
+                }
+                else {
+                    $msg = qq{Connection to "$db" ($fullname) as user $user failed};
+                }
+
+                die "$msg. You may force add it with the --force argument.\nError was: $err\n\n"
+                    unless $bcargs->{force};
+                warn "$msg, but will add anyway.\nError was: $err\n";
+            }
+        } ## End each database to connect to
 
     } ## end of TESTCONN
 
     ## If we got a group, process that as well
-    if (exists $extra->{dbgroup}) {
-        my $gname = $extra->{dbgroup};
+    if (defined $dbgroup) {
         ## We need to store this away as the function below changes the global hash
-        my $isnew = exists $DBGROUP->{$gname};
+        my $isnew = exists $DBGROUP->{$dbgroup};
 
-        my ($newgroup, $newrole) = add_db_to_group($item_name, $gname);
-        if (! $isnew) {
-            $finalmsg .= qq{Created database group "$newgroup"\n};
+        ## The first database should be a source if not specified explicitly
+        my $isfirst = 1;
+
+        for my $db (@$db_names) {
+
+            my $role = '';
+            if ($isfirst) {
+                if ($db !~ /:/) {
+                    $role = ':source';
+                }
+                $isfirst = 0;
+            }
+
+            my ($newgroup, $newrole) = add_db_to_group($db, "$dbgroup$role");
+            if (! $isnew) {
+                $finalmsg .= qq{Created database group "$newgroup"\n};
+                $isnew = 1;
+            }
+            $finalmsg .= qq{Added database "$db" to group "$newgroup" as $newrole\n};
         }
-        $finalmsg .= qq{Added database "$item_name" to group "$newgroup" as $newrole\n};
     }
-
+ 
     ## Adjust the db name so add_all_* can use it
-    $bcargs->{db} = $item_name;
+    $bcargs->{db} = $db_names->[0];
 
     ## Make sure $DB gets repopulated for the add_all_* calls below
     load_bucardo_info(1);
@@ -1749,7 +1793,9 @@ sub add_database {
     $finalmsg .= add_all_sequences() if grep /addallseq/i, @nouns;
 
     if (!$QUIET) {
-        print qq{Added database "$item_name"\n};
+        my $list = join ',' => map { qq{"$_"} } @$db_names;
+        printf qq{Added %s %s\n},
+            $list =~ /,/ ? 'databases' : 'database', $list;
         $finalmsg and print $finalmsg;
     }
 
