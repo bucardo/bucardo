@@ -1838,6 +1838,7 @@ sub remove_database {
     for my $name (@nouns) {
         ## Wrap in an eval so we can handle known exceptions
         my $evalok = 0;
+        $dbh->pg_savepoint('try_remove_db');
         eval {
             $sth->execute($name);
             $evalok = 1;
@@ -1845,7 +1846,7 @@ sub remove_database {
         if (! $evalok) {
             if ($bcargs->{force} and $@ =~ /"goat_db_fk"|"dbmap_db_fk"/) {
                 $QUIET or warn qq{Dropping all tables and dbgroups that reference database "$name"\n};
-                $dbh->rollback();
+                $dbh->pg_rollback_to('try_remove_db');
                 $dbh->do('DELETE FROM bucardo.goat WHERE db = ' . $dbh->quote($name));
                 $dbh->do('DELETE FROM bucardo.dbmap WHERE db = ' . $dbh->quote($name));
                 ## Try the same query again
