@@ -4132,7 +4132,7 @@ sub add_sync {
         my $newlist = join ',' => map { "$_=".$db{$_} } sort keys %db;
         for my $gname (sort keys %$DBGROUP) {
             my $innerjoin = join ',' =>
-                map { "$_=".$DBGROUP->{$gname}{db}{$_} }
+                map { "$_=".$DBGROUP->{$gname}{db}{$_}{role} }
                     sort keys %{$DBGROUP->{$gname}{db}};
             if ($innerjoin eq $newlist) {
                 push @message => qq{Using existing database group "$gname"};
@@ -4299,8 +4299,6 @@ sub add_sync {
         die "Failed to add sync: $@\n";
     }
 
-    $dbh->commit();
-
     ## Now we can output our success messages if any
     for my $msg (@message) {
         chomp $msg;
@@ -4308,6 +4306,8 @@ sub add_sync {
     }
 
     $QUIET or print qq{Added sync "$sync_name"\n};
+
+    confirm_commit();
 
     exit 0;
 
