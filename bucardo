@@ -9624,9 +9624,13 @@ include:
 
   bucardo add db <name> dbname=actual_name port=xxx host=xxx user=xxx pass=xxx
 
-Adds a new database. The C<name> is the name by which the database will be
+Adds one or more new databases. The C<name> is the name by which the database will be
 known to Bucardo, and must be unique. This may vary from the actual database
-name, as multiple hosts might have databases with the same name.
+name, as multiple hosts might have databases with the same name. Multiple databases
+can be added by separating the names with commas. Options that differ between the
+databases should be separated by a matching commas. Example:
+
+  bucardo add db alpha,beta dbname=sales host=aa,bb user=bucardo
 
 The supported named parameters are:
 
@@ -9948,7 +9952,7 @@ and/or sequences and they will be added to the group.
 
 =head3 add sync
 
-  bucardo add sync syncname relgroup=xxx dbs=xxx
+  bucardo add sync name relgroup=xxx dbs=xxx
 
 Adds a sync, which is a named replication event containing information about
 what to replicate from where to where. The supported parameters are:
@@ -9959,6 +9963,12 @@ what to replicate from where to where. The supported parameters are:
 
 The name of a database group or comma-delimited list of databases. All of the
 specified databases will be synchronized. Required.
+
+=item C<dbgroup>
+
+The name of a database group. All of the databases within this group will be
+part of the sync. If the database group does not exists and a separate list
+of databases is given, the group will be created and populated.
 
 =item C<relgroup>
 
