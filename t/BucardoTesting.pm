@@ -22,6 +22,8 @@ use vars qw/$SQL $sth $count $COM %dbh/;
 
 my $DEBUG = $ENV{BUCARDO_DEBUG} || 0;
 
+$ENV{BUCARDO_CONFIRM} = 0 if exists $ENV{BUCARDO_CONFIRM};
+
 use base 'Exporter';
 our @EXPORT = qw/%tabletype %tabletypemysql %tabletypemariadb %tabletypeoracle %tabletypesqlite
                  %sequences %val
