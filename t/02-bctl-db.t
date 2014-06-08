@@ -122,7 +122,7 @@ like ($res, qr/Added database "B" to group "group1" as target/s, $t);
 
 $t = q{Remove database gives expected message when database does not exist};
 $res = $bct->ctl('bucardo remove db foobar');
-like ($res, qr/No such database: foobar/, $t);
+like ($res, qr/No such database "foobar"/, $t);
 
 $t = q{Remove database works};
 $res = $bct->ctl('bucardo remove db B');
