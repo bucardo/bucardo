@@ -131,10 +131,10 @@ is ($res, qq{$addtable_msg:\n  public.bucardo space test\n  public.bucardo_test1
 $t = q{'bucardo list tables' returns expected result};
 $res = $bct->ctl('bucardo list tables');
 $expected =
-qr{\d+\.\s* Table: public.Bucardo_test3       DB: A  PK: id \(int8\)\s+
-\d+\.\s* Table: public.bucardo space test  DB: A  PK: id \(int4\)\s+
-\d+\.\s* Table: public.bucardo_test1       DB: A  PK: id \(int2\)\s+
-\d+\.\s* Table: public.bucardo_test2       DB: A  PK: id\|data1 \(int4\|text\)
+qr{\d+\.\s* Table: public.Bucardo_test3       DB: A  PK: id \(bigint\)\s+
+\d+\.\s* Table: public.bucardo space test  DB: A  PK: id \(integer\)\s+
+\d+\.\s* Table: public.bucardo_test1       DB: A  PK: id \(smallint\)\s+
+\d+\.\s* Table: public.bucardo_test2       DB: A  PK: id\|data1 \(integer\|text\)
 \d+\.\s* Table: public.bucardo_test4       DB: A  PK: id \(text\)\s+
 \d+\.\s* Table: public.bucardo_test5       DB: A  PK: id space \(date\)\s+
 \d+\.\s* Table: public.bucardo_test6       DB: A  PK: id \(timestamp\)\s+
@@ -160,9 +160,9 @@ is ($res, qq{$addtable_msg:\n  public.bucardo_test5\n}, $t);
 $t = q{'bucardo list tables' returns expected result};
 $res = $bct->ctl('bucardo list tables');
 $expected =
-qr{\d+\.\s* Table: public.bucardo_test1  DB: A  PK: id \(int2\)\s*
-\d+\.\s* Table: public.bucardo_test2  DB: A  PK: id\|data1 \(int4\|text\)\s*
-\d+\.\s* Table: public.bucardo_test5  DB: A  PK: id space \(date\)       autokick:true\s*
+qr{\d+\.\s* Table: public.bucardo_test1  DB: A  PK: id \(smallint\)\s*
+\d+\.\s* Table: public.bucardo_test2  DB: A  PK: id\|data1 \(integer\|text\)\s*
+\d+\.\s* Table: public.bucardo_test5  DB: A  PK: id space \(date\)\s+ autokick:true\s*
 \d+\.\s* Table: public.bucardo_test9  DB: A  PK: id \(int_unsigned\)\s*
 };
 like ($res, $expected, $t);
@@ -174,8 +174,8 @@ is ($res, qq{$addtable_msg:\n  public.bucardo_test4\n  tschema.bucardo_test4\n},
 $t = q{'bucardo list tables' returns expected result};
 $res = $bct->ctl('bucardo list tables');
 $expected =
-qr{\d+\.\s* Table: public.bucardo_test1   DB: A  PK: id \(int2\)\s*
-\d+\.\s* Table: public.bucardo_test2   DB: A  PK: id|data1 \(int4\|text\)\s*
+qr{\d+\.\s* Table: public.bucardo_test1   DB: A  PK: id \(smallint\)\s*
+\d+\.\s* Table: public.bucardo_test2   DB: A  PK: id|data1 \(integer\|text\)\s*
 \d+\.\s* Table: public.bucardo_test4   DB: A  PK: id \(text\)\s* autokick:false\s*rebuild_index:true\s*
 \d+\.\s* Table: public.bucardo_test5   DB: A  PK: id space \(date\)\s* autokick:true\s*
 \d+\.\s* Table: public.bucardo_test9   DB: A  PK: id \(int_unsigned\)\s*

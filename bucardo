@@ -1571,8 +1571,8 @@ sub add_database {
     }
 
     ## Attempt to insert into the bucardo.db table
-	my $columns = join ',' => keys %$dbcols;
-	my $qs = '?,' x keys %$dbcols;
+    my $columns = join ',' => keys %$dbcols;
+    my $qs = '?,' x keys %$dbcols;
     $SQL = "INSERT INTO bucardo.db (name,$columns) VALUES (${qs}?)";
     debug("SQL: $SQL");
     $sth = $dbh->prepare($SQL);
@@ -1784,7 +1784,7 @@ sub add_database {
             $finalmsg .= qq{Added database "$db" to group "$newgroup" as $newrole\n};
         }
     }
- 
+
     ## Adjust the db name so add_all_* can use it
     $bcargs->{db} = $db_names->[0];
 
