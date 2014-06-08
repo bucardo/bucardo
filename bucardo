@@ -1770,7 +1770,7 @@ sub add_database {
 
             my $role = '';
             if ($isfirst) {
-                if ($db !~ /:/) {
+                if ($db !~ /:/ and defined $db_names->[1]) {
                     $role = ':source';
                 }
                 $isfirst = 0;
