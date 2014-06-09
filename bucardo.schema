@@ -416,7 +416,7 @@ CREATE TABLE bucardo.sync (
   onetimecopy        SMALLINT    NOT NULL DEFAULT 0,
   lifetime           INTERVAL        NULL,                   -- force controller and kids to restart
   maxkicks           INTEGER     NOT NULL DEFAULT 0,         -- force controller and kids to restart
-  isolation_level    TEXT            NULL DEFAULT 'serializable',
+  isolation_level    TEXT            NULL DEFAULT 'repeatable read',
   cdate              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE bucardo.sync IS $$Defines a single replication event from a herd to one or more target databases$$;
