@@ -8748,7 +8748,7 @@ sub delete_rows {
     my $newname = $goat->{newname}{$self->{syncname}};
 
     ## Are we truncating?
-    if (exists $self->{truncateinfo}{$S}{$T}) {
+    if (exists $self->{truncateinfo} and exists $self->{truncateinfo}{$S}{$T}) {
 
         ## Try and truncate each target
         for my $t (@$deldb) {
