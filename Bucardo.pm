@@ -2391,7 +2391,7 @@ sub start_kid {
         $x->{does_append_only} = 0;
 
         ## List of tables in this database that need makedelta inserts
-        $x->{needs_makedelta} = {};
+        $x->{does_makedelta} = {};
 
         ## Does it have that annoying timestamp +dd bug?
         $x->{has_mysql_timestamp_issue} = 0;
@@ -2885,7 +2885,7 @@ sub start_kid {
                     ## Set the per database/per table makedelta setting now
                     if (defined $g->{makedelta}) {
                         if ($g->{makedelta} eq 'on' or $g->{makedelta} =~ /\b$dbname\b/) {
-                            $x->{needs_makedelta}{$S}{$T} = 1;
+                            $x->{does_makedelta}{$S}{$T} = 1;
                             $self->glog("Set table $dbname.$S.$T to makedelta", LOG_NORMAL);
                         }
                     }
@@ -4511,31 +4511,6 @@ sub start_kid {
                         ($count = $x->{dbh}->pg_result()) =~ s/0E0/0/o;
                         $self->{insertcount}{dbname}{$S}{$T} = $count;
                         $maxcount = $count if $count > $maxcount;
-                    }
-                }
-
-                ## Do makedelta here: no sense in doing it before all the changes above
-                ## We only need to call makedelta if there is a positive delta
-                ## count for any other database
-                for my $dbname (@dbs_source) {
-
-                    $x = $sync->{db}{$dbname};
-
-                    if ($x->{needs_makedelta}{$S}{$T}) {
-                        my $found = 0;
-                        for my $dbname2 (@dbs_source) {
-                            next if $dbname eq $dbname2;
-                            if ($deltacount{dbtable}{$dbname}{$S}{$T}) {
-                                $found = 1;
-                                last;
-                            }
-                        }
-                        if ($found) {
-                            $self->glog("Setting makdelta for table $S.$T because others updated it", LOG_VERBOSE);
-                        }
-                        else {
-                            $x->{needs_makedelta}{$S}{$T} = 0;
-                        }
                     }
                 }
 
@@ -9515,8 +9490,8 @@ sub push_rows {
                 ##   normal action of a trigger and add a row to bucardo.track to indicate that
                 ##   it has already been replicated here.
                 my $dbinfo = $sync->{db}{ $t->{name} };
-                if (!$fullcopy and $dbinfo->{needs_makedelta}{$S}{$T}) {
-                    $self->glog('Using makedelta to populate delta and track tables', LOG_VERBOSE);
+                if (!$fullcopy and $dbinfo->{does_makedelta}{$S}{$T}) {
+                    $self->glog("Using makedelta to populate delta and track tables for $t->{name}.$tname", LOG_VERBOSE);
                     my ($cols, $vals);
                     if ($numpks == 1) {
                         $cols = "($pkcols)";
@@ -9533,7 +9508,7 @@ sub push_rows {
                     $dbh->do(qq{
                         INSERT INTO bucardo.$goat->{tracktable}
                         VALUES (NOW(), ?)
-                    }, undef, $t->{SYNCNAME});
+                    }, undef, $x->{DBGROUPNAME});
                 }
             }
             elsif ('flatpg' eq $type) {
