@@ -8,8 +8,7 @@ use strict;
 use warnings;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 50;
-
+use Test::More tests => 49;
 use BucardoTesting;
 my $bct = BucardoTesting->new({ location => 'makedelta' })
     or BAIL_OUT "Creation of BucardoTesting object failed\n";
@@ -69,31 +68,26 @@ $bct->check_for_row([], [qw(A B C)], undef, 'test[124]$');
 # Let's add some data into A.bucardo_test1.
 ok $dbhA->do(q{INSERT INTO bucardo_test1 (id, data1) VALUES (1, 'foo')}),
     'Insert a row into test1 on A';
-$bct->ctl('bucardo message Adding new row to bucardo_test1');
 $dbhA->commit;
 
 ok $bct->wait_for_notice($dbhX, [qw(
     bucardo_syncdone_deltatest1
-)]), 'The deltatest1 sync finished';
+    bucardo_syncdone_deltatest2
+)]), 'The deltatest1 and deltatest2 syncs have finished';
 
-# The row should be in A and B, but not C (as we have not kicked deltatest2 yet)
+# The row should be in A and B, as well as C!
 is_deeply $dbhB->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test1'
 ), [[1, 'foo']], 'Should have the test1 row in B';
 
 is_deeply $dbhC->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test1'
-), [], 'No rows in C yet';
+), [[1, 'foo']], 'Second sync moved row from B to C';
 
-# Kick the second sync so that we get the row into C
-$bct->ctl('bucardo kick sync deltatest2 0');
-
-# Now the row should be in C
-is_deeply $dbhC->selectall_arrayref(
-    'SELECT id, data1 FROM bucardo_test1'
-), [[1, 'foo']], 'Should have the test1 row in C';
-
-# Excellent. Now let's insert into test2 on B.
+# Now let's insert into test2 on B.
+# This will cause both syncs to fire
+# deltatest1 (A<=>B) will copy the row from B to A
+# deltatest2 (B=>C) will copy the row from B to C
 ok $dbhB->do(q{INSERT INTO bucardo_test2 (id, data1) VALUES (2, 'foo')}),
     'Insert a row into test2 on B';
 $dbhB->commit;
@@ -103,14 +97,9 @@ ok $bct->wait_for_notice($dbhX, [qw(
     bucardo_syncdone_deltatest2
 )]), 'The deltatest1 and deltatest2 syncs finished';
 
-## Why is a sleep needed?!?
-sleep 5;
-
 is_deeply $dbhA->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test2'
 ), [[2, 'foo']], 'Should have the A test2 row in A';
-
-exit;
 
 is_deeply $dbhC->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test2'
