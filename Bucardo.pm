@@ -3886,21 +3886,24 @@ sub start_kid {
                         $self->glog('Starting code_conflict', LOG_VERBOSE);
 
                         ## We pass it %conflict, and assume it will modify all the values therein
-                        my $code = $g->{code_conflict};
-                        $code->{info}{conflicts} = \%conflict;
+                        for my $code (@{ $g->{code_conflict} }) {
+                            $code->{info}{conflicts} = \%conflict;
 
-                        $self->run_kid_custom_code($sync, $code);
-                        ## Loop through and make sure the conflict handler has done its job
-                        while (my ($key, $winner) = each %conflict) {
-                            if (! defined $winner or ref $winner) {
-                                ($pkval = $key) =~ s/\0/\|/go;
-                                die "Conflict handler failed to provide a winner for $S.$T.$pkval";
+                            my $result = $self->run_kid_custom_code($sync, $code);
+                            ## Allow it to skip!
+
+                            ## Loop through and make sure the conflict handler has done its job
+                            while (my ($key, $winner) = each %conflict) {
+                                if (! defined $winner or ref $winner) {
+                                    ($pkval = $key) =~ s/\0/\|/go;
+                                    die "Conflict handler failed to provide a winner for $S.$T.$pkval";
+                                }
+                                if (! exists $deltabin{$winner}) {
+                                    ($pkval = $key) =~ s/\0/\|/go;
+                                    die "Conflict handler provided an invalid winner for $S.$T.$pkval: $winner";
+                                }
                             }
-                            if (! exists $deltabin{$winner}) {
-                                ($pkval = $key) =~ s/\0/\|/go;
-                                die "Conflict handler provided an invalid winner for $S.$T.$pkval: $winner";
-                            }
-                        }
+                        } ## end each code_conflict
                     }
                     ## If conflict_strategy is abort, simply die right away
                     elsif ('bucardo_abort' eq $g->{conflict_strategy}) {
