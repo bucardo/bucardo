@@ -5992,7 +5992,7 @@ sub update_customcode {
             $setting =~ /^[a-z_]+$/ or die "Invalid setting: $setting\n";
 
             ## We only allow changing a strict subset of all the columns
-            if ($setting =~ /^(?:about|getdbh|name|priority|status|whenrun)$/) {
+            if ($setting =~ /^(?:about|getdbh|name|priority|status|whenrun|src_code)$/) {
                 my $oldvalue = defined $cc->{$setting} ? $cc->{$setting} : '';
                 ## Allow some variation for booleans, but transform to 0/1
                 if ($setting =~ /^(?:getdbh)$/) {
@@ -6010,13 +6010,29 @@ sub update_customcode {
                     die qq{Invalid value for setting "whenrun"\n}
                         unless $whenrun{$value};
                 }
+                elsif ('src_code' eq $setting) {
+                    my $srcfile = $value;
+                    if (! -e $srcfile) {
+                        warn qq{Could not find a file named "$srcfile"\n};
+                        exit 2;
+                    }
+                    open my $fh, '<', $srcfile or die qq{Could not open "$srcfile": $!\n};
+                    $value = '';
+                    { local $/; $value = <$fh>; } ## no critic (RequireInitializationForLocalVars)
+                    close $fh or warn qq{Could not close "$srcfile": $!\n};
+                }
                 ## Make the change, if it has changed
                 if ($value ne $oldvalue) {
                     $SQL = "UPDATE customcode SET $setting=? WHERE name = ?";
                     $sth = $dbh->prepare($SQL);
                     $sth->execute($value, $name);
                     $changes++;
-                    print qq{Changed customcode "$name" $setting from '$oldvalue' to '$value'\n};
+                    if ('src_code' eq $setting) {
+                        print qq{Changed customcode "$name" $setting with content of file "value"\n};
+                    }
+                    else {
+                        print qq{Changed customcode "$name" $setting from '$oldvalue' to '$value'\n};
+                    }
                 }
             }
             else {
