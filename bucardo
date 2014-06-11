@@ -741,24 +741,33 @@ sub start {
     ## Refuse to go on if we get a ping response within 5 seconds
     $QUIET or print "Checking for existing processes\n";
 
-    ## We refuse to start if the MCP PID file exists
-    my $oldpid = 0;
+    ## We refuse to start if the MCP PID file exists and looks valid
     if (-e $PIDFILE) {
-        $msg = "Cannot start, PID file $PIDFILE exists\n";
         open my $fh, '<', $PIDFILE or die qq{Could not open "$PIDFILE": $!\n};
-        if (<$fh> !~ /(\d+)/) { ## no critic
+        my $pid = <$fh> =~ /(\d+)/ ? $1 : 0;
+        close $fh or warn qq{Could not close $PIDFILE: $!\n};
+
+        $msg = qq{Cannot start, PID file "$PIDFILE" exists\n};
+        if (!$pid) {
             warn qq{File "$PIDFILE" does not start with a PID!\n};
         }
         else {
-            $msg = "Cannot start, process $1 is already running (file=$PIDFILE)\n";
+            ## We have a PID, see if it is still alive
+            my $res = kill 0 => $pid;
+            if (0 == $res) {
+                warn qq{Removing file "$PIDFILE" with stale PID $pid\n};
+                unlink $PIDFILE;
+                $msg = '';
+            }
         }
-        close $fh or warn qq{Could not close $PIDFILE: $!\n};
 
-        $QUIET or print $msg;
+        if ($msg) {
+            $QUIET or print $msg;
 
-        append_reason_file('fail');
+            append_reason_file('fail');
 
-        exit 1;
+            exit 1;
+        }
     }
 
     ## Verify that the version in the database matches our version
@@ -795,7 +804,7 @@ sub start {
     stop_bucardo();
 
     if (-e $STOPFILE) {
-        print "Removing $STOPFILE\n" unless $QUIET;
+        print qq{Removing file "$STOPFILE"\n} unless $QUIET;
         unlink $STOPFILE;
     }
 
