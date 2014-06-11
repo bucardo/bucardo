@@ -4390,7 +4390,6 @@ sub update_sync {
         die qq{Could not find a sync named "$name"\nUse 'list syncs' to see all available.\n};
     }
 
-
     my $changes = 0;
 
     ## Current information about this sync, including column names
@@ -4403,6 +4402,15 @@ sub update_sync {
     );
 
     for my $action (@actions) {
+
+        ## Allow for some simple shortcuts
+        if ($action =~/^inactiv/i) {
+            $action = 'status=inactive';
+        }
+        elsif ($action =~ /^activ/i) {
+            $action = 'status=active';
+        }
+
         ## Look for a standard foo=bar or foo:bar format
         if ($action =~ /(.+?)\s*[=:]\s*(.+)/) {
             my ($setting,$value) = (lc $1,$2);
