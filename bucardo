@@ -4561,8 +4561,8 @@ sub list_syncs {
 
         ## Show associated tables if in verbose mode
         if ($VERBOSE >= 1) {
-            if (exists $s->{relgroup}{goat}) {
-                my $goathash = $s->{relgroup}{goat};
+            if (exists $s->{herd}{goat}) {
+                my $goathash = $s->{herd}{goat};
                 for my $relname (sort {
                                      $goathash->{$b}{priority} <=> $goathash->{$a}{priority}
                                      or $a cmp $b
@@ -6311,7 +6311,7 @@ sub add_customcode {
 
     ## Is this a valid sync?
     if ($extras->{sync} and ! exists $global{sync}{$extras->{sync}}) {
-        die qq{Unknown sync: $dbcols->{sync}\n};
+        die qq{Unknown sync: $extras->{sync}\n};
     }
 
     ## Is this a valid gaot?
