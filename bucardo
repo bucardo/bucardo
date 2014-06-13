@@ -1507,11 +1507,18 @@ sub add_database {
     usage_exit($doc_section) unless length $item_name;
 
     ## We may have more than one database specified at once
-    my $db_names = [split /\s*,\s*/ => $item_name];
+    ## Assign to an array, and set the role as well in case a dbgroup is set
+    my $db_names = [];
+    for my $entry (split /\s*,\s*/ => $item_name) {
+        ## First database defaults to source, others to targets
+        if (! @$db_names and $entry !~ /:/) {
+            $entry .= ':source';
+        }
+        push @{ $db_names } => [ extract_name_and_role($entry) ];
+    }
 
     ## Inputs and aliases, database column name, flags, default value
     my $validcols = qq{
-        null                     name                 0                $item_name
         type|dbtype              dbtype               0                postgres
         pass|password|dbpass     dbpass               0                null
         db|dbname                dbname               0                null
@@ -1545,7 +1552,7 @@ sub add_database {
     }
 
     ## Cannot add if already there
-    for my $db (@$db_names) {
+    for my $db (map { $_->[0] } @$db_names) {
         if (exists $DB->{ $db }) {
             print qq{Cannot add database: the name "$db" already exists\n};
             exit 1;
@@ -1561,8 +1568,7 @@ sub add_database {
         delete $dbcols->{dbhost};
     }
 
-    ## Do not need these values
-    delete $dbcols->{name};
+    ## We do not want some things to hang around in the dbcols hash
     my $dbgroup = delete $dbcols->{dbgroup};
 
     ## Map each value into individual databases
@@ -1594,10 +1600,12 @@ sub add_database {
         debug(Dumper $db_names->[$x]);
         debug(Dumper \@args);
         eval {
-            $sth->execute($db_names->[$x], @args);
+            $sth->execute($db_names->[$x][0], @args);
             $evalok = 1;
         };
+
         if (! $evalok) {
+
             if ($@ =~ /"db_name_sane"/) {
                 die qq{Invalid name: you cannot refer to this database as "$db_names->[$x]"\n};
             }
@@ -1637,7 +1645,7 @@ sub add_database {
         ## Gather connection information from the database via db_getconn
         $SQL = 'SELECT bucardo.db_getconn(?)';
         $sth = $dbh->prepare($SQL);
-        for my $db (@$db_names) {
+        for my $db (map { $_->[0] } @$db_names) {
             $sth->execute($db);
             my $dbconn = $sth->fetchall_arrayref()->[0][0];
 
@@ -1775,27 +1783,20 @@ sub add_database {
         ## The first database should be a source if not specified explicitly
         my $isfirst = 1;
 
-        for my $db (@$db_names) {
+        for my $row (@$db_names) {
 
-            my $role = '';
-            if ($isfirst) {
-                if ($db !~ /:/ and defined $db_names->[1]) {
-                    $role = ':source';
-                }
-                $isfirst = 0;
-            }
-
-            my ($newgroup, $newrole) = add_db_to_group($db, "$dbgroup$role");
+            my ($db,$role) = @$row;
+            my ($newgroup, $newrole) = add_db_to_group($db, "$dbgroup:$role");
             if (! $isnew) {
                 $finalmsg .= qq{Created database group "$newgroup"\n};
                 $isnew = 1;
             }
-            $finalmsg .= qq{Added database "$db" to group "$newgroup" as $newrole\n};
+            $finalmsg .= qq{  Added database "$db" to dbgroup "$newgroup" as $newrole\n};
         }
     }
 
     ## Adjust the db name so add_all_* can use it
-    $bcargs->{db} = $db_names->[0];
+    $bcargs->{db} = $db_names->[0][0];
 
     ## Make sure $DB gets repopulated for the add_all_* calls below
     load_bucardo_info(1);
@@ -1807,7 +1808,7 @@ sub add_database {
     $finalmsg .= add_all_sequences() if grep /addallseq/i, @nouns;
 
     if (!$QUIET) {
-        my $list = join ',' => map { qq{"$_"} } @$db_names;
+        my $list = join ',' => map { qq{"$_->[0]"} } @$db_names;
         printf qq{Added %s %s\n},
             $list =~ /,/ ? 'databases' : 'database', $list;
         $finalmsg and print $finalmsg;
