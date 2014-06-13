@@ -8112,7 +8112,7 @@ sub install {
     ## Setup our default arguments for the installation choices
     my $host   = $bcargs->{dbhost} || $ENV{PGHOST} || '<none>';
     my $port   = $bcargs->{dbport} || $ENV{PGPORT} || 5432;
-    my $user   = $bcargs->{dbuser} || $ENV{DBUSER} || 'postgres';
+    my $user   = $ENV{DBUSER} || 'postgres';
     my $dbname = $bcargs->{dbname} || $ENV{DBNAME} || 'postgres';
 
     ## Make sure the bucardo.schema file is available, and extract some config items
@@ -8142,7 +8142,7 @@ sub install {
   GOOEY:
     {
 
-        ## We only don't print this in quiet batch mode
+        ## We only don't print this in quiet and batch mode
         if (! $QUIET or ! $bcargs->{batch}) {
             print "Current connection settings:\n";
 
