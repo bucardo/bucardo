@@ -8754,13 +8754,13 @@ sub extract_name_and_role {
     }
 
     ## Valid role name?
-    if ($role !~ /^(?:master|target|slave|rep|replica|source|fullcopy)$/) {
+    if ($role !~ /^(?:master|target|t|slave|rep|replica|source|s|fullcopy)$/) {
         die "Invalid database role: $role\n";
     }
 
     ## Standardize the names
-    $role = 'source' if $role =~ /master/;
-    $role = 'target' if $role =~ /slave|rep|tar/;
+    $role = 'source' if $role =~ /^(?:master|s)$/;
+    $role = 'target' if $role =~ /^(?:slave|rep|replica|tar|t)$/;
 
     return $name, $role, \%extra;
 
