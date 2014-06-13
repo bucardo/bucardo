@@ -271,6 +271,16 @@ install() if $verb =~ /instal/i;
 ## Display more detailed help than --help
 superhelp() if $verb eq 'help';
 
+my ($STOPFILE,$REASONFILE,$REASONFILE_LOG);
+
+## If we are trying a stop, and piddir is already set, do it now
+if ('stop' eq $verb and $bcargs->{piddir}) {
+    $STOPFILE = "$bcargs->{piddir}/fullstopbucardo";
+    $REASONFILE = 'bucardo.restart.reason.txt';
+    $REASONFILE_LOG = 'bucardo.restart.reason.log';
+    stop();
+}
+
 ## For everything else, we need to connect to a previously installed Bucardo database
 
 ## Create a quick data source name
@@ -296,8 +306,8 @@ $dbh->commit();
 ## Set some global variables based on information from the bucardo_config table
 
 ## The reason file records startup and shutdown messages
-my $REASONFILE = get_config('reason_file') or die "Invalid reason_file!\n";
-(my $REASONFILE_LOG = $REASONFILE) =~ s{(?:[.][^.]+)?$}{.log};
+$REASONFILE = get_config('reason_file') or die "Invalid reason_file!\n";
+($REASONFILE_LOG = $REASONFILE) =~ s{(?:[.][^.]+)?$}{.log};
 
 ## The directory Bucardo.pm writes PID and other information to
 my $PIDDIR = $bcargs->{piddir} || get_config('piddir') or die "Invalid piddir!\n";
@@ -308,7 +318,7 @@ my $PIDFILE = "$PIDDIR/bucardo.mcp.pid";
 
 ## The stop file whose existence tells all Bucardo processes to exit immediately
 my $stopfile = get_config('stopfile') or die "Invalid stopfile!\n";
-my $STOPFILE = "$PIDDIR/$stopfile";
+$STOPFILE = "$PIDDIR/$stopfile";
 
 ## Aliases for terms people may shorten, misspell, etc.
 ## Mostly used for database columns when doing an 'update'
