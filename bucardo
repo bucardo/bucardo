@@ -4632,7 +4632,8 @@ sub get_goat_ids {
     my %new;
 
     ## Figure out which database to search in, unless already given
-    my $bestdb = exists $dbcols->{db} ? $dbcols->{db} : find_best_db_for_searching();
+    my $bestdb = (exists $dbcols->{db} and defined $dbcols->{db})
+    ? $dbcols->{db} : find_best_db_for_searching();
 
     ## This check still makes sense: if no databases, there should be nothing in $GOAT!
     if (! defined $bestdb) {
