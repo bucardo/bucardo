@@ -8286,19 +8286,30 @@ sub install {
     my $res = qx{$COM 2>&1};
 
     ## Dump any problems verbatim to stderr
+    my $delayed_warning;
     if ($res =~ /FATAL|ERROR/ or $res =~ /psql:/) {
-        warn $res;
+        $delayed_warning = $res;
     }
 
     ## Check for some common errors
-    if ($res =~ /role ".+" does not exist/) {
-        print "-->Sorry, please try using a different user\n\n";
-        exit 1 if $bcargs->{batch};
+    if ($res =~ /role "(.+)" does not exist/) {
+        my $baduser = $1;
+        if ($baduser eq 'postgres' and exists $ENV{USER} and $ENV{USER} =~ /^\w+$/) {
+            $user = $ENV{USER};
+            if (!$QUIET and !$bcargs->{batch}) {
+                print "Failed to connect as user 'postgres', will try '$user'\n";
+            }
+        }
+        else {
+            print "-->Sorry, please try using a different user\n\n";
+            exit 1 if $bcargs->{batch};
+        }
         goto GOOEY;
     }
 
     if ($res !~ /(\d+)\.(\d+)(\S+)/) {
         print "-->Sorry, unable to connect to the database\n\n";
+        warn $delayed_warning;
         exit 1 if $bcargs->{batch};
         goto GOOEY;
     }
