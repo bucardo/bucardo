@@ -168,7 +168,6 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'logseparate|log-sep|log-separate|debugfilesep!',
      'logextension|log-extension|log-ext|debugname=s',
      'logclean|log-clean!',
-     'piddir=s',
 
      ## Used internally
      'force',
