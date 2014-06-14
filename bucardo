@@ -4236,9 +4236,11 @@ sub add_sync {
             die qq{Could not find a relation named "$table"\n};
         }
 
-        (my $val) = values %{ $result->{relations} };
-        $table{$table} = $val->{goat}->[0];
-    }
+        ## Save each table's information for use below
+        for my $tname (sort keys %{ $result->{relations} }) {
+            $table{$tname} ||= $result->{relations}{$tname}{goat}[0];
+        }
+     }
 
     ## If we don't have a relgroup already, see if our list matches an existing one
     if (! defined $relgroup_name and keys %table) {
@@ -4778,10 +4780,6 @@ AND nspname !~ '^pg_'
 
                 ## Set this table to be added to the goat table below
                 push @addtable, {name => $name, db => $bestdb, reltype => $row->{relkind}, dbcols => $dbcols};
-
-                ## Add this to our matching list
-                # This happens after add_items_to_goat_table now
-                #push @matches => $name;
 
             }
         }
