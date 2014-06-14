@@ -90,6 +90,8 @@ Bucardo version 5.0.0, released ??, 2013
 
   - Add new options for 'bucardo add db': addalltables and addallsequences [GSM]
 
+  - Allows syncs to be paused and resumed while they are running. [GSM]
+
   - Allow 'bucardo status' to run even if piddir is not available. [GSM]
 
   - Don't bother comparing the 'log_cnt' field of sequences. [Rosser Schwarz]

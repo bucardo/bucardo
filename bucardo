@@ -403,7 +403,8 @@ validate()      if $verb eq 'validate';
 purge()         if $verb eq 'purge';
 
 ## There are only a few valid verbs left, so we check for them now
-if ($verb ne 'kick' and $verb ne 'activate' and $verb ne 'deactivate') {
+if ($verb ne 'kick' and $verb ne 'activate' and $verb ne 'deactivate'
+        and $verb ne 'pause' and $verb ne 'resume') {
     ## Show help and exit
     help(1, qq{Unknown command "$verb"\n});
 }
@@ -425,7 +426,7 @@ my $msg;
 SYNCMATCH: for my $sync (@nouns) {
 
     ## Quick skipping of noise word 'sync'
-    next if $sync eq 'sync';
+    next if $sync =~ /^syncs?$/;
 
     ## If this is a number, it's a timeout, so set it and skip to the next noun
     if ($sync =~ /^\d+$/) {
@@ -491,6 +492,9 @@ vate_sync() if $verb eq 'activate' or $verb eq 'deactivate';
 
 ## Kick one or more syncs
 kick() if $verb eq 'kick';
+
+## Pause or resume one or more syncs
+pause_resume($verb) if $verb eq 'pause' or $verb eq 'resume';
 
 ## If we reach here (and we should not), display help and exit
 help(1);
@@ -5158,6 +5162,41 @@ sub kick {
     exit $exitstatus;
 
 } ## end of kick
+
+
+sub pause_resume {
+
+    ## Pause or resume one or more syncs
+    ## Arguments: none, parses nouns
+    ## Returns: never, exits
+
+    my $doc_section = 'pause';
+    usage_exit($doc_section) unless @nouns;
+
+    my $action = shift;
+
+    my @syncs_signalled;
+    for my $sync (@syncs) {
+
+        ## Syncs can only be paused/resumed if they are active
+        my $status = $SYNC->{$sync}{status};
+        if ($status ne 'active') {
+            print qq{Cannot pause or resume sync "$sync" unless it is active (currently "$status")\n};
+        }
+        else {
+            $dbh->do(qq{NOTIFY "bucardo_${action}_sync_$sync"});
+            push @syncs_signalled => $sync;
+        }
+    }
+
+    $dbh->commit();
+
+    my $list = join ',' => @syncs_signalled;
+    $QUIET or print qq{Syncs ${action}d: $list\n};
+
+    exit 0;
+
+} ## end of pause_resume
 
 
 sub show_why_sync_killed {
@@ -10977,6 +11016,17 @@ running a kick, for example, via a cronjob, so turning --notimer on will
 simply print the entire message without backspaces.
 
 =back
+
+=head2 pause
+
+  bucardo pause <syncname(s)>
+  bucardo pause all
+  bucardo resume <syncname(s)>
+  bucardo resume all
+
+Tells one or more named syncs to temporarily pause, or to resume from a previous pause. This
+only applies to active syncs and only takes effect if Bucardo is currently running. The
+keyword 'all' can be used as well to pause or resume all known active syncs.
 
 =head2 reload config
 

@@ -778,8 +778,8 @@ sub start_mcp {
 
         my $s = $self->{sync}{$syncname};
 
-        ## Skip inactive syncs
-        next unless $s->{mcp_active};
+        ## Skip inactive or paused syncs
+        next if !$s->{mcp_active} or $s->{paused};
 
         ## Walk through each database and check the roles, discarding inactive dbs
         my %rolecount;
@@ -812,8 +812,8 @@ sub start_mcp {
         ## Default to starting in a non-kicked mode
         $s->{kick_on_startup} = 0;
 
-        ## Skip inactive syncs
-        next unless $s->{mcp_active};
+        ## Skip inactive or paused syncs
+        next if  !$s->{mcp_active} or $s->{paused};
 
         ## Skip fullcopy syncs
         next if $s->{fullcopy};
@@ -1000,6 +1000,9 @@ sub mcp_main {
                 elsif (! $self->{sync}{$syncname}{mcp_active}) {
                     $msg = qq{Cannot kick inactive sync "$syncname"};
                 }
+                elsif ($self->{sync}{$syncname}{paused}) {
+                    $msg = qq{Cannot kick paused sync "$syncname"};
+                }
                 ## We also won't kick if this was created by a kid
                 ## This can happen as our triggerkicks may be set to 'always'
                 elsif (exists $self->{kidpidlist}{$npid}) {
@@ -1036,6 +1039,53 @@ sub mcp_main {
                 $self->db_notify($maindbh, $name, 1);
                 ## Check on the health of our databases, in case that was the reason the sync was killed
                 $self->check_sync_health($syncdone);
+            }
+            ## Request to pause a sync
+            elsif ($name =~ /^pause_sync_(.+)/o) {
+                my $syncname = $1;
+				my $msg;
+
+                ## We will not pause if this sync does not exist or it is inactive
+                if (! exists $self->{sync}{$syncname}) {
+                    $msg = qq{Warning: Unknown sync to be paused: "$syncname"\n};
+                }
+                elsif (! $self->{sync}{$syncname}{mcp_active}) {
+                    $msg = qq{Cannot pause inactive sync "$syncname"};
+                }
+                else {
+					## Mark it as paused, stop the kids and controller
+                    $sync->{$syncname}{paused} = 1;
+					my $stopsync = "stopsync_$syncname";
+					$self->db_notify($maindbh, "kid_$stopsync");
+					$self->db_notify($maindbh, "ctl_$stopsync");
+					$maindbh->commit();
+					$self->glog(qq{Set sync "$syncname" as paused}, LOG_VERBOSE);
+                }
+                if (defined $msg) {
+                    $self->glog($msg, LOG_TERSE);
+                }
+            }
+            ## Request to resume a sync
+            elsif ($name =~ /^resume_sync_(.+)/o) {
+                my $syncname = $1;
+				my $msg;
+
+                ## We will not resume if this sync does not exist or it is inactive
+                if (! exists $self->{sync}{$syncname}) {
+                    $msg = qq{Warning: Unknown sync to be resumed: "$syncname"\n};
+                }
+                elsif (! $self->{sync}{$syncname}{mcp_active}) {
+                    $msg = qq{Cannot resume inactive sync "$syncname"};
+                }
+                else {
+					## Mark it as resumed, stop the kids
+                    $sync->{$syncname}{paused} = 0;
+					$self->glog(qq{Set sync "$syncname" as resumed}, LOG_VERBOSE);
+                    ## MCP will restart the CTL on next loop around
+                }
+                if (defined $msg) {
+                    $self->glog($msg, LOG_TERSE);
+                }
             }
             ## Request to reload the configuration file
             elsif ('reload_config' eq $name) {
@@ -1098,6 +1148,13 @@ sub mcp_main {
                     $self->glog(qq{Cannot reload: sync "$syncname" is not active}, LOG_TERSE);
                 }
                 else {
+
+					## reload overrides a pause
+					if ($sync->{$syncname}{paused}) {
+						$self->glog(qq{Resuming paused sync "$syncname"}, LOG_TERSE);
+						$sync->{$syncname}{paused} = 0;
+					}
+
                     $self->glog(qq{Deactivating sync "$syncname"}, LOG_TERSE);
                     $self->deactivate_sync($sync->{$syncname});
 
@@ -1166,6 +1223,8 @@ sub mcp_main {
                 }
                 elsif ($self->activate_sync($sync->{$syncname})) {
                     $sync->{$syncname}{mcp_active} = 1;
+					## Just in case:
+					$sync->{$syncname}{paused} = 0;
                     $maindbh->do(
                         'UPDATE sync SET status = ? WHERE name = ?',
                         undef, 'active', $syncname
@@ -1229,12 +1288,15 @@ sub mcp_main {
         ## Startup controllers for all eligible syncs
       SYNC: for my $syncname (keys %$sync) {
 
-            ## Skip if this sync has not been activated
-            next unless $sync->{$syncname}{mcp_active};
-
             my $s = $sync->{$syncname};
 
-            ## If this sync is stalled, skip it
+            ## Skip if this sync has not been activated
+            next if ! $s->{mcp_active};
+
+			## Skip if this one is paused
+			next if $s->{paused};
+
+			## Skip is this one is stalled
             next if $s->{status} eq 'stalled';
 
             ## If this is not a stayalive, AND is not being kicked, skip it
@@ -6920,6 +6982,8 @@ sub activate_sync {
     ## But we do need to listen for deactivate and kick requests
     $self->db_listen($maindbh, "deactivate_sync_$syncname", '', 1);
     $self->db_listen($maindbh, "kick_sync_$syncname", '', 1);
+    $self->db_listen($maindbh, "pause_sync_$syncname", '', 1);
+    $self->db_listen($maindbh, "resume_sync_$syncname", '', 1);
     $maindbh->commit();
 
     ## Redo our process name to include an updated list of active syncs
@@ -6928,7 +6992,7 @@ sub activate_sync {
         next if ! $self->{sync}{$syncname}{mcp_active};
         push @activesyncs, $syncname;
     }
-
+ 
     ## Change our process name to show all active syncs
     $0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active syncs: ";
     $0 .= join ',' => @activesyncs;
@@ -6965,9 +7029,11 @@ sub deactivate_sync {
 
     ## Let any listeners know we are done
     $self->db_notify($maindbh, "deactivated_sync_$syncname");
-    ## We don't need to listen for deactivation or kick requests
+    ## We don't need to listen for deactivation or kick/pause/resume requests
     $self->db_unlisten($maindbh, "deactivate_sync_$syncname", '', 1);
     $self->db_unlisten($maindbh, "kick_sync_$syncname", '', 1);
+    $self->db_unlisten($maindbh, "pause_sync_$syncname", '', 1);
+    $self->db_unlisten($maindbh, "resume_sync_$syncname", '', 1);
     ## But we do need to listen for an activation request
     $self->db_listen($maindbh, "activate_sync_$syncname", '', 1);
     $maindbh->commit();
