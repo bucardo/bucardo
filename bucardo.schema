@@ -429,7 +429,7 @@ ALTER TABLE bucardo.db      ADD CONSTRAINT db_name_sane      CHECK (name ~ E'^[a
 ALTER TABLE bucardo.dbgroup ADD CONSTRAINT dbgroup_name_sane CHECK (name ~ E'^[a-zA-Z]\\w*$');
 
 ALTER TABLE bucardo.sync    ADD CONSTRAINT sync_name_sane
-  CHECK (name ~ E'^[a-zA-Z]\\w*$' AND lower(name) NOT IN ('pushdelta','fullcopy','swap'));
+  CHECK (name ~ E'^[a-zA-Z]\\w*$' AND lower(name) NOT IN ('pushdelta','fullcopy','swap','sync'));
 
 ALTER TABLE bucardo.sync    ADD CONSTRAINT sync_isolation_level
   CHECK ((isolation_level IS NULL) OR (lower(isolation_level) IN ('serializable', 'repeatable read')));
