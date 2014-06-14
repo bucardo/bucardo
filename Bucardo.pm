@@ -4003,7 +4003,7 @@ sub start_kid {
                                     map { "$maxsql bucardo.$_->{deltatable}" }
                                     grep { $_->{reltype} eq 'table'}
                                         @$goatlist;
-                                $SQL .= ' ORDER BY 1 DESC LIMIT 1';
+                                $SQL .= ' ORDER BY 1 DESC NULLS LAST LIMIT 1';
 
                                 $sth = $x->{dbh}->prepare($SQL);
                                 $sth->execute();
