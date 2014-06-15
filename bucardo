@@ -366,10 +366,10 @@ start()         if $verb eq 'start' or $verb eq 'strt';
 restart()       if $verb eq 'restart';
 
 ## Reload the configuration file
-reload_config() if $verb eq 'reload' && $nouns[0] eq 'config';
+reload_config() if $verb eq 'reload' and defined $nouns[0] and $nouns[0] eq 'config';
 
-## Reload the whole daemon
-reload()        if $verb eq 'reload';
+## Reload the mcp (if args, we want reload_sync)
+reload() if $verb eq 'reload' and ! defined $nouns[0];
 
 # Reopen the log files
 reopen()        if $verb eq 'reopen';
@@ -404,6 +404,7 @@ purge()         if $verb eq 'purge';
 
 ## There are only a few valid verbs left, so we check for them now
 if ($verb ne 'kick' and $verb ne 'activate' and $verb ne 'deactivate'
+    and $verb ne 'reload'
         and $verb ne 'pause' and $verb ne 'resume') {
     ## Show help and exit
     help(1, qq{Unknown command "$verb"\n});
@@ -495,6 +496,10 @@ kick() if $verb eq 'kick';
 
 ## Pause or resume one or more syncs
 pause_resume($verb) if $verb eq 'pause' or $verb eq 'resume';
+
+## Reload one or more syncs
+reload_sync() if $verb eq 'reload';
+
 
 ## If we reach here (and we should not), display help and exit
 help(1);
@@ -900,6 +905,45 @@ sub restart {
 } ## end of restart
 
 
+sub reload {
+
+    ## Reload the MCP daemon
+    ## Effectively restarts everything
+    ## Arguments: none
+    ## Returns: never, exits
+
+    ## Is Bucardo active?
+    my $pong = 'bucardo_mcp_pong';
+    $dbh->do("LISTEN $pong");
+    $dbh->do('NOTIFY bucardo_mcp_ping');
+    $dbh->commit();
+    ## Wait a little bit, then scan for the confirmation message
+    sleep 0.1;
+    if (! wait_for_notice($dbh, $pong, 2)) {
+        die "Looks like Bucardo is not running, so there is no need to reload\n";
+    }
+
+    ## We want to wait to hear from the MCP that it is done
+    my $done = 'bucardo_reloaded_mcp';
+    $dbh->do('NOTIFY bucardo_mcp_reload');
+    $dbh->do("LISTEN $done");
+    $dbh->commit();
+
+    ## Wait a little bit, then scan for the confirmation message
+    sleep 0.1;
+    my $timeout = $adverb || get_config('reload_config_timeout') || 30;
+    if (! wait_for_notice($dbh, $done, $timeout) ) {
+        die "Waited ${timeout}s, but Bucardo never confirmed the reload!\n"
+          . "HINT: Pass a longer timeout to the reload_config command or set the\n"
+          . "reload_config_timeout configuration setting to wait longer\n";
+    }
+    print "DONE!\n";
+
+    exit 0;
+
+} ## end of reload
+
+
 sub reload_config {
 
     ## Reload configuration settings from the bucardo database,
@@ -1018,7 +1062,7 @@ sub wait_for_notice {
 } ## end of wait_for_notice
 
 
-sub reload {
+sub reload_sync {
 
     ## Ask for one or more syncs to be reloaded
     ## Arguments: none directly (but processes the nouns for a list of syncs)
@@ -1079,7 +1123,7 @@ sub reload {
 
     exit 0;
 
-} ## end of reload
+} ## end of reload_sync
 
 
 sub reopen {
@@ -8702,7 +8746,6 @@ sub process_simple_args {
             }
         }
     }
-
 
     ## Build the lists of columns and placeholders for the SQL statement
     my ($cols,$phs,$vals) = ('','',{});
