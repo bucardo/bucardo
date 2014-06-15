@@ -8747,6 +8747,15 @@ sub process_simple_args {
         }
     }
 
+    ## Automatic morphing magic
+    if (exists $item{status} and ! exists $dbcol{status}) {
+        for my $stat (qw/ active inactive /) {
+            if (grep { $_ eq $stat } @{ $xyargs->{extraargs} }) {
+                $dbcol{status} = $stat;
+            }
+        }
+    }
+
     ## Build the lists of columns and placeholders for the SQL statement
     my ($cols,$phs,$vals) = ('','',{});
     for my $col (sort keys %dbcol) {
