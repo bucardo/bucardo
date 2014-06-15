@@ -9578,6 +9578,15 @@ sub push_rows {
                         INSERT INTO bucardo.$goat->{tracktable}
                         VALUES (NOW(), ?)
                     }, undef, $x->{DBGROUPNAME});
+
+                    $self->glog("Signalling all other syncs that this table has changed", LOG_DEBUG);
+                    $SQL = 'SELECT sync FROM bucardo.bucardo_delta_names WHERE sync <> ? AND tablename = ?';
+                    $sth = $dbh->prepare($SQL);
+                    $count = $sth->execute($syncname,$tname);
+                    for my $row (@{ $sth->fetchall_arrayref }) {
+                        my $othersync = $row->[0];
+                        $self->db_notify($dbh, "kick_sync_$othersync");
+                    }
                 }
             }
             elsif ('flatpg' eq $type) {
