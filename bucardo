@@ -1567,10 +1567,12 @@ sub add_database {
     ## We may have more than one database specified at once
     ## Assign to an array, and set the role as well in case a dbgroup is set
     my $db_names = [];
+    my $newsource = 0;
     for my $entry (split /\s*,\s*/ => $item_name) {
         ## First database defaults to source, others to targets
         if (! @$db_names and $entry !~ /:/) {
             $entry .= ':source';
+            $newsource = 1;
         }
         push @{ $db_names } => [ extract_name_and_role($entry) ];
     }
@@ -1835,19 +1837,29 @@ sub add_database {
 
     ## If we got a group, process that as well
     if (defined $dbgroup) {
+
+        ## If it has an attached role, strip it out and force that everywhere
+        my $master_role = $dbgroup =~ s/:(\w+)// ? $1 : 0;
+
         ## We need to store this away as the function below changes the global hash
-        my $isnew = exists $DBGROUP->{$dbgroup};
-
-        ## The first database should be a source if not specified explicitly
-        my $isfirst = 1;
-
+        my $isnew = exists $DBGROUP->{$dbgroup} ? 0 : 1;
+        my $firstrow = 1;
         for my $row (@$db_names) {
 
             my ($db,$role) = @$row;
+
+            ## If we set this source ourself, change to target if the group already exists
+            if ($firstrow) {
+                $firstrow = 0;
+                if ($newsource and ! $isnew) {
+                    $role = 'target';
+                }
+            }
+            $role = $master_role if $master_role;
             my ($newgroup, $newrole) = add_db_to_group($db, "$dbgroup:$role");
-            if (! $isnew) {
+            if ($isnew) {
                 $finalmsg .= qq{Created database group "$newgroup"\n};
-                $isnew = 1;
+                $isnew = 0;
             }
             $finalmsg .= qq{  Added database "$db" to dbgroup "$newgroup" as $newrole\n};
         }
@@ -2036,24 +2048,24 @@ sub update_database {
                     ## Same role?
                     my $oldrole = $oldgroup->{$group}{role};
                     if ($oldrole eq $role) {
-                        $QUIET or print qq{No change: database "$name" already belongs to group "$group" as $role\n};
+                        $QUIET or print qq{No change: database "$name" already belongs to dbgroup "$group" as $role\n};
                     }
                     else {
                         change_db_role($role,$group,$name);
-                        push @groupchanges => qq{Changed role for database "$name" in group "$group" from $oldrole to $role};
+                        push @groupchanges => qq{Changed role for database "$name" in dbgroup "$group" from $oldrole to $role};
                     }
                 }
                 else {
                     ## We are not a part of this group yet
                     add_db_to_group($name, "$group:$role");
-                    push @groupchanges => qq{Added database "$name" to group "$group" as $role};
+                    push @groupchanges => qq{Added database "$name" to dbgroup "$group" as $role};
                 }
 
                 ## Handle any extra modifiers
                 if (keys %$extra) {
                     update_dbmap($name, $group, $extra);
                     my $list = join ',' => map { "$_=$extra->{$_}" } sort keys %$extra;
-                    push @groupchanges => qq{For database "$name" in group "$group", set $list};
+                    push @groupchanges => qq{For database "$name" in dbgroup "$group", set $list};
                 }
 
             } ## end each group specified
@@ -2065,7 +2077,7 @@ sub update_database {
 
                     ## Remove this database from the group, but do not remove the group itself
                     remove_db_from_group($name, $old);
-                    push @groupchanges => qq{Removed database "$name" from group "$old"};
+                    push @groupchanges => qq{Removed database "$name" from dbgroup "$old"};
                 }
             }
 
@@ -2336,7 +2348,7 @@ sub add_dbgroup {
 
         add_db_to_group($db, "$name:$role");
 
-        $QUIET or print qq{Added database "$db" to group "$name" as $role\n};
+        $QUIET or print qq{Added database "$db" to dbgroup "$name" as $role\n};
     }
 
     confirm_commit();
@@ -2474,7 +2486,7 @@ sub update_dbgroup {
     for my $db (sort keys %$oldlist) {
         if (! exists $dblist{$db}) {
             remove_db_from_group($db, $name);
-            $QUIET or print qq{Removed database "$db" from group "$name"\n};
+            $QUIET or print qq{Removed database "$db" from dbgroup "$name"\n};
             $changes++;
             next;
         }
@@ -2482,7 +2494,7 @@ sub update_dbgroup {
         my $newrole = $dblist{$db};
         if ($oldrole ne $newrole) {
             change_db_role($newrole, $name, $db);
-            $QUIET or print qq{Changed role of database "$db" in group "$name" from $oldrole to $newrole\n};
+            $QUIET or print qq{Changed role of database "$db" in dbgroup "$name" from $oldrole to $newrole\n};
             $changes++;
         }
     }
@@ -2492,7 +2504,7 @@ sub update_dbgroup {
         next if exists $oldlist->{$db};
         my $role = $dblist{$db};
         add_db_to_group($db, "$name:$role");
-        $QUIET or print qq{Added database "$db" to group "$name" as $role\n};
+        $QUIET or print qq{Added database "$db" to dbgroup "$name" as $role\n};
         $changes++;
     }
 
@@ -4235,7 +4247,7 @@ sub add_sync {
         for my $db (sort keys %db) {
             $count = $sth->execute($dbgroup_name, $db, $db{$db});
             if (1 != $count) {
-                die qq{Unable to add database "$db" to group "$dbgroup_name"\n};
+                die qq{Unable to add database "$db" to dbgroup "$dbgroup_name"\n};
             }
         }
     }
@@ -4336,7 +4348,7 @@ sub add_sync {
         for my $t (sort keys %table) {
             $count = $sth->execute($relgroup_name, $table{$t}{id});
             if (1 != $count) {
-                die qq{Unable to add table "$t" to group "$relgroup_name"\n};
+                die qq{Unable to add table "$t" to relgroup "$relgroup_name"\n};
             }
         }
 
@@ -9287,7 +9299,7 @@ sub add_db_to_group {
         $sth->execute($db,$group,$role);
     };
     if ($@) {
-        my $message = qq{Cannot add database "$db" to group "$group"};
+        my $message = qq{Cannot add database "$db" to dbgroup "$group"};
         if ($@ =~ /"dbmap_unique"/) {
             die qq{$message: already part of the group\n};
         }
