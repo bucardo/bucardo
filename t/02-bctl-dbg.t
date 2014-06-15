@@ -69,12 +69,12 @@ like ($res, qr/"A" does not exist/, $t);
 $t = q{Adding a database via add dbgroup gives expected message};
 $bct->ctl("bucardo add db A dbname=bucardo_test user=$dbuserA port=$dbportA host=$dbhostA");
 $res = $bct->ctl('bucardo add dbgroup foobar A');
-like ($res, qr/Added database "A" to group "foobar" as target/, $t);
+like ($res, qr/Added database "A" to dbgroup "foobar" as target/, $t);
 
 $t = q{Adding a database in source role via add dbgroup gives expected message};
 $bct->ctl("bucardo add db B dbname=bucardo_test user=$dbuserB port=$dbportB host=$dbhostB");
 $res = $bct->ctl('bucardo add dbgroup foobar B:master');
-like ($res, qr/Added database "B" to group "foobar" as source/, $t);
+like ($res, qr/Added database "B" to dbgroup "foobar" as source/, $t);
 
 $t = 'Listing of database groups looks correct';
 $res = $bct->ctl('bucardo list dbgroups');
@@ -123,11 +123,11 @@ like ($res, qr/Could not find a database group named "foobar3"/, $t);
 
 $t = 'Update dbgroup works with adding a single database';
 $res = $bct->ctl('bucardo update dbgroup foobar A');
-like ($res, qr/Added database "A" to group "foobar" as target/, $t);
+like ($res, qr/Added database "A" to dbgroup "foobar" as target/, $t);
 
 $t = 'Update dbgroup works with adding multiple databases';
 $res = $bct->ctl('bucardo update dbgroup foobar A:master B:master');
-like ($res, qr/Changed role of database "A" in group "foobar" from target to source.*Added database "B" to group "foobar" as source/s, $t);
+like ($res, qr/Changed role of database "A" in dbgroup "foobar" from target to source.*Added database "B" to dbgroup "foobar" as source/s, $t);
 $res = $bct->ctl('bucardo list dbgroup');
 like ($res, qr/Database group: foobar  Members: A:source B:source/s, $t);
 
