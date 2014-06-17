@@ -4290,7 +4290,7 @@ sub add_sync {
         my $found = keys %{ $result->{match} };
 
         for my $name (sort keys %{ $result->{new} }) {
-            push @message => qq{  Table added: "$name"};
+            push @message => qq{  Added table "$name"};
         }
 
         ## If a specific table is not found, throw an exception
@@ -4314,7 +4314,7 @@ sub add_sync {
         for my $rname (sort keys %$RELGROUP) {
             my $innerjoin = join ',' => sort keys %{$RELGROUP->{$rname}{goat}};
             if ($innerjoin eq $newlist) {
-                push @message => qq{Using existing relgroup group "$rname"};
+                push @message => qq{Using existing relgroup "$rname"};
                 $relgroup_name = $rname;
                 last;
             }
@@ -4340,7 +4340,7 @@ sub add_sync {
     ## Also associate our tables with this new group
     if (! exists $HERD->{ $relgroup_name }) {
 
-        push @message => qq{Created a new relgroup named "$relgroup_name"\n};
+        unshift @message => qq{Created a new relgroup named "$relgroup_name"\n};
 
         $SQL = 'INSERT INTO bucardo.herdmap(herd,goat) VALUES (?,?)';
         $sth = $dbh->prepare($SQL);
@@ -4383,13 +4383,13 @@ sub add_sync {
         die "Failed to add sync: $@\n";
     }
 
+    $QUIET or print qq{Added sync "$sync_name"\n};
+
     ## Now we can output our success messages if any
     for my $msg (@message) {
         chomp $msg;
         $QUIET or print "$msg\n";
     }
-
-    $QUIET or print qq{Added sync "$sync_name"\n};
 
     confirm_commit();
 
@@ -8170,7 +8170,7 @@ sub message {
     $sth = $dbh->prepare($SQL);
     $sth->execute($nouns);
     $dbh->commit();
-    $VERBOSE and print "Message added\n";
+    $VERBOSE and print "Added message\n";
 
     exit 0;
 
