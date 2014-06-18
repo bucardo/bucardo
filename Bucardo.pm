@@ -8197,7 +8197,7 @@ sub create_newkid {
     if ($newkid) { ## We are the parent
         my $msg = sprintf q{Created new kid %s for sync "%s"},
             $newkid, $self->{syncname};
-        $self->glog($msg, LOG_NORMAL);
+        $self->glog($msg, LOG_VERBOSE);
 
         ## Map this PID to a name for CTL use elsewhere
         $self->{pidmap}{$newkid} = 'KID';
