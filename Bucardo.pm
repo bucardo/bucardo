@@ -1078,8 +1078,13 @@ sub mcp_main {
                     $msg = qq{Cannot resume inactive sync "$syncname"};
                 }
                 else {
-                    ## Mark it as resumed, stop the kids
-                    $sync->{$syncname}{paused} = 0;
+                    ## Mark it as resumed
+                    my $s = $sync->{$syncname};
+                    $s->{paused} = 0;
+                    ## Since we may have accumulated deltas while pasued, set to autokick if needed
+                    if (!$s->{fullcopy} and $s->{autokick}) {
+                        $sync->{$syncname}{kick_on_start} = 1;
+                    }
                     $self->glog(qq{Set sync "$syncname" as resumed}, LOG_VERBOSE);
                     ## MCP will restart the CTL on next loop around
                 }
