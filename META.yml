@@ -10,21 +10,25 @@ dynamic_config      : 1
 distribution_type   : module
 
 requires:
-  DBI               : 1.51
-  DBD::Pg           : 2.0
-  DBIx::Safe        : 1.2.4
-  IO::Handle        : 1.24
-  Sys::Hostname     : 1.11
-  Sys::Syslog       : 0.13
-  Net::SMTP         : 0
-  MIME::Base64      : 0
-  boolean           : 0
-  File::Spec        : 0
-  Time::HiRes       : 0
+  boolean             : 0
+  DBD::Pg             : 2.0
+  DBI                 : 1.51
+  DBIx::Safe          : 1.2.4
+  Encode::Locale      : 0
+  ExtUtils::MakeMaker : 6.32
+  File::Spec          : 0
+  IO::Handle          : 1.24
+  List::Util          : 0
+  MIME::Base64        : 0
+  Net::SMTP           : 0
+  Pod::Usage          : 0
+  Sys::Hostname       : 1.11
+  Sys::Syslog         : 0.13
+  Time::HiRes         : 0
 build_requires:
-  Test::Harness     : 2.03
-  Test::More        : 0.61
-  Module::Signature : 0.50
+  Test::Harness       : 2.03
+  Test::More          : 0.61
+  Module::Signature   : 0.50
 
 provides:
   Bucardo:
