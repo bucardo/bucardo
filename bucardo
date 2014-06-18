@@ -8399,7 +8399,7 @@ sub install {
     ## Check for some common errors
     if ($res =~ /role "(.+)" does not exist/) {
         my $baduser = $1;
-        if ($baduser eq 'postgres' and exists $ENV{USER} and $ENV{USER} =~ /^\w+$/) {
+        if ($baduser eq 'postgres' and exists $ENV{USER} and $ENV{USER} =~ /^[\w-]+$/) {
             $user = $ENV{USER};
             if (!$QUIET and !$bcargs->{batch}) {
                 print "Failed to connect as user 'postgres', will try '$user'\n";
