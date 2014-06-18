@@ -1005,7 +1005,7 @@ sub mcp_main {
                 }
                 ## We also won't kick if this was created by a kid
                 ## This can happen as our triggerkicks may be set to 'always'
-                elsif (exists $self->{kidpidlist}{$npid}) {
+                elsif (exists $self->{kidpid list}{$npid}) {
                     $self->glog(qq{Not kicking sync "$syncname" as it came from KID $npid}, LOG_DEBUG);
                 }
                 else {
@@ -1014,7 +1014,7 @@ sub mcp_main {
                 }
 
                 if ($msg) {
-                    $self->glog($msg, LOG_TERSE);
+                    $self->glog($msg, $msg =~ /Unknown/ ? LOG_TERSE : LOG_VERBOSE);
                     ## As we don't want people to wait around for a syncdone...
                     $self->db_notify($maindbh, "syncerror_$syncname", 1);
                 }
