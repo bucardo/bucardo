@@ -8412,6 +8412,18 @@ sub install {
         goto GOOEY;
     }
 
+    ## Check for some common errors
+    if ($res =~ /database "(.+)" does not exist/) {
+        my $baddb = $1;
+        if ($baddb ne 'postgres') {
+            if (!$QUIET and !$bcargs->{batch}) {
+                print "Failed to connect to database '$dbname', will try 'postgres'\n";
+            }
+            $dbname = 'postgres';
+            goto GOOEY;
+        }
+    }
+
     if ($res !~ /(\d+)\.(\d+)(\S+)/) {
         print "-->Sorry, unable to connect to the database\n\n";
         warn $delayed_warning;
