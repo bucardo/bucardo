@@ -1043,7 +1043,7 @@ sub mcp_main {
             ## Request to pause a sync
             elsif ($name =~ /^pause_sync_(.+)/o) {
                 my $syncname = $1;
-				my $msg;
+                my $msg;
 
                 ## We will not pause if this sync does not exist or it is inactive
                 if (! exists $self->{sync}{$syncname}) {
@@ -1053,13 +1053,13 @@ sub mcp_main {
                     $msg = qq{Cannot pause inactive sync "$syncname"};
                 }
                 else {
-					## Mark it as paused, stop the kids and controller
+                    ## Mark it as paused, stop the kids and controller
                     $sync->{$syncname}{paused} = 1;
-					my $stopsync = "stopsync_$syncname";
-					$self->db_notify($maindbh, "kid_$stopsync");
-					$self->db_notify($maindbh, "ctl_$stopsync");
-					$maindbh->commit();
-					$self->glog(qq{Set sync "$syncname" as paused}, LOG_VERBOSE);
+                    my $stopsync = "stopsync_$syncname";
+                    $self->db_notify($maindbh, "kid_$stopsync");
+                    $self->db_notify($maindbh, "ctl_$stopsync");
+                    $maindbh->commit();
+                    $self->glog(qq{Set sync "$syncname" as paused}, LOG_VERBOSE);
                 }
                 if (defined $msg) {
                     $self->glog($msg, LOG_TERSE);
@@ -1068,7 +1068,7 @@ sub mcp_main {
             ## Request to resume a sync
             elsif ($name =~ /^resume_sync_(.+)/o) {
                 my $syncname = $1;
-				my $msg;
+                my $msg;
 
                 ## We will not resume if this sync does not exist or it is inactive
                 if (! exists $self->{sync}{$syncname}) {
@@ -1078,9 +1078,9 @@ sub mcp_main {
                     $msg = qq{Cannot resume inactive sync "$syncname"};
                 }
                 else {
-					## Mark it as resumed, stop the kids
+                    ## Mark it as resumed, stop the kids
                     $sync->{$syncname}{paused} = 0;
-					$self->glog(qq{Set sync "$syncname" as resumed}, LOG_VERBOSE);
+                    $self->glog(qq{Set sync "$syncname" as resumed}, LOG_VERBOSE);
                     ## MCP will restart the CTL on next loop around
                 }
                 if (defined $msg) {
@@ -1149,11 +1149,11 @@ sub mcp_main {
                 }
                 else {
 
-					## reload overrides a pause
-					if ($sync->{$syncname}{paused}) {
-						$self->glog(qq{Resuming paused sync "$syncname"}, LOG_TERSE);
-						$sync->{$syncname}{paused} = 0;
-					}
+                    ## reload overrides a pause
+                    if ($sync->{$syncname}{paused}) {
+                        $self->glog(qq{Resuming paused sync "$syncname"}, LOG_TERSE);
+                        $sync->{$syncname}{paused} = 0;
+                    }
 
                     $self->glog(qq{Deactivating sync "$syncname"}, LOG_TERSE);
                     $self->deactivate_sync($sync->{$syncname});
@@ -1223,8 +1223,8 @@ sub mcp_main {
                 }
                 elsif ($self->activate_sync($sync->{$syncname})) {
                     $sync->{$syncname}{mcp_active} = 1;
-					## Just in case:
-					$sync->{$syncname}{paused} = 0;
+                    ## Just in case:
+                    $sync->{$syncname}{paused} = 0;
                     $maindbh->do(
                         'UPDATE sync SET status = ? WHERE name = ?',
                         undef, 'active', $syncname
@@ -1293,10 +1293,10 @@ sub mcp_main {
             ## Skip if this sync has not been activated
             next if ! $s->{mcp_active};
 
-			## Skip if this one is paused
-			next if $s->{paused};
+            ## Skip if this one is paused
+            next if $s->{paused};
 
-			## Skip is this one is stalled
+            ## Skip is this one is stalled
             next if $s->{status} eq 'stalled';
 
             ## If this is not a stayalive, AND is not being kicked, skip it
