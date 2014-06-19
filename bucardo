@@ -340,7 +340,7 @@ my %column_no_change = (
     'cdate' => 1,
 );
 
-## Regular expression for a valid database group name
+## Regular expression for a valid dbgroup name
 my $re_dbgroupname = qr{\w[\w\d]*};
 
 ## Regular expression for a valid database name
@@ -1858,7 +1858,7 @@ sub add_database {
             $role = $master_role if $master_role;
             my ($newgroup, $newrole) = add_db_to_group($db, "$dbgroup:$role");
             if ($isnew) {
-                $finalmsg .= qq{Created database group "$newgroup"\n};
+                $finalmsg .= qq{Created dbgroup "$newgroup"\n};
                 $isnew = 0;
             }
             $finalmsg .= qq{  Added database "$db" to dbgroup "$newgroup" as $newrole\n};
@@ -2039,7 +2039,7 @@ sub update_database {
                 ## Does this group exist?
                 if (! exists $DBGROUP->{$group}) {
                     create_dbgroup($group);
-                    push @groupchanges => qq{Created database group "$group"};
+                    push @groupchanges => qq{Created dbgroup "$group"};
                 }
 
                 ## Are we a part of it already?
@@ -2277,14 +2277,14 @@ sub list_databases {
 
         if ($VERBOSE) {
 
-            ## Which database groups is this a member of?
+            ## Which dbgroups is this a member of?
             if (exists $info->{group}) {
                 for my $group (sort keys %{ $info->{group} }) {
                     my $i = $info->{group}{$group};
                     my $role = $i->{role};
                     my $gang = $i->{gang};
                     my $pri = $i->{priority};
-                    print "  Belongs to database group $group ($role)";
+                    print "  Belongs to dbgroup $group ($role)";
                     $pri and print "  Priority:$pri";
                     print "\n";
                 }
@@ -2312,7 +2312,7 @@ sub list_databases {
 
 sub add_dbgroup {
 
-    ## Add one or more database groups. Inserts to the bucardo.dbgroup table
+    ## Add one or more dbgroups. Inserts to the bucardo.dbgroup table
     ## May also insert to the bucardo.dbmap table
     ## Arguments: one plus
     ## 1. The name of the group we are creating
@@ -2331,7 +2331,7 @@ sub add_dbgroup {
     ## Create the group if it does not exist
     if (! exists $DBGROUP->{$name}) {
         create_dbgroup($name);
-        $QUIET or print qq{Created database group "$name"\n};
+        $QUIET or print qq{Created dbgroup "$name"\n};
     }
 
     ## Add all these databases to the group
@@ -2362,7 +2362,7 @@ sub remove_dbgroup {
 
     ## Remove one or more entries from the bucardo.dbgroup table
     ## Arguments: one or more
-    ## 1+ Name of a database group
+    ## 1+ Name of a dbgroup
     ## Returns: undef
     ## Example: bucardo remove dbgroup sales
 
@@ -2374,7 +2374,7 @@ sub remove_dbgroup {
     ## Make sure all the groups exist
     for my $name (@nouns) {
         if (! exists $DBGROUP->{$name}) {
-            die qq{No such database group: $name\n};
+            die qq{No such dbgroup: $name\n};
         }
     }
 
@@ -2399,13 +2399,13 @@ sub remove_dbgroup {
                     goto NEND if ! $@;
                 }
                 else {
-                    die qq{Cannot remove database group "$name": it is being used by one or more syncs\n};
+                    die qq{Cannot remove dbgroup "$name": it is being used by one or more syncs\n};
                 }
             }
-            die qq{Could not delete database group "$name"\n$@\n};
+            die qq{Could not delete dbgroup "$name"\n$@\n};
         }
           NEND:
-        $QUIET or print qq{Removed database group "$name"\n};
+        $QUIET or print qq{Removed dbgroup "$name"\n};
     }
 
     confirm_commit();
@@ -2417,7 +2417,7 @@ sub remove_dbgroup {
 
 sub update_dbgroup {
 
-    ## Update one or more database groups
+    ## Update one or more dbgroups
     ## This may modify the bucardo.dbgroup and bucardo.dbmap tables
     ## Arguments: two or more
     ## 1. Group to be updated
@@ -2435,9 +2435,9 @@ sub update_dbgroup {
     ## Recursively call ourselves for wildcards and 'all'
     exit 0 if ! check_recurse($DBGROUP, $name, @actions);
 
-    ## Make sure this database group exists!
+    ## Make sure this dbgroup exists!
     if (! exists $DBGROUP->{$name}) {
-        die qq{Could not find a database group named "$name"\nUse 'list dbgroups' to see all available.\n};
+        die qq{Could not find a dbgroup named "$name"\nUse 'list dbgroups' to see all available.\n};
     }
 
     ## From this point on, we have either:
@@ -2455,13 +2455,13 @@ sub update_dbgroup {
         if ($action =~ /name=(.+)/) {
             my $newname = $1;
             if ($newname !~ /^$re_dbgroupname$/) {
-                die qq{Invalid database group name "$newname"\n};
+                die qq{Invalid dbgroup name "$newname"\n};
             }
             next if $name eq $newname; ## Duh
             $SQL = 'UPDATE bucardo.dbgroup SET name=? WHERE name=?';
             $sth = $dbh->prepare($SQL);
             $sth->execute($newname, $name);
-            $QUIET or print qq{Changed database group name from "$name" to "$newname"\n};
+            $QUIET or print qq{Changed dbgroup name from "$name" to "$newname"\n};
             $changes++;
             next;
         }
@@ -2525,7 +2525,7 @@ sub list_dbgroups {
 
     ## Might be no groups yet
     if (! keys %$DBGROUP) {
-        print "No database groups have been added yet\n";
+        print "No dbgroups have been added yet\n";
         return -1;
     }
 
@@ -2558,7 +2558,7 @@ sub list_dbgroups {
 
     ## No matches?
     if (@nouns and ! keys %matchdbg) {
-        print "No matching database groups found\n";
+        print "No matching dbgroups found\n";
         return -1;
     }
 
@@ -2591,7 +2591,7 @@ sub list_dbgroups {
                 }
             }
         }
-        printf "Database group: %-*s%s\n",
+        printf "dbgroup: %-*s%s\n",
             $maxlen, $name, $dbs;
         $VERBOSE >= 2 and show_all_columns($info);
     }
@@ -4085,7 +4085,7 @@ sub add_sync {
 
     ## We must know where to replicate: need a dbgroup or a list of databases
     if (! exists $dbcols->{dbgroup} and ! exists $dbcols->{dbs}) {
-        die "Need to specify which database group (or list of databases) for this sync\n";
+        die "Need to specify which dbgroup (or list of databases) for this sync\n";
     }
 
     #### RELGROUP
@@ -4114,12 +4114,12 @@ sub add_sync {
     }
 
     ## DBGROUP
-    ## Determine which database group to use
+    ## Determine which dbgroup to use
     ## We create a unique name as needed later on
     my $dbgroup_name;
     if (exists $dbcols->{dbgroup}) {
 
-        ## If this database group already exists, we are done
+        ## If this dbgroup already exists, we are done
         if (exists $DBGROUP->{ $dbcols->{dbgroup} }) {
 
             ## We cannot have both an existing dbgroup and a list of databases
@@ -4152,7 +4152,7 @@ sub add_sync {
         push @dblist => split /\s*,\s*/ => $dbcols->{dbgroup};
     }
 
-    ## If this is a new database group, databases must be given
+    ## If this is a new dbgroup, databases must be given
     if (!@dblist and defined $dbgroup_name and ! exists $DBGROUP->{ $dbgroup_name }) {
         die qq{Must provide a list of databases to go into the new dbgroup\n};
     }
@@ -4217,7 +4217,7 @@ sub add_sync {
                 map { "$_=".$DBGROUP->{$gname}{db}{$_}{role} }
                     sort keys %{$DBGROUP->{$gname}{db}};
             if ($innerjoin eq $newlist) {
-                push @message => qq{Using existing database group "$gname"};
+                push @message => qq{Using existing dbgroup "$gname"};
                 $dbgroup_name = $gname;
                 last;
             }
@@ -4241,7 +4241,7 @@ sub add_sync {
     ## Give a courtesy message is we created a new dbgroup
     ## Also associate our dbs with this new group
     if (! exists $DBGROUP->{ $dbgroup_name }) {
-        push @message => qq{Created a new database group named "$dbgroup_name"\n};
+        push @message => qq{Created a new dbgroup named "$dbgroup_name"\n};
         $SQL = 'INSERT INTO bucardo.dbmap(dbgroup,db,role) VALUES (?,?,?)';
         $sth = $dbh->prepare($SQL);
         for my $db (sort keys %db) {
@@ -4994,10 +4994,10 @@ sub create_dbgroup {
     if ($@) {
         if ($@ =~ /dbgroup_name_sane/) {
             print "Trying name $name\n";
-            print qq{Invalid characters in database group name "$name"\n};
+            print qq{Invalid characters in dbgroup name "$name"\n};
         }
         else {
-            print qq{Failed to create database group "$name"\n$@\n};
+            print qq{Failed to create dbgroup "$name"\n$@\n};
         }
         exit 1;
     }
@@ -9380,7 +9380,7 @@ sub update_dbmap {
     ## Update the values in the bucardo.dbmap table
     ## Arguments: three
     ## 1. Name of the database
-    ## 2. Name of the database group
+    ## 2. Name of the dbgroup
     ## 3. Hashref of things to change
     ## Returns: undef
 
@@ -9416,7 +9416,7 @@ sub create_herd {
         $sth->execute($name);
     };
     if ($@) {
-        print qq{Failed to create relation group "$name"\n$@\n};
+        print qq{Failed to create relgroup "$name"\n$@\n};
         exit 1;
     }
 
@@ -9913,9 +9913,7 @@ Initial status of the database in Bucardo. Must be either "active" or
 
 =item C<dbgroup>
 
-=item C<group>
-
-Bucardo database group to which to add the database. Optional.
+Bucardo dbgroup to which to add the database. Optional.
 
 =item C<addalltables>
 
@@ -9951,7 +9949,7 @@ an authentication failure.
 
   bucardo add dbgroup name db1:source db2:source db3:target ...
 
-Adds one or more databases to the named database group. If the database group
+Adds one or more databases to the named dbgroup. If the dbgroup
 doesn't exist, it will be created. The database parameters should specify
 their roles, either "source" or "target".
 
@@ -9992,7 +9990,7 @@ default. Optional.
 
 =item C<relgroup>
 
-Adds the table to the named relation group. If the relation group does not
+Adds the table to the named relgroup. If the relgroup does not
 exist, it will be created. Optional.
 
 =item C<makedelta>
@@ -10025,7 +10023,7 @@ Required.
 
 =item C<relgroup>
 
-Adds the sequence to the named relation group. If the relation group does not
+Adds the sequence to the named relgroup. If the relgroup does not
 exist, it will be created. Optional.
 
 =back
@@ -10086,7 +10084,7 @@ Exclude the specified tables. The options may be specified more than once.
 
 =item C<--relgroup>
 
-Name of the relation group to which to add new tables.
+Name of the relgroup to which to add new tables.
 
 =item C<pkonly>
 
@@ -10134,7 +10132,7 @@ options may be specified more than once.
 
 =item C<--relgroup>
 
-Name of the relation group to which to add new tables or sequences.
+Name of the relgroup to which to add new tables or sequences.
 
 =back
 
@@ -10143,7 +10141,7 @@ Name of the relation group to which to add new tables or sequences.
   bucardo add relgroup name
   bucardo add relgroup name table, sequence, ...
 
-Adds a relation group. After the name, pass in an optional list of tables
+Adds a relgroup. After the name, pass in an optional list of tables
 and/or sequences and they will be added to the group.
 
 =head3 add sync
@@ -10157,24 +10155,24 @@ what to replicate from where to where. The supported parameters are:
 
 =item C<dbs>
 
-The name of a database group or comma-delimited list of databases. All of the
+The name of a dbgroup or comma-delimited list of databases. All of the
 specified databases will be synchronized. Required.
 
 =item C<dbgroup>
 
-The name of a database group. All of the databases within this group will be
-part of the sync. If the database group does not exists and a separate list
+The name of a dbgroup. All of the databases within this group will be
+part of the sync. If the dbgroup does not exists and a separate list
 of databases is given, the group will be created and populated.
 
 =item C<relgroup>
 
-The name of a relation group to synchronize. All of the tables and/or
+The name of a relgroup to synchronize. All of the tables and/or
 sequences in the relgroup will be synchronized. Required unless C<tables> is
 specified.
 
 =item C<tables>
 
-List of tables to add to the sync. This implicitly creates a relation group
+List of tables to add to the sync. This implicitly creates a relgroup
 with the same name as the sync. Required unless C<relgroup> is specified.
 
 =item C<status>
@@ -10774,10 +10772,10 @@ them.
 
 The service name to use for a Postgres database.
 
-=item C<group>
+=item C<dbgroup>
 
-A comma-separated list of database groups to which to add the database. The
-database will be removed from any other groups of which it was previously a
+A comma-separated list of dbgroups to which to add the database. The
+database will be removed from any other dbgroups of which it was previously a
 member.
 
 =back
@@ -10797,11 +10795,11 @@ The name of the sync. Required.
 
 =item C<dbs>
 
-The name of a database group or comma-delimited list of databases.
+The name of a dbgroup or comma-delimited list of databases.
 
 =item C<relgroup>
 
-The name of a relation group to synchronize.
+The name of a relgroup to synchronize.
 
 =item C<status>
 
@@ -10981,8 +10979,8 @@ Boolean indicating whether or not to vacuum the table after every sync.
 
 =item C<relgroup>
 
-Adds the table to the named relation group. May be specified more than once.
-The table will be removed from any other relation groups.
+Adds the table to the named relgroup. May be specified more than once.
+The table will be removed from any other relgroups.
 
 =item C<makedelta>
 
@@ -11014,8 +11012,8 @@ The name of the schema in which the sequence is found.
 
 =item C<relgroup>
 
-Adds the sequence to the named relation group. May be specified more than
-once. The sequence will be removed from any other relation groups.
+Adds the sequence to the named relgroup. May be speci<fied more than
+once. The sequence will be removed from any other relgroups.
 
 =back
 
