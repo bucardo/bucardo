@@ -102,7 +102,7 @@ is ($res, qq{Removed database "A"\nRemoved database "B"\n}, $t);
 
 $t = 'Add database works when adding to a new dbgroup - role is source';
 $res = $bct->ctl("bucardo add db A dbname=bucardo_test user=$dbuserA port=$dbportA host=$dbhostA group=group1");
-like ($res, qr/Added database "A".*Created database group "group1".*Added database "A" to dbgroup "group1" as source/s, $t);
+like ($res, qr/Added database "A".*Created dbgroup "group1".*Added database "A" to dbgroup "group1" as source/s, $t);
 
 $t = 'Add database works when adding to an existing dbgroup - role is target';
 $res = $bct->ctl("bucardo add db B dbname=bucardo_test user=$dbuserB port=$dbportB host=$dbhostB group=group1");
@@ -222,7 +222,7 @@ like ($res, qr/Changed bucardo.db dbport from \d+ to 1234/, $t);
 
 $t = 'Update database works when adding to a new group';
 $res = $bct->ctl('bucardo update db A group=group5');
-like ($res, qr/Created database group "group5".*Added database "A" to dbgroup "group5" as target/s, $t);
+like ($res, qr/Created dbgroup "group5".*Added database "A" to dbgroup "group5" as target/s, $t);
 
 $t = 'Update database works when adding to an existing group';
 $res = $bct->ctl('bucardo update db B group=group5');
@@ -235,7 +235,7 @@ like ($res, qr/Changed role for database "A" in dbgroup "group5" from target to 
 $t = 'Update database works when removing from a group';
 $res = $bct->ctl('bucardo update db B group=group2:replica');
 ## new group, correct role, remove from group1!
-like ($res, qr/Created database group "group2".*Added database "B" to dbgroup "group2" as target.*Removed database "B" from dbgroup "group5"/s, $t);
+like ($res, qr/Created dbgroup "group2".*Added database "B" to dbgroup "group2" as target.*Removed database "B" from dbgroup "group5"/s, $t);
 
 $res = $bct->ctl('bucardo update db A status=inactive DBport=12345');
 like ($res, qr/No change needed for dbport.*Changed bucardo.db status from active to inactive/s, $t);
