@@ -11,10 +11,7 @@ use Data::Dumper;
 select(($|=1,select(STDERR),$|=1)[1]);
 
 if (! $ENV{RELEASE_TESTING}) {
-	plan (skip_all =>  'Test skipped unless environment variable RELEASE_TESTING is set');
-}
-else {
-#	plan tests => 1;
+    plan (skip_all =>  'Test skipped unless environment variable RELEASE_TESTING is set');
 }
 
 ## The 'bucardo' script
@@ -32,8 +29,11 @@ check_subroutines($file, $fh);
 
 check_whitespace($file, $fh);
 
+check_hash_names($file, $fh);
+
 close $fh or die qq{Could not close filehandle for "$file": $!\n};
 
+pass "Scanned file $file";
 
 $file = 'Bucardo.pm';
 if (! open $fh, '<', $file) {
@@ -45,6 +45,9 @@ if (! open $fh, '<', $file) {
 
 check_whitespace($file, $fh);
 
+check_hash_names($file, $fh);
+
+pass "Scanned file $file";
 
 done_testing();
 
@@ -197,3 +200,41 @@ sub check_whitespace {
 } ## end of check_whitespace
 
 
+sub check_hash_names {
+
+    ## Make sure our hashes stay simple
+    ## Arguments: two
+    ## 1. File name
+    ## 2. file handle
+    ## Returns: undef
+
+    my $filename = shift;
+    my $fh = shift;
+
+    ## Rewind to the beginning
+    seek $fh, 0, 0;
+
+    my %found;
+
+    ## Just in case, reset the line counter
+    $. = 0;
+
+    while (<$fh>) {
+        next if /[mq]{/;
+        next if /(?:map|grep|first|eval) *{/;
+        while (m/(?<!q[wqrx])\{(.+?)\}/g) {
+            my $word = $1;
+            next if $word =~ /^q[wr]/;
+            if ($word =~ /\w \w/) {
+                fail "Invalid hash name ($word) at line $. of $filename";
+            }
+            last;
+        }
+    }
+
+    ## Do *not* close the file handle!
+
+    return;
+
+
+} ## end of check_hash_names
