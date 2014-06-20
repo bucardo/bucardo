@@ -59,6 +59,7 @@
 
 		<li><a href="#remove">remove</a></li>
 		<li><a href="#kick">kick</a></li>
+		<li><a href="#pause">pause</a></li>
 		<li><a href="#reload_config">reload config</a></li>
 		<li><a href="#set">set</a></li>
 		<li><a href="#show">show</a></li>
@@ -95,7 +96,7 @@
 </p>
 <hr />
 <h1><a name="version">VERSION</a></h1>
-<p>This document describes version 4.99.12 of bucardo</p>
+<p>This document describes version 5.0.0 of bucardo</p>
 <p>
 </p>
 <hr />
@@ -175,7 +176,7 @@ configuration.</p>
 <dt><strong><a name="reopen" class="item"><code>reopen</code></a></strong></dt>
 
 <dd>
-<p>Sends a message to all Bucardo processes asking them to reopen any log files 
+<p>Sends a message to all Bucardo processes asking them to reopen any log files
 they may have open. Call this after you have rotated the log file(s).</p>
 </dd>
 <dt><strong><a name="show_all_setting_setting" class="item"><code>show all|&lt;setting&gt; [&lt;setting&gt;...]</code></a></strong></dt>
@@ -509,9 +510,13 @@ include:</p>
 <h3><a name="add_db">add db</a></h3>
 <pre>
   bucardo add db &lt;name&gt; dbname=actual_name port=xxx host=xxx user=xxx pass=xxx</pre>
-<p>Adds a new database. The <a href="#name"><code>name</code></a> is the name by which the database will be
+<p>Adds one or more new databases. The <a href="#name"><code>name</code></a> is the name by which the database will be
 known to Bucardo, and must be unique. This may vary from the actual database
-name, as multiple hosts might have databases with the same name.</p>
+name, as multiple hosts might have databases with the same name. Multiple databases
+can be added by separating the names with commas. Options that differ between the
+databases should be separated by a matching commas. Example:</p>
+<pre>
+  bucardo add db alpha,beta dbname=sales host=aa,bb user=bucardo</pre>
 <p>The supported named parameters are:</p>
 <dl>
 <dt><strong><code>dbname</code></strong></dt>
@@ -609,10 +614,8 @@ environment variable, if present. Optional.</p>
 </dd>
 <dt><strong><code>dbgroup</code></strong></dt>
 
-<dt><strong><a name="group" class="item"><code>group</code></a></strong></dt>
-
 <dd>
-<p>Bucardo database group to which to add the database. Optional.</p>
+<p>Bucardo dbgroup to which to add the database. Optional.</p>
 </dd>
 <dt><strong><a name="addalltables" class="item"><code>addalltables</code></a></strong></dt>
 
@@ -651,7 +654,7 @@ an authentication failure.</p>
 <h3><a name="add_dbgroup">add dbgroup</a></h3>
 <pre>
   bucardo add dbgroup name db1:source db2:source db3:target ...</pre>
-<p>Adds one or more databases to the named database group. If the database group
+<p>Adds one or more databases to the named dbgroup. If the dbgroup
 doesn't exist, it will be created. The database parameters should specify
 their roles, either &quot;source&quot; or &quot;target&quot;.</p>
 <p>
@@ -696,14 +699,14 @@ default. Optional.</p>
 <dt><strong><code>relgroup</code></strong></dt>
 
 <dd>
-<p>Adds the table to the named relation group. If the relation group does not
+<p>Adds the table to the named relgroup. If the relgroup does not
 exist, it will be created. Optional.</p>
 </dd>
 <dt><strong><a name="makedelta" class="item"><code>makedelta</code></a></strong></dt>
 
 <dd>
-<p>Turns makedelta magic on or off. Value is a list of databases which need makedelta 
-for this table. Value can also be &quot;on&quot; to enable makedelta for all databases. 
+<p>Turns makedelta magic on or off. Value is a list of databases which need makedelta
+for this table. Value can also be &quot;on&quot; to enable makedelta for all databases.
 Defaults to &quot;off&quot;.</p>
 </dd>
 <dt><strong><a name="strict_check" class="item"><code>strict_check</code></a></strong></dt>
@@ -732,7 +735,7 @@ Required.</p>
 <dt><strong><code>relgroup</code></strong></dt>
 
 <dd>
-<p>Adds the sequence to the named relation group. If the relation group does not
+<p>Adds the sequence to the named relgroup. If the relgroup does not
 exist, it will be created. Optional.</p>
 </dd>
 </dl>
@@ -797,7 +800,7 @@ may be specified more than once.</p>
 <dt><strong><code>--relgroup</code></strong></dt>
 
 <dd>
-<p>Name of the relation group to which to add new tables.</p>
+<p>Name of the relgroup to which to add new tables.</p>
 </dd>
 <dt><strong><a name="pkonly" class="item"><code>pkonly</code></a></strong></dt>
 
@@ -848,7 +851,7 @@ options may be specified more than once.</p>
 <dt><strong><a name="relgroup2" class="item"><a href="#relgroup"><code>--relgroup</code></a></a></strong></dt>
 
 <dd>
-<p>Name of the relation group to which to add new tables or sequences.</p>
+<p>Name of the relgroup to which to add new tables or sequences.</p>
 </dd>
 </dl>
 <p>
@@ -857,33 +860,40 @@ options may be specified more than once.</p>
 <pre>
   bucardo add relgroup name
   bucardo add relgroup name table, sequence, ...</pre>
-<p>Adds a relation group. After the name, pass in an optional list of tables
+<p>Adds a relgroup. After the name, pass in an optional list of tables
 and/or sequences and they will be added to the group.</p>
 <p>
 </p>
 <h3><a name="add_sync">add sync</a></h3>
 <pre>
-  bucardo add sync syncname relgroup=xxx dbs=xxx</pre>
+  bucardo add sync name relgroup=xxx dbs=xxx</pre>
 <p>Adds a sync, which is a named replication event containing information about
 what to replicate from where to where. The supported parameters are:</p>
 <dl>
 <dt><strong><a name="dbs" class="item"><code>dbs</code></a></strong></dt>
 
 <dd>
-<p>The name of a database group or comma-delimited list of databases. All of the
+<p>The name of a dbgroup or comma-delimited list of databases. All of the
 specified databases will be synchronized. Required.</p>
+</dd>
+<dt><strong><code>dbgroup</code></strong></dt>
+
+<dd>
+<p>The name of a dbgroup. All of the databases within this group will be
+part of the sync. If the dbgroup does not exists and a separate list
+of databases is given, the group will be created and populated.</p>
 </dd>
 <dt><strong><code>relgroup</code></strong></dt>
 
 <dd>
-<p>The name of a relation group to synchronize. All of the tables and/or
+<p>The name of a relgroup to synchronize. All of the tables and/or
 sequences in the relgroup will be synchronized. Required unless <a href="#tables"><code>tables</code></a> is
 specified.</p>
 </dd>
 <dt><strong><a name="tables" class="item"><code>tables</code></a></strong></dt>
 
 <dd>
-<p>List of tables to add to the sync. This implicitly creates a relation group
+<p>List of tables to add to the sync. This implicitly creates a relgroup
 with the same name as the sync. Required unless <a href="#relgroup"><code>relgroup</code></a> is specified.</p>
 </dd>
 <dt><strong><code>status</code></strong></dt>
@@ -1033,7 +1043,7 @@ default. Optional.</p>
 <p>Boolean indicating whether or not to be strict when comparing tables in the
 sync. If the columns have different names or data types, the validation will
 fail. But perhaps the columns are allowed to have different names or data
-types. If so, disable <a href="#strict_check"><code>strict_check</code></a> and column diffrences will result in
+types. If so, disable <a href="#strict_check"><code>strict_check</code></a> and column differences will result in
 warnings rather than failing the validation. Defaults to true.</p>
 </dd>
 </dl>
@@ -1533,11 +1543,11 @@ them.</p>
 <dd>
 <p>The service name to use for a Postgres database.</p>
 </dd>
-<dt><strong><code>group</code></strong></dt>
+<dt><strong><code>dbgroup</code></strong></dt>
 
 <dd>
-<p>A comma-separated list of database groups to which to add the database. The
-database will be removed from any other groups of which it was previously a
+<p>A comma-separated list of dbgroups to which to add the database. The
+database will be removed from any other dbgroups of which it was previously a
 member.</p>
 </dd>
 </dl>
@@ -1557,12 +1567,12 @@ what to replicate from where to where. The supported parameters are:</p>
 <dt><strong><code>dbs</code></strong></dt>
 
 <dd>
-<p>The name of a database group or comma-delimited list of databases.</p>
+<p>The name of a dbgroup or comma-delimited list of databases.</p>
 </dd>
 <dt><strong><code>relgroup</code></strong></dt>
 
 <dd>
-<p>The name of a relation group to synchronize.</p>
+<p>The name of a relgroup to synchronize.</p>
 </dd>
 <dt><strong><code>status</code></strong></dt>
 
@@ -1591,7 +1601,7 @@ deactivate a sync.</p>
 <dt><strong><a name="isolation_level" class="item"><code>isolation_level</code></a></strong></dt>
 
 <dd>
-<p>The transation isolation level this sync should use.
+<p>The transaction isolation level this sync should use.
 Only choices are &quot;serializable&quot; and &quot;repeatable read&quot;</p>
 </dd>
 <dt><strong><code>conflict_strategy</code></strong></dt>
@@ -1718,7 +1728,7 @@ message when a sync has not been run in this amount of time.</p>
 <p>Boolean indicating whether or not to be strict when comparing tables in the
 sync. If the columns have different names or data types, the validation will
 fail. But perhaps the columns are allowed to have different names or data
-types. If so, disable <a href="#strict_check"><code>strict_check</code></a> and column diffrences will result in
+types. If so, disable <a href="#strict_check"><code>strict_check</code></a> and column differences will result in
 warnings rather than failing the validation. Defaults to true.</p>
 </dd>
 </dl>
@@ -1771,8 +1781,8 @@ of which the table is a part.</p>
 <dt><strong><code>relgroup</code></strong></dt>
 
 <dd>
-<p>Adds the table to the named relation group. May be specified more than once.
-The table will be removed from any other relation groups.</p>
+<p>Adds the table to the named relgroup. May be specified more than once.
+The table will be removed from any other relgroups.</p>
 </dd>
 <dt><strong><code>makedelta</code></strong></dt>
 
@@ -1785,7 +1795,7 @@ The table will be removed from any other relation groups.</p>
 <p>Boolean indicating whether or not to be strict when comparing the table
 between syncs. If the columns have different names or data types, the
 validation will fail. But perhaps the columns are allowed to have different
-names or data types. If so, disable <a href="#strict_check"><code>strict_check</code></a> and column diffrences will
+names or data types. If so, disable <a href="#strict_check"><code>strict_check</code></a> and column differences will
 result in warnings rather than failing the validation. Defaults to true.</p>
 </dd>
 </dl>
@@ -1808,8 +1818,8 @@ result in warnings rather than failing the validation. Defaults to true.</p>
 <dt><strong><code>relgroup</code></strong></dt>
 
 <dd>
-<p>Adds the sequence to the named relation group. May be specified more than
-once. The sequence will be removed from any other relation groups.</p>
+<p>Adds the sequence to the named relgroup. May be speci&lt;fied more than
+once. The sequence will be removed from any other relgroups.</p>
 </dd>
 </dl>
 <p>
@@ -1861,15 +1871,15 @@ erroring out.</p>
 <h2><a name="kick">kick</a></h2>
 <pre>
   bucardo kick &lt;syncname(s)&gt; [timeout]</pre>
-<p>Tells one or more named syncs to fire as soon as possible. Note that this simply sends a request that 
-the sync fire: it may not start right away if the same sync is already running, or if the source or 
-target database has exceeded the number of allowed Bucardo connections. If the final argument is a 
-number, it is treated as a timeout. If this number is zero, the bucardo command will not return 
-until the sync has finished. For any other number, the sync will wait at most that number of seconds. 
+<p>Tells one or more named syncs to fire as soon as possible. Note that this simply sends a request that
+the sync fire: it may not start right away if the same sync is already running, or if the source or
+target database has exceeded the number of allowed Bucardo connections. If the final argument is a
+number, it is treated as a timeout. If this number is zero, the bucardo command will not return
+until the sync has finished. For any other number, the sync will wait at most that number of seconds.
 If any sync has not finished before the timeout, an exit value of 1 will be returned. Errors will
 cause exit values of 2 or 3. In all other cases, an exit value of 0 will be returned.</p>
-<p>If a timeout is given, the total completion time in seconds is also displayed. If the sync is going to 
-multiple targets, the time that each target takes from the start of the kick is also shown as each 
+<p>If a timeout is given, the total completion time in seconds is also displayed. If the sync is going to
+multiple targets, the time that each target takes from the start of the kick is also shown as each
 target finishes. Options:</p>
 <dl>
 <dt><strong><a name="retry" class="item"><code>--retry</code></a></strong></dt>
@@ -1891,6 +1901,17 @@ running a kick, for example, via a cronjob, so turning --notimer on will
 simply print the entire message without backspaces.</p>
 </dd>
 </dl>
+<p>
+</p>
+<h2><a name="pause">pause</a></h2>
+<pre>
+  bucardo pause &lt;syncname(s)&gt;
+  bucardo pause all
+  bucardo resume &lt;syncname(s)&gt;
+  bucardo resume all</pre>
+<p>Tells one or more named syncs to temporarily pause, or to resume from a previous pause. This
+only applies to active syncs and only takes effect if Bucardo is currently running. The
+keyword 'all' can be used as well to pause or resume all known active syncs.</p>
 <p>
 </p>
 <h2><a name="reload_config">reload config</a></h2>
@@ -1920,7 +1941,7 @@ case-insensitive. The available settings are:</p>
 <dt><strong><a name="bucardo_version" class="item"><code>bucardo_version</code></a></strong></dt>
 
 <dd>
-<p>Current version of Bucardo. Default: <code>4.99.12</code>.</p>
+<p>Current version of Bucardo. Default: <code>5.0.0</code>.</p>
 </dd>
 <dt><strong><a name="bucardo_vac" class="item"><code>bucardo_vac</code></a></strong></dt>
 
@@ -1930,7 +1951,7 @@ case-insensitive. The available settings are:</p>
 <dt><strong><a name="bucardo_initial_version" class="item"><code>bucardo_initial_version</code></a></strong></dt>
 
 <dd>
-<p>Bucardo version this schema was created with. Default: <code>4.99.12</code>.</p>
+<p>Bucardo version this schema was created with. Default: <code>5.0.0</code>.</p>
 </dd>
 <dt><strong><a name="ctl_checkonkids_time" class="item"><code>ctl_checkonkids_time</code></a></strong></dt>
 
@@ -1990,7 +2011,7 @@ case-insensitive. The available settings are:</p>
 <dt><strong><code>isolation_level</code></strong></dt>
 
 <dd>
-<p>The transaction isolation level all sync should use. Defaults to 'serializable'. 
+<p>The transaction isolation level all sync should use. Defaults to 'serializable'.
 The only other valid option is 'repeatable read'</p>
 </dd>
 <dt><strong><a name="kid_deadlock_sleep" class="item"><code>kid_deadlock_sleep</code></a></strong></dt>
@@ -2175,8 +2196,8 @@ details on the configuration settings.</p>
   bucardo ping
   bucardo ping 60
   bucardo ping 0</pre>
-<p>Sends a ping notice to the MCP process to see if it will respond. By default, it will wait 15 seconds. A 
-numeric argument will change this timeout. Using a 0 as the timeout indicates waiting forever. If a response 
+<p>Sends a ping notice to the MCP process to see if it will respond. By default, it will wait 15 seconds. A
+numeric argument will change this timeout. Using a 0 as the timeout indicates waiting forever. If a response
 was returned, the program will exit with a value of 0. If it times out, the value will be 1.
 Returns a Nagios like message starting with &quot;OK&quot; or &quot;CRITICAL&quot; for success or failure.</p>
 <p>
@@ -2184,8 +2205,8 @@ Returns a Nagios like message starting with &quot;OK&quot; or &quot;CRITICAL&quo
 <h2><a name="status">status</a></h2>
 <pre>
   bucardo status [syncname(s)] [--sort=#] [--show-days] [--compress]</pre>
-<p>Shows the brief status of all known syncs in a tabular format. If given one or more sync names, 
-shows detailed information for each one. To see detailed information for all syncs, simply 
+<p>Shows the brief status of all known syncs in a tabular format. If given one or more sync names,
+shows detailed information for each one. To see detailed information for all syncs, simply
 use &quot;status all&quot;</p>
 <p>When showing brief information, the columns are:</p>
 <ol>
@@ -2208,7 +2229,7 @@ use &quot;status all&quot;</p>
 </li>
 <li><strong><a name="last_i_u" class="item"><strong>Last I/U</strong></a></strong>
 
-<p>The number of insert and deletes performed by the last successful sync. May also show 
+<p>The number of insert and deletes performed by the last successful sync. May also show
 the number of rows truncated (T) or conflicted (C), if applicable.</p>
 </li>
 <li><strong><a name="last_bad" class="item"><strong>Last bad</strong></a></strong>
@@ -2246,22 +2267,22 @@ negative number to reverse the sort order.</p>
 <h2><a name="activate">activate</a></h2>
 <pre>
   bucardo activate syncname [syncname2 syncname3 ...] [timeout]</pre>
-<p>Activates one or more named syncs. If given a timeout argument, it will wait until it has received 
+<p>Activates one or more named syncs. If given a timeout argument, it will wait until it has received
 confirmation from Bucardo that each sync has been successfully activated.</p>
 <p>
 </p>
 <h2><a name="deactivate">deactivate</a></h2>
 <pre>
   bucardo deactivate syncname [syncname2 syncname3 ...] [timeout]</pre>
-<p>Deactivates one or more named syncs. If given a timeout argument, it will wait until it has received 
+<p>Deactivates one or more named syncs. If given a timeout argument, it will wait until it has received
 confirmation from Bucardo that the sync has been successfully deactivated.</p>
 <p>
 </p>
 <h2><a name="message">message</a></h2>
 <pre>
   bucardo message 'I WAS HERE'</pre>
-<p>Sends a message to the running Bucardo logs. This message will appear prefixed with &quot;MESSAGE: &quot;. If 
-Bucardo is not running, the message will go to the logs the next time Bucardo runs and someone 
+<p>Sends a message to the running Bucardo logs. This message will appear prefixed with &quot;MESSAGE: &quot;. If
+Bucardo is not running, the message will go to the logs the next time Bucardo runs and someone
 adds another message.</p>
 <p>
 </p>
@@ -2320,7 +2341,7 @@ or a command and its action. Some examples:</p>
 </p>
 <hr />
 <h1><a name="options_details">OPTIONS DETAILS</a></h1>
-<p>It is usually easier to set most of these options at the top of the script, or make an alias for them, 
+<p>It is usually easier to set most of these options at the top of the script, or make an alias for them,
 as they will not change very often if at all.</p>
 <dl>
 <dt><strong><a name="d" class="item"><code>-d</code></a></strong></dt>
@@ -2405,12 +2426,12 @@ as they will not change very often if at all.</p>
 </p>
 <hr />
 <h1><a name="files">FILES</a></h1>
-<p>In addition to command-line configurations, you can put any options inside of a file. The file <em class="file">.bucardorc</em> in 
-the current directory will be used if found. If not found, then the file <em class="file">~/.bucardorc</em> will be used. Finally, 
-the file /etc/bucardorc will be used if available. The format of the file is option = value, one per line. Any 
-line starting with a '#' will be skipped. Any values loaded from a bucardorc file will be overwritten by 
-command-line options. All bucardorc files can be ignored by supplying a <a href="#no_bucardorc"><code>--no-bucardorc</code></a> argument. A specific 
-file can be forced with the <code>--bucardorc=file</code> option; if this option is set, bucardo will refuse to run 
+<p>In addition to command-line configurations, you can put any options inside of a file. The file <em class="file">.bucardorc</em> in
+the current directory will be used if found. If not found, then the file <em class="file">~/.bucardorc</em> will be used. Finally,
+the file /etc/bucardorc will be used if available. The format of the file is option = value, one per line. Any
+line starting with a '#' will be skipped. Any values loaded from a bucardorc file will be overwritten by
+command-line options. All bucardorc files can be ignored by supplying a <a href="#no_bucardorc"><code>--no-bucardorc</code></a> argument. A specific
+file can be forced with the <code>--bucardorc=file</code> option; if this option is set, bucardo will refuse to run
 unless that file can be read.</p>
 <p>
 </p>
