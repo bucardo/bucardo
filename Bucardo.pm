@@ -6997,7 +6997,7 @@ sub activate_sync {
         next if ! $self->{sync}{$syncname}{mcp_active};
         push @activesyncs, $syncname;
     }
- 
+
     ## Change our process name to show all active syncs
     $0 = "Bucardo Master Control Program v$VERSION.$self->{extraname} Active syncs: ";
     $0 .= join ',' => @activesyncs;

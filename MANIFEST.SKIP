@@ -29,3 +29,4 @@ notes.*
 .db$
 MYMETA.*
 dev/
+dist/

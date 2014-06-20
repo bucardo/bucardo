@@ -72,10 +72,10 @@ $t = q{Adding all sequences to a new sync works};
 $res = $bct->ctl(q{bucardo add sequences all herd=seqonly});
 like ($res, qr/Creating relgroup: seqonly/s, $t);
 
-## Create a new database group going from A to B and C and D
-$t = q{Created a new fullcopy database group A -> B C D};
+## Create a new dbgroup going from A to B and C and D
+$t = q{Created a new fullcopy dbgroup A -> B C D};
 $res = $bct->ctl('bucardo add dbgroup pg A:source B:fullcopy C:fullcopy D:fullcopy');
-like ($res, qr/Created database group "pg"/, $t);
+like ($res, qr/Created dbgroup "pg"/, $t);
 
 ## Create a new sync
 $t = q{Created a new sync};

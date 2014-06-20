@@ -93,30 +93,30 @@ $t = q{Adding all sequences to the main relgroup};
 $res = $bct->ctl(q{bucardo add all sequences relgroup=allpk});
 like ($res, qr/New sequences added/s, $t);
 
-## Create a new database group going from A to B and C and D and E
-$t = q{Created a new database group A -> B C D E};
+## Create a new dbgroup going from A to B and C and D and E
+$t = q{Created a new dbgroup A -> B C D E};
 $res = $bct->ctl('bucardo add dbgroup pg1 A:source B:target C:target D:target E:target');
-like ($res, qr/Created database group "pg1"/, $t);
+like ($res, qr/Created dbgroup "pg1"/, $t);
 
-## Create a new database group going from A and B to C and D
-$t = q{Created a new database group (A <=> B ) -> C D};
+## Create a new dbgroup going from A and B to C and D
+$t = q{Created a new dbgroup (A <=> B ) -> C D};
 $res = $bct->ctl('bucardo add dbgroup pg2 A:source B:source C D');
-like ($res, qr/Created database group "pg2"/, $t);
+like ($res, qr/Created dbgroup "pg2"/, $t);
 
-## Create a new database group going from A and B and C to D
-$t = q{Created a new database group (A <=> B <=> C) -> D};
+## Create a new dbgroup going from A and B and C to D
+$t = q{Created a new dbgroup (A <=> B <=> C) -> D};
 $res = $bct->ctl('bucardo add dbgroup pg3 A:source B:source C:source D');
-like ($res, qr/Created database group "pg3"/, $t);
+like ($res, qr/Created dbgroup "pg3"/, $t);
 
-## Create a new database group going from A and B and C and D
-$t = q{Created a new database group (A <=> B <=> C <=> D)};
+## Create a new dbgroup going from A and B and C and D
+$t = q{Created a new dbgroup (A <=> B <=> C <=> D)};
 $res = $bct->ctl('bucardo add dbgroup pg4 A:source B:source C:source D:source');
-like ($res, qr/Created database group "pg4"/, $t);
+like ($res, qr/Created dbgroup "pg4"/, $t);
 
-## Create a new database group going between A and B
-$t = q{Created a new database group (A <=> B)};
+## Create a new dbgroup going between A and B
+$t = q{Created a new dbgroup (A <=> B)};
 $res = $bct->ctl('bucardo add dbgroup pg5 A:source B:source');
-like ($res, qr/Created database group "pg5"/, $t);
+like ($res, qr/Created dbgroup "pg5"/, $t);
 
 ## Create some new syncs. Only one should be active at a time!
 $t = q{Created a new sync for dbgroup pg1};
