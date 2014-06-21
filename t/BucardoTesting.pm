@@ -421,7 +421,15 @@ sub create_cluster {
 
     my $dirname = $info->{dirname};
 
-    return if -d $dirname;
+    if (-d $dirname) {
+        ## Sometimes these test clusters get left in a broken state.
+        my $file = "$dirname/postgresql.conf";
+        if (! -e $file) {
+            ## Just move it out of the way, rather than deleting it
+            rename $dirname, "$dirname.old";
+        }
+        return;
+    }
 
     my $localinitdb = $info->{initdb};
 
