@@ -1083,7 +1083,7 @@ sub mcp_main {
                     $s->{paused} = 0;
                     ## Since we may have accumulated deltas while pasued, set to autokick if needed
                     if (!$s->{fullcopy} and $s->{autokick}) {
-                        $sync->{$syncname}{kick_on_start} = 1;
+                        $s->{kick_on_startup} = 1;
                     }
                     $self->glog(qq{Set sync "$syncname" as resumed}, LOG_VERBOSE);
                     ## MCP will restart the CTL on next loop around
