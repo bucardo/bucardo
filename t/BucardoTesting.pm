@@ -1581,7 +1581,6 @@ sub add_row_to_database {
         }
 
         ## Execute!
-warn "Insert to table $table with val $xval, values $value\n";
         $gsth{$dbh}{insert}{$xval}{$table}->execute($value);
 
     }
