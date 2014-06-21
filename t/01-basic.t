@@ -23,6 +23,10 @@ closedir $dh or warn qq{Could not close the 'scripts' directory: $!\n};
 
 plan tests => @important_files + @test_files + @script_files;
 
+if (! eval { require CGI; } ) {
+    @script_files = grep { ! /bucardo-report/ } @script_files;
+}
+
 for my $file (@important_files) {
     my $t=qq{File $file compiles without errors};
     eval {
