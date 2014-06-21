@@ -43,9 +43,9 @@ for my $num (1, 2) {
         qr/Added the following tables/, "Add table bucardo_test$num";
 }
 
-# Create a new database group going from A to B
+# Create a new dbgroup going from A to B
 like $bct->ctl('bucardo add dbgroup serial1 A:source B:target'),
-    qr/Created database group "serial1"/, 'Create relgroup serial1';
+    qr/Created dbgroup "serial1"/, 'Create relgroup serial1';
 
 # Create a sync for this group.
 like $bct->ctl('bucardo add sync serialtest1 relgroup=myrels dbs=serial1'),

@@ -101,10 +101,10 @@ $command =
 $res = $bct->ctl($command);
 like ($res, qr/Added database "R"/, $t);
 
-## Create a new database group going from A to B and off to R
-$t = q{Created a new database group A <=> B -> R};
+## Create a new dbgroup going from A to B and off to R
+$t = q{Created a new dbgroup A <=> B -> R};
 $res = $bct->ctl('bucardo add dbgroup pg1 A:source B:source R:target');
-like ($res, qr/Created database group "pg1"/, $t);
+like ($res, qr/Created dbgroup "pg1"/, $t);
 
 $t = q{Created a new sync for dbgroup pg1};
 $res = $bct->ctl('bucardo add sync pgtest1 relgroup=allpk dbs=pg1 status=active');

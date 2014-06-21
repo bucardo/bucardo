@@ -113,12 +113,12 @@ $command =
 $res = $bct->ctl($command);
 like ($res, qr/New sequences added: \d/, $t);
 
-## Create a new database group
-$t = q{Created a new database group};
+## Create a new dbgroup
+$t = q{Created a new dbgroup};
 $command =
 "bucardo add dbgroup md A:source B:source C M";
 $res = $bct->ctl($command);
-like ($res, qr/Created database group "md"/, $t);
+like ($res, qr/Created dbgroup "md"/, $t);
 
 ## Create a new sync
 $t = q{Created a new sync};

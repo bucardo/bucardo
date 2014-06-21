@@ -73,10 +73,10 @@ $t = q{Adding tables to new herd 'exherd' works};
 $res = $bct->ctl(q{bucardo add table employee herd=exherd});
 like ($res, qr/Created the relgroup named "exherd".*are now part of/s, $t);
 
-## Create a new database group going from A to B to C
-$t = q{Created a new database group exabc for A <=> B <=> C};
+## Create a new dbgroup going from A to B to C
+$t = q{Created a new dbgroup exabc for A <=> B <=> C};
 $res = $bct->ctl('bucardo add dbgroup exabc A:source B:source C:source');
-like ($res, qr/Created database group "exabc"/, $t);
+like ($res, qr/Created dbgroup "exabc"/, $t);
 
 ## Create a new sync
 $t = q{Created a new sync for dbgroup exabc};

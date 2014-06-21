@@ -1196,7 +1196,7 @@ $SQL = qq{
     };
 $rv = spi_exec_query($SQL);
 if (!@{$rv->{rows}}) {
-    elog(ERROR, qq{Could not find a database group of $dbs});
+    elog(ERROR, qq{Could not find a dbgroup of $dbs});
 }
 
 ## We also want to count up each type of role
@@ -1218,7 +1218,7 @@ for (@{$rv->{rows}}) {
 
 ## No source databases? Does not compute!
 if ($role{source} < 1) {
-    die "Invalid database group: at least one database must have a role of 'source'!\n";
+    die "Invalid dbgroup: at least one database must have a role of 'source'!\n";
 }
 
 ## Unless we are fullcopy, we must have PKs on each table
