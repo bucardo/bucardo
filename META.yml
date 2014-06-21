@@ -21,6 +21,7 @@ requires:
   List::Util          : 0
   MIME::Base64        : 0
   Net::SMTP           : 0
+  Pod::Parser         : 0
   Pod::Usage          : 0
   Sys::Hostname       : 1.11
   Sys::Syslog         : 0.13
