@@ -11,7 +11,14 @@ use open qw( :std :utf8 );
 use charnames ':full';
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 20;
+use Test::More;
+
+(my $dbdpgversion = $DBD::Pg::VERSION) =~ s/^(\d+).*/$1/;
+
+if (! $dbdpgversion < 3) {
+    plan (skip_all =>  'Test skipped unless DBD::Pg is version 3 or higher');
+}
+plan tests => 20;
 
 use BucardoTesting;
 my $bct = BucardoTesting->new({ location => 'makedelta' })
