@@ -264,7 +264,7 @@ for my $file (qw/bucardo Bucardo.pm/) {
 ## Prepare some test values for easy use
 ## The secondary names are for other databases, e.g. MySQL
 our %val;
-for (1..30) {
+for (1..40) {
     $val{SMALLINT}{$_} = $_;
     $val{INT}{$_} = 1234567+$_;
     $val{BIGINT}{$_} = 7777777777 + $_;
