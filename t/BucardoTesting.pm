@@ -65,6 +65,11 @@ if ($FRESHLOG) {
     unlink 'tmp/bucardo.log';
 }
 
+my $piddir = 'pid';
+if (! -e $piddir) {
+    mkdir $piddir;
+}
+
 ## Test databases are labelled as A, B, C, etc.
 my @dbs = qw/A B C D E/;
 
