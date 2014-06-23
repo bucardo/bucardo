@@ -13,10 +13,11 @@ use lib 't','.';
 use DBD::Pg;
 use Test::More;
 
-(my $dbdpgversion = $DBD::Pg::VERSION) =~ s/^(\d+).*/$1/;
+my $dbdpgversion = $DBD::Pg::VERSION;
+(my $majorversion = $dbdpgversion) =~ s/^(\d+).*/$1/;
 
-if (! $dbdpgversion < 3) {
-    plan (skip_all =>  'Test skipped unless DBD::Pg is version 3 or higher');
+if ($majorversion < 3) {
+    plan (skip_all =>  "Test skipped unless DBD::Pg is version 3 or higher: this is $dbdpgversion");
 }
 plan tests => 20;
 
