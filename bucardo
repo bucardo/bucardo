@@ -8700,8 +8700,12 @@ sub process_simple_args {
         elsif ($flag eq 'TF') {
             $val =~ s/^\s*t(?:rue)*\s*$/1/i;
             $val =~ s/^\s*f(?:alse)*\s*$/0/i;
+            $val =~ s/^\s*on*\s*$/1/i;
+            $val =~ s/^\s*off*\s*$/0/i;
+            $val =~ s/^\s*yes*\s*$/1/i;
+            $val =~ s/^\s*no*\s*$/0/i;
             if ($val !~ /^[01]$/) {
-                die "Invalid value for '$arg': must be true of false\n";
+                die "Invalid value for '$arg': must be true or false\n";
             }
         }
         elsif ($flag eq 'numeric') {
