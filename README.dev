@@ -325,6 +325,10 @@ http://www.postgresql.org/about/submitnews
 
 The content should be roughly the same as the announcement.
 
+* Update the Postres wiki as needed
+
+https://wiki.postgresql.org/wiki/Bucardo (may be other pages too)
+
 * PostgreSQL weekly news summary
 
 The maintainers of the weekly news are usually pretty good about catching the update 
