@@ -44,7 +44,7 @@ like $bct->ctl('bucardo add sync deltatest1 relgroup=myrels dbs=A:source,B:sourc
     qr/Added sync "deltatest1"/, 'Create sync "deltatest1"';
 
 # Create a sync for replication from B to C
-like $bct->ctl('bucardo add sync deltatest2 relgroup=myrels dbs=B,C'),
+like $bct->ctl('bucardo add sync deltatest2 relgroup=myrels dbs=B,C autokick=no'),
     qr/Added sync "deltatest2"/, 'Create sync "deltatest2"';
 
 # Listen in on things.
@@ -59,8 +59,7 @@ ok $dbhX->do('LISTEN bucardo_syncdone_deltatest3'),
 ok $bct->restart_bucardo($dbhX), 'Bucardo should start';
 ok $bct->wait_for_notice($dbhX, [qw(
     bucardo_syncdone_deltatest1
-    bucardo_syncdone_deltatest2
-)]), 'The deltatest1 and deltatest2 syncs should finish';
+)]), 'The deltatest1 sync finished';
 
 # Should have no rows.
 $bct->check_for_row([], [qw(A B C)], undef, 'test[124]$');
@@ -70,10 +69,12 @@ ok $dbhA->do(q{INSERT INTO bucardo_test1 (id, data1) VALUES (1, 'foo')}),
     'Insert a row into test1 on A';
 $dbhA->commit;
 
+## Bucardo will fire off deltatest2 itself
 ok $bct->wait_for_notice($dbhX, [qw(
     bucardo_syncdone_deltatest1
     bucardo_syncdone_deltatest2
 )]), 'The deltatest1 and deltatest2 syncs have finished';
+
 
 # The row should be in A and B, as well as C!
 is_deeply $dbhB->selectall_arrayref(
@@ -91,6 +92,10 @@ is_deeply $dbhC->selectall_arrayref(
 ok $dbhB->do(q{INSERT INTO bucardo_test2 (id, data1) VALUES (2, 'foo')}),
     'Insert a row into test2 on B';
 $dbhB->commit;
+
+## Sync deltatest2 is not automatic, so we need to kick it
+# Kick off the second sync
+$bct->ctl('bucardo kick sync deltatest2 0');
 
 ok $bct->wait_for_notice($dbhX, [qw(
     bucardo_syncdone_deltatest1

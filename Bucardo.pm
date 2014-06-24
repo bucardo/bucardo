@@ -9585,10 +9585,14 @@ sub push_rows {
                     }, undef, $x->{DBGROUPNAME});
 
                     $self->glog("Signalling all other syncs that this table has changed", LOG_DEBUG);
-                    $SQL = 'SELECT sync FROM bucardo.bucardo_delta_names WHERE sync <> ? AND tablename = ?';
-                    $sth = $dbh->prepare($SQL);
-                    $count = $sth->execute($syncname,$tname);
-                    for my $row (@{ $sth->fetchall_arrayref }) {
+                    ## Cache this
+                    if (! exists $self->{kick_othersyncs}{$syncname}{$tname}) {
+                        $SQL = 'SELECT sync FROM bucardo.bucardo_delta_names WHERE sync <> ? AND tablename = ?';
+                        $sth = $dbh->prepare($SQL);
+                        $count = $sth->execute($syncname,$tname);
+                        $self->{kick_othersyncs}{$syncname}{$tname} = $sth->fetchall_arrayref();
+                    }
+                    for my $row (@{ $self->{kick_othersyncs}{$syncname}{$tname} }) {
                         my $othersync = $row->[0];
                         $self->db_notify($dbh, "kick_sync_$othersync");
                     }
