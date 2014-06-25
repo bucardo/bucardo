@@ -4478,6 +4478,9 @@ sub update_sync {
 
     for my $action (@actions) {
 
+        ## Skip noise words
+        next if $action =~ 'set';
+
         ## Allow for some simple shortcuts
         if ($action =~/^inactiv/i) {
             $action = 'status=inactive';
