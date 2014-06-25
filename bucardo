@@ -4472,6 +4472,7 @@ sub update_sync {
 
     my %aliases = (
         standard_conflict => 'conflict_strategy',
+        conflict          => 'conflict_strategy',
         ping              => 'autokick',
         relgroup          => 'herd',
     );
@@ -4515,9 +4516,31 @@ sub update_sync {
                 die "Invalid setting: $setting\n";
             }
 
-            ## Do any magic we need
+            ## Do any magic we need for specific items
             if ($setting eq 'isolation_level') {
                 $value =~ s/_/ /g;
+            }
+            elsif ($setting eq 'conflict_strategy') {
+
+                ## Allow some alternative names
+                $value = 'bucardo_latest' if $value eq 'default' or $value eq 'latest';
+
+                ## Standard ones are okay
+                if ($value eq 'bucardo_latest'
+                        or $value eq 'bucardo_abort'
+                            or $value eq 'bucardo_custom') {
+                }
+                else {
+                    ## This must be a list of the databases in this sync
+                    my $dbs = $SYNC->{$name}{dblist};
+                    for my $dbname (split /\s+/ => $value) {
+                        if (! exists $dbs->{$dbname}) {
+                            die qq{conflict_strategy should contain a list of databases, but "$dbname" is not a db for this sync!\n};
+                        }
+                    }
+                }
+
+                $QUIET or print qq{Set conflict strategy to '$value'\n};
             }
 
             ## Try setting it
