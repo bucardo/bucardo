@@ -4064,7 +4064,7 @@ sub add_sync {
         rebuild_index|rebuildindex rebuild_index        numeric          null
         dbgroup                    dbgroup              0                null
 
-        conflict_strategy|standard_conflict conflict_strategy  0   null
+        conflict_strategy|standard_conflict|conflict conflict_strategy  0   null
         relation|relations|table|tables     tables             0   null
         db|databases|database|databases|dbs dbs                0   null
     };
