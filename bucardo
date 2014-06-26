@@ -2352,20 +2352,23 @@ sub add_dbgroup {
     }
 
     ## Add all these databases to the group
-    for my $fulldb (@nouns) {
+    for my $dblist (@nouns) {
 
-        ## Figure out the optional role
-        my ($db,$role) = extract_name_and_role($fulldb);
+        for my $fulldb (split /\s*,\s*/ => $dblist) {
 
-        ## This database must exist!
-        if (! exists $DB->{$db}) {
-            print qq{The database "$db" does not exist\n};
-            exit 1;
+            ## Figure out the optional role
+            my ($db,$role) = extract_name_and_role($fulldb);
+
+            ## This database must exist!
+            if (! exists $DB->{$db}) {
+                print qq{The database "$db" does not exist\n};
+                exit 1;
+            }
+
+            add_db_to_group($db, "$name:$role");
+
+            $QUIET or print qq{Added database "$db" to dbgroup "$name" as $role\n};
         }
-
-        add_db_to_group($db, "$name:$role");
-
-        $QUIET or print qq{Added database "$db" to dbgroup "$name" as $role\n};
     }
 
     confirm_commit();
