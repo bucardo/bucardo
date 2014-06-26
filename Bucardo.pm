@@ -1185,7 +1185,8 @@ sub mcp_main {
                     ## Only certain things can be changed "on the fly"
                     for my $val (qw/checksecs stayalive deletemethod status autokick
                                     analyze_after_copy vacuum_after_copy targetgroup targetdb
-                                    onetimecopy lifetimesecs maxkicks rebuild_index/) {
+                                    onetimecopy lifetimesecs maxkicks rebuild_index
+                                   conflict_strategy/) {
                         $sync->{$syncname}{$val} = $self->{sync}{$syncname}{$val} = $info->{$val};
                     }
 
@@ -4047,7 +4048,7 @@ sub start_kid {
                         ## no updates at all for this run. Note: this does not
                         ## mean no conflicts, it means no insert/update/delete
 
-                        $self->glog(q{Starting default conflict strategy}, LOG_VERBOSE);
+                        $self->glog(qq{Starting default conflict strategy "$g->{conflict_strategy}"}, LOG_VERBOSE);
 
                         if (! exists $self->{conflictwinner}) {
 
@@ -4075,7 +4076,6 @@ sub start_kid {
                                 for my $dbname (@dbs) {
 
                                     my $found_delta = 0;
-
                                     ## Walk through but stop at the first found delta
                                     for my $g (@$goatlist) {
 
@@ -4089,13 +4089,14 @@ sub start_kid {
                                             $SQL = qq{SELECT COUNT(*) FROM bucardo.$g->{deltatable} d }
                                                  . q{WHERE d.txntime > }
                                                  . qq{(SELECT MAX(txntime) FROM bucardo.$g->{tracktable} }
-                                                 . qq{WHERE target = '$x->{SYNCNAME}')};
+                                                 . qq{WHERE target = '$x->{DBGROUPNAME}')};
                                             $g->{sql_got_delta} = $SQL;
                                         }
                                         $sth = $x->{dbh}->prepare($g->{sql_got_delta});
                                         $count = $sth->execute();
                                         $sth->finish();
                                         if ($count >= 1) {
+                                            $self->glog("Found a delta for db $dbname", LOG_DEBUG);
                                             $found_delta = 1;
                                             last;
                                         }
@@ -6544,6 +6545,7 @@ sub validate_sync {
         ## Determine the conflict method for each goat
         ## Use the syncs if it has one, otherwise the default
         $g->{conflict_strategy} = $s->{conflict_strategy} || $config{default_conflict_strategy};
+        $self->glog(qq{Set conflict strategy for $S.$T to "$g->{conflict_strategy}"}, LOG_DEBUG);
         ## We do this even if g->{code_conflict} exists so it can fall through
 
         my $colinfo;
