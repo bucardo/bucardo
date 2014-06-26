@@ -4388,6 +4388,13 @@ sub add_sync {
         $dbcols->{kidsalive} = 0;
     }
 
+    ## Allow some alternate way to say things
+    my $cs = 'conflict_strategy';
+    if (exists $dbcols->{$cs}) {
+        $dbcols->{$cs} = 'bucardo_latest'
+            if $dbcols->{$cs} eq 'default' or $dbcols->{$cs} eq 'latest';
+    }
+
     ## Attempt to insert this into the database
     my $columns = join ',' => keys %$dbcols;
     my $qs = '?,' x keys %$dbcols;
