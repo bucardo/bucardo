@@ -1639,6 +1639,10 @@ sub add_database {
         next if $dbcols->{$k} !~ /,/;
         my @list = split /\s*,\s*/ => $dbcols->{$k};
         my $value;
+        ## The dbnames can contain role information: strip it out from here
+        if ('dbname' eq $k) {
+            @list = map { [extract_name_and_role($_)]->[0] } @list;
+        }
         for (my $x=0; defined $db_names->[$x]; $x++) {
             $value = $list[$x] if defined $list[$x];
             $dbinfo{$k}[$x] = $value;
@@ -1838,6 +1842,16 @@ sub add_database {
     ## If we got a group, process that as well
     if (defined $dbgroup) {
 
+        ## If the dbnames had supplied role information, extract that now
+        if (exists $dbcols->{dbname} and $dbcols->{dbname} =~ /:/) {
+            my $x=0;
+            for my $namerole (split /\s*,\s*/ => $dbcols->{dbname}) {
+                my ($name,$role) = extract_name_and_role($namerole);
+                print "$namerole gave us $name and $role\n";
+                $db_names->[$x++][1] = $role;
+            }
+        }
+
         ## If it has an attached role, strip it out and force that everywhere
         my $master_role = $dbgroup =~ s/:(\w+)// ? $1 : 0;
 
@@ -1855,7 +1869,10 @@ sub add_database {
                     $role = 'target';
                 }
             }
+
+            ## The master role trumps everything
             $role = $master_role if $master_role;
+
             my ($newgroup, $newrole) = add_db_to_group($db, "$dbgroup:$role");
             if ($isnew) {
                 $finalmsg .= qq{Created dbgroup "$newgroup"\n};
