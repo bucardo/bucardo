@@ -5036,13 +5036,19 @@ sub start_kid {
         ## If we used a staging table for the tracking info, do the final inserts now
         ## This is the safest way to ensure we never miss any changes
         for my $dbname (@dbs_dbi) {
+
             $x = $sync->{db}{$dbname};
 
             next if ! $x->{trackstage};
 
             my $dbh = $sync->{db}{$dbname}{dbh};
+
             for my $g (@$goatlist) {
+
                 next if $g->{reltype} ne 'table';
+
+                next if ! $deltacount{dbtable}{$dbname}{$g->{safeschema}}{$g->{safetable}};
+
                 $SQL = "INSERT INTO bucardo.$g->{tracktable} SELECT * FROM bucardo.$g->{stagetable}";
                 $dbh->do($SQL);
                 $SQL = "TRUNCATE TABLE bucardo.$g->{stagetable}";
