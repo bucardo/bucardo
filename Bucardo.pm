@@ -4092,9 +4092,11 @@ sub start_kid {
                                                  . qq{WHERE target = '$x->{DBGROUPNAME}')};
                                             $g->{sql_got_delta} = $SQL;
                                         }
+
+                                        $x = $sync->{db}{$dbname};
                                         $sth = $x->{dbh}->prepare($g->{sql_got_delta});
-                                        $count = $sth->execute();
-                                        $sth->finish();
+                                        $sth->execute();
+                                        $count = $sth->fetch()->[0];
                                         if ($count >= 1) {
                                             $self->glog("Found a delta for db $dbname", LOG_DEBUG);
                                             $found_delta = 1;
