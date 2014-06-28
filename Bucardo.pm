@@ -3816,6 +3816,11 @@ sub start_kid {
             ## The overall winning database for conflicts
             delete $self->{conflictwinner};
 
+            ## Custom conflict handler may have told us to always use the same winner
+            if (exists $self->{conflictwinneralways}) {
+                $self->{conflictwinner} = $self->{conflictwinneralways};
+            }
+
             ## Do each goat in turn
 
           PUSHDELTA_GOAT: for my $g (@$goatlist) {
@@ -3950,15 +3955,18 @@ sub start_kid {
                     $self->glog("Conflicts for $S.$T: $count", LOG_NORMAL);
 
                     ## If we have a custom conflict handler for this goat, invoke it
-                    if ($g->{code_conflict}) {
+                    if ($g->{code_conflict} and ! defined $self->{conflictwinner}) {
 
                         $self->glog('Starting code_conflict', LOG_VERBOSE);
 
+                        my $conflict_resolved = 0;
+
                         ## We pass it %conflict, and assume it will modify all the values therein
                         for my $code (@{ $g->{code_conflict} }) {
+                            my $c = $code->{name};
                             $code->{info}{conflicts} = \%conflict;
-                            $code->{info}{schemaname} = $S;
-                            $code->{info}{tablename} = $T;
+                            $code->{info}{safeschemaname} = $S;
+                            $code->{info}{safetablename} = $T;
                             for my $dbname (@dbs_connectable) {
                                 $x = $sync->{db}{$dbname};
                                 ## Make a shallow copy, excluding the actual dbh handle
@@ -3972,31 +3980,67 @@ sub start_kid {
                             }
 
                             my $result = $self->run_kid_custom_code($sync, $code);
-                            ## Allow it to skip!
+                            $self->glog("Result of custom code is $result", LOG_DEBUG);
+
+                            ## We may want to simply skip this code altogether
+                            next if 'skip' eq $result;
+
                             ## Allow it to set permanent winner for this round
+                            if ($result =~ /winner: (.+)/o) {
+                                my $winner = $1;
+                                $self->glog("Custom conflict says winner should be: $winner");
+                                if (! exists $deltabin{$winner}) {
+                                    $self->pause_and_exit(qq{Conflict handler $c provided an invalid winner for $S.$T: $winner});
+                                }
+                                $self->{conflictwinner} = $winner;
+                                $conflict_resolved = 1;
+                                last; ## No sense in going on
+                            }
+
+                            ## Allow it to set permanent winner for all rounds until we restart
+                            if ($result =~ /winner_always: (.+)/o) {
+                                my $winner = $1;
+                                $self->glog("Conflict handler $c says winner should ALWAYS be: $winner");
+                                if (! exists $deltabin{$winner}) {
+                                    $self->pause_and_exit(qq{Conflict handler $c provided an invalid winner_always for $S.$T: $winner});
+                                }
+                                $self->{conflictwinner} = $self->{conflictwinneralways} = $winner;
+                                $conflict_resolved = 1;
+                                last; ## No sense in going on
+                            }
+
                             ## Allow it to set permanent winner for all rounds!
 
                             ## Loop through and make sure the conflict handler has done its job
                             while (my ($key, $winner) = each %conflict) {
-                                if (! defined $winner or ref $winner) {
+                                if (! defined $winner or ref $winner or ! exists $deltabin{$winner}) {
                                     ($pkval = $key) =~ s/\0/\|/go;
-                                    die "Conflict handler failed to provide a winner for $S.$T.$pkval";
+                                    $self->pause_and_exit(qq{Conflict handler $c provided an invalid winner for $S.$T.$pkval: $winner});
                                 }
-                                if (! exists $deltabin{$winner}) {
-                                    ($pkval = $key) =~ s/\0/\|/go;
-                                    die "Conflict handler provided an invalid winner for $S.$T.$pkval: $winner";
-                                }
+                                $self->glog("Conflict handler $c says winner for $key is $winner", LOG_VERBOSE);
                             }
+                            $conflict_resolved = 1;
+
+                            ## If info->{lastcode} has been set, we don't call any other codes
+                            ## Kind of moot
+                            last if $result eq 'last';
+
                         } ## end each code_conflict
+
+                        if (! $conflict_resolved) {
+                            $self->glog(qq{Could not resolve the conflicts! Pausing sync $syncname}, LOG_WARN);
+                            $self->pause_and_exit(qq{Conflict handlers failed to resolve the conflict for $S.$T});
+                        }
+
                     }
                     ## If conflict_strategy is abort, simply die right away
                     elsif ('bucardo_abort' eq $g->{conflict_strategy}) {
-                        die "Aborting sync due to conflict of $S.$T";
+                        $self->pause_and_exit(qq{Aborting sync due to conflict of $S.$T});
                     }
 
                     ## If we require a custom code, also die
                     elsif ('bucardo_custom' eq $g->{conflict_strategy}) {
-                        die "Aborting sync due to lack of custom conflict handler for $S.$T";
+                        $self->pause_and_exit(qq{Aborting sync due to lack of custom conflict handler for $S.$T});
                     }
 
                     ## If we are grabbing the 'latest', figure out which it is
@@ -4077,7 +4121,7 @@ sub start_kid {
                             if (index($sc, ' ') < 1) {
                                 ## Sanity check
                                 if (! exists $deltacount{$sc}) {
-                                    die "Invalid conflict_strategy '$sc' used for $S.$T";
+                                    $self->pause_and_exit(qq{Invalid conflict_strategy '$sc' used for $S.$T});
                                 }
                                 $self->{conflictwinner} = $sc;
                             }
@@ -4087,7 +4131,7 @@ sub start_kid {
                                 ## Make sure they all exist
                                 for my $dbname (@dbs) {
                                     if (! exists $deltacount{$dbname}) {
-                                        die qq{Invalid database "$dbname" found in standard conflict for $S.$T};
+                                        $self->pause_and_exit(qq{Invalid database "$dbname" found in standard conflict for $S.$T});
                                     }
                                 }
 
@@ -4137,7 +4181,7 @@ sub start_kid {
 
                                 ## No match at all? Must be a non-inclusive list
                                 if (! exists $self->{conflictwinner}) {
-                                    die qq{Invalid standard conflict '$sc': no matching database found!};
+                                    $self->pause_and_exit(qq{Invalid standard conflict '$sc': no matching database found!});
                                 }
                             }
                         } ## end conflictwinner not set yet
@@ -5353,6 +5397,28 @@ sub start_kid {
 } ## end of start_kid
 
 
+sub pause_and_exit {
+
+    ## Usually called by a kid, dies and pauses the sync before it leaves
+    ## This prevents infinite loops because something went wrong with the kid
+    ## Arguments: one
+    ## 1. Message to give (LOG_WARN)
+    ## Returns: never, dies.
+
+    my ($self, $message) = @_;
+
+    $self->glog($message, LOG_WARN);
+
+    my $syncname = $self->{sync}{name};
+    $self->glog("Pausing sync $syncname", LOG_TERSE);
+
+    $self->db_notify($self->{masterdbh}, "pause_sync_$syncname", 1);
+
+    die $message;
+
+} ## end of pause_and_exit
+
+
 sub connect_database {
 
     ## Connect to the given database
@@ -6452,7 +6518,7 @@ sub validate_sync {
             FROM customcode c, customcode_map m
             WHERE c.id=m.code AND m.active IS TRUE
             AND (m.sync = ? $goatclause)
-            ORDER BY m.priority ASC
+            ORDER BY m.priority ASC, c.name ASC
         };
     $sth = $self->{masterdbh}->prepare($SQL);
     $sth->execute($syncname);
@@ -8581,6 +8647,7 @@ sub run_kid_custom_code {
         message  => '',  ## Allows the code to send a message to the logs
         warning  => '',  ## Allows a warning to be thrown by the code
         error    => '',  ## Allows an exception to be thrown by the code
+        skip     => '',  ## Tells the caller to skip this code
         lastcode => '',  ## Tells the caller to skip any other codes of this type
         endsync  => '',  ## Tells the caller to cancel the whole sync
         sendmail => sub { $self->send_mail(@_) },
@@ -8668,39 +8735,25 @@ sub run_kid_custom_code {
         return 'last';
     }
 
+    ## The custom code has requested we skip this code (and let any others try)
+    if (length $info->{skip}) {
+        return 'skip';
+    }
+
+    ## The custom code has told us how to handle all conflicts for this round
+    if (exists $info->{winner} and length $info->{winner}) {
+        return "winner: $info->{winner}";
+    }
+
+    ## The custom code has told us how to handle all conflicts until we restart
+    if (exists $info->{winner_always} and length $info->{winner_always}) {
+        return "winner_always: $info->{winner_always}";
+    }
+
     ## Default action, which usually means the next code in the list, if any
     return 'normal';
 
 } ## end of run_kid_custom_code
-
-
-sub custom_conflict {
-
-    ## Arguments: one
-    ## 1. Hashref of info about the state of affairs
-    ##   - table: hashref of info about the current goat
-    ##   - schema, table
-    ##   - key: null-joined primary key causing the problem
-    ## Returns: action -1=nobody wins 1=source wins 2=target wins
-
-    my ($self,$arg) = @_;
-
-    my $ginfo = $arg->{table};
-    my $sync = $arg->{sync};
-
-    for my $code (@{$ginfo->{code_conflict}}) {
-        my $result = $self->run_kid_custom_code($sync, $code);
-        if ($result eq 'next') {
-            $self->glog('Going to next available conflict code', LOG_DEBUG);
-            next;
-        }
-        $self->glog("Conflict handler action: $result", LOG_DEBUG);
-        return $result;
-    }
-
-    return 0; ## Will fail, as we should not get here!
-
-} ## end of custom_conflict
 
 
 sub truncate_table {
