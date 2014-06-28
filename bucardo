@@ -4027,7 +4027,7 @@ sub add_sync {
     ## Create a new sync by adding an entry to the bucardo.sync table
     ## Will add tables as needed to the bucardo.goat table
     ## Will create implicit relgroups as needed
-    ## May also modify the goat, herd, and herdmap tables
+    ## May modify the goat, herd, and herdmap tables
     ## Arguments: none (uses nouns)
     ## Returns: never, exits
 
@@ -4042,7 +4042,7 @@ sub add_sync {
         die qq{A sync with the name "$sync_name" already exists\n};
     }
 
-    ## Store a list of messages we can output once no we have no errors
+    ## Store a list of messages we can output once we have no errors
     my @message;
 
     ## Inputs and aliases, database column name, flags, default
@@ -8700,7 +8700,7 @@ sub process_simple_args {
     my %othername;
 
     ## Transform array of x=y into a hashref
-    my $xyargs = process_args(join ' ' => @$list);
+    my $xyargs = process_args(join ' ' => map { s/[=:]\s*(\w+ .*)/="$1"/; $_; } @$list);
 
     ## Parse the validcols string, and setup any non-null defaults
     for my $row (split /\n/ => $validcols) {
