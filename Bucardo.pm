@@ -3250,6 +3250,7 @@ sub start_kid {
         my $kid_start_time = [gettimeofday];
 
         ## Create an entry in the syncrun table to let people know we've started
+        $self->glog('Adding entry to syncrun table', LOG_DEBUG);
         $sth{kid_syncrun_insert}->execute($syncname, "Started (KID $$)");
 
         ## Increment our count of how many times we have been here before
@@ -3301,15 +3302,14 @@ sub start_kid {
         }
 
         ## Populate the dbrun table so others know we are using these databases
+        $self->glog('Populating the dbrun table', LOG_DEBUG);
         for my $dbname (@dbs_connectable) {
-
             $x = $sync->{db}{$dbname};
-
             $sth{dbrun_insert}->execute($syncname, $dbname, $x->{backend});
-            $maindbh->commit();
         }
 
         ## Add a note to the syncrun table
+        $self->glog('Adding note to the syncrun table', LOG_DEBUG);
         $sth{kid_syncrun_update_status}->execute("Begin txn (KID $$)", $syncname);
 
         ## Figure out our isolation level. Only used for Postgres
@@ -3319,6 +3319,7 @@ sub start_kid {
 
         ## Commit so our dbrun and syncrun stuff is visible to others
         ## This should be done just before we start transactions on all dbs
+        $self->glog('Doing final maindbh commit', LOG_DEBUG);
         $maindbh->commit();
 
         ## Start the main transactions by setting isolation levels.
@@ -4050,7 +4051,11 @@ sub start_kid {
 
                         $self->glog(qq{Starting default conflict strategy "$g->{conflict_strategy}"}, LOG_VERBOSE);
 
-                        if (! exists $self->{conflictwinner}) {
+
+                        if (exists $self->{conflictwinner}) {
+                            $self->glog("Using previous conflict winner: $self->{conflictwinner}", LOG_VERBOSE);
+                        }
+                        else {
 
                             ## Optimize for a single database name
                             my $sc = $g->{conflict_strategy};
@@ -4088,7 +4093,8 @@ sub start_kid {
                                             ## In other words, any deltas newer than the highest track entry
                                             $SQL = qq{SELECT COUNT(*) FROM bucardo.$g->{deltatable} d }
                                                  . q{WHERE d.txntime > }
-                                                 . qq{(SELECT MAX(txntime) FROM bucardo.$g->{tracktable} }
+                                                 . q{(SELECT COALESCE(MAX(txntime),'1999-12-31') }
+                                                 . qq{FROM bucardo.$g->{tracktable} }
                                                  . qq{WHERE target = '$x->{DBGROUPNAME}')};
                                             $g->{sql_got_delta} = $SQL;
                                         }
@@ -4098,7 +4104,7 @@ sub start_kid {
                                         $sth->execute();
                                         $count = $sth->fetch()->[0];
                                         if ($count >= 1) {
-                                            $self->glog("Found a delta for db $dbname", LOG_DEBUG);
+                                            $self->glog("Found a delta for db $dbname, table $g->{tablename}", LOG_DEBUG);
                                             $found_delta = 1;
                                             last;
                                         }
