@@ -3957,9 +3957,24 @@ sub start_kid {
                         ## We pass it %conflict, and assume it will modify all the values therein
                         for my $code (@{ $g->{code_conflict} }) {
                             $code->{info}{conflicts} = \%conflict;
+                            $code->{info}{schemaname} = $S;
+                            $code->{info}{tablename} = $T;
+                            for my $dbname (@dbs_connectable) {
+                                $x = $sync->{db}{$dbname};
+                                ## Make a shallow copy, excluding the actual dbh handle
+                                for my $name (keys %$x) {
+
+                                    ## We provide DBIx::Safe versions elsehwere
+                                    next if $name eq 'dbh';
+
+                                    $code->{info}{dbinfo}{$dbname}{$name} = $x->{$name};
+                                }
+                            }
 
                             my $result = $self->run_kid_custom_code($sync, $code);
                             ## Allow it to skip!
+                            ## Allow it to set permanent winner for this round
+                            ## Allow it to set permanent winner for all rounds!
 
                             ## Loop through and make sure the conflict handler has done its job
                             while (my ($key, $winner) = each %conflict) {
@@ -8562,8 +8577,6 @@ sub run_kid_custom_code {
     my $info = {
         syncname   => $sync->{name},
         version    => $self->{version}, ## Version of Bucardo
-        sourcename => $sync->{sourcedb},
-        targetname => $sync->{targetname},
 
         message  => '',  ## Allows the code to send a message to the logs
         warning  => '',  ## Allows a warning to be thrown by the code
@@ -8668,7 +8681,6 @@ sub custom_conflict {
     ##   - table: hashref of info about the current goat
     ##   - schema, table
     ##   - key: null-joined primary key causing the problem
-    ##   - sourcedbh, targetdbh
     ## Returns: action -1=nobody wins 1=source wins 2=target wins
 
     my ($self,$arg) = @_;
