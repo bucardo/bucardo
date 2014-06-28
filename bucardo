@@ -6109,11 +6109,24 @@ sub list_customcodes {
 
     for my $row (@$info) {
         my $name = $row->{name};
+
+        ## We want to show all associates syncs (when mapping is active)
+        my $info = $CUSTOMCODE->{$name} || {};
+        my $synclist;
+        if (exists $info->{map}) {
+            $synclist = join ',' => sort map { $_->{sync} }
+                grep { defined $_->{sync} and $_->{active} }
+                    @{ $info->{map} };
+        }
+
         printf "Code: %-*s  When run: %-*s  Get dbh: %s  Status: %s\n",
             $maxname, $name,
             $maxwhen, $row->{whenrun},
             $row->{getdbh},
             $row->{status};
+        if (defined $synclist) {
+            print "  Syncs: $synclist\n";
+        }
         if (defined $row->{about} and $VERBOSE) {
             (my $about = $row->{about}) =~ s/(.)^/$1    /gsm;
             print "  About: $about\n";
