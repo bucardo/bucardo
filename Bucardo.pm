@@ -4175,6 +4175,7 @@ sub start_kid {
                                     }
 
                                     $self->{conflictwinner} = $dbname;
+                                    $self->glog("Set conflict winner to database $dbname", LOG_NORMAL);
                                     last;
 
                                 }
@@ -6640,7 +6641,7 @@ sub validate_sync {
         ## Determine the conflict method for each goat
         ## Use the syncs if it has one, otherwise the default
         $g->{conflict_strategy} = $s->{conflict_strategy} || $config{default_conflict_strategy};
-        $self->glog(qq{Set conflict strategy for $S.$T to "$g->{conflict_strategy}"}, LOG_DEBUG);
+        $self->glog(qq{  Set conflict strategy for $S.$T to "$g->{conflict_strategy}"}, LOG_DEBUG);
         ## We do this even if g->{code_conflict} exists so it can fall through
 
         my $colinfo;
