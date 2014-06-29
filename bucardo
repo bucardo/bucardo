@@ -3882,14 +3882,16 @@ sub add_herd {
         eval {
             @a = @{$goatlist->{relations}{$name}{goat}};
         };
-        for my $tmpgoat (@a) {
-            my $db = $tmpgoat->{db};
 
+        my $doneit;
+        for my $tmpgoat (@a) {
+            next if exists $doneit->{$tmpgoat->{id}};
+            my $db = $tmpgoat->{db};
             my $pri = 0;
 
-            $count = $sth->execute($herdname,$pri,$name, $db);
-
+            $count = $sth->execute($herdname,$pri,$name,$db);
             push @newnames => $name;
+            $doneit->{$tmpgoat->{id}}++;
         }
     }
 
