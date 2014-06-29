@@ -1605,6 +1605,57 @@ sub add_row_to_database {
 } ## end of add_row_to_database
 
 
+sub update_row_in_database {
+
+    ## Change a row in each table in a database
+    ## We always change the "inty" field
+    ## Arguments: four
+    ## 1. Database name to use
+    ## 2. Primary key to update
+    ## 3. New value
+    ## 4. Do we commit or not? Boolean, defaults to true
+    ## Returns: undef
+
+    my ($self, $dbname, $pkeyvalue, $newvalue, $commit) = @_;
+
+    $commit = 1 if ! defined $commit;
+
+    my $dbh = $gdbh{$dbname} or die "No such database: $dbname";
+
+    ## Loop through each table we know about
+    for my $table (sort keys %tabletype) {
+
+        ## Look up the actual value to use
+        my $type = $tabletype{$table};
+        my $value = $val{$type}{$pkeyvalue};
+
+        ## Prepare it if we have not already
+        if (! exists $gsth{$dbh}{update}{inty}{$table}) {
+
+            ## Handle odd pkeys
+            my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
+
+            my $SQL = qq{UPDATE "$table" SET inty=? WHERE $pkey = ?};
+            $gsth{$dbh}{update}{inty}{$table} = $dbh->prepare($SQL);
+
+            if ('BYTEA' eq $type) {
+                $gsth{$dbh}{update}{inty}{$table}->bind_param(2, undef, {pg_type => PG_BYTEA});
+            }
+
+        }
+
+        ## Execute!
+        $gsth{$dbh}{update}{inty}{$table}->execute($newvalue,$value);
+
+    }
+
+    $dbh->commit() if $commit;
+
+    return undef;
+
+} ## end of update_row_in_database
+
+
 sub remove_row_from_database {
 
     ## Delete a row from each table in one of the databases
