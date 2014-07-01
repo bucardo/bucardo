@@ -4108,7 +4108,7 @@ sub start_kid {
                         ## no updates at all for this run. Note: this does not
                         ## mean no conflicts, it means no insert/update/delete
 
-                        $self->glog(qq{Starting default conflict strategy "$g->{conflict_strategy}"}, LOG_VERBOSE);
+                        $self->glog(qq{Starting conflict strategy "$g->{conflict_strategy}"}, LOG_VERBOSE);
 
 
                         if (exists $self->{conflictwinner}) {
@@ -4523,6 +4523,7 @@ sub start_kid {
 
                         ## Prepare information to pass to the handler about this run
                         my $codeinfo = {
+                            version      => $VERSION,
                             schemaname   => $S,
                             tablename    => $T,
                             error_string => $err,
