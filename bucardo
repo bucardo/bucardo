@@ -4553,14 +4553,10 @@ sub update_sync {
 
                 ## Allow some alternative names
                 $value = 'bucardo_latest' if $value eq 'default' or $value eq 'latest';
+                $value = 'bucardo_latest_all_tables' if $value eq 'latest_all';
 
-                ## Standard ones are okay
-                if ($value eq 'bucardo_latest'
-                        or $value eq 'bucardo_abort'
-                            or $value eq 'bucardo_custom') {
-                }
-                else {
-                    ## This must be a list of the databases in this sync
+                ## If the name does not start with bucardo, it must be a list of databases
+                if ($value !~ /^bucardo_/) {
                     my $dbs = $SYNC->{$name}{dblist};
                     for my $dbname (split /\s+/ => $value) {
                         if (! exists $dbs->{$dbname}) {
