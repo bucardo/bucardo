@@ -1830,8 +1830,12 @@ sub check_for_row {
             $table =~ /X/ and $SQL =~ s/inty/$pkey/;
 
             local $Test::Builder::Level = $Test::Builder::Level + 1;
-            bc_deeply($res, $dbh, $SQL, $t, (caller)[2]);
+            my $result = bc_deeply($res, $dbh, $SQL, $t, (caller)[2]);
             $dbh->commit();
+            if (!$result) {
+                my $line = (caller)[2];
+                Test::More::BAIL_OUT "Stopping on a failed 'check_for_row' test from line $line";
+            }
         }
     }
 
