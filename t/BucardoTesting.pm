@@ -1831,6 +1831,7 @@ sub check_for_row {
 
             local $Test::Builder::Level = $Test::Builder::Level + 1;
             bc_deeply($res, $dbh, $SQL, $t, (caller)[2]);
+            $dbh->commit();
         }
     }
 
