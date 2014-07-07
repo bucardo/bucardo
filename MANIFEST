@@ -53,6 +53,9 @@ t/98-cleanup.t
 t/99-signature.t
 t/BucardoTesting.pm
 t/customcode.exception.bucardotest.pl
+t/ctest1.pl
+t/ctest2.pl
+t/ctest3.pl
 test_setup.sh
 TODO
 UPGRADE
