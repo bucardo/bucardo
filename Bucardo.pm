@@ -3995,7 +3995,7 @@ sub start_kid {
                             ## Allow it to set permanent winners for all rows this round
                             if ($result =~ /winner: (.+)/o) {
                                 my $winners = $1;
-                                $self->glog("Custom code $cname says winners should be: $winners");
+                                $self->glog("Custom code $cname says winners should be: $winners", LOG_VERBOSE);
                                 $self->{conflictinfo}{winners} = $winners;
                                 last; ## No sense in going on
                             }
@@ -4004,7 +4004,7 @@ sub start_kid {
                             ## Need an intermediate levels: row, table, all tables. one or all
                             if ($result =~ /winner_always: (.+)/o) {
                                 my $winners = $1;
-                                $self->glog("Custom code $cname says winners should ALWAYS be: $winners");
+                                $self->glog("Custom code $cname says winners should ALWAYS be: $winners", LOG_VERBOSE);
                                 $self->{conflictinfo}{winners} = $self->{conflictinfo}{winneralways} = $winners;
                                 last; ## No sense in going on
                             }
@@ -4065,7 +4065,6 @@ sub start_kid {
                                 $sth = $x->{dbh}->prepare($SQL);
                                 $sth->execute();
                                 $x->{lastmod} = $sth->fetchall_arrayref()->[0][0] || 0;
-                                $self->glog("ZZZ db $dbname table $T lastmod is $x->{lastmod}");
                             }
 
                             ## Now we can put them in rank order
@@ -4118,18 +4117,18 @@ sub start_kid {
                             if (! exists $deltacount{$dbname}) {
                                 $self->pause_and_exit(qq{Invalid conflict strategy '$sc' used for $S.$T: no such database '$dbname'});;
                             }
-						}
+                        }
 
-						## Fill in each conflict with first found database
-						for my $pkval (keys %conflict) {
+                        ## Fill in each conflict with first found database
+                        for my $pkval (keys %conflict) {
                             ## As above, we only change if currently a ref
                             next if ! ref $conflict{$pkval};
-							$conflict{$pkval} = first { exists $conflict{$pkval}{$_} } split ' ' => $sc;
-						}
+                            $conflict{$pkval} = first { exists $conflict{$pkval}{$_} } split ' ' => $sc;
+                        }
                     }
 
-					## At this point, the conflict hash should consist of keys with 
-					## the winning database as the value
+                    ## At this point, the conflict hash should consist of keys with 
+                    ## the winning database as the value
                     ## Walk through and apply to the %deltabin hash
 
                     for my $pkey (keys %conflict) {
@@ -4140,9 +4139,9 @@ sub start_kid {
                         }
 
                         ## Add (or re-add) the winning one
-						## We do it this way as we cannot be sure that the combo existed.
-						## It could be the case that the winning database made
-						## no changes to this table!
+                        ## We do it this way as we cannot be sure that the combo existed.
+                        ## It could be the case that the winning database made
+                        ## no changes to this table!
                         $deltabin{ $conflict{$pkey} }{$pkey} = 1;
                     }
 

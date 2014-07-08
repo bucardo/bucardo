@@ -229,7 +229,7 @@ $bct->add_row_to_database('A', 3);
 $bct->add_row_to_database('B', 4);
 
 ## Kick off the sync.
-my $timer_regex = qr/\[01\s*s\]\s+(?:[\b]{6}\[\d+\s*s\]\s+)*/;
+my $timer_regex = qr/\[\d+\s*s\]\s+(?:[\b]{6}\[\d+\s*s\]\s+)*/;
 like $bct->ctl('bucardo kick sync pgtest5 0'),
     qr/^Kick\s+pgtest5:\s+${timer_regex}DONE!/,
     'Kick pgtest5' or die 'Sync failed, no point continuing';
