@@ -132,6 +132,8 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
     ($bcargs,
      'verbose+',
      'vv',
+     'vvv',
+     'vvvv',
      'quiet+',
      'notimer',
      'help|?',
@@ -227,8 +229,10 @@ $bcargs->{logclean} = 1
 ## Sometimes we want to be as quiet as possible
 my $QUIET = delete $bcargs->{quiet};
 
-## Quick shortcut for lots of verbosity
+## Quick shortcuts for lots of verbosity
 $bcargs->{vv} and $bcargs->{verbose} = 2;
+$bcargs->{vvv} and $bcargs->{verbose} = 3;
+$bcargs->{vvvv} and $bcargs->{verbose} = 4;
 
 ## Set some global arguments
 my $VERBOSE = delete $bcargs->{verbose};
@@ -6108,13 +6112,23 @@ sub list_customcodes {
     for my $row (@$info) {
         my $name = $row->{name};
 
-        ## We want to show all associates syncs (when mapping is active)
-        my $info = $CUSTOMCODE->{$name} || {};
-        my $synclist;
-        if (exists $info->{map}) {
+        ## We never show the actual source code unless verbosity is at least three!
+        if ($VERBOSE < 3) {
+            $row->{src_code} = 'Use -vvv to see the actual source code';
+        }
+
+        ## We want to show all associates syncs and relations (when mapping is active)
+        my $info2 = $CUSTOMCODE->{$name} || {};
+
+        my ($synclist, $relationlist) = ('','');
+        if (exists $info2->{map}) {
             $synclist = join ',' => sort map { $_->{sync} }
                 grep { defined $_->{sync} and $_->{active} }
-                    @{ $info->{map} };
+                    @{ $info2->{map} };
+            $relationlist = join ',' => sort
+                map { "$GOAT->{by_id}{$_->{goat}}{schemaname}.$GOAT->{by_id}{$_->{goat}}{tablename}" }
+                grep { defined $_->{goat} and $_->{active} }
+                    @{ $info2->{map} };
         }
 
         printf "Code: %-*s  When run: %-*s  Get dbh: %s  Status: %s\n",
@@ -6122,8 +6136,11 @@ sub list_customcodes {
             $maxwhen, $row->{whenrun},
             $row->{getdbh},
             $row->{status};
-        if (defined $synclist) {
+        if (length $synclist) {
             print "  Syncs: $synclist\n";
+        }
+        if (length $relationlist) {
+            print "  Relations: $relationlist\n";
         }
         if (defined $row->{about} and $VERBOSE) {
             (my $about = $row->{about}) =~ s/(.)^/$1    /gsm;
@@ -6442,7 +6459,7 @@ sub add_customcode {
         whenrun|when_run         whenrun              =$whenrun        null
         getdbh                   getdbh               TF               null
         sync                     sync                 0                skip
-        goat|relation            goat                 0                skip
+        goat|table|relation      goat                 0                skip
         status                   status               =active|inactive skip
         priority                 priority             number           skip
         src_code                 src_code             0                skip
@@ -6505,12 +6522,13 @@ sub add_customcode {
     }
 
     ## Is this a valid sync?
-    if ($extras->{sync} and ! exists $global{sync}{$extras->{sync}}) {
+    if ($extras->{sync} and ! exists $SYNC->{$extras->{sync}}) {
         die qq{Unknown sync: $extras->{sync}\n};
     }
 
     ## Is this a valid gaot?
-    if ($extras->{relation} and ! exists $global{goat}{$extras->{relation}}) {
+    if ($extras->{relation} and ! exists $GOAT->{by_name}{$extras->{relation}}
+        and ! exists $GOAT->{by_table}{$extras->{relation}}) {
         die qq{Unknown relation: $extras->{relation}\n};
     }
 
@@ -6518,13 +6536,17 @@ sub add_customcode {
     if ($extras->{sync} or $extras->{relation}) {
         $SQL = 'INSERT INTO customcode_map(code,';
         my @vals;
-        # XXX Relation is text, but we need a goat.id. Should the param be
-        # table instead of relation, and should it look up the ID?
         for my $col (qw/sync priority active/) {
             if ($extras->{$col}) {
                 $SQL .= "$col,";
                 push @vals => $extras->{$col};
             }
+        }
+        if ($extras->{relation}) {
+            $SQL .= 'goat,';
+            push @vals => exists $GOAT->{by_name}{$extras->{relation}}
+                ? $GOAT->{by_name}{$extras->{relation}}->[0]{id}
+                    : $GOAT->{by_table}{$extras->{relation}}->[0]{id};
         }
         my $phs2 = '?,' x @vals;
         $SQL .= ") VALUES ((SELECT currval('customcode_id_seq')),$phs2)";
@@ -6538,12 +6560,12 @@ sub add_customcode {
         }
     }
 
-    confirm_commit();
-
     if (!$QUIET) {
         print qq{Added customcode "$newname"\n};
         $finalmsg and print $finalmsg;
     }
+
+    confirm_commit();
 
     exit 0;
 
@@ -8961,6 +8983,7 @@ sub extract_name_and_role {
 
 
 sub load_bucardo_info {
+
     ## Load of all information from the database into global hashes
     ## Arguments: one
     ## 1. Boolean: if true, force run even if we've run once already
