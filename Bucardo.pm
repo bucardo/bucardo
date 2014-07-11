@@ -6453,7 +6453,7 @@ sub validate_sync {
             FROM customcode c, customcode_map m
             WHERE c.id=m.code AND m.active IS TRUE
             AND (m.sync = ? $goatclause)
-            ORDER BY m.priority ASC, c.name ASC
+            ORDER BY m.priority ASC, m.goat IS NULL, c.name ASC
         };
     $sth = $self->{masterdbh}->prepare($SQL);
     $sth->execute($syncname);
