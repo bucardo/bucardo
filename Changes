@@ -1,7 +1,8 @@
 [ GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
-Bucardo version 5.0.1, released ??
+Bucardo version 5.1.0, released ??
 
+  - Many fixes and features added to the conflict resolution system. [GSM]
 
 Bucardo version 5.0.0, released June 23, 2014 (git commit 2349582733df31a4115b952bfcc2f5732d5af16a)
 
