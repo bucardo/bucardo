@@ -6224,7 +6224,7 @@ sub update_customcode {
                     $sth->execute($value, $name);
                     $changes++;
                     if ('src_code' eq $setting) {
-                        print qq{Changed customcode "$name" $setting with content of file "value"\n};
+                        print qq{Changed customcode "$name" $setting with content of file "$value"\n};
                     }
                     else {
                         print qq{Changed customcode "$name" $setting from '$oldvalue' to '$value'\n};
