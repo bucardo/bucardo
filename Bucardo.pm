@@ -4098,7 +4098,7 @@ sub start_kid {
 
                     ## Optimize for a single database name
                     my $sc = $self->{conflictinfo}{winners}
-                        or pause_and_exit(q{Invalid conflict winners list given});
+                        or $self->pause_and_exit(q{Invalid conflict winners list given});
                     if (index($sc, ' ') < 1) {
                         ## Sanity check
                         if (! exists $deltacount{$sc}) {
