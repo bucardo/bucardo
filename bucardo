@@ -6187,6 +6187,8 @@ sub update_customcode {
             ## No funny characters please, just boring column names
             $setting =~ /^[a-z_]+$/ or die "Invalid setting: $setting\n";
 
+            my $srcfile;
+
             ## We only allow changing a strict subset of all the columns
             if ($setting =~ /^(?:about|getdbh|name|priority|status|whenrun|src_code)$/) {
                 my $oldvalue = defined $cc->{$setting} ? $cc->{$setting} : '';
@@ -6207,7 +6209,7 @@ sub update_customcode {
                         unless $whenrun{$value};
                 }
                 elsif ('src_code' eq $setting) {
-                    my $srcfile = $value;
+                    $srcfile = $value;
                     if (! -e $srcfile) {
                         warn qq{Could not find a file named "$srcfile"\n};
                         exit 2;
@@ -6224,7 +6226,7 @@ sub update_customcode {
                     $sth->execute($value, $name);
                     $changes++;
                     if ('src_code' eq $setting) {
-                        print qq{Changed customcode "$name" $setting with content of file "$value"\n};
+                        print qq{Changed customcode "$name" $setting with content of file "$srcfile"\n};
                     }
                     else {
                         print qq{Changed customcode "$name" $setting from '$oldvalue' to '$value'\n};
