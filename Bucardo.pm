@@ -4001,7 +4001,6 @@ sub start_kid {
                             }
 
                             ## Allow it to set permanent winner for all rounds until we restart
-                            ## Need an intermediate levels: row, table, all tables. one or all
                             if ($result =~ /winner_always: (.+)/o) {
                                 my $winners = $1;
                                 $self->glog("Custom code $cname says winners should ALWAYS be: $winners", LOG_VERBOSE);
@@ -4022,7 +4021,6 @@ sub start_kid {
                     elsif ('bucardo_abort' eq $g->{conflict_strategy}) {
                         $self->pause_and_exit(qq{Aborting sync due to conflict of $S.$T});
                     }
-
                     ## If we require a custom code, also die
                     elsif ('bucardo_custom' eq $g->{conflict_strategy}) {
                         $self->pause_and_exit(qq{Aborting sync due to lack of custom conflict handler for $S.$T});
@@ -4096,38 +4094,40 @@ sub start_kid {
                     ## We walk through all of the conflicting rows, and set the winner as the
                     ## database highest in the supplied list
 
-                    ## Optimize for a single database name
-                    my $sc = $self->{conflictinfo}{winners}
-                        or $self->pause_and_exit(q{Invalid conflict winners list given});
-                    if (index($sc, ' ') < 1) {
-                        ## Sanity check
-                        if (! exists $deltacount{$sc}) {
-                            $self->pause_and_exit(qq{Invalid conflict strategy '$sc' used for $S.$T: no such database});
-                        }
-                        for my $pkval (keys %conflict) {
-                            ## May have already been set by customcode, so only change if a ref
-                            $conflict{$pkval} = $sc if ref $conflict{$pkval};
-                        }
-                    }
-                    else {
-                        ## Have more than one, so figure out the best one to use
-                        my @dbs = split / +/ => $sc;
-                        ## Make sure they all exist
-                        for my $dbname (@dbs) {
-                            if (! exists $deltacount{$dbname}) {
-                                $self->pause_and_exit(qq{Invalid conflict strategy '$sc' used for $S.$T: no such database '$dbname'});;
+                    if (exists $self->{conflictinfo}{winner}) {
+                        ## We say if exists as a customcode may have simply updated %conflict itself
+                        my $sc = $self->{conflictinfo}{winners}
+                            or $self->pause_and_exit(q{Invalid conflict winners list given});
+                        if (index($sc, ' ') < 1) {
+                            ## Sanity check
+                            if (! exists $deltacount{$sc}) {
+                                $self->pause_and_exit(qq{Invalid conflict strategy '$sc' used for $S.$T: no such database});
+                            }
+                            for my $pkval (keys %conflict) {
+                                ## May have already been set by customcode, so only change if a ref
+                                $conflict{$pkval} = $sc if ref $conflict{$pkval};
                             }
                         }
+                        else {
+                            ## Have more than one, so figure out the best one to use
+                            my @dbs = split / +/ => $sc;
+                            ## Make sure they all exist
+                            for my $dbname (@dbs) {
+                                if (! exists $deltacount{$dbname}) {
+                                    $self->pause_and_exit(qq{Invalid conflict strategy '$sc' used for $S.$T: no such database '$dbname'});;
+                                }
+                            }
 
-                        ## Fill in each conflict with first found database
-                        for my $pkval (keys %conflict) {
-                            ## As above, we only change if currently a ref
-                            next if ! ref $conflict{$pkval};
-                            $conflict{$pkval} = first { exists $conflict{$pkval}{$_} } split ' ' => $sc;
+                            ## Fill in each conflict with first found database
+                            for my $pkval (keys %conflict) {
+                                ## As above, we only change if currently a ref
+                                next if ! ref $conflict{$pkval};
+                                $conflict{$pkval} = first { exists $conflict{$pkval}{$_} } split ' ' => $sc;
+                            }
                         }
                     }
 
-                    ## At this point, the conflict hash should consist of keys with 
+                    ## At this point, the conflict hash should consist of keys with
                     ## the winning database as the value
                     ## Walk through and apply to the %deltabin hash
 
@@ -4140,7 +4140,7 @@ sub start_kid {
 
                         ## Add (or re-add) the winning one
                         ## We do it this way as we cannot be sure that the combo existed.
-                        ## It could be the case that the winning database made
+                        ## It could be the case that the winning database made 
                         ## no changes to this table!
                         $deltabin{ $conflict{$pkey} }{$pkey} = 1;
                     }
