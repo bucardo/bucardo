@@ -3818,7 +3818,7 @@ sub start_kid {
 
             ## Custom conflict handler may have told us to always use the same winner
             if (exists $self->{conflictinfo}{winneralways}) {
-                $self->{conflictinfo}{winner} = $self->{conflictinfo}{winneralways};
+                $self->{conflictinfo}{winners} = $self->{conflictinfo}{winneralways};
             }
 
             ## Do each goat in turn
@@ -3955,7 +3955,7 @@ sub start_kid {
                     $self->glog("Conflicts for $S.$T: $count", LOG_NORMAL);
 
                     ## If we have a custom conflict handler for this goat, invoke it
-                    if ($g->{code_conflict} and ! exists $self->{conflictinfo}{winner}) {
+                    if ($g->{code_conflict} and ! exists $self->{conflictinfo}{winners}) {
 
                         $self->glog('Starting code_conflict', LOG_VERBOSE);
 
@@ -4094,7 +4094,7 @@ sub start_kid {
                     ## We walk through all of the conflicting rows, and set the winner as the
                     ## database highest in the supplied list
 
-                    if (exists $self->{conflictinfo}{winner}) {
+                    if (exists $self->{conflictinfo}{winners}) {
                         ## We say if exists as a customcode may have simply updated %conflict itself
                         my $sc = $self->{conflictinfo}{winners}
                             or $self->pause_and_exit(q{Invalid conflict winners list given});
