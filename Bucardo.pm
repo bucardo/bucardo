@@ -3955,67 +3955,94 @@ sub start_kid {
                     $self->glog("Conflicts for $S.$T: $count", LOG_NORMAL);
 
                     ## If we have a custom conflict handler for this goat, invoke it
-                    if ($g->{code_conflict} and ! exists $self->{conflictinfo}{winners}) {
+                    if ($g->{code_conflict}) {
 
-                        $self->glog('Starting code_conflict', LOG_VERBOSE);
+                        ## We can safely skip this if we already have the winners list in some format
+                        if (exists $self->{conflictinfo}{tablewinner_always}{$g}) {
+                            $self->glog("Using previous tablewinner_always winner", LOG_DEBUG);
+                        }
+                        elsif (exists $self->{conflictinfo}{syncwinner}) {
+                            $self->glog("Using previous syncwinner winner", LOG_DEBUG);
+                        }
+                        elsif (exists $self->{conflictinfo}{syncwinner_always}) {
+                            $self->glog("Using previous syncwinner_always winner", LOG_DEBUG);
+                        }
+                        else {
+                            $self->glog('Starting code_conflict', LOG_VERBOSE);
 
-                        ## Give each piece of code a chance to resolve the conflict
-                        ## We walk through each unless they tell is otherwise
-                        for my $code (@{ $g->{code_conflict} }) {
+                            ## Give each piece of code a chance to resolve the conflict
+                            for my $code (@{ $g->{code_conflict} }) {
 
-                            ## The all important conflict hash, which the caller may change
-                            $code->{info}{conflicts} = \%conflict;
+                                ## The all important conflict hash, which the caller may change
+                                $code->{info}{conflicts} = \%conflict;
 
-                            ## Provide the current schema and table name
-                            $code->{info}{schemaname} = $S;
-                            $code->{info}{tablename} = $T;
+                                ## Provide the current schema and table name
+                                $code->{info}{schemaname} = $S;
+                                $code->{info}{tablename} = $T;
 
-                            ## Provide detailed information on all databases, but elide the dbh
-                            for my $dbname (@dbs_connectable) {
-                                $x = $sync->{db}{$dbname};
-                                ## Make a shallow copy, excluding the actual dbh handle
-                                for my $name (keys %$x) {
+                                ## Provide detailed information on all databases, but elide the dbh
+                                for my $dbname (@dbs_connectable) {
+                                    $x = $sync->{db}{$dbname};
+                                    ## Make a shallow copy, excluding the actual dbh handle
+                                    for my $name (keys %$x) {
 
-                                    ## We provide DBIx::Safe versions elsewhere
-                                    next if $name eq 'dbh';
+                                        ## We provide DBIx::Safe versions elsewhere
+                                        next if $name eq 'dbh';
 
-                                    $code->{info}{dbinfo}{$dbname}{$name} = $x->{$name};
+                                        $code->{info}{dbinfo}{$dbname}{$name} = $x->{$name};
+                                    }
                                 }
-                            }
 
-                            my $cname = $code->{name};
+                                my $cname = $code->{name};
 
-                            ## Run the conflict handler customcode, get the result
-                            my $result = $self->run_kid_custom_code($sync, $code);
-                            $self->glog("Result of custom code $cname is $result", LOG_DEBUG);
+                                ## Run the conflict handler customcode, get the result
+                                my $result = $self->run_kid_custom_code($sync, $code);
+                                $self->glog("Result of custom code $cname is $result", LOG_DEBUG);
 
-                            ## Code has asked us to do nothing
-                            next if 'skip' eq $result;
+                                ## Code has asked us to do nothing
+                                next if 'skip' eq $result;
 
-                            ## Allow it to set permanent winners for all rows this round
-                            if ($result =~ /winner: (.+)/o) {
-                                my $winners = $1;
-                                $self->glog("Custom code $cname says winners should be: $winners", LOG_VERBOSE);
-                                $self->{conflictinfo}{winners} = $winners;
-                                last; ## No sense in going on
-                            }
+                                ## How to handle conflicts for this table right now only:
+                                if ($result =~ /tablewinner: (.+)/o) {
+                                    my $winlist = $1;
+                                    $self->glog("Custom code $cname says table winners should be: $winlist", LOG_VERBOSE);
+                                    $self->{conflictinfo}{tablewinner}{$g} = $winlist;
+                                    last;
+                                }
 
-                            ## Allow it to set permanent winner for all rounds until we restart
-                            if ($result =~ /winner_always: (.+)/o) {
-                                my $winners = $1;
-                                $self->glog("Custom code $cname says winners should ALWAYS be: $winners", LOG_VERBOSE);
-                                $self->{conflictinfo}{winners} = $self->{conflictinfo}{winneralways} = $winners;
-                                last; ## No sense in going on
-                            }
+                                ## How to handle conflicts for this table until the sync restarts:
+                                if ($result =~ /tablewinner_always: (.+)/o) {
+                                    my $winlist = $1;
+                                    $self->glog("Custom code $cname says table winners should always be: $winlist", LOG_VERBOSE);
+                                    $self->{conflictinfo}{tablewinner_always}{$g} = $winlist;
+                                    last;
+                                }
 
-                            ## We assume that some or all keys in %conflict have been changed,
-                            ## from a hashref to a scalar.
-                            ## We don't do checks here, as it will get caught down below.
+                                ## How to handle conflicts for all tables in this sync:
+                                if ($result =~ /syncwinner: (.+)/o) {
+                                    my $winlist = $1;
+                                    $self->glog("Custom code $cname says all table winners should be: $winlist", LOG_VERBOSE);
+                                    $self->{conflictinfo}{syncwinner} = $winlist;
+                                    last;
+                                }
 
-                            ## If info->{lastcode} has been set, we don't call any other codes
-                            last if $result eq 'last';
+                                ## How to handle conflicts for all tables in this sync, until the sync restarts:
+                                if ($result =~ /syncwinner_always: (.+)/o) {
+                                    my $winlist = $1;
+                                    $self->glog("Custom code $cname says all table winners should always be: $winlist", LOG_VERBOSE);
+                                    $self->{conflictinfo}{syncwinner_always} = $winlist;
+                                    last;
+                                }
 
-                        } ## end each code_conflict
+                                ## We assume that some or all keys in %conflict have been changed,
+                                ## from a hashref to a scalar.
+                                ## We don't do checks here, as it will get caught down below.
+
+                                ## If info->{lastcode} has been set, we don't call any other codes
+                                last if $result eq 'last';
+
+                            } ## end each code_conflict
+                        }
                     }
                     ## If conflict_strategy is abort, simply die right away
                     elsif ('bucardo_abort' eq $g->{conflict_strategy}) {
@@ -4028,24 +4055,28 @@ sub start_kid {
                     elsif ($g->{conflict_strategy} =~ /^bucardo_latest/o) {
 
                         ## For bucardo_latest*, we want to check the transaction times across
-                        ## all databases in this sync that may conflict - in other words, 
+                        ## all databases in this sync that may conflict - in other words,
                         ## source databases that have deltas. We then sort that list and set it
                         ## as the list of preferred databases
-                        ## Right now, there are two variants:
+                        ## There are two variants:
                         ## bucardo_latest: check this table only
                         ## bucardo_latest_all_tables: check all tables in the sync
+                        ## These get internally mapped to tablewinner and syncwinner respectively
 
                         $self->glog(qq{Starting conflict strategy $g->{conflict_strategy}}, LOG_VERBOSE);
 
-                        ## If we are doing all tables, we can cache the information
-                        if ($g->{conflict_strategy} eq 'bucardo_latest'
-                                or ! exists $self->{conflictinfo}{bucardo_latest_winners}) {
-
-                            ## Find the maximum txntime across all databases
+                        ## If we are doing all tables, we only run it once, then save the information
+                        if (exists $self->{conflictinfo}{syncwinner}) {
+                            $self->glog("Using previous conflict winner $self->{conflictinfo}{syncwinner}");
+                        }
+                        else {
                             my $maxsql = 'SELECT extract(epoch FROM MAX(txntime)) FROM';
+
+                            ## Find the maximum txntime across all databases for this table
                             if ($g->{conflict_strategy} eq 'bucardo_latest') {
                                 $SQL = "$maxsql bucardo.$g->{deltatable}";
                             }
+                            ## Same, but also across all tables in the sync
                             elsif ($g->{conflict_strategy} eq 'bucardo_latest_all_tables') {
                                 $SQL = join " UNION\n" =>
                                     map { "$maxsql bucardo.$_->{deltatable}" }
@@ -4053,33 +4084,42 @@ sub start_kid {
                                             @$goatlist;
                             }
                             else {
+                                ## Sanity check in case something got misspelled
                                 $self->pause_and_exit(qq{Unknown conflict_strategy $g->{conflict_strategy}!});
                             }
+
                             $SQL .= ' ORDER BY 1 DESC NULLS LAST LIMIT 1';
 
                             ## Check every database that generates deltas
                             for my $dbname (@dbs_delta) {
                                 $x = $sync->{db}{$dbname};
-                                $sth = $x->{dbh}->prepare($SQL);
-                                $sth->execute();
-                                $x->{lastmod} = $sth->fetchall_arrayref()->[0][0] || 0;
+                                $x->{sth} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
+                                $x->{sth}->execute();
+                            }
+                            for my $dbname (@dbs_delta) {
+                                $x = $sync->{db}{$dbname};
+                                $x->{dbh}->pg_result();
+                                $x->{lastmod} = $x->{sth}->fetchall_arrayref()->[0][0] || 0;
                             }
 
                             ## Now we can put them in rank order
                             ## The last modification time is the main key
                             ## In the unlikely chance of a tie, we go by alphabetical database name
-                            $self->{conflictinfo}{bucardo_latest_winner}
-                                = join ' ' =>
+                            my $winner =
+                                join ' ' =>
                                     map { $_->[0] }
                                         sort { $b->[1] <=> $a->[1] or $a->[0] cmp $b->[0] }
                                             map { [$_, $sync->{db}{$_}{lastmod} ] }
                                                 @dbs_delta;
 
-                            $self->glog("Set conflict winners to: $self->{conflictinfo}{bucardo_latest_winner}", LOG_VERBOSE);
+                            $self->glog("Set conflict winners to: $winner", LOG_VERBOSE);
 
-                        } ## end bucardo_latest_winner not set yet
-
-                        $self->{conflictinfo}{winners} = $self->{conflictinfo}{bucardo_latest_winner};
+                            ## Store it away
+                            $self->{conflictinfo}{tablewinner}{$g} = $winner;
+                            if ($g->{conflict_strategy} eq 'bucardo_latest_all_tables') {
+                                $self->{conflictinfo}{syncwinner} = $winner;
+                            }
+                        }
 
                     } ## end of bucardo_latest*
                     else {
@@ -4087,15 +4127,27 @@ sub start_kid {
                         $self->{conflictinfo}{winners} = $g->{conflict_strategy};
                     }
 
-                    ## At this point, conflictinfo{winners} should contain a list of databases
-                    ## This can come from the built-in strategies, from a customcode,
-                    ## or directly as a list supplied by the user
-
-                    ## We walk through all of the conflicting rows, and set the winner as the
-                    ## database highest in the supplied list
+                    ## At this point, we should have enough information to solve the conflict
+                    ## Either conflictinfo{winners} will have a list of databases,
+                    ## or we will have a per-table or per-sync list
+                    if (! exists $self->{conflictinfo}{winners}) {
+                        if (exists $self->{conflictinfo}{tablewinner}{$g}) {
+                            $self->{conflictinfo}{winners} = $self->{conflictinfo}{tablewinner}{$g};
+                        }
+                        if (exists $self->{conflictinfo}{tablewinner_always}{$g}) {
+                            $self->{conflictinfo}{winners} = $self->{conflictinfo}{tablewinner_always}{$g};
+                        }
+                        if (exists $self->{conflictinfo}{syncwinner}) {
+                            $self->{conflictinfo}{winners} = $self->{conflictinfo}{syncwinner};
+                        }
+                        if (exists $self->{conflictinfo}{syncwinner_alwyas}) {
+                            $self->{conflictinfo}{winners} = $self->{conflictinfo}{syncwinner_always};
+                        }
+                    }
 
                     if (exists $self->{conflictinfo}{winners}) {
-                        ## We say if exists as a customcode may have simply updated %conflict itself
+                        ## We walk through all of the conflicting rows, and set the winner as the
+                        ## database highest in the supplied list
                         my $sc = $self->{conflictinfo}{winners}
                             or $self->pause_and_exit(q{Invalid conflict winners list given});
                         if (index($sc, ' ') < 1) {
@@ -4126,6 +4178,9 @@ sub start_kid {
                             }
                         }
                     }
+
+                    ## Delete our old conflict resolution information so we don't use it again
+                    delete $self->{conflictinfo}{winners};
 
                     ## At this point, the conflict hash should consist of keys with
                     ## the winning database as the value
@@ -8681,14 +8736,15 @@ sub run_kid_custom_code {
         return 'skip';
     }
 
-    ## The custom code has told us how to handle all conflicts for this round
-    if (exists $info->{winner} and length $info->{winner}) {
-        return "winner: $info->{winner}";
-    }
-
-    ## The custom code has told us how to handle all conflicts until we restart
-    if (exists $info->{winner_always} and length $info->{winner_always}) {
-        return "winner_always: $info->{winner_always}";
+    ## Four cases for handling conflicts:
+    ## The customcode has told us how to handle this table
+    ## The customcode has told us how to handle this table until a sync restart
+    ## The customcode has told us how to handle all tables in the sync
+    ## The customcode has told us how to handle all tables in the sync until a sync restart
+    for my $case (qw/ tablewinner tablewinner_always syncwinner syncwinner_always /) {
+        if (exists $info->{$case}) {
+            return "$case: $info->{$case}";
+        }
     }
 
     ## Default action, which usually means the next code in the list, if any

@@ -5,8 +5,8 @@ use warnings;
 my $info = shift;
 
 ## Walk through all conflicted rows and set a winning list
-for my $row (keys %{ $info->{conflict}}) {
-    $info->{conflict}{$row} = 'A B C';
+for my $row (keys %{ $info->{conflicts}}) {
+    $info->{conflicts}{$row} = 'B';
 }
 ## We don't want any other customcodes to fire: we have handled this!
 $info->{lastcode} = 1;

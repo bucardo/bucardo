@@ -10,7 +10,7 @@ if ($info->{tablename} eq 'work') {
 }
 else {
     ## Winning databases, in order
-    $info->{winner} = 'B A C';
+    $info->{tablewinner} = 'B A C';
 }
 
 return;

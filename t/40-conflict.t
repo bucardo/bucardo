@@ -179,8 +179,12 @@ like($res, qr{success}, $t);
 $bct->update_row_in_database('A', 1, 101);
 $bct->update_row_in_database('B', 1, 102);
 $bct->update_row_in_database('C', 1, 103);
+$bct->update_row_in_database('A', 2, 221);
+$bct->update_row_in_database('B', 2, 222);
+$bct->update_row_in_database('C', 2, 223);
 $bct->ctl('bucardo kick sync ctest 10');
-$bct->check_for_row([[102],[212],[301]], [qw/ A B C D /]);
+## ctest2.pl sets B as winner inside the conflict hash
+$bct->check_for_row([[102],[222],[301]], [qw/ A B C D /]);
 
 
 ## Customcode on a goat only
