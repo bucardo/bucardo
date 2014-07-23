@@ -4067,7 +4067,7 @@ sub start_kid {
 
                         ## If we are doing all tables, we only run it once, then save the information
                         if (exists $self->{conflictinfo}{syncwinner}) {
-                            $self->glog("Using previous conflict winner $self->{conflictinfo}{syncwinner}");
+                            $self->glog("Using previous conflict winner $self->{conflictinfo}{syncwinner}", LOG_DEBUG);
                         }
                         else {
                             my $maxsql = 'SELECT extract(epoch FROM MAX(txntime)) FROM';
