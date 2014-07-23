@@ -7625,9 +7625,12 @@ sub upgrade {
                 $def =~ s/\bbucardo\.//;
                 push @clist2, [$tablename, $cname, $def];
             }
-            elsif (/^\s+([a-z_]+)\s+([A-Z]+)\s*(NOT)? NULL/) {
-                my ($colname,$coltype,$isnull) = ($1, $2, $3 ? 1 : 0);
-                push @collist, ['bucardo', $tablename, $colname, $_];
+            elsif (/^\s+([a-z_]+)\s+([A-Z]+)\s*(NOT)? NULL(.*)/) {
+                my ($colname,$coltype,$isnull,$extra,$default) = ($1, $2, $3 ? 1 : 0, $4, undef);
+                if ($extra =~ /DEFAULT\s+([^,]+)/) {
+                    $default = $1;
+                }
+                push @collist, ['bucardo', $tablename, $colname, $_, $default];
             }
             elsif (/;/) {
                 push @tablelist, [$tablename, $tablebody];
@@ -7721,12 +7724,12 @@ sub upgrade {
 
     ## Add new columns as needed from the schema
     for my $row (@collist) {
-        my ($schema,$table,$column,$def) = @$row;
+        my ($schema,$table,$column,$definition) = @$row;
         next if column_exists($schema, $table, $column);
-        $def =~ s/\-\-.+$//;
-        $def =~ s/,\s*$//;
-        $def =~ s/\s+/ /g;
-        upgrade_and_log("ALTER TABLE $schema.$table ADD COLUMN $def");
+        $definition =~ s/\-\-.+$//;
+        $definition =~ s/,\s*$//;
+        $definition =~ s/\s+/ /g;
+        upgrade_and_log("ALTER TABLE $schema.$table ADD COLUMN $definition");
         clog "Created column: $schema.$table.$column";
         $changes++;
     }
@@ -7791,6 +7794,22 @@ sub upgrade {
             die qq{Do not know how to handle altered column spec of "$change"};
         }
     }
+
+    ## Change any column defaults
+    ## Add new columns as needed from the schema
+    for my $row (@collist) {
+        my ($schema,$table,$column,$definition,$default) = @$row;
+        next if ! column_exists($schema, $table, $column) or ! defined $default;
+        my $olddefault = column_default($schema, $table, $column);
+        $olddefault =~ s/::text//;
+        $olddefault =~ s/::regclass//;
+        $olddefault =~ s/'00:00:00'::interval/'0 seconds'::interval/;
+        next if $olddefault eq $default;
+        upgrade_and_log("ALTER TABLE $schema.$table ALTER COLUMN $column SET DEFAULT $default");
+        clog "Set new default for $schema.$table.$column: $default";
+        $changes++;
+    }
+
 
     ## Drop any old columns
     for my $row (@old_columns) {
