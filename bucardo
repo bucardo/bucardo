@@ -3052,7 +3052,7 @@ sub add_customcols {
     usage_exit($doc_section) unless length $item_name && length $clause;
 
     ## Does this number or name exist?
-    my @candidate_goats = find_goat_by_item($item_name, @nouns);
+    my @candidate_goats = find_goat_by_item($item_name, \@nouns);
     if (! @candidate_goats) {
         print qq{Could not find a matching table for "$item_name"\n};
         exit 1;
