@@ -22,12 +22,13 @@ use Time::HiRes     qw/ sleep gettimeofday tv_interval /;
 use POSIX           qw/ ceil setsid localeconv /;
 use Config          qw/ %Config /;
 use Encode          qw/ decode /;
-use Encode::Locale  qw/ decode_argv /;
 use File::Spec;
 use Data::Dumper    qw/ Dumper /;
 $Data::Dumper::Indent = 1;
 use Getopt::Long;
 Getopt::Long::Configure(qw/ no_ignore_case pass_through no_autoabbrev /);
+
+require I18N::Langinfo;
 
 our $VERSION = '5.1.1';
 
@@ -38,8 +39,11 @@ return 1 if $ENV{BUCARDO_TEST};
 *STDOUT->autoflush(1);
 *STDERR->autoflush(1);
 
-## Treat ARGV values as utf8
-decode_argv();
+my $locale = I18N::Langinfo::langinfo(I18N::Langinfo::CODESET());
+
+for (@ARGV) {
+    $_ = decode($locale, $_);
+}
 
 ## All the variables we use often and want to declare here without 'my'
 use vars qw/$dbh $SQL $sth %sth $count $info %global $SYNC $GOAT $TABLE $SEQUENCE $DB $DBGROUP $HERD $RELGROUP
