@@ -1451,6 +1451,11 @@ sub list_item {
     $thing = standardize_name($thing);
 
     SWITCH: {
+        $thing eq 'config' and do {
+            $verb = 'config';
+            config();
+            exit;
+        };
         $thing eq 'customcode' and do {
                 list_customcodes();
                 last SWITCH;
@@ -8198,7 +8203,10 @@ sub config {
 
     ## Allow for old syntax
     if ($verb eq 'config') {
-        @nouns or die "Usage: $progname config [set|show]\n";
+        ## Plain old "config" means the same as "show all"
+        if (!@nouns) {
+            @nouns = ('show','all');
+        }
         $verb = shift @nouns;
     }
 
@@ -8718,7 +8726,9 @@ sub standardize_name {
 
     return 'all'        if $name =~ /^all$/i;
 
-    return '';
+    return 'config'     if $name =~ /^config/i;
+
+    return $name;
 
 } ## end of standardize_name
 
