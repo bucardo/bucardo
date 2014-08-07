@@ -9915,7 +9915,7 @@ sub send_mail {
     return if ! $self->{sendmail} and ! $self->{sendmail_file};
 
     ## Hashref of args
-    my $arg = @_;
+    my $arg = shift;
 
     ## If 'default_email_from' is not set, we default to currentuser@currenthost
     my $from = $config{default_email_from} || (getpwuid($>) . '@' . $hostname);
