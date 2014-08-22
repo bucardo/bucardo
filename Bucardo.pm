@@ -3595,8 +3595,8 @@ sub start_kid {
                     }
 
                     ## Gets all relevant rows from bucardo_deltas: runs asynchronously
+                    $x->{async_active} = time;
                     $sth{getdelta}{$dbname}{$g}->execute();
-
                 }
 
                 ## Grab all results as they finish.
@@ -3618,6 +3618,7 @@ sub start_kid {
 
                     ## pg_result tells us to wait for the query to finish
                     $count = $x->{dbh}->pg_result();
+                    $x->{async_active} = 0;
 
                     ## Call finish() and change the ugly 0E0 to a true zero
                     $sth{getdelta}{$dbname}{$g}->finish() if $count =~ s/0E0/0/o;
@@ -4094,11 +4095,13 @@ sub start_kid {
                             for my $dbname (@dbs_delta) {
                                 $x = $sync->{db}{$dbname};
                                 $x->{sth} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
+                                $x->{async_active} = time;
                                 $x->{sth}->execute();
                             }
                             for my $dbname (@dbs_delta) {
                                 $x = $sync->{db}{$dbname};
                                 $x->{dbh}->pg_result();
+                                $x->{async_active} = 0;
                                 $x->{lastmod} = $x->{sth}->fetchall_arrayref()->[0][0] || 0;
                             }
 
@@ -4434,6 +4437,7 @@ sub start_kid {
                                     $x->{dbh}->do($SQL);
                                     $self->glog("Reindexing table $dbname.$S.$T", LOG_NORMAL);
                                     ## We do this asynchronously so we don't wait on each db
+                                    $x->{async_active} = time;
                                     $x->{dbh}->do( "REINDEX TABLE $S.$T", {pg_async => PG_ASYNC} );
                                 }
                             }
@@ -4446,6 +4450,7 @@ sub start_kid {
 
                                 if ($x->{index_disabled}) {
                                     $x->{dbh}->pg_result();
+                                    $x->{async_active} = 0;
                                     $x->{index_disabled} = 0;
                                 }
                             }
@@ -4504,6 +4509,12 @@ sub start_kid {
                             $x = $sync->{db}{$dbname};
 
                             next if ! $x->{writtento};
+
+                            ## Just in case, clear out any existing async queries
+                            if ($x->{async_active}) {
+                                $x->{dbh}->pg_cancel();
+                                $x->{async_active} = 0;
+                            }
 
                             $self->glog("Rolling back to savepoint on database $dbname", LOG_DEBUG);
                             $x->{dbh}->do("ROLLBACK TO SAVEPOINT bucardo_$$");
@@ -4627,6 +4638,7 @@ sub start_kid {
                         else {
                             $sth{track}{$dbname}{$g}->execute();
                         }
+                        $x->{async_active} = time;
                     }
                 }
 
@@ -4637,6 +4649,7 @@ sub start_kid {
 
                     if ($x->{needs_track}) {
                         ($count = $x->{dbh}->pg_result()) =~ s/0E0/0/o;
+                        $x->{async_active} = 0;
                         $self->{insertcount}{dbname}{$S}{$T} = $count;
                         $maxcount = $count if $count > $maxcount;
                     }
@@ -5009,10 +5022,14 @@ sub start_kid {
                 $x = $sync->{db}{$dbname};
                 $x->{sth} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
                 $x->{sth}->execute($syncname);
+                $x->{async_active} = time;
+
             }
             for my $dbname (@dbs_source) {
                 $x = $sync->{db}{$dbname};
                 $x->{dbh}->pg_result();
+                $x->{async_active} = 0;
+
             }
         }
 
@@ -5353,13 +5370,16 @@ sub start_kid {
             for my $dbname (@dbs_dbi) {
                 my $x = $sync->{db}{$dbname};
                 my $dbh = $x->{dbh};
+                ## If we are async, clear it out
+                if ($x->{async_active}) {
+                    $dbh->pg_cancel();
+                    $x->{async_active} = 0;
+                }
                 ## Seperate eval{} for the rollback as we are probably still connected to the transaction.
                 eval { $dbh->rollback; };
                 if ($@) {
                     $self->glog("Result of eval for rollback: $@", LOG_DEBUG);
                 }
-                ## We are certainly not async after this rollback
-                $x->{async_active} = 0;
             }
 
             # End the syncrun.
@@ -7465,6 +7485,7 @@ sub fork_vac {
                 $SQL = q{SELECT bucardo.bucardo_purge_delta('45 seconds')};
                 $sth{"vac_$dbname"} = $xdbh->prepare($SQL, { pg_async => PG_ASYNC } );
                 $sth{"vac_$dbname"}->execute();
+                $x->{async_active} = time;
 
             } ## end each source database
 
@@ -7494,6 +7515,7 @@ sub fork_vac {
 
                 $self->glog(qq{Finish and fetch bucardo_purge_delta on database "$dbname"}, LOG_DEBUG);
                 $count = $sth{"vac_$dbname"}->pg_result();
+                $x->{async_active} = 0;
 
                 my $info = $sth{"vac_$dbname"}->fetchall_arrayref()->[0][0];
                 $xdbh->commit();
