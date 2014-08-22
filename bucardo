@@ -7998,7 +7998,7 @@ sub upgrade {
             upgrade_and_log("ALTER TABLE $tcname DROP CONSTRAINT $cname");
             upgrade_and_log("ALTER TABLE $tcname ADD CONSTRAINT $cname $cdef");
             clog "Altered constraint $cname on $tcname";
-            clog "$condef vs\n$cdef";
+            clog "CURRENT: $condef\nNEW: $cdef\n";
             $changes++;
         }
     }
