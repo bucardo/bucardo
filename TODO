@@ -28,6 +28,8 @@ Future
 
 These range the gamut from wildly speculative ideas to must-have features.
 
+- Allow columns A.varchar(x) and B.varchar(x+y) to be equivalent in the initial 
+validate_sync check if B is only a target
 - Allow skipping of some or all of the initial schema checks; currently
   necessary but time consuming for large numbers of tables/servers
 - Throttle outgoing mail; such as the flood when things go wrong
