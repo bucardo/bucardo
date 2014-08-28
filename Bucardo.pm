@@ -665,10 +665,10 @@ sub start_mcp {
             if ($bad) {
                 my $changes = $self->check_sync_health();
                 if ($changes) {
-                    ## If we already made it MCP label, go there
+                    ## If we already made a MCP label, go there
                     ## Else fallthrough and assume our bucardo.sync changes stick!
                     if ($self->{mcp_loop_started}) {
-                        goto MCP;
+                        die 'We are going to redo the MCP loop';
                     }
                 }
             }
@@ -676,9 +676,9 @@ sub start_mcp {
 
         ## The error message determines if we try to resurrect ourselves or not
         my $respawn = (
-                       $msg =~  /DBI connect/         ## From DBI
-                       or $msg =~ /Ping failed/       ## Set below
-                       ) ? 1 : 0;
+            $msg =~  /DBI connect/         ## From DBI
+                or $msg =~ /Ping failed/       ## Set below
+        ) ? 1 : 0;
 
         ## Sometimes we don't want to respawn at all (e.g. during some tests)
         if (! $config{mcp_dbproblem_sleep}) {
@@ -730,7 +730,6 @@ sub start_mcp {
             $self->glog('Exiting', LOG_WARN);
             exit 0;
         }
-
 
         ## We assume this is bucardo, and that we are in same directory as when called
         my $RUNME = $old0;
@@ -837,9 +836,10 @@ sub start_mcp {
     }
 
     ## Start the main loop
-    $self->mcp_main();
-
-    die 'We should never reach this point!';
+    {
+        my $value = $self->mcp_main();
+        redo if $value;
+    }
 
     return; ## no critic
 
@@ -850,7 +850,7 @@ sub mcp_main {
 
     ## The main MCP process
     ## Arguments: none
-    ## Returns: never (exit 0 or exit 1)
+    ## Returns: undef (but almost always just exits with 0 or 1)
 
     my $self = shift;
 
@@ -871,6 +871,8 @@ sub mcp_main {
     $self->{mcp_loop_started} = 1;
 
   MCP: {
+
+        eval {
 
         ## Bail if the stopfile exists
         if (-e $self->{stopfile}) {
@@ -1439,6 +1441,13 @@ sub mcp_main {
         sleep $config{mcp_loop_sleep};
         redo MCP;
 
+        }; # end of eval
+
+        ## We may want to redo if the error was not *that* fatal
+        if ($@ =~ /redo/) {
+            redo MCP;
+        }
+
     } ## end of MCP loop
 
     return;
@@ -1516,6 +1525,7 @@ sub check_sync_health {
 
             ## Retry connection afresh: wrap in eval as one of these is likely to fail!
             undef $dbinfo->{dbh};
+
             eval {
                 ($dbinfo->{backend}, $dbinfo->{dbh}) = $self->connect_database($dbname);
                 $self->glog(qq{Database "$dbname" backend PID: $dbinfo->{backend}}, LOG_VERBOSE);
