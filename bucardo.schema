@@ -2634,7 +2634,7 @@ AS $bc$
     }
     else {
         my $old = $_TD->{old};
-        for my $x (qw(name source targetdb targetgroup autokick)) {
+        for my $x (qw(name herd dbs autokick)) {
             elog(DEBUG, "Checking on $x");
             if (! defined $old->{$x}) {
                 next if ! defined $new->{$x};
