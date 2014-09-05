@@ -2960,6 +2960,23 @@ sub start_kid {
                     ($SQL = $SQL{stage}{$g}) =~ s/DBGROUP/'$x->{DBGROUPNAME}'/go;
                     $sth{stage}{$dbname}{$g} = $x->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
 
+
+                } ## end each table
+
+            } ## end each source database
+
+
+            ## Set all makedelta tables (can be target databases too, as another sync may have them as a source)
+            for my $dbname (@dbs) {
+
+                $x = $sync->{db}{$dbname};
+
+                for my $g (@$goatlist) {
+
+                    next if $g->{reltype} ne 'table';
+
+                    ($S,$T) = ($g->{safeschema},$g->{safetable});
+
                     ## Set the per database/per table makedelta setting now
                     if (defined $g->{makedelta}) {
                         if ($g->{makedelta} eq 'on' or $g->{makedelta} =~ /\b$dbname\b/) {
@@ -2970,7 +2987,8 @@ sub start_kid {
 
                 } ## end each table
 
-            } ## end each source database
+            } ## end all databases
+
 
         } ## end if delta databases
 
