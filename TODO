@@ -7,13 +7,6 @@ Version 5
 * Fix 'error loop' escaping bug from mailing list
   https://github.com/bucardo/bucardo/issues/13
 
-* Fix quoting bug reported by Sean M. Pappalardo
-  https://github.com/bucardo/bucardo/issues/14
-
-* Note minimum Postgres version requirements (source and target)
-  https://github.com/bucardo/bucardo/issues/18
-
-
 Version 5.1
 -----------
 
