@@ -1,9 +1,29 @@
 [ GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
 
-Bucardo version ???
+Bucardo version 5.1.2?
+
+  - Fix problem with async failures
+    [Greg Sabino Mullane]
+
+  - Fix add_customcols params parsing
+    [David Christensen]
+
+  - Improve MCP loop handling on errors
+    [Greg Sabino Mullane]
 
   - Make sure makedelta can be set for all databases, not just source ones
+    [Greg Sabino Mullane]
+
+  - Fix minor bug in send_mail subroutine
+    [Greg Sabino Mullane]
+
+  - Remove Encode::Locale dependency
+    [Joshua Tolley]
+
+  - Allow 'git list config*' to work as an alias for git config.
+    Make plain 'git config' act as 'git show all'
+    [Greg Sabino Mullane]
 
 
 Bucardo version 5.1.1, released July 23, 2014 (git commit c91753ef834cdcac311d66851947d1e4cb8acc7c)
