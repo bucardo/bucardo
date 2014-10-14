@@ -8,7 +8,7 @@ use strict;
 use warnings;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 49;
+use Test::More tests => 50;
 use BucardoTesting;
 my $bct = BucardoTesting->new({ location => 'makedelta' })
     or BAIL_OUT "Creation of BucardoTesting object failed\n";
@@ -46,6 +46,10 @@ like $bct->ctl('bucardo add sync deltatest1 relgroup=myrels dbs=A:source,B:sourc
 # Create a sync for replication from B to C
 like $bct->ctl('bucardo add sync deltatest2 relgroup=myrels dbs=B,C autokick=no'),
     qr/Added sync "deltatest2"/, 'Create sync "deltatest2"';
+
+# Create an inactive sync from C to A. This is so makedelta on C tables works
+like $bct->ctl('bucardo add sync deltafake relgroup=myrels dbs=C,A status=inactive autokick=no'),
+    qr/Added sync "deltafake"/, 'Create sync "deltafake"';
 
 # Listen in on things.
 ok $dbhX->do('LISTEN bucardo_syncdone_deltatest1'),
