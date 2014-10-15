@@ -1,7 +1,7 @@
 [ GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
 
-Bucardo version 5.1.2, released October 2014
+Bucardo version 5.1.2, released October 15, 2014 (git commit 6b8f02feaef5b116dfba9b57f6a0617d73ba3657)
 
   - Fix problem with async failures
     [Greg Sabino Mullane]
