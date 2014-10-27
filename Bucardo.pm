@@ -4661,6 +4661,11 @@ sub start_kid {
                         $x->{needs_track} = 1;
                         ## Kick off the track or stage update asynchronously
                         if ($x->{trackstage}) {
+                            ## The stage table can only have rows if a previous version failed
+                            ## This can happen if this kid committed, but another failed
+                            ## Thus, we always want to make sure the stage table is empty:
+                            $SQL = "TRUNCATE TABLE bucardo.$x->{stagetable}";
+                            $x->{dbh}->do($SQL);
                             $sth{stage}{$dbname}{$g}->execute();
                         }
                         else {

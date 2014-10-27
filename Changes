@@ -1,6 +1,15 @@
 [ GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
 
+Bucardo version 5.1.3
+
+
+  - Fix problem of not clearing out stagetable before using it. There was a 
+    chance that a previous KID left some rows in there, in which case duplicate 
+    entries will appear in bucardo_track.
+    [Greg Sabino Mullane]
+
+
 Bucardo version 5.1.2, released October 15, 2014 (git commit 6b8f02feaef5b116dfba9b57f6a0617d73ba3657)
 
   - Fix problem with async failures
