@@ -4664,7 +4664,7 @@ sub start_kid {
                             ## The stage table can only have rows if a previous version failed
                             ## This can happen if this kid committed, but another failed
                             ## Thus, we always want to make sure the stage table is empty:
-                            $SQL = "TRUNCATE TABLE bucardo.$x->{stagetable}";
+                            $SQL = "TRUNCATE TABLE bucardo.$g->{stagetable}";
                             $x->{dbh}->do($SQL);
                             $sth{stage}{$dbname}{$g}->execute();
                         }
