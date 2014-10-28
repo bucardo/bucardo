@@ -223,6 +223,7 @@ sub new {
         created      => scalar localtime,
         mcppid       => $$,
         verbose      => 1,
+        quickstart   => 0,
         logdest      => ['.'],#'/var/log/bucardo'],
         warning_file => '',
         logseparate  => 0,
@@ -6814,6 +6815,11 @@ sub validate_sync {
 
             ## MySQL/MariaDB/Drizzle/Oracle/SQLite is skipped for now, but should be added later
             next if $x->{dbtype} =~ /mysql|mariadb|drizzle|oracle|sqlite/o;
+
+            if ($self->{quickstart}) {
+                $self->glog("quickstart: Skipping table check for $dbname.$S.$T", LOG_VERBOSE);
+                next;
+            }
 
             ## Respond to ping here and now for very impatient watchdog programs
             $maindbh->commit();

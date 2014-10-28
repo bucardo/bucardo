@@ -1054,7 +1054,7 @@ sub restart_bucardo {
     $dbh->do('LISTEN bucardo_nosyncs');
     $dbh->commit();
 
-    my $output = $self->ctl('start --exit-on-nosync testing');
+    my $output = $self->ctl('start --exit-on-nosync --quickstart testing');
 
     my $bail = 30;
     my $n;
