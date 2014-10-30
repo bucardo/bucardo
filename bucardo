@@ -8611,7 +8611,9 @@ sub install {
     ## This probably needs to be i18n safe
     if ($res =~ /relation .* already exists/) {
         warn "\nINSTALLATION FAILED! Looks like you already have Bucardo installed there.\n";
-        warn "Try running 'bucardo upgrade' instead\n\n";
+        warn "Try running 'bucardo upgrade' instead.\n";
+        warn "If you are trying to completely reinstall Bucardo,\n";
+        warn "drop the bucardo database, and the bucardo schema from all databases.\n\n";
         exit 1;
     }
 
