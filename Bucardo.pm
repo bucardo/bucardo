@@ -6817,7 +6817,7 @@ sub validate_sync {
             next if $x->{dbtype} =~ /mysql|mariadb|drizzle|oracle|sqlite/o;
 
             if ($self->{quickstart}) {
-                $self->glog("quickstart: Skipping table check for $dbname.$S.$T", LOG_VERBOSE);
+                $self->glog("  quickstart: Skipping table check for $dbname.$S.$T", LOG_VERBOSE);
                 next;
             }
 
