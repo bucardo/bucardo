@@ -506,9 +506,8 @@ sub start_mcp {
             : 'timeofday()::timestamptz';
 
     ## Start outputting some interesting things to the log
-    $self->show_db_version_and_time($masterdbh, 'Master DB ');
+    $self->show_db_version_and_time($masterdbh, $self->{mcp_backend}, 'Master DB ');
     $self->glog("PID: $$", LOG_WARN);
-    $self->glog("Postgres backend PID: $self->{mcp_backend}", LOG_WARN);
     $self->glog('Postgres library version: ' . $masterdbh->{pg_lib_version}, LOG_WARN);
     $self->glog("bucardo: $old0", LOG_WARN);
     $self->glog('Bucardo.pm: ' . $INC{'Bucardo.pm'}, LOG_WARN);
@@ -936,8 +935,7 @@ sub mcp_main {
 
                     ($d->{backend}, $d->{dbh}) = $self->connect_database($dbname);
                     if (defined $d->{backend}) {
-                        $self->glog(qq{Database "$dbname" backend PID: $d->{backend}}, LOG_VERBOSE);
-                        $self->show_db_version_and_time($d->{dbh}, qq{Database "$dbname" });
+                        $self->show_db_version_and_time($d->{dbh}, $d->{backend}, qq{Database "$dbname" });
                     }
                     else {
                         $self->glog("Unable to reconnect to database $dbname!", LOG_WARN);
@@ -1531,8 +1529,7 @@ sub check_sync_health {
 
             eval {
                 ($dbinfo->{backend}, $dbinfo->{dbh}) = $self->connect_database($dbname);
-                $self->glog(qq{Database "$dbname" backend PID: $dbinfo->{backend}}, LOG_VERBOSE);
-                $self->show_db_version_and_time($dbinfo->{dbh}, qq{Database "$dbname" });
+                $self->show_db_version_and_time($dbinfo->{dbh}, $dbinfo->{backend}, qq{Database "$dbname" });
             };
 
             ## If we cannot connect, mark the db (and the sync) as stalled
@@ -1623,8 +1620,7 @@ sub restore_syncs {
             undef $dbinfo->{dbh};
             eval {
                 ($dbinfo->{backend}, $dbinfo->{dbh}) = $self->connect_database($dbname);
-                $self->glog(qq{Database "$dbname" backend PID: $dbinfo->{backend}}, LOG_VERBOSE);
-                $self->show_db_version_and_time($dbinfo->{dbh}, qq{Database "$dbname" });
+                $self->show_db_version_and_time($dbinfo->{dbh}, $dbinfo->{backend}, qq{Database "$dbname" });
             };
 
             if (defined $dbinfo->{dbh}) {
@@ -5913,18 +5909,21 @@ sub conflict_log {
 sub show_db_version_and_time {
 
     ## Output the time, timezone, and version information to the log
-    ## Arguments: two
+    ## Arguments: three
     ## 1. Database handle
-    ## 2. A string indicating which database this is
+    ## 2. Backend PID
+    ## 3. A string indicating which database this is
     ## Returns: undef
 
-    my ($self,$ldbh,$prefix) = @_;
+    my ($self,$ldbh,$backend,$prefix) = @_;
 
     return if ! defined $ldbh;
 
     return if ref $ldbh ne 'DBI::db';
 
     return if $ldbh->{Driver}{Name} ne 'Pg';
+
+    $self->glog(qq{${prefix}backend PID: $backend}, LOG_VERBOSE);
 
     ## Get the databases epoch, timestamp, and timezone
     $SQL = q{SELECT extract(epoch FROM now()), now(), current_setting('timezone')};
@@ -6481,8 +6480,7 @@ sub validate_sync {
                 return 0;
             }
 
-            $self->glog(qq{Database "$dbname" backend PID: $d->{backend}}, LOG_VERBOSE);
-            $self->show_db_version_and_time($d->{dbh}, qq{DB "$dbname" });
+            $self->show_db_version_and_time($d->{dbh}, $d->{backend}, qq{Database "$dbname" });
 
             ## If this db was previously stalled, restore it
             if ($d->{status} eq 'stalled') {
