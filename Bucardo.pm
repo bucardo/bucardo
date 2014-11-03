@@ -9759,12 +9759,11 @@ sub push_rows {
                         INSERT INTO bucardo.$goat->{deltatable} $cols
                         VALUES $vals
                     });
-                    # Make sure we track it!
+                    # Make sure we track it - but only if this sync already acts as a source
                     $dbh->do(qq{
                         INSERT INTO bucardo.$goat->{tracktable}
                         VALUES (NOW(), ?)
                     }, undef, $d->{DBGROUPNAME});
-$self->glog("ZZZZZ TEST $d->{DBGROUPNAME}!!");
 
                     $self->glog("Signalling all other syncs that this table has changed", LOG_DEBUG);
                     ## Cache this
