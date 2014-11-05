@@ -1,4 +1,4 @@
-#!perl
+h#!perl
 # -*-mode:cperl; indent-tabs-mode: nil; cperl-indent-level: 4-*-
 
 ## The main Bucardo program
@@ -16,7 +16,7 @@ use warnings;
 use utf8;
 use open qw( :std :utf8 );
 
-our $VERSION = '5.1.2';
+our $VERSION = '5.2.0';
 
 use DBI 1.51;                               ## How Perl talks to databases
 use DBD::Pg 2.0   qw( :async             ); ## How Perl talks to Postgres databases
@@ -10110,7 +10110,7 @@ Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This document describes version 5.1.2 of Bucardo
+This document describes version 5.2.0 of Bucardo
 
 =head1 WEBSITE
 
