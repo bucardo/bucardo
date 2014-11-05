@@ -1,7 +1,7 @@
 [ GSM is Greg Sabino Mullane <greg@endpoint.com> <greg@turnstep.com> ]
 
 
-Bucardo version 5.2.0, released November 5, 2014
+Bucardo version 5.2.0, released November 5, 2014 (git commit 003b827a73a6e2e51cc5e833a5b4bc21631bd216)t
 
   - quickstart: new parameter to give on startup (e.g. "bucardo start --quickstart"). 
     When set, skips checking the tables and columns on remote databases.
