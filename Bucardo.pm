@@ -658,6 +658,7 @@ sub start_mcp {
                 }
                 elsif (! $self->{sdb}{$db}{dbh}->ping()) {
                     $self->glog("Database $db failed ping check", LOG_NORMAL);
+                    $msg = 'Ping failed';
                     $bad++;
                 }
             }
@@ -668,7 +669,8 @@ sub start_mcp {
                     ## If we already made a MCP label, go there
                     ## Else fallthrough and assume our bucardo.sync changes stick!
                     if ($self->{mcp_loop_started}) {
-                        die 'We are going to redo the MCP loop';
+                        $self->glog('Going to restart the MCP loop, as syncs have changed', LOG_VERBOSE);
+                        die 'We are going to redo the MCP loop'; ## goes to end of mcp main eval
                     }
                 }
             }
@@ -924,18 +926,29 @@ sub mcp_main {
 
                 next if $d->{dbtype} =~ /flat|mongo|redis/o;
 
-                next if $d->{status} eq 'stalled';
-
-                if (! $d->{dbh}->ping) {
-                    ## Database is not reachable, so we'll try and reconnect
+                my $try_reconnect = 0;
+                if ($d->{status} eq 'stalled') {
+                    $self->glog("Trying to connect to stalled database $dbname", LOG_VERBOSE);
+                    $try_reconnect = 1;
+                }
+                elsif (! $d->{dbh}->ping) {
                     $self->glog("Ping failed for database $dbname, trying to reconnect", LOG_NORMAL);
+                }
+
+                if ($try_reconnect) {
 
                     ## Sleep a hair so we don't reloop constantly
                     sleep 0.5;
-
-                    ($d->{backend}, $d->{dbh}) = $self->connect_database($dbname);
+                    undef $d->{backend};
+                    {
+                        local $SIG{__DIE__} = 'IGNORE';
+                        eval {
+                            ($d->{backend}, $d->{dbh}) = $self->connect_database($dbname);
+                        };
+                    }
                     if (defined $d->{backend}) {
                         $self->show_db_version_and_time($d->{dbh}, $d->{backend}, qq{Database "$dbname" });
+                        $d->{status} = 'active'; ## In case it was stalled
                     }
                     else {
                         $self->glog("Unable to reconnect to database $dbname!", LOG_WARN);
@@ -1104,6 +1117,7 @@ sub mcp_main {
                 $self->log_config();
 
                 ## We need to reload ourself as well
+                ## XXX Not needed for some items! e.g. mcp_pingtime
                 $self->reload_mcp();
 
                 ## Let anyone listening know we are done
@@ -1446,6 +1460,7 @@ sub mcp_main {
 
         ## We may want to redo if the error was not *that* fatal
         if ($@ =~ /redo/) {
+            $self->glog('Going to restart the main MCP loop', LOG_VERBOSE);
             redo MCP;
         }
 
