@@ -689,6 +689,8 @@ sub repopulate_cluster {
     my $self = shift;
     my $clustername = shift or die;
 
+    Test::More::note("Recreating cluster $clustername");
+
     my $dbh = $self->empty_cluster($clustername);
 
     $self->add_test_schema($dbh);
@@ -1104,6 +1106,8 @@ sub setup_bucardo {
     my $self = shift;
     my $clustername = shift or die;
 
+    Test::More::note('Installing Bucardo');
+
     $self->create_cluster($clustername);
     my $dbh = $self->connect_database($clustername, 'postgres');
     if (database_exists($dbh,'bucardo')) {
@@ -1377,8 +1381,18 @@ sub shutdown_cluster {
 
     my $pidfile = "$dirname/postmaster.pid";
     return if ! -e $pidfile;
+
+    Test::More::note("Stopping cluster $name");
     my @cmd = ($pg_ctl, '-D', $dirname, '-s', '-m', 'fast', 'stop');
     system(@cmd) == 0 or die "@cmd failed: $?\n";
+
+    ## Hang around until the PID file is gone
+    my $loops = 0;
+    {
+        sleep 0.2;
+        last if ! -e $pidfile;
+        redo;
+    }
 
     delete $gdbh{$name};
 
