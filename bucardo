@@ -401,7 +401,7 @@ update_item()   if $verb eq 'update' or $verb eq 'upd' or $verb eq 'udpate';
 inspect()       if $verb eq 'inspect';
 
 ## Inject a message into the Bucardo logs
-message()       if $verb eq 'message';
+message()       if $verb eq 'message' or $verb eq 'msg';
 
 ## Show or set an item from the bucardo.config table
 config()        if $verb eq 'set' or $verb eq 'show' or $verb eq 'config';
