@@ -269,7 +269,8 @@ for my $file (qw/bucardo Bucardo.pm/) {
 ## Prepare some test values for easy use
 ## The secondary names are for other databases, e.g. MySQL
 our %val;
-for (1..30) {
+my $xvalmax = 30;
+for (1..$xvalmax) {
     $val{SMALLINT}{$_} = $_;
     $val{INT}{$_} = 1234567+$_;
     $val{BIGINT}{$_} = 7777777777 + $_;
@@ -453,7 +454,7 @@ sub create_cluster {
     printf {$fh} "
 
 port                       = %d
-max_connections            = 20
+max_connections            = 50
 random_page_cost           = 2.5
 log_statement              = 'all'
 log_min_duration_statement = 0
@@ -1578,6 +1579,11 @@ sub add_row_to_database {
     ## Returns: undef
 
     my ($self, $dbname, $xval, $commit) = @_;
+
+
+    if ($xval > $xvalmax) {
+        die "Too high of an ID: max is $xvalmax\n";
+    }
 
     $commit = 1 if ! defined $commit;
 
