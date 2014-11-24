@@ -1605,6 +1605,7 @@ sub add_database {
         addalltables             none                 0                null
         addallsequences          none                 0                null
         server_side_prepares|ssp server_side_prepares TF               null
+        makedelta                makedelta            TF               null
         service|dbservice        dbservice            0                null
     };
 
@@ -2254,6 +2255,9 @@ sub list_databases {
             print "Conn: psql$showport -U $info->{dbuser} -d $info->{dbname}$showhost";
             if (! $info->{server_side_prepares}) {
                 print ' (SSP is off)';
+            }
+            if ($info->{makedelta}) {
+                print " (makedelta on)";
             }
         }
         if ($dbtype eq 'drizzle') {
@@ -7502,7 +7506,6 @@ sub upgrade {
     );
 
     my @old_columns = (
-        ['bucardo', 'db',    'makedelta'],
         ['bucardo', 'dbmap', 'makedelta'],
         ['bucardo', 'sync',  'disable_rules'],
         ['bucardo', 'sync',  'disable_triggers'],
@@ -10058,6 +10061,10 @@ Automatically adds all sequences once the database has been added. Optional.
 Enable or disable server-side prepares. Pass 1 to enable them or 0 to disable
 them. Defaults to 1.
 
+=item C<makedelta>
+
+Enable or disable makedelta for this database. Defaults to 0.
+
 =item C<dbservice>
 
 =item C<service>
@@ -10893,6 +10900,10 @@ Status of the database in Bucardo. Must be either "active" or "inactive".
 
 Enable or disable server-side prepares. Pass 1 to enable them or 0 to disable
 them.
+
+=item C<makedelta>
+
+Enable or disable makedelta for this database.
 
 =item C<dbservice>
 

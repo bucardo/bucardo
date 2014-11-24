@@ -2990,7 +2990,7 @@ sub start_kid {
             } ## end each source database
 
 
-            ## Set all makedelta tables (can be target databases too, as another sync may have them as a source)
+            ## Set all makedelta tables (target databases can have them too, as another sync may have them as a source)
             for my $dbname (@dbs) {
 
                 my $d = $sync->{db}{$dbname};
@@ -3002,8 +3002,8 @@ sub start_kid {
                     ($S,$T) = ($g->{safeschema},$g->{safetable});
 
                     ## Set the per database/per table makedelta setting now
-                    if (defined $g->{makedelta}) {
-                        if ($g->{makedelta} eq 'on' or $g->{makedelta} =~ /\b$dbname\b/) {
+                    if ($d->{makedelta} or defined $g->{makedelta}) {
+                        if ($d->{makedelta} or $g->{makedelta} eq 'on' or $g->{makedelta} =~ /\b$dbname\b/) {
                             $d->{does_makedelta}{$S}{$T} = 1;
                             $self->glog("Set table $dbname.$S.$T to makedelta", LOG_NORMAL);
                         }
