@@ -4550,6 +4550,10 @@ sub start_kid {
                         if (!$g->{has_exception_code}) {
                             $self->glog("Warning! Aborting due to exception for $S.$T:$pkval Error was $err",
                                         $err =~ /serialize|deadlock/ ? LOG_VERBOSE : LOG_WARN);
+                            ## If this was a serialization error, we will not need to use pg_cancel
+                            if ($err =~ /serialize/) {
+                                $g->{aync_active} = 0;
+                            }
                             die "$err\n";
                         }
 
