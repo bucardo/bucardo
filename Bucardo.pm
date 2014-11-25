@@ -6566,6 +6566,7 @@ sub validate_sync {
         $self->{masterdbh}->do("SELECT validate_sync('$syncname')");
     };
     if ($@) {
+        $self->glog("Error from validate_sync: $@", LOG_NORMAL);
         $self->{masterdbh}->rollback;
         return 0;
     }
