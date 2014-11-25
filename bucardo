@@ -3809,6 +3809,9 @@ sub list_tables {
         if ($row->{rebuild_index}) {
             print '  rebuild_index:true';
         }
+        if ($row->{makedelta}) {
+            print "  (makedelta:$row->{makedelta})";
+        }
         print "\n";
 
         $VERBOSE >= 2 and show_all_columns($row);
