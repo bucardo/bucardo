@@ -19,7 +19,7 @@ Version 5.1
 Future
 ------
 
-These range the gamut from wildly speculative ideas to must-have features.
+These range the gamut from wildly speculative ideas to must-have features. 
 
 - Allow syncs to be grouped together to allow for a single kicksync notification
 - Allow columns A.varchar(x) and B.varchar(x+y) to be equivalent in the initial 
