@@ -51,69 +51,73 @@ $t = q{Adding all PK tables on the master works};
 $res = $bct->ctl(q{bucardo add tables '*bucardo*test*' '*Bucardo*test*' db=A relgroup=allpk pkonly});
 like ($res, qr/Created the relgroup named "allpk".*are now part of/s, $t);
 
-
 ## We want to start with two non-overlapping syncs, so we can make sure a database going down
 ## in one sync does not bring down the other sync
-$t = q{Created a new dbgroup A -> B};
-$res = $bct->ctl('bucardo add dbgroup ct1 A:source B:target');
-like ($res, qr/Created dbgroup "ct1"/, $t);
 
-$t = q{Created a new dbgroup C -> D};
-$res = $bct->ctl('bucardo add dbgroup ct2 C:source D:target');
-like ($res, qr/Created dbgroup "ct2"/, $t);
+## SYNC a_b is A => B
+$t = q{Created a new sync a_b for A -> B};
+$res = $bct->ctl('bucardo add sync a_b relgroup=allpk dbs=A,B autokick=false');
+like ($res, qr/Added sync "a_b"/, $t);
 
-$t = q{Created a new sync cts1 for A -> B};
-$res = $bct->ctl('bucardo add sync cts1 relgroup=allpk dbs=ct1 autokick=false');
-like ($res, qr/Added sync "cts1"/, $t);
+## SYNC c_d is C => D
+$t = q{Created a new sync c_d for C -> D};
+$res = $bct->ctl('bucardo add sync c_d relgroup=allpk dbs=C,D autokick=false');
+like ($res, qr/Added sync "c_d"/, $t);
 
-$t = q{Created a new sync cts2 for C -> D};
-$res = $bct->ctl('bucardo add sync cts2 relgroup=allpk dbs=ct2 autokick=false');
-like ($res, qr/Added sync "cts2"/, $t);
+## Change our timeout so our testing doesn't take too long
+$bct->ctl('bucardo set mcp_pingtime=10');
 
-## Start up Bucardo.
+## Make sure nobody has any rows yet, then start Bucardo
+$bct->check_for_row([], [qw/ A B C D /]);
 $bct->restart_bucardo($dbhX);
 
-## Add a row to A and C
+## Add a row to A and make sure it gets to B
 $bct->add_row_to_database('A', 22);
-$bct->add_row_to_database('C', 25);
-
-## Kick the syncs
-$bct->ctl('bucardo kick sync cts1 0');
-$bct->ctl('bucardo kick sync cts2 0');
-
-## Make sure the new rows are on the targets
+$bct->ctl('bucardo kick sync a_b 0');
 $bct->check_for_row([[22]], [qw/ B /]);
+
+## Add a row to C and make sure it gets to D
+$bct->add_row_to_database('C', 25);
+$bct->ctl('bucardo kick sync c_d 0');
 $bct->check_for_row([[25]], [qw/ D /]);
 
-## Pull the plug on B. First, let's cleanly disconnect ourselves
+## We are going to kill B and make sure the C->D sync still works
 $dbhB->disconnect();
-sleep 2; ## Design a better system using pg_ping and a timeout
 $bct->shutdown_cluster('B');
-sleep 5; ## Again, need a better system - have shutdown_cluster take an arg?
 
+sleep 20;
 ## Add a row to A and C again, then kick the syncs
 $bct->add_row_to_database('A', 26);
 $bct->add_row_to_database('C', 27);
-$bct->ctl('bucardo kick sync cts1 0');
-$bct->ctl('bucardo kick sync cts2 0');
+$bct->ctl('bucardo msg xxxx');
+$bct->ctl('bucardo kick sync a_b 0');
+$bct->ctl('bucardo kick sync c_d 0');
 
 ## D should have the new row
 $bct->check_for_row([[25],[27]], [qw/ D/]);
 
-## C should not have the new row
+## B should not, as it's dead! Listen for an announcement of its resurrection
+$dbhX->do('LISTEN bucardo_syncstart_a_b');
+$dbhX->commit();
 
 ## Bring the dead database back up
-$bct->start_cluster('C');
-sleep 1; ## better
+$bct->start_cluster('B');
 
-## B will not have the new row right away
+## B will /not/ have the new row right away
 $bct->check_for_row([[22]], [qw/ B /]);
 
-## But once the MCP detects B is back up, the sync should get kicked
-sleep 2;
-$bct->check_for_row([[22]], [qw/ B /]);
+diag Dumper $bct->ctl('bucardo status');
+diag Dumper $bct->ctl('bucardo status c_d');
+diag Dumper $bct->ctl('bucardo update sync c_d active');
 
-sleep 2;
+$bct->wait_for_notice($dbhX, 'bucardo_syncstart_a_b', 90);
+pass('Sync a_b was resurrected');
+
+sleep 30;
+$bct->ctl('bucardo kick sync a_b c_d 0');
+
+$bct->check_for_row([[22],[26]], [qw/ B /]);
+
 $bct->ctl('bucardo stop');
 
 done_testing();

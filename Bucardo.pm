@@ -7455,6 +7455,14 @@ sub fork_vac {
         ## Not a whole lot of cleanup to do on this one: just shut database connections and leave
         $self->{masterdbh}->disconnect() if exists $self->{masterdbhvac};
 
+        for my $dbname (keys %{ $self->{sdb} }) {
+            my $d = $self->{sdb}{$dbname};
+            if (defined $d->{dbh} and $d->{dbh}) {
+                $d->{dbh}->disconnect();
+            }
+        }
+
+
         ## Remove our pid file
         unlink $self->{vacpidfile} or $self->glog("Warning! Failed to unlink $self->{vacpidfile}", LOG_WARN);
 
