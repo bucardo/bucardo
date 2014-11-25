@@ -9762,16 +9762,17 @@ sub push_rows {
                 my $d = $sync->{db}{ $t->{name} };
                 if (!$fullcopy and $d->{does_makedelta}{$S}{$T}) {
                     $self->glog("Using makedelta to populate delta and track tables for $t->{name}.$tname", LOG_VERBOSE);
-                    my ($cols, $vals);
+                    my $vals;
                     if ($numpks == 1) {
-                        $cols = "($pkcols)";
                         $vals = join ',', map { "($_)" } map { @{ $_ } } @pkvals;
-                    } else {
-                        $cols = $pkcols;
+                    }
+                    else {
                         $vals = join ',', map { @{ $_ } } @pkvals;
                     }
+                    my $cols = join ',' => @{ $goat->{qpkey} };
+
                     $dbh->do(qq{
-                        INSERT INTO bucardo.$goat->{deltatable} $cols
+                        INSERT INTO bucardo.$goat->{deltatable} ($cols)
                         VALUES $vals
                     });
                     # Make sure we track it - but only if this sync already acts as a source!
