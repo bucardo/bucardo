@@ -21,6 +21,7 @@ Future
 
 These range the gamut from wildly speculative ideas to must-have features.
 
+- Make sure pkonly and makedelta=xx work everywhere, e.g. add/update relation/relgroup
 - Allow syncs to be grouped together to allow for a single kicksync notification
 - Allow columns A.varchar(x) and B.varchar(x+y) to be equivalent in the initial 
 validate_sync check if B is only a target
