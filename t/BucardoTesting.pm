@@ -1794,10 +1794,16 @@ sub check_for_row {
         if (defined $filter) {
             my $f = $filter;
             if ($f =~ s/^\!//) {
-                next if $table =~ /$f$/;
+                if ($table =~ /$f$/) {
+                    delete $tabletype{$table};
+                    next;
+                }
             }
             else {
-                next if $table !~ /$f$/;
+                if ($table !~ /$f$/) {
+                    delete $tabletype{$table};
+                    next;
+                }
             }
         }
         $maxtable = length $table if length $table > $maxtable;
@@ -1815,16 +1821,6 @@ sub check_for_row {
 
         for my $table (sort keys %tabletype) {
 
-            ## Allow skipping tables
-            if (defined $filter) {
-                my $f = $filter;
-                if ($f =~ s/^\!//) {
-                    next if $table =~ /$f$/;
-                }
-                else {
-                    next if $table !~ /$f$/;
-                }
-            }
             ## Handle odd pkeys
             my $pkey = $table =~ /test5/ ? q{"id space"} : 'id';
 
