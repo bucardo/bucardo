@@ -5865,6 +5865,7 @@ sub glog { ## no critic (RequireArgUnpacking)
             : '';
         if ($config{log_microsecond}) {
             $showtime =~ s/(:\d\d) /"$1." . substr($msec,0,3) . ' '/oe;
+            $showtime =~ s/(:\d\d\.\d\d) /${1}0 /;
         }
     }
 
