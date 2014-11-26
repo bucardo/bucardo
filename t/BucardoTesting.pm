@@ -365,16 +365,18 @@ sub debug {
 
 sub empty_cluster {
 
-    ## Empty out a cluster's database
+    ## Empty out a cluster's databases
     ## Creates the cluster and 'bucardo_test' database as needed
     ## For existing databases, removes all known schemas
     ## Always recreates the public schema
-    ## Arguments:
+    ## Arguments: two
     ## 1. Name of the cluster
-    ## Returns: database handle to the 'bucardo_test' database
+    ## 2. Optional - number of additional databases
+    ## Returns: arrayref of database handles to the 'bucardo_test*' databases
 
     my $self = shift;
     my $clustername = shift or die;
+    my $extradbs = shift || 0;
 
     ## Create the cluster if needed
     $self->create_cluster($clustername);
@@ -382,31 +384,43 @@ sub empty_cluster {
     ## Start it up if needed
     $self->start_cluster($clustername);
 
+    my $alldbh;
+
     ## Get a handle to the postgres database
-    my $dbh = $self->connect_database($clustername, 'postgres');
+    my $masterdbh = $self->connect_database($clustername, 'postgres');
 
-    if (database_exists($dbh, $dbname)) {
-        $dbh = $self->connect_database($clustername, $dbname);
-        ## Remove any of our known schemas
-        my @slist;
-        for my $sname (qw/ public bucardo freezer tschema /) {
-            push @slist => $sname if $self->drop_schema($dbh, $sname);
+    for my $number (0..$extradbs) {
+        my $dbname2 = $dbname;
+        if ($number >= 1) {
+            $dbname2 .= $number;
+            Test::More::note(" ...recreating database $dbname2");
         }
-        debug(qq{Schemas dropped from $dbname on $clustername: } . join ',' => @slist);
+        my $dbh;
+        if (database_exists($masterdbh, $dbname2)) {
+            $dbh = $self->connect_database($clustername, $dbname2);
+            ## Remove any of our known schemas
+            my @slist;
+            for my $sname (qw/ public bucardo freezer tschema /) {
+                push @slist => $sname if $self->drop_schema($dbh, $sname);
+            }
+            debug(qq{Schemas dropped from $dbname2 on $clustername: } . join ',' => @slist);
 
-        ## Recreate the public schema
-        $dbh->do("CREATE SCHEMA public");
-        $dbh->commit();
-    }
-    else {
-        local $dbh->{AutoCommit} = 1;
-        debug(qq{Creating database $dbname});
-        $dbh->do("CREATE DATABASE $dbname");
-        $dbh->disconnect();
-        $dbh = $self->connect_database($clustername, $dbname);
+            ## Recreate the public schema
+            $dbh->do("CREATE SCHEMA public");
+            $dbh->commit();
+        }
+        else {
+            local $masterdbh->{AutoCommit} = 1;
+            debug(qq{Creating database $dbname2});
+            $masterdbh->do("CREATE DATABASE $dbname2");
+            $dbh = $self->connect_database($clustername, $dbname);
+        }
+        push @$alldbh => $dbh;
     }
 
-    return $dbh;
+    $masterdbh->disconnect();
+
+    return $alldbh;
 
 } ## end of empty_cluster
 
@@ -422,8 +436,9 @@ sub create_cluster {
     my $self = shift;
     my $clustername = shift or die;
 
+    my $line = (caller)[2];
     my $info = $pgver{$clustername}
-        or die qq{No such cluster as "$clustername"\n};
+        or die qq{No such cluster as "$clustername" (called from line $line)\n};
 
     my $dirname = $info->{dirname};
 
@@ -449,12 +464,13 @@ sub create_cluster {
     }
 
     ## Make some minor adjustments
+    my $connections = $clustername eq 'A' ? 150 : 75;
     my $file = "$dirname/postgresql.conf";
     open my $fh, '>>', $file or die qq{Could not open "$file": $!\n};
     printf {$fh} "
 
 port                       = %d
-max_connections            = 50
+max_connections            = $connections
 random_page_cost           = 2.5
 log_statement              = 'all'
 log_min_duration_statement = 0
@@ -506,9 +522,6 @@ sub start_cluster {
         close $fh or die qq{Could not close "$pidfile": $!\n};
         ## An active process should respond to a "ping kill"
         $count = kill 0 => $pid;
-        #warn "GOT A count of $count for $pid!\n";
-        #my $count2 = kill 1 => $pid;
-        #warn "GOT A count of $count2 for $pid kill 1!\n";
         return if 1 == $count;
         ## If no response, remove the pidfile ourselves and go on
         debug(qq{Server seems to have died, removing file "$pidfile"});
@@ -590,6 +603,9 @@ sub connect_database {
     my $self = shift;
     my $clustername = shift or die;
     my $ldbname = shift || $dbname;
+
+    ## This may be one of the "extra" databases. In which case the true cluster must be revealed:
+    $clustername =~ s/\d+$//;
 
     ## Create and start the cluster as needed
     $self->start_cluster($clustername);
@@ -683,23 +699,27 @@ sub drop_schema {
 sub repopulate_cluster {
 
     ## Make sure a cluster is empty, then add in the sample data
-    ## Arguments:
+    ## Arguments: two
     ## 1. Name of the cluster
+    ## 2. Optional - number of additional databases to create
     ## Returns: database handle to the 'bucardo_test' database
 
     my $self = shift;
     my $clustername = shift or die;
+    my $extradbs = shift || 0;
 
     Test::More::note("Recreating cluster $clustername");
 
-    my $dbh = $self->empty_cluster($clustername);
+    my $dbh = $self->empty_cluster($clustername, $extradbs);
 
-    $self->add_test_schema($dbh);
+    for my $innerdbh (@$dbh) {
+        $self->add_test_schema($innerdbh);
+    }
 
     ## Store our names away
-    $gdbh{$clustername} = $dbh;
+    $gdbh{$clustername} = $dbh->[0];
 
-    return $dbh;
+    return $dbh->[0];
 
 } ## end of repopulate_cluster
 
@@ -707,7 +727,7 @@ sub repopulate_cluster {
 sub add_test_schema {
 
     ## Add an empty test schema to a database
-    ## Arguments:
+    ## Arguments: two
     ## 1. database handle (usually to 'bucardo_test')
     ## Returns: nothing
 
@@ -1059,12 +1079,13 @@ sub restart_bucardo {
 
     my $output = $self->ctl('start --exit-on-nosync --quickstart testing');
 
-    my $bail = 30;
+    my $bail = 50;
     my $n;
   WAITFORIT: {
         if ($bail--<0) {
             $output =~ s/^/#     /gmx;
-            die "Bucardo did not start, but we waited! Start output:\n\n$output\n";
+            my $time = localtime;
+            die "Bucardo did not start, but we waited!\nTime: $time\nStart output:\n\n$output\n";
         }
         while ($n = $dbh->func('pg_notifies')) {
             my ($name, $pid, $payload) = @$n;
