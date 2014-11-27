@@ -286,6 +286,10 @@ for (1..$xvalmax) {
 }
 
 
+sub diag {
+    Test::More::diag(@_);
+}
+
 
 sub new {
 
@@ -862,10 +866,10 @@ ALTER TABLE bucardo_fkey1
 
         ## Does the sequence already exist? If so, drop it.
         if (table_exists($dbh => $seq)) {
-            $dbh->do("DROP SEQUENCE $seq");
+            $dbh->do(qq{DROP SEQUENCE "$seq"});
         }
 
-        $SQL = qq{CREATE SEQUENCE $seq};
+        $SQL = qq{CREATE SEQUENCE "$seq"};
         $dbh->do($SQL);
         $scount++;
     }
