@@ -126,7 +126,7 @@ t/13-ddl.t - Test pushing DDL (not complete yet)
 
 t/14-truncate.t - Test of truncation replication (requires Postgres 8.4 or greater)
 
-t/15-star.t - Test of star replication scheme
+t/50-star.t - Test of star replication scheme
 
 t/98-cleanup.t - Shuts down test databases. Called by "make distclean"
 
