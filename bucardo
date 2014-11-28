@@ -6788,7 +6788,8 @@ sub add_all_goats {
     }
 
     ## Get ready to add tables or sequences to the goat table
-    $SQL = q{INSERT INTO bucardo.goat (db,schemaname,tablename,reltype) VALUES (?,?,?,?)};
+    $SQL = q{INSERT INTO bucardo.goat (db,schemaname,tablename,reltype};
+    $SQL .= exists $bcargs->{makedelta} ? ',makedelta) VALUES (?,?,?,?,?)' : ') VALUES (?,?,?,?)';
     my $addtable = $dbh->prepare($SQL);
 
     ## Walk through all returned tables from the remote database
@@ -6818,7 +6819,9 @@ sub add_all_goats {
         }
         $VERBOSE >= 2 and warn "Attempting to add relation $S.$T\n";
         eval {
-            $count = $addtable->execute($db->{name},$S,$T,$type);
+            my @arg = ($db->{name},$S,$T,$type);
+            push @arg => $bcargs->{makedelta} if exists $bcargs->{makedelta};
+            $count = $addtable->execute(@arg);
         };
         if ($@) {
             warn "$@\n";
