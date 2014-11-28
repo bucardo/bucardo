@@ -1149,7 +1149,7 @@ sub mcp_main {
                     for my $row (@{$sth->fetchall_arrayref()}) {
                         $self->glog("MESSAGE ($row->[1]): $row->[0]", LOG_TERSE);
                     }
-                    $maindbh->do('TRUNCATE TABLE bucardo_log_message');
+                    $maindbh->do('DELETE FROM bucardo_log_message');
                     $maindbh->commit();
                 }
                 else {
@@ -4700,7 +4700,7 @@ sub start_kid {
                             ## The stage table can only have rows if a previous version failed
                             ## This can happen if this kid committed, but another failed
                             ## Thus, we always want to make sure the stage table is empty:
-                            $SQL = "TRUNCATE TABLE bucardo.$g->{stagetable}";
+                            $SQL = "DELETE FROM bucardo.$g->{stagetable}";
                             $d->{dbh}->do($SQL);
                             $sth{stage}{$dbname}{$g}->execute();
                         }
@@ -5204,7 +5204,7 @@ sub start_kid {
 
                 $SQL = "INSERT INTO bucardo.$g->{tracktable} SELECT * FROM bucardo.$g->{stagetable}";
                 $dbh->do($SQL);
-                $SQL = "TRUNCATE TABLE bucardo.$g->{stagetable}";
+                $SQL = "DELETE FROM bucardo.$g->{stagetable}";
                 $dbh->do($SQL);
                 $self->glog("Populated $dbname.$g->{tracktable}", LOG_DEBUG);
             }
@@ -7757,7 +7757,7 @@ sub reload_mcp {
         $self->glog("Entries cleaned from the syncrun table: $count", LOG_NORMAL);
     }
 
-    $SQL = q{TRUNCATE TABLE bucardo.dbrun};
+    $SQL = q{DELETE FROM bucardo.dbrun};
     $maindbh->do($SQL);
 
     $self->glog(('Loading sync table. Rows=' . (scalar (keys %{ $self->{sync} }))), LOG_VERBOSE);
