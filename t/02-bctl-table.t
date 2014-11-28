@@ -10,7 +10,7 @@ use warnings;
 use Data::Dumper;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 43;
+use Test::More tests => 46;
 
 use vars qw/$t $res $expected $command $dbhX $dbhA $dbhB $SQL/;
 
@@ -189,8 +189,22 @@ $t = q{Add all tables};
 $res = $bct->ctl('bucardo add all tables -vv --debug');
 like ($res, qr{New tables added: 13}, $t);
 
-## Remove them all, then try 'all tables' with tables limit
-empty_goat_table();
+## Try removing them all via commandline
+$t = q{Remove all tables at once};
+$res = $bct->ctl('bucardo remove all tables -vv --debug --batch');
+like ($res, qr{Removed the following tables}, $t);
+
+## Remove them all, then try 'tables all'
+$t = q{Add all tables with reversed words};
+$res = $bct->ctl('bucardo add tables all -vv --debug');
+like ($res, qr{New tables added: 13}, $t);
+
+## Try removing them all via commandline, reversed args
+$t = q{Remove all tables at once with reversed words};
+$res = $bct->ctl('bucardo remove tables all -vv --debug --batch');
+like ($res, qr{Removed the following tables}, $t);
+
+## Try 'all tables' with tables limit
 $t = q{Add all tables with tables limit};
 $res = $bct->ctl('bucardo add all tables -t bucardo_test1 -t bucardo_test2 -vv --debug');
 like ($res, qr{New tables added: 2\n}, $t);
