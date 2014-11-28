@@ -1235,7 +1235,8 @@ sub validate {
             $dbh->commit;
             if ($msg eq 'MODIFY') {
                 $success = 1;
-            } else {
+            }
+            else {
                 warn "$msg\n";
                 $exitval++;
             }
@@ -1244,7 +1245,8 @@ sub validate {
 
         if ($evalok) {
             print "OK\n" if $success;
-        } else {
+        }
+        else {
             warn $dbh->errstr || $@;
             $exitval++;
         }
@@ -1367,7 +1369,7 @@ sub add_item {
             ## Add all the tables, and return the output
             print add_all_tables();
             ## The above does not commit, so make sure we do it here
-            $dbh->commit();
+            confirm_commit();
             exit 0;
         }
         else {
@@ -3509,7 +3511,8 @@ sub _remove_relation {
             eval {
                 if ($db_filter) {
                     $sth->execute($reltype, $name, $db_filter);
-                } else {
+                }
+                else {
                     $sth->execute($reltype, $name);
                 }
             };
@@ -6684,7 +6687,7 @@ sub add_all_goats {
         die "Sorry, cannot add any ${type}s until at least one database has been added\n";
     }
 
-    ## If there is more than one database, it must be selected via db=
+    ## If there is more than one database, it should be selected via db=
     my $db;
     my $showdbs = 0;
     if (exists $bcargs->{db}) {
@@ -6727,7 +6730,6 @@ sub add_all_goats {
 
     ## We always exclude information_schema, system, and bucardo schemas
     $SQL .= q{AND n.nspname <> 'information_schema' AND nspname !~ '^pg' AND nspname !~ '^bucardo'};
-
 
     my @clause;
 
@@ -9394,7 +9396,7 @@ sub confirm_commit {
 
     ## The dryrun option overrides everything else: we never commit
     if ($bcargs->{dryrun}) {
-        $VERBOSE and print "In dryrun mode, so no going to commit database changes\n";
+        $VERBOSE and print "In dryrun mode, so not going to commit database changes\n";
         return 0;
     }
 
