@@ -1896,7 +1896,7 @@ sub check_sequences_same {
 
     for my $seq (sort keys %sequences) {
 
-        $SQL = "SELECT * FROM $seq";
+        $SQL = qq{SELECT * FROM "$seq"};
 
         ## The first we come across will be the standard for the others
         my (%firstone, $firstdb);

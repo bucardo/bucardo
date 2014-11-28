@@ -25,7 +25,7 @@ my $bct = BucardoTesting->new({location => 'postgres'})
 ## The above runs one test for each passed in database x the number of test tables
 my $numtables = keys %tabletype;
 my $numsequences = keys %sequences;
-my $single_tests = 62;
+my $single_tests = 61;
 my $check_for_row_1 = 1;
 my $check_for_row_2 = 2;
 my $check_for_row_3 = 3;
@@ -342,7 +342,7 @@ if ($dbhA->{pg_server_version} < 80400) {
 }
 $dbhA->commit();
 $dbhB->commit();
-$dbhC->do(q{SELECT setval('bucardo_test_seq3', 12345)});
+$dbhC->do(q{SELECT setval('"Bucardo_test_seq3"', 12345)});
 $dbhC->commit();
 
 like $bct->ctl('bucardo kick sync pgtest3 0'),
@@ -458,5 +458,7 @@ $bct->check_for_row([[1],[2],[3],[7]], [qw/D/], 'customcols', '!test1');
 $bct->check_for_row([[2],[3],[7],[30]], [qw/D/], 'customcols', 'test1');
 
 unlink $service_temp_filename;
+
+$bct->ctl('bucardo stop');
 
 exit;
