@@ -1533,21 +1533,36 @@ sub remove_item {
 
     ## First word is the type if thing we are removing
     my $thing = shift @nouns;
-
     ## Account for variations and abbreviations
     $thing = standardize_name($thing);
+    my $second_arg = $nouns[0] || '';
+
+    ## Allow the keyword 'all' to appear before or after the noun
+    my $do_all = 0;
+    if ($thing eq 'all') {
+        $do_all = 1;
+        $thing = shift @nouns;
+        $thing = standardize_name($thing);
+    }
+    elsif (lc $second_arg eq 'all') {
+        $do_all = 1;
+        shift @nouns;
+    }
+
+    my $arg = $do_all ? 'all' : '';
 
     ## All of these will exit and do not return
-    remove_customcode() if $thing eq 'customcode';
-    remove_customname() if $thing eq 'customname';
-    remove_customcols() if $thing eq 'customcols';
+    remove_customcode($arg) if $thing eq 'customcode';
+    remove_customname($arg) if $thing eq 'customname';
+    remove_customcols($arg) if $thing eq 'customcols';
     ## The dbgroup must be checked before the database (dbg vs db)
-    remove_database()   if $thing eq 'database';
-    remove_dbgroup()    if $thing eq 'dbgroup';
-    remove_herd()       if $thing eq 'herd';
-    remove_sync()       if $thing eq 'sync';
-    remove_table()      if $thing eq 'table';
-    remove_sequence()   if $thing eq 'sequence';
+    remove_database($arg)   if $thing eq 'database';
+    remove_dbgroup($arg)    if $thing eq 'dbgroup';
+    remove_herd($arg)       if $thing eq 'herd';
+    remove_sync($arg)       if $thing eq 'sync';
+
+    remove_relation('table', $arg)    if $thing eq 'table';
+    remove_relation('sequence', $arg) if $thing eq 'sequence';
 
     ## Do not know how to remove anything else
     usage_exit($doc_section);
@@ -3482,12 +3497,16 @@ sub add_table {
 } ## end of add_table
 
 
-sub _remove_relation {
+sub remove_relation {
 
     my $reltype = shift;
 
+    my $arg = shift || '';
+
     my $doc_section = 'remove';
-    usage_exit($doc_section) unless @nouns;
+    if (!@nouns and $arg ne 'all') {
+        usage_exit($doc_section);
+    }
 
     my $db_filter;
     for my $name ( @nouns ) {
@@ -3495,34 +3514,56 @@ sub _remove_relation {
         $db_filter = $1;
     }
 
-    ## Prepare our SQL
-    $SQL = q{DELETE FROM bucardo.goat WHERE reltype = ? AND schemaname||'.'||tablename = ?};
-    $SQL .= ' AND db = ?' if $db_filter;
-    $sth = $dbh->prepare($SQL);
     my @removed;
 
-    ## Bucardo won't fully support a table name that starts with "db=". Darn.
-    for my $name (grep { ! /^db=/ } @nouns) {
-        if ($name =~ /^\w[\w\d]*\.\w[\w\d]*$/) {
-            if (! exists $GOAT->{by_fullname}{$name}) {
-                print qq{No such $reltype: $name\n};
-                next;
-            }
-            eval {
-                if ($db_filter) {
-                    $sth->execute($reltype, $name, $db_filter);
-                }
-                else {
-                    $sth->execute($reltype, $name);
-                }
-            };
-            if ($@) {
-                die qq{Could not delete $reltype "$name"\n$@\n};
-            }
-            push @removed, $name;
+    if ($arg eq 'all') {
+        if (! $bcargs->{batch}) {
+            print "Are you sure you want to remove all ${reltype}s? ";
+            exit if <STDIN> !~ /Y/i;
         }
-        else {
-            die qq{Please use the full schema.$reltype name\n};
+
+        $SQL = q{DELETE FROM bucardo.goat WHERE id = ?};
+        $sth = $dbh->prepare($SQL);
+
+        for my $tid ( sort { $a <=> $b } keys %{$GOAT->{by_id}}) {
+            my $t = $GOAT->{by_id}{$tid};
+            next if $t->{reltype} ne $reltype;
+            $count = $sth->execute($tid);
+            if (1 == $count) {
+                push @removed => "$t->{schemaname}.$t->{tablename}";
+            }
+        }
+    }
+    else {
+
+        ## Prepare our SQL
+        $SQL = q{DELETE FROM bucardo.goat WHERE reltype = ? AND schemaname||'.'||tablename = ?};
+        $SQL .= ' AND db = ?' if $db_filter;
+        $sth = $dbh->prepare($SQL);
+
+        ## Bucardo won't fully support a table name that starts with "db=". Darn.
+        for my $name (grep { ! /^db=/ } @nouns) {
+            if ($name =~ /^\w[\w\d]*\.\w[\w\d]*$/) {
+                if (! exists $GOAT->{by_fullname}{$name}) {
+                    print qq{No such $reltype: $name\n};
+                    next;
+                }
+                eval {
+                    if ($db_filter) {
+                        $sth->execute($reltype, $name, $db_filter);
+                    }
+                    else {
+                        $sth->execute($reltype, $name);
+                    }
+                };
+                if ($@) {
+                    die qq{Could not delete $reltype "$name"\n$@\n};
+                }
+                push @removed, $name;
+            }
+            else {
+                die qq{Please use the full schema.$reltype name\n};
+            }
         }
     }
 
@@ -3531,32 +3572,15 @@ sub _remove_relation {
         for my $name (sort numbered_relations @removed) {
             print qq{  $name} . ($db_filter ? " (DB: $db_filter)" : '') . "\n";
         }
+        confirm_commit();
     }
-
-    confirm_commit();
+    else {
+        print "Nothing found to remove\n";
+    }
 
     exit 0;
 
-} ## end of _remove_relation
-
-sub remove_table {
-    ## Usage: remove table tablename [t2 t3 ...]
-    ## Arguments: none, parses nouns for tables
-    ## Returns: never, exits
-
-    return _remove_relation('table');
-
-} ## end of remove_table
-
-
-sub remove_sequence {
-    ## Usage: remove sequence sequencename [t2 t3 ...]
-    ## Arguments: none, parses nouns for sequences
-    ## Returns: never, exits
-
-    return _remove_relation('sequence');
-
-} ## end of remove_sequence
+} ## end of remove_relation
 
 
 sub update_table {
