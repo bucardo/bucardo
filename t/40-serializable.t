@@ -5,13 +5,15 @@ use warnings;
 use lib 't';
 use Test::More;
 use BucardoTesting;
+use Data::Dumper;
+
 
 my $bct = BucardoTesting->new({location => 'postgres'})
     or BAIL_OUT 'Creation of BucardoTesting object failed';
 
 END { $bct->stop_bucardo if $bct }
 
-my $dbh = $bct->empty_cluster('A');
+my $dbh = $bct->empty_cluster('A')->[0];
 END { $dbh->disconnect if $dbh }
 
 # Skip the tests if we can't mock the serialization failure.
