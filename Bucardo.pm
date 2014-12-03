@@ -1054,7 +1054,7 @@ sub mcp_main {
                 ## Echo out to anyone listening
                 $self->db_notify($maindbh, $name, 1);
                 ## Check on the health of our databases, in case that was the reason the sync was killed
-                $self->check_sync_health($syncdone);
+                $self->check_sync_health();
             }
             ## Request to pause a sync
             elsif ($name =~ /^pause_sync_(.+)/o) {
@@ -1296,6 +1296,13 @@ sub mcp_main {
                 }
             }
 
+            ## Someone giving us a hint that a database may be down
+            elsif ($name =~ /dead_db_(.+)/) {
+                my $dbname = $1;
+                $self->glog(qq{Got a hint that database "$dbname" may be down. Let's check it out!}, LOG_NORMAL);
+                my $changes = $self->check_sync_health($dbname);
+			}
+
             ## Should not happen, but let's at least log it
             else {
                 $self->glog("Warning: received unknown message $name from $npid!", LOG_TERSE);
@@ -1476,10 +1483,12 @@ sub check_sync_health {
     ## Check every database used by a sync
     ## Typically called on demand when we know something is wrong
     ## Marks any unreachable databases, and their syncs, as stalled
-    ## Arguments: none
+    ## Arguments: zero or one
+    ## 1. Optional name of database to hone in on
     ## Returns: number of bad databases detected
 
     my $self = shift;
+    my $dbnamematch = shift || '';
 
     $self->glog('Starting check_sync_health', LOG_NORMAL);
 
@@ -1505,6 +1514,9 @@ sub check_sync_health {
 
             ## Only check each database (by name) once
             next if $db_checked->{$dbname}++;
+
+            ## If limiting to a single database, only check that one
+            next if $dbnamematch and $dbnamematch ne $dbname;
 
             $self->glog("Checking database $dbname for sync $syncname", LOG_DEBUG);
 
@@ -2704,6 +2716,8 @@ sub start_kid {
             ## Is this still around?
             if (!$dbh->ping) {
                 $self->glog("Ping failed for database $dbname", LOG_TERSE);
+                ## We want to give the MCP a hint that something is wrong
+                $self->db_notify($finaldbh, "dead_db_$dbname", 1);
                 ## We'll assume no disconnect is necessary - but we'll undef it below just in case
             }
             else {
@@ -4255,7 +4269,7 @@ sub start_kid {
 
                         ## Add (or re-add) the winning one
                         ## We do it this way as we cannot be sure that the combo existed.
-                        ## It could be the case that the winning database made 
+                        ## It could be the case that the winning database made
                         ## no changes to this table!
                         $deltabin{ $conflict{$pkey} }{$pkey} = 1;
                     }
@@ -5529,7 +5543,7 @@ sub connect_database {
 
     my $id = shift || 0;
 
-    my ($dsn,$dbh,$user,$pass,$ssp);
+    my ($dsn,$dbh,$user,$pass,$ssp,$dbname);
 
     my $dbtype = 'postgres';
 
@@ -5550,6 +5564,7 @@ sub connect_database {
 
         my $d = $db->{$id};
         $dbtype = $d->{dbtype};
+		$dbname = $d->{dbname};
         if ($d->{status} eq 'inactive') {
             return 0, 'inactive';
         }
@@ -5566,7 +5581,7 @@ sub connect_database {
             } grep { defined $d->{$_} and length $d->{$_} } qw/dbname dbservice/;
         }
         elsif ('drizzle' eq $dbtype) {
-            $dsn = "dbi:drizzle:database=$d->{dbname}";
+            $dsn = "dbi:drizzle:database=$dbname";
         }
         elsif ('mongo' eq $dbtype) {
             my $dsn = {};
@@ -5576,16 +5591,16 @@ sub connect_database {
             ## For now, we simply require it
             require MongoDB;
             my $conn = MongoDB::Connection->new($dsn); ## no critic
-            $dbh = $conn->get_database($d->{dbname});
+            $dbh = $conn->get_database($dbname);
             my $backend = 0;
 
             return $backend, $dbh;
         }
         elsif ('mysql' eq $dbtype or 'mariadb' eq $dbtype) {
-            $dsn = "dbi:mysql:database=$d->{dbname}";
+            $dsn = "dbi:mysql:database=$dbname";
         }
         elsif ('oracle' eq $dbtype) {
-            $dsn = "dbi:Oracle:dbname=$d->{dbname}";
+            $dsn = "dbi:Oracle:dbname=$dbname";
         }
         elsif ('redis' eq $dbtype) {
             my $dsn = {};
@@ -5612,7 +5627,7 @@ sub connect_database {
             return $backend, $dbh;
         }
         elsif ('sqlite' eq $dbtype) {
-            $dsn = "dbi:SQLite:dbname=$d->{dbname}";
+            $dsn = "dbi:SQLite:dbname=$dbname";
         }
         else {
             die qq{Cannot handle databases of type "$dbtype"\n};
@@ -5671,8 +5686,15 @@ sub connect_database {
     ## If the main database, prepend 'bucardo' to the search path
     if (!$id) {
         $dbh->do(q{SELECT pg_catalog.set_config('search_path', 'bucardo,' || current_setting('search_path'), false)});
-        $dbh->commit();
+		$dbh->commit();
     }
+
+	## If this is not the main database, listen for a dead db hint
+	if ($id and $self->{logprefix} eq 'MCP') {
+		$self->db_listen($self->{masterdbh}, "dead_db_$id");
+        $self->glog("Listening for dead_db_$id", LOG_DEBUG);
+		$dbh->commit();
+	}
 
     return $backend, $dbh;
 
