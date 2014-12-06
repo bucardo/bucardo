@@ -106,7 +106,7 @@ for my $dbh (@alldbhs) {
     $dbh->commit();
     $maxnumber = $number;
 }
-sleep 5;
+sleep 15;
 
 my $result = [];
 push @$result, [$_] for 1..$maxnumber;
