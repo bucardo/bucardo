@@ -2238,7 +2238,7 @@ sub list_databases {
         return -1;
     }
 
-    ## We only show the type if they are different from each othera
+    ## We only show the type if they are different from each other
     my %typecount;
 
     ## Figure out the length of each item for a pretty display
@@ -6305,8 +6305,7 @@ sub _whenrun_values {
         after_table_sync
         exception
         conflict
-        before
-        _trigger_enable
+        before_trigger_enable
         after_trigger_enable
         after_txn
         before_sync
