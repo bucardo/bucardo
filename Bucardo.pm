@@ -1301,7 +1301,7 @@ sub mcp_main {
                 my $dbname = $1;
                 $self->glog(qq{Got a hint that database "$dbname" may be down. Let's check it out!}, LOG_NORMAL);
                 my $changes = $self->check_sync_health($dbname);
-			}
+            }
 
             ## Should not happen, but let's at least log it
             else {
@@ -3014,10 +3014,9 @@ sub start_kid {
                     next if $g->{reltype} ne 'table';
 
                     ($S,$T) = ($g->{safeschema},$g->{safetable});
-
                     ## Set the per database/per table makedelta setting now
-                    if ($d->{makedelta} or defined $g->{makedelta}) {
-                        if ($d->{makedelta} or $g->{makedelta} eq 'on' or $g->{makedelta} =~ /\b$dbname\b/) {
+                    if ($d->{makedelta} eq 'true' or defined $g->{makedelta}) {
+                        if ($d->{makedelta} eq 'true' or $g->{makedelta} eq 'on' or $g->{makedelta} =~ /\b$dbname\b/) {
                             $d->{does_makedelta}{$S}{$T} = 1;
                             $self->glog("Set table $dbname.$S.$T to makedelta", LOG_NORMAL);
                         }
@@ -5564,7 +5563,7 @@ sub connect_database {
 
         my $d = $db->{$id};
         $dbtype = $d->{dbtype};
-		$dbname = $d->{dbname};
+        $dbname = $d->{dbname};
         if ($d->{status} eq 'inactive') {
             return 0, 'inactive';
         }
@@ -5686,15 +5685,15 @@ sub connect_database {
     ## If the main database, prepend 'bucardo' to the search path
     if (!$id) {
         $dbh->do(q{SELECT pg_catalog.set_config('search_path', 'bucardo,' || current_setting('search_path'), false)});
-		$dbh->commit();
+        $dbh->commit();
     }
 
-	## If this is not the main database, listen for a dead db hint
-	if ($id and $self->{logprefix} eq 'MCP') {
-		$self->db_listen($self->{masterdbh}, "dead_db_$id");
+    ## If this is not the main database, listen for a dead db hint
+    if ($id and $self->{logprefix} eq 'MCP') {
+        $self->db_listen($self->{masterdbh}, "dead_db_$id");
         $self->glog("Listening for dead_db_$id", LOG_DEBUG);
-		$dbh->commit();
-	}
+        $dbh->commit();
+    }
 
     return $backend, $dbh;
 
