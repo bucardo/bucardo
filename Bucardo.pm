@@ -3934,6 +3934,9 @@ sub start_kid {
                 ## it's now time to gather the actual data
                 my %deltabin;
 
+                ## Customcode may need to know which rows we have changed: reset it here
+                $sync->{deltarows} = {};
+
                 for my $dbname (@dbs_source) {
 
                     ## Skip if we are truncating and this is not the winner
@@ -4490,6 +4493,9 @@ sub start_kid {
                                 ## For this table, copy all rows from source to target(s)
                                 $dmlcount{inserts} += $self->push_rows(
                                     $deltabin{$dbname1}, $S, $T, $g, $sync, $sdbh, $dbname1, \@pushdbs);
+
+                                ## Store references to the list of changes in case custom code needs them
+                                $sync->{deltarows}{$S}{$T} = $deltabin{$dbname1};
 
                             } ## end source database
 
@@ -8386,16 +8392,16 @@ sub run_ctl_custom_code {
     $c->{coderef}->($input);
     $self->{masterdbh}->{InactiveDestroy} = 0;
     $cc_sourcedbh->{InactiveDestroy} = 0;
-    $self->glog("Finished custom code $c->{id}", LOG_VERBOSE);
+    $self->glog("Finished custom code $c->{name}", LOG_VERBOSE);
     if (length $input->{message}) {
-        $self->glog("Message from $c->{whenrun} code $c->{id}: $input->{message}", LOG_TERSE);
+        $self->glog("Message from $c->{whenrun} code $c->{name}: $input->{message}", LOG_TERSE);
     }
     if (length $input->{warning}) {
-        $self->glog("Warning! Code $c->{whenrun} $c->{id}: $input->{warning}", LOG_WARN);
+        $self->glog("Warning! Code $c->{whenrun} $c->{name}: $input->{warning}", LOG_WARN);
     }
     if (length $input->{error}) {
-        $self->glog("Warning! Code $c->{whenrun} $c->{id}: $input->{error}", LOG_WARN);
-        die "Code $c->{whenrun} $c->{id} error: $input->{error}";
+        $self->glog("Warning! Code $c->{whenrun} $c->{name}: $input->{error}", LOG_WARN);
+        die "Code $c->{whenrun} $c->{name} error: $input->{error}";
     }
     if (length $input->{nextcode}) { ## Mostly for conflict handlers
         return 'next';
@@ -8787,8 +8793,9 @@ sub run_kid_custom_code {
 
     ## Create a hash of information common to all customcodes
     my $info = {
-        syncname   => $sync->{name},
-        version    => $self->{version}, ## Version of Bucardo
+        rows     => $sync->{deltarows},
+        syncname => $sync->{name},
+        version  => $self->{version}, ## Version of Bucardo
 
         message  => '',  ## Allows the code to send a message to the logs
         warning  => '',  ## Allows a warning to be thrown by the code
@@ -8832,7 +8839,7 @@ sub run_kid_custom_code {
     local $_ = $info;
     $c->{coderef}->($info);
 
-    $self->glog("Finished custom code $c->{id}", LOG_VERBOSE);
+    $self->glog("Finished custom code $c->{name}", LOG_VERBOSE);
 
     for my $dbname (keys %{ $sync->{db} }) {
         $sync->{db}{$dbname}{dbh}->{InactiveDestroy} = 0;
@@ -8840,18 +8847,18 @@ sub run_kid_custom_code {
 
     ## Check for any messages set by the custom code
     if (length $info->{message}) {
-        $self->glog("Message from $c->{whenrun} code $c->{id}: $info->{message}", LOG_TERSE);
+        $self->glog("Message from $c->{whenrun} code $c->{name}: $info->{message}", LOG_TERSE);
     }
 
     ## Check for any warnings set by the custom code
     if (length $info->{warning}) {
-        $self->glog("Warning! Code $c->{whenrun} $c->{id}: $info->{warning}", LOG_WARN);
+        $self->glog("Warning! Code $c->{whenrun} $c->{name}: $info->{warning}", LOG_WARN);
     }
 
     ## Check for any errors set by the custom code. Throw an exception if found.
     if (length $info->{error}) {
-        $self->glog("Warning! Code $c->{whenrun} $c->{id}: $info->{error}", LOG_WARN);
-        die "Code $c->{whenrun} $c->{id} error: $info->{error}";
+        $self->glog("Warning! Code $c->{whenrun} $c->{name}: $info->{error}", LOG_WARN);
+        die "Code $c->{whenrun} $c->{name} error: $info->{error}";
     }
 
     ## Check for a request to end the sync.
