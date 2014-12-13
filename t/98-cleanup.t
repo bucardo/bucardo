@@ -6,8 +6,14 @@
 use 5.008003;
 use strict;
 use warnings;
-use Test::More tests => 2;
+use Test::More;
 use File::Path 'rmtree';
+
+if ($ENV{BUCARDO_NOCLEANUP}) {
+    diag 'Skipping cleanup because BUCARDO_NOCLEANUP is set';
+    done_testing();
+    exit;
+}
 
 opendir my $dh, '.' or die qq{Could not opendir?: $!\n};
 for my $dir (readdir $dh) {
@@ -42,5 +48,7 @@ if (-d $dir) {
 pass "Removed directory $dir";
 
 unlink <bucardo_pgservice.tmp.*>;
+
+done_testing();
 
 exit;
