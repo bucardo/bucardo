@@ -311,7 +311,7 @@ sub new {
     $self->{file} = (caller)[1];
 
     ## Bail on first error? Default is ENV, then false.
-    $self->{bail} = exists $arg->{bail} ? $arg->{bail} : $ENV{BUCARDO_TESTBAIL} || 0;
+    $bail_on_error = exists $arg->{bail} ? $arg->{bail} : $ENV{BUCARDO_TESTBAIL} || 0;
 
     ## Name of the test schema
     $self->{schema} = 'bucardo_schema';
@@ -373,14 +373,12 @@ sub empty_cluster {
     ## Creates the cluster and 'bucardo_test' database as needed
     ## For existing databases, removes all known schemas
     ## Always recreates the public schema
-    ## Arguments: two
+    ## Arguments: one
     ## 1. Name of the cluster
-    ## 2. Optional - number of additional databases
     ## Returns: arrayref of database handles to the 'bucardo_test*' databases
 
     my $self = shift;
     my $clustername = shift or die;
-    my $extradbs = shift || 0;
 
     ## Create the cluster if needed
     $self->create_cluster($clustername);
@@ -393,38 +391,31 @@ sub empty_cluster {
     ## Get a handle to the postgres database
     my $masterdbh = $self->connect_database($clustername, 'postgres');
 
-    for my $number (0..$extradbs) {
-        my $dbname2 = $dbname;
-        if ($number >= 1) {
-            $dbname2 .= $number;
-            Test::More::note(" ...recreating database $dbname2");
+    my $dbh;
+    if (database_exists($masterdbh, $dbname)) {
+        $dbh = $self->connect_database($clustername, $dbname);
+        ## Remove any of our known schemas
+        my @slist;
+        for my $sname (qw/ public bucardo freezer tschema /) {
+            push @slist => $sname if $self->drop_schema($dbh, $sname);
         }
-        my $dbh;
-        if (database_exists($masterdbh, $dbname2)) {
-            $dbh = $self->connect_database($clustername, $dbname2);
-            ## Remove any of our known schemas
-            my @slist;
-            for my $sname (qw/ public bucardo freezer tschema /) {
-                push @slist => $sname if $self->drop_schema($dbh, $sname);
-            }
-            debug(qq{Schemas dropped from $dbname2 on $clustername: } . join ',' => @slist);
+        debug(qq{Schemas dropped from $dbname on $clustername: } . join ',' => @slist);
 
-            ## Recreate the public schema
-            $dbh->do("CREATE SCHEMA public");
-            $dbh->commit();
-        }
-        else {
-            local $masterdbh->{AutoCommit} = 1;
-            debug(qq{Creating database $dbname2});
-            $masterdbh->do("CREATE DATABASE $dbname2");
-            $dbh = $self->connect_database($clustername, $dbname);
-        }
-        push @$alldbh => $dbh;
+        ## Recreate the public schema
+        $dbh->do("CREATE SCHEMA public");
+        $dbh->commit();
+    }
+    else {
+        local $masterdbh->{AutoCommit} = 1;
+        debug(qq{Creating database $dbname});
+        $masterdbh->do("CREATE DATABASE $dbname");
+        diag "CREATED da b $dbname";
+        $dbh = $self->connect_database($clustername, $dbname);
     }
 
     $masterdbh->disconnect();
 
-    return $alldbh;
+    return $dbh;
 
 } ## end of empty_cluster
 
@@ -714,16 +705,32 @@ sub repopulate_cluster {
 
     Test::More::note("Recreating cluster $clustername");
 
-    my $dbh = $self->empty_cluster($clustername, $extradbs);
+    my $dbh = $self->empty_cluster($clustername);
+    $self->add_test_schema($dbh, $clustername);
 
-    for my $innerdbh (@$dbh) {
-        $self->add_test_schema($innerdbh);
+    ## Now recreate all the extra databases via templating
+    for my $number (1..$extradbs) {
+        my $dbname2 = "$dbname$number";
+        local $dbh->{AutoCommit} = 1;
+        if (database_exists($dbh, $dbname2)) {
+            ## First, kill other sessions!
+            my $odbh = $self->connect_database($clustername, $dbname2);
+            eval {
+                $SQL = 'SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = ? AND pid <> pg_backend_pid()';
+                $sth = $odbh->prepare($SQL);
+                $odbh->execute($dbname2);
+                $odbh->commit();
+            };
+            $odbh->disconnect();
+            $dbh->do("DROP DATABASE $dbname2");
+        }
+        $dbh->do("CREATE DATABASE $dbname2 TEMPLATE $dbname");
     }
 
     ## Store our names away
-    $gdbh{$clustername} = $dbh->[0];
+    $gdbh{$clustername} = $dbh;
 
-    return $dbh->[0];
+    return $dbh;
 
 } ## end of repopulate_cluster
 
@@ -733,10 +740,12 @@ sub add_test_schema {
     ## Add an empty test schema to a database
     ## Arguments: two
     ## 1. database handle (usually to 'bucardo_test')
+    ## 2. Cluster name
     ## Returns: nothing
 
     my $self = shift;
     my $dbh = shift or die;
+    my $clustername = shift or die;
 
     my ($tcount,$scount,$fcount) = (0,0,0);
 
@@ -759,7 +768,6 @@ sub add_test_schema {
         debug(q{Creating language plpgsql});
         $dbh->do('CREATE LANGUAGE plpgsql');
     }
-    $dbh->commit() if ! $dbh->{AutoCommit};
 
     ## Create supporting functions as needed
     if (!function_exists($dbh => 'trigger_test')) {
@@ -874,7 +882,8 @@ ALTER TABLE bucardo_fkey1
         $scount++;
     }
 
-    debug("Test objects created. Tables: $tcount  Sequences: $scount  Functions: $fcount");
+    debug("Test objects created for $clustername. Tables: $tcount  Sequences: $scount  Functions: $fcount");
+#    diag("Test objects created for $clustername. Tables: $tcount  Sequences: $scount  Functions: $fcount");
 
     $dbh->commit() if ! $dbh->{AutoCommit};
 
@@ -1931,7 +1940,7 @@ sub check_sequences_same {
         if (@msg) {
             Test::More::fail("Sequence $seq NOT the same");
             for (@msg) {
-                Test::More::diag($_);
+                diag($_);
             }
         }
         else {
@@ -1961,8 +1970,8 @@ sub is_deeply {
     if ($bail_on_error and ++$total_errors => $bail_on_error) {
         my $line = (caller)[2];
         my $time = time;
-        Test::More::diag("GOT: ".Dumper $_[0]);
-        Test::More::diag("EXPECTED: ".Dumper $_[1]);
+        diag("GOT: ".Dumper $_[0]);
+        diag("EXPECTED: ".Dumper $_[1]);
         Test::More::BAIL_OUT "Stopping on a failed 'is_deeply' test from line $line. Time: $time";
     }
 } ## end of is_deeply
@@ -1999,7 +2008,7 @@ sub is($$;$) {
         my $one = ord(substr($_[0],$char,1));
         my $two = ord(substr($_[1],$char,1));
         if ($one != $two) {
-            Test::More::diag("First difference at character $char ($one vs $two) (line $line, char $lchar)");
+            diag("First difference at character $char ($one vs $two) (line $line, char $lchar)");
             last;
         }
         if (10 == $one) {
