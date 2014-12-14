@@ -10097,6 +10097,7 @@ sub send_mail {
 
     ## Where do we connect to?
     my $smtphost = $config{default_email_host} || 'localhost';
+    my $smtpport = $config{default_email_port} || 25;
 
     ## Send normal email
     ## Do not send it if the 'example.com' default value is still in place
@@ -10106,9 +10107,18 @@ sub send_mail {
         eval {
             my $smtp = Net::SMTP->new(
                 Host    => $smtphost,
+                Port    => $smtpport,
                 Hello   => $hostname,
                 Timeout => 15
                 );
+
+            if ($config{email_auth_user} and $config{email_auth_pass}) {
+                ## Requires Authen::SASL
+                my ($auser,$apass) = ($config{email_auth_user}, $config{email_auth_pass});
+                $self->glog("Attempting Net::SMTP::auth with user $auser", LOG_DEBUG);
+                $smtp->auth($auser, $apass);
+            }
+
             $smtp->mail($from);
             $smtp->to($arg->{to});
             $smtp->data();
