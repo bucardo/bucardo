@@ -55,6 +55,7 @@ use constant {
     LOG_NORMAL  => 2,  ## Normal messages
     LOG_VERBOSE => 3,  ## Many more details
     LOG_DEBUG   => 4,  ## Firehose: rarely needed
+    LOG_DEBUG2  => 5,  ## Painful level of detail
 };
 
 ## Map system signal numbers to standard names
@@ -7375,7 +7376,7 @@ sub fork_and_inactivate {
         ## It is probably still referenced elsewhere, so handle that - how?
         for my $iname (keys %{ $self->{dbhlist} }) {
             my $ldbh = $self->{dbhlist}{$iname};
-            $self->glog("Inactivating dbh $iname post-fork", LOG_DEBUG);
+            $self->glog("Inactivating dbh $iname post-fork", LOG_DEBUG2);
             $ldbh->{InactiveDestroy} = 1;
             delete $self->{dbhlist}{$iname};
         }
@@ -7403,7 +7404,7 @@ sub fork_and_inactivate {
                 for my $dbname (sort keys %{ $self->{sync}{db} }) {
                     if (exists $self->{sync}{db}{$dbname}{dbh}) {
                         if (ref $self->{sync}{db}{$dbname}{dbh}) {
-                            $self->glog("Removing reference to database $dbname", LOG_DEBUG);
+                            $self->glog("Removing reference to database $dbname", LOG_DEBUG2);
                             $self->{sync}{db}{$dbname}{dbh}->{InactiveDestroy} = 1;
                         }
                         delete $self->{sync}{db}{$dbname}{dbh};
@@ -7415,7 +7416,7 @@ sub fork_and_inactivate {
                     for my $dbname (sort keys %{ $self->{sync}{$syncname}{db} }) {
                         if (exists $self->{sync}{$syncname}{db}{$dbname}{dbh}) {
                             if (ref $self->{sync}{$syncname}{db}{$dbname}{dbh}) {
-                                $self->glog("Removing reference to database $dbname in sync $syncname", LOG_DEBUG);
+                                $self->glog("Removing reference to database $dbname in sync $syncname", LOG_DEBUG2);
                                 $self->{sync}{$syncname}{db}{$dbname}{dbh}->{InactiveDestroy} = 1;
                             }
                             delete $self->{sync}{$syncname}{db}{$dbname}{dbh};
