@@ -3012,14 +3012,11 @@ sub start_kid {
                 for my $g (@$goatlist) {
 
                     next if $g->{reltype} ne 'table';
-
                     ($S,$T) = ($g->{safeschema},$g->{safetable});
                     ## Set the per database/per table makedelta setting now
-                    if ($d->{makedelta} eq 'true' or defined $g->{makedelta}) {
-                        if ($d->{makedelta} eq 'true' or $g->{makedelta} eq 'on' or $g->{makedelta} =~ /\b$dbname\b/) {
-                            $d->{does_makedelta}{$S}{$T} = 1;
-                            $self->glog("Set table $dbname.$S.$T to makedelta", LOG_NORMAL);
-                        }
+                    if (1 == $d->{makedelta} or $g->{makedelta} eq 'on' or $g->{makedelta} =~ /\b$dbname\b/) {
+                        $d->{does_makedelta}{$S}{$T} = 1;
+                        $self->glog("Set table $dbname.$S.$T to makedelta", LOG_NORMAL);
                     }
 
                 } ## end each table
@@ -6763,6 +6760,9 @@ sub validate_sync {
 
         ## Plunk the oid into a hash for easy lookup below when saving FK information
         $s->{tableoid}{$g->{oid}}{name} = "$S.$T";
+
+        ## Makedelta for this table starts empty
+        $g->{makedelta} = '';
 
         ## Determine the conflict method for each goat
         ## Use the syncs if it has one, otherwise the default
