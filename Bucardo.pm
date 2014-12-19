@@ -6765,7 +6765,7 @@ sub validate_sync {
         $s->{tableoid}{$g->{oid}}{name} = "$S.$T";
 
         ## Makedelta for this table starts empty
-        $g->{makedelta} = '';
+        $g->{makedelta} ||= '';
 
         ## Determine the conflict method for each goat
         ## Use the syncs if it has one, otherwise the default
