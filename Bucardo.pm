@@ -2999,7 +2999,6 @@ sub start_kid {
                     ($SQL = $SQL{stage}{$g}) =~ s/DBGROUP/'$d->{DBGROUPNAME}'/go;
                     $sth{stage}{$dbname}{$g} = $d->{dbh}->prepare($SQL, {pg_async => PG_ASYNC});
 
-
                 } ## end each table
 
             } ## end each source database
@@ -6257,23 +6256,26 @@ sub db_unlisten_all {
 sub db_notify {
 
     ## Send an asynchronous notification into the DB aether, then commit
-
+    ## Arguments: five
     ## 1. Database handle
     ## 2. The string to send
     ## 3. Whether to skip payloads. Optional boolean, defaults to false
     ## 4. Name of the database (as defined in bucardo.db). Optional
+    ## 5. Whether we should skip the final commit or not. Defaults to false. Optional.
     ## Returns: undef
 
-    my ($self, $ldbh, $string, $skip_payload, $dbname) = @_;
+    my ($self, $ldbh, $string, $skip_payload, $dbname, $skip_commit) = @_;
 
     ## We make some exceptions to the payload system, mostly for early MCP notices
     ## This is because we don't want to complicate external clients with payload decisions
     $skip_payload = 0 if ! defined $skip_payload;
 
+    $skip_commit = 0 if ! defined $skip_commit;
+
     if ($config{log_level_number} <= LOG_DEBUG) {
         my $line = (caller)[2];
-        my $showdb = defined $dbname ? " to db $dbname" : '';
-        $self->glog(qq{Sending NOTIFY "$string"$showdb (line $line)}, LOG_DEBUG);
+        my $showdb = (defined $dbname and length $dbname) ? " to db $dbname" : '';
+        $self->glog(qq{Sending NOTIFY "$string"$showdb (line $line) skip_commit=$skip_commit}, LOG_DEBUG);
     }
 
     if ($ldbh->{pg_server_version} < 90000 or $skip_payload) {
@@ -6297,7 +6299,7 @@ sub db_notify {
             or $self->glog(qq{Warning: NOTIFY failed for bucardo, '$string'}, LOG_DEBUG);
     }
 
-    $ldbh->commit();
+    $ldbh->commit() if ! $skip_commit;
 
     return;
 
@@ -9836,7 +9838,7 @@ sub push_rows {
                     }
                     for my $row (@{ $self->{kick_othersyncs}{$syncname}{$tname} }) {
                         my $othersync = $row->[0];
-                        $self->db_notify($dbh, "kick_sync_$othersync");
+                        $self->db_notify($dbh, "kick_sync_$othersync", 0, '', 1);
                     }
                 }
             }
