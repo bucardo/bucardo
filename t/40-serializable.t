@@ -13,7 +13,7 @@ my $bct = BucardoTesting->new({location => 'postgres'})
 
 END { $bct->stop_bucardo if $bct }
 
-my $dbh = $bct->empty_cluster('A')->[0];
+my $dbh = $bct->empty_cluster('A');
 END { $dbh->disconnect if $dbh }
 
 # Skip the tests if we can't mock the serialization failure.
