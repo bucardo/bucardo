@@ -15,7 +15,7 @@ use Test::More;
 use vars qw/ $dbhX $dbhA $dbhB $dbhC $dbhD $res $command $t $SQL $sth $count /;
 
 use BucardoTesting;
-my $bct = BucardoTesting->new({location => 'star'})
+my $bct = BucardoTesting->new({location => 'star', bail => 1})
     or BAIL_OUT "Creation of BucardoTesting object failed\n";
 
 pass("*** Beginning star tests");
@@ -40,7 +40,7 @@ $dbhD = $bct->repopulate_cluster('D',$extras);
 $dbhX = $bct->setup_bucardo('A');
 
 ## Teach Bucardo about all databases
-my (@alldbs, @alldbhs);
+my (@alldbs, @alldbhs, %dbmap);
 for my $name (qw/ A B C D /) {
     my ($dbuser,$dbport,$dbhost) = $bct->add_db_args($name);
     for my $number (0..$extras) {
@@ -58,8 +58,9 @@ for my $name (qw/ A B C D /) {
         $res = $bct->ctl($command);
         like ($res, qr/Added database "$bname"/, $t);
         push @alldbs => $bname;
-        my $dbh = $bct->connect_database($bname);
+        my $dbh = $bct->connect_database($bname, $dbname);
         push @alldbhs => $dbh;
+        $dbmap{$dbh} = $bname;
     }
 }
 
@@ -87,6 +88,9 @@ for my $db (qw/ B C D /) {
     }
 }
 
+## Turn off the vac daemon for now
+$bct->ctl('bucardo set bucardo_vac=0');
+
 ## Start up the Bucardo daemon
 $bct->restart_bucardo($dbhX);
 
@@ -101,12 +105,57 @@ my $maxnumber = 1;
 $SQL = 'INSERT INTO bucardo_test1(id,inty) VALUES (?,?)';
 for my $dbh (@alldbhs) {
     $number++;
-    next if $number < 2; ## Do ont want to add anything to the "A" database
+    next if $number < 2; ## Do not want to add anything to the "A" database
     $dbh->do($SQL, undef, $number, $number);
     $dbh->commit();
+    my $mydb = $dbmap{$dbh};
+    #diag "Added number $number to database $mydb";
     $maxnumber = $number;
+    #last if $number >= 5;
 }
-sleep 15;
+
+## Scan everyone until replication is done.
+## Bail if it gets too long
+my $toolong = 30; ## number of 1-second loops
+my $round = 1;
+
+$SQL = 'SELECT id FROM bucardo_test1 ORDER BY id';
+my %sth;
+for my $dbh (@alldbhs) {
+    $sth{$dbh} = $dbh->prepare($SQL);
+}
+
+my $good = '';
+for (1..$maxnumber) {
+    $good .= "$_ ";
+}
+chop $good;
+
+{
+
+    my $allgood = 1;
+    for my $dbh (@alldbhs) {
+        $sth{$dbh}->execute();
+        my $output = join ' ' => map { $_->[0] } @{ $sth{$dbh}->fetchall_arrayref() };
+        $allgood = 0 if $output ne $good;
+    }
+
+    #diag "Round $round, good is $allgood";
+    last if $allgood;
+
+    if ($round++ >= $toolong) {
+        diag "Too many loops and no complete replication";
+        exit;
+    }
+    sleep 1;
+    redo;
+}
+
+pass 'All databases received all updates!';
+
+for my $dbh (@alldbhs) {
+    $dbh->disconnect();
+}
 
 my $result = [];
 push @$result, [$_] for 1..$maxnumber;
