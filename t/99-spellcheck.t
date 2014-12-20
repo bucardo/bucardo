@@ -2,6 +2,7 @@
 # -*-mode:cperl; indent-tabs-mode: nil-*-
 
 ## Spellcheck as much as we can
+## Make sure you have Text::Hunspell installed or you will get false positives
 ## Requires TEST_SPELL to be set
 
 use 5.006;
@@ -50,7 +51,7 @@ while (<DATA>) {
 
 sub spellcheck {
 	my ($desc, $text, $filename) = @_;
-	my $check = Text::SpellChecker->new(text => $text);
+	my $check = Text::SpellChecker->new(text => $text, lang => 'en_US');
 	my %badword;
 	while (my $word = $check->next_word) {
 		next if $okword{Common}{$word} or $okword{$filename}{$word};
@@ -156,7 +157,10 @@ dbname
 dbrun
 DDL
 dropin
+foobar
 fullcopy
+grep
+Hunspell
 LOGIN
 MariaDB
 mongo
@@ -165,6 +169,7 @@ Mullane
 mysql
 MySQL
 NOTIFYs
+org
 perl
 PGBINDIR
 pgsql
@@ -259,9 +264,11 @@ NAMEDATALEN
 nosync
 onetimecopy
 param
+params
 pgbouncer
 PgBouncer's
 pgpid
+PGSERVICEFILE
 pid
 PID
 PIDCLEANUP
@@ -312,6 +319,9 @@ Zamani
 
 ## TODO
 
+kicksync
+sourceonly
+varchar
 CPAN
 PID
 Readonly
@@ -388,6 +398,8 @@ vate
 
 ## README.dev
 
+Bugzilla
+tarball
 BucardoTesting
 Checksum
 DBIx
@@ -434,18 +446,22 @@ perlcritic
 perlcriticrc
 postgresql
 pragma
+quickstart
 realclean
 sha
 sig
 skipcheck
 spellcheck
+stagetable
 submitnews
 teardown
 testname
 timestamps
 tmp
 txt
+undef
 uniqueconstraint
+unlink
 username
 weeklynews
 wildkick
@@ -479,12 +495,22 @@ unapologetically
 backend
 bct
 booly
+configs
+commandline
+ctest
 ctl
 ctlargs
 dbh
 dbhA
 dbhB
+dbhC
+dbhD
+dbhE
+dbhF
 dbhX
+dbhostA
+dbportA
+dbuserA
 diag
 droptest
 env
@@ -533,6 +559,9 @@ untar
 
 ## META.yml
 
+ExtUtils
+MakeMaker
+Util
 HiRes
 Hostname
 MailingList

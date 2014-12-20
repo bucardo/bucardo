@@ -167,7 +167,7 @@ $bct->update_row_in_database('C', 1, 113);
 $bct->ctl('bucardo kick sync ctest 10');
 $bct->check_for_row([[111],[212],[301]], [qw/ A B C D /]);
 
-## Customcode with specific winners per row
+## Test customcode with specific winners per row
 $t = q{Added new customcode ctest2 for conflict in the ctest sync};
 $res = $bct->ctl('bucardo add customcode ctest2 whenrun=conflict relation=bucardo_test1 src_code=t/ctest2.pl');
 like($res, qr{Added customcode "ctest2"}, $t);
@@ -187,7 +187,7 @@ $bct->ctl('bucardo kick sync ctest 10');
 $bct->check_for_row([[102],[222],[301]], [qw/ A B C D /]);
 
 
-## Customcode on a goat only
+## Test customcode on a goat only
 
 
 done_testing();
