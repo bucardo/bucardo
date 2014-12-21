@@ -611,7 +611,8 @@ sub _pod2usage {
 }
 
 sub help {
-    my ($exitval, $msg) = @_;
+
+    my ($exitval, $message) = @_;
 
     ## Give detailed help about usage of this program
     ## Arguments: none
@@ -621,7 +622,7 @@ sub help {
     exit 0 if $QUIET;
 
     _pod2usage(
-        '-message'  => $msg,
+        '-message'  => $message,
         '-sections' => '^(?:USAGE|COMMANDS|OPTIONS)$',
         '-exitval'  => $exitval || 0,
     );
@@ -679,7 +680,7 @@ sub superhelp {
             table
             tables
             validate
-        )
+        ),
     );
 
     # Standardize names.
@@ -1228,16 +1229,16 @@ sub validate {
 
         my ($evalok, $success);
         eval {
-            my ($msg) = $dbh->selectrow_array(
+            my ($message) = $dbh->selectrow_array(
                 'SELECT validate_sync(?)',
                 undef, $name
             );
             $dbh->commit;
-            if ($msg eq 'MODIFY') {
+            if ($message eq 'MODIFY') {
                 $success = 1;
             }
             else {
-                warn "$msg\n";
+                warn "$message\n";
                 $exitval++;
             }
             $evalok = 1;
@@ -1610,7 +1611,7 @@ sub add_database {
     }
 
     ## Inputs and aliases, database column name, flags, default value
-    my $validcols = qq{
+    my $validcols = q{
         type|dbtype              dbtype               0                postgres
         pass|password|dbpass     dbpass               0                null
         db|dbname                dbname               0                null
@@ -1767,14 +1768,14 @@ sub add_database {
 
             if ('mongo' eq $dbtype) {
 
-                my $dsn = {};
+                my $mongodsn = {};
                 for my $line (split /\n/ => $dbconn) {
                     next if $line !~ /(\w+):\s+(.+)/;
-                    $dsn->{$1} = $2;
+                    $mongodsn->{$1} = $2;
                 }
 
                 eval {
-                    $testdbh = MongoDB::Connection->new($dsn); ## no critic
+                    $testdbh = MongoDB::Connection->new($mongodsn); ## no critic
                     $evalok = 1;
                 };
             }
@@ -1820,7 +1821,6 @@ sub add_database {
             }
             else {
                 my $err = $DBI::errstr || $@;
-                my $msg;
 
                 ## For Postgres, we get a little fancy and try to account for instances
                 ## where the bucardo user may not exist yet, by reconnecting and
@@ -2274,11 +2274,11 @@ sub list_databases {
                 print ' (SSP is off)';
             }
             if ($info->{makedelta}) {
-                print " (makedelta on)";
+                print ' (makedelta on)';
             }
         }
         if ($dbtype eq 'drizzle') {
-            my $showport = (length $info->{dbport} and $info->{dbport} != 3306)
+            $showport = (length $info->{dbport} and $info->{dbport} != 3306)
                 ? " --port $info->{dbport}" : '';
             printf 'Conn: drizzle -u %s -D %s%s%s',
                 $info->{dbuser},
@@ -2295,7 +2295,7 @@ sub list_databases {
             }
         }
         if ($dbtype eq 'mysql' or $dbtype eq 'mariadb') {
-            my $showport = (length $info->{dbport} and $info->{dbport} != 3306)
+            $showport = (length $info->{dbport} and $info->{dbport} != 3306)
                 ? " --port $info->{dbport}" : '';
             printf 'Conn: mysql -u %s -D %s%s%s',
                 $info->{dbuser},
@@ -2980,16 +2980,17 @@ sub list_customnames {
 } ## end of list_customnames
 
 sub find_goat_by_item {
+
     ## Finds a goat in the %GOAT hash, using one argument as a search key
     ## Arguments: name. Can be a goat id or a name, possibly including schema, or wildcards
     ##            nouns. Ref to array of other args; right now only supports "db=###"
     ## Results: An array of goat objects that match these keys
 
     my $name = shift;
-    my $nouns = shift;
-    my @nouns = ( defined $nouns ? @$nouns : ());
+    my $lnouns = shift;
+    my @lnouns = ( defined $lnouns ? @$lnouns : ());
 
-    $DEBUG and warn "Finding goats with name $name, noun: " . Dumper(@nouns);
+    $DEBUG and warn "Finding goats with name $name, noun: " . Dumper(@lnouns);
 
     my @results;
 
@@ -3029,7 +3030,7 @@ sub find_goat_by_item {
 
         ## The found goat keys point to arrayrefs. Turn all that into a
         ## one-dimensional array of goats
-        $DEBUG and warn "Found these candidate keys: ". Dumper(@found_keys);
+        $DEBUG and warn 'Found these candidate keys: '. Dumper(@found_keys);
         map {
             for my $b (@{$GOAT->{$_->[0]}{$_->[1]}}) {
                 push(@results, $b);
@@ -3038,10 +3039,10 @@ sub find_goat_by_item {
         $DEBUG and warn q{Here are the goats we've found, before filtering: } . Dumper(@results);
     }
 
-    if (@results && defined $results[0] && @nouns && defined $nouns[0]) {
-        my @filters = grep(/^(?:db|database)\s*=/, @nouns);
+    if (@results && defined $results[0] && @lnouns && defined $lnouns[0]) {
+        my @filters = grep(/^(?:db|database)\s*=/, @lnouns);
         if (@filters) {
-            ## The @nouns array will only contain one db= value, even if the command includes several
+            ## The @lnouns array will only contain one db= value, even if the command includes several
             my $db_filter = $filters[0];
 
             $DEBUG and warn "Database filter starting value: $db_filter";
@@ -3057,7 +3058,9 @@ sub find_goat_by_item {
 
     $DEBUG and warn 'Here are the filtered results: ' . Dumper(@results);
     @results = () if (@results and !defined $results[0]);
+
     return @results;
+
 } ## end of find_goat_by_item
 
 ##
@@ -4786,7 +4789,7 @@ sub get_goat_ids {
 
     my %arg = @_;
     my $reltype = $arg{type};
-    my $names = $arg{args} or die "Must have list of things to match";
+    my $names = $arg{args} or die 'Must have list of things to match';
     my $dbcols = $arg{dbcols} || {};
     my $noherd = $arg{noherd} || '';
 
@@ -7907,8 +7910,8 @@ sub upgrade {
     if (config_exists('bucardo_current_version')) {
         ## was version and current_version; became initial_version and version
         clog('Renaming bucardo_current_version to bucardo_version, and bucardo_version to bucardo_initial_version');
-        upgrade_and_log(qq{UPDATE bucardo.bucardo_config SET name = 'bucardo_initial_version' WHERE name = 'bucardo_version'});
-        upgrade_and_log(qq{UPDATE bucardo.bucardo_config SET name = 'bucardo_version' WHERE name = 'bucardo_current_version'});
+        upgrade_and_log(q{UPDATE bucardo.bucardo_config SET name = 'bucardo_initial_version' WHERE name = 'bucardo_version'});
+        upgrade_and_log(q{UPDATE bucardo.bucardo_config SET name = 'bucardo_version' WHERE name = 'bucardo_current_version'});
     }
 
     ## Check for any new config items
@@ -8179,6 +8182,8 @@ sub usage_exit {
         '-sections' => "COMMAND DETAILS/$name",
         '-exitval'  => $exitval,
     );
+
+    return;
 
 } ## end of usage_exit
 

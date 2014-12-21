@@ -10,6 +10,7 @@ profile-strictness = quiet
 ## Five:
 ##
 
+[-BuiltinFunctions::ProhibitStringyEval]
 [-ControlStructures::ProhibitMutatingListFunctions]
 [-Subroutines::ProhibitNestedSubs] 
 [-ValuesAndExpressions::ProhibitAccessOfPrivateData]
@@ -58,6 +59,7 @@ profile-strictness = quiet
 [-Subroutines::ProhibitManyArgs]
 [-ValuesAndExpressions::ProhibitImplicitNewlines]
 [-Variables::ProhibitPackageVars]
+[-Variables::RequireInitializationForLocalVars]
 [-ValuesAndExpressions::ProhibitVersionStrings]
 
 ##
@@ -69,6 +71,7 @@ profile-strictness = quiet
 [-BuiltinFunctions::ProhibitBooleanGrep]
 [-BuiltinFunctions::ProhibitStringySplit]
 [-CodeLayout::ProhibitQuotedWordLists]
+[-ControlStructures::ProhibitCStyleForLoops]
 [-ControlStructures::ProhibitPostfixControls]
 [-ControlStructures::ProhibitUnlessBlocks]
 [-Documentation::RequirePodSections]
@@ -104,6 +107,7 @@ profile-strictness = quiet
 [-NamingConventions::Capitalization]
 [-RegularExpressions::ProhibitEnumeratedClasses]
 [-RegularExpressions::ProhibitEscapedMetacharacters]
+[-RegularExpressions::ProhibitSingleCharAlternation]
 
 ## Change the severity level of some specific items
 
