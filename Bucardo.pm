@@ -719,16 +719,16 @@ sub start_mcp {
         ## Bail if the stopfile exists
         if (-e $self->{stopfile}) {
             $self->glog(qq{Found stopfile "$self->{stopfile}": exiting}, LOG_WARN);
-            my $msg = 'Found stopfile';
+            my $message = 'Found stopfile';
 
             ## Grab the reason, if it exists, so we can propagate it onward
             my $mcpreason = get_reason(0);
             if ($mcpreason) {
-                $msg .= ": $mcpreason";
+                $message .= ": $mcpreason";
             }
 
             ## Stop controllers, disconnect, remove PID file, etc.
-            $self->cleanup_mcp("$msg\n");
+            $self->cleanup_mcp("$message\n");
 
             $self->glog('Exiting', LOG_WARN);
             exit 0;
@@ -741,11 +741,11 @@ sub start_mcp {
             $RUNME = "./$RUNME" if index ($RUNME,'.') != 0;
         }
 
-        my $reason = 'Attempting automatic respawn after MCP death';
-        $self->glog("Respawn attempt: $RUNME @{ $opts } start '$reason'", LOG_TERSE);
+        my $mcpreason = 'Attempting automatic respawn after MCP death';
+        $self->glog("Respawn attempt: $RUNME @{ $opts } start '$mcpreason'", LOG_TERSE);
 
         ## Replace ourselves with a new process running this command
-        { exec $RUNME, @{ $opts }, 'start', $reason };
+        { exec $RUNME, @{ $opts }, 'start', $mcpreason };
         $self->glog("Could not exec $RUNME: $!", LOG_WARN);
 
     }; ## end SIG{__DIE__} handler sub
@@ -966,7 +966,7 @@ sub mcp_main {
 
         ## Add in any messages from the main database and reset the notice hash
         ## Ignore things we may have sent ourselves
-        my $notice = $self->db_get_notices($maindbh, $self->{mcp_backend});
+        $notice = $self->db_get_notices($maindbh, $self->{mcp_backend});
 
         ## Add in any messages from each remote database
         for my $dbname (keys %{ $self->{sdb} }) {
@@ -2647,7 +2647,7 @@ sub start_kid {
     $sth{dbrun_delete} = $maindbh->prepare($SQL{dbrun_delete});
 
     ## Disable the CTL exception handler.
-    local $SIG{__DIE__};
+
 
     ## Fancy exception handler to clean things up before leaving.
     my $err_handler = sub {
@@ -2909,7 +2909,7 @@ sub start_kid {
         for my $g (@$goatlist) {
             next if $g->{reltype} ne 'table';
             ($S,$T) = ($g->{safeschema},$g->{safetable});
-            $maxst = length "$S.$T" if length "$S.$T" > $maxst;
+            $maxst = length "$S.$T" if length ("$S.$T") > $maxst;
         }
         $self->{maxdbstname} = $self->{maxdbname} + 1 + $maxst;
 
@@ -3907,7 +3907,7 @@ sub start_kid {
                 ## The list of primary key columns
                 if (! $g->{pkeycols}) { ## only do this once
                     $g->{pkeycols} = '';
-                    my $i=0;
+                    $i=0;
                     for my $qpk (@{$g->{qpkey}}) {
                         $g->{pkeycols} .= sprintf '%s,', $g->{binarypkey}{$i} ? qq{ENCODE($qpk,'base64')} : $qpk;
                         $i++;
@@ -4024,13 +4024,13 @@ sub start_kid {
 
                         ## We can safely skip this if we already have the winners list in some format
                         if (exists $self->{conflictinfo}{tablewinner_always}{$g}) {
-                            $self->glog("Using previous tablewinner_always winner", LOG_DEBUG);
+                            $self->glog('Using previous tablewinner_always winner', LOG_DEBUG);
                         }
                         elsif (exists $self->{conflictinfo}{syncwinner}) {
-                            $self->glog("Using previous syncwinner winner", LOG_DEBUG);
+                            $self->glog('Using previous syncwinner winner', LOG_DEBUG);
                         }
                         elsif (exists $self->{conflictinfo}{syncwinner_always}) {
-                            $self->glog("Using previous syncwinner_always winner", LOG_DEBUG);
+                            $self->glog('Using previous syncwinner_always winner', LOG_DEBUG);
                         }
                         else {
                             $self->glog('Starting code_conflict', LOG_VERBOSE);
@@ -4235,9 +4235,9 @@ sub start_kid {
                         }
                         else {
                             ## Have more than one, so figure out the best one to use
-                            my @dbs = split / +/ => $sc;
+                            my @mdbs = split / +/ => $sc;
                             ## Make sure they all exist
-                            for my $dbname (@dbs) {
+                            for my $dbname (@mdbs) {
                                 if (! exists $deltacount{$dbname}) {
                                     $self->pause_and_exit(qq{Invalid conflict strategy '$sc' used for $S.$T: no such database '$dbname'});;
                                 }
@@ -4848,12 +4848,12 @@ sub start_kid {
 
                         my $d = $sync->{db}{$dbname};
 
-                        my $tname = $g->{newname}{$syncname}{$dbname};
+                        my $targetname = $g->{newname}{$syncname}{$dbname};
 
                         ## If this target table has rows, skip it
-                        if ($self->table_has_rows($d, $tname)) {
+                        if ($self->table_has_rows($d, $targetname)) {
                             $sync->{otc}{skip}{$dbname} = 1;
-                            $self->glog(qq{Target table "$dbname.$tname" has rows and we are in onetimecopy if empty mode, so we will not COPY}, LOG_NORMAL);
+                            $self->glog(qq{Target table "$dbname.$targetname" has rows and we are in onetimecopy if empty mode, so we will not COPY}, LOG_NORMAL);
                         }
                         else {
                             $have_targets = 1;
@@ -5233,7 +5233,7 @@ sub start_kid {
         #my $target_commit_time = $targetdbh->selectall_arrayref('SELECT now()')->[0][0];
         #$sourcedbh->commit();
         #$targetdbh->commit();
-        my ($source_commit_time, $target_commit_time);
+        #my ($source_commit_time, $target_commit_time);
 
         ## Update the syncrun table, including the delete and insert counts
         my $reason = "Finished (KID $$)";
@@ -5493,9 +5493,9 @@ sub start_kid {
             sleep $sleeptime if $sleeptime;
             $kicked = 1;
         };
-        if (my $err = $@) {
+        if ($@) {
             # Our recovery failed. :-(
-            $err_handler->($err);
+            $err_handler->($@);
         }
         else {
             redo RUNKID;
@@ -5586,13 +5586,13 @@ sub connect_database {
             $dsn = "dbi:drizzle:database=$dbname";
         }
         elsif ('mongo' eq $dbtype) {
-            my $dsn = {};
+            my $mongodsn = {};
             for my $name (qw/ dbhost dbport dbuser dbpass /) {
-                defined $d->{$name} and length $d->{$name} and $dsn->{$name} = $d->{$name};
+                defined $d->{$name} and length $d->{$name} and $mongodsn->{$name} = $d->{$name};
             }
             ## For now, we simply require it
             require MongoDB;
-            my $conn = MongoDB::Connection->new($dsn); ## no critic
+            my $conn = MongoDB::Connection->new($mongodsn); ## no critic
             $dbh = $conn->get_database($dbname);
             my $backend = 0;
 
@@ -5605,10 +5605,6 @@ sub connect_database {
             $dsn = "dbi:Oracle:dbname=$dbname";
         }
         elsif ('redis' eq $dbtype) {
-            my $dsn = {};
-            for my $name (qw/ dbhost dbport dbuser dbpass /) {
-                defined $d->{$name} and length $d->{$name} and $dsn->{$name} = $d->{$name};
-            }
             my @dsn;
             my $server = '';
             if (defined $d->{host} and length $d->{host}) {
@@ -6511,7 +6507,7 @@ sub validate_sync {
             }
             $self->glog(qq{Connecting to database "$dbname" ($role)}, LOG_TERSE);
             eval {
-                ## We do not want the MCP handler here
+                ## We do not want the CTL handler here
                 local $SIG{__DIE__} = undef;
                 ($d->{backend}, $d->{dbh}) = $self->connect_database($dbname);
             };
@@ -6787,7 +6783,7 @@ sub validate_sync {
             $g->{pkeytype}       = [split /\|/o => $g->{pkeytype}];
             $g->{numpkcols}      = @{$g->{pkey}};
             $g->{hasbinarypk}    = 0; ## Not used anywhere?
-            my $i = 0;
+            $i = 0;
             for (@{$g->{pkey}}) {
                 $g->{binarypkey}{$i++} = 0;
             }
@@ -8143,7 +8139,7 @@ sub signal_pid_files {
     while (defined ($name = readdir($dh))) {
 
         ## Skip unless it's a matched file
-        next unless index($name, $string) >= 0;
+        next if index($name, $string) < 0;
 
         $self->glog(qq{Attempting to signal PID from file "$name"}, LOG_TERSE);
 
@@ -8453,6 +8449,9 @@ sub create_newkid {
 
         return $newkid;
     }
+
+    ## At this point, this is the kid. Make sure we do not inherit the CTL error handler:
+    $SIG{__DIE__} = undef;
 
     ## Create the kid process
     $self->start_kid($kidsync);
@@ -9320,18 +9319,18 @@ sub delete_rows {
 
                         ## Grab what type this column is
                         ## We need to map non-strings to correct types as best we can
-                        my $type = $goat->{columnhash}{$realpkname}{ftype};
+                        my $ctype = $goat->{columnhash}{$realpkname}{ftype};
 
                         ## For integers, we simply force to a Perlish int
-                        if ($type =~ /smallint|integer|bigint/o) {
+                        if ($ctype =~ /smallint|integer|bigint/o) {
                             @{ $delkeys[$pknum] } = map { int $_->[$pknum] } @fullrow;
                         }
                         ## Non-integer numbers get set via the strtod command from the 'POSIX' module
-                        elsif ($type =~ /real|double|numeric/o) {
+                        elsif ($ctype =~ /real|double|numeric/o) {
                             @{ $delkeys[$pknum] } = map { strtod $_->[$pknum] } @fullrow;
                         }
                         ## Boolean becomes true Perlish booleans via the 'boolean' module
-                        elsif ($type eq 'boolean') {
+                        elsif ($ctype eq 'boolean') {
                             @{ $delkeys[$pknum] } = map { $_->[$pknum] eq 't' ? true : false } @fullrow;
                         }
                         ## Everything else gets a direct mapping
@@ -9761,7 +9760,7 @@ sub push_rows {
                         my $pkeyval = join ':' => @pkey;
                         ## Build a list of non-null key/value pairs to set in the hash
                         my @add;
-                        my $i = $goat->{numpkcols} - 1;
+                        $i = $goat->{numpkcols} - 1;
                         for my $val (@colvals) {
                             $i++;
                             next if ! defined $val;
@@ -9828,7 +9827,7 @@ sub push_rows {
                         }, undef, $d->{DBGROUPNAME});
                     }
 
-                    $self->glog("Signalling all other syncs that this table has changed", LOG_DEBUG);
+                    $self->glog('Signalling all other syncs that this table has changed', LOG_DEBUG);
                     ## Cache this
                     if (! exists $self->{kick_othersyncs}{$syncname}{$tname}) {
                         $SQL = 'SELECT sync FROM bucardo.bucardo_delta_names WHERE sync <> ? AND tablename = ?';
@@ -9838,7 +9837,7 @@ sub push_rows {
                     }
                     for my $row (@{ $self->{kick_othersyncs}{$syncname}{$tname} }) {
                         my $othersync = $row->[0];
-                        $self->db_notify($dbh, "kick_sync_$othersync", 0, '', 1);
+                        $self->db_notify($dbh, 'kick_sync_$othersync', 0, '', 1);
                     }
                 }
             }
@@ -9979,7 +9978,7 @@ sub msg { ## no critic
         die qq{Invalid message "$name" from line $line\n};
     }
 
-    my $i = 1;
+    $i = 1;
     {
         my $val = $_[$i-1];
         $val = '?' if ! defined $val;
