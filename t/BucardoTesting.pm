@@ -1234,7 +1234,7 @@ sub wait_for_notice {
     my $timeout = shift || $TIMEOUT_NOTICE;
     my $sleep = shift || $TIMEOUT_SLEEP;
     my $bail = shift;
-    $bail = 1 if !defined($bail);
+    $bail = 0 if !defined($bail);
     my $n;
     my %wait_for;
     for my $str (ref $text ? @{ $text } : $text) {
