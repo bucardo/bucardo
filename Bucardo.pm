@@ -9837,7 +9837,7 @@ sub push_rows {
                     }
                     for my $row (@{ $self->{kick_othersyncs}{$syncname}{$tname} }) {
                         my $othersync = $row->[0];
-                        $self->db_notify($dbh, 'kick_sync_$othersync', 0, '', 1);
+                        $self->db_notify($dbh, "kick_sync_$othersync", 0, '', 1);
                     }
                 }
             }
