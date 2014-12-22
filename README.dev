@@ -319,9 +319,7 @@ very last step. Running "make signature" will do the signing for you.
 
 * Post to the "PostgreSQL news"
 
-On the main page, there is a link named "Submit News" which points to:
-
-http://www.postgresql.org/about/submitnews
+https://www.postgresql.org/account/news/new/
 
 The content should be roughly the same as the announcement.
 
