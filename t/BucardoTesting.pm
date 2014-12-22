@@ -409,7 +409,6 @@ sub empty_cluster {
         local $masterdbh->{AutoCommit} = 1;
         debug(qq{Creating database $dbname});
         $masterdbh->do("CREATE DATABASE $dbname");
-        diag "CREATED da b $dbname";
         $dbh = $self->connect_database($clustername, $dbname);
     }
 
