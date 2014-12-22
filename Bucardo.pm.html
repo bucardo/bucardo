@@ -2,7 +2,7 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-<title>Bucardo - Postgres multi-master replication system</title>
+<title></title>
 <meta http-equiv="content-type" content="text/html; charset=utf-8" />
 
 </head>
@@ -10,100 +10,86 @@
 <body style="background-color: white">
 
 
-<!-- INDEX BEGIN -->
-<div name="index">
-<p><a name="__index__"></a></p>
 
-<ul>
-
-	<li><a href="#name">NAME</a></li>
-	<li><a href="#version">VERSION</a></li>
-	<li><a href="#website">WEBSITE</a></li>
-	<li><a href="#description">DESCRIPTION</a></li>
-	<li><a href="#dependencies">DEPENDENCIES</a></li>
-	<li><a href="#bugs">BUGS</a></li>
-	<li><a href="#credits">CREDITS</a></li>
-	<li><a href="#author">AUTHOR</a></li>
-	<li><a href="#license_and_copyright">LICENSE AND COPYRIGHT</a></li>
+<ul id="index">
+  <li><a href="#NAME">NAME</a></li>
+  <li><a href="#VERSION">VERSION</a></li>
+  <li><a href="#WEBSITE">WEBSITE</a></li>
+  <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+  <li><a href="#DEPENDENCIES">DEPENDENCIES</a></li>
+  <li><a href="#BUGS">BUGS</a></li>
+  <li><a href="#CREDITS">CREDITS</a></li>
+  <li><a href="#AUTHOR">AUTHOR</a></li>
+  <li><a href="#LICENSE-AND-COPYRIGHT">LICENSE AND COPYRIGHT</a></li>
 </ul>
 
-<hr name="index" />
-</div>
-<!-- INDEX END -->
+<h1 id="NAME">NAME</h1>
 
-<p>
-</p>
-<hr />
-<h1><a name="name">NAME</a></h1>
 <p>Bucardo - Postgres multi-master replication system</p>
-<p>
-</p>
-<hr />
-<h1><a name="version">VERSION</a></h1>
+
+<h1 id="VERSION">VERSION</h1>
+
 <p>This document describes version 5.3.0 of Bucardo</p>
-<p>
-</p>
-<hr />
-<h1><a name="website">WEBSITE</a></h1>
+
+<h1 id="WEBSITE">WEBSITE</h1>
+
 <p>The latest news and documentation can always be found at:</p>
-<p><a href="http://bucardo.org/">http://bucardo.org/</a></p>
-<p>
-</p>
-<hr />
-<h1><a name="description">DESCRIPTION</a></h1>
-<p>Bucardo is a Perl module that replicates Postgres databases using a combination
-of Perl, a custom database schema, Pl/Perlu, and Pl/Pgsql.</p>
+
+<p>http://bucardo.org/</p>
+
+<h1 id="DESCRIPTION">DESCRIPTION</h1>
+
+<p>Bucardo is a Perl module that replicates Postgres databases using a combination of Perl, a custom database schema, Pl/Perlu, and Pl/Pgsql.</p>
+
 <p>Bucardo is unapologetically extremely verbose in its logging.</p>
-<p>Full documentation can be found on the website, or in the files that came with
-this distribution. See also the documentation for the bucardo program.</p>
-<p>
-</p>
-<hr />
-<h1><a name="dependencies">DEPENDENCIES</a></h1>
+
+<p>Full documentation can be found on the website, or in the files that came with this distribution. See also the documentation for the bucardo program.</p>
+
+<h1 id="DEPENDENCIES">DEPENDENCIES</h1>
+
 <ul>
-<li><strong><a name="dbi" class="item">DBI (1.51 or better)</a></strong>
+
+<li><p>DBI (1.51 or better)</p>
 
 </li>
-<li><strong><a name="pg" class="item">DBD::Pg (2.0.0 or better)</a></strong>
+<li><p>DBD::Pg (2.0.0 or better)</p>
 
 </li>
-<li><strong><a name="sys_hostname" class="item">Sys::Hostname</a></strong>
+<li><p>Sys::Hostname</p>
 
 </li>
-<li><strong><a name="sys_syslog" class="item">Sys::Syslog</a></strong>
+<li><p>Sys::Syslog</p>
 
 </li>
-<li><strong><a name="dbix_safe_try_yum_install_perl_dbix_safe_or_visit_bucardo_org" class="item">DBIx::Safe ## Try 'yum install perl-DBIx-Safe' or visit bucardo.org</a></strong>
+<li><p>DBIx::Safe ## Try &#39;yum install perl-DBIx-Safe&#39; or visit bucardo.org</p>
 
 </li>
-<li><strong><a name="boolean" class="item">boolean</a></strong>
+<li><p>boolean</p>
 
 </li>
 </ul>
-<p>
-</p>
-<hr />
-<h1><a name="bugs">BUGS</a></h1>
-<p>Bugs should be reported to <a href="mailto:bucardo-general@bucardo.org.">bucardo-general@bucardo.org.</a> A list of bugs can be found at
-<a href="http://bucardo.org/bugs.html">http://bucardo.org/bugs.html</a></p>
-<p>
-</p>
-<hr />
-<h1><a name="credits">CREDITS</a></h1>
-<p>Bucardo was originally developed and funded by Backcountry.com, who have been using versions
-of it in production since 2002. Jon Jensen &lt;<a href="mailto:jon@endpoint.com">jon@endpoint.com</a>&gt; wrote the original version.</p>
-<p>
-</p>
-<hr />
-<h1><a name="author">AUTHOR</a></h1>
-<p>Greg Sabino Mullane &lt;<a href="mailto:greg@endpoint.com">greg@endpoint.com</a>&gt;</p>
-<p>
-</p>
-<hr />
-<h1><a name="license_and_copyright">LICENSE AND COPYRIGHT</a></h1>
-<p>Copyright (c) 2005-2014 Greg Sabino Mullane &lt;<a href="mailto:greg@endpoint.com">greg@endpoint.com</a>&gt;.</p>
+
+<h1 id="BUGS">BUGS</h1>
+
+<p>Bugs should be reported to bucardo-general@bucardo.org. A list of bugs can be found at http://bucardo.org/bugs.html</p>
+
+<h1 id="CREDITS">CREDITS</h1>
+
+<p>Bucardo was originally developed and funded by Backcountry.com, who have been using versions of it in production since 2002. Jon Jensen &lt;jon@endpoint.com&gt; wrote the original version.</p>
+
+<h1 id="AUTHOR">AUTHOR</h1>
+
+<p>Greg Sabino Mullane &lt;greg@endpoint.com&gt;</p>
+
+<h1 id="LICENSE-AND-COPYRIGHT">LICENSE AND COPYRIGHT</h1>
+
+<p>Copyright (c) 2005-2014 Greg Sabino Mullane &lt;greg@endpoint.com&gt;.</p>
+
 <p>This software is free to use: see the LICENSE file for details.</p>
+
 
 </body>
 
 </html>
+
+
