@@ -7,13 +7,42 @@ Bucardo version 5.3.0
   - Allow 'makedelta' to be specified at the database level
     [Greg Sabino Mullane]
 
-  - Give customcodes access to the list of changed rows
+  - Give customcodes access to the list of changed rows via 
+    the 'rows' key in the passed-in hashref
     [Greg Sabino Mullane]
+
+  - Allow specification of non-default port when sending email.
+    Attempt support for SASL auth.
+    [Greg Sabino Mullane, per suggestsion from Michael Wagner]
 
   - Better support for continuing once a database has crashed
     [Greg Sabino Mullane]
 
+  - Allow removing all tables or sequences at once via command line,
+    e.g. 'bucardo remove all tables'
+    [Greg Sabino Mullane]
+
+  - Allow --makedelta=foo to work on command line when adding all tables
+    [Greg Sabino Mullane]
+
   - New test file t/50-star.t and much improvement to testing framework
+    [Greg Sabino Mullane]
+
+  - Added new logging level, DEBUG2, for things that are just too verbose
+    even for DEBUG!
+    [Greg Sabino Mullane]
+
+  - When the VAC exits, disconnect from any databases cleanly we 
+    may still be connected to.
+    [Greg Sabino Mullane]
+
+  - Allow --dryrun to work when adding items, esp. tables
+    [Greg Sabino Mullane]
+     
+  - Allow msg as alias for message e.g. 'bucardo msg foobar'
+    [Greg Sabino Mullane]
+
+  - When showing microseconds in the log, force the third and final zero to appear
     [Greg Sabino Mullane]
 
 
