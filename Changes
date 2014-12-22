@@ -1,5 +1,5 @@
 
-Bucardo version 5.3.0, released November 22, 2014
+Bucardo version 5.3.0, released December 22, 2014
 
   - Fix race condition when makedelta used which could cause some 
     rows to be incorrectly entered into the track table
