@@ -9,7 +9,7 @@ This is version 5.3.0 of Bucardo.
 COPYRIGHT:
 ----------
 
-    Copyright (c) 2005-2014 Greg Sabino Mullane <greg@endpoint.com>
+    Copyright (c) 2005-2015 Greg Sabino Mullane <greg@endpoint.com>
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.3 or,
