@@ -5469,9 +5469,13 @@ sub start_kid {
                 my $d = $sync->{db}{$dbname};
 
                 my $dbh = $d->{dbh};
-                ## If we are async, clear it out
+
+                ## If we are async, clear it out - if the connection is still valid!
                 if ($d->{async_active}) {
-                    $dbh->pg_cancel();
+                    my $state = $dbh->state;
+                    if ($state eq '' or $state eq '25P01') {
+                        $dbh->pg_cancel();
+                    }
                     $d->{async_active} = 0;
                 }
                 ## Seperate eval{} for the rollback as we are probably still connected to the transaction.
