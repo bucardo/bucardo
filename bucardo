@@ -8232,6 +8232,9 @@ sub connect_database {
                 $user = 'bucardo';
                 $dbh2 = DBI->connect_cached($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
             }
+            else {
+                die $@;
+            }
         }
     }
 
