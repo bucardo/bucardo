@@ -10,6 +10,7 @@
 ## Run with a --help argument for some basic instructions
 
 package bucardo;
+
 use strict;
 use warnings;
 use utf8;
@@ -53,7 +54,7 @@ use vars qw/$dbh $SQL $sth %sth $count $info %global $SYNC $GOAT $TABLE $SEQUENC
 my $DATEFORMAT       = $ENV{BUCARDO_DATEFORMAT} || q{Mon DD, YYYY HH24:MI:SS};
 my $SHORTDATEFORMAT  = $ENV{BUCARDO_SHORTDATEFORMAT} || q{HH24:MI:SS};
 
-## How long we hang out between checks after a kick - or when waiting for notices
+## How long (in seconds) we hang out between checks after a kick - or when waiting for notices
 my $WAITSLEEP = 1;
 
 ## Determine how we were called
@@ -125,9 +126,14 @@ if (defined $file) {
         next if /^\s*#/;
 
         ## Format is foo=bar or foo:bar, with whitespace allowed
-        next unless /^\s*(\w[\w-]+)\s*[:=]\s*(.+?)\s*$/o;
-        my ($name,$value) = ($1,$2); ## no critic (ProhibitCaptureWithoutTest)
-        $bcargs->{$name} = $name eq 'logdest' ? [$value] : $value;
+        if (/^\s*(\w[\w-]+)\s*[:=]\s*(.+?)\s*$/o) {
+            my ($name,$value) = ($1,$2); ## no critic (ProhibitCaptureWithoutTest)
+            $bcargs->{$name} = $name eq 'logdest' ? [$value] : $value;
+        }
+        else {
+            warn qq{Could not parse line $. of file "$file"\n};
+        }
+
     }
     close $rc or die;
 }
