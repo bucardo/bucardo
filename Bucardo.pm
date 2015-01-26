@@ -36,11 +36,11 @@ use List::Util    qw( first              ); ## Better than grep
 use MIME::Base64  qw( encode_base64
                       decode_base64      ); ## For making text versions of bytea primary keys
 
-use Time::HiRes
- qw(sleep gettimeofday tv_interval); ## For better resolution than the built-in sleep
-                                     ## and for timing of events
+use Time::HiRes   qw( sleep gettimeofday
+                      tv_interval        ); ## For better resolution than the built-in sleep
+                                            ## and for timing of events
 
-## Formatting of Dumper() calls:
+## Formatting of Data::Dumper() calls:
 $Data::Dumper::Varname = 'BUCARDO';
 $Data::Dumper::Indent = 1;
 
@@ -225,7 +225,7 @@ sub new {
         mcppid       => $$,
         verbose      => 1,
         quickstart   => 0,
-        logdest      => ['.'],#'/var/log/bucardo'],
+        logdest      => ['.'],
         warning_file => '',
         logseparate  => 0,
         logextension => '',
@@ -293,10 +293,10 @@ sub new {
     $self->{sendmail_file} = $ENV{BUCARDO_EMAIL_DEBUG_FILE} || $config{email_debug_file} || '';
 
     ## Where to store our PID:
-    $self->{pidfile} = File::Spec->catfile( $config{piddir} => 'bucardo.mcp.pid' );
+    $self->{pid_file} = File::Spec->catfile( $config{piddir} => 'bucardo.mcp.pid' );
 
     ## The file to ask all processes to stop:
-    $self->{stopfile} = File::Spec->catfile( $config{piddir} => $config{stopfile} );
+    $self->{stop_file} = File::Spec->catfile( $config{piddir} => $config{stopfile} );
 
     ## Send all log lines starting with "Warning" to a separate file
     $self->{warning_file} ||= $config{warning_file};
@@ -362,24 +362,24 @@ sub start_mcp {
     $self->{logprefix} = 'MCP';
 
     ## If the standard pid file [from new()] already exists, cowardly refuse to run
-    if (-e $self->{pidfile}) {
+    if (-e $self->{pid_file}) {
         ## Grab the PID from the file if we can for better output
         my $extra = '';
         my $fh;
 
         ## Failing to open is not fatal here, just means no PID shown
         my $oldpid;
-        if (open ($fh, '<', $self->{pidfile})) {
+        if (open ($fh, '<', $self->{pid_file})) {
             if (<$fh> =~ /(\d+)/) {
                 $oldpid = $1;
                 $extra = " (PID=$oldpid)";
             }
-            close $fh or warn qq{Could not close "$self->{pidfile}": $!\n};
+            close $fh or warn qq{Could not close "$self->{pid_file}": $!\n};
         }
 
         ## Output to the logfile, to STDERR, then exit
         if ($oldpid != $$) {
-            my $msg = qq{File "$self->{pidfile}" already exists$extra: cannot run until it is removed};
+            my $msg = qq{File "$self->{pid_file}" already exists$extra: cannot run until it is removed};
             $self->glog($msg, LOG_WARN);
             warn $msg;
 
@@ -388,13 +388,13 @@ sub start_mcp {
     }
 
     ## We also refuse to run if the global stop file exists
-    if (-e $self->{stopfile}) {
-        my $msg = qq{Cannot run while this file exists: "$self->{stopfile}"};
+    if (-e $self->{stop_file}) {
+        my $msg = qq{Cannot run while this file exists: "$self->{stop_file}"};
         $self->glog($msg, LOG_WARN);
         warn $msg;
 
         ## Failure to open this file is not fatal
-        if (open my $fh, '<', $self->{stopfile}) {
+        if (open my $fh, '<', $self->{stop_file}) {
             ## Read in up to 10 lines from the stopfile and output them
             while (<$fh>) {
                 $msg = "Line $.: $_";
@@ -402,7 +402,7 @@ sub start_mcp {
                 warn $msg;
                 last if $. > 10;
             }
-            close $fh or warn qq{Could not close "$self->{stopfile}": $!\n};
+            close $fh or warn qq{Could not close "$self->{stop_file}": $!\n};
         }
 
         exit 1;
@@ -422,15 +422,15 @@ sub start_mcp {
 
     ## Create a new (temporary) PID file
     ## We will overwrite later with a new PID once we do the initial fork
-    open my $pidfh, '>', $self->{pidfile}
-        or die qq{Cannot write to $self->{pidfile}: $!\n};
+    open my $pidfh, '>', $self->{pid_file}
+        or die qq{Cannot write to $self->{pid_file}: $!\n};
 
     ## Inside our newly created PID file, print out PID on the first line
     ##  - print how the script was originally invoked on the second line (old $0),
     ##  - print the current time on the third line
     my $now = scalar localtime;
     print {$pidfh} "$$\n$old0\n$now\n";
-    close $pidfh or warn qq{Could not close "$self->{pidfile}": $!\n};
+    close $pidfh or warn qq{Could not close "$self->{pid_file}": $!\n};
 
     ## Create a pretty Dumped version of the current $self object, with the password elided
     ## This is used in the body of emails that may be sent later
@@ -484,11 +484,11 @@ sub start_mcp {
     }
 
     ## Now that we've forked, overwrite the PID file with our new value
-    open $pidfh, '>', $self->{pidfile} or die qq{Cannot write to $self->{pidfile}: $!\n};
+    open $pidfh, '>', $self->{pid_file} or die qq{Cannot write to $self->{pid_file}: $!\n};
     ## Same format as before: PID, then invocation line, then timestamp
     $now = scalar localtime;
     print {$pidfh} "$$\n$old0\n$now\n";
-    close $pidfh or warn qq{Could not close "$self->{pidfile}": $!\n};
+    close $pidfh or warn qq{Could not close "$self->{pid_file}": $!\n};
 
     ## Reconnect to the master database
     ($self->{mcp_backend}, $self->{masterdbh}) = $self->connect_database();
@@ -583,7 +583,7 @@ sub start_mcp {
     for my $pidfile (sort @pidfiles) {
         my $fullfile = File::Spec->catfile( $piddir => $pidfile );
         ## Do not erase our own file
-        next if $fullfile eq $self->{pidfile};
+        next if $fullfile eq $self->{pid_file};
         ## Everything else can get removed
         if (-e $fullfile) {
             if (unlink $fullfile) {
@@ -717,8 +717,8 @@ sub start_mcp {
 
         ## Do a quick check for a stopfile
         ## Bail if the stopfile exists
-        if (-e $self->{stopfile}) {
-            $self->glog(qq{Found stopfile "$self->{stopfile}": exiting}, LOG_WARN);
+        if (-e $self->{stop_file}) {
+            $self->glog(qq{Found stopfile "$self->{stop_file}": exiting}, LOG_WARN);
             my $message = 'Found stopfile';
 
             ## Grab the reason, if it exists, so we can propagate it onward
@@ -878,8 +878,8 @@ sub mcp_main {
         eval {
 
         ## Bail if the stopfile exists
-        if (-e $self->{stopfile}) {
-            $self->glog(qq{Found stopfile "$self->{stopfile}": exiting}, LOG_WARN);
+        if (-e $self->{stop_file}) {
+            $self->glog(qq{Found stopfile "$self->{stop_file}": exiting}, LOG_WARN);
             my $msg = 'Found stopfile';
 
             ## Grab the reason, if it exists, so we can propagate it onward
@@ -2162,8 +2162,8 @@ sub start_controller {
   CONTROLLER: {
 
         ## Bail if the stopfile exists
-        if (-e $self->{stopfile}) {
-            $self->glog(qq{Found stopfile "$self->{stopfile}": exiting}, LOG_TERSE);
+        if (-e $self->{stop_file}) {
+            $self->glog(qq{Found stopfile "$self->{stop_file}": exiting}, LOG_TERSE);
             ## Do not change this message: looked for in the controller DIE sub
             my $stopmsg = 'Found stopfile';
 
@@ -3217,8 +3217,8 @@ sub start_kid {
     my $runkid = sub {
       KID: {
         ## Leave right away if we find a stopfile
-        if (-e $self->{stopfile}) {
-            $self->glog(qq{Found stopfile "$self->{stopfile}": exiting}, LOG_WARN);
+        if (-e $self->{stop_file}) {
+            $self->glog(qq{Found stopfile "$self->{stop_file}": exiting}, LOG_WARN);
             last KID;
         }
 
@@ -7548,8 +7548,8 @@ sub fork_vac {
   VAC: {
 
         ## Bail if the stopfile exists
-        if (-e $self->{stopfile}) {
-            $self->glog(qq{Found stopfile "$self->{stopfile}": exiting}, LOG_TERSE);
+        if (-e $self->{stop_file}) {
+            $self->glog(qq{Found stopfile "$self->{stop_file}": exiting}, LOG_TERSE);
             ## Do not change this message: looked for in the controller DIE sub
             my $stopmsg = 'Found stopfile';
 
@@ -7904,11 +7904,11 @@ sub cleanup_mcp {
     $finaldbh->disconnect();
 
     ## For the very last thing, remove our own PID file
-    if (unlink $self->{pidfile}) {
-        $self->glog(qq{Removed pid file "$self->{pidfile}"}, LOG_DEBUG);
+    if (unlink $self->{pid_file}) {
+        $self->glog(qq{Removed pid file "$self->{pid_file}"}, LOG_DEBUG);
     }
     else {
-        $self->glog("Warning! Failed to remove pid file $self->{pidfile}", LOG_WARN);
+        $self->glog("Warning! Failed to remove pid file $self->{pid_file}", LOG_WARN);
     }
 
     return;
