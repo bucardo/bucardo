@@ -31,7 +31,7 @@ Getopt::Long::Configure(qw/ no_ignore_case pass_through no_autoabbrev /);
 
 require I18N::Langinfo;
 
-our $VERSION = '5.3.0';
+our $VERSION = '5.3.1';
 
 ## For the tests, we want to check that it compiles without actually doing anything
 return 1 if $ENV{BUCARDO_TEST};
@@ -9612,7 +9612,7 @@ bucardo - utility script for controlling the Bucardo program
 
 =head1 VERSION
 
-This document describes version 5.3.0 of bucardo
+This document describes version 5.3.1 of bucardo
 
 =head1 USAGE
 
@@ -11328,7 +11328,7 @@ Which DDL changing conditions do we try to remedy automatically? Default: C<newc
 
 =item C<bucardo_version>
 
-Current version of Bucardo. Default: C<5.3.0>.
+Current version of Bucardo. Default: C<5.3.1>.
 
 =item C<bucardo_vac>
 
@@ -11336,7 +11336,7 @@ Do we want the automatic VAC daemon to run? Default: C<1>.
 
 =item C<bucardo_initial_version>
 
-Bucardo version this schema was created with. Default: C<5.3.0>.
+Bucardo version this schema was created with. Default: C<5.3.1>.
 
 =item C<ctl_checkonkids_time>
 
