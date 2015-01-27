@@ -1,6 +1,6 @@
 
 
-Bucardo version 5.3.1
+Bucardo version 5.3.1, released January 27, 2015
 
   - When clearing out the async mode, do not do so unless the state() is sane.
     This will solve some of the "pg_cancel failed" errors seen
