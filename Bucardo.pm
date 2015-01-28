@@ -365,11 +365,10 @@ sub start_mcp {
     if (-e $self->{pid_file}) {
         ## Grab the PID from the file if we can for better output
         my $extra = '';
-        my $fh;
 
         ## Failing to open is not fatal here, just means no PID shown
         my $oldpid;
-        if (open ($fh, '<', $self->{pid_file})) {
+        if (open my $fh, '<', $self->{pid_file}) {
             if (<$fh> =~ /(\d+)/) {
                 $oldpid = $1;
                 $extra = " (PID=$oldpid)";
@@ -420,49 +419,43 @@ sub start_mcp {
         close STDOUT or warn "Could not close STDOUT\n";
     }
 
-    ## Create a new (temporary) PID file
+    ## Create a new (but very temporary) PID file
     ## We will overwrite later with a new PID once we do the initial fork
-    open my $pidfh, '>', $self->{pid_file}
-        or die qq{Cannot write to $self->{pid_file}: $!\n};
+    $self->create_mcp_pid_file($old0);
 
-    ## Inside our newly created PID file, print out PID on the first line
-    ##  - print how the script was originally invoked on the second line (old $0),
-    ##  - print the current time on the third line
-    my $now = scalar localtime;
-    print {$pidfh} "$$\n$old0\n$now\n";
-    close $pidfh or warn qq{Could not close "$self->{pid_file}": $!\n};
+    ## Send an email message with details about this invocation
+    if ($self->{sendmail} or $self->{sendmail_file}) {
+        ## Create a pretty Dumped version of the current $self object, with the password elided
 
-    ## Create a pretty Dumped version of the current $self object, with the password elided
-    ## This is used in the body of emails that may be sent later
+        ## Squirrel away the old password
+        my $oldpass = $self->{dbpass};
+        ## Set to something else
+        $self->{dbpass} = '<not shown>';
+        ## Dump the entire object with Data::Dumper (with custom config variables)
+        my $dump = Dumper $self;
+        ## Put the password back in place
+        $self->{dbpass} = $oldpass;
 
-    ## Squirrel away the old password
-    my $oldpass = $self->{dbpass};
-    ## Set to something else
-    $self->{dbpass} = '<not shown>';
-    ## Dump the entire object with Data::Dumper (with custom config variables)
-    my $dump = Dumper $self;
-    ## Put the password back in place
-    $self->{dbpass} = $oldpass;
-
-    ## Prepare to send an email letting people know we have started up
-    my $body = qq{
+        ## Prepare to send an email letting people know we have started up
+        my $body = qq{
         Master Control Program $$ was started on $hostname
         Args: $old0
         Version: $VERSION
-    };
-    my $subject = qq{Bucardo $VERSION started on $shorthost};
+    	};
+        my $subject = qq{Bucardo $VERSION started on $shorthost};
 
-    ## If someone left a message in the reason file, append it, then delete the file
-    my $reason = get_reason('delete');
-    if ($reason) {
-        $body .= "Reason: $reason\n";
-        $subject .= " ($reason)";
+        ## If someone left a message in the reason file, append it, then delete the file
+        my $reason = get_reason('delete');
+        if ($reason) {
+            $body .= "Reason: $reason\n";
+            $subject .= " ($reason)";
+        }
+        ## Strip leading whitespace from the body (from the qq{} above)
+        $body =~ s/^\s+//gsm;
+
+        ## Send out the email (if sendmail or sendmail_file is enabled)
+        $self->send_mail({ body => "$body\n\n$dump", subject => $subject });
     }
-    ## Strip leading whitespace from the body (from the qq{} above)
-    $body =~ s/^\s+//gsm;
-
-    ## Send out the email (if sendmail or sendmail_file is enabled)
-    $self->send_mail({ body => "$body\n\n$dump", subject => $subject });
 
     ## Drop the existing database connection, fork, and get a new one
     ## This self-fork helps ensure our survival
@@ -484,11 +477,7 @@ sub start_mcp {
     }
 
     ## Now that we've forked, overwrite the PID file with our new value
-    open $pidfh, '>', $self->{pid_file} or die qq{Cannot write to $self->{pid_file}: $!\n};
-    ## Same format as before: PID, then invocation line, then timestamp
-    $now = scalar localtime;
-    print {$pidfh} "$$\n$old0\n$now\n";
-    close $pidfh or warn qq{Could not close "$self->{pid_file}": $!\n};
+    $self->create_mcp_pid_file($old0);
 
     ## Reconnect to the master database
     ($self->{mcp_backend}, $self->{masterdbh}) = $self->connect_database();
@@ -541,7 +530,8 @@ sub start_mcp {
     $self->{pidmap}{$self->{mcp_backend}} = 'Bucardo DB';
 
     ## Again with the password trick
-    $self->{dbpass} = '<not shown>'; ## already saved as $oldpass above
+    my $oldpass = $self->{dbpass};
+    $self->{dbpass} = '<not shown>';
     my $objdump = "Bucardo object:\n";
 
     ## Get the maximum key length for pretty formatting
@@ -847,6 +837,32 @@ sub start_mcp {
     return; ## no critic
 
 } ## end of start_mcp
+
+
+sub create_mcp_pid_file {
+
+    ## Create a file containing the PID of the current MCP,
+    ## plus a few other details
+    ## Arguments: one
+    ## 1. Message (usually just the original invocation line)
+    ## Returns: undef
+
+    my $self = shift;
+    my $message = shift || '';
+
+    open my $pidfh, '>', $self->{pid_file}
+        or die qq{Cannot write to $self->{pid_file}: $!\n};
+
+    ## Inside our newly created PID file, print out PID on the first line
+    ##  - print how the script was originally invoked on the second line (old $0),
+    ##  - print the current time on the third line
+    my $now = scalar localtime;
+    print {$pidfh} "$$\n$message\n$now\n";
+    close $pidfh or warn qq{Could not close "$self->{pid_file}": $!\n};
+
+    return;
+
+} ## end of create_mcp_pid_file
 
 
 sub mcp_main {
@@ -8577,10 +8593,10 @@ sub store_pid {
     ## Put this file into our pid directory
     my $pidfile = File::Spec->catfile( $config{piddir} => $file );
 
-    ## Check for any remove old processes
+    ## Check for and remove old processes
     my $oldpid = '?';
     if (-e $pidfile) {
-        ## Send the PID in the file a USR1. If we did so, sleep a littel bit
+        ## Send the PID in the file a USR1. If we did so, sleep a little bit
         ## to allow that process to clean itself up
         $self->signal_pid_files($pidfile) and sleep 1;
         if (-e $pidfile) {
