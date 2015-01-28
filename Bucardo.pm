@@ -529,12 +529,7 @@ sub start_mcp {
     $self->{pidmap}{$$} = 'MCP';
     $self->{pidmap}{$self->{mcp_backend}} = 'Bucardo DB';
 
-    ## Again with the password trick
-    my $oldpass = $self->{dbpass};
-    $self->{dbpass} = '<not shown>';
-    my $objdump = "Bucardo object:\n";
-
-    ## Get the maximum key length for pretty formatting
+    ## Get the maximum key length of the "self" hash for pretty formatting
     my $maxlen = 5;
     for (keys %$self) {
         $maxlen = length($_) if length($_) > $maxlen;
@@ -544,18 +539,17 @@ sub start_mcp {
     ## Yes, this prints things like HASH(0x8fbfc84), but we're okay with that
     $Data::Dumper::Indent = 0;
     $Data::Dumper::Terse = 1;
-    for (sort keys %$self) {
-        $objdump .= sprintf " %-*s => %s\n", $maxlen, $_,
-            (defined $self->{$_}) ?
-                (ref $self->{$_} eq 'ARRAY') ? Dumper($self->{$_})
-                    : qq{'$self->{$_}'} : 'undef';
+    my $objdump = "Bucardo object:\n";
+    for my $key (sort keys %$self) {
+        my $value = $key eq 'dbpass' ? '<not shown>' : $self->{$key};
+        $objdump .= sprintf " %-*s => %s\n", $maxlen, $key,
+            (defined $value) ?
+                (ref $value eq 'ARRAY') ? Dumper($value)
+                    : qq{'$value'} : 'undef';
     }
     $Data::Dumper::Indent = 1;
     $Data::Dumper::Terse = 0;
     $self->glog($objdump, LOG_TERSE);
-
-    ## Restore the password
-    $self->{dbpass} = $oldpass;
 
     ## Dump all configuration variables to the log
     $self->log_config();
