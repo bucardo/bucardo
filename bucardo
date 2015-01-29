@@ -7253,7 +7253,7 @@ sub constraint_definition {
 
     my $name = shift;
 
-    my $SQL = qq{SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = '$name'};
+    my $SQL = qq{SELECT pg_get_constraintdef(oid,true) FROM pg_constraint WHERE conname = '$name'};
     my $def = $dbh->selectall_arrayref($SQL)->[0][0];
 
     ## Nothing found? Just return an empty string
@@ -8032,18 +8032,14 @@ sub upgrade {
         }
 
         ## Clean up the constraint to make it match what comes back from the database:
-        $cdef =~ s/;$//;
         $cdef =~ s/','/', '/g;
-        if ($cdef =~ s/([^)]) (OR|AND) (\w)/$1) $2 ($3/g) {
-            $cdef =~ s/CHECK (.+)/CHECK ($1)/;
-        }
         my $condef = constraint_definition($cname);
         $condef =~ s{\\}{\\\\}g;
         if ($condef ne $cdef) {
             upgrade_and_log("ALTER TABLE $tcname DROP CONSTRAINT $cname");
             upgrade_and_log("ALTER TABLE $tcname ADD CONSTRAINT $cname $cdef");
             clog "Altered constraint $cname on $tcname";
-            clog "CURRENT: $condef\nNEW: $cdef\n";
+            clog "OLD: $condef\nNEW: $cdef\n";
             $changes++;
         }
     }
