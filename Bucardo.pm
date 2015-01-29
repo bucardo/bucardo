@@ -580,6 +580,7 @@ sub start_mcp {
         }
     }
 
+    ## We use a USR2 signal to indicate that the logs should be reopened
     local $SIG{USR2} = sub {
 
         $self->glog("Received USR2 from pid $$, who is a $self->{logprefix}", LOG_DEBUG);
@@ -616,7 +617,7 @@ sub start_mcp {
 
         }
 
-     };
+     }; ## end of handling USR2 signals
 
     ## From this point forward, we want to die gracefully
     ## We setup our own subroutine to catch any die signals
@@ -885,6 +886,7 @@ sub mcp_main {
 
   MCP: {
 
+        ## We eval the whole loop so we can cleanly redo it if needed
         eval {
 
         ## Bail if the stopfile exists
@@ -1695,6 +1697,7 @@ sub start_controller {
 
     ## For a particular sync, does all the listening and creation of KIDs
     ## aka the CTL process
+    ## Why not just spawn KIDs? Someday the CTL may have multiple kids again...
     ## Arguments: one
     ## 1. Hashref of sync information
     ## Returns: never
@@ -1823,7 +1826,7 @@ sub start_controller {
 
         exit 0;
 
-    }; ## end SIG{__DIE_} handler sub
+    }; ## end SIG{__DIE__} handler sub
 
     ## Connect to the master database
     ($self->{master_backend}, $self->{masterdbh}) = $self->connect_database();
