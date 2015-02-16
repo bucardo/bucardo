@@ -21,6 +21,7 @@ Future
 
 These range the gamut from wildly speculative ideas to must-have features.
 
+- Make the listen/notify system cleaner, maybe break into mcp/ctl/kid streams rather than generic 'bucardo'
 - Create a new "sourceonly" type what can issue deltas but not receive them
 - Make sure pkonly and makedelta=xx work everywhere, e.g. add/update relation/relgroup
 - Allow syncs to be grouped together to allow for a single kicksync notification
