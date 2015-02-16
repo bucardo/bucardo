@@ -2241,6 +2241,10 @@ sub start_controller {
                 or
                 (index($name, 'stopsync_') == 0);
 
+
+            ## Ignore any messages sent to a kid
+            next NOTICE if 0 == index($name, 'kid_');
+
             ## Should not happen, but let's at least log it
             $self->glog("Warning: received unknown message $name from $npid!", LOG_TERSE);
 
