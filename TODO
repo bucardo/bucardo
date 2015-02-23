@@ -21,6 +21,9 @@ Future
 
 These range the gamut from wildly speculative ideas to must-have features.
 
+- Allow a new type of trigger that only indicates if a table has changed or not.
+  Rather than storing a PK, we only note "changed". This would allow fullcopy tables 
+  inside of a sync to run or just get skipped.
 - Make the listen/notify system cleaner, maybe break into mcp/ctl/kid streams rather than generic 'bucardo'
 - Create a new "sourceonly" type what can issue deltas but not receive them
 - Make sure pkonly and makedelta=xx work everywhere, e.g. add/update relation/relgroup
