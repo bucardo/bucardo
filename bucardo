@@ -1618,19 +1618,19 @@ sub add_database {
 
     ## Inputs and aliases, database column name, flags, default value
     my $validcols = q{
+        db|dbname                dbname               0                null
         type|dbtype              dbtype               0                postgres
         pass|password|dbpass     dbpass               0                null
-        db|dbname                dbname               0                null
-        port|dbport|pgport       dbport               0                ENV:PGPORT
         host|dbhost|pghost       dbhost               0                ENV:PGHOSTADDR|PGHOST
+        port|dbport|pgport       dbport               0                ENV:PGPORT
         conn|dbconn|pgconn       dbconn               0                null
+        service|dbservice        dbservice            0                null
         stat|status              status               =active|inactive null
         group|dbgroup            dbgroup              0                null
         addalltables             none                 0                null
         addallsequences          none                 0                null
         server_side_prepares|ssp server_side_prepares TF               null
         makedelta                makedelta            TF               null
-        service|dbservice        dbservice            0                null
     };
 
     ## Include the value for the dbuser only if a service is not specified, or
@@ -1886,7 +1886,7 @@ sub add_database {
             my $x=0;
             for my $namerole (split /\s*,\s*/ => $dbcols->{dbname}) {
                 my ($name,$role) = extract_name_and_role($namerole);
-                print "$namerole gave us $name and $role\n";
+                debug("$namerole gave us $name and $role");
                 $db_names->[$x++][1] = $role;
             }
         }
@@ -9741,6 +9741,8 @@ Shows help.
      --verbose             Incremental verbose mode.
   -? --help                Output basic help and exit.
      --version             Print the version number and exit.
+     --dryrun              Do not perform any actual actions.
+     --confirm             Require direct confirmation before changes.
 
 =head1 COMMAND DETAILS
 
@@ -9990,7 +9992,7 @@ include:
 
 =head3 add db
 
-  bucardo add db <name> dbname=actual_name port=xxx host=xxx user=xxx pass=xxx
+  bucardo add db <name> dbname=actual_name port=xxx host=xxx user=xxx
 
 Adds one or more new databases. The C<name> is the name by which the database will be
 known to Bucardo, and must be unique. This may vary from the actual database
@@ -10000,19 +10002,16 @@ databases should be separated by a matching commas. Example:
 
   bucardo add db alpha,beta dbname=sales host=aa,bb user=bucardo
 
+This command will attempt an immediate test connection to the added database(s).
 The supported named parameters are:
 
 =over
 
 =item C<dbname>
 
-=item C<db>
-
-The actual name of the database. Required.
+The actual name of the database. Required unless using a service file.
 
 =item C<type>
-
-=item C<dbtype>
 
 The type of the database. Defaults to C<postgres>. Currently supported values are:
 
@@ -10036,81 +10035,68 @@ The type of the database. Defaults to C<postgres>. Currently supported values ar
 
 =back
 
-=item C<username>
-
-=item C<dbuser>
-
 =item C<user>
 
-The username Bucardo should use to connect to the database. Optional.
-
-=item C<password>
-
-=item C<dbpass>
+The username Bucardo should use when connecting to this database.
 
 =item C<pass>
 
-The password Bucardo should use when connecting to the database. Optional.
-
-=item C<dbhost>
-
-=item C<pghost>
+The password Bucardo should use when connecting to this database. It is recommended 
+that you use a .pgpass file rather than entering the password here.
 
 =item C<host>
 
-The host name to which to connect. Defaults to the value of the C<$PGHOSTADDR>
-or C<$PGHOST> environment variables, if present. Optional.
-
-=item C<dbport>
-
-=item C<pgport>
+The host Bucardo should use when connecting to this database. Defaults to the value of the C<$PGHOSTADDR>
+or C<$PGHOST> environment variables, if present.
 
 =item C<port>
 
-The port to which to connect. Defaults to the value of the C<$PGPORT>
-environment variable, if present. Optional.
-
-=item C<dbconn>
-
-=item C<pgconn>
+The port Bucardo should use when connecting to this database. Defaults to the value of the C<$PGPORT>
+environment variable, if present.
 
 =item C<conn>
 
-Additional connection parameters, e.g., C<sslmode=require>. Optional.
+Additional connection parameters, e.g. C<sslmode=require>.
+
+=item C<service>
+
+The service name Bucardo should use when connecting to this database.
 
 =item C<status>
 
-Initial status of the database in Bucardo. Must be either "active" or
-"inactive". Defaults to "active".
+Initial status of this database. Defaults to "active" but can be set to "inactive".
 
 =item C<dbgroup>
 
-Bucardo dbgroup to which to add the database. Optional.
+Name of the database group this database should belong to.
 
 =item C<addalltables>
 
-Automatically adds all tables once the database has been added. Optional.
+Automatically add all tables from this database.
 
 =item C<addallsequences>
 
-Automatically adds all sequences once the database has been added. Optional.
+Automatically add all sequences from this database.
 
 =item C<server_side_prepares>
 
 =item C<ssp>
 
-Enable or disable server-side prepares. Pass 1 to enable them or 0 to disable
-them. Defaults to 1.
+Set to 1 or 0 to enable or disable server-side prepares. Defaults to 1.
 
 =item C<makedelta>
 
-Enable or disable makedelta for this database. Defaults to 0.
+Set to 1 or 0 to enable or disable makedelta. Defaults to 0.
 
-=item C<dbservice>
+=back
 
-=item C<service>
+Additional parameters:
 
-The service name to use for a Postgres database. Optional.
+=over
+
+=item C<--force>
+
+Forces the database to be added without running a connection test.
 
 =back
 
