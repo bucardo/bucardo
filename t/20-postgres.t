@@ -25,7 +25,7 @@ my $bct = BucardoTesting->new({location => 'postgres'})
 ## The above runs one test for each passed in database x the number of test tables
 my $numtables = keys %tabletype;
 my $numsequences = keys %sequences;
-my $single_tests = 61;
+my $single_tests = 62;
 my $check_for_row_1 = 1;
 my $check_for_row_2 = 2;
 my $check_for_row_3 = 3;
@@ -179,6 +179,10 @@ like ($res, qr/Added sync "msync"/, $t);
 ## Add a row to A, to make sure it does not go anywhere with inactive syncs
 $bct->add_row_to_database('A', 1);
 
+## Clean out the droptest table for later testing
+$dbhA->do('TRUNCATE TABLE droptest_bucardo');
+$dbhA->commit();
+
 sub d {
     my $msg = shift || '?';
     my $time = scalar localtime;
@@ -216,6 +220,17 @@ $t = q{Replicating to the same database via customname works};
 $SQL = 'SELECT inty FROM bucardo_test1_copy';
 $res = $dbhA->selectall_arrayref($SQL);
 is_deeply($res, [[1]], $t);
+
+## Make sure triggers and rules did not fire
+$SQL = 'SELECT * FROM droptest_bucardo';
+$sth = $dbhB->prepare($SQL);
+$count = $sth->execute();
+if ($count >= 1) {
+    diag Dumper $sth->fetchall_arrayref({});
+    BAIL_OUT "Found rows ($count) in the droptest table!";
+}
+$sth->finish();
+ok ('No rows found in the droptest table: triggers and rules were disabled');
 
 ## Switch to a 2 source sync
 is $bct->ctl('bucardo update sync pgtest1 status=inactive'), '', 'Set pgtest1 status=inactive';

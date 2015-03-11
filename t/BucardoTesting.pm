@@ -151,7 +151,7 @@ our %tabletypesqlite =
      );
 
 
-our @tables2empty = (qw/droptest/);
+our @tables2empty = (qw/droptest_bucardo/);
 
 our %sequences =
     (
@@ -749,13 +749,13 @@ sub add_test_schema {
     my ($tcount,$scount,$fcount) = (0,0,0);
 
     ## Empty out or create the droptest table
-    if (table_exists($dbh => 'droptest')) {
-        $dbh->do('TRUNCATE TABLE droptest');
+    if (table_exists($dbh => 'droptest_bucardo')) {
+        $dbh->do('TRUNCATE TABLE droptest_bucardo');
     }
     else {
         $tcount++;
         $dbh->do(q{
-            CREATE TABLE droptest (
+            CREATE TABLE droptest_bucardo (
               name TEXT NOT NULL,
               type TEXT NOT NULL
             )
@@ -776,7 +776,7 @@ sub add_test_schema {
                 RETURNS trigger
                 LANGUAGE plpgsql
                 AS $_$ BEGIN
-                INSERT INTO droptest(name,type)
+                INSERT INTO droptest_bucardo(name,type)
                     VALUES (TG_RELNAME, 'trigger');
                 RETURN NULL;
                 END;
@@ -790,7 +790,7 @@ sub add_test_schema {
                 RETURNS trigger
                 LANGUAGE plpgsql
                 AS $_$ BEGIN
-                INSERT INTO droptest(name,type)
+                INSERT INTO droptest_bucardo(name,type)
                     VALUES (TG_RELNAME, 'trigger');
                 RETURN NULL;
                 END;
@@ -849,7 +849,7 @@ sub add_test_schema {
         $SQL = qq{
             CREATE OR REPLACE RULE "bcrule_$table"
             AS ON INSERT TO "$table"
-            DO ALSO INSERT INTO droptest(name,type) VALUES ('$table','rule')
+            DO ALSO INSERT INTO droptest_bucardo(name,type) VALUES ('$table','rule')
             };
         $table =~ /0/ and $SQL =~ s/NEW.inty/0/;
         $dbh->do($SQL);

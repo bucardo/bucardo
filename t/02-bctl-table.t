@@ -90,7 +90,7 @@ is ($res, qq{$addtable_msg:\n  public.bucardo_test5\n}, $t);
 
 $t = q{Add table works for a single valid ending wildcard entry};
 $res = $bct->ctl('bucardo add table drop%');
-is ($res, qq{$addtable_msg:\n  public.droptest\n}, $t);
+is ($res, qq{$addtable_msg:\n  public.droptest_bucardo\n}, $t);
 
 $t = q{Add table works for a single valid middle wildcard entry};
 $res = $bct->ctl('bucardo add table b%_test6');
@@ -142,7 +142,7 @@ qr{\d+\.\s* Table: public.Bucardo_test3       DB: A  PK: id \(bigint\)\s+
 \d+\.\s* Table: public.bucardo_test8       DB: A  PK: id \(bytea\)\s+
 \d+\.\s* Table: public.bucardo_test9       DB: A  PK: id \(int_unsigned\)\s+
 \d+\.\s* Table: public.bucardo_test10      DB: A  PK: id \(timestamptz\)\s+
-\d+\.\s* Table: public.droptest            DB: A  PK: none\s+
+\d+\.\s* Table: public.droptest_bucardo    DB: A  PK: none\s+
 \d+\.\s* Table: tschema.bucardo_test4      DB: A  PK: none\s+
 };
 like ($res, $expected, $t);
@@ -218,7 +218,7 @@ like ($res, qr{New tables added: 12\n}, $t);
 ## Remove them all, then try 'all tables' with exclude table
 empty_goat_table();
 $t = q{Add all tables with exclude table};
-$res = $bct->ctl('bucardo add all tables -T droptest -vv --debug');
+$res = $bct->ctl('bucardo add all tables -T droptest_bucardo -vv --debug');
 like ($res, qr{New tables added: 12}, $t);
 
 ## Remove them all, then try 'all tables' with exclude schema
