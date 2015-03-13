@@ -23,6 +23,7 @@ CREATE LANGUAGE plpgsql;
 CREATE LANGUAGE plperlu;
 CREATE SCHEMA bucardo;
 ALTER DATABASE bucardo SET search_path = bucardo, public;
+SET standard_conforming_strings = 'ON';
 
 -- The above were allowed to fail, because there is no harm if the objects
 -- already existed. From this point forward however, we suffer no errors
@@ -33,7 +34,7 @@ BEGIN;
 SET client_min_messages = 'WARNING';
 SET search_path TO bucardo;
 SET escape_string_warning = 'OFF';
-SET standard_conforming_strings = 'ON';
+
 
 -- Try and create a plperlu function, then call it at the very end
 -- Do not change this string, as the bucardo program parses it

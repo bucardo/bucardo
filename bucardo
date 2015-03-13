@@ -7503,10 +7503,12 @@ sub upgrade {
     }
     if ($schema_version ne $VERSION) {
         die qq{Cannot continue: bucardo is version $VERSION, but $schema_file is version $schema_version\n};
-   }
+    }
 
     $dbh->do(q{SET escape_string_warning = 'OFF'});
-    $dbh->do(q{SET standard_conforming_strings = 'ON'});
+    if ($dbh->{pg_server_version} >= 80200) {
+        $dbh->do(q{SET standard_conforming_strings = 'ON'});
+    }
 
     my $changes = 0;
 
