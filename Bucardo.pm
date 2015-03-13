@@ -2471,6 +2471,9 @@ sub start_kid {
 
         my $d = $sync->{db}{$dbname};
 
+        ## All databases start with triggers enabled
+        $d->{triggers_enabled} = 1;
+
         ## First, do some exclusions
 
         ## If this is a onetimecopy sync, the fullcopy targets are dead to us
@@ -3042,92 +3045,6 @@ sub start_kid {
 
         } ## end if delta databases
 
-        ## We disable and enable triggers and rules in one of two ways
-        ## For old, pre 8.3 versions of Postgres, we manipulate pg_class
-        ## This is not ideal, as we don't lock pg_class and thus risk problems
-        ## because the system catalogs are not strictly MVCC. However, there is
-        ## no other way to disable rules, which we must do.
-        ## If we are 8.3 or higher, we simply use session_replication_role,
-        ## which is completely safe, and faster (thanks Jan!)
-        ##
-        ## We also see if the version is modern enough to use COPY with subselects
-        ##
-        ## Note that each database within the same sync may have different methods,
-        ## so we need to see if anyone is doing things the old way
-        my $anyone_does_pgclass = 0;
-        for my $dbname (@dbs_write) {
-
-            my $d = $sync->{db}{$dbname};
-
-            next if $d->{dbtype} ne 'postgres';
-
-            my $ver = $d->{dbh}{pg_server_version};
-            if ($ver >= 80300) {
-                $d->{disable_trigrules} = 'replica';
-            }
-            else {
-                $d->{disable_trigrules} = 'pg_class';
-                $anyone_does_pgclass = 1;
-            }
-
-            ## If 8.2 or higher, we can use COPY (SELECT *)
-            $d->{modern_copy} = $ver >= 80200 ? 1 : 0;
-        }
-
-        ## We don't bother building these statements unless we need to
-        if ($anyone_does_pgclass) {
-
-            ## TODO: Ideally, we would also adjust for "newname"
-            ## For now, we do not and thus have a restriction of no
-            ## customnames on Postgres databases older than 8.2
-
-            ## The SQL to disable all triggers and rules for the tables in this sync
-            $SQL = q{
-                UPDATE pg_class
-                SET    reltriggers = 0, relhasrules = false
-                WHERE  (
-            };
-            $SQL .= join "OR\n"
-                => map { "(oid = '$_->{safeschema}.$_->{safetable}'::regclass)" }
-                grep { $_->{reltype} eq 'table' }
-                @$goatlist;
-            $SQL .= ')';
-
-            ## We are adding all tables together in a single multi-statement query
-            $SQL{disable_trigrules} = $SQL;
-
-            my $setclause =
-                ## no critic (RequireInterpolationOfMetachars)
-                q{reltriggers = }
-                . q{(SELECT count(*) FROM pg_catalog.pg_trigger WHERE tgrelid = pg_catalog.pg_class.oid),}
-                . q{relhasrules = }
-                . q{CASE WHEN (SELECT COUNT(*) FROM pg_catalog.pg_rules WHERE schemaname=SNAME AND tablename=TNAME) > 0 }
-                . q{THEN true ELSE false END};
-                ## use critic
-
-            ## The SQL to re-enable rules and triggers
-            ## for each table in this sync
-            $SQL{etrig} = qq{
-                UPDATE pg_class
-                SET    $setclause
-                WHERE  oid = 'SCHEMANAME.TABLENAME'::regclass
-            };
-            $SQL = join ";\n"
-                => map {
-                         my $sql = $SQL{etrig};
-                         $sql =~ s/SNAME/$_->{safeschemaliteral}/g;
-                         $sql =~ s/TNAME/$_->{safetableliteral}/g;
-                         $sql =~ s/SCHEMANAME/$_->{safeschema}/g;
-                         $sql =~ s/TABLENAME/$_->{safetable}/g;
-                         $sql;
-                     }
-                    grep { $_->{reltype} eq 'table' }
-                    @$goatlist;
-
-            $SQL{enable_trigrules} .= $SQL;
-
-        } ## end anyone using pg_class to turn off triggers and rules
-
         ## Common settings for the database handles. Set before passing to DBIx::Safe below
         ## These persist through all subsequent transactions
         ## First, things that are common to databases, irrespective of read/write:
@@ -3175,18 +3092,7 @@ sub start_kid {
 
             my $dbh = $d->{dbh};
 
-            if ($d->{dbtype} eq 'postgres') {
-
-                ## Note: no need to turn these back to what they were: we always want to stay in replica mode
-                ## If doing old school pg_class hackery, we defer until much later
-                if ($d->{disable_trigrules} eq 'replica') {
-                    $dbh->do(q{SET session_replication_role = 'replica'});
-                    $dbh->commit();
-                }
-
-            } ## end postgres
-
-            elsif ($d->{dbtype} eq 'mysql' or $d->{dbtype} eq 'mariadb') {
+            if ($d->{dbtype} eq 'mysql' or $d->{dbtype} eq 'mariadb') {
 
                 ## No foreign key checks, please
                 $dbh->do('SET foreign_key_checks = 0');
@@ -4317,33 +4223,8 @@ sub start_kid {
                     ## Should we use the stage table for this database?
                     $d->{trackstage} = ($numsources > 1 and exists $deltabin{$dbname}) ? 1 : 0;
 
-                    ## Disable triggers and rules the 'old way'
-                    if ($d->{disable_trigrules} eq 'pg_class' and ! $disabled_via_pg_class) {
-
-                        ## Run all 'before_trigger_disable' code
-                        if (exists $sync->{code_before_trigger_disable}) {
-                            $sth{kid_syncrun_update_status}->execute("Code before_trigger_disable (KID $$)", $syncname);
-                            $maindbh->commit();
-                            for my $code (@{$sync->{code_before_trigger_disable}}) {
-                                last if 'last' eq $self->run_kid_custom_code($sync, $code);
-                            }
-                        }
-
-                        $self->glog(qq{Disabling triggers and rules on db "$dbname" via pg_class}, LOG_VERBOSE);
-                        $d->{dbh}->do($SQL{disable_trigrules});
-
-                        ## Run all 'after_trigger_disable' code
-                        if (exists $sync->{code_after_trigger_disable}) {
-                            $sth{kid_syncrun_update_status}->execute("Code after_trigger_disable (KID $$)", $syncname);
-                            $maindbh->commit();
-                            for my $code (@{$sync->{code_after_trigger_disable}}) {
-                                last if 'last' eq $self->run_kid_custom_code($sync, $code);
-                            }
-                        }
-
-                        ## Because this disables all tables in this sync, we only want to do it once
-                        $disabled_via_pg_class = 1;
-                    }
+                    ## By hook or by crook, disable all triggers on the tables involved
+                    $self->disable_triggers($sync, $d);
 
                     ## If we are rebuilding indexes, disable them for this table now
                     ## XXX Do all of these at once as per above? Maybe even combine the call?
@@ -4949,36 +4830,7 @@ sub start_kid {
                     ## Grab the real target name
                     my $tname = $g->{newname}{$syncname}{$dbname};
 
-                    if ('postgres' eq $d->{dbtype}) {
-                        ## Disable triggers and rules the 'old way'
-                        if ($d->{disable_trigrules} eq 'pg_class' and ! $disabled_via_pg_class) {
-
-                            ## Run all 'before_trigger_disable' code
-                            if (exists $sync->{code_before_trigger_disable}) {
-                                $sth{kid_syncrun_update_status}->execute("Code before_trigger_disable (KID $$)", $syncname);
-                                $maindbh->commit();
-                                for my $code (@{$sync->{code_before_trigger_disable}}) {
-                                    last if 'last' eq $self->run_kid_custom_code($sync, $code);
-                                }
-                            }
-
-                            $self->glog(qq{Disabling triggers and rules on db "$dbname" via pg_class}, LOG_VERBOSE);
-                            $d->{dbh}->do($SQL{disable_trigrules});
-
-                            ## Run all 'after_trigger_disable' code
-                            if (exists $sync->{code_after_trigger_disable}) {
-                                $sth{kid_syncrun_update_status}->execute("Code after_trigger_disable (KID $$)", $syncname);
-                                $maindbh->commit();
-                                for my $code (@{$sync->{code_after_trigger_disable}}) {
-                                    last if 'last' eq $self->run_kid_custom_code($sync, $code);
-                                }
-                            }
-
-                            ## Because this disables all tables in this sync, we only want to do it once
-                            $disabled_via_pg_class = 1;
-                        }
-
-                    } ## end postgres
+                    $self->disable_triggers($sync, $d);
 
                     $self->glog(qq{Emptying out $dbname.$tname using $sync->{deletemethod}}, LOG_VERBOSE);
                     my $use_delete = 1;
@@ -5155,27 +5007,13 @@ sub start_kid {
 
             next if ! $d->{writtento};
 
-            ## Turn triggers and rules back on if using old-school pg_class hackery
-            if ($d->{dbtype} eq 'postgres') {
+            ## Turn triggers and rules back on
+            $self->enable_triggers($sync, $d);
 
-                next if $d->{disable_trigrules} ne 'pg_class';
-
-                $self->glog(qq{Enabling triggers and rules on $dbname via pg_class}, LOG_VERBOSE);
-                $d->{dbh}->do($SQL{enable_trigrules});
-            }
-            elsif ($d->{dbtype} eq 'mysql' or $d->{dbtype} eq 'mariadb') {
+            if ($d->{dbtype} eq 'mysql' or $d->{dbtype} eq 'mariadb') {
 
                 $self->glog(qq{Turning foreign key checks back on for $dbname}, LOG_VERBOSE);
                 $d->{dbh}->do('SET foreign_key_checks = 1');
-            }
-        }
-
-        ## Run all 'after_trigger_enable' code
-        if (exists $sync->{code_after_trigger_enable}) {
-            $sth{kid_syncrun_update_status}->execute("Code after_trigger_enable (KID $$)", $syncname);
-            $maindbh->commit();
-            for my $code (@{$sync->{code_after_trigger_enable}}) {
-                last if 'last' eq $self->run_kid_custom_code($sync, $code);
             }
         }
 
@@ -5525,6 +5363,133 @@ sub start_kid {
     }
 
 } ## end of start_kid
+
+
+sub disable_triggers {
+
+    ## Disable any triggers and rules for all tables in a sync, for the given database.
+    ## This gets all tables at once, so it only needs to be called once for each database.
+    ## Arguments: two
+    ## 1. Sync object
+    ## 2. Database object
+    ## Returns: undef
+
+    my ($self, $sync, $db) = @_;
+
+    ## Are triggers already disabled for this database? Return and do nothing
+    return undef if ! $db->{triggers_enabled};
+
+    ## We only know how to disable Postgres triggers
+    return undef if $db->{dbtype} ne 'postgres';
+
+    ## Can we do this the easy way? Thanks to Jan for srr!
+    if ($db->{dbh}{pg_server_version} >= 80200) {
+        $self->glog("Setting session_replication_role to replica for database $db->{name}", LOG_VERBOSE);
+        $db->{dbh}->do(q{SET session_replication_role = 'replica'});
+        $db->{dbh}->commit();
+        $db->{triggers_enabled} = 0;
+        return undef;
+    }
+
+    ## Okay, the old and ugly way: pg_class table manipulation
+    ## First, create the SQL as needed
+    if (! $sync->{SQL_disable_trigrules}) {
+
+        ## The SQL to disable all triggers and rules for the tables in this sync
+        $SQL = q{
+                UPDATE pg_class
+                SET    reltriggers = 0, relhasrules = false
+                WHERE  (
+            };
+        $SQL .= join "OR\n"
+            => map { "(oid = '$_->{safeschema}.$_->{safetable}'::regclass)" }
+                grep { $_->{reltype} eq 'table' }
+                    @{ $sync->{goatlist} };
+        $SQL .= ')';
+
+        $sync->{SQL_disable_trigrules} = $SQL;
+    }
+
+    ## Now run the SQL and mark that we have been here
+    $self->glog(qq{Disabling triggers and rules on database "$db->{name}" via pg_class}, LOG_VERBOSE);
+    $db->{dbh}->do($sync->{SQL_disable_trigrules});
+
+    $db->{triggers_enabled} = 0;
+
+    return undef;
+
+} ## end of disable_triggers
+
+
+sub enable_triggers {
+
+    ## Restore any previously disabled triggers and rules
+    ##   for all tables in a sync, for the given database.
+    ## This gets all tables at once, so it only needs to be called once for each database.
+    ## Arguments: two
+    ## 1. Sync object
+    ## 2. Database object
+    ## Returns: undef
+
+    my ($self, $sync, $db) = @_;
+
+    ## Are triggers already enabled for this database? Return and do nothing
+    return undef if $db->{triggers_enabled};
+
+    ## We only know how to manipulate Postgres triggers
+    return undef if $db->{dbtype} ne 'postgres';
+
+    ## If we are using srr, just flip it back to the default
+    if ($db->{dbh}{pg_server_version} >= 80200) {
+        $self->glog("Setting session_replication_role to default for database $db->{name}", LOG_VERBOSE);
+        $db->{dbh}->do(q{SET session_replication_role = default}); ## Assumes a sane default!
+        $db->{dbh}->commit();
+        $db->{triggers_enabled} = time;
+        return undef;
+    }
+
+    ## Okay, the old and ugly way: pg_class table manipulation
+    ## First, create the SQL as needed
+    if (! $sync->{SQL_enable_trigrules}) {
+
+        my $setclause =
+            ## no critic (RequireInterpolationOfMetachars)
+            q{reltriggers = }
+                . q{(SELECT count(*) FROM pg_catalog.pg_trigger WHERE tgrelid = pg_catalog.pg_class.oid),}
+                . q{relhasrules = }
+                . q{CASE WHEN (SELECT COUNT(*) FROM pg_catalog.pg_rules WHERE schemaname=SNAME AND tablename=TNAME) > 0 }
+                . q{THEN true ELSE false END};
+            ## use critic
+
+        my $tempsql = qq{
+                UPDATE pg_class
+                SET    $setclause
+                WHERE  oid = 'SCHEMANAME.TABLENAME'::regclass
+            };
+        $SQL = join ";\n"
+            => map {
+                my $sql = $tempsql;
+                $sql =~ s/SNAME/$_->{safeschemaliteral}/g;
+                $sql =~ s/TNAME/$_->{safetableliteral}/g;
+                $sql =~ s/SCHEMANAME/$_->{safeschema}/g;
+                $sql =~ s/TABLENAME/$_->{safetable}/g;
+                $sql;
+            }
+                grep { $_->{reltype} eq 'table' }
+                    @{ $sync->{goatlist} };
+
+        $sync->{SQL_enable_trigrules} = $SQL;
+    }
+
+    ## Now run the SQL and mark that we have been here
+    $self->glog(qq{Enabling triggers and rules on database "$db->{name}" via pg_class}, LOG_VERBOSE);
+    $db->{dbh}->do($sync->{SQL_enable_trigrules});
+
+    $db->{triggers_enabled} = time;
+
+    return undef;
+
+} ## end of enable_triggers
 
 
 sub pause_and_exit {
