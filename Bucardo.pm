@@ -3341,7 +3341,8 @@ sub start_kid {
             }
 
             if ($d->{dbtype} eq 'sqlite') {
-                ## Nothing needed here, the default seems okay
+                ## Defer all foreign key checking until the very end
+                $d->{dbh}->do('PRAGMA defer_foreign_keys = 1');
             }
 
             if ($d->{dbtype} eq 'redis') {
