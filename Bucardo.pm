@@ -4223,26 +4223,14 @@ sub start_kid {
                     ## Should we use the stage table for this database?
                     $d->{trackstage} = ($numsources > 1 and exists $deltabin{$dbname}) ? 1 : 0;
 
-                    ## By hook or by crook, disable all triggers on the tables involved
+                    ## Disable triggers as needed
                     $self->disable_triggers($sync, $d);
 
-                    ## If we are rebuilding indexes, disable them for this table now
-                    ## XXX Do all of these at once as per above? Maybe even combine the call?
-                    ## XXX No sense in updating pg_class yet another time
-                    ## XXX Although the relhasindex is important...but may not hurt since we are updating
-                    ## XXX the row anyway...
-                    if ($g->{rebuild_index} == 2) { ## XXX why the 2?
+                    ## Grab the actual target table name
+                    my $tname = $g->{newname}{$syncname}{$dbname};
 
-                        ## No index means no manipulation
-                        ## We don't cache the value, but simply set index_disabled below
-                        $SQL = "SELECT relhasindex FROM pg_class WHERE oid = '$S.$T'::regclass";
-                        if ($d->{dbh}->selectall_arrayref($SQL)->[0][0]) {
-                            $self->glog("Turning off indexes for $dbname.$S.$T", LOG_NORMAL);
-                            $SQL = "UPDATE pg_class SET relhasindex = 'f' WHERE oid = '$S.$T'::regclass";
-                            $d->{dbh}->do($SQL);
-                            $d->{index_disabled} = 1;
-                        }
-                    }
+                    ## Disable indexes as needed (will be rebuilt after data is copied)
+                    $self->disable_indexes($sync, $d, $g, $tname);
 
                 } ## end setting up each database
 
@@ -4404,14 +4392,12 @@ sub start_kid {
 
                                 next if ! $d->{writtento};
 
-                                if ($d->{index_disabled}) {
-                                    $self->glog("Re-enabling indexes for $dbname.$S.$T", LOG_NORMAL);
-                                    $SQL = "UPDATE pg_class SET relhasindex = 't' WHERE oid = '$S.$T'::regclass";
-                                    $d->{dbh}->do($SQL);
-                                    $self->glog("Reindexing table $dbname.$S.$T", LOG_NORMAL);
-                                    ## We do this asynchronously so we don't wait on each db
-                                    $d->{async_active} = time;
-                                    $d->{dbh}->do( "REINDEX TABLE $S.$T", {pg_async => PG_ASYNC} );
+                                my $tname = $g->{newname}{$syncname}{$dbname};
+
+                                ## May be slow, so update syncrun
+                                if ($self->enable_indexes($sync, $d, $g, $tname)) { ## may set $g->{rebuild_index_active}
+                                    $sth{kid_syncrun_update_status}->execute("REINDEX $tname (KID $$)", $syncname);
+                                    $maindbh->commit();
                                 }
                             }
 
@@ -4422,10 +4408,10 @@ sub start_kid {
 
                                 next if ! $d->{writtento};
 
-                                if ($d->{index_disabled}) {
+                                if ($g->{rebuild_index_active}) {
                                     $d->{dbh}->pg_result();
                                     $d->{async_active} = 0;
-                                    $d->{index_disabled} = 0;
+                                    $g->{rebuild_index_active} = 0;
                                 }
                             }
 
@@ -4787,32 +4773,8 @@ sub start_kid {
                         ## Grab the actual target table name
                         my $tname = $g->{newname}{$syncname}{$dbname};
 
-                        if ($d->{dbtype} eq 'postgres') {
-                            ## TODO: Cache this information earlier
-                            $SQL = "SELECT relhasindex FROM pg_class WHERE oid = '$tname'::regclass";
-                            if ($d->{dbh}->selectall_arrayref($SQL)->[0][0]) {
-                                $self->glog("Turning off indexes for $tname on $dbname", LOG_NORMAL);
-                                ## Do this without pg_class manipulation when Postgres supports that
-                                $SQL = "UPDATE pg_class SET relhasindex = 'f' WHERE oid = '$S.$T'::regclass";
-                                $d->{dbh}->do($SQL);
-                                $d->{index_disabled} = 1;
-                            }
-                        }
+                        $self->disable_indexes($sync, $d, $g, $tname);
 
-                        if ($d->{dbtype} eq 'mysql' or $d->{dbtype} eq 'mariadb') {
-                            $SQL = "ALTER TABLE $tname DISABLE KEYS";
-                            $self->glog("Disabling keys for $tname on $dbname", LOG_NORMAL);
-                            $d->{dbh}->do($SQL);
-                            $d->{index_disabled} = 1;
-                        }
-
-                        if ($d->{dbtype} eq 'sqlite') {
-                            ## May be too late to do this here
-                            $SQL = q{PRAGMA foreign_keys = OFF};
-                            $self->glog("Disabling foreign keys on $dbname", LOG_NORMAL);
-                            $d->{dbh}->do($SQL);
-                            $d->{index_disabled} = 1;
-                        }
                     }
                 }
 
@@ -4830,7 +4792,11 @@ sub start_kid {
                     ## Grab the real target name
                     my $tname = $g->{newname}{$syncname}{$dbname};
 
+                    ## Disable triggers as needed
                     $self->disable_triggers($sync, $d);
+
+                    ## Disable indexes as needed (will be rebuilt after data is copied)
+                    $self->disable_indexes($sync, $d, $g, $tname);
 
                     $self->glog(qq{Emptying out $dbname.$tname using $sync->{deletemethod}}, LOG_VERBOSE);
                     my $use_delete = 1;
@@ -4882,36 +4848,25 @@ sub start_kid {
                     my $tname = $g->{newname}{$syncname}{$dbname};
 
                     ## May be slow, so update syncrun
-                    $sth{kid_syncrun_update_status}->execute("REINDEX $tname (KID $$)", $syncname);
-                    $maindbh->commit();
-
-                    if ($d->{dbtype} eq 'postgres') {
-                        $SQL = "UPDATE pg_class SET relhasindex = 't' WHERE oid = '$tname'::regclass";
-                        $d->{dbh}->do($SQL);
-
-                        ## Do the reindex, and time how long it takes
-                        my $t0 = [gettimeofday];
-                        $self->glog("Reindexing table $dbname.$tname", LOG_NORMAL);
-                        $d->{dbh}->do("REINDEX TABLE $tname");
-                        $self->glog((sprintf(q{(OTC: %s) REINDEX TABLE %s},
-                            $self->pretty_time(tv_interval($t0), 'day'), $tname)), LOG_NORMAL);
+                    if ($self->enable_indexes($sync, $d, $g, $tname)) { ## may set $g->{rebuild_index_active}
+                        $sth{kid_syncrun_update_status}->execute("REINDEX $tname (KID $$)", $syncname);
+                        $maindbh->commit();
                     }
-
-                    if ($d->{dbtype} eq 'mysql' or $d->{dbtype} eq 'mariadb') {
-                        $SQL = "ALTER TABLE $tname ENABLE KEYS";
-                        $self->glog("Enabling keys for $tname on $dbname", LOG_NORMAL);
-                        $d->{dbh}->do($SQL);
-                    }
-
-                    if ($d->{dbtype} eq 'sqlite') {
-                        $SQL = q{PRAGMA foreign_keys = ON};
-                        $self->glog("Enabling keys on $dbname", LOG_NORMAL);
-                        $d->{dbh}->do($SQL);
-                    }
-
-                    $d->{index_disabled} = 0;
 
                 } ## end each target to be reindexed
+
+                ## As the reindexes may be async, finish them off
+                for my $dbname (@dbs_copytarget) {
+
+                    my $d = $sync->{db}{$dbname};
+
+                    if ($g->{rebuild_index_active}) {
+                        $d->{dbh}->pg_result();
+                        $d->{async_active} = 0;
+                        $g->{rebuild_index_active} = 0;
+                    }
+                }
+
 
                 ## TODO: logic to clean out delta rows is this was a onetimecopy
 
@@ -5490,6 +5445,107 @@ sub enable_triggers {
     return undef;
 
 } ## end of enable_triggers
+
+
+sub disable_indexes {
+
+    ## Disable indexes on a specific table for faster loading
+    ## Obviously, the index will get enabled and rebuilt later on
+    ## Arguments: four
+    ## 1. Sync object
+    ## 2. Database object
+    ## 3. Table object
+    ## 4. Fully qualified table name
+    ## Returns: undef
+
+    my ($self, $sync, $db, $table, $tablename) = @_;
+
+    ## Do nothing unless rebuild_index has been set for this table
+    return undef if ! $table->{rebuild_index};
+
+    ## Have we already disabled triggers on this table? Return and do nothing
+    return undef if $table->{indexes_disabled};
+
+    ## The only system we do this with is Postgres
+    return undef if $db->{dbtype} ne 'postgres';
+
+    my $safename = "$table->{safeschema}.$table->{safetable}";
+
+    ## We need to know if this table has indexes or not
+    if (! exists $table->{has_indexes}) {
+        $SQL = qq{SELECT relhasindex FROM pg_class WHERE oid = '$safename'::regclass};
+        $table->{has_indexes} = $db->{dbh}->selectall_arrayref($SQL)->[0][0];
+    }
+
+    ## Do nothing if the table is known to have no indexes
+    return undef if ! $table->{has_indexes};
+
+    $self->glog("Turning off indexes for $db->{name}.$tablename", LOG_NORMAL);
+    $SQL = qq{UPDATE pg_class SET relhasindex = 'f' WHERE oid = '$safename'::regclass};
+    $db->{dbh}->do($SQL);
+    $table->{indexes_disabled} = 1;
+
+    return undef;
+
+    ## mysql and mariadb could do this:
+    ## $SQL = "ALTER TABLE $tablename DISABLE KEYS";
+    ## But there is now way to rebuild the indexes, so we would have to
+    ## actually count the rows to make sure it is zero first
+    ## (or know that we just truncated)
+    ## A future optimization
+
+} ## end of disable_indexes
+
+
+sub enable_indexes {
+
+    ## Make indexes live again, and rebuild if needed
+    ## Arguments: four
+    ## 1. Sync object
+    ## 2. Database object
+    ## 3. Table object
+    ## 4. Fully qualified table name
+    ## Returns: undef
+
+    my ($self, $sync, $db, $table, $tablename) = @_;
+
+    ## Do nothing unless rebuild_index has been set for this table
+    return undef if ! $table->{rebuild_index};
+
+    ## Do nothing if the indexes are already enabled
+    return undef if ! $table->{indexes_disabled};
+
+    ## The only system we do this with is Postgres
+    return undef if $db->{dbtype} ne 'postgres';
+
+    ## Safety check
+    if (! exists $table->{has_indexes}) {
+        die qq{Oops! has_indexes for table $tablename was not set!\n};
+    }
+
+    ## Do nothing if the table is known to have no indexes
+    return undef if ! $table->{has_indexes};
+
+    my $safename = "$table->{safeschema}.$table->{safetable}";
+
+    ## Turn the indexes back on
+    my $dbname = $db->{name};
+    $self->glog("Enabling indexes for $dbname.$tablename", LOG_NORMAL);
+    $SQL = qq{UPDATE pg_class SET relhasindex = 't' WHERE oid = '$safename'::regclass};
+    $db->{dbh}->do($SQL);
+    $table->{indexes_disabled} = 0;
+
+    ## Rebuild all the indexes on this table
+    $self->glog("Reindexing table $dbname.$tablename", LOG_NORMAL);
+    ## We do this asynchronously so we don't wait on each db
+    $db->{async_active} = time;
+    $db->{dbh}->do( "REINDEX TABLE $tablename", {pg_async => PG_ASYNC} );
+    $table->{rebuild_index_active} = 1;
+
+    return undef;
+
+} ## end of enable_triggers
+
 
 
 sub pause_and_exit {
@@ -6694,7 +6750,6 @@ sub validate_sync {
         ## If we didn't find exception custom code above, set it to 0 for this goat
         $g->{has_exception_code} ||= 0;
 
-        ## If goat.rebuild_index is null, use the sync's value
         if (!defined $g->{rebuild_index}) {
             $g->{rebuild_index} = $s->{rebuild_index};
         }
