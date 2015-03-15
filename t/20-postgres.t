@@ -461,6 +461,9 @@ $t = q{add customcols returns expected message};
 $res = $bct->ctl('bucardo add customcols bucardo_test1 "SELECT id, data1, inty*30 AS inty"');
 like($res, qr/\QNew columns for public.bucardo_test1: "SELECT id, data1, inty*30 AS inty"/, $t);
 
+## Also test the rebuild_index functionality
+$res = $bct->ctl('bucardo update sync pgtest3 rebuild_index=1');
+
 ## We need to restart Bucardo entirely to change this. Someday, a reload sync will be enough.
 $bct->restart_bucardo($dbhX);
 
