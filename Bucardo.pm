@@ -4227,11 +4227,8 @@ sub start_kid {
                     ## Disable triggers as needed
                     $self->disable_triggers($sync, $d);
 
-                    ## Grab the actual target table name
-                    my $tname = $g->{newname}{$syncname}{$dbname};
-
                     ## Disable indexes as needed (will be rebuilt after data is copied)
-                    $self->disable_indexes($sync, $d, $g, $tname);
+                    $self->disable_indexes($sync, $d, $g);
 
                 } ## end setting up each database
 
@@ -4396,7 +4393,7 @@ sub start_kid {
                                 my $tname = $g->{newname}{$syncname}{$dbname};
 
                                 ## May be slow, so update syncrun
-                                if ($self->enable_indexes($sync, $d, $g, $tname)) { ## may set $g->{rebuild_index_active}
+                                if ($self->enable_indexes($sync, $d, $g)) { ## may set $g->{rebuild_index_active}
                                     $sth{kid_syncrun_update_status}->execute("REINDEX $tname (KID $$)", $syncname);
                                     $maindbh->commit();
                                 }
@@ -4790,19 +4787,18 @@ sub start_kid {
                     ## Nothing to do here for flatfiles
                     next if $d->{dbtype} =~ /flat/;
 
-                    ## Grab the real target name
-                    my $tname = $g->{newname}{$syncname}{$dbname};
-
                     ## Disable triggers as needed
                     $self->disable_triggers($sync, $d);
 
                     ## Disable indexes as needed (will be rebuilt after data is copied)
-                    $self->disable_indexes($sync, $d, $g, $tname);
+                    $self->disable_indexes($sync, $d, $g);
 
-                    $self->glog(qq{Emptying out $dbname.$tname using $sync->{deletemethod}}, LOG_VERBOSE);
+                    $self->glog(qq{Emptying out $dbname.$S.$T using $sync->{deletemethod}}, LOG_VERBOSE);
                     my $use_delete = 1;
 
                     ## By hook or by crook, empty this table
+
+                    my $tname = $g->{newname}{$syncname}{$dbname};
 
                     if ($sync->{deletemethod} =~ /truncate/io) {
                         my $do_cascade = $sync->{deletemethod} =~ /cascade/io ? 1 : 0;
@@ -4849,7 +4845,7 @@ sub start_kid {
                     my $tname = $g->{newname}{$syncname}{$dbname};
 
                     ## May be slow, so update syncrun
-                    if ($self->enable_indexes($sync, $d, $g, $tname)) { ## may set $g->{rebuild_index_active}
+                    if ($self->enable_indexes($sync, $d, $g)) { ## may set $g->{rebuild_index_active}
                         $sth{kid_syncrun_update_status}->execute("REINDEX $tname (KID $$)", $syncname);
                         $maindbh->commit();
                     }
@@ -5452,14 +5448,13 @@ sub disable_indexes {
 
     ## Disable indexes on a specific table for faster loading
     ## Obviously, the index will get enabled and rebuilt later on
-    ## Arguments: four
+    ## Arguments: three
     ## 1. Sync object
     ## 2. Database object
     ## 3. Table object
-    ## 4. Fully qualified table name
     ## Returns: undef
 
-    my ($self, $sync, $db, $table, $tablename) = @_;
+    my ($self, $sync, $db, $table) = @_;
 
     ## Do nothing unless rebuild_index has been set for this table
     return undef if ! $table->{rebuild_index};
@@ -5470,11 +5465,12 @@ sub disable_indexes {
     ## The only system we do this with is Postgres
     return undef if $db->{dbtype} ne 'postgres';
 
-    my $safename = "$table->{safeschema}.$table->{safetable}";
+    ## Grab the actual target table name
+    my $tablename = $table->{newname}{$sync->{name}}{$db->{name}};
 
     ## We need to know if this table has indexes or not
     if (! exists $table->{has_indexes}) {
-        $SQL = qq{SELECT relhasindex FROM pg_class WHERE oid = '$safename'::regclass};
+        $SQL = qq{SELECT relhasindex FROM pg_class WHERE oid = '$tablename'::regclass};
         $table->{has_indexes} = $db->{dbh}->selectall_arrayref($SQL)->[0][0];
     }
 
@@ -5482,18 +5478,11 @@ sub disable_indexes {
     return undef if ! $table->{has_indexes};
 
     $self->glog("Turning off indexes for $db->{name}.$tablename", LOG_NORMAL);
-    $SQL = qq{UPDATE pg_class SET relhasindex = 'f' WHERE oid = '$safename'::regclass};
+    $SQL = qq{UPDATE pg_class SET relhasindex = 'f' WHERE oid = '$tablename'::regclass};
     $db->{dbh}->do($SQL);
     $table->{indexes_disabled} = 1;
 
     return undef;
-
-    ## mysql and mariadb could do this:
-    ## $SQL = "ALTER TABLE $tablename DISABLE KEYS";
-    ## But there is now way to rebuild the indexes, so we would have to
-    ## actually count the rows to make sure it is zero first
-    ## (or know that we just truncated)
-    ## A future optimization
 
 } ## end of disable_indexes
 
@@ -5501,11 +5490,10 @@ sub disable_indexes {
 sub enable_indexes {
 
     ## Make indexes live again, and rebuild if needed
-    ## Arguments: four
+    ## Arguments: three
     ## 1. Sync object
     ## 2. Database object
     ## 3. Table object
-    ## 4. Fully qualified table name
     ## Returns: undef
 
     my ($self, $sync, $db, $table, $tablename) = @_;
@@ -5527,12 +5515,13 @@ sub enable_indexes {
     ## Do nothing if the table is known to have no indexes
     return undef if ! $table->{has_indexes};
 
-    my $safename = "$table->{safeschema}.$table->{safetable}";
+    ## Grab the actual target table name
+    my $tablename = $table->{newname}{$sync->{name}}{$db->{name}};
 
     ## Turn the indexes back on
     my $dbname = $db->{name};
     $self->glog("Enabling indexes for $dbname.$tablename", LOG_NORMAL);
-    $SQL = qq{UPDATE pg_class SET relhasindex = 't' WHERE oid = '$safename'::regclass};
+    $SQL = qq{UPDATE pg_class SET relhasindex = 't' WHERE oid = '$tablename'::regclass};
     $db->{dbh}->do($SQL);
     $table->{indexes_disabled} = 0;
 
@@ -5545,8 +5534,7 @@ sub enable_indexes {
 
     return undef;
 
-} ## end of enable_triggers
-
+} ## end of enable_indexes
 
 
 sub pause_and_exit {
