@@ -206,6 +206,11 @@ $dbhX->do('LISTEN bucardo_syncdone_pgtest1');
 $dbhX->do('LISTEN bucardo_syncdone_samedb');
 $dbhX->commit();
 
+## Create a lock file to test the forced file locking
+my $lockfile = 'pid/bucardo-force-lock-pgtest1';
+open my $fh, '>', $lockfile or die qq{Could not create "$lockfile": $!\n};
+close $fh;
+
 ## Start up Bucardo again
 $bct->restart_bucardo($dbhX);
 
