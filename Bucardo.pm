@@ -4117,37 +4117,6 @@ sub start_kid {
 
                 } ## end if have conflicts
 
-                ## At this point, %deltabin should contain a single copy of each primary key
-                ## It may even be empty if we are truncating
-
-                ## We need to figure out how many sources we have for some later optimizations
-                my $numsources = keys %deltabin;
-
-                ## Figure out which databases are getting written to
-                ## If there is only one source, then it will *not* get written to
-                ## If there is more than one source, then everyone gets written to!
-                for my $dbname (keys %{ $sync->{db} }) {
-
-                    my $d = $sync->{db}{$dbname};
-
-                    ## Again: everyone is written to unless there is a single source
-                    ## A truncation source may have an empty deltabin, but it will exist
-                    $d->{writtento} = (1==$numsources and exists $deltabin{$dbname}) ? 0 : 1;
-                    next if ! $d->{writtento};
-
-                    next if $d->{dbtype} ne 'postgres';
-
-                    ## Should we use the stage table for this database?
-                    $d->{trackstage} = ($numsources > 1 and exists $deltabin{$dbname}) ? 1 : 0;
-
-                    ## Disable triggers as needed
-                    $self->disable_triggers($sync, $d);
-
-                    ## Disable indexes as needed (will be rebuilt after data is copied)
-                    $self->disable_indexes($sync, $d, $g);
-
-                } ## end setting up each database
-
                 ## Create filehandles for any flatfile databases
                 for my $dbname (keys %{ $sync->{db} }) {
 
@@ -4201,6 +4170,38 @@ sub start_kid {
                         }
                     }
                 }
+
+                ## At this point, %deltabin should contain a single copy of each primary key
+                ## It may even be empty if we are truncating
+
+                ## We need to figure out how many sources we have for some later optimizations
+                my $numsources = keys %deltabin;
+
+                ## Figure out which databases are getting written to
+                ## If there is only one source, then it will *not* get written to
+                ## If there is more than one source, then everyone gets written to!
+                for my $dbname (keys %{ $sync->{db} }) {
+
+                    my $d = $sync->{db}{$dbname};
+
+                    ## Again: everyone is written to unless there is a single source
+                    ## A truncation source may have an empty deltabin, but it will exist
+                    $d->{writtento} = (1==$numsources and exists $deltabin{$dbname}) ? 0 : 1;
+                    next if ! $d->{writtento};
+
+                    next if $d->{dbtype} ne 'postgres';
+
+                    ## Should we use the stage table for this database?
+                    $d->{trackstage} = ($numsources > 1 and exists $deltabin{$dbname}) ? 1 : 0;
+
+                    ## Disable triggers as needed
+                    $self->disable_triggers($sync, $d);
+
+                    ## Disable indexes as needed (will be rebuilt after data is copied)
+                    $self->disable_indexes($sync, $d, $g);
+
+                } ## end setting up each database
+
 
                 ## This is where we want to 'rewind' to on a handled exception
               PUSH_SAVEPOINT: {
