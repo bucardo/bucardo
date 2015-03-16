@@ -3352,58 +3352,9 @@ sub start_kid {
 
         }
 
-        ## We may want to lock all the tables. Use sparingly
-        my $lock_table_mode = '';
-        my $force_lock_file = File::Spec->catfile( $config{piddir} => "bucardo-force-lock-$syncname" );
+        ## We may have a request to lock all the tables
+        $self->lock_all_tables({ sync => $sync, databases => \@dbs_write, tables => $goatlist});
 
-        ## If the file exists, pull the mode from inside it
-        if (-e $force_lock_file) {
-            $lock_table_mode = 'EXCLUSIVE';
-            if (-s _ and (open my $fh, '<', "$force_lock_file")) {
-                my $newmode = <$fh>;
-                close $fh or warn qq{Could not close "$force_lock_file": $!\n};
-                if (defined $newmode) {
-                    chomp $newmode;
-                    ## Quick sanity check: only set if looks like normal words
-                    $lock_table_mode = $newmode if $newmode =~ /^\s*\w[ \w]+\s*$/o;
-                }
-            }
-            $self->glog(qq{Found lock control file "$force_lock_file". Mode: $lock_table_mode}, LOG_TERSE);
-        }
-
-        if ($lock_table_mode) {
-            $self->glog("Locking all tables in $lock_table_mode MODE", LOG_TERSE);
-            for my $g (@$goatlist) {
-                next if $g->{reltype} ne 'table';
-
-                for my $dbname (@dbs_write) {
-
-                    my $d = $sync->{db}{$dbname};
-
-                    ## Figure out which table name to use
-                    my $tname = $g->{newname}{$syncname}{$dbname};
-
-                    if ('postgres' eq $d->{dbtype}) {
-                        my $com = "$tname IN $lock_table_mode MODE";
-                        $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
-                        $d->{dbh}->do("LOCK TABLE $com");
-                    }
-                    elsif ('mysql' eq $d->{dbtype } or 'drizzle' eq $d->{dbtype} or 'mariadb' eq $d->{dbtype}) {
-                        my $com = "$tname WRITE";
-                        $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
-                        $d->{dbh}->do("LOCK TABLE $com");
-                    }
-                    elsif ('oracle' eq $d->{dbtype}) {
-                        my $com = "$tname IN EXCLUSIVE MODE";
-                        $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
-                        $d->{dbh}->do("LOCK TABLE $com");
-                    }
-                    elsif ('sqlite' eq $d->{dbtype}) {
-                        $d->{dbh}->do('BEGIN EXCLUSIVE TRANSACTION');
-                    }
-                }
-            }
-        }
 
         ## Run all 'before_check_rows' code
         if (exists $sync->{code_before_check_rows}) {
@@ -5135,10 +5086,7 @@ sub start_kid {
         my $total_time = sprintf '%.2f', tv_interval($kid_start_time);
 
         ## Remove lock file if we used it
-        if ($lock_table_mode and -e $force_lock_file) {
-            $self->glog("Removing lock control file $force_lock_file", LOG_VERBOSE);
-            unlink $force_lock_file or $self->glog("Warning! Failed to unlink $force_lock_file", LOG_WARN);
-        }
+        $self->remove_lock_file();
 
         ## Run all 'after_txn' code
         if (exists $sync->{code_after_txn}) {
@@ -5315,6 +5263,107 @@ sub start_kid {
     }
 
 } ## end of start_kid
+
+
+sub lock_all_tables {
+
+    ## If requested, lock all the tables used in the sync
+    ## Arguments: one hashref
+    ## sync: sync object
+    ## tables: arrayref of table objects
+    ## databases: arrayref of database names
+    ## Returns: undef
+
+    my ($self, $info) = @_;
+
+    my $sync      = $info->{sync}      or die qq{Required arg 'sync' missing\n};
+    my $tables    = $info->{tables}    or die qq{Required arg 'tables' missing\n};
+    my $databases = $info->{databases} or die qq{Required arg 'databases' missing\n};
+
+    ## The final mode we choose
+    my $lock_table_mode = '';
+
+    my $syncname = $sync->{name};
+
+    ## Check if the filesystem has a lock file request
+    my $force_lock_file = File::Spec->catfile( $config{piddir} => "bucardo-force-lock-$syncname" );
+    ## Cache that
+
+    ## Currently, a file is the only way to trigger this rather severe action
+    return undef if ! -e $force_lock_file;
+
+    $self->glog("Looking for lock file $force_lock_file - and found!");
+
+    $self->{force_lock_file} = $force_lock_file;
+
+    ## If the file exists, pull the mode from inside it. Default to EXCLUSIVE mode
+    $lock_table_mode = 'EXCLUSIVE';
+    if (-s _ and (open my $fh, '<', "$force_lock_file")) {
+        my $newmode = <$fh>;
+        close $fh or warn qq{Could not close "$force_lock_file": $!\n};
+        if (defined $newmode) {
+            chomp $newmode;
+            ## Quick sanity check: only set if looks like normal words
+            $lock_table_mode = $newmode if $newmode =~ /^\s*\w[ \w]+\s*$/o;
+        }
+    }
+    $self->glog(qq{Found lock control file "$force_lock_file". Mode: $lock_table_mode}, LOG_TERSE);
+
+    $self->glog("Locking all writeable tables in $lock_table_mode MODE", LOG_TERSE);
+    for my $dbname (@$databases) {
+
+        my $d = $sync->{db}{$dbname};
+
+        for my $g (@$tables) {
+
+            next if $g->{reltype} ne 'table';
+
+            ## Figure out which table name to use
+            my $tname = $g->{newname}{$syncname}{$dbname};
+
+            if ('postgres' eq $d->{dbtype}) {
+                my $com = "$tname IN $lock_table_mode MODE";
+                $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
+                $d->{dbh}->do("LOCK TABLE $com");
+            }
+            elsif ('mysql' eq $d->{dbtype } or 'drizzle' eq $d->{dbtype} or 'mariadb' eq $d->{dbtype}) {
+                my $com = "$tname WRITE";
+                $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
+                $d->{dbh}->do("LOCK TABLE $com");
+            }
+            elsif ('oracle' eq $d->{dbtype}) {
+                my $com = "$tname IN EXCLUSIVE MODE";
+                $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
+                $d->{dbh}->do("LOCK TABLE $com");
+            }
+            elsif ('sqlite' eq $d->{dbtype}) {
+                $d->{dbh}->do('BEGIN EXCLUSIVE TRANSACTION');
+            }
+        }
+    }
+
+    return undef;
+
+} ## end of lock_all_tables
+
+
+sub remove_lock_file {
+
+    ## Remove a lock file that was used above in the remove_lock_file sub
+    ## Arguments: none
+    ## Returns: undef
+
+    my $self = shift;
+
+    if (exists $self->{force_lock_file} and -e $self->{force_lock_file}) {
+        $self->glog("Removing lock control file $self->{force_lock_file}", LOG_VERBOSE);
+        unlink $self->{force_lock_file}
+            or $self->glog("Warning! Failed to unlink $self->{force_lock_file}", LOG_WARN);
+    }
+
+    return undef;
+
+} ## end of remove_lock_file
 
 
 sub disable_triggers {
@@ -5496,7 +5545,7 @@ sub enable_indexes {
     ## 3. Table object
     ## Returns: undef
 
-    my ($self, $sync, $db, $table, $tablename) = @_;
+    my ($self, $sync, $db, $table) = @_;
 
     ## Do nothing unless rebuild_index has been set for this table
     return undef if ! $table->{rebuild_index};
@@ -5507,6 +5556,9 @@ sub enable_indexes {
     ## The only system we do this with is Postgres
     return undef if $db->{dbtype} ne 'postgres';
 
+    ## Grab the actual target table name
+    my $tablename = $table->{newname}{$sync->{name}}{$db->{name}};
+
     ## Safety check
     if (! exists $table->{has_indexes}) {
         die qq{Oops! has_indexes for table $tablename was not set!\n};
@@ -5514,9 +5566,6 @@ sub enable_indexes {
 
     ## Do nothing if the table is known to have no indexes
     return undef if ! $table->{has_indexes};
-
-    ## Grab the actual target table name
-    my $tablename = $table->{newname}{$sync->{name}}{$db->{name}};
 
     ## Turn the indexes back on
     my $dbname = $db->{name};
