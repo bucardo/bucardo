@@ -2499,6 +2499,9 @@ sub start_kid {
         ## Is this a SQL database?
         $d->{does_sql} = 0;
 
+        ## Do we have a DBI-based driver?
+        $d->{does_dbi} = 0;
+
         ## Can it do truncate?
         $d->{does_truncate} = 0;
 
@@ -2630,14 +2633,17 @@ sub start_kid {
             if $d->{role} ne 'fullcopy';
 
         ## Databases with Perl DBI support
-        push @dbs_dbi => $dbname
-            if $d->{dbtype} eq 'postgres'
-            or $d->{dbtype} eq 'drizzle'
-            or $d->{dbtype} eq 'mariadb'
-            or $d->{dbtype} eq 'mysql'
-            or $d->{dbtype} eq 'oracle'
-            or $d->{dbtype} eq 'sqlite';
+        if ($d->{dbtype} eq 'postgres'
+                or $d->{dbtype} eq 'drizzle'
+                or $d->{dbtype} eq 'mariadb'
+                or $d->{dbtype} eq 'mysql'
+                or $d->{dbtype} eq 'oracle'
+                or $d->{dbtype} eq 'sqlite') {
+            push @dbs_dbi => $dbname;
+            $d->{does_dbi} = 1;
+        }
 
+        ## Things we can connect to. Almost everything
         push @dbs_connectable => $dbname
             if $d->{dbtype} !~ /flat/;
     }
@@ -3301,7 +3307,7 @@ sub start_kid {
 
         ## Figure out our isolation level. Only used for Postgres
         ## All others are hard-coded as 'serializable'
-        my $isolation_level = defined $sync->{isolation_level} ? $sync->{isolation_level} :
+        $self->{pg_isolation_level} = defined $sync->{isolation_level} ? $sync->{isolation_level} :
             $config{isolation_level} || 'serializable';
 
         ## Commit so our dbrun and syncrun stuff is visible to others
@@ -3309,52 +3315,11 @@ sub start_kid {
         $self->glog('Doing final maindbh commit', LOG_DEBUG);
         $maindbh->commit();
 
-        ## Start the main transactions by setting isolation levels.
-        ## From here on out, speed is important.
-        ## Note that all database handles are currently not in a txn
-        ## (last action was commit or rollback)
-        for my $dbname (@dbs_dbi) {
-
-            my $d = $sync->{db}{$dbname};
-
-            ## Just in case:
-            $d->{dbh}->rollback();
-
-            if ($d->{dbtype} eq 'postgres') {
-                $d->{dbh}->do(qq{SET TRANSACTION ISOLATION LEVEL $isolation_level READ WRITE});
-                $self->glog(qq{Set database "$dbname" to $isolation_level read write}, LOG_DEBUG);
-            }
-
-            if ($d->{dbtype} eq 'mysql' or $d->{dbtype} eq 'mariadb') {
-                $d->{dbh}->do('SET TRANSACTION READ WRITE ISOLATION LEVEL SERIALIZABLE');
-                $self->glog(qq{Set database "$dbname" to serializable}, LOG_DEBUG);
-            }
-
-            if ($d->{dbtype} eq 'drizzle') {
-                ## Drizzle does not appear to have anything to control this yet
-            }
-
-            if ($d->{dbtype} eq 'oracle') {
-                $d->{dbh}->do('SET TRANSACTION READ WRITE');
-                $d->{dbh}->do(q{SET TRANSACTION ISOLATION LEVEL SERIALIZABLE NAME 'bucardo'});
-                $self->glog(qq{Set database "$dbname" to serializable and read write}, LOG_DEBUG);
-            }
-
-            if ($d->{dbtype} eq 'sqlite') {
-                ## Defer all foreign key checking until the very end
-                $d->{dbh}->do('PRAGMA defer_foreign_keys = 1');
-            }
-
-            if ($d->{dbtype} eq 'redis') {
-                ## Implement MULTI, when the driver supports it
-                ##$d->{dbh}->multi();
-            }
-
-        }
+        ## Start the main transaction and do things such as setting isolation levels
+        $self->start_main_transaction({ sync => $sync, databases => \@dbs_connectable});
 
         ## We may have a request to lock all the tables
         $self->lock_all_tables({ sync => $sync, databases => \@dbs_write, tables => $goatlist});
-
 
         ## Run all 'before_check_rows' code
         if (exists $sync->{code_before_check_rows}) {
@@ -5263,6 +5228,67 @@ sub start_kid {
     }
 
 } ## end of start_kid
+
+
+sub start_main_transaction {
+
+    ## Prepare each database for the final work of copying data
+    ## This is the time when we do things such as set the isolation level
+    ## From this point on, we are in the "main" transaction and speed is important
+    ## Arguments: one hashref
+    ## sync: the sync object
+    ## databases: arrayref of all databases that have been connected to
+    ## Returns: undef
+
+    my ($self, $info) = @_;
+
+    my $sync      = $info->{sync}      or die qq{Required arg 'sync' missing\n};
+    my $databases = $info->{databases} or die qq{Required arg 'databases' missing\n};
+
+    for my $dbname (@$databases) {
+
+        my $d = $sync->{db}{$dbname};
+
+        if ($d->{does_dbi}) {
+            ## Just in case:
+            $d->{dbh}->rollback();
+        }
+
+        if ($d->{dbtype} eq 'postgres') {
+            $d->{dbh}->do(qq{SET TRANSACTION ISOLATION LEVEL $self->{pg_isolation_level} READ WRITE});
+            $self->glog(qq{Set database "$dbname" to $self->{pg_isolation_level} read write}, LOG_DEBUG);
+        }
+
+        if ($d->{dbtype} eq 'mysql' or $d->{dbtype} eq 'mariadb') {
+            $d->{dbh}->do('SET TRANSACTION READ WRITE ISOLATION LEVEL SERIALIZABLE');
+            $self->glog(qq{Set database "$dbname" to serializable}, LOG_DEBUG);
+        }
+
+        if ($d->{dbtype} eq 'drizzle') {
+            ## Drizzle does not appear to have anything to control this yet
+        }
+
+        if ($d->{dbtype} eq 'oracle') {
+            $d->{dbh}->do('SET TRANSACTION READ WRITE');
+            $d->{dbh}->do(q{SET TRANSACTION ISOLATION LEVEL SERIALIZABLE NAME 'bucardo'});
+            $self->glog(qq{Set database "$dbname" to serializable and read write}, LOG_DEBUG);
+        }
+
+        if ($d->{dbtype} eq 'sqlite') {
+            ## Defer all foreign key checking until the very end
+            $d->{dbh}->do('PRAGMA defer_foreign_keys = 1');
+        }
+
+        if ($d->{dbtype} eq 'redis') {
+            ## Implement MULTI, when the driver supports it
+            ##$d->{dbh}->multi();
+        }
+
+    }
+
+    return undef;
+
+} ## end of start_main_transaction
 
 
 sub lock_all_tables {
