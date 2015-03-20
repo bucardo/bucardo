@@ -57,6 +57,6 @@ t/customcode.exception.bucardotest.pl
 t/ctest1.pl
 t/ctest2.pl
 t/ctest3.pl
-test_setup.sh
+dev/test_setup.sh
 TODO
 UPGRADE
