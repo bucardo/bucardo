@@ -4189,8 +4189,6 @@ sub start_kid {
                     $d->{writtento} = (1==$numsources and exists $deltabin{$dbname}) ? 0 : 1;
                     next if ! $d->{writtento};
 
-                    next if $d->{dbtype} ne 'postgres';
-
                     ## Should we use the stage table for this database?
                     $d->{trackstage} = ($numsources > 1 and exists $deltabin{$dbname}) ? 1 : 0;
 
@@ -4787,15 +4785,15 @@ sub start_kid {
             }
         }
 
+        ## Turn triggers and rules back on as needed
+        $self->enable_triggers($sync);
+
         ## Bring the db back to normal
         for my $dbname (@dbs_write) {
 
             my $d = $sync->{db}{$dbname};
 
             next if ! $d->{writtento};
-
-            ## Turn triggers and rules back on
-            $self->enable_triggers($sync, $d);
 
             if ($d->{dbtype} eq 'mysql' or $d->{dbtype} eq 'mariadb') {
 
@@ -5313,7 +5311,7 @@ sub remove_lock_file {
 
 sub disable_triggers {
 
-    ## Disable any triggers and rules for all tables in a sync, for the given database.
+    ## Disable triggers and rules for all tables in a sync, for the given database.
     ## This gets all tables at once, so it only needs to be called once for each database.
     ## Arguments: two
     ## 1. Sync object
@@ -5329,8 +5327,9 @@ sub disable_triggers {
     return undef if $db->{dbtype} ne 'postgres';
 
     ## Can we do this the easy way? Thanks to Jan for srr!
+    my $dbname = $db->{name};
     if ($db->{dbh}{pg_server_version} >= 80200) {
-        $self->glog("Setting session_replication_role to replica for database $db->{name}", LOG_VERBOSE);
+        $self->glog("Setting session_replication_role to replica for database $dbname", LOG_VERBOSE);
         $db->{dbh}->do(q{SET session_replication_role = 'replica'});
         $db->{triggers_enabled} = 0;
         return undef;
@@ -5356,7 +5355,7 @@ sub disable_triggers {
     }
 
     ## Now run the SQL and mark that we have been here
-    $self->glog(qq{Disabling triggers and rules on database "$db->{name}" via pg_class}, LOG_VERBOSE);
+    $self->glog(qq{Disabling triggers and rules on database "$dbname" via pg_class}, LOG_VERBOSE);
     $db->{dbh}->do($sync->{SQL_disable_trigrules});
 
     $db->{triggers_enabled} = 0;
@@ -5368,69 +5367,71 @@ sub disable_triggers {
 
 sub enable_triggers {
 
-    ## Restore any previously disabled triggers and rules
-    ##   for all tables in a sync, for the given database.
-    ## This gets all tables at once, so it only needs to be called once for each database.
-    ## Arguments: two
+    ## Restore any previously disabled triggers and rules for all databases
+    ## Arguments: one
     ## 1. Sync object
-    ## 2. Database object
     ## Returns: undef
 
-    my ($self, $sync, $db) = @_;
+    my ($self, $sync) = @_;
 
-    ## Are triggers already enabled for this database? Return and do nothing
-    return undef if $db->{triggers_enabled};
 
-    ## We only know how to manipulate Postgres triggers
-    return undef if $db->{dbtype} ne 'postgres';
+    ## Walk through each database in this sync and reapply indexes as needed
+    for my $dbname (sort keys %{ $sync->{db} }) {
 
-    ## If we are using srr, just flip it back to the default
-    if ($db->{dbh}{pg_server_version} >= 80200) {
-        $self->glog("Setting session_replication_role to default for database $db->{name}", LOG_VERBOSE);
-        $db->{dbh}->do(q{SET session_replication_role = default}); ## Assumes a sane default!
-        $db->{dbh}->commit();
-        $db->{triggers_enabled} = time;
-        return undef;
-    }
+        my $db = $sync->{db}{$dbname};
 
-    ## Okay, the old and ugly way: pg_class table manipulation
-    ## First, create the SQL as needed
-    if (! $sync->{SQL_enable_trigrules}) {
+        ## Do nothing unless triggers are disabled
+        next if $db->{triggers_enabled};
 
-        my $setclause =
-            ## no critic (RequireInterpolationOfMetachars)
-            q{reltriggers = }
+        ## If we are using srr, just flip it back to the default
+        if ($db->{dbh}{pg_server_version} >= 80200) {
+            $self->glog("Setting session_replication_role to default for database $dbname", LOG_VERBOSE);
+            $db->{dbh}->do(q{SET session_replication_role = default}); ## Assumes a sane default!
+            $db->{dbh}->commit();
+            $db->{triggers_enabled} = time;
+            next;
+        }
+
+        ## Okay, the old and ugly way: pg_class table manipulation
+        ## First, create the SQL as needed
+        if (! $sync->{SQL_enable_trigrules}) {
+
+            my $setclause =
+                ## no critic (RequireInterpolationOfMetachars)
+                q{reltriggers = }
                 . q{(SELECT count(*) FROM pg_catalog.pg_trigger WHERE tgrelid = pg_catalog.pg_class.oid),}
                 . q{relhasrules = }
                 . q{CASE WHEN (SELECT COUNT(*) FROM pg_catalog.pg_rules WHERE schemaname=SNAME AND tablename=TNAME) > 0 }
                 . q{THEN true ELSE false END};
-            ## use critic
+                ## use critic
 
-        my $tempsql = qq{
+            my $tempsql = qq{
                 UPDATE pg_class
                 SET    $setclause
                 WHERE  oid = 'SCHEMANAME.TABLENAME'::regclass
-            };
-        $SQL = join ";\n"
-            => map {
-                my $sql = $tempsql;
-                $sql =~ s/SNAME/$_->{safeschemaliteral}/g;
-                $sql =~ s/TNAME/$_->{safetableliteral}/g;
-                $sql =~ s/SCHEMANAME/$_->{safeschema}/g;
-                $sql =~ s/TABLENAME/$_->{safetable}/g;
-                $sql;
-            }
-                grep { $_->{reltype} eq 'table' }
-                    @{ $sync->{goatlist} };
+                };
+            $SQL = join ";\n"
+                => map {
+                    my $sql = $tempsql;
+                    $sql =~ s/SNAME/$_->{safeschemaliteral}/g;
+                    $sql =~ s/TNAME/$_->{safetableliteral}/g;
+                    $sql =~ s/SCHEMANAME/$_->{safeschema}/g;
+                    $sql =~ s/TABLENAME/$_->{safetable}/g;
+                    $sql;
+                }
+                    grep { $_->{reltype} eq 'table' }
+                        @{ $sync->{goatlist} };
 
-        $sync->{SQL_enable_trigrules} = $SQL;
+            $sync->{SQL_enable_trigrules} = $SQL;
+        }
+
+        ## Now run the SQL and mark that we have been here
+        $self->glog(qq{Enabling triggers and rules on database "$dbname" via pg_class}, LOG_VERBOSE);
+        $db->{dbh}->do($sync->{SQL_enable_trigrules});
+
+        $db->{triggers_enabled} = time;
+
     }
-
-    ## Now run the SQL and mark that we have been here
-    $self->glog(qq{Enabling triggers and rules on database "$db->{name}" via pg_class}, LOG_VERBOSE);
-    $db->{dbh}->do($sync->{SQL_enable_trigrules});
-
-    $db->{triggers_enabled} = time;
 
     return undef;
 
