@@ -441,7 +441,7 @@ sub start_mcp {
         Master Control Program $$ was started on $hostname
         Args: $old0
         Version: $VERSION
-    	};
+        };
         my $subject = qq{Bucardo $VERSION started on $shorthost};
 
         ## If someone left a message in the reason file, append it, then delete the file
@@ -3051,63 +3051,6 @@ sub start_kid {
 
         } ## end if delta databases
 
-        ## Common settings for the database handles. Set before passing to DBIx::Safe below
-        ## These persist through all subsequent transactions
-        ## First, things that are common to databases, irrespective of read/write:
-        for my $dbname (@dbs) {
-
-            my $d = $sync->{db}{$dbname};
-
-            my $dbh = $d->{dbh};
-
-            if ($d->{dbtype} eq 'postgres') {
-
-                ## We never want to timeout
-                $dbh->do('SET statement_timeout = 0');
-
-                ## Using the same time zone everywhere keeps us sane
-                $dbh->do(q{SET TIME ZONE 'GMT'});
-
-                ## Rare, but allow for tcp fiddling
-                if ($config{tcp_keepalives_idle}) { ## e.g. not 0, should always exist
-                    $dbh->do("SET tcp_keepalives_idle = $config{tcp_keepalives_idle}");
-                    $dbh->do("SET tcp_keepalives_interval = $config{tcp_keepalives_interval}");
-                    $dbh->do("SET tcp_keepalives_count = $config{tcp_keepalives_count}");
-                }
-
-                $dbh->commit();
-
-            } ## end postgres
-
-            elsif ($d->{dbtype} eq 'mysql' or $d->{dbtype} eq 'mariadb') {
-
-                ## ANSI mode: mostly because we want ANSI_QUOTES
-                $dbh->do(q{SET sql_mode = 'ANSI'});
-                ## Use the same time zone everywhere
-                $dbh->do(q{SET time_zone = '+0:00'});
-                $dbh->commit();
-
-            } ## end mysql/mariadb
-
-        }
-
-        ## Now things that apply only to databases we are writing to:
-        for my $dbname (@dbs_write) {
-
-            my $d = $sync->{db}{$dbname};
-
-            my $dbh = $d->{dbh};
-
-            if ($d->{dbtype} eq 'mysql' or $d->{dbtype} eq 'mariadb') {
-
-                ## No foreign key checks, please
-                $dbh->do('SET foreign_key_checks = 0');
-                $dbh->commit();
-
-            } ## end mysql/mariadb
-
-        }
-
         ## Create safe versions of the database handles if we are going to need them
         if ($sync->{need_safe_dbh_strict} or $sync->{need_safe_dbh}) {
 
@@ -5165,40 +5108,69 @@ sub start_main_transaction {
     for my $dbname (@$databases) {
 
         my $d = $sync->{db}{$dbname};
+        my $dbh = exists $d->{dbh} ? $d->{dbh} : '';
 
         if ($d->{does_dbi}) {
             ## Just in case:
-            $d->{dbh}->rollback();
+            $dbh->rollback();
         }
 
-        if ($d->{dbtype} eq 'postgres') {
-            $d->{dbh}->do(qq{SET TRANSACTION ISOLATION LEVEL $self->{pg_isolation_level} READ WRITE});
+        if ('postgres' eq $d->{dbtype}) {
+            ## We never want to timeout!
+            $dbh->do('SET statement_timeout = 0');
+            ## Using the same time zone everywhere keeps us sane
+            $dbh->do(q{SET TIME ZONE 'GMT'});
+            ## Rare, but allow for tcp fiddling
+            for my $var (qw/ idle interval count /) {
+                my $name = "tcp_keepalives_$var";
+
+                ## Should always exist, but:
+                next if ! exists $config{$name};
+
+                ## Quick sanity checks:
+                next if ! defined $config{$name} or $config{$name} !~ /^\d+$/;
+
+                ## A setting of zero means leave it alone
+                next if ! $config{$name};
+
+                $dbh->do("SET $name = $config{$name}");
+
+                $self->glog("Set $name to $config{$name} for database $dbname", LOG_DEBUG);
+            }
+
+            $dbh->do(qq{SET TRANSACTION ISOLATION LEVEL $self->{pg_isolation_level} READ WRITE});
             $self->glog(qq{Set database "$dbname" to $self->{pg_isolation_level} read write}, LOG_DEBUG);
         }
 
-        if ($d->{dbtype} eq 'mysql' or $d->{dbtype} eq 'mariadb') {
-            $d->{dbh}->do('SET TRANSACTION READ WRITE ISOLATION LEVEL SERIALIZABLE');
+        if ('mysql' eq $d->{dbtype} or 'mariadb' eq $d->{dbtype}) {
+
+            ## ANSI mode: mostly because we want ANSI_QUOTES
+            $dbh->do(q{SET sql_mode = 'ANSI'});
+            ## Use the same time zone everywhere
+            $dbh->do(q{SET time_zone = '+0:00'});
+
+            $dbh->do('SET TRANSACTION READ WRITE ISOLATION LEVEL SERIALIZABLE');
             $self->glog(qq{Set database "$dbname" to serializable}, LOG_DEBUG);
         }
 
-        if ($d->{dbtype} eq 'drizzle') {
+        if ('drizzle' eq $d->{dbtype}) {
             ## Drizzle does not appear to have anything to control this yet
         }
 
-        if ($d->{dbtype} eq 'oracle') {
-            $d->{dbh}->do('SET TRANSACTION READ WRITE');
-            $d->{dbh}->do(q{SET TRANSACTION ISOLATION LEVEL SERIALIZABLE NAME 'bucardo'});
+        if ('oracle' eq $d->{dbtype}) {
+            $dbh->do('SET TRANSACTION READ WRITE');
+            $dbh->do(q{SET TRANSACTION ISOLATION LEVEL SERIALIZABLE NAME 'bucardo'});
             $self->glog(qq{Set database "$dbname" to serializable and read write}, LOG_DEBUG);
         }
 
-        if ($d->{dbtype} eq 'sqlite') {
+        if ('sqlite' eq $d->{dbtype}) {
             ## Defer all foreign key checking until the very end
-            $d->{dbh}->do('PRAGMA defer_foreign_keys = 1');
+            $dbh->do('PRAGMA defer_foreign_keys = 1');
         }
 
-        if ($d->{dbtype} eq 'redis') {
+        if ('redis' eq $d->{dbtype}) {
             ## Implement MULTI, when the driver supports it
-            ##$d->{dbh}->multi();
+            ##$dbh->multi();
         }
 
     }
@@ -5234,8 +5206,6 @@ sub lock_all_tables {
 
     ## Currently, a file is the only way to trigger this rather severe action
     return undef if ! -e $force_lock_file;
-
-    $self->glog("Looking for lock file $force_lock_file - and found!");
 
     $self->{force_lock_file} = $force_lock_file;
 
@@ -5323,14 +5293,27 @@ sub disable_triggers {
     ## Are triggers already disabled for this database? Return and do nothing
     return undef if ! $db->{triggers_enabled};
 
-    ## We only know how to disable Postgres triggers
+    my $dbh = $db->{dbh};
+
+    if ('mysql' eq $db->{dbtype} or 'mariadb' eq $db->{dbtype}) {
+        ## Do not worry about checking foreign keys
+        $dbh->do('SET foreign_key_checks = 0');
+        ## Do not worry about uniqueness of unique indexes
+        $dbh->do('SET unique_checks = 0');
+
+        $db->{triggers_enabled} = 0;
+        return undef;
+    }
+
+    ## From this point on we are doing Postgres
     return undef if $db->{dbtype} ne 'postgres';
 
     ## Can we do this the easy way? Thanks to Jan for srr!
     my $dbname = $db->{name};
-    if ($db->{dbh}{pg_server_version} >= 80200) {
+    if ($dbh->{pg_server_version} >= 80200) {
         $self->glog("Setting session_replication_role to replica for database $dbname", LOG_VERBOSE);
-        $db->{dbh}->do(q{SET session_replication_role = 'replica'});
+        $dbh->do(q{SET session_replication_role = 'replica'});
+
         $db->{triggers_enabled} = 0;
         return undef;
     }
@@ -5356,7 +5339,7 @@ sub disable_triggers {
 
     ## Now run the SQL and mark that we have been here
     $self->glog(qq{Disabling triggers and rules on database "$dbname" via pg_class}, LOG_VERBOSE);
-    $db->{dbh}->do($sync->{SQL_disable_trigrules});
+    $dbh->do($sync->{SQL_disable_trigrules});
 
     $db->{triggers_enabled} = 0;
 
@@ -5374,8 +5357,7 @@ sub enable_triggers {
 
     my ($self, $sync) = @_;
 
-
-    ## Walk through each database in this sync and reapply indexes as needed
+    ## Walk through each database in this sync and enable triggers as needed
     for my $dbname (sort keys %{ $sync->{db} }) {
 
         my $db = $sync->{db}{$dbname};
@@ -5383,11 +5365,22 @@ sub enable_triggers {
         ## Do nothing unless triggers are disabled
         next if $db->{triggers_enabled};
 
+        my $dbh = $db->{dbh};
+
+        if ('mysql' eq $db->{dbtype} or 'mariadb' eq $db->{dbtype}) {
+            $dbh->do('SET foreign_key_checks = 1');
+            $dbh->do('SET unique_checks = 1');
+            $db->{triggers_enabled} = time;
+            next;
+        }
+
+        ## Past here is Postgres
+
         ## If we are using srr, just flip it back to the default
         if ($db->{dbh}{pg_server_version} >= 80200) {
             $self->glog("Setting session_replication_role to default for database $dbname", LOG_VERBOSE);
-            $db->{dbh}->do(q{SET session_replication_role = default}); ## Assumes a sane default!
-            $db->{dbh}->commit();
+            $dbh->do(q{SET session_replication_role = default}); ## Assumes a sane default!
+            $dbh->commit();
             $db->{triggers_enabled} = time;
             next;
         }
