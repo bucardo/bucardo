@@ -3264,20 +3264,20 @@ sub start_kid {
         ## We may have a request to lock all the tables
         $self->lock_all_tables({ sync => $sync, databases => \@dbs_write, tables => $goatlist});
 
-        ## Run all 'before_check_rows' code
-        if (exists $sync->{code_before_check_rows}) {
-            $sth{kid_syncrun_update_status}->execute("Code before_check_rows (KID $$)", $syncname);
-            $maindbh->commit();
-            for my $code (@{$sync->{code_before_check_rows}}) {
-                ## Check if the code has asked us to skip other before_check_rows codes
-                last if 'last' eq $self->run_kid_custom_code($sync, $code);
-            }
-        }
-
         ## Do all the delta (non-fullcopy) targets
         if (@dbs_delta) {
 
             ## We will never reach this while in onetimecopy mode as @dbs_delta is emptied
+
+            ## Run all 'before_check_rows' code
+            if (exists $sync->{code_before_check_rows}) {
+                $sth{kid_syncrun_update_status}->execute("Code before_check_rows (KID $$)", $syncname);
+                $maindbh->commit();
+                for my $code (@{$sync->{code_before_check_rows}}) {
+                    ## Check if the code has asked us to skip other before_check_rows codes
+                    last if 'last' eq $self->run_kid_custom_code($sync, $code);
+                }
+            }
 
             ## Check if any tables were truncated on all source databases
             ## If so, set $self->{has_truncation}; store results in $self->{truncateinfo}
