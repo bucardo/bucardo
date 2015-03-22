@@ -8616,7 +8616,7 @@ sub install {
 
     ## If no number 1 seen, no bucardo user, so create it
     if ($res !~ /1/) {
-      print "Creating superuser 'bucardo'\n";
+      $QUIET or print "Creating superuser 'bucardo'\n";
 
       ## Generate a new random password
       my $pass = generate_password();
