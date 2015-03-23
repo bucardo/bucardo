@@ -21,6 +21,7 @@ Future
 
 These range the gamut from wildly speculative ideas to must-have features.
 
+- Remove the need for pl/perl entirely: put all logic into ./bucardo
 - Allow a new type of trigger that only indicates if a table has changed or not.
   Rather than storing a PK, we only note "changed". This would allow fullcopy tables 
   inside of a sync to run or just get skipped.
