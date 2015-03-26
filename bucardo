@@ -48,7 +48,7 @@ for (@ARGV) {
 
 ## All the variables we use often and want to declare here without 'my'
 use vars qw/$dbh $SQL $sth %sth $count $info %global $SYNC $GOAT $TABLE $SEQUENCE $DB $DBGROUP $HERD $RELGROUP
-            $CUSTOMCODE $CUSTOMNAME $CUSTOMCOLS /;
+            $CUSTOMCODE $CUSTOMNAME $CUSTOMCOLS $CLONE /;
 
 ## How to show dates from the database, e.g. start time of a sync
 my $DATEFORMAT       = $ENV{BUCARDO_DATEFORMAT} || q{Mon DD, YYYY HH24:MI:SS};
@@ -417,6 +417,9 @@ validate()      if $verb eq 'validate';
 
 ## Purge the delta/track tables
 purge()         if $verb eq 'purge';
+
+## Clone a database
+clone()         if $verb eq 'clone';
 
 ## There are only a few valid verbs left, so we check for them now
 if ($verb ne 'kick' and $verb ne 'activate' and $verb ne 'deactivate'
@@ -1462,6 +1465,10 @@ sub list_item {
     $thing = standardize_name($thing);
 
     SWITCH: {
+        $thing eq 'clone' and do {
+            list_clones();
+            last SWITCH;
+        };
         $thing eq 'config' and do {
             $verb = 'config';
             config();
@@ -1505,6 +1512,7 @@ sub list_item {
                 last SWITCH;
         };
         $thing eq 'all' and do {
+            ## Not shown on purpose: clones
                 print "-- customcodes:\n";  list_customcodes();
                 print "-- customnames:\n";  list_customnames();
                 print "-- customcols:\n";   list_customcols();
@@ -5193,6 +5201,181 @@ sub get_arg_items {
 } ## end of get_arg_items
 
 
+sub clone {
+
+    ## Put an entry in the clone table so the MCP can do some copyin'
+    ## Arguments: none, parses nouns
+    ## Returns: never, exits
+
+    my $doc_section = 'clone'; ### XXX dont forget
+
+    usage_exit($doc_section) unless @nouns;
+
+    ## Examples:
+    ## ./bucardo clone dbs=A:source,B,C relgroup=foo
+    ## ./bucardo clone sync=foobar
+    ## ./bucardo clone sync=foobar prime=A
+    ## ./bucardo clone dbs=A,B,C,D relgroup=foo notruncate=B,C
+
+    ## Optional sync to associate with:
+    my $sync;
+
+    ## Optional database group to use:
+    my $dbgroup;
+
+    ## The prime (winning) source database.
+    my $prime;
+
+    ## Optonal relgroup. Can be a list of tables
+    my $relgroup;
+
+    ## Optional options :)
+    my $options;
+
+    for my $word (@nouns) {
+
+        ## Check for an optional sync name.
+        if ($word =~ /(?i)sync(?-i)\s*[:=]\s*(\w.*?)\s*$/) {
+            my $syncname = $1;
+            if (! exists $SYNC->{$syncname}) {
+                die qq{Invalid sync "$syncname"\n};
+            }
+            ## Have we already specified a sync?
+            if (defined $sync) {
+                die qq{Cannot specify more than one sync\n};
+            }
+
+            $sync = $syncname;
+            next;
+        }
+
+        ## Check for an optional dbgroup
+        if ($word =~ /(?i)dbg(?-i)\w*\s*[:=]\s*(\w.*?)\s*$/) {
+            my $dbgroupname = $1;
+            if (! exists $DBGROUP->{$dbgroupname}) {
+                die qq{Invalid database group "$dbgroupname"\n};
+            }
+            ## Have we already specified a database group?
+            if (defined $dbgroup) {
+                die qq{Cannot specify more than one database group\n};
+            }
+            $dbgroup  = $dbgroupname;
+            next;
+        }
+
+        ## Check for an optional relgroup
+        if ($word =~ /(?i)(?:relgroup|table)s?(?-i)\w*\s*[:=]\s*(\w.*?)\s*$/) {
+            my $relgroupname = $1;
+            ## May be a relgroup, or a list of tables
+            if (exists $RELGROUP->{$relgroupname}) {
+                $relgroup = $relgroupname;
+                next;
+            }
+            ## Must be one or more tables. See if we can find them, and shove into a relgroup
+
+            ## Go through all the items and try to find matches
+            ## Assumes tables are all in CSV format
+            my @tablelist = split /\s*,\s*/ => $relgroupname;
+            my $goatlist = get_goat_ids(args => \@tablelist, type => 'table');
+
+            ## Cannot proceed unless we have a match for every table
+            if (keys %{ $goatlist->{nomatch} }) {
+                print "Cannot clone because the following tables were not found:\n";
+                for my $badname (sort keys %{ $goatlist->{nomatch} }) {
+                    print "  $badname\n";
+                }
+                exit 1;
+            }
+
+            ## We need to generate a relgroup name
+            ## TODO: See if any existing relgroups match exactly
+            my $basename = 'clone_relgroup';
+            my $number = 1;
+            {
+                $relgroupname = "$basename$number";
+                last if ! exists $RELGROUP->{$relgroupname};
+                $number++;
+                redo;
+            }
+
+            $SQL = 'INSERT INTO bucardo.herd(name) VALUES (?)';
+            $sth = $dbh->prepare($SQL);
+            $sth->execute($relgroupname);
+
+            $SQL = 'INSERT INTO bucardo.herdmap (herd,goat) VALUES (?,?)';
+            $sth = $dbh->prepare($SQL);
+            for my $goat (values %{ $goatlist->{relations} }) {
+                $sth->execute($relgroupname, $goat->{goat}[0]{id});
+            }
+
+            next;
+        }
+
+        ## Check for a prime
+        if ($word =~ /(?i)prime(?-i)\w*\s*[:=]\s*(\w.*?)\s*$/) {
+            $prime = $1;
+            ## This must be a valid database
+            if (! exists $DB->{$prime}) {
+                die qq{The prime option must specify a known database\n};
+            }
+            $options .= "prime=$prime;";
+            next;
+        }
+
+        die qq{Unknown option: $word\n};
+
+    } ## end checking each noun
+
+    ## Must have at least one of sync or dbgroup
+    if (! defined $sync and ! defined $dbgroup) {
+        die qq{Must provide a sync or a database group\n};
+    }
+
+    ## Generate a list of databases to make sure we know which is prime
+    my $dbrole;
+    if (defined $dbgroup) {
+        for my $row (values %{ $DBGROUP->{$dbgroup}{db} }) {
+            $dbrole->{ $row->{role} }{ $row->{db} } = 1;
+        }
+    }
+    else {
+        for my $db (values %{ $SYNC->{$sync}{dblist} }) {
+            $dbrole->{ $db->{role} }{ $db->{db} } = 1;
+        }
+    }
+
+    ## If we have more than one source, make sure we know how to proceed
+    if (keys %{ $dbrole->{source}} > 1) {
+        ## TODO: Allow more than one somehow
+        if (! defined $prime) {
+            warn qq{Must provide a prime so we know which database to copy from\n};
+            my $dblist = join ', ' => sort keys %{ $dbrole->{source} };
+            warn qq{Should be one of: $dblist\n};
+            exit 1;
+        }
+    }
+
+    ## Clean up the options by removing any trailing semicolons
+    if (defined $options) {
+        $options =~ s/;$//;
+    }
+
+    $SQL = 'INSERT INTO bucardo.clone(status,sync,dbgroup,relgroup,options) VALUES (?,?,?,?,?) RETURNING id';
+    $sth = $dbh->prepare($SQL);
+    $sth->execute('new', $sync, $dbgroup, $relgroup, $options);
+    my $id = $sth->fetchall_arrayref()->[0][0];
+
+    ## Tell the MCP there is a new clone
+    $dbh->do('NOTIFY bucardo_clone_ready');
+
+    confirm_commit();
+
+    $QUIET or print qq{Clone $id has been started. Track progress with "bucardo status clone $id"\n};
+
+    exit 0;
+
+} ## end of clone
+
 
 
 sub kick {
@@ -6131,7 +6314,57 @@ sub process_args {
 } ## end of process_args
 
 
+sub list_clones {
 
+    ## Show information about clones. Queries the bucardo.clone table
+    ## Arguments: zero or more
+    ## 1+ Clone id to view.
+    ## Returns: 0 on success, -1 on error
+    ## Example: bucardo list clones
+
+    ## Might be no clones yet
+    if (! keys %$CLONE) {
+        print "No clones have been created yet\n";
+        return -1;
+    }
+
+	## Keep track of specific requests
+	my $cloneids;
+
+    for my $term (@nouns) {
+
+		if ($term =~ /^(\d+)$/) {
+			my $id = $1;
+			if (! exists $CLONE->{$id}) {
+				die qq{No such clone id "$id": try bucardo list clones\n};
+			}
+			$cloneids->{$id}++;
+		}
+
+    } ## end each term
+
+	## Print them out in numeric order
+	for my $clone (sort { $a->{id} <=> $b->{id} } values %$CLONE) {
+		## TODO: right justify numbers
+		next if keys %$cloneids and ! exists $cloneids->{$clone->{id}};
+		print "Clone #$clone->{id}";
+		print " Status: $clone->{status}";
+		defined $clone->{sync} and print " sync: $clone->{sync}";
+		defined $clone->{dbgroup} and print " dbgroup: $clone->{dbgroup}";
+		defined $clone->{relgroup} and print " relgroup: $clone->{relgroup}";
+		defined $clone->{started} and print "  started: $clone->{pstarted}";
+		defined $clone->{ended} and print "  ended: $clone->{pstarted}";
+		if (defined $clone->{options}) {
+			print " $clone->{options}";
+		}
+		## Print last, on a new line:
+		defined $clone->{summary} and print "\n  summary: $clone->{summary}";
+		print "\n";
+	}
+
+    return 0;
+
+} ## end of list_clones
 
 
 sub list_customcodes {
@@ -8778,6 +9011,8 @@ sub standardize_name {
 
     return 'config'     if $name =~ /^config/i;
 
+    return 'clone'      if $name =~ /^clon/i;
+
     return $name;
 
 } ## end of standardize_name
@@ -9280,6 +9515,18 @@ JOIN goat g ON (g.id = c.goat)
         }
     }
 
+    ## Grab all clone information
+    $SQL = qq{SELECT *,
+      TO_CHAR(started,'$DATEFORMAT') AS pstarted,
+      TO_CHAR(ended,'$DATEFORMAT') AS pended
+      FROM bucardo.clone};
+    $sth = $dbh->prepare($SQL);
+    $sth->execute();
+    $CLONE = {};
+    for my $row (@{ $sth->fetchall_arrayref({}) }) {
+		$CLONE->{$row->{id}} = $row;
+	}
+
     return;
 
 } ## end of load_bucardo_info
@@ -9402,8 +9649,8 @@ sub find_best_db_for_searching {
             $a->[1] <=> $b->[1]
             ## First created are first
             or $a->[2] <=> $b->[2]
-            ## All else fails, sort by name (should not happen)
-            or $b->[0] cmp $a->[0] }
+            ## All else fails, sort by name
+            or $a->[0] cmp $b->[0] }
         map { [
                $_,
                exists $DB->{$_}{issource} ? 0 : 1,

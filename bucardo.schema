@@ -439,6 +439,24 @@ ALTER TABLE bucardo.sync    ADD CONSTRAINT sync_name_sane
 ALTER TABLE bucardo.sync    ADD CONSTRAINT sync_isolation_level
   CHECK (isolation_level IS NULL OR (lower(isolation_level) IN ('serializable', 'repeatable read')));
 
+CREATE SEQUENCE clone_id_seq;
+CREATE TABLE bucardo.clone (
+  id        INTEGER     NOT NULL DEFAULT nextval('clone_id_seq'),
+              CONSTRAINT clone_id_pk PRIMARY KEY (id),
+  sync      TEXT            NULL,
+    CONSTRAINT clone_sync_fk FOREIGN KEY (sync) REFERENCES bucardo.sync(name) ON UPDATE CASCADE ON DELETE CASCADE,
+  dbgroup   TEXT            NULL,
+    CONSTRAINT clone_dbgroup_fk FOREIGN KEY (dbgroup) REFERENCES bucardo.dbgroup(name) ON UPDATE CASCADE ON DELETE CASCADE,
+  relgroup  TEXT            NULL,
+    CONSTRAINT clone_relgroup_fk FOREIGN KEY (relgroup) REFERENCES bucardo.herd(name) ON UPDATE CASCADE ON DELETE CASCADE,
+  options   TEXT            NULL,
+  status    TEXT            NULL,
+  started   TIMESTAMPTZ     NULL,
+  ended     TIMESTAMPTZ     NULL,
+  summary   TEXT            NULL,
+  cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE SEQUENCE bucardo.customcode_id_seq;
 CREATE TABLE bucardo.customcode (
   id        INTEGER     NOT NULL DEFAULT nextval('customcode_id_seq'),
