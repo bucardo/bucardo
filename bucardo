@@ -1475,55 +1475,55 @@ sub list_item {
             exit;
         };
         $thing eq 'customcode' and do {
-                list_customcodes();
-                last SWITCH;
+            list_customcodes();
+            last SWITCH;
         };
         $thing eq 'customname' and do {
-                list_customnames();
-                last SWITCH;
+            list_customnames();
+            last SWITCH;
         };
         $thing eq 'customcols' and do {
-                list_customcols();
-                last SWITCH;
+            list_customcols();
+            last SWITCH;
         };
         ## The dbgroup must be checked before the database (dbg vs db)
         $thing eq 'dbgroup' and do {
-                list_dbgroups();
-                last SWITCH;
+            list_dbgroups();
+            last SWITCH;
         };
         $thing eq 'database' and do {
-                list_databases();
-                last SWITCH;
+            list_databases();
+            last SWITCH;
         };
         $thing eq 'herd' and do {
-                list_herds();
-                last SWITCH;
+            list_herds();
+            last SWITCH;
         };
         $thing eq 'sync' and do {
-                list_syncs();
-                last SWITCH;
+            list_syncs();
+            last SWITCH;
         };
         $thing eq 'table' and do {
-                list_tables();
-                last SWITCH;
+            list_tables();
+            last SWITCH;
         };
         $thing eq 'sequence' and do {
-                list_sequences();
-                last SWITCH;
+            list_sequences();
+            last SWITCH;
         };
         $thing eq 'all' and do {
             ## Not shown on purpose: clones
-                print "-- customcodes:\n";  list_customcodes();
-                print "-- customnames:\n";  list_customnames();
-                print "-- customcols:\n";   list_customcols();
-                print "-- dbgroups:\n";     list_dbgroups();
-                print "-- databases:\n";    list_databases();
-                print "-- relgroup:\n";     list_herds();
-                print "-- syncs:\n";        list_syncs();
-                print "-- tables:\n";       list_tables();
-                print "-- sequences:\n";    list_sequences();
-                print "\n";
-                last SWITCH;
+            print "-- customcodes:\n";  list_customcodes();
+            print "-- customnames:\n";  list_customnames();
+            print "-- customcols:\n";   list_customcols();
+            print "-- dbgroups:\n";     list_dbgroups();
+            print "-- databases:\n";    list_databases();
+            print "-- relgroup:\n";     list_herds();
+            print "-- syncs:\n";        list_syncs();
+            print "-- tables:\n";       list_tables();
+            print "-- sequences:\n";    list_sequences();
+            print "\n";
+            last SWITCH;
         };
 
         ## catch all
