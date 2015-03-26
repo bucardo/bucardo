@@ -1513,9 +1513,15 @@ sub list_item {
         };
         $thing eq 'all' and do {
             ## Not shown on purpose: clones
-            print "-- customcodes:\n";  list_customcodes();
-            print "-- customnames:\n";  list_customnames();
-            print "-- customcols:\n";   list_customcols();
+            if (keys %$CUSTOMCODE) {
+                print "-- customcodes:\n"; list_customcodes();
+            }
+            if (keys %$CUSTOMNAME) {
+                print "-- customnames:\n"; list_customnames();
+            }
+            if (keys %$CUSTOMCOLS) {
+                print "-- customcols:\n"; list_customcols();
+            }
             print "-- dbgroups:\n";     list_dbgroups();
             print "-- databases:\n";    list_databases();
             print "-- relgroup:\n";     list_herds();
