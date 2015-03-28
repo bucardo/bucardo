@@ -5320,9 +5320,11 @@ sub clone {
         ## Check for a prime
         if ($word =~ /(?i)prime(?-i)\w*\s*[:=]\s*(\w.*?)\s*$/) {
             $prime = $1;
-            ## This must be a valid database
-            if (! exists $DB->{$prime}) {
-                die qq{The prime option must specify a known database\n};
+            for my $candidate (split /\s*,\s*/ => $prime) {
+                ## This must be a valid database
+                if (! exists $DB->{$candidate}) {
+                    die qq{The prime option must specify a known database (not "$candidate")\n};
+                }
             }
             $options .= "prime=$prime;";
             next;
@@ -6355,16 +6357,16 @@ sub list_clones {
 		next if keys %$cloneids and ! exists $cloneids->{$clone->{id}};
 		print "Clone #$clone->{id}";
 		print " Status: $clone->{status}";
-		defined $clone->{sync} and print " sync: $clone->{sync}";
-		defined $clone->{dbgroup} and print " dbgroup: $clone->{dbgroup}";
-		defined $clone->{relgroup} and print " relgroup: $clone->{relgroup}";
-		defined $clone->{started} and print "  started: $clone->{pstarted}";
-		defined $clone->{ended} and print "  ended: $clone->{pstarted}";
+		defined $clone->{sync} and print "  Sync: $clone->{sync}";
+		defined $clone->{dbgroup} and print " Dbgroup: $clone->{dbgroup}";
+		defined $clone->{relgroup} and print "  Relgroup: $clone->{relgroup}";
+		defined $clone->{started} and print "  Started: $clone->{pstarted}";
+		defined $clone->{ended} and print "  Ended: $clone->{pstarted}";
 		if (defined $clone->{options}) {
-			print " $clone->{options}";
+			print "  $clone->{options}";
 		}
 		## Print last, on a new line:
-		defined $clone->{summary} and print "\n  summary: $clone->{summary}";
+		defined $clone->{summary} and print "\n  Summary: $clone->{summary}";
 		print "\n";
 	}
 
