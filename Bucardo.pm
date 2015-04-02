@@ -3041,7 +3041,7 @@ sub start_kid {
                     ($S,$T) = ($g->{safeschema},$g->{safetable});
                     ## Set the per database/per table makedelta setting now
                     if (1 == $d->{makedelta} or $g->{makedelta} eq 'on' or $g->{makedelta} =~ /\b$dbname\b/) {
-                        $d->{does_makedelta}{$S}{$T} = 1;
+                        $d->{does_makedelta}{"$S.$T"} = 1;
                         $self->glog("Set table $dbname.$S.$T to makedelta", LOG_NORMAL);
                     }
 
@@ -4221,7 +4221,7 @@ sub start_kid {
                                     push @pushdbs => $sync->{db}{$dbname2};
                                 }
 
-                                my $sdbh = $sync->{db}{$dbname1}{dbh};
+                                my $sourcedb = $sync->{db}{$dbname1};
 
                                 ## Here's the real action: delete/truncate from target, then copy from source to target
 
@@ -4231,7 +4231,7 @@ sub start_kid {
 
                                 ## For this table, copy all rows from source to target(s)
                                 $dmlcount{inserts} += $self->push_rows(
-                                    $deltabin{$dbname1}, $S, $T, $g, $sync, $sdbh, $dbname1, \@pushdbs);
+                                    $deltabin{$dbname1}, $g, $sync, $sourcedb, \@pushdbs);
 
                                 ## Store references to the list of changes in case custom code needs them
                                 $sync->{deltarows}{$S}{$T} = $deltabin{$dbname1};
@@ -4631,7 +4631,7 @@ sub start_kid {
 
                 ## For this table, copy all rows from source to target(s)
                 $dmlcount{inserts} += $dmlcount{I}{target}{$S}{$T} = $self->push_rows(
-                    'fullcopy', $S, $T, $g, $sync, $sourcedbh, $sourcename,
+                    'fullcopy', $g, $sync, $sourcex,
                     ## We need an array of database objects here:
                     [ map { $sync->{db}{$_} } @dbs_copytarget ]);
 
@@ -9523,19 +9523,18 @@ sub delete_rows {
 sub push_rows {
 
     ## Copy rows from one database to another
-    ## Arguments: eight
+    ## Arguments: five
     ## 1. Hash of rows, where the key is \0 joined pkeys
-    ## 2. Schema name
-    ## 3. Table name
-    ## 4. Goat object
-    ## 5. Sync object
-    ## 6. Database handle we are copying from
-    ## 7. Database name we are copying from
-    ## 8. Target database object, or arrayref of the same
+    ## 2. Goat object
+    ## 3. Sync object
+    ## 4. Source database object
+    ## 5. Target database object, or arrayref of the same
     ## Returns: number of rows copied
 
-    my ($self,$rows,$S,$T,$goat,$sync,$fromdbh,$fromname,$todb) = @_;
+    my ($self,$rows,$goat,$sync,$fromdb,$todb) = @_;
 
+    my $tablename = "$goat->{safeschema}.$goat->{safetable}";
+    my $fromdbh = $fromdb->{dbh};
     my $syncname = $sync->{name};
 
     my $pkcols = $goat->{pkeycols};
@@ -9693,17 +9692,17 @@ sub push_rows {
             my $pkvs = join ',' => @{ $pk_values };
 
             ## Message to prepend to the statement if chunking
-            my $pre = $pcount <= 1 ? '' : "/* $loop of $pcount */";
+            my $pre = $pcount <= 1 ? '' : "/* $loop of $pcount */ ";
             $loop++;
 
             ## Kick off the copy on the source
-            $self->glog(qq{${pre}Copying from $fromname.$S.$T}, LOG_VERBOSE);
-            my $srccmd = sprintf '%s%sCOPY (%s FROM %s.%s%s) TO STDOUT%s',
+            my $fromname = $fromdb->{name};
+            $self->glog(qq{${pre}Copying from $fromname.$tablename}, LOG_VERBOSE);
+            my $srccmd = sprintf '%s%sCOPY (%s FROM %s %s) TO STDOUT%s',
                 $pre,
                 $self->{sqlprefix},
                 $SELECT,
-                $S,
-                $T,
+                $tablename,
                 $fullcopy ? '' : " WHERE $pkcols IN ($pkvs)",
                 $sync->{copyextra} ? " $sync->{copyextra}" : '';
             $fromdbh->do($srccmd);
@@ -9849,7 +9848,7 @@ sub push_rows {
                 ##   normal action of a trigger and add a row to bucardo.track to indicate that
                 ##   it has already been replicated here.
                 my $d = $sync->{db}{ $t->{name} };
-                if (!$fullcopy and $d->{does_makedelta}{$S}{$T}) {
+                if (!$fullcopy and $d->{does_makedelta}{$tablename}) {
                     $self->glog("Using makedelta to populate delta and track tables for $t->{name}.$tname", LOG_VERBOSE);
                     my $vals;
                     if ($numpks == 1) {
