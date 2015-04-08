@@ -6336,39 +6336,39 @@ sub list_clones {
         return -1;
     }
 
-	## Keep track of specific requests
-	my $cloneids;
+    ## Keep track of specific requests
+    my $cloneids;
 
     for my $term (@nouns) {
 
-		if ($term =~ /^(\d+)$/) {
-			my $id = $1;
-			if (! exists $CLONE->{$id}) {
-				die qq{No such clone id "$id": try bucardo list clones\n};
-			}
-			$cloneids->{$id}++;
-		}
+        if ($term =~ /^(\d+)$/) {
+            my $id = $1;
+            if (! exists $CLONE->{$id}) {
+                die qq{No such clone id "$id": try bucardo list clones\n};
+            }
+            $cloneids->{$id}++;
+        }
 
     } ## end each term
 
-	## Print them out in numeric order
-	for my $clone (sort { $a->{id} <=> $b->{id} } values %$CLONE) {
-		## TODO: right justify numbers
-		next if keys %$cloneids and ! exists $cloneids->{$clone->{id}};
-		print "Clone #$clone->{id}";
-		print " Status: $clone->{status}";
-		defined $clone->{sync} and print "  Sync: $clone->{sync}";
-		defined $clone->{dbgroup} and print " Dbgroup: $clone->{dbgroup}";
-		defined $clone->{relgroup} and print "  Relgroup: $clone->{relgroup}";
-		defined $clone->{started} and print "  Started: $clone->{pstarted}";
-		defined $clone->{ended} and print "  Ended: $clone->{pstarted}";
-		if (defined $clone->{options}) {
-			print "  $clone->{options}";
-		}
-		## Print last, on a new line:
-		defined $clone->{summary} and print "\n  Summary: $clone->{summary}";
-		print "\n";
-	}
+    ## Print them out in numeric order
+    for my $clone (sort { $a->{id} <=> $b->{id} } values %$CLONE) {
+        ## TODO: right justify numbers
+        next if keys %$cloneids and ! exists $cloneids->{$clone->{id}};
+        print "Clone #$clone->{id}";
+        print " Status: $clone->{status}";
+        defined $clone->{sync} and print "  Sync: $clone->{sync}";
+        defined $clone->{dbgroup} and print " Dbgroup: $clone->{dbgroup}";
+        defined $clone->{relgroup} and print "  Relgroup: $clone->{relgroup}";
+        defined $clone->{started} and print "  Started: $clone->{pstarted}";
+        defined $clone->{ended} and print "  Ended: $clone->{pstarted}";
+        if (defined $clone->{options}) {
+            print "  $clone->{options}";
+        }
+        ## Print last, on a new line:
+        defined $clone->{summary} and print "\n  Summary: $clone->{summary}";
+        print "\n";
+    }
 
     return 0;
 
@@ -9532,8 +9532,8 @@ JOIN goat g ON (g.id = c.goat)
     $sth->execute();
     $CLONE = {};
     for my $row (@{ $sth->fetchall_arrayref({}) }) {
-		$CLONE->{$row->{id}} = $row;
-	}
+        $CLONE->{$row->{id}} = $row;
+    }
 
     return;
 
