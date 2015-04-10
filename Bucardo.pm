@@ -4625,7 +4625,7 @@ sub start_kid {
                         $maindbh->commit();
 
                         ## Note: even though $tname is the actual name, we still track stats with $S.$T
-                        $dmlcount{D}{target}{$S}{$T} = $self->delete_table($d, $tname);
+                        $dmlcount{D}{target}{$S}{$T} = $self->delete_table($d, $g);
                         $dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
                         $self->glog("Rows deleted from $tname: $dmlcount{D}{target}{$S}{$T}", LOG_VERBOSE);
                     }
@@ -9028,19 +9028,21 @@ sub delete_table {
     ## Given a table, attempt to unconditionally delete rows from it
     ## Arguments: two
     ## 1. Database object
-    ## 2. Table name
+    ## 2. Table object
     ## Returns: number of rows deleted
 
-    my ($self, $d, $tname) = @_;
+    my ($self, $d, $Table) = @_;
+
+    my $tablename = exists $Table->{tablename} ? $Table->{tablename} : "$Table->{safeschema}.$Table->{safetable}";
 
     my $count = 0;
 
     if ($d->{does_sql}) {
-        ($count = $d->{dbh}->do("DELETE FROM $tname")) =~ s/0E0/0/o;
+        ($count = $d->{dbh}->do("DELETE FROM $tablename")) =~ s/0E0/0/o;
     }
     elsif ('mongo' eq $d->{dbtype}) {
         ## Same as truncate, really, except we return the number of rows
-        my $collection = $d->{dbh}->get_collection($tname);
+        my $collection = $d->{dbh}->get_collection($tablename);
         my $res = $collection->remove({}, { safe => 1} );
         $count = $res->{n};
     }
