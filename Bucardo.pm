@@ -4192,13 +4192,17 @@ sub start_kid {
                                         ## Exclude ourselves, which should be the only thing in deltabin!
                                         next if $dbname1 eq $dbnamet;
 
-                                        ## Grab the real target name
-                                        my $tname = $g->{newname}{$syncname}{$dbnamet};
+                                        ## Set the real target name
+                                        $g->{tablename} = $g->{newname}{$syncname}{$dbnamet};
 
                                         my $d = $sync->{db}{$dbnamet};
 
                                         my $do_cascade = 0;
-                                        $self->truncate_table($d, $tname, $do_cascade);
+                                        $self->truncate_table($d, $g, $do_cascade);
+
+                                        ## Do not keep this around, as it is sync and db specific!
+                                        delete $g->{tablename};
+
                                     }
                                     ## We keep going, in case the source has post-truncation items
                                 }
@@ -4601,11 +4605,11 @@ sub start_kid {
 
                     ## By hook or by crook, empty this table
 
-                    my $tname = $g->{newname}{$syncname}{$dbname};
+                    my $tname = $g->{tablename} = $g->{newname}{$syncname}{$dbname};
 
                     if ($sync->{deletemethod} =~ /truncate/io) {
                         my $do_cascade = $sync->{deletemethod} =~ /cascade/io ? 1 : 0;
-                        if ($self->truncate_table($d, $tname, $do_cascade)) {
+                        if ($self->truncate_table($d, $g, $do_cascade)) {
                             $self->glog("Truncated table $tname", LOG_VERBOSE);
                             $use_delete = 0;
                         }
@@ -4625,6 +4629,9 @@ sub start_kid {
                         $dmlcount{alldeletes}{target} += $dmlcount{D}{target}{$S}{$T};
                         $self->glog("Rows deleted from $tname: $dmlcount{D}{target}{$S}{$T}", LOG_VERBOSE);
                     }
+
+                    ## This needs to not stick around
+                    delete $g->{tablename};
 
                 } ## end each database to be truncated/deleted
 
@@ -8963,21 +8970,23 @@ sub truncate_table {
     ## Given a table, attempt to truncate it
     ## Arguments: three
     ## 1. Database object
-    ## 2. Table name
+    ## 2. Table object
     ## 3. Boolean if we should CASCADE the truncate or not
     ## Returns: true if the truncate succeeded without error, false otherwise
 
-    my ($self, $d, $tname, $cascade) = @_;
+    my ($self, $d, $Table, $cascade) = @_;
 
     ## Override any existing handlers so we can cleanly catch the eval
     local $SIG{__DIE__} = sub {};
+
+    my $tablename = exists $Table->{tablename} ? $Table->{tablename} : "$Table->{safeschema}.$Table->{safetable}";
 
     if ($d->{does_sql}) {
         if ($d->{does_savepoints}) {
             $d->{dbh}->do('SAVEPOINT truncate_attempt');
         }
         $SQL = sprintf 'TRUNCATE TABLE %s%s',
-        $tname,
+        $tablename,
         ($cascade and $d->{does_cascade}) ? ' CASCADE' : '';
         my $truncate_ok = 0;
 
@@ -8987,7 +8996,7 @@ sub truncate_table {
         };
         if (! $truncate_ok) {
             $d->{does_savepoints} and $d->{dbh}->do('ROLLBACK TO truncate_attempt');
-            $self->glog("Truncate error for db $d->{name}.$d->{dbname}.$tname: $@", LOG_NORMAL);
+            $self->glog("Truncate error for db $d->{name}.$d->{dbname}.$tablename: $@", LOG_NORMAL);
             return 0;
         }
         else {
@@ -8997,7 +9006,7 @@ sub truncate_table {
     }
 
     if ('mongo' eq $d->{dbtype}) {
-        my $collection = $d->{dbh}->get_collection($tname);
+        my $collection = $d->{dbh}->get_collection($tablename);
         $collection->remove({}, { safe => 1} );
         return 1;
     }
