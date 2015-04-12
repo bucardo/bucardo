@@ -8974,44 +8974,44 @@ sub truncate_table {
     ## 3. Boolean if we should CASCADE the truncate or not
     ## Returns: true if the truncate succeeded without error, false otherwise
 
-    my ($self, $d, $Table, $cascade) = @_;
+    my ($self, $Database, $Table, $does_cascade) = @_;
 
     ## Override any existing handlers so we can cleanly catch the eval
     local $SIG{__DIE__} = sub {};
 
     my $tablename = exists $Table->{tablename} ? $Table->{tablename} : "$Table->{safeschema}.$Table->{safetable}";
 
-    if ($d->{does_sql}) {
-        if ($d->{does_savepoints}) {
-            $d->{dbh}->do('SAVEPOINT truncate_attempt');
+    if ($Database->{does_sql}) {
+        if ($Database->{does_savepoints}) {
+            $Database->{dbh}->do('SAVEPOINT truncate_attempt');
         }
         $SQL = sprintf 'TRUNCATE TABLE %s%s',
         $tablename,
-        ($cascade and $d->{does_cascade}) ? ' CASCADE' : '';
+        ($does_cascade and $Database->{does_cascade}) ? ' CASCADE' : '';
         my $truncate_ok = 0;
 
         eval {
-            $d->{dbh}->do($SQL);
+            $Database->{dbh}->do($SQL);
             $truncate_ok = 1;
         };
         if (! $truncate_ok) {
-            $d->{does_savepoints} and $d->{dbh}->do('ROLLBACK TO truncate_attempt');
-            $self->glog("Truncate error for db $d->{name}.$d->{dbname}.$tablename: $@", LOG_NORMAL);
+            $Database->{does_savepoints} and $Database->{dbh}->do('ROLLBACK TO truncate_attempt');
+            $self->glog("Truncate error for db $Database->{name}.$Database->{dbname}.$tablename: $@", LOG_NORMAL);
             return 0;
         }
         else {
-            $d->{does_savepoints} and $d->{dbh}->do('RELEASE truncate_attempt');
+            $Database->{does_savepoints} and $Database->{dbh}->do('RELEASE truncate_attempt');
             return 1;
         }
     }
 
-    if ('mongo' eq $d->{dbtype}) {
-        my $collection = $d->{dbh}->get_collection($tablename);
+    if ('mongo' eq $Database->{dbtype}) {
+        my $collection = $Database->{dbh}->get_collection($tablename);
         $collection->remove({}, { safe => 1} );
         return 1;
     }
 
-    elsif ('redis' eq $d->{dbtype}) {
+    elsif ('redis' eq $Database->{dbtype}) {
         ## No real equivalent here, as we do not map tables 1:1 to redis keys
         ## In theory, we could walk through all keys and delete ones that match the table
         ## We will hold off until someone actually needs that, however :)
@@ -9536,7 +9536,7 @@ sub push_rows {
     ## Copy rows from one database to another
     ## Arguments: five
     ## 1. Hash of rows, where the key is \0 joined pkeys
-    ## 2. Goat object
+    ## 2. Table object
     ## 3. Sync object
     ## 4. Source database object
     ## 5. Target database object, or arrayref of the same
