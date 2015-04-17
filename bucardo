@@ -5051,7 +5051,7 @@ sub add_items_to_goat_table {
     for my $rel (sort { $a->{name} cmp $b->{name} } @$info) {
         # XXX Is it safe to assume UTF8 encoding here? Probably not
         my $name = $rel->{name};
-        if ($name !~ /^([\w ]+)\.([\w ]+)$/o) {
+        if ($name !~ /^([-\w ]+)\.([-\w ]+)$/o) {
             die qq{Invalid name, got "$name", but expected format "schema.relname"};
         }
         my ($schema,$table) = ($1,$2);
