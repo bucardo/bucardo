@@ -5317,7 +5317,7 @@ sub disable_triggers {
 
     ## Can we do this the easy way? Thanks to Jan for srr!
     my $dbname = $db->{name};
-    if ($dbh->{pg_server_version} >= 80200) {
+    if ($dbh->{pg_server_version} >= 80300) {
         $self->glog("Setting session_replication_role to replica for database $dbname", LOG_VERBOSE);
         $dbh->do(q{SET session_replication_role = 'replica'});
 
@@ -5384,7 +5384,7 @@ sub enable_triggers {
         ## Past here is Postgres
 
         ## If we are using srr, just flip it back to the default
-        if ($db->{dbh}{pg_server_version} >= 80200) {
+        if ($db->{dbh}{pg_server_version} >= 80300) {
             $self->glog("Setting session_replication_role to default for database $dbname", LOG_VERBOSE);
             $dbh->do(q{SET session_replication_role = default}); ## Assumes a sane default!
             $dbh->commit();
