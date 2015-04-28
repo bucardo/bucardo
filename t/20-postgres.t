@@ -70,7 +70,7 @@ $dbhX = $bct->setup_bucardo('A');
 for my $name (qw/ A B C D A1 /) {
     $t = "Adding database from cluster $name works";
     my ($dbuser,$dbport,$dbhost) = $bct->add_db_args($name);
-    $command = "bucardo add db $name dbname=bucardo_test user=$dbuser port=$dbport host=$dbhost status=active";
+    $command = "bucardo add db $name dbname=bucardo_test user=$dbuser port=$dbport host=$dbhost status=active conn=sslmode=allow";
     $res = $bct->ctl($command);
     like ($res, qr/Added database "$name"/, $t);
 }
