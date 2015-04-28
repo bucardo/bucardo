@@ -745,7 +745,7 @@ if ($dbtype eq 'postgres') {
         ( $_ eq 'name' ? 'dbname' : $_ ) . "=$db{$_}";
     } grep { length $db{$_} } qw/name host port service/;
 
-	$connstring .= $db{conn} if length $db{conn};
+    $connstring .= ';' . $db{conn} if length $db{conn};
 
     my $ssp = $row->{server_side_prepares};
     $ssp = 1 if ! defined $ssp;
