@@ -7171,7 +7171,7 @@ sub validate_sync {
         ## Postgres added the array_agg function in 8.3, so if this is older than that,
         ## we add our own copy
         my $arrayagg = 'array_agg';
-        if ($srcdbh->{pg_server_version} <= 80200) {
+        if ($srcdbh->{pg_server_version} < 80300) {
 
             ## We reset the search_path below, so we need to force the query below to use the public namespace
             $arrayagg = 'public.array_agg';
