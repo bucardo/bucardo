@@ -7168,10 +7168,29 @@ sub validate_sync {
     my $oidlist = join ',' => map { $_->{oid} } @{ $s->{goatlist} };
     if ($oidlist) {
 
+        ## Postgres added the array_agg function in 8.3, so if this is older than that,
+        ## we add our own copy
+        my $arrayagg = 'array_agg';
+        if ($srcdbh->{pg_server_version} <= 80200) {
+
+            ## We reset the search_path below, so we need to force the query below to use the public namespace
+            $arrayagg = 'public.array_agg';
+
+            ## Searching for the proname rather than the aggregate should be good enough
+            $SQL = 'SELECT proname FROM pg_proc WHERE proname ~ ?';
+            $sth = $srcdbh->prepare($SQL);
+            $count = $sth->execute('array_agg');
+            $sth->finish();
+            if ($count < 1) {
+                $SQL = q{CREATE AGGREGATE array_agg(anyelement) ( SFUNC=array_append, STYPE=anyarray, INITCOND='{}')};
+                $srcdbh->do($SQL);
+            }
+        }
+
         $SQL = qq{SELECT conname,
                     conrelid, conrelid::regclass,
                     confrelid, confrelid::regclass,
-                    array_agg(a.attname), array_agg(z.attname)
+                    $arrayagg(a.attname), $arrayagg(z.attname)
              FROM pg_constraint c
              JOIN pg_attribute a ON (a.attrelid = conrelid AND a.attnum = ANY(conkey))
              JOIN pg_attribute z ON (z.attrelid = confrelid AND z.attnum = ANY (confkey))
