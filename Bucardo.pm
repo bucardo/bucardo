@@ -8809,11 +8809,14 @@ sub adjust_sequence {
             ## Skip things not set by ALTER SEQUENCE
             next if ! $syntax;
 
+            ## Older versions may not have all the fields!
+            next if ! exists $sourceinfo->{$name} or ! exists $targetinfo->{$name};
+
             ## Skip if these items are the exact same
-            next if exists $targetinfo->{last_value} and $sourceinfo->{$name} eq $targetinfo->{$name};
+            next if $sourceinfo->{$name} eq $targetinfo->{$name};
 
             ## Fullcopy will not have this, and we won't report it
-            if (exists $targetinfo->{last_value}) {
+            if (exists $targetinfo->{$name}) {
                 $self->glog("Sequence $S.$T has a different $name value: was $targetinfo->{$name}, now $sourceinfo->{$name}", LOG_VERBOSE);
             }
 
