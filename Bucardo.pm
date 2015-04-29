@@ -3938,7 +3938,7 @@ sub start_kid {
                                 $self->pause_and_exit(qq{Unknown conflict_strategy $g->{conflict_strategy}!});
                             }
 
-                            $SQL .= ' ORDER BY 1 DESC NULLS LAST LIMIT 1';
+                            $SQL .= ' ORDER BY txntime IS NULL, 1 DESC LIMIT 1';
 
                             ## Check every database that generates deltas
                             for my $dbname (@dbs_delta) {
