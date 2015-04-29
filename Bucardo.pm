@@ -3920,7 +3920,7 @@ sub start_kid {
                             $self->glog("Using previous conflict winner $self->{conflictinfo}{syncwinner}", LOG_DEBUG);
                         }
                         else {
-                            my $maxsql = 'SELECT extract(epoch FROM MAX(txntime)) FROM';
+                            my $maxsql = 'SELECT COALESCE(extract(epoch FROM MAX(txntime)),0) FROM';
 
                             ## Find the maximum txntime across all databases for this table
                             if ($g->{conflict_strategy} eq 'bucardo_latest') {
@@ -3938,7 +3938,7 @@ sub start_kid {
                                 $self->pause_and_exit(qq{Unknown conflict_strategy $g->{conflict_strategy}!});
                             }
 
-                            $SQL .= ' ORDER BY txntime IS NULL, 1 DESC LIMIT 1';
+                            $SQL .= ' ORDER BY 1 DESC LIMIT 1';
 
                             ## Check every database that generates deltas
                             for my $dbname (@dbs_delta) {
