@@ -1,4 +1,4 @@
-
+		
 -- Schema for the main Bucardo database
 -- Version 5.3.1
 
@@ -1903,9 +1903,9 @@ SELECT 'Fixme'::TEXT;
         } ## end of bucardo_compress_delta creations
 
         ## Create the bucardo_purge_delta functions as needed
-        if (! exists $bfunctionoid{'bucardo_purge_delta'}) {
+        if (! exists $bfunctionoid{'bucardo_purge_delta_oid'}) {
             $SQL = qq{
-                    CREATE OR REPLACE FUNCTION bucardo.bucardo_purge_delta(text,text)
+                    CREATE OR REPLACE FUNCTION bucardo.bucardo_purge_delta_oid(text,oid)
                     RETURNS TEXT
                     LANGUAGE plpgsql
                     VOLATILE
@@ -1915,34 +1915,35 @@ SELECT 'Fixme'::TEXT;
                     DECLARE
                       deltatable TEXT;
                       tracktable TEXT;
+                      tablename TEXT;
                       myst TEXT;
                       drows BIGINT = 0;
                       trows BIGINT = 0;
                     BEGIN
-                    
-                      -- Clean out the search_path so the regclass casting works as expected
-                      SET LOCAL search_path = pg_catalog;
-                    
+                      -- Store the schema and table name
+                      SELECT INTO tablename
+                        quote_ident(nspname)||'.'||quote_ident(relname)
+                        FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace)
+                        WHERE c.oid = \$2;
+
                       -- See how many dbgroups are being used by this table
                       SELECT INTO drows 
                         COUNT(DISTINCT target)
                         FROM bucardo.bucardo_delta_targets
-                        WHERE tablename::regclass::text = \$2;
-                      RAISE DEBUG 'delta_targets rows found for %: %', \$2, drows;
+                        WHERE tablename = \$2;
+                      RAISE DEBUG 'delta_targets rows found for %: %', tablename, drows;
 
-                      RESET search_path;
-                    
                       -- If no dbgroups, no point in going on, as we will never purge anything
                       IF drows < 1 THEN
-                        RETURN 'Nobody is using table '||\$2||', according to bucardo_delta_targets';
+                        RETURN 'Nobody is using table '|| tablename ||', according to bucardo_delta_targets';
                       END IF;
 
                       -- Figure out the names of the delta and track tables for this relation
                       SELECT INTO deltatable
-                        bucardo.bucardo_tablename_maker(\$2, 'delta_');
+                        bucardo.bucardo_tablename_maker(tablename, 'delta_');
                       SELECT INTO tracktable
-                        bucardo.bucardo_tablename_maker(\$2, 'track_');
-                    
+                        bucardo.bucardo_tablename_maker(tablename, 'track_');
+
                       -- Delete all txntimes from the delta table that:
                       -- 1) Have been used by all dbgroups listed in bucardo_delta_targets
                       -- 2) Have a matching txntime from the track table
@@ -2006,11 +2007,11 @@ SELECT 'Fixme'::TEXT;
                     
                       SET LOCAL search_path = pg_catalog;
                     
-                     -- Grab all potential tables to be vacuumed by looking at bucardo_delta_targets
-                      FOR myrec IN SELECT DISTINCT tablename::regclass::text
+                      -- Grab all potential tables to be vacuumed by looking at bucardo_delta_targets
+                      FOR myrec IN SELECT DISTINCT tablename
                         FROM bucardo.bucardo_delta_targets LOOP
                         SELECT INTO myrez
-                          bucardo.bucardo_purge_delta(\$1, myrec.tablename);
+                          bucardo.bucardo_purge_delta_oid(\$1, myrec.tablename);
                         RAISE NOTICE '%', myrez;
                         total = total + 1;
                       END LOOP;
