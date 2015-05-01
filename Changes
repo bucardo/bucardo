@@ -17,6 +17,14 @@ Bucardo version ???
   - Add 'PRAGMA defer_foreign_keys' for sqlite targets
     [Greg Sabino Mullane]
 
+  - Allow code with 'array_agg' to work on Postgres <= 8.2,
+    along with many other minor changes to support older versions.
+    [Greg Sabino Mullane]
+
+  - Add new internal function bucardo_purge_delta_oid which helps the 
+    VAC process work better on older versions of Postgres (<= 8.2)
+    [Greg Sabino Mullane]
+
 
 Bucardo version 5.3.1, released January 27, 2015 (git commit a4e59ea351410acd4fe750384a19393c261f7e91)
 
