@@ -1929,6 +1929,7 @@ sub check_sequences_same {
             ## Compare certain items
             for my $item (qw/ last_value start_value increment_by min_value max_value is_cycled is_called/) {
                 my ($uno,$dos) = ($firstone{$seq}->{$item}, $info->{$item});
+                next if ! defined $uno or ! defined $dos;
                 if ($uno ne $dos) {
                     push @msg, "$item is different on $firstdb vs $dbname: $uno vs $dos";
                 }
