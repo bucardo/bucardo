@@ -7822,6 +7822,7 @@ sub upgrade {
     my @altered_columns = (
         ['bucardo', 'goat', 'rebuild_index',     'BOOL2SMALLINT1'],
         ['bucardo', 'goat', 'schemaname',        'NO DEFAULT'],
+        ['bucardo', 'sync', 'isolation_level',   'NO DEFAULT'],
         ['bucardo', 'sync', 'rebuild_index',     'BOOL2SMALLINT1'],
         ['bucardo', 'sync', 'standard_conflict', 'RENAME conflict_strategy'],
         ['bucardo', 'sync', 'ping',              'RENAME autokick'],
