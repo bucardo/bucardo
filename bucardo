@@ -421,6 +421,9 @@ purge()         if $verb eq 'purge';
 ## Clone a database
 clone()         if $verb eq 'clone';
 
+## View delta statistics
+count_deltas()  if $verb eq 'delta' or $verb eq 'deltas';
+
 ## There are only a few valid verbs left, so we check for them now
 if ($verb ne 'kick' and $verb ne 'activate' and $verb ne 'deactivate'
     and $verb ne 'reload'
@@ -668,6 +671,7 @@ sub superhelp {
             customname
             dbgroup
             deactivate
+            delta
             help
             inspect
             install
@@ -1266,6 +1270,116 @@ sub validate {
     exit $exitval;
 
 } ## end of validate
+
+
+sub count_deltas {
+
+    ## Count up rows in the delta tables
+    ## Does not remove "unvacuumed" rows: assumes delta tables are getting emptied out by VAC
+    ## Arguments: optional 
+    ## Returns: nothing, exits
+
+    ## May want to see totals only
+    my $total_only = (defined $nouns[0] and $nouns[0] =~ /totals?/i) ? 1 : 0;
+
+    ## See if we want to limit it to specific databases
+    my %dblimit;
+    for my $name (@nouns) {
+
+        ## Do not limit if doing a total, even if other names are specified
+        next if $total_only;
+
+        ## Allow wildcards
+        if ($name =~ s/[%*]/.*/) {
+            for (grep { $_ =~ /$name/ } keys %$DB) {
+                $dblimit{$_}++;
+            }
+        }
+        elsif (exists $DB->{$name}) {
+            $dblimit{$name}++;
+        }
+    }
+
+    ## No matches means we stop right away
+    if (@nouns and !keys %dblimit and !$total_only) {
+        warn qq{No matching databases were found: try "bucardo list dbs"\n};
+        exit 1;
+    }
+
+    my $total = { grand => 0 };
+
+    for my $dbname (sort keys %$DB) {
+        my $db = $DB->{$dbname};
+
+        ## Only sources should get checked
+        if (! $db->{issource}) {
+            if (delete $dblimit{$dbname}) {
+                print "Skipping database $dbname: not a source\n";
+            }
+            elsif ($VERBOSE >= 1) {
+                print "Skipping $dbname: not a source\n";
+            }
+            next;
+        }
+
+        ## If we are limiting, possibly skip this one
+        next if keys %dblimit and ! exists $dblimit{$dbname};
+
+        ## Make sure it has a bucardo schema.
+        ## May not if validate_sync has never been run!
+        my $dbh = connect_database($dbname);
+
+        if (! schema_exists('bucardo')) {
+            warn "Cannot check database $dbname: no bucardo schema!\n";
+            next;
+        }
+
+        ## Grab all potential delta tables
+        $SQL = 'SELECT deltaname FROM bucardo.bucardo_delta_names';
+        for my $row (@{ $dbh->selectall_arrayref($SQL) }) {
+            my $tname = $row->[0];
+            $SQL = "SELECT count(*) FROM bucardo.$tname";
+            $count = $dbh->selectall_arrayref($SQL)->[0][0];
+            $total->{grand} += $count;
+            $total->{database}{$dbname} += $count;
+            if ($db->{status} ne 'active') {
+                $total->{databaseinactive}{$dbname} = 1;
+            }
+        }
+        $dbh->disconnect();
+    }
+
+    ## Stop here if we did not actually scan any databases because they are all non-source
+    if (! keys %{ $total->{database} }) {
+        print "No databases to check\n";
+        exit 1;
+    }
+
+    ## Figure out our sizes for a pretty alignment
+    my $grandmessage = 'Total deltas across all targets';
+    my $dbmessage = 'Total deltas for database';
+    my $size = { db => 0, largest => length $grandmessage, };
+    for my $db (keys %{ $total->{database} }) {
+        $size->{db} = length $db if length $db > $size->{db};
+        my $len = length "  $dbmessage $db";
+        $size->{largest} = $len if $len > $size->{largest};
+    }
+
+    printf "%*s: %s\n", $size->{largest}, $grandmessage, pretty_number($total->{grand});
+
+    ## Break it down by database
+    for my $db (sort keys %{ $total->{database} }) {
+        next if $total_only;
+        printf "%*s: %s%s\n",
+            $size->{largest},
+                "  $dbmessage $db",
+                    pretty_number($total->{database}{$db}),
+                        $total->{databaseinactive}{$db} ? ' (not active)' : '';
+    }
+
+    exit 0;
+
+} ## end of count_deltas
 
 
 sub purge {
@@ -9991,6 +10105,10 @@ Validates one or more syncs.
 Purges the delta and track tables for one or more tables, for one or more
 databases.
 
+=item C<< delta [<database(s)>] >>
+
+Show the delta counts for each source target.
+
 =item C<< help [<command> [<action>]] >>
 
 Shows help.
@@ -11924,6 +12042,14 @@ sync is started or activated.
 Purges the delta and track tables for one or more tables, for one or more
 databases. Use the keyword "all" to validate all tables, or specify one or
 more tables to validate.
+
+=head2 delta
+
+  bucardo delta [total] [<database>...]
+
+Show the current delta count for each source target. Provide a list of databases
+to limit it to just the given ones. Wildcards are allowed. Use the special name
+"totals" to show only the grand total.
 
 =head2 help
 
