@@ -7090,7 +7090,10 @@ sub add_all_goats {
             }
             next;
         }
+
         $VERBOSE >= 2 and warn "Attempting to add relation $S.$T\n";
+        ## We want a savepoint as we may retract the addition (e.g. no pkey and pkonly specified)
+        $dbh->do('SAVEPOINT newtable');
         eval {
             my @arg = ($db->{name},$S,$T,$type);
             push @arg => $bcargs->{makedelta} if exists $bcargs->{makedelta};
@@ -7116,18 +7119,26 @@ sub add_all_goats {
         $id = $dbh->selectall_arrayref($SQL)->[0][0];
         $VERBOSE >= 2 and warn "ID of new table $S.$T is $id\n";
 
+        ## Grab it back from the database
+        $SQL = 'SELECT * FROM goat WHERE id = ?';
+        $sth = $dbh->prepare($SQL);
+        $sth->execute($id);
+        $tinfo = $sth->fetchall_arrayref({})->[0];
+
+        ## If it has no primary key and pkonly is set, abandon this change
+        if ($bcargs->{pkonly} and 'table' eq $type and ! length $tinfo->{pkey}) {
+            $VERBOSE >= 1 and warn "Not adding table $S.$T: no pkey\n";
+            $dbh->do('ROLLBACK TO newtable');
+            next;
+        }
+
         $count{added}++;
         $new{$S}{$T} = 1;
       HERD:
         if ($herd) {
-            if (! defined $tinfo) {
-                $SQL = 'SELECT * FROM goat WHERE id = ?';
-                $sth = $dbh->prepare($SQL);
-                $sth->execute($id);
-                $tinfo = $sth->fetchall_arrayref({})->[0];
-            }
+            ## Need to check again as the previous check above was only for brand new tables
             if ($bcargs->{pkonly} and 'table' eq $type and ! length $tinfo->{pkey}) {
-                warn "Not adding table $S.$T to relgroup: no pkey\n";
+                $VERBOSE >= 1 and warn "Not adding table $S.$T to relgroup: no pkey\n";
             }
             else {
                 $SQL = 'SELECT 1 FROM herdmap WHERE herd=? AND goat = ?';
