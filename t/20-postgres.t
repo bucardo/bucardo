@@ -25,7 +25,7 @@ my $bct = BucardoTesting->new({location => 'postgres'})
 ## The above runs one test for each passed in database x the number of test tables
 my $numtables = keys %tabletype;
 my $numsequences = keys %sequences;
-my $single_tests = 62;
+my $single_tests = 63;
 my $check_for_row_1 = 1;
 my $check_for_row_2 = 2;
 my $check_for_row_3 = 3;
@@ -455,7 +455,6 @@ else {
 $bct->add_row_to_database('A', 2);
 $bct->add_row_to_database('B', 3);
 
-$bct->ctl('bucardo message XXXXXXX');
 like $bct->ctl('bucardo kick sync pgtest3 0'),
     qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
     'Kick pgtest3 like it hurts' or die 'Sync failed, no point continuing';
@@ -483,5 +482,7 @@ $bct->check_for_row([[2],[3],[7],[30]], [qw/D/], 'customcols', 'test1');
 unlink $service_temp_filename;
 
 $bct->ctl('bucardo stop');
+
+pass('Finished with testing');
 
 exit;

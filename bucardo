@@ -5327,7 +5327,7 @@ sub clone {
     ## Arguments: none, parses nouns
     ## Returns: never, exits
 
-    my $doc_section = 'clone'; ### XXX dont forget
+    my $doc_section = 'clone';
 
     usage_exit($doc_section) unless @nouns;
 
