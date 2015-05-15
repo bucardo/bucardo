@@ -1915,13 +1915,13 @@ SELECT 'Fixme'::TEXT;
                     DECLARE
                       deltatable TEXT;
                       tracktable TEXT;
-                      tablename TEXT;
+                      dtablename TEXT;
                       myst TEXT;
                       drows BIGINT = 0;
                       trows BIGINT = 0;
                     BEGIN
                       -- Store the schema and table name
-                      SELECT INTO tablename
+                      SELECT INTO dtablename
                         quote_ident(nspname)||'.'||quote_ident(relname)
                         FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace)
                         WHERE c.oid = \$2;
@@ -1931,18 +1931,18 @@ SELECT 'Fixme'::TEXT;
                         COUNT(DISTINCT target)
                         FROM bucardo.bucardo_delta_targets
                         WHERE tablename = \$2;
-                      RAISE DEBUG 'delta_targets rows found for %: %', tablename, drows;
+                      RAISE DEBUG 'delta_targets rows found for %: %', dtablename, drows;
 
                       -- If no dbgroups, no point in going on, as we will never purge anything
                       IF drows < 1 THEN
-                        RETURN 'Nobody is using table '|| tablename ||', according to bucardo_delta_targets';
+                        RETURN 'Nobody is using table '|| dtablename ||', according to bucardo_delta_targets';
                       END IF;
 
                       -- Figure out the names of the delta and track tables for this relation
                       SELECT INTO deltatable
-                        bucardo.bucardo_tablename_maker(tablename, 'delta_');
+                        bucardo.bucardo_tablename_maker(dtablename, 'delta_');
                       SELECT INTO tracktable
-                        bucardo.bucardo_tablename_maker(tablename, 'track_');
+                        bucardo.bucardo_tablename_maker(dtablename, 'track_');
 
                       -- Delete all txntimes from the delta table that:
                       -- 1) Have been used by all dbgroups listed in bucardo_delta_targets
