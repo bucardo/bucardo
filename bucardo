@@ -6062,7 +6062,7 @@ sub append_reason_file {
 
 sub set_sync_status {
 
-    ## Set detailed information about syncs from the synrun table
+    ## Set detailed information about syncs from the syncrun table
     ## Arguments: zero or one (hashref)
     ## 1. Hashref containing a. syncs=arrarref of syncnames
     ## Returns: hashref indicating maximum lengths of inner information
