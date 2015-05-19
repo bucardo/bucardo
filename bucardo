@@ -366,7 +366,7 @@ my $re_dbname = qr{\w[\w\d]*};
 ping() if $verb eq 'ping';
 
 ## Make sure the Bucardo database has the latest schema
-upgrade() if $verb eq 'upgrade' or $verb eq 'uprgade' or $verb eq 'ugprade';
+upgrade() if $verb =~ /^upgr/ or $verb eq 'uprgade' or $verb eq 'ugprade';
 
 ## All the rest of the verbs require use of global information
 ## Thus, we load everything right now
@@ -413,7 +413,7 @@ message()       if $verb eq 'message' or $verb eq 'msg';
 config()        if $verb eq 'set' or $verb eq 'show' or $verb eq 'config';
 
 ## Validate a sync
-validate()      if $verb eq 'validate';
+validate()      if $verb =~ /^vali/;
 
 ## Purge the delta/track tables
 purge()         if $verb eq 'purge';
