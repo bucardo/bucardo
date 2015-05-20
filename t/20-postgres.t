@@ -381,6 +381,9 @@ $dbhC->commit();
 $dbhB->commit();
 $dbhA->commit();
 
+## Just in case, make sure 'bucardo upgrade' does not mess anything up
+$bct->ctl('bucardo upgrade');
+
 like $bct->ctl('bucardo kick sync pgtest3 0'),
     qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
     'Kick pgtest3 LIKE A BOSS' or die 'Sync failed, no point continuing';
