@@ -9220,7 +9220,7 @@ sub delete_rows {
             $SQL{IN}{$tname} = sprintf '%sDELETE FROM %s WHERE %s IN (',
                 $self->{sqlprefix},
                 $tname,
-                $pkcols;
+                $goat->{pklist};
             my $inner;
             if ($t->{has_mysql_timestamp_issue}) {
                 for my $key (keys %$rows) {
