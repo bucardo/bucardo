@@ -5069,6 +5069,7 @@ sub start_kid {
                 eval { $dbh->rollback; };
                 if ($@) {
                     $self->glog("Result of eval for rollback: $@", LOG_DEBUG);
+                    die $@;
                 }
             }
 
