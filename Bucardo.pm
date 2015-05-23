@@ -5065,6 +5065,10 @@ sub start_kid {
                     }
                     $d->{async_active} = 0;
                 }
+
+                ## Mark triggers as enabled, since we are also rolling back our trigger disabling magic
+                $d->{triggers_enabled} = 1;
+
                 ## Seperate eval{} for the rollback as we are probably still connected to the transaction.
                 eval { $dbh->rollback; };
                 if ($@) {
