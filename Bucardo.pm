@@ -9222,7 +9222,7 @@ sub delete_rows {
         }
         ## Normal DELETE call with IN() clause
         elsif ('IN' eq $sqltype and ! exists $SQL{IN}{$tname}) {
-            $SQL{IN}{$tname} = sprintf '%sDELETE FROM %s WHERE %s IN (',
+            $SQL{IN}{$tname} = sprintf '%sDELETE FROM %s WHERE (%s) IN (',
                 $self->{sqlprefix},
                 $tname,
                 $goat->{pklist};
