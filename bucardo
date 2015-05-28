@@ -8588,7 +8588,7 @@ sub connect_database {
         my ($type,$dsn,$user,$pass) = split /\n/ => $conn;
 
         if ($type ne 'postgres') {
-            return "Cannot return a handle for database type $type";
+            die "Cannot return a handle for database type $type\n";
         }
 
         eval {
