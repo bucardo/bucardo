@@ -4183,14 +4183,17 @@ sub list_herds {
 
     for my $row (@$info) {
         my $name = $row->{name};
-        my $h = $global{herd}{$name};
+        my $h = $HERD->{$name};
         printf 'Relgroup: %-*s ',
             $maxlen, $name;
         printf ' DB: %s ', $h->{db} if $h->{db};
         ## Got goats?
         if (exists $h->{goat}) {
             print ' Members: ';
-            print join ', ' => sort keys %{ $h->{goat} };
+            print join ', ' => sort {
+                $h->{goat}{$b}{priority} <=> $h->{goat}{$a}{priority}
+                    or $a cmp $b
+            } keys %{ $h->{goat} };
         }
         ## Got syncs?
         if (exists $h->{sync}) {
