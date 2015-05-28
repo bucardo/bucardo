@@ -8578,6 +8578,10 @@ sub connect_database {
         $opt = { name => $opt };
     }
 
+    if (! exists $DB->{$opt->{name}}) {
+        die qq{Unknown database "$opt->{name}": try bucardo list dbs\n};
+    }
+
     if (exists $opt->{name}) {
         $SQL = qq{SELECT bucardo.db_getconn('$opt->{name}')};
         my $conn = $dbh->selectall_arrayref($SQL)->[0][0];
