@@ -4,17 +4,17 @@ Bucardo version ???
   - Allow dashes in valid schema and table names
     [David Christensen]
 
-    Allow dashes in valid schema and table names
+  - New command "bucardo delta [syncname...]" to show number of pending 
+    delta rows on source databases.
+    [Greg Sabino Mullane]
+
   - Fix incorrect usage of the 'dbconn' parameter in the bucardo.db table
     [Greg Sabino Mullane, reported by Alexandre Busquets]
 
   - Adjustments for new version of ExtUtils::MakeMaker
     [Mathieu Arnold]
 
-  - Make 'bucardo list all' a little less verbose for some not-so-common items
-    [Greg Sabino Mullane]
-
-  - Add 'PRAGMA defer_foreign_keys' for sqlite targets
+  - When doing target deletes, use the quoted version of the primary key column names.
     [Greg Sabino Mullane]
 
   - Allow code with 'array_agg' to work on Postgres <= 8.2,
@@ -24,6 +24,29 @@ Bucardo version ???
   - Add new internal function bucardo_purge_delta_oid which helps the 
     VAC process work better on older versions of Postgres (<= 8.2)
     [Greg Sabino Mullane]
+
+  - Add 'PRAGMA defer_foreign_keys' for sqlite targets
+    [Greg Sabino Mullane]
+
+  - Remove default value from sync.isolation_level, so we can default to 
+    the global one when needed.
+    [Greg Sabino Mullane]
+
+  - Improve workings of the 'pkonly' argument to "bucardo add tables"
+    [Greg Sabino Mullane]
+
+  - Make 'bucardo list relgroup foo' show the tables in priority order.
+    [Greg Sabino Mullane]
+
+  - Make 'bucardo list all' a little less verbose for some not-so-common items
+    [Greg Sabino Mullane]
+
+  - Allow validate_sync to check the contents of functions for upgrade,
+    not just their existence.
+    [Greg Sabino Mullane]
+
+
+
 
 
 Bucardo version 5.3.1, released January 27, 2015 (git commit a4e59ea351410acd4fe750384a19393c261f7e91)
@@ -57,7 +80,7 @@ Bucardo version 5.3.0, released December 22, 2014 (git commit 07d884fea5ba113b5d
 
   - Allow specification of non-default port when sending email.
     Attempt support for SASL auth.
-    [Greg Sabino Mullane, per suggestsion from Michael Wagner]
+    [Greg Sabino Mullane, per suggestion from Michael Wagner]
 
   - Better support for continuing once a database has crashed
     [Greg Sabino Mullane]
