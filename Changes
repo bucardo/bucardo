@@ -25,6 +25,10 @@ Bucardo version ???
     VAC process work better on older versions of Postgres (<= 8.2)
     [Greg Sabino Mullane]
 
+  - Add new function bucardo_purge_sync_track which removes all track 
+    and delta entries for a given sync. Use with care.
+    [Greg Sabino Mullane]
+
   - Add 'PRAGMA defer_foreign_keys' for sqlite targets
     [Greg Sabino Mullane]
 
@@ -45,7 +49,8 @@ Bucardo version ???
     not just their existence.
     [Greg Sabino Mullane]
 
-
+  - Do not 'RESET search_path' inside some of the internal functions.
+    [Greg Sabino Mullane]
 
 
 
