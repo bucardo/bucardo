@@ -1749,6 +1749,39 @@ END;
 } ## end of bucardo_purge_delta body
 },
 
+{ name => 'bucardo_purge_sync_track', args => 'text', returns => 'text', body => q{
+DECLARE
+  myrec RECORD;
+  myst  TEXT;
+BEGIN
+  PERFORM 1 FROM bucardo.bucardo_delta_names WHERE sync = $1 LIMIT 1;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'No sync found named %', $1;
+  END IF;
+
+  FOR myrec IN SELECT DISTINCT tablename, deltaname, trackname
+    FROM bucardo.bucardo_delta_names WHERE sync = $1
+    ORDER BY tablename LOOP
+
+    myst = 'INSERT INTO bucardo.'
+    || myrec.trackname
+    || ' SELECT DISTINCT txntime, '
+    || quote_literal($1)
+    || ' FROM bucardo.'
+    || myrec.deltaname;
+
+    RAISE DEBUG 'Running: %', myst;
+
+    EXECUTE myst;
+
+  END LOOP;
+
+  RETURN 'Complete';
+
+END;
+} ## end of bucardo_purge_sync_track body
+},
+
 
 ); ## end of %functions
 
