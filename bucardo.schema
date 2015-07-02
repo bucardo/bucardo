@@ -1743,8 +1743,6 @@ BEGIN
     total = total + 1;
   END LOOP;
 
-  RESET search_path;
-
   RETURN 'Tables processed: ' || total;
 
 END;
@@ -2156,8 +2154,6 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
              $sth->finish();
              die qq{Could not determine column information for table "$remoteschema.$remotetable"!\n};
          }
-
-         $dbh->do('RESET search_path');
 
          my $colinfo = $columninfo->{$oid};
             ## Allow for 'dead' columns in the attnum ordering
