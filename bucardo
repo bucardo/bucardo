@@ -4024,7 +4024,7 @@ sub add_herd {
     ## No sense going on if no nouns!
     if (! $nouncount) {
         confirm_commit();
-        return undef;
+        exit 0;
     }
 
     ## Get the list of all requested tables, adding as needed
