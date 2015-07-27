@@ -9332,7 +9332,7 @@ sub delete_rows {
                     next;
                 }
                 my $dbname = $t->{name};
-                $self->glog("Deleting from target $dbname.$tname. $t->{delete_round} of $t->{delete_rounds}", LOG_DEBUG);
+                $self->glog("Deleting from target $dbname.$tname (round $t->{delete_round} of $t->{delete_rounds})", LOG_DEBUG);
 
                 $did_something++;
 
