@@ -811,7 +811,8 @@ sub start_mcp {
             if ($db->{status} eq 'active'
                 and $db->{dbtype} eq 'postgres'
                 and $db->{role} eq 'source') {
-                $db->{needsvac}++;
+                ## We need to increment it for any matches in sdb, regardless of which sync initially set it!
+                $self->{sdb}{ $db->{name} }{needsvac} = 2;
                 $self->{needsvac} = 1;
             }
         }
