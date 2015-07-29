@@ -11,6 +11,9 @@ Bucardo version ???
   - Fix incorrect usage of the 'dbconn' parameter in the bucardo.db table
     [Greg Sabino Mullane, reported by Alexandre Busquets]
 
+  - Fix case where VAC sometimes skipped databases used in multiple syncs.
+    [Greg Sabino Mullane, reported by Andrey Solovjov]
+
   - Adjustments for new version of ExtUtils::MakeMaker
     [Mathieu Arnold]
 
