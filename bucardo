@@ -781,6 +781,9 @@ sub start {
     ## This will automatically write any nouns in as well
     append_reason_file('start');
 
+   print "Create if needed pid directory: - $PIDDIR  - ";
+    my $ouputls = `mkdir -p  $PIDDIR`;
+
     ## Refuse to go on if we get a ping response within 5 seconds
     $QUIET or print "Checking for existing processes\n";
 
