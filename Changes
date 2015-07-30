@@ -32,6 +32,9 @@ Bucardo version ???
     and delta entries for a given sync. Use with care.
     [Greg Sabino Mullane]
 
+  - Allow 'bucardo validate' to drop the autokick triggers if they are no longer needed.
+    [Greg Sabino Mullane]
+
   - Add 'PRAGMA defer_foreign_keys' for sqlite targets
     [Greg Sabino Mullane]
 
@@ -48,13 +51,16 @@ Bucardo version ???
   - Make 'bucardo list all' a little less verbose for some not-so-common items
     [Greg Sabino Mullane]
 
+  - Fix up the "add relgroup" call to allow it to work for capitalized relations,
+    and remove a prepare_cached error that could occur.
+    [Greg Sabino Mullane]
+
   - Allow validate_sync to check the contents of functions for upgrade,
     not just their existence.
     [Greg Sabino Mullane]
 
   - Do not 'RESET search_path' inside some of the internal functions.
     [Greg Sabino Mullane]
-
 
 
 Bucardo version 5.3.1, released January 27, 2015 (git commit a4e59ea351410acd4fe750384a19393c261f7e91)
