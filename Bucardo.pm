@@ -5162,7 +5162,7 @@ sub start_main_transaction {
             ## Use the same time zone everywhere
             $dbh->do(q{SET time_zone = '+0:00'});
 
-            $dbh->do('SET TRANSACTION READ WRITE ISOLATION LEVEL SERIALIZABLE');
+            $dbh->do('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE'); ## READ WRITE appears in MySQL 5.6.5
             $self->glog(qq{Set database "$dbname" to serializable}, LOG_DEBUG);
         }
 
