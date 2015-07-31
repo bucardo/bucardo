@@ -4983,7 +4983,7 @@ AND nspname !~ '^pg_'
         ## In case someone entered duplicate arguments
         next if $seenit{$item}++;
 
-        ## Skip if this is not a tablename, but an arguement of the form x=y
+        ## Skip if this is not a tablename, but an argument of the form x=y
         next if index($item, '=') >= 0;
 
         ## Determine if this item has a dot in it, and/or it is using wildcards
