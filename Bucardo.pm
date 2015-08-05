@@ -9910,12 +9910,16 @@ sub push_rows {
                         }, undef, $d->{DBGROUPNAME});
                     }
 
-                    $self->glog('Signalling all other syncs that this table has changed', LOG_DEBUG);
+                    ## We want to send a kick signal to other syncs that are using this table
+                    ## However, we do not want to kick unless they are set to autokick and active
+
+                    $self->glog('Signalling other syncs that this table has changed', LOG_DEBUG);
                     ## Cache this
                     if (! exists $self->{kick_othersyncs}{$syncname}{$tname}) {
-                        $SQL = 'SELECT sync FROM bucardo.bucardo_delta_names WHERE sync <> ? AND tablename = ?';
-                        $sth = $dbh->prepare($SQL);
-                        $count = $sth->execute($syncname,$tname);
+                        #$SQL = 'SELECT sync FROM bucardo.bucardo_delta_names WHERE sync <> ? AND tablename = ?';
+                        $SQL = 'SELECT name FROM sync WHERE herd IN (SELECT herd FROM herdmap WHERE goat IN (SELECT id FROM goat WHERE schemaname=? AND tablename = ?)) AND name <> ? AND autokick AND status = ?';
+                        $sth = $self->{masterdbh}->prepare($SQL);
+                        $sth->execute($goat->{schemaname}, $goat->{tablename}, $syncname, 'active');
                         $self->{kick_othersyncs}{$syncname}{$tname} = $sth->fetchall_arrayref();
                     }
                     for my $row (@{ $self->{kick_othersyncs}{$syncname}{$tname} }) {
