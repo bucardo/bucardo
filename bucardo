@@ -2199,6 +2199,19 @@ sub update_database {
         ## Standardize the values as well
         my $value = $args->{$setting};
         my $newvalue = transform_value($value);
+        my $oldvalue = $DB->{$name}{$newname};
+
+        ## We want certain booleans to appear as "off/on"
+        if ($setting =~ /makedelta|server_side_prepares/) {
+            $oldvalue = $oldvalue ? 'on' : 'off';
+            ## Clean up, but lightly so invalid entries fall through for later
+            if ($newvalue =~ /^[1tT]/ or $newvalue =~ /^on/i) {
+                $newvalue = 'on';
+            }
+            elsif ($newvalue =~ /^[0fF]/ or $newvalue =~ /^off/i) {
+                $newvalue = 'off';
+            }
+        }
 
         ## Handle all the non-standard columns
         if ($newname =~ /^group/) {
@@ -2283,7 +2296,6 @@ sub update_database {
             print qq{Cannot change "$newname"\n};
             next;
         }
-        my $oldvalue = $DB->{$name}{$newname};
 
         ## Has this really changed?
         if ($oldvalue eq $newvalue) {
