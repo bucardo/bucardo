@@ -921,7 +921,7 @@ sub restart {
     ## Returns: undef
 
     stop();
-    sleep 1;
+    sleep 3;
     start();
 
     return;
