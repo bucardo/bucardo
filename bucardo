@@ -1995,7 +1995,7 @@ sub add_database {
                     }
                 }
                 else {
-                    $msg = qq{Connection to "$db" ($fullname) as user $user failed};
+                    $msg = qq{Connection to "$db" ($fullname) failed};
                 }
 
                 die "$msg. You may force add it with the --force argument.\nError was: $err\n\n"
