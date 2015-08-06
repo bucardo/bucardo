@@ -8,7 +8,7 @@ use strict;
 use warnings;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 50;
+use Test::More tests => 51;
 use BucardoTesting;
 my $bct = BucardoTesting->new({ location => 'makedelta' })
     or BAIL_OUT "Creation of BucardoTesting object failed\n";
@@ -62,7 +62,7 @@ ok $dbhX->do('LISTEN bucardo_syncdone_deltatest3'),
 # Start up Bucardo and wait for initial syncs to finish.
 ok $bct->restart_bucardo($dbhX), 'Bucardo should start';
 ok $bct->wait_for_notice($dbhX, [qw(
-    bucardo_syncdone_deltatest1
+    syncdone_deltatest1
 )]), 'The deltatest1 sync finished';
 
 # Should have no rows.
@@ -73,12 +73,16 @@ ok $dbhA->do(q{INSERT INTO bucardo_test1 (id, data1) VALUES (1, 'foo')}),
     'Insert a row into test1 on A';
 $dbhA->commit;
 
-## Bucardo will fire off deltatest2 itself
 ok $bct->wait_for_notice($dbhX, [qw(
-    bucardo_syncdone_deltatest1
-    bucardo_syncdone_deltatest2
-)]), 'The deltatest1 and deltatest2 syncs have finished';
+    syncdone_deltatest1
+)]), 'The deltatest1 sync has finished';
 
+## Bucardo will not fire off deltatest2 itself, so we kick it
+$bct->ctl('bucardo kick sync deltatest2 0');
+
+ok $bct->wait_for_notice($dbhX, [qw(
+    syncdone_deltatest2
+)]), 'The deltatest2 sync has finished';
 
 # The row should be in A and B, as well as C!
 is_deeply $dbhB->selectall_arrayref(
@@ -102,8 +106,8 @@ $dbhB->commit;
 $bct->ctl('bucardo kick sync deltatest2 0');
 
 ok $bct->wait_for_notice($dbhX, [qw(
-    bucardo_syncdone_deltatest1
-    bucardo_syncdone_deltatest2
+    syncdone_deltatest1
+    syncdone_deltatest2
 )]), 'The deltatest1 and deltatest2 syncs finished';
 
 is_deeply $dbhA->selectall_arrayref(
@@ -120,7 +124,7 @@ ok $dbhA->do(q{INSERT INTO bucardo_test4 (id, data1) VALUES (3, 'foo')}),
 $dbhA->commit;
 
 ok $bct->wait_for_notice($dbhX, [qw(
-    bucardo_syncdone_deltatest1
+    syncdone_deltatest1
 )]), 'The deltatest1 sync finished';
 
 # Kick off the second sync
@@ -152,8 +156,8 @@ ok $dbhA->do(q{INSERT INTO bucardo_test2 (id, data1) VALUES (3, 'howdy')}),
 $dbhA->commit;
 
 ok $bct->wait_for_notice($dbhX, [qw(
-    bucardo_syncdone_deltatest1
-    bucardo_syncdone_deltatest3
+   syncdone_deltatest1
+   syncdone_deltatest3
 )]), 'Syncs deltatest1 and deltatest3 finished';
 
 is_deeply $dbhB->selectall_arrayref(
