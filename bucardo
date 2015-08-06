@@ -843,13 +843,15 @@ sub start {
         die $message;
     }
 
+    my $had_stopfile = -e $STOPFILE;
+
     ## Just in case, stop it
     stop_bucardo();
 
-    if (-e $STOPFILE) {
+    if ($had_stopfile) {
         print qq{Removing file "$STOPFILE"\n} unless $QUIET;
-        unlink $STOPFILE;
     }
+    unlink $STOPFILE;
 
     $QUIET or print qq{Starting Bucardo\n};
 
