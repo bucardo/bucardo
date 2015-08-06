@@ -1807,7 +1807,7 @@ LANGUAGE $language
 $volatility
 SECURITY DEFINER
 AS \$clone\$ $info->{body} \$clone\$";
-           elog(INFO, "Writing function $funcname($info->{args})");
+           elog(DEBUG, "Writing function $funcname($info->{args})");
            $run_sql->($SQL,$dbh);
        }
    }
