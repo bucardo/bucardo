@@ -1,5 +1,5 @@
 
-Bucardo version ???
+Bucardo version 5.4.0
 
   - Allow dashes in valid schema and table names
     [David Christensen]
@@ -18,6 +18,10 @@ Bucardo version ???
     [Mathieu Arnold]
 
   - When doing target deletes, use the quoted version of the primary key column names.
+    [Greg Sabino Mullane]
+
+  - Make sure we do not signal other syncs during makedelta runs if the other 
+    syncs are inactive or have autokick off.
     [Greg Sabino Mullane]
 
   - Allow code with 'array_agg' to work on Postgres <= 8.2,
@@ -64,6 +68,9 @@ Bucardo version ???
     [Greg Sabino Mullane]
 
   - Do not 'RESET search_path' inside some of the internal functions.
+    [Greg Sabino Mullane]
+
+  - Sleep longer between stop and start when doing 'bucardo restart'
     [Greg Sabino Mullane]
 
 
