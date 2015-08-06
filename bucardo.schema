@@ -2507,15 +2507,15 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
             ## Add in the autokick triggers as needed
             ## Skip if autokick is false
-			if ($info->{autokick} eq 'f') {
+            if ($info->{autokick} eq 'f') {
                 if (exists $btriggerinfo{$schema}{$table}{$kickfunc}) {
                     $SQL = qq{DROP TRIGGER "$kickfunc" ON $safeschema.$safetable};
-					## This is important enough that we want to be verbose about it:
-					warn "Dropped trigger $kickfunc from table $safeschema.$safetable\n";
+                    ## This is important enough that we want to be verbose about it:
+                    warn "Dropped trigger $kickfunc from table $safeschema.$safetable\n";
                     $run_sql->($SQL,$dbh);
                     delete $btriggerinfo{$schema}{$table}{$kickfunc};
                 }
-			    next TABLE;
+                next TABLE;
             }
             if (! exists $btriggerinfo{$schema}{$table}{$kickfunc}) {
                 my $ttrig = $dbh->{pg_server_version} >= 80400 ? ' OR TRUNCATE' : '';

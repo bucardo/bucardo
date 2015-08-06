@@ -5079,10 +5079,10 @@ AND nspname !~ '^pg_'
                     if (!$row->{relhaspkey}) {
                         ## Allow if we have a unique index on this table
                         $SQL = q{SELECT 1 FROM pg_index WHERE indisunique AND indrelid = }
-							. q{(SELECT c.oid FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace) WHERE n.nspname=? AND c.relname=?)};
+                            . q{(SELECT c.oid FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace) WHERE n.nspname=? AND c.relname=?)};
                         my $sthunique = $rdbh->prepare_cached($SQL);
                         $count = $sthunique->execute($row->{nspname},$row->{relname});
-						$sthunique->finish();
+                        $sthunique->finish();
                         next if $count < 1;
                     }
                 }
