@@ -1278,7 +1278,7 @@ sub count_deltas {
 
     ## Count up rows in the delta tables
     ## Does not remove "unvacuumed" rows: assumes delta tables are getting emptied out by VAC
-    ## Arguments: optional 
+    ## Arguments: optional
     ## Returns: nothing, exits
 
     ## May want to see totals only
@@ -10435,7 +10435,7 @@ The username Bucardo should use when connecting to this database.
 
 =item C<pass>
 
-The password Bucardo should use when connecting to this database. It is recommended 
+The password Bucardo should use when connecting to this database. It is recommended
 that you use a .pgpass file rather than entering the password here.
 
 =item C<host>

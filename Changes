@@ -38,7 +38,7 @@ Bucardo version ???
   - Add 'PRAGMA defer_foreign_keys' for sqlite targets
     [Greg Sabino Mullane]
 
-  - Do not try to apply 'READ WRITE' when doing the intial SET TRANSACTION for MySQL and MariaDB,
+  - Do not try to apply 'READ WRITE' when doing the initial SET TRANSACTION for MySQL and MariaDB,
     as that option is not supported across all versions.
     [Greg Sabino Mullane]
 
