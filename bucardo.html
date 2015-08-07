@@ -66,6 +66,7 @@
       <li><a href="#inspect">inspect</a></li>
       <li><a href="#validate">validate</a></li>
       <li><a href="#purge">purge</a></li>
+      <li><a href="#delta">delta</a></li>
       <li><a href="#help">help</a></li>
     </ul>
   </li>
@@ -237,6 +238,12 @@
 <p>Purges the delta and track tables for one or more tables, for one or more databases.</p>
 
 </dd>
+<dt id="delta-database-s"><code>delta [&lt;database(s)&gt;]</code></dt>
+<dd>
+
+<p>Show the delta counts for each source target.</p>
+
+</dd>
 <dt id="help-command-action"><code>help [&lt;command&gt; [&lt;action&gt;]]</code></dt>
 <dd>
 
@@ -257,7 +264,9 @@
      --quiet               Incremental quiet.
      --verbose             Incremental verbose mode.
   -? --help                Output basic help and exit.
-     --version             Print the version number and exit.</code></pre>
+     --version             Print the version number and exit.
+     --dryrun              Do not perform any actual actions.
+     --confirm             Require direct confirmation before changes.</code></pre>
 
 <h1 id="COMMAND-DETAILS">COMMAND DETAILS</h1>
 
@@ -465,32 +474,6 @@
 
 <p>The optional <code>regex</code> option can be used to filter the list to only those matching a regular expression.</p>
 
-<p>Aliases:</p>
-
-<dl>
-
-<dt id="l"><code>l</code></dt>
-<dd>
-
-</dd>
-<dt id="lsit"><code>lsit</code></dt>
-<dd>
-
-</dd>
-<dt id="liast"><code>liast</code></dt>
-<dd>
-
-</dd>
-<dt id="lisy"><code>lisy</code></dt>
-<dd>
-
-</dd>
-<dt id="lit"><code>lit</code></dt>
-<dd>
-
-</dd>
-</dl>
-
 <h2 id="add">add</h2>
 
 <pre><code>  bucardo add &lt;type&gt; &lt;name&gt; &lt;parameters&gt;</code></pre>
@@ -543,31 +526,23 @@
 
 <h3 id="add-db">add db</h3>
 
-<pre><code>  bucardo add db &lt;name&gt; dbname=actual_name port=xxx host=xxx user=xxx pass=xxx</code></pre>
+<pre><code>  bucardo add db &lt;name&gt; dbname=actual_name port=xxx host=xxx user=xxx</code></pre>
 
 <p>Adds one or more new databases. The <code>name</code> is the name by which the database will be known to Bucardo, and must be unique. This may vary from the actual database name, as multiple hosts might have databases with the same name. Multiple databases can be added by separating the names with commas. Options that differ between the databases should be separated by a matching commas. Example:</p>
 
 <pre><code>  bucardo add db alpha,beta dbname=sales host=aa,bb user=bucardo</code></pre>
 
-<p>The supported named parameters are:</p>
+<p>This command will attempt an immediate test connection to the added database(s). The supported named parameters are:</p>
 
 <dl>
 
 <dt id="dbname1"><code>dbname</code></dt>
 <dd>
 
-</dd>
-<dt id="db1"><code>db</code></dt>
-<dd>
-
-<p>The actual name of the database. Required.</p>
+<p>The actual name of the database. Required unless using a service file.</p>
 
 </dd>
 <dt id="type"><code>type</code></dt>
-<dd>
-
-</dd>
-<dt id="dbtype"><code>dbtype</code></dt>
 <dd>
 
 <p>The type of the database. Defaults to <code>postgres</code>. Currently supported values are:</p>
@@ -601,98 +576,64 @@
 </ul>
 
 </dd>
-<dt id="username"><code>username</code></dt>
-<dd>
-
-</dd>
-<dt id="dbuser1"><code>dbuser</code></dt>
-<dd>
-
-</dd>
 <dt id="user"><code>user</code></dt>
 <dd>
 
-<p>The username Bucardo should use to connect to the database. Optional.</p>
-
-</dd>
-<dt id="password"><code>password</code></dt>
-<dd>
-
-</dd>
-<dt id="dbpass"><code>dbpass</code></dt>
-<dd>
+<p>The username Bucardo should use when connecting to this database.</p>
 
 </dd>
 <dt id="pass"><code>pass</code></dt>
 <dd>
 
-<p>The password Bucardo should use when connecting to the database. Optional.</p>
-
-</dd>
-<dt id="dbhost"><code>dbhost</code></dt>
-<dd>
-
-</dd>
-<dt id="pghost"><code>pghost</code></dt>
-<dd>
+<p>The password Bucardo should use when connecting to this database. It is recommended that you use a .pgpass file rather than entering the password here.</p>
 
 </dd>
 <dt id="host"><code>host</code></dt>
 <dd>
 
-<p>The host name to which to connect. Defaults to the value of the <code>$PGHOSTADDR</code> or <code>$PGHOST</code> environment variables, if present. Optional.</p>
-
-</dd>
-<dt id="dbport1"><code>dbport</code></dt>
-<dd>
-
-</dd>
-<dt id="pgport"><code>pgport</code></dt>
-<dd>
+<p>The host Bucardo should use when connecting to this database. Defaults to the value of the <code>$PGHOSTADDR</code> or <code>$PGHOST</code> environment variables, if present.</p>
 
 </dd>
 <dt id="port"><code>port</code></dt>
 <dd>
 
-<p>The port to which to connect. Defaults to the value of the <code>$PGPORT</code> environment variable, if present. Optional.</p>
-
-</dd>
-<dt id="dbconn"><code>dbconn</code></dt>
-<dd>
-
-</dd>
-<dt id="pgconn"><code>pgconn</code></dt>
-<dd>
+<p>The port Bucardo should use when connecting to this database. Defaults to the value of the <code>$PGPORT</code> environment variable, if present.</p>
 
 </dd>
 <dt id="conn"><code>conn</code></dt>
 <dd>
 
-<p>Additional connection parameters, e.g., <code>sslmode=require</code>. Optional.</p>
+<p>Additional connection parameters, e.g. <code>sslmode=require</code>.</p>
+
+</dd>
+<dt id="service"><code>service</code></dt>
+<dd>
+
+<p>The service name Bucardo should use when connecting to this database.</p>
 
 </dd>
 <dt id="status"><code>status</code></dt>
 <dd>
 
-<p>Initial status of the database in Bucardo. Must be either &quot;active&quot; or &quot;inactive&quot;. Defaults to &quot;active&quot;.</p>
+<p>Initial status of this database. Defaults to &quot;active&quot; but can be set to &quot;inactive&quot;.</p>
 
 </dd>
 <dt id="dbgroup1"><code>dbgroup</code></dt>
 <dd>
 
-<p>Bucardo dbgroup to which to add the database. Optional.</p>
+<p>Name of the database group this database should belong to.</p>
 
 </dd>
 <dt id="addalltables"><code>addalltables</code></dt>
 <dd>
 
-<p>Automatically adds all tables once the database has been added. Optional.</p>
+<p>Automatically add all tables from this database.</p>
 
 </dd>
 <dt id="addallsequences"><code>addallsequences</code></dt>
 <dd>
 
-<p>Automatically adds all sequences once the database has been added. Optional.</p>
+<p>Automatically add all sequences from this database.</p>
 
 </dd>
 <dt id="server_side_prepares"><code>server_side_prepares</code></dt>
@@ -702,23 +643,25 @@
 <dt id="ssp"><code>ssp</code></dt>
 <dd>
 
-<p>Enable or disable server-side prepares. Pass 1 to enable them or 0 to disable them. Defaults to 1.</p>
+<p>Set to 1 or 0 to enable or disable server-side prepares. Defaults to 1.</p>
 
 </dd>
 <dt id="makedelta"><code>makedelta</code></dt>
 <dd>
 
-<p>Enable or disable makedelta for this database. Defaults to 0.</p>
+<p>Set to 1 or 0 to enable or disable makedelta. Defaults to 0.</p>
 
 </dd>
-<dt id="dbservice"><code>dbservice</code></dt>
+</dl>
+
+<p>Additional parameters:</p>
+
+<dl>
+
+<dt id="force"><code>--force</code></dt>
 <dd>
 
-</dd>
-<dt id="service"><code>service</code></dt>
-<dd>
-
-<p>The service name to use for a Postgres database. Optional.</p>
+<p>Forces the database to be added without running a connection test.</p>
 
 </dd>
 </dl>
@@ -739,7 +682,7 @@
 
 <dl>
 
-<dt id="db2"><code>db</code></dt>
+<dt id="db1"><code>db</code></dt>
 <dd>
 
 <p>The name of the database from which to read the table information. Should be a name known to Bucardo, thanks to a previous call to <code>add database</code>. Required.</p>
@@ -795,7 +738,7 @@
 
 <dl>
 
-<dt id="db3"><code>db</code></dt>
+<dt id="db2"><code>db</code></dt>
 <dd>
 
 <p>The name of the database from which to read the sequence information. Should be a name known to Bucardo, thanks to a previous call to <code>add database</code>. Required.</p>
@@ -817,11 +760,11 @@
 
 <dl>
 
-<dt id="db4"><code>db</code></dt>
+<dt id="db3"><code>db</code></dt>
 <dd>
 
 </dd>
-<dt id="db5"><code>--db</code></dt>
+<dt id="db4"><code>--db</code></dt>
 <dd>
 
 <p>Name of the database from which to find all the tables to add. If not provided, tables will be added from all known databases.</p>
@@ -909,11 +852,11 @@
 
 <dl>
 
-<dt id="db6"><code>db</code></dt>
+<dt id="db5"><code>db</code></dt>
 <dd>
 
 </dd>
-<dt id="db7"><code>--db</code></dt>
+<dt id="db6"><code>--db</code></dt>
 <dd>
 
 <p>Name of the database from which to find all the sequences to add. If not provided, sequences will be added from all known databases.</p>
@@ -1176,7 +1119,7 @@
 <dd>
 
 </dd>
-<dt id="db8"><code>db</code></dt>
+<dt id="db7"><code>db</code></dt>
 <dd>
 
 <p>A database for which to add the customname. May be specified multiple times.</p>
@@ -1208,7 +1151,7 @@
 <dd>
 
 </dd>
-<dt id="db9"><code>db</code></dt>
+<dt id="db8"><code>db</code></dt>
 <dd>
 
 <p>A database for which to add the customcols. May be specified multiple times.</p>
@@ -1499,7 +1442,7 @@
 <dd>
 
 </dd>
-<dt id="db10"><code>db</code></dt>
+<dt id="db9"><code>db</code></dt>
 <dd>
 
 </dd>
@@ -1629,7 +1572,7 @@
 <dd>
 
 </dd>
-<dt id="db11"><code>db</code></dt>
+<dt id="db10"><code>db</code></dt>
 <dd>
 
 <p>The actual name of the database.</p>
@@ -1639,7 +1582,7 @@
 <dd>
 
 </dd>
-<dt id="dbtype1"><code>dbtype</code></dt>
+<dt id="dbtype"><code>dbtype</code></dt>
 <dd>
 
 <p>The type of the database. Currently supported values are:</p>
@@ -1673,11 +1616,11 @@
 </ul>
 
 </dd>
-<dt id="username1"><code>username</code></dt>
+<dt id="username"><code>username</code></dt>
 <dd>
 
 </dd>
-<dt id="dbuser2"><code>dbuser</code></dt>
+<dt id="dbuser1"><code>dbuser</code></dt>
 <dd>
 
 </dd>
@@ -1687,11 +1630,11 @@
 <p>The username Bucardo should use to connect to the database.</p>
 
 </dd>
-<dt id="password1"><code>password</code></dt>
+<dt id="password"><code>password</code></dt>
 <dd>
 
 </dd>
-<dt id="dbpass1"><code>dbpass</code></dt>
+<dt id="dbpass"><code>dbpass</code></dt>
 <dd>
 
 </dd>
@@ -1701,11 +1644,11 @@
 <p>The password Bucardo should use when connecting to the database.</p>
 
 </dd>
-<dt id="dbhost1"><code>dbhost</code></dt>
+<dt id="dbhost"><code>dbhost</code></dt>
 <dd>
 
 </dd>
-<dt id="pghost1"><code>pghost</code></dt>
+<dt id="pghost"><code>pghost</code></dt>
 <dd>
 
 </dd>
@@ -1715,11 +1658,11 @@
 <p>The host name to which to connect.</p>
 
 </dd>
-<dt id="dbport2"><code>dbport</code></dt>
+<dt id="dbport1"><code>dbport</code></dt>
 <dd>
 
 </dd>
-<dt id="pgport1"><code>pgport</code></dt>
+<dt id="pgport"><code>pgport</code></dt>
 <dd>
 
 </dd>
@@ -1729,11 +1672,11 @@
 <p>The port to which to connect.</p>
 
 </dd>
-<dt id="dbconn1"><code>dbconn</code></dt>
+<dt id="dbconn"><code>dbconn</code></dt>
 <dd>
 
 </dd>
-<dt id="pgconn1"><code>pgconn</code></dt>
+<dt id="pgconn"><code>pgconn</code></dt>
 <dd>
 
 </dd>
@@ -1769,7 +1712,7 @@
 <p>Enable or disable makedelta for this database.</p>
 
 </dd>
-<dt id="dbservice1"><code>dbservice</code></dt>
+<dt id="dbservice"><code>dbservice</code></dt>
 <dd>
 
 </dd>
@@ -1987,7 +1930,7 @@
 
 <dl>
 
-<dt id="db12"><code>db</code></dt>
+<dt id="db11"><code>db</code></dt>
 <dd>
 
 <p>The name of the database from which to read the table information. Should be a name known to Bucardo.</p>
@@ -2055,7 +1998,7 @@
 
 <dl>
 
-<dt id="db13"><code>db</code></dt>
+<dt id="db12"><code>db</code></dt>
 <dd>
 
 <p>The name of the database where the sequence lives.</p>
@@ -2113,20 +2056,6 @@
 
 </li>
 </ul>
-
-<p>Aliases:</p>
-
-<dl>
-
-<dt id="delete"><code>delete</code></dt>
-<dd>
-
-</dd>
-<dt id="del"><code>del</code></dt>
-<dd>
-
-</dd>
-</dl>
 
 <h2 id="kick">kick</h2>
 
@@ -2626,6 +2555,12 @@
 <pre><code>  bucardo purge all|&lt;table&gt; [&lt;table&gt;...]</code></pre>
 
 <p>Purges the delta and track tables for one or more tables, for one or more databases. Use the keyword &quot;all&quot; to validate all tables, or specify one or more tables to validate.</p>
+
+<h2 id="delta">delta</h2>
+
+<pre><code>  bucardo delta [total] [&lt;database&gt;...]</code></pre>
+
+<p>Show the current delta count for each source target. Provide a list of databases to limit it to just the given ones. Wildcards are allowed. Use the special name &quot;totals&quot; to show only the grand total.</p>
 
 <h2 id="help">help</h2>
 
