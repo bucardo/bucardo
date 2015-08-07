@@ -1,5 +1,5 @@
 
-Bucardo version 5.4.0, released August 6, 2015
+Bucardo version 5.4.0, released August 6, 2015 (git commit a0eff9f6558cc2c6b19e4e675604250ad00ce420)
 
   - Allow dashes in valid schema and table names
     [David Christensen]
