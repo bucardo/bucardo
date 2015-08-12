@@ -439,7 +439,7 @@ ALTER TABLE bucardo.sync    ADD CONSTRAINT sync_name_sane
 ALTER TABLE bucardo.sync    ADD CONSTRAINT sync_isolation_level
   CHECK (isolation_level IS NULL OR (lower(isolation_level) IN ('serializable', 'repeatable read')));
 
-CREATE SEQUENCE clone_id_seq;
+CREATE SEQUENCE bucardo.clone_id_seq;
 CREATE TABLE bucardo.clone (
   id        INTEGER     NOT NULL DEFAULT nextval('clone_id_seq'),
               CONSTRAINT clone_id_pk PRIMARY KEY (id),
