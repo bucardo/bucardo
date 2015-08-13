@@ -133,6 +133,9 @@ my @sequence_columns = (
 
 my $sequence_columns = join ',' => map { $_->[0] } @sequence_columns;
 
+## Default statement chunk size in case config does not have it
+my $default_statement_chunk_size = 10_000;
+
 ## Output messages per language
 our %msg = (
 'en' => {
@@ -9175,7 +9178,7 @@ sub delete_rows {
     ## This is inexact, as we don't know how large each key is,
     ## but should be good enough as long as not set too high.
     ## For now, all targets have the same chunksize
-    my $chunksize = $config{statement_chunk_size} || 8_000;
+    my $chunksize = $config{statement_chunk_size} || $default_statement_chunk_size;
 
     ## Setup our deletion SQL as needed
     my %SQL;
@@ -9573,8 +9576,8 @@ sub push_rows {
 
     my ($self,$rows,$Table,$Sync,$SourceDB,$TargetDB) = @_;
 
-    ## This may be a fullcopy. If it is, $rows will not be a hashref
-    ## If it is fullcopy, flip it to a dummy hashref
+    ## If fullcopy, $rows will be the scalar 'fullcopy' instead of a hashref
+    ## In which case, we create a dummy hashref
     my $fullcopy = 0;
     if (! ref $rows) {
         if ($rows eq 'fullcopy') {
@@ -9587,16 +9590,16 @@ sub push_rows {
         $rows = {};
     }
 
+    ## Make sure TargetDB is an arrayref (may come as a single TargetDB object)
+    if (ref $TargetDB ne 'ARRAY') {
+        $TargetDB = [$TargetDB];
+    }
+
     ## This will be zero for fullcopy of course
     my $total = keys %$rows;
 
     ## Total number of rows written
     $count = 0;
-
-    ## Allow for non-arrays by forcing to an array
-    if (ref $TargetDB ne 'ARRAY') {
-        $TargetDB = [$TargetDB];
-    }
 
     my $syncname = $Sync->{name};
     my $newname = $Table->{newname}{$syncname};
@@ -9604,7 +9607,7 @@ sub push_rows {
 
     ## As with delete, we may break this into more than one step
     ## Should only be a factor for very large numbers of keys
-    my $chunksize = $config{statement_chunk_size} || 10_000;
+    my $chunksize = $config{statement_chunk_size} || $default_statement_chunk_size;
 
     ## Build a list of all PK values to feed to IN clauses
     my @pkvals;
@@ -9626,6 +9629,11 @@ sub push_rows {
 
     ## This can happen if we truncated but had no delta activity
     return 0 if (! $pkvals[0] or ! length $pkvals[0]->[0] ) and ! $fullcopy;
+
+    ## Put dummy data into @pkvals if using fullcopy
+    if ($fullcopy) {
+        push @pkvals => ['fullcopy'];
+    }
 
     ## Get ready to export from the source
     ## This may have multiple versions depending on the customcols table
@@ -9716,11 +9724,6 @@ sub push_rows {
             }
 
         } ## end preparing each target for this clause
-
-        ## Put dummy data into @pkvals if using fullcopy
-        if ($fullcopy) {
-            push @pkvals => ['fullcopy'];
-        }
 
         my $loop = 1;
         my $pcount = @pkvals;
