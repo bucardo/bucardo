@@ -9914,9 +9914,7 @@ sub push_rows {
                     ## However, we do not want to kick unless they are set to autokick and active
 
                     $self->glog('Signalling other syncs that this table has changed', LOG_DEBUG);
-                    ## Cache this
                     if (! exists $self->{kick_othersyncs}{$syncname}{$tname}) {
-                        #$SQL = 'SELECT sync FROM bucardo.bucardo_delta_names WHERE sync <> ? AND tablename = ?';
                         $SQL = 'SELECT name FROM sync WHERE herd IN (SELECT herd FROM herdmap WHERE goat IN (SELECT id FROM goat WHERE schemaname=? AND tablename = ?)) AND name <> ? AND autokick AND status = ?';
                         $sth = $self->{masterdbh}->prepare($SQL);
                         $sth->execute($goat->{schemaname}, $goat->{tablename}, $syncname, 'active');
