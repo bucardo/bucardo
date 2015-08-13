@@ -9599,7 +9599,7 @@ sub push_rows {
     ## Total number of rows written
     $count = 0;
 
-    my $newname = $goat->{newname}{$self->{syncname}};
+    my $newname = $goat->{newname}{$syncname};
 
     ## As with delete, we may break this into more than one step
     ## Should only be a factor for very large numbers of keys
