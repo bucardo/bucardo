@@ -9561,23 +9561,17 @@ sub delete_rows {
 
 sub push_rows {
 
-    ## Copy rows from one database to another
+    ## Copy rows from one table to another
+    ## Typically called after delete_rows()
     ## Arguments: five
-    ## 1. Hash of rows, where the key is \0 joined pkeys
+    ## 1. Hash of rows to copy, where the keys are the primary keys (\0 joined if multi)
     ## 2. Table object
-    ## 3. Sync object
+    ## 3. Sync object (may be empty if we are not associated with a sync)
     ## 4. Source database object
     ## 5. Target database object, or arrayref of the same
     ## Returns: number of rows copied
 
-    my ($self,$rows,$goat,$sync,$fromdb,$todb) = @_;
-
-    my $tablename = "$goat->{safeschema}.$goat->{safetable}";
-    my $fromdbh = $fromdb->{dbh};
-    my $syncname = $sync->{name};
-
-    my $pkcols = $goat->{pkeycols};
-    my $numpks = $goat->{numpkcols};
+    my ($self,$rows,$Table,$Sync,$SourceDB,$TargetDB) = @_;
 
     ## This may be a fullcopy. If it is, $rows will not be a hashref
     ## If it is fullcopy, flip it to a dummy hashref
@@ -9599,7 +9593,14 @@ sub push_rows {
     ## Total number of rows written
     $count = 0;
 
-    my $newname = $goat->{newname}{$syncname};
+    ## Allow for non-arrays by forcing to an array
+    if (ref $TargetDB ne 'ARRAY') {
+        $TargetDB = [$TargetDB];
+    }
+
+    my $syncname = $Sync->{name};
+    my $newname = $Table->{newname}{$syncname};
+    my $numpks = $Table->{numpkcols};
 
     ## As with delete, we may break this into more than one step
     ## Should only be a factor for very large numbers of keys
@@ -9623,23 +9624,18 @@ sub push_rows {
     ## Example: 1234, 221
     ## Example MCPK: ('1234','Don''t Stop','2008-01-01'),('221','foobar','2008-11-01')
 
-    ## Allow for non-arrays by forcing to an array
-    if (ref $todb ne 'ARRAY') {
-        $todb = [$todb];
-    }
-
     ## This can happen if we truncated but had no delta activity
     return 0 if (! $pkvals[0] or ! length $pkvals[0]->[0] ) and ! $fullcopy;
 
     ## Get ready to export from the source
     ## This may have multiple versions depending on the customcols table
-    my $newcols = $goat->{newcols}{$syncname} || {};
+    my $newcols = $Table->{newcols}{$syncname} || {};
 
     ## Walk through and grab which SQL is needed for each target
     ## Cache this earlier on - controller?
 
     my %srccmd;
-    for my $t (@$todb) {
+    for my $t (@$TargetDB ) {
 
         ## The SELECT clause we use (may be empty)
         my $clause = $newcols->{$t->{name}};
@@ -9647,6 +9643,9 @@ sub push_rows {
         ## Associate this target with this clause
         push @{$srccmd{$clause}} => $t;
     }
+
+    my $tablename = "$Table->{safeschema}.$Table->{safetable}";
+    my $fromdbh = $SourceDB->{dbh};
 
     ## Loop through each source command and push it out to all targets
     ## that are associated with it
@@ -9665,7 +9664,7 @@ sub push_rows {
             my $tname = $newname->{$targetname};
 
             ## The columns we are pushing to, both as an arrayref and a CSV:
-            my $cols = $goat->{tcolumns}{$SELECT};
+            my $cols = $Table->{tcolumns}{$SELECT};
             my $columnlist = $t->{does_sql} ?
                 ('(' . (join ',', map { $t->{dbh}->quote_identifier($_) } @$cols) . ')')
               : ('(' . (join ',', map { $_ } @$cols) . ')');
@@ -9725,6 +9724,7 @@ sub push_rows {
 
         my $loop = 1;
         my $pcount = @pkvals;
+        my $fromname = $SourceDB->{name};
 
         ## Loop through each chunk of primary keys to copy over
         for my $pk_values (@pkvals) {
@@ -9735,15 +9735,14 @@ sub push_rows {
             $loop++;
 
             ## Kick off the copy on the source
-            my $fromname = $fromdb->{name};
             $self->glog(qq{${pre}Copying from $fromname.$tablename}, LOG_VERBOSE);
             my $srccmd = sprintf '%s%sCOPY (%s FROM %s %s) TO STDOUT%s',
                 $pre,
                 $self->{sqlprefix},
                 $SELECT,
                 $tablename,
-                $fullcopy ? '' : " WHERE $pkcols IN ($pkvs)",
-                $sync->{copyextra} ? " $sync->{copyextra}" : '';
+                $fullcopy ? '' : " WHERE $Table->{pkcols} IN ($pkvs)",
+                $Sync->{copyextra} ? " $Sync->{copyextra}" : '';
             $fromdbh->do($srccmd);
 
             my $buffer = '';
@@ -9766,7 +9765,7 @@ sub push_rows {
                 for my $t (@{ $srccmd{$clause} }) {
 
                     my $type = $t->{dbtype};
-                    my $cols = $goat->{tcolumns}{$SELECT};
+                    my $cols = $Table->{tcolumns}{$SELECT};
                     my $tname = $newname->{$t->{name}};
 
                     chomp $buffer;
@@ -9803,15 +9802,15 @@ sub push_rows {
                             if (!defined($object->{$key})) {
                                 delete $object->{$key};
                             }
-                            elsif ($goat->{columnhash}{$key}{ftype} =~ /smallint|integer|bigint/o) {
+                            elsif ($Table->{columnhash}{$key}{ftype} =~ /smallint|integer|bigint/o) {
                                 $object->{$key} = int $object->{$key};
                             }
-                            elsif ($goat->{columnhash}{$key}{ftype} eq 'boolean') {
+                            elsif ($Table->{columnhash}{$key}{ftype} eq 'boolean') {
                                 if (defined $object->{$key}) {
                                     $object->{$key} = $object->{$key} eq 't' ? true : false;
                                 }
                             }
-                            elsif ($goat->{columnhash}{$key}{ftype} =~ /real|double|numeric/o) {
+                            elsif ($Table->{columnhash}{$key}{ftype} =~ /real|double|numeric/o) {
                                 $object->{$key} = strtod($object->{$key});
                             }
                         }
@@ -9826,7 +9825,7 @@ sub push_rows {
                         my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/, $buffer, -1;
                         for my $cindex (0..@cols) {
                             next unless defined $cols[$cindex];
-                            if ($goat->{columnhash}{$cols->[$cindex]}{ftype} eq 'boolean') {
+                            if ($Table->{columnhash}{$cols->[$cindex]}{ftype} eq 'boolean') {
                                 # BOOLEAN support is inconsistent, but almost everyone will coerce 1/0 to TRUE/FALSE
                                 $cols[$cindex] = ( $cols[$cindex] =~ /^[1ty]/i )? 1 : 0;
                             }
@@ -9837,13 +9836,13 @@ sub push_rows {
                         ## We are going to set a Redis hash, in which the key is "tablename:pkeyvalue"
                         my @colvals = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/, $buffer, -1;
                         my @pkey;
-                        for (1 .. $goat->{numpkcols}) {
+                        for (1 .. $Table->{numpkcols}) {
                             push @pkey => shift @colvals;
                         }
                         my $pkeyval = join ':' => @pkey;
                         ## Build a list of non-null key/value pairs to set in the hash
                         my @add;
-                        $i = $goat->{numpkcols} - 1;
+                        $i = $Table->{numpkcols} - 1;
                         for my $val (@colvals) {
                             $i++;
                             next if ! defined $val;
@@ -9886,7 +9885,7 @@ sub push_rows {
                 ## If this table is set to makedelta, add rows to bucardo.delta to simulate the
                 ##   normal action of a trigger and add a row to bucardo.track to indicate that
                 ##   it has already been replicated here.
-                my $d = $sync->{db}{ $t->{name} };
+                my $d = $Sync->{db}{ $t->{name} };
                 if (!$fullcopy and $d->{does_makedelta}{$tablename}) {
                     $self->glog("Using makedelta to populate delta and track tables for $t->{name}.$tname", LOG_VERBOSE);
                     my $vals;
@@ -9896,16 +9895,16 @@ sub push_rows {
                     else {
                         $vals = join ',', map { @{ $_ } } @pkvals;
                     }
-                    my $cols = join ',' => @{ $goat->{qpkey} };
+                    my $cols = join ',' => @{ $Table->{qpkey} };
 
                     $dbh->do(qq{
-                        INSERT INTO bucardo.$goat->{deltatable} ($cols)
+                        INSERT INTO bucardo.$Table->{deltatable} ($cols)
                         VALUES $vals
                     });
                     # Make sure we track it - but only if this sync already acts as a source!
                     if ($t->{role} eq 'source') {
                         $dbh->do(qq{
-                            INSERT INTO bucardo.$goat->{tracktable}
+                            INSERT INTO bucardo.$Table->{tracktable}
                             VALUES (NOW(), ?)
                         }, undef, $d->{DBGROUPNAME});
                     }
@@ -9917,7 +9916,7 @@ sub push_rows {
                     if (! exists $self->{kick_othersyncs}{$syncname}{$tname}) {
                         $SQL = 'SELECT name FROM sync WHERE herd IN (SELECT herd FROM herdmap WHERE goat IN (SELECT id FROM goat WHERE schemaname=? AND tablename = ?)) AND name <> ? AND autokick AND status = ?';
                         $sth = $self->{masterdbh}->prepare($SQL);
-                        $sth->execute($goat->{schemaname}, $goat->{tablename}, $syncname, 'active');
+                        $sth->execute($Table->{schemaname}, $Table->{tablename}, $syncname, 'active');
                         $self->{kick_othersyncs}{$syncname}{$tname} = $sth->fetchall_arrayref();
                     }
                     for my $row (@{ $self->{kick_othersyncs}{$syncname}{$tname} }) {
