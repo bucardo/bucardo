@@ -8,7 +8,7 @@ use strict;
 use warnings;
 use lib 't','.';
 use DBD::Pg;
-use Test::More tests => 51;
+use Test::More;
 use BucardoTesting;
 my $bct = BucardoTesting->new({ location => 'makedelta' })
     or BAIL_OUT "Creation of BucardoTesting object failed\n";
@@ -56,10 +56,10 @@ ok $dbhX->do('LISTEN bucardo_syncdone_deltatest1'),
     'Listen for syncdone_deltatest1';
 ok $dbhX->do('LISTEN bucardo_syncdone_deltatest2'),
     'Listen for syncdone_deltatest2';
-ok $dbhX->do('LISTEN bucardo_syncdone_deltatest3'),
+ok $dbhX->do('LISTEN bucardo_syncdone_deltatest3'), ## created below
     'Listen for syncdone_deltatest3';
 
-# Start up Bucardo and wait for initial syncs to finish.
+# Start up Bucardo and wait for initial active sync to finish.
 ok $bct->restart_bucardo($dbhX), 'Bucardo should start';
 ok $bct->wait_for_notice($dbhX, [qw(
     syncdone_deltatest1
@@ -76,6 +76,9 @@ $dbhA->commit;
 ok $bct->wait_for_notice($dbhX, [qw(
     syncdone_deltatest1
 )]), 'The deltatest1 sync has finished';
+
+## The data should only go as far as B
+$bct->check_for_row([], ['C'], undef, 'test[124]$');
 
 ## Bucardo will not fire off deltatest2 itself, so we kick it
 $bct->ctl('bucardo kick sync deltatest2 0');
@@ -117,6 +120,7 @@ is_deeply $dbhA->selectall_arrayref(
 is_deeply $dbhC->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test2'
 ), [[2, 'foo']], 'Should have the A test2 row in C';
+
 
 # Finally, try table 4, which has no makedelta.
 ok $dbhA->do(q{INSERT INTO bucardo_test4 (id, data1) VALUES (3, 'foo')}),
@@ -164,7 +168,9 @@ is_deeply $dbhB->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test2'
 ), [[2, 'foo'], [3, 'howdy']], 'Should have the A test2 row in B';
 
+
 is_deeply $dbhC->selectall_arrayref(
     'SELECT id, data1 FROM bucardo_test2'
 ), [[2, 'foo'], [3, 'howdy']], 'Should have the A test2 row in C';
 
+done_testing();
