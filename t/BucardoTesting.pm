@@ -95,7 +95,7 @@ our %tabletypemysql =
      'bucardo_test1'  => 'SMALLINT',
      'bucardo_test2'  => 'INT',
      'Bucardo_test3'  => 'BIGINT',
-     'bucardo_test4'  => 'VARCHAR(1000)',
+     'bucardo_test4'  => 'VARCHAR(700)',
      'bucardo_test5'  => 'DATE',
      'bucardo_test6'  => 'DATETIME',
      'bucardo_test7'  => 'NUMERIC(5,1)',
@@ -274,7 +274,7 @@ for (1..$xvalmax) {
     $val{SMALLINT}{$_} = $_;
     $val{INT}{$_} = 1234567+$_;
     $val{BIGINT}{$_} = 7777777777 + $_;
-    $val{TEXT}{$_} = $val{'VARCHAR(1000)'}{$_} = "bc'$_";
+    $val{TEXT}{$_} = $val{'VARCHAR(1000)'}{$_} = $val{'VARCHAR(700)'}{$_} = "bc'$_";
     $val{DATE}{$_} = sprintf '2001-10-%02d', $_;
     $val{TIMESTAMP}{$_} = $val{DATE}{$_} . ' 12:34:56';
     $val{NUMERIC}{$_} = $val{'NUMERIC(5,1)'}{$_} = 0.7 + $_;
