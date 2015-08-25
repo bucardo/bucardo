@@ -29,13 +29,14 @@ if (!$evalok) {
 $evalok = 0;
 my $dbh;
 my $dbuser = 'root';
+my $dbpass = 'testpass';
 eval {
-    $dbh = DBI->connect('dbi:mysql:database=test', $dbuser, '',
+    $dbh = DBI->connect('dbi:mysql:database=test', $dbuser, $dbpass,
                          {AutoCommit=>1, PrintError=>0, RaiseError=>1});
     $evalok = 1;
 };
 if (!$evalok) {
-    plan (skip_all =>  "Cannot test MariaDB as we cannot connect to a running MariaDB database");
+    plan (skip_all =>  "Cannot test MariaDB as we cannot connect to a running MariaDB database: $@");
 }
 
 ## Need to ensure this is really MariaDB, not MySQL
@@ -62,7 +63,7 @@ eval {
 $dbh->do("CREATE DATABASE $dbname");
 
 ## Reconnect to the new database
-$dbh = DBI->connect("dbi:mysql:database=$dbname", $dbuser, '',
+$dbh = DBI->connect("dbi:mysql:database=$dbname", $dbuser, $dbpass,
                     {AutoCommit=>1, PrintError=>0, RaiseError=>1});
 
 ## Yes, this must be turned on manually!
@@ -129,7 +130,7 @@ for my $name (qw/ A B C /) {
 
 $t = 'Adding mariadb database Q works';
 $command =
-"bucardo add db Q dbname=$dbname type=mariadb dbuser=$dbuser";
+"bucardo add db Q dbname=$dbname type=mariadb dbuser=$dbuser password=$dbpass";
 $res = $bct->ctl($command);
 like ($res, qr/Added database "Q"/, $t);
 
