@@ -5657,6 +5657,9 @@ sub connect_database {
             my $conn = MongoDB::Connection->new($mongodsn); ## no critic
             $dbh = $conn->get_database($dbname);
             my $backend = 0;
+            if (! $self->{show_mongodb_version}++) {
+                $self->glog("Perl module MongoDB loaded. Version $MongoDB::VERSION", LOG_NORMAL);
+            }
 
             return $backend, $dbh;
         }
@@ -5682,9 +5685,11 @@ sub connect_database {
             ## For now, we simply require it
             require Redis;
             $dbh = Redis->new(@dsn);
-            my $backend = 0;
+            if (! $self->{show_redis_version}++) {
+                $self->glog("Perl module Redis loaded. Version $Redis::VERSION", LOG_NORMAL);
+            }
 
-            return $backend, $dbh;
+            return 0, $dbh;
         }
         elsif ('sqlite' eq $dbtype) {
             $dsn = "dbi:SQLite:dbname=$dbname";
@@ -5719,6 +5724,11 @@ sub connect_database {
 
     ## From here on out we are setting Postgres-specific items, so everyone else is done
     if ($dbtype ne 'postgres') {
+        my $modname = "DBD::" . $dbh->{Driver}->{Name};
+        if (! $self->{"show_${modname}_version"}++) {
+            my $modver = $modname->VERSION;
+            $self->glog("Perl module $modname loaded. Version $modver", LOG_NORMAL);
+        }
         return 0, $dbh;
     }
 
