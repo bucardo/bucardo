@@ -25,7 +25,7 @@ my $DEBUG = $ENV{BUCARDO_DEBUG} || 0;
 $ENV{BUCARDO_CONFIRM} = 0 if exists $ENV{BUCARDO_CONFIRM};
 
 use base 'Exporter';
-our @EXPORT = qw/%tabletype %tabletypemysql %tabletypemariadb %tabletypeoracle %tabletypesqlite
+our @EXPORT = qw/%tabletype %tabletypemysql %tabletypemariadb %tabletypeoracle %tabletypesqlite %tabletypefirebird
                  %sequences %val
                  compare_tables bc_deeply clear_notices wait_for_notice
                  $location $oldherd_msg $newherd_msg $addtable_msg $deltable_msg $nomatch_msg/;
@@ -117,6 +117,21 @@ our %tabletypemariadb =
      'bucardo_test8'  => 'VARBINARY(1000)',
      'bucardo_test9'  => 'INTEGER UNSIGNED',
      'bucardo_test10' => 'DATETIME',
+     'bucardo space test' => 'INT',
+     );
+
+our %tabletypefirebird =
+    (
+     'bucardo_test1'  => 'SMALLINT',
+     'bucardo_test2'  => 'INT',
+     'Bucardo_test3'  => 'BIGINT',
+     'bucardo_test4'  => 'VARCHAR(700)',
+     'bucardo_test5'  => 'DATE',
+     'bucardo_test6'  => 'DATETIME',
+     'bucardo_test7'  => 'NUMERIC(5,1)',
+     'bucardo_test8'  => 'VARBINARY(1000)',
+     'bucardo_test9'  => 'INTEGER UNSIGNED',
+     'bucardo_test10' => 'TIMESTAMP',
      'bucardo space test' => 'INT',
      );
 

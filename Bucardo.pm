@@ -2465,7 +2465,7 @@ sub start_kid {
     ## Also setup common attributes
     my (@dbs, @dbs_source, @dbs_target, @dbs_delta, @dbs_fullcopy,
         @dbs_connectable, @dbs_dbi, @dbs_write, @dbs_non_fullcopy,
-        @dbs_postgres, @dbs_drizzle, @dbs_mongo, @dbs_mysql, @dbs_oracle,
+        @dbs_postgres, @dbs_drizzle, @dbs_firebird, @dbs_mongo, @dbs_mysql, @dbs_oracle,
         @dbs_redis, @dbs_sqlite);
 
     ## Used to weed out all but one source if in onetimecopy mode
@@ -2572,6 +2572,16 @@ sub start_kid {
             $d->{has_mysql_timestamp_issue} = 1;
         }
 
+        ## Firebird
+        if ('firebird' eq $d->{dbtype}) {
+            push @dbs_firebird => $dbname;
+            $d->{does_sql}        = 1;
+            $d->{does_truncate}   = 1;
+            $d->{does_savepoints} = 1;
+            $d->{does_limit}      = 1;
+            $d->{has_mysql_timestamp_issue} = 1;
+        }
+
         ## Oracle
         if ('oracle' eq $d->{dbtype}) {
             push @dbs_oracle => $dbname;
@@ -2639,6 +2649,7 @@ sub start_kid {
         ## Databases with Perl DBI support
         if ($d->{dbtype} eq 'postgres'
                 or $d->{dbtype} eq 'drizzle'
+                or $d->{dbtype} eq 'firebird'
                 or $d->{dbtype} eq 'mariadb'
                 or $d->{dbtype} eq 'mysql'
                 or $d->{dbtype} eq 'oracle'
@@ -5662,6 +5673,9 @@ sub connect_database {
             }
 
             return $backend, $dbh;
+        }
+        elsif ('firebird' eq $dbtype) {
+            $dsn = "dbi:Firebird:db=$dbname";
         }
         elsif ('mysql' eq $dbtype or 'mariadb' eq $dbtype) {
             $dsn = "dbi:mysql:database=$dbname";
@@ -9217,6 +9231,12 @@ sub delete_rows {
         ## The actual target table name: may differ from the source!
         my $tname = $newname->{$t->{name}};
 
+        if ('firebird' eq $type) {
+            $goat->{pklist} =~ s/\"//g; ## not ideal: fix someday
+            $goat->{pklist} = uc $goat->{pklist};
+			$tname = qq{"$tname"} if $tname !~ /"/;
+        }
+
         ## Internal counters to help us break queries into chunks if needed
         my ($round, $roundtotal) = (0,0);
 
@@ -9385,6 +9405,12 @@ sub delete_rows {
             ## The actual target name
             my $tname = $newname->{$t->{name}};
 
+			$self->glog("Deleting from target $tname (type=$type)", LOG_DEBUG);
+
+			if ('firebird' eq $type) {
+				$tname = qq{"$tname"} if $tname !~ /"/;
+			}
+
             if ('mongo' eq $type) {
 
                 ## Grab the collection name and store it
@@ -9499,7 +9525,7 @@ sub delete_rows {
                 $self->glog("Mongo objects removed from $tname: $t->{deleted_rows}", LOG_VERBOSE);
             }
             elsif ('mysql' eq $type or 'drizzle' eq $type or 'mariadb' eq $type
-                       or 'oracle' eq $type or 'sqlite' eq $type) {
+                       or 'oracle' eq $type or 'sqlite' eq $type or 'firebird' eq $type) {
                 my $tdbh = $t->{dbh};
                 for (@{ $SQL{IN}{$tname} }) {
                     $t->{deleted_rows} += $tdbh->do($_);
@@ -9713,6 +9739,14 @@ sub push_rows {
                 $tgtcmd =~ s/,$/)/o;
                 $target->{sth} = $target->{dbh}->prepare($tgtcmd);
             }
+            elsif ('firebird' eq $type) {
+				$columnlist =~ s/\"//g;
+				$target_tablename = qq{"$target_tablename"} if $target_tablename !~ /"/;
+                my $tgtcmd = "INSERT INTO $target_tablename$columnlist VALUES (";
+                $tgtcmd .= '?,' x @$cols;
+                $tgtcmd =~ s/,$/)/o;
+                $target->{sth} = $target->{dbh}->prepare($tgtcmd);
+            }
             elsif ('oracle' eq $type) {
                 my $tgtcmd = "INSERT INTO $target_tablename$columnlist VALUES (";
                 $tgtcmd .= '?,' x @$cols;
@@ -9836,15 +9870,16 @@ sub push_rows {
                                 }
                             }
                             elsif ($Table->{columnhash}{$key}{ftype} =~ /real|double|numeric/o) {
-                                $object->{$key} = strtod($object->{$key}); 
+                                $object->{$key} = strtod($object->{$key});
                             }
                         }
                         $self->{collection}->insert($object, { safe => 1 });
                     }
-                    ## For MySQL, MariaDB, Drizzle, Oracle, and SQLite, do some basic INSERTs
+                    ## For MySQL, MariaDB, Firebird, Drizzle, Oracle, and SQLite, do some basic INSERTs
                     elsif ('mysql' eq $type
                             or 'mariadb' eq $type
                             or 'drizzle' eq $type
+                            or 'firebird' eq $type
                             or 'oracle' eq $type
                             or 'sqlite' eq $type) {
                         chomp $buffer;
@@ -9974,7 +10009,7 @@ sub push_rows {
                 $self->glog(qq{Rows copied to Redis $target->{name}.$tname:<pkeyvalue>: $total_source_rows}, LOG_VERBOSE);
             }
             else {
-                ## Nothing to be done for mongo, mysql, mariadb, sqlite, oracle
+                ## Nothing to be done for mongo, mysql, mariadb, sqlite, oracle, firebird
             }
         }
 
