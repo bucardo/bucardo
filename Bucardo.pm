@@ -4246,7 +4246,7 @@ sub start_kid {
 
                                 ## For this table, delete all rows that may exist on the target(s)
                                 $dmlcount{deletes} += $self->delete_rows(
-                                    $deltabin{$dbname1}, $S, $T, $g, $sync, \@pushdbs);
+                                    $deltabin{$dbname1}, $g, $sync, \@pushdbs);
 
                                 ## For this table, copy all rows from source to target(s)
                                 $dmlcount{inserts} += $self->push_rows(
@@ -9115,127 +9115,125 @@ sub delete_table {
 
 sub delete_rows {
 
-    ## Given a list of rows, delete them from a database
-    ## Arguments: six
-    ## 1. Hash of rows, where the key is \0 joined pkeys
-    ## 2. Schema name
-    ## 3. Table name
-    ## 4. Goat object
-    ## 5. Sync object
-    ## 6. Target database object, or arrayref of the same
+    ## Given a list of rows, delete them from a table in one or more databases
+    ## Arguments: four
+    ## 1. Hashref of rows to delete, where the keys are the primary keys (\0 joined if multi).
+    ## 2. Table object
+    ## 3. Sync object
+    ## 4. Target database object (or an arrayref of the same)
     ## Returns: number of rows deleted
 
-    my ($self,$rows,$S,$T,$goat,$sync,$deldb) = @_;
-
-    my $syncname = $sync->{name};
-    my $pkcols = $goat->{pkeycols};
-    my $pkcolsraw = $goat->{pkeycolsraw};
-    my $numpks = $goat->{numpkcols};
+    my ($self,$rows,$Table,$Sync,$TargetDB) = @_;
 
     ## Have we already truncated this table? If yes, skip and reset the flag
-    if (exists $goat->{truncatewinner}) {
+    if (exists $Table->{truncatewinner}) {
         return 0;
     }
 
+    my ($S,$T) = ($Table->{safeschema},$Table->{safetable});
+
+    my $syncname = $Sync->{name};
+       my $pkcols = $Table->{pkeycols};
+       my $pkcolsraw = $Table->{pkeycolsraw};
+
     ## Ensure the target database argument is always an array
-    if (ref $deldb ne 'ARRAY') {
-        $deldb = [$deldb];
+    if (ref $TargetDB ne 'ARRAY') {
+        $TargetDB = [$TargetDB];
     }
 
     ## We may be going from one table to another - this is the mapping hash
-    my $newname = $goat->{newname}{$self->{syncname}};
+    my $customname = $Table->{newname}{$syncname} || {};
 
     ## Are we truncating?
     if (exists $self->{truncateinfo} and exists $self->{truncateinfo}{$S}{$T}) {
 
         ## Try and truncate each target
-        for my $d (@$deldb) {
+        for my $Target (@$TargetDB) {
 
-            my $type = $d->{dbtype};
+            my $target_tablename = $customname->{$Target->{name}};
 
-            my $tname = $newname->{$d->{name}};
+            my $type = $Target->{dbtype};
 
             ## Postgres is a plain and simple TRUNCATE, with an async flag
             ## TRUNCATE CASCADE is not needed as everything should be in one
             ## sync (herd), and we have turned all FKs off
             if ('postgres' eq $type) {
-                my $tdbh = $d->{dbh};
-                $tdbh->do("TRUNCATE table $tname", { pg_async => PG_ASYNC });
-                $d->{async_active} = time;
-            } ## end postgres database
+                $Target->{dbh}->do("$self->{sqlprefix}TRUNCATE table $target_tablename", { pg_async => PG_ASYNC });
+                $Target->{async_active} = time;
+            }
             ## For all other SQL databases, we simply truncate
-            elsif ($d->{does_sql}) {
-                $d->{dbh}->do("TRUNCATE TABLE $tname");
+            elsif ($Target->{does_sql}) {
+                $Target->{dbh}->do("$self->{sqlprefix}TRUNCATE TABLE $target_tablename");
             }
             ## For MongoDB, we simply remove everything from the collection
             ## This keeps the indexes around (which is why we don't "drop")
             elsif ('mongo' eq $type) {
-                $self->{collection} = $d->{dbh}->get_collection($tname);
-                $self->{collection}->remove({}, { safe => 1} );
-            }
-            ## For Redis, do nothing
-            elsif ('redis' eq $type) {
+                $self->{collection} = $Target->{dbh}->get_collection($target_tablename);
+                $self->{collection}->remove({}, { safe => 1 } );
             }
             ## For flatfiles, write out a basic truncate statement
             elsif ($type =~ /flat/o) {
-                printf {$d->{filehandle}} qq{TRUNCATE TABLE %S;\n\n},
-                    'flatpg' eq $type ? $tname : $tname;
-                $self->glog(qq{Appended to flatfile "$d->{filename}"}, LOG_VERBOSE);
+                printf {$Target->{filehandle}} qq{TRUNCATE TABLE $target_tablename;\n\n};
+                $self->glog(qq{Appended truncate command to flatfile "$Target->{filename}"}, LOG_VERBOSE);
+            }
+            elsif ('redis' eq $type) {
+                ## For Redis, do nothing
+            }
+            ## Safety valve:
+            else {
+                die qq{Do not know how to do truncate for type $type!\n};
             }
 
-        } ## end each database to be truncated
+        } ## end each target to be truncated
 
         ## Final cleanup for each target
-        for my $d (@$deldb) {
-            if ('postgres' eq $d->{dbtype}) {
-                ## Wrap up all the async truncate call
-                $d->{dbh}->pg_result();
-                $d->{async_active} = 0;
+        for my $Target (@$TargetDB) {
+            if ('postgres' eq $Target->{dbtype}) {
+                ## Wait for the async truncate call to finish
+                $Target->{dbh}->pg_result();
+                $Target->{async_active} = 0;
             }
         }
 
+        ## We do not know how many rows were actually truncated
         return 0;
 
     } ## end truncation
 
-    ## The number of items before we break it into a separate statement
-    ## This is inexact, as we don't know how large each key is,
-    ## but should be good enough as long as not set too high.
-    ## For now, all targets have the same chunksize
+    ## We may want to break the SQL into separate statements if there are lots of keys
     my $chunksize = $config{statement_chunk_size} || $default_statement_chunk_size;
+
+    ## The number of primary keys this table has affects our SQL
+    my $numpks = $Table->{numpkcols};
 
     ## Setup our deletion SQL as needed
     my %SQL;
-    for my $t (@$deldb) {
+    for my $Target (@$TargetDB) {
 
-        my $type = $t->{dbtype};
+        my $type = $Target->{dbtype};
 
         ## Track the number of rows actually deleted from this target
-        $t->{deleted_rows} = 0;
+        $Target->{deleted_rows} = 0;
 
         ## Set to true when all rounds completed
-        $t->{delete_complete} = 0;
+        $Target->{delete_complete} = 0;
 
         ## No special preparation for mongo or redis
         next if $type =~ /mongo|redis/;
 
-        ## Set the type of SQL we are using: IN vs ANY. Default is IN
-        my $sqltype = 'IN';
-
-        ## Use of ANY is greatly preferred, but can only use if the
-        ## underlying database supports it, and if we have a single column pk
-        if ($t->{does_ANY_clause} and 1==$numpks) {
-            $sqltype = 'ANY';
-        }
-
         ## The actual target table name: may differ from the source!
-        my $tname = $newname->{$t->{name}};
+        my $target_tablename = $customname->{$Target->{name}};
 
         if ('firebird' eq $type) {
-            $goat->{pklist} =~ s/\"//g; ## not ideal: fix someday
-            $goat->{pklist} = uc $goat->{pklist};
-            $tname = qq{"$tname"} if $tname !~ /"/;
+            $Table->{pklist} =~ s/\"//g; ## not ideal: fix someday
+            $Table->{pklist} = uc $Table->{pklist};
+            $target_tablename = qq{"$target_tablename"} if $target_tablename !~ /"/;
         }
+
+        ## Set the type of SQL we are using: IN vs ANY. Default is IN
+        ## Use of ANY is greatly preferred, but can only use if the
+        ## underlying database supports it, and if we have a single column pk
+        my $sqltype = ($Target->{does_ANY_clause} and 1==$numpks) ? 'ANY' : 'IN';
 
         ## Internal counters to help us break queries into chunks if needed
         my ($round, $roundtotal) = (0,0);
@@ -9243,8 +9241,8 @@ sub delete_rows {
         ## Array to store each chunk of SQL
         my @chunk;
         ## Optimization for a single primary key using ANY(?)
-        if ('ANY' eq $sqltype and ! exists $SQL{ANY}{$tname}) {
-            $SQL{ANY}{$tname} = "$self->{sqlprefix}DELETE FROM $tname WHERE $pkcols = ANY(?)";
+        if ('ANY' eq $sqltype and ! exists $SQL{ANY}{$target_tablename}) {
+            $SQL{ANY}{$target_tablename} = "$self->{sqlprefix}DELETE FROM $target_tablename WHERE $pkcols = ANY(?)";
             for my $key (keys %$rows) {
                 push @{$chunk[$round]} => length $key ? ([split '\0', $key, -1]) : [''];
                 if (++$roundtotal >= $chunksize) {
@@ -9255,13 +9253,13 @@ sub delete_rows {
             $SQL{ANYargs} = \@chunk;
         }
         ## Normal DELETE call with IN() clause
-        elsif ('IN' eq $sqltype and ! exists $SQL{IN}{$tname}) {
-            $SQL{IN}{$tname} = sprintf '%sDELETE FROM %s WHERE (%s) IN (',
+        elsif ('IN' eq $sqltype and ! exists $SQL{IN}{$target_tablename}) {
+            $SQL{IN}{$target_tablename} = sprintf '%sDELETE FROM %s WHERE (%s) IN (',
                 $self->{sqlprefix},
-                $tname,
-                $goat->{pklist};
+                $target_tablename,
+                $Table->{pklist};
             my $inner;
-            if ($t->{has_mysql_timestamp_issue}) {
+            if ($Target->{has_mysql_timestamp_issue}) {
                 for my $key (keys %$rows) {
                     $inner = length $key
                         ? (join ',' => map { s/\'/''/go; s{\\}{\\\\}; s/\+\d\d$//; qq{'$_'}; } split '\0', $key, -1)
@@ -9288,36 +9286,36 @@ sub delete_rows {
             ## Cleanup
             for (@chunk) {
                 chop;
-                $_ = "$SQL{IN}{$tname} $_)";
+                $_ = "$SQL{IN}{$target_tablename} $_)";
             }
-            $SQL{IN}{$tname} = \@chunk;
+            $SQL{IN}{$target_tablename} = \@chunk;
         }
 
-        $t->{delete_rounds} = @chunk;
+        $Target->{delete_rounds} = @chunk;
 
         ## If we bypassed because of a cached version, use the cached delete_rounds too
         if ('ANY' eq $sqltype) {
-            if (exists $SQL{ANYrounds}{$tname}) {
-                $t->{delete_rounds} = $SQL{ANYrounds}{$tname};
+            if (exists $SQL{ANYrounds}{$target_tablename}) {
+                $Target->{delete_rounds} = $SQL{ANYrounds}{$target_tablename};
             }
             else {
-                $SQL{ANYrounds}{$tname} = $t->{delete_rounds};
+                $SQL{ANYrounds}{$target_tablename} = $Target->{delete_rounds};
             }
         }
         elsif ('IN' eq $sqltype) {
-            if (exists $SQL{INrounds}{$tname}) {
-                $t->{delete_rounds} = $SQL{INrounds}{$tname};
+            if (exists $SQL{INrounds}{$target_tablename}) {
+                $Target->{delete_rounds} = $SQL{INrounds}{$target_tablename};
             }
             else {
-                $SQL{INrounds}{$tname} = $t->{delete_rounds};
+                $SQL{INrounds}{$target_tablename} = $Target->{delete_rounds};
             }
         }
 
         ## Empty our internal tracking items that may have been set previously
-        $t->{delete_round} = 0;
-        delete $t->{delete_sth};
+        $Target->{delete_round} = 0;
+        delete $Target->{delete_sth};
 
-    }
+    } ## end each Target
 
     ## Start the main deletion loop
     ## The idea is to be efficient as possible by always having as many
@@ -9331,90 +9329,90 @@ sub delete_rows {
         $did_something = 0;
 
         ## Wrap up any async targets that have finished
-        for my $t (@$deldb) {
-            next if !$t->{async_active} or $t->{delete_complete};
-            if ('postgres' eq $t->{dbtype}) {
-                if ($t->{dbh}->pg_ready) {
+        for my $Target (@$TargetDB) {
+            next if ! $Target->{async_active} or $Target->{delete_complete};
+            if ('postgres' eq $Target->{dbtype}) {
+                if ($Target->{dbh}->pg_ready) {
                     ## If this was a do(), we already have the number of rows
                     if (1 == $numpks) {
-                        $t->{deleted_rows} += $t->{dbh}->pg_result();
+                        $Target->{deleted_rows} += $Target->{dbh}->pg_result();
                     }
                     else {
-                        $t->{dbh}->pg_result();
+                        $Target->{dbh}->pg_result();
                     }
-                    $t->{async_active} = 0;
+                    $Target->{async_active} = 0;
                 }
             }
             ## Don't need to check for invalid types: happens on the kick off below
         }
 
         ## Kick off all dormant async targets
-        for my $t (@$deldb) {
+        for my $Target (@$TargetDB) {
 
             ## Skip if this target does not support async, or is in the middle of a query
-            next if !$t->{does_async} or $t->{async_active} or $t->{delete_complete};
+            next if ! $Target->{does_async} or $Target->{async_active} or $Target->{delete_complete};
 
             ## The actual target name
-            my $tname = $newname->{$t->{name}};
+            my $target_tablename = $customname->{$Target->{name}};
 
-            if ('postgres' eq $t->{dbtype}) {
+            if ('postgres' eq $Target->{dbtype}) {
 
                 ## Which chunk we are processing.
-                $t->{delete_round}++;
-                if ($t->{delete_round} > $t->{delete_rounds}) {
-                    $t->{delete_complete} = 1;
+                $Target->{delete_round}++;
+                if ($Target->{delete_round} > $Target->{delete_rounds}) {
+                    $Target->{delete_complete} = 1;
                     next;
                 }
-                my $dbname = $t->{name};
-                $self->glog("Deleting from target $dbname.$tname (round $t->{delete_round} of $t->{delete_rounds})", LOG_DEBUG);
+                my $dbname = $Target->{name};
+                $self->glog("Deleting from target $dbname.$target_tablename (round $Target->{delete_round} of $Target->{delete_rounds})", LOG_DEBUG);
 
                 $did_something++;
 
                 ## Single primary key, so delete using the ANY(?) format
                 if (1 == $numpks) {
                     ## Use the or-equal so we only prepare this once
-                    $t->{delete_sth} ||= $t->{dbh}->prepare("$SQL{ANY}{$tname}", { pg_async => PG_ASYNC });
-                    $t->{delete_sth}->execute($SQL{ANYargs}->[$t->{delete_round}-1]);
+                    $Target->{delete_sth} ||= $Target->{dbh}->prepare("$SQL{ANY}{$target_tablename}", { pg_async => PG_ASYNC });
+                    $Target->{delete_sth}->execute($SQL{ANYargs}->[$Target->{delete_round}-1]);
                 }
                 ## Multiple primary keys, so delete old school via IN ((x,y),(a,b))
                 else {
-                    my $pre = $t->{delete_rounds} > 1 ? "/* $t->{delete_round} of $t->{delete_rounds} */ " : '';
+                    my $pre = $Target->{delete_rounds} > 1 ? "/* $Target->{delete_round} of $Target->{delete_rounds} */ " : '';
                     ## The pg_direct tells DBD::Pg there are no placeholders, and to use PQexec directly
-                    $t->{deleted_rows} += $t->{dbh}->
-                        do($pre.$SQL{IN}{$tname}->[$t->{delete_round}-1], { pg_async => PG_ASYNC, pg_direct => 1 });
+                    $Target->{deleted_rows} += $Target->{dbh}->
+                        do($pre.$SQL{IN}{$target_tablename}->[$Target->{delete_round}-1], { pg_async => PG_ASYNC, pg_direct => 1 });
                 }
 
-                $t->{async_active} = time;
+                $Target->{async_active} = time;
             } ## end postgres
             else {
-                die qq{Do not know how to do async for type $t->{dbtype}!\n};
+                die qq{Do not know how to do async for type $Target->{dbtype}!\n};
             }
 
         } ## end all async targets
 
         ## Kick off a single non-async target
-        for my $t (@$deldb) {
+        for my $Target (@$TargetDB) {
 
             ## Skip if this target is async, or has no more rounds
-            next if $t->{does_async} or $t->{delete_complete};
+            next if $Target->{does_async} or $Target->{delete_complete};
 
             $did_something++;
 
-            my $type = $t->{dbtype};
+            my $type = $Target->{dbtype};
 
             ## The actual target name
-            my $tname = $newname->{$t->{name}};
+            my $target_tablename = $customname->{$Target->{name}};
 
-            $self->glog("Deleting from target $tname (type=$type)", LOG_DEBUG);
+            $self->glog("Deleting from target $target_tablename (type=$type)", LOG_DEBUG);
 
             if ('firebird' eq $type) {
-                $tname = qq{"$tname"} if $tname !~ /"/;
+                $target_tablename = qq{"$target_tablename"} if $target_tablename !~ /"/;
             }
 
             if ('mongo' eq $type) {
 
                 ## Grab the collection name and store it
-                $self->{collection} = $t->{dbh}->get_collection($tname);
+                $self->{collection} = $Target->{dbh}->get_collection($target_tablename);
 
                 ## Because we may have multi-column primary keys, and each key may need modifying,
                 ## we have to put everything into an array of arrays.
@@ -9426,7 +9424,7 @@ sub delete_rows {
 
                 ## Binary PKs are easy: all we have to do is decode
                 ## We can assume that binary PK means not a multi-column PK
-                if ($goat->{hasbinarypkey}) {
+                if ($Table->{hasbinarypkey}) {
                     @{ $delkeys[0] } = map { decode_base64($_) } keys %$rows;
                 }
                 else {
@@ -9442,7 +9440,7 @@ sub delete_rows {
 
                         ## Grab what type this column is
                         ## We need to map non-strings to correct types as best we can
-                        my $ctype = $goat->{columnhash}{$realpkname}{ftype};
+                        my $ctype = $Table->{columnhash}{$realpkname}{ftype};
 
                         ## For integers, we simply force to a Perlish int
                         if ($ctype =~ /smallint|integer|bigint/o) {
@@ -9484,7 +9482,7 @@ sub delete_rows {
                         my @newarray = @{ $delkeys[0] }[$bottom..$top];
                         my $result = $self->{collection}->remove(
                         {$pkcolsraw => { '$in' => \@newarray }}, { safe => 1 });
-                        $t->{deleted_rows} += $result->{n};
+                        $Target->{deleted_rows} += $result->{n};
                     }
                     else {
                         ## For multi-column primary keys, we cannot use '$in', sadly.
@@ -9506,7 +9504,7 @@ sub delete_rows {
                         my $result = $self->{collection}->remove(
                         { '$and' => \@find }, { safe => 1 });
 
-                        $t->{deleted_rows} += $result->{n};
+                        $Target->{deleted_rows} += $result->{n};
 
                         ## We do not need to loop, as we just went 1 by 1 through the whole list
                         last MONGODEL;
@@ -9522,37 +9520,37 @@ sub delete_rows {
                     redo MONGODEL;
                 }
 
-                $self->glog("Mongo objects removed from $tname: $t->{deleted_rows}", LOG_VERBOSE);
+                $self->glog("Mongo objects removed from $target_tablename: $Target->{deleted_rows}", LOG_VERBOSE);
             }
             elsif ('mysql' eq $type or 'drizzle' eq $type or 'mariadb' eq $type
                        or 'oracle' eq $type or 'sqlite' eq $type or 'firebird' eq $type) {
-                my $tdbh = $t->{dbh};
-                for (@{ $SQL{IN}{$tname} }) {
-                    $t->{deleted_rows} += $tdbh->do($_);
+                my $tdbh = $Target->{dbh};
+                for (@{ $SQL{IN}{$target_tablename} }) {
+                    $Target->{deleted_rows} += $tdbh->do($_);
                 }
             }
             elsif ('redis' eq $type) {
                 ## We need to remove the entire tablename:pkey:column for each column we know about
-                my $cols = $goat->{cols};
+                my $cols = $Table->{cols};
                 for my $pk (keys %$rows) {
                     ## If this is a multi-column primary key, change our null delimiter to a colon
-                    if ($goat->{numpkcols} > 1) {
+                    if ($Table->{numpkcols} > 1) {
                         $pk =~ s{\0}{:}go;
                     }
-                    $t->{deleted_rows} += $t->{dbh}->del("$tname:$pk");
+                    $Target->{deleted_rows} += $Target->{dbh}->del("$target_tablename:$pk");
                 }
             }
             elsif ($type =~ /flat/o) { ## same as flatpg for now
-                for (@{ $SQL{IN}{$tname} }) {
-                    print {$t->{filehandle}} qq{$_;\n\n};
+                for (@{ $SQL{IN}{$target_tablename} }) {
+                    print {$Target->{filehandle}} qq{$_;\n\n};
                 }
-                $self->glog(qq{Appended to flatfile "$t->{filename}"}, LOG_VERBOSE);
+                $self->glog(qq{Appended to flatfile "$Target->{filename}"}, LOG_VERBOSE);
             }
             else {
                 die qq{No support for database type "$type" yet!};
             }
 
-            $t->{delete_complete} = 1;
+            $Target->{delete_complete} = 1;
 
             ## Only one target at a time, please: we need to check on the asyncs
             last;
@@ -9562,38 +9560,39 @@ sub delete_rows {
         ## If we did nothing this round, and there are no asyncs running, we are done.
         ## Otherwise, we will wait for the oldest async to finish
         if (!$did_something) {
-            if (! grep { $_->{async_active} } @$deldb) {
+            if (! grep { $_->{async_active} } @$TargetDB) {
                 $done = 1;
             }
             else {
                 ## Since nothing else is going on, let's wait for the oldest async to finish
-                my $t = ( sort { $a->{async_active} > $b->{async_active} } grep { $_->{async_active} } @$deldb)[0];
+                my $Target = ( sort { $a->{async_active} > $b->{async_active} } grep { $_->{async_active} } @$TargetDB)[0];
                 if (1 == $numpks) {
-                    $t->{deleted_rows} += $t->{dbh}->pg_result();
+                    $Target->{deleted_rows} += $Target->{dbh}->pg_result();
                 }
                 else {
-                    $t->{dbh}->pg_result();
+                    $Target->{dbh}->pg_result();
                 }
-                $t->{async_active} = 0;
+                $Target->{async_active} = 0;
             }
         }
 
     } ## end of main deletion loop
 
     ## Generate our final deletion counts
-    my $count = 0;
-    for my $t (@$deldb) {
+    my $rows_deleted = 0;
+
+    for my $Target (@$TargetDB) {
 
         ## We do not delete from certain types of targets
-        next if $t->{dbtype} =~ /mongo|flat|redis/o;
+        next if $Target->{dbtype} =~ /mongo|flat|redis/o;
 
-        my $tname = $newname->{$t->{name}};
+        my $target_tablename = $customname->{$Target->{name}};
 
-        $count += $t->{deleted_rows};
-        $self->glog(qq{Rows deleted from $t->{name}.$tname: $t->{deleted_rows}}, LOG_VERBOSE);
+        $rows_deleted += $Target->{deleted_rows};
+        $self->glog(qq{Rows deleted from $Target->{name}.$target_tablename: $Target->{deleted_rows}}, LOG_VERBOSE);
     }
 
-    return $count;
+    return $rows_deleted;
 
 } ## end of delete_rows
 
@@ -9609,7 +9608,7 @@ sub push_rows {
     ## 4. Source database object
     ## 5. Target database object (or an arrayref of the same)
     ## 6. Action mode - currently only 'copy' and 'fullcopy'
-    ## Returns: number of rows copied
+    ## Returns: number of rows copied (to each target, not the total)
 
     my ($self,$rows,$Table,$Sync,$SourceDB,$TargetDB,$mode) = @_;
 
