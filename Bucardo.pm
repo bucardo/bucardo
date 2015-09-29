@@ -9926,7 +9926,9 @@ sub push_rows {
 
             my $type = $Target->{dbtype};
 
-            $self->glog(qq{Rows copied to ($type) $Target->{name}.$target_tablename: $source_rows_read}, LOG_VERBOSE);
+            my $tname = $Target->{name};
+
+            $self->glog(qq{Rows copied to ($type) $tname.$target_tablename: $source_rows_read}, LOG_VERBOSE);
 
             if ('postgres' eq $type) {
                 my $dbh = $Target->{dbh};
@@ -9938,10 +9940,10 @@ sub push_rows {
                 ## If this table is set to makedelta, add rows to bucardo.delta to simulate the
                 ##   normal action of a trigger and add a row to bucardo.track to indicate that
                 ##   it has already been replicated here.
-                my $d = $Sync->{db}{ $Target->{name} };
+                my $d = $Sync->{db}{$tname};
                 if ($mode ne 'fullcopy' and $d->{does_makedelta}{$source_tablename} ) {
 
-                    $self->glog("Using makedelta to populate delta and track tables for $Target->{name}.$target_tablename", LOG_VERBOSE);
+                    $self->glog("Using makedelta to populate delta and track tables for $tname.$target_tablename", LOG_VERBOSE);
 
                     my $cols = join ',' => @{ $Table->{qpkey} };
 
@@ -9979,14 +9981,14 @@ sub push_rows {
                     ## However, we do not want to kick unless they are set to autokick and active
                     ## This works even if we do not have a real syncs, as $syncname will be ''
                     $self->glog('Signalling other syncs that this table has changed', LOG_DEBUG);
-                    if (! exists $self->{kick_othersyncs}{$syncname}{$target_tablename}) {
+                    if (! exists $self->{kick_othersyncs}{$syncname}{$tname}{$target_tablename}) {
                         $SQL = 'SELECT name FROM sync WHERE herd IN (SELECT herd FROM herdmap WHERE goat IN (SELECT id FROM goat WHERE schemaname=? AND tablename = ?)) AND name <> ? AND autokick AND status = ?';
                         $sth = $self->{masterdbh}->prepare($SQL);
                         $sth->execute($Table->{schemaname}, $Table->{tablename}, $syncname, 'active');
-                        $self->{kick_othersyncs}{$syncname}{$target_tablename} = $sth->fetchall_arrayref();
+                        $self->{kick_othersyncs}{$syncname}{$tname}{$target_tablename} = $sth->fetchall_arrayref();
                     }
                     ## For each sync returned from the query above, send a kick request
-                    for my $row (@{ $self->{kick_othersyncs}{$syncname}{$target_tablename} }) {
+                    for my $row (@{ $self->{kick_othersyncs}{$syncname}{$tname}{$target_tablename} }) {
                         my $othersync = $row->[0];
                         $self->db_notify($dbh, "kick_sync_$othersync", 0, '', 1);
                     }
