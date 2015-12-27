@@ -32,7 +32,7 @@ eval {
     $evalok = 1;
 };
 if (!$evalok) {
-    plan (skip_all =>  'Cannot test mongo as we cannot connect to a running Mongo db');
+    plan (skip_all =>  "Cannot test mongo as we cannot connect to a running Mongo db: $@");
 }
 
 use BucardoTesting;
