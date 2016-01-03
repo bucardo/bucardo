@@ -1,4 +1,10 @@
 
+Bucardo version ???
+
+  - Rewrite code to support the new version of the Perl MongoDB driver.
+    The minimum supported version of MongoDB is now 1.2.1
+
+
 Bucardo version 5.4.0, released August 6, 2015 (git commit a0eff9f6558cc2c6b19e4e675604250ad00ce420)
 
   - Allow dashes in valid schema and table names
