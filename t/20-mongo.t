@@ -14,7 +14,9 @@ use MIME::Base64;
 
 use vars qw/ $bct $dbhX $dbhA $dbhB $dbhC $dbhD $res $command $t %pkey $SQL %sth %sql/;
 
+
 ## Must have the MongoDB module
+## Ideally we check for version 1.2.1 or better, but use_ok is horribly broken
 my $evalok = 0;
 eval {
     require MongoDB;
@@ -28,7 +30,7 @@ if (!$evalok) {
 $evalok = 0;
 my $conn;
 eval {
-    $conn = MongoDB::Connection->new({});
+    $conn = MongoDB->connect();
     $evalok = 1;
 };
 if (!$evalok) {

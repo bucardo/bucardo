@@ -2794,11 +2794,11 @@ sub start_kid {
                 if ($d->{dbtype} eq 'mongo') {
                     my $collection = $d->{dbh}->get_collection($tname);
                     my $object = {
-                        sync => $syncname,
-                        status => 'failed',
-                        endtime => scalar gmtime,
+                        '$.sync' => $syncname,
+                        '$.status' => 'failed',
+                        '$.endtime' => scalar gmtime,
                     };
-                    $collection->update
+                    $collection->update_one
                         (
                             {sync => $syncname},
                             $object,
@@ -4115,11 +4115,11 @@ sub start_kid {
                         if ($d->{dbtype} eq 'mongo') {
                             my $collection = $d->{dbh}->get_collection($tname);
                             my $object = {
-                                sync => $syncname,
-                                status => 'started',
-                                starttime => scalar gmtime,
+                                '$.sync' => $syncname,
+                                '$.status' => 'started',
+                                '$.starttime' => scalar gmtime
                                 };
-                            $collection->update
+                            $collection->update_one
                                 (
                                     {sync => $syncname},
                                     $object,
@@ -4704,11 +4704,11 @@ sub start_kid {
                 if ($d->{dbtype} eq 'mongo') {
                     my $collection = $d->{dbh}->get_collection($tname);
                     my $object = {
-                        sync => $syncname,
-                        status => 'complete',
-                        endtime => scalar gmtime,
+                        '$.sync' => $syncname,
+                        '$.status' => 'complete',
+                        '$.endtime' => scalar gmtime,
                     };
-                    $collection->update
+                    $collection->update_one
                         (
                             {sync => $syncname},
                             $object,
@@ -5665,7 +5665,14 @@ sub connect_database {
             }
             ## For now, we simply require it
             require MongoDB;
-            my $conn = MongoDB::Connection->new($mongodsn); ## no critic
+            my $mongoURI = 'mongodb://';
+            if (exists $mongodsn->{dbuser}) {
+                my $pass = $mongodsn->{dbpass} || '';
+                $mongoURI .= "$mongodsn->{dbuser}:$pass\@";
+            }
+            $mongoURI .= $mongodsn->{dbhost} || 'localhost';
+            $mongoURI .= ":$mongodsn->{dbport}" if exists $mongodsn->{dbport};
+            my $conn = MongoDB->connect($mongoURI); ## no critic
             $dbh = $conn->get_database($dbname);
             my $backend = 0;
             if (! $self->{show_mongodb_version}++) {

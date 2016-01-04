@@ -1911,8 +1911,16 @@ sub add_database {
                     $mongodsn->{$1} = $2;
                 }
 
+                my $mongoURI = 'mongodb://';
+                if (exists $mongodsn->{dbuser}) {
+                    my $pass = $mongodsn->{dbpass} || '';
+                    $mongoURI .= "$mongodsn->{dbuser}:$pass\@";
+                }
+                $mongoURI .= $mongodsn->{host} || 'localhost';
+                $mongoURI .= ":$mongodsn->{port}" if exists $mongodsn->{port};
+
                 eval {
-                    $testdbh = MongoDB::Connection->new($mongodsn); ## no critic
+                    $testdbh = MongoDB->connect($mongoURI);
                     $evalok = 1;
                 };
             }
