@@ -286,7 +286,7 @@ CREATE TABLE bucardo.goat (
 );
 COMMENT ON TABLE bucardo.goat IS $$Holds information on each table or sequence that may be replicated$$;
 
-ALTER TABLE bucardo.goat ADD CONSTRAINT has_schemaname CHECK (length(schemaname) > 1);
+ALTER TABLE bucardo.goat ADD CONSTRAINT has_schemaname CHECK (length(schemaname) >= 1);
 
 ALTER TABLE bucardo.goat ADD CONSTRAINT valid_reltype CHECK (reltype IN ('table','sequence'));
 
