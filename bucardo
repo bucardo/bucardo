@@ -8466,7 +8466,7 @@ sub upgrade {
         my $current_comment =
             $type eq 'table' ? table_comment($schema,$relation)
             : $type eq 'domain' ? domain_comment($schema,$relation)
-            : 'Unkonwn type';
+            : 'Unknown type';
         if ($current_comment ne $comment) {
             upgrade_and_log($full);
             clog (length $current_comment
