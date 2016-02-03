@@ -2424,9 +2424,13 @@ sub list_databases {
             $maxstat, $info->{status};
         my $showhost = length $info->{dbhost} ? " -h $info->{dbhost}" : '';
         my $showport = $info->{dbport} =~ /\d/ ? " -p $info->{dbport}" : '';
+        my $dbname = "-d $info->{dbname}";
+        if (length $info->{dbconn}) {
+            $dbname = qq{-d "dbname=$info->{dbname} $info->{dbconn}"};
+        }
         my $dbtype = $info->{dbtype};
         if ($dbtype eq 'postgres') {
-            print "Conn: psql$showport -U $info->{dbuser} -d $info->{dbname}$showhost";
+            print "Conn: psql$showport -U $info->{dbuser} $dbname$showhost";
             if (! $info->{server_side_prepares}) {
                 print ' (SSP is off)';
             }
