@@ -2430,7 +2430,10 @@ sub list_databases {
         }
         my $dbtype = $info->{dbtype};
         if ($dbtype eq 'postgres') {
-            print "Conn: psql$showport -U $info->{dbuser} $dbname$showhost";
+            my $showuser = defined $info->{dbuser} ? "-U $info->{dbuser}" : '';
+            my $showdb = defined $info->{dbname} ? " -d $info->{dbname}" : '';
+            my $showservice = defined $info->{dbservice} ? qq{ "service=$info->{dbservice}"} : '';
+            print "Conn: psql$showport $showuser$showdb$showhost$showservice";
             if (! $info->{server_side_prepares}) {
                 print ' (SSP is off)';
             }
