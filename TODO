@@ -21,8 +21,6 @@ Future
 
 These range the gamut from wildly speculative ideas to must-have features.
 
-- Make sure the db can be specified for add herd, rather than relying on find_best_db_for_searching()
-- Use something more specific than txntime, which is not unique enough
 - Allow bucardo add table ... --relgroup=foo to work, or at least throw an error.
 - Remove the need for pl/perl entirely: put all logic into ./bucardo
 - Allow a new type of trigger that only indicates if a table has changed or not.

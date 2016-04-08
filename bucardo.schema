@@ -1,6 +1,6 @@
 
 -- Schema for the main Bucardo database
--- Version 5.4.0
+-- Version 5.4.1
 
 -- Should be run as a superuser
 -- This should not need to be run directly: use either
@@ -151,8 +151,8 @@ warning_file|bucardo.warning.log|File containing all log lines starting with "Wa
 COPY bucardo.bucardo_config(name,setting,about)
 FROM STDIN
 WITH DELIMITER '|';
-bucardo_initial_version|5.4.0|Bucardo version this schema was created with
-bucardo_version|5.4.0|Current version of Bucardo
+bucardo_initial_version|5.4.1|Bucardo version this schema was created with
+bucardo_version|5.4.1|Current version of Bucardo
 \.
 
 -- Other settings:
@@ -286,7 +286,7 @@ CREATE TABLE bucardo.goat (
 );
 COMMENT ON TABLE bucardo.goat IS $$Holds information on each table or sequence that may be replicated$$;
 
-ALTER TABLE bucardo.goat ADD CONSTRAINT has_schemaname CHECK (length(schemaname) >= 1);
+ALTER TABLE bucardo.goat ADD CONSTRAINT has_schemaname CHECK (length(schemaname) > 1);
 
 ALTER TABLE bucardo.goat ADD CONSTRAINT valid_reltype CHECK (reltype IN ('table','sequence'));
 
@@ -678,7 +678,6 @@ AS $bc$
 ## Given the name of a db, return the type, plus type-specific connection information
 ## Postgres: a connection string, username, password, and attribs
 ## Drizzle: a connection string, username, and password
-## Firebird: a connection string, username, and password
 ## Mongo: "foo: bar" style connection information, one per line
 ## MariaDB: a connection string, username, and password
 ## MySQL: a connection string, username, and password
@@ -793,21 +792,6 @@ if ($dbtype eq 'mysql' or $dbtype eq 'mariadb') {
     return "$dbtype\n$connstring\n$db{user}\n$db{pass}";
 
 } ## end mysql/mariadb
-
-if ($dbtype eq 'firebird') {
-
-    length $db{name} or elog(ERROR, qq{Database name is mandatory\n});
-    length $db{user} or elog(ERROR, qq{Database username is mandatory\n});
-
-    my $connstring = "dbi:Firebird:db=$db{name}";
-    $db{host} ||= ''; $db{port} ||= ''; $db{pass} ||= '';
-    length $db{host} and $connstring .= ";host=$db{host}";
-    length $db{port} and $connstring .= ";port=$db{port}";
-    length $db{conn} and $connstring .= ";$db{conn}";
-
-    return "$dbtype\n$connstring\n$db{user}\n$db{pass}";
-
-} ## end firebird
 
 if ($dbtype eq 'oracle') {
 
@@ -1318,7 +1302,7 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
     next if $db{$dbname}{dbtype} =~ /flat/;
 
     ## Skip if this is a non-supported database
-    next if $db{$dbname}{dbtype} =~ /drizzle|mariadb|mongo|mysql|oracle|redis|sqlite|firebird/;
+    next if $db{$dbname}{dbtype} =~ /drizzle|mariadb|mongo|mysql|oracle|redis|sqlite/;
 
     ## Figure out how to connect to this database
     my $rv = spi_exec_query("SELECT bucardo.db_getconn('$dbname') AS conn");

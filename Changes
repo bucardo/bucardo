@@ -1,23 +1,7 @@
 
-Bucardo version ???
+Bucardo version 5.4.1, released September 27, 2015 (git commit e2b238c7a6239f8ab78a96d7cd356f3cbb840551)
 
-  - Allow one-character schema names to work.
-    [David Christensen]
-
-  - Rewrite code to support the new version of the Perl MongoDB driver.
-    The minimum supported version of MongoDB is now 1.2.1
-    [Greg Sabino Mullane]
-
-  - Ensure all sequences used in the bucardo database are in the bucardo schema.
-    [Greg Sabino Mullane]
-
-  - Improve the push_rows() function, and use ANY(?) whenever possible.
-    [Greg Sabino Mullane]
-
-  - Log the version of all loaded modules.
-    [Greg Sabino Mullane]
-
-  - Add basic support for Firebird as a target database type.
+  - Fix failure to upgrade because of sequence name missing a schema
     [Greg Sabino Mullane]
 
 
