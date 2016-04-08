@@ -3,7 +3,7 @@
 
 ## Script to control Bucardo
 ##
-## Copyright 2006-2015 Greg Sabino Mullane <greg@endpoint.com>
+## Copyright 2006-2016 Greg Sabino Mullane <greg@endpoint.com>
 ##
 ## Please see http://bucardo.org/ for full documentation
 ##
@@ -31,7 +31,7 @@ Getopt::Long::Configure(qw/ no_ignore_case pass_through no_autoabbrev /);
 
 require I18N::Langinfo;
 
-our $VERSION = '5.4.1';
+our $VERSION = '5.4.0';
 
 ## For the tests, we want to check that it compiles without actually doing anything
 return 1 if $ENV{BUCARDO_TEST};
@@ -1863,6 +1863,7 @@ sub add_database {
         ## This also makes sure we have a valid type
         my %dbtypeinfo = (
             drizzle  => ['DBD::drizzle',  'Drizzle database'],
+            firebird => ['DBD::Firebird', 'Firebird database'],
             mongo    => ['MongoDB',       'MongoDB'],
             mysql    => ['DBD::mysql',    'MySQL database'],
             mariadb  => ['DBD::mysql',    'MariaDB database'],
@@ -1910,8 +1911,16 @@ sub add_database {
                     $mongodsn->{$1} = $2;
                 }
 
+                my $mongoURI = 'mongodb://';
+                if (exists $mongodsn->{dbuser}) {
+                    my $pass = $mongodsn->{dbpass} || '';
+                    $mongoURI .= "$mongodsn->{dbuser}:$pass\@";
+                }
+                $mongoURI .= $mongodsn->{host} || 'localhost';
+                $mongoURI .= ":$mongodsn->{port}" if exists $mongodsn->{port};
+
                 eval {
-                    $testdbh = MongoDB::Connection->new($mongodsn); ## no critic
+                    $testdbh = MongoDB->connect($mongoURI);
                     $evalok = 1;
                 };
             }
@@ -2415,9 +2424,16 @@ sub list_databases {
             $maxstat, $info->{status};
         my $showhost = length $info->{dbhost} ? " -h $info->{dbhost}" : '';
         my $showport = $info->{dbport} =~ /\d/ ? " -p $info->{dbport}" : '';
+        my $dbname = "-d $info->{dbname}";
+        if (length $info->{dbconn}) {
+            $dbname = qq{-d "dbname=$info->{dbname} $info->{dbconn}"};
+        }
         my $dbtype = $info->{dbtype};
         if ($dbtype eq 'postgres') {
-            print "Conn: psql$showport -U $info->{dbuser} -d $info->{dbname}$showhost";
+            my $showuser = defined $info->{dbuser} ? "-U $info->{dbuser}" : '';
+            my $showdb = defined $info->{dbname} ? " -d $info->{dbname}" : '';
+            my $showservice = defined $info->{dbservice} ? qq{ "service=$info->{dbservice}"} : '';
+            print "Conn: psql$showport $showuser$showdb$showhost$showservice";
             if (! $info->{server_side_prepares}) {
                 print ' (SSP is off)';
             }
@@ -2450,6 +2466,11 @@ sub list_databases {
                 $info->{dbname},
                 $showhost,
                 $showport;
+        }
+        if ($dbtype eq 'firebird') {
+            printf 'Conn: isql-fb -u %s %s',
+                $info->{dbuser},
+                $info->{dbname};
         }
         if ($dbtype eq 'oracle') {
             printf 'Conn: sqlplus %s%s',
@@ -8452,7 +8473,7 @@ sub upgrade {
         my $current_comment =
             $type eq 'table' ? table_comment($schema,$relation)
             : $type eq 'domain' ? domain_comment($schema,$relation)
-            : 'Unkonwn type';
+            : 'Unknown type';
         if ($current_comment ne $comment) {
             upgrade_and_log($full);
             clog (length $current_comment
@@ -9374,7 +9395,7 @@ sub check_recurse {
     my $caller = (caller(1))[3];
 
     ## If the name is 'all', recursively call on all objects of this type
-    if ($name =~ /all/i) {
+    if ($name =~ /^all$/i) {
         for my $item (sort keys %$thing) {
             &$caller($item, @actions);
         }
@@ -9780,6 +9801,7 @@ sub standardize_rdbms_name {
     $name =~ s/postgres.*/postgres/io;
     $name =~ s/pg.*/postgres/io;
     $name =~ s/driz?zle.*/drizzle/io;
+    $name =~ s/firebird/firebird/io;
     $name =~ s/mongo.*/mongo/io;
     $name =~ s/mysql.*/mysql/io;
     $name =~ s/maria.*/mariadb/io;
@@ -10014,7 +10036,7 @@ bucardo - utility script for controlling the Bucardo program
 
 =head1 VERSION
 
-This document describes version 5.4.1 of bucardo
+This document describes version 5.4.0 of bucardo
 
 =head1 USAGE
 
@@ -11694,7 +11716,7 @@ Which DDL changing conditions do we try to remedy automatically? Default: C<newc
 
 =item C<bucardo_version>
 
-Current version of Bucardo. Default: C<5.4.1>.
+Current version of Bucardo. Default: C<5.4.0>.
 
 =item C<bucardo_vac>
 
@@ -11702,7 +11724,7 @@ Do we want the automatic VAC daemon to run? Default: C<1>.
 
 =item C<bucardo_initial_version>
 
-Bucardo version this schema was created with. Default: C<5.4.1>.
+Bucardo version this schema was created with. Default: C<5.4.0>.
 
 =item C<ctl_checkonkids_time>
 
@@ -12163,7 +12185,7 @@ Bucardo
 
 =head1 COPYRIGHT
 
-Copyright 2006-2015 Greg Sabino Mullane <greg@endpoint.com>
+Copyright 2006-2016 Greg Sabino Mullane <greg@endpoint.com>
 
 This program is free to use, subject to the limitations in the LICENSE file.
 
