@@ -2424,7 +2424,7 @@ sub list_databases {
             $maxstat, $info->{status};
         my $showhost = length $info->{dbhost} ? " -h $info->{dbhost}" : '';
         my $showport = $info->{dbport} =~ /\d/ ? " -p $info->{dbport}" : '';
-        my $dbname = "-d $info->{dbname}";
+        my $dbname = length $info->{dbname} ? "-d $info->{dbname}" : '';
         if (length $info->{dbconn}) {
             $dbname = qq{-d "dbname=$info->{dbname} $info->{dbconn}"};
         }
