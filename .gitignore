@@ -26,6 +26,7 @@ bucardo_test_database_*
 *.log
 log.bucardo
 bucardo.restart.reason.*
+fullstopbucardo
 test.*
 bucardo_pgservice.tmp.*
 pid/*
