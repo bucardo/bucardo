@@ -5827,7 +5827,7 @@ sub reload_config_database {
         if ($row->{name} eq 'log_level') {
             my $newvalue = $log_level_number{uc $setting};
             if (! defined $newvalue) {
-                die "Invalid log_level!\n";
+                die "Invalid log_level! ($setting)\n";
             }
             $config{log_level_number} = $newvalue;
         }
