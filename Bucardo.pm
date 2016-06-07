@@ -5787,6 +5787,12 @@ sub connect_database {
         $dbh->commit();
     }
 
+    ## If this is a vacuum process, make sure it can write to the database!
+    if ('VAC' eq $self->{logprefix}) {
+        $dbh->do(qq{SET default_transaction_read_only = off});
+        $dbh->commit();
+    }
+
     return $backend, $dbh;
 
 } ## end of connect_database
