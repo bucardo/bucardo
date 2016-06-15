@@ -43,6 +43,10 @@ bucardo_flags="--quiet ${hostopt} ${portopt} --db-name ${DBNAME} --db-user ${DBU
 RETVAL=0
 
 start() {
+     # Make sure that PIDDIR directory exists before starting
+     if [ ! -d "${PIDDIR}" ]; then
+         mkdir -p "${PIDDIR}"
+     fi
      # Make sure that bucardo is not already running:
      if [ -f "${PIDDIR}/bucardo.mc.pid" ]; then
          echo -n "${NAME} is already running"
