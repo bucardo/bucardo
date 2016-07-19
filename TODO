@@ -21,6 +21,7 @@ Future
 
 These range the gamut from wildly speculative ideas to must-have features.
 
+- Disable constraints on large data loads
 - Allow 'bucardo update relgroup' to work
 - Make sure the db can be specified for add herd, rather than relying on find_best_db_for_searching()
 - Use something more specific than txntime, which is not unique enough
