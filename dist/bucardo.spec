@@ -1,8 +1,8 @@
 %define         realname Bucardo
 %define         sysuser postgres
 Name:           bucardo
-Version:        4.99.7
-Release:        2%{?dist}
+Version:        5.1.2
+Release:        1%{?dist}
 Summary:        Postgres replication system for both multi-master and multi-slave operations
 
 Group:          Applications/Databases
@@ -31,6 +31,7 @@ BuildRequires:  perl(DBIx::Safe)
 BuildRequires:  perl(boolean)
 
 Requires:  postgresql
+Requires:  postgresql-plperl
 Requires:  perl(ExtUtils::MakeMaker)
 Requires:  perl(DBI)
 Requires:  perl(DBD::Pg)
@@ -57,6 +58,15 @@ mkdir -p /var/run/bucardo
 mkdir -p /var/log/bucardo
 chown -R %{sysuser}:%{sysuser} /var/run/bucardo
 chown -R %{sysuser}:%{sysuser} /var/log/bucardo
+
+%post
+/sbin/chkconfig --add bucardo
+
+%preun
+if [ $1 = 0 ]; then
+	/sbin/service bucardo stop > /dev/null 2>&1
+	/sbin/chkconfig --del bucardo
+fi
 
 %prep
 %setup -q -n %{realname}-%{version}
@@ -105,6 +115,11 @@ rm -rf %{buildroot}
 %{_initrddir}/%{name}
 
 %changelog
+* Thu Oct 23 2014 Ivan Poddubny <ivan.poddubny@gmail.com> - 5.1.2-1
+- Update to 5.1.2
+- Register bucardo as a service with chkconfig
+- Require postgresql-plperl
+
 * Wed Nov 7 2012 David E. Wheeler <david@justatheory.com> - 4.99.6-2
 - Changed LOGDEST to support multiple destinations.
 - Added a two-second sleep between stop and start in the init script restart
