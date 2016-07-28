@@ -1944,6 +1944,20 @@ sub add_database {
                     push @dsn => 'server', $server;
                 }
 
+                my ($pass, $index);
+                if (exists $tempdsn->{pass}) {
+                    $pass = $tempdsn->{pass};
+                }
+                if (exists $tempdsn->{name} and $tempdsn->{name} !~ /\D/) {
+                    $index = $tempdsn->{name};
+                }
+
+                push @dsn => 'on_connect', sub {
+                    $_[0]->client_setname('bucardo');
+                    $_[0]->auth($pass) if $pass;
+                    $_[0]->select($index) if $index;
+                };
+
                 $evalok = 0;
                 eval {
                     $testdbh = Redis->new(@dsn);
@@ -2478,17 +2492,11 @@ sub list_databases {
                 $showhost ? qq{\@$showhost} : '';
         }
         if ($dbtype eq 'redis') {
-            my $server = '';
-            if (length $info->{dbhost}) {
-                $server .= $info->{dbhost};
-            }
-            if (length $info->{dbport}) {
-                $server .= ":$info->{dbport}";
-            }
-            if ($server) {
-                $server = "server=$server";
-                print "Conn: $server";
-            }
+            my $showindex = (length $info->{dbname} and $info->{dbname} !~ /\D/) ? " -n $info->{dbname}" : '';
+            printf 'Conn: redis-cli %s%s%s',
+                $showhost,
+                $showport,
+                $showindex;
         }
         if ($dbtype eq 'sqlite') {
             printf 'Conn: sqlite3 %s',

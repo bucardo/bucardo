@@ -829,7 +829,7 @@ if ($dbtype eq 'oracle') {
 
 if ($dbtype eq 'redis') {
    my $connstring = "$dbtype\n";
-   for my $name (qw/ host port user pass /) {
+   for my $name (qw/ host port user pass name /) {
      defined $db{$name} and length $db{$name} and $connstring .= "$name: $db{$name}\n";
    }
    chomp $connstring;
