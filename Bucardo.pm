@@ -9773,7 +9773,7 @@ sub push_rows {
             ## If we are doing a small batch of single primary keys, use ANY
             ## For a fullcopy mode, leave the WHERE clause out completely
             if ($mode eq 'fullcopy' or $mode eq 'anyclause') {
-                my $srccmd = sprintf '%sCOPY (%s FROM %s %s) TO STDOUT%s',
+                my $srccmd = sprintf '%sCOPY (%s FROM ONLY %s %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -9794,7 +9794,7 @@ sub push_rows {
                 my $placeholders = "$baseq," x ($number_values / $numpks);
                 chop $placeholders;
 
-                my $srccmd = sprintf '%s%sCOPY (%s FROM %s WHERE %s IN (%s)) TO STDOUT%s',
+                my $srccmd = sprintf '%s%sCOPY (%s FROM ONLY %s WHERE %s IN (%s)) TO STDOUT%s',
                     $pre,
                     $self->{sqlprefix},
                     $SELECT,
