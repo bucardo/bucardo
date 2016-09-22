@@ -1759,7 +1759,7 @@ BEGIN
     total = total + 1;
   END LOOP;
 
-  RETURN 'Tables processed: ' || total;
+  RETURN 'Tables processed: ' || total::text;
 
 END;
 } ## end of bucardo_purge_delta body
