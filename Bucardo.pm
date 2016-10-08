@@ -1391,7 +1391,7 @@ sub mcp_main {
                             ## Perform the kick
                             my $notify = "ctl_kick_$syncname";
                             $self->db_notify($maindbh, $notify);
-                            $self->glog(qq{Sent a kick to controller $s->{controller} for sync "$syncname"}, LOG_VERBOSE);
+                            $self->glog(qq{Sent a kick to controller $s->{controller} for sync "$syncname"}, LOG_DEBUG);
                         }
 
                         ## Reset so we don't kick the next round
