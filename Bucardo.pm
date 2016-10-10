@@ -4568,6 +4568,9 @@ sub start_kid {
                     my $have_targets = 0;
                     for my $dbname (@dbs_fullcopy) {
 
+                        ## Reset this in case a previous loop changed it
+                        $sync->{otc}{skip}{$dbname} = 0;
+
                         my $d = $sync->{db}{$dbname};
 
                         my $targetname = $g->{newname}{$syncname}{$dbname};
@@ -4595,7 +4598,7 @@ sub start_kid {
                 for my $dbname (@dbs_fullcopy) {
 
                     ## Skip if onetimecopy was two and this target had rows
-                    next if exists $sync->{otc}{skip}{$dbname};
+                    next if 2 == $sync->{onetimecopy} and $sync->{otc}{skip}{$dbname};
 
                     push @dbs_copytarget => $dbname;
 
