@@ -1,6 +1,9 @@
 
 Bucardo version ???
 
+  - Fix bug in onetimecopy=2 mode
+    [Greg Sabino Mullane]
+
   - Allow one-character schema names to work.
     [David Christensen]
 
