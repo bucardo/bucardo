@@ -3522,8 +3522,7 @@ sub start_kid {
                                  $self->{maxdbstname},
                                  "$dbname.$S.$T",
                                  length $maxcount,
-                                 $deltacount{dbtable}{$dbname}{$S}{$T}),
-                                $deltacount{dbtable}{$dbname}{$S}{$T} ? LOG_NORMAL : LOG_VERBOSE);
+                                 $deltacount{dbtable}{$dbname}{$S}{$T}), LOG_VERBOSE);
                 } ## end each db
 
             } ## end each table
@@ -4387,7 +4386,7 @@ sub start_kid {
             } ## end each goat
 
             $self->glog("Totals: deletes=$dmlcount{deletes} inserts=$dmlcount{inserts} conflicts=$dmlcount{conflicts}",
-                        ($dmlcount{deletes} or $dmlcount{inserts} or $dmlcount{conflicts}) ? LOG_NORMAL : LOG_VERBOSE);
+                        LOG_VERBOSE);
 
             ## Update bucardo_track table so that the bucardo_delta rows we just processed
             ##  are marked as "done" and ignored by subsequent runs
@@ -4870,9 +4869,7 @@ sub start_kid {
                     scalar keys %{$deltacount{table}},
                     (1== keys %{$deltacount{table}} ? 'table' : 'tables'),
                     pretty_time($synctime),
-                    $synctime < 120 ? '' : " ($synctime seconds)",),
-                    ## We don't want to output a "finished" if no changes made unless verbose
-                    $dmlcount{allinserts}{target} ? LOG_NORMAL : LOG_VERBOSE);
+                    $synctime < 120 ? '' : " ($synctime seconds)",), LOG_VERBOSE);
 
         ## Update our rate information as needed
         if (0 and $sync->{track_rates}) {
