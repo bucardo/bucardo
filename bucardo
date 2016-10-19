@@ -4782,7 +4782,8 @@ sub update_sync {
                 ## If the name does not start with bucardo, it must be a list of databases
                 if ($value !~ /^bucardo_/) {
                     my $dbs = $SYNC->{$name}{dblist};
-                    for my $dbname (split /\s+/ => $value) {
+                    $value =~ s/[,\s]+/ /g;
+                    for my $dbname (split / / => $value) {
                         if (! exists $dbs->{$dbname}) {
                             die qq{conflict_strategy should contain a list of databases, but "$dbname" is not a db for this sync!\n};
                         }
