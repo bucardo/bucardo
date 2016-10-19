@@ -891,6 +891,7 @@ sub mcp_main {
   MCP: {
 
         ## We eval the whole loop so we can cleanly redo it if needed
+        my $mcp_loop_finished = 0;
         eval {
 
         ## Bail if the stopfile exists
@@ -1478,9 +1479,12 @@ sub mcp_main {
         } ## end each sync
 
         sleep $config{mcp_loop_sleep};
-        redo MCP;
+
+        $mcp_loop_finished = 1;
 
         }; # end of eval
+
+        redo MCP if $mcp_loop_finished;
 
         ## We may want to redo if the error was not *that* fatal
         if ($@ =~ /redo/) {
