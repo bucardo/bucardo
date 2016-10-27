@@ -5846,6 +5846,17 @@ sub reload_config_database {
     }
     $self->{masterdbh}->commit();
 
+    ## Allow certain command-line overrides
+    my $loglevel = delete $self->{loglevel} || '';
+    if (length $loglevel) {
+        $config{log_level} = $loglevel;
+        $config{log_level_number} = $log_level_number{uc $loglevel};
+    }
+    my $logshowline = delete $self->{logshowline} || '';
+    if (length $logshowline) {
+        $config{log_showline} = 1;
+    }
+
     return;
 
 } ## end of reload_config_database
@@ -6694,6 +6705,7 @@ sub validate_sync {
 
     eval {
         local $SIG{__DIE__} = undef;
+        $self->glog(qq{Calling validate_sync on sync "$syncname"}, LOG_VERBOSE);
         $self->{masterdbh}->do("SELECT validate_sync('$syncname')");
     };
     if ($@) {
