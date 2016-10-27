@@ -1933,6 +1933,9 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
             }
         }
         $SQL =~ s/OR $//;
+
+        ## TODO: If this list is very large and a certain % of all tables, consider no WHERE clause
+
         $sth = $dbh->prepare($SQL);
         $sth->execute(@args);
 
