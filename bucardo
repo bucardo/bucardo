@@ -182,6 +182,8 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'logseparate|log-sep|log-separate|debugfilesep!',
      'logextension|log-extension|log-ext|debugname=s',
      'logclean|log-clean!',
+     'loglevel|log-level=s',
+     'logshowline|log-showline|log-show-line=s',
 
      ## Used internally
      'force',

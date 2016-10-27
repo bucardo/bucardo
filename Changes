@@ -20,6 +20,9 @@ Bucardo version ???
   - Add basic support for Firebird as a target database type.
     [Greg Sabino Mullane]
 
+  - Allow commas in the list for conflict_strategy.
+    [Greg Sabino Mullane]
+
 
 Bucardo version 5.4.1, released September 26, 2015
 
