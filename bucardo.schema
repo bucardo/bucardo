@@ -1209,6 +1209,8 @@ if (!$rv->{processed}) {
     return qq{Herd "$herd" for sync "$syncname" has no members: cannot validate};
 }
 
+my $number_sync_relations = $rv->{processed};
+
 ## Create a simple hash so we can look up the information by schema then table name
 my %goat;
 for my $x (@{$rv->{rows}}) {
@@ -1388,6 +1390,12 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
         }
     }
 
+    ## We may need to optimize some calls below for very large numbers of relations
+    ## Thus, it helps to know how many this database has in total
+    $sth = $dbh->prepare(q{SELECT count(*) FROM pg_class WHERE relkind IN ('r','S')});
+    $sth->execute();
+    my $relation_count = $sth->fetchall_arrayref()->[0][0];
+ 
     ## Get a list of all functions in the bucardo schema
     $SQL = q{SELECT p.oid,proname FROM pg_proc p JOIN pg_namespace n ON (n.oid=p.pronamespace) WHERE nspname='bucardo'};
     $sth = $dbh->prepare($SQL);
@@ -1923,22 +1931,28 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Get a list of oids and relkinds for all of our goats
         ## This is much faster than doing individually
-        $SQL = q{SELECT n.nspname,c.relname,relkind,c.oid FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace) WHERE };
-        my @args;
+        $SQL = q{SELECT n.nspname,c.relname,relkind,c.oid FROM pg_class c JOIN pg_namespace n ON (n.oid = c.relnamespace)};
 
-        for my $schema (sort keys %goat) {
-            for my $table (sort keys %{$goat{$schema}}) {
-                $SQL .= '(nspname = ? AND relname = ?) OR ';
-                push @args => $schema, $table;
-            }
+        ## If this is a very large statement, it might be more efficient to not use a WHERE clause!
+        if ($relation_count > 1000 and $number_sync_relations / $relation_count > 0.05) {
+            elog(DEBUG, "Too many relations for a WHERE clause! (would ask for $number_sync_relations or $relation_count rows)");
+            $sth = $dbh->prepare($SQL);
+            $sth->execute();
         }
-        $SQL =~ s/OR $//;
-
-        ## TODO: If this list is very large and a certain % of all tables, consider no WHERE clause
-
-        $sth = $dbh->prepare($SQL);
-        $sth->execute(@args);
-
+        else {
+            $SQL .= ' WHERE ';
+            my @args;
+            for my $schema (sort keys %goat) {
+                for my $table (sort keys %{$goat{$schema}}) {
+                    $SQL .= '(nspname = ? AND relname = ?) OR ';
+                    push @args => $schema, $table;
+                }
+            }
+            $SQL =~ s/OR $//;
+            $sth = $dbh->prepare($SQL);
+            $sth->execute(@args);
+        }
+ 
         my %tableoid;
         my %sequenceoid;
         for my $row (@{$sth->fetchall_arrayref()}) {
@@ -2092,8 +2106,16 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
     } ## end each schema
 
     $SQL =~ s/OR $//;
+
+    ## If this is a very large statement, it might be more efficient to throw away the WHERE clause!
+    if ($relation_count > 1000 and $number_sync_relations / $relation_count > 0.05) {
+        elog(DEBUG, "Too many relations for a WHERE clause! (would ask for $number_sync_relations or $relation_count rows)");
+        $SQL =~ s/WHERE.+//;
+    }
+
     $sth = $dbh->prepare($SQL);
-    $sth->execute(@args);
+    $SQL =~ /WHERE/ ? $sth->execute(@args) : $sth->execute();
+
     my (%goatoid,@tableoids);
     for my $row (@{$sth->fetchall_arrayref()}) {
         $goatoid{"$row->[0].$row->[1]"} = [$row->[2],$row->[3]];
