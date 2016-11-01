@@ -32,6 +32,8 @@ DBUSER=${DBUSER-bucardo}
 LOGDEST=${LOGDEST-/var/log/${NAME}}
 PIDDIR=${PIDDIR-/var/run/${NAME}}
 
+mkdir -p $PIDDIR
+
 # Override defaults from /etc/sysconfig/bucardo, if file is present:
 [ -f /etc/sysconfig/${NAME} ] && . /etc/sysconfig/${NAME}
 
