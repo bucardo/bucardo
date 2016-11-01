@@ -1,7 +1,7 @@
 %define         realname Bucardo
 %define         sysuser postgres
 Name:           bucardo
-Version:        4.99.7
+Version:        5.4.1
 Release:        2%{?dist}
 Summary:        Postgres replication system for both multi-master and multi-slave operations
 
@@ -49,7 +49,7 @@ Requires:  perl(Test::Harness)
 
 %description
 Bucardo is an asynchronous PostgreSQL replication system, allowing for both
-multi-master and multi-slave operations.It was developed at Backcountry.com
+multi-master and multi-slave operations. It was developed at Backcountry.com
 primarily by Greg Sabino Mullane of End Point Corporation.
 
 %pre
@@ -105,6 +105,9 @@ rm -rf %{buildroot}
 %{_initrddir}/%{name}
 
 %changelog
+* Tue Nov 1 2016 David Christensen <david@endpoint.com> - 5.4.1-1
+- Update to 5.4.1
+
 * Wed Nov 7 2012 David E. Wheeler <david@justatheory.com> - 4.99.6-2
 - Changed LOGDEST to support multiple destinations.
 - Added a two-second sleep between stop and start in the init script restart
