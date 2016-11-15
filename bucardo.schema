@@ -647,8 +647,14 @@ DECLARE
   newname TEXT;
   hashed TEXT;
 BEGIN
-  -- Change the first period to an underscore
-  SELECT INTO tname REPLACE($1, '.', '_');
+  -- sanitize and dequote the table name to avoid double-quoting later
+  SELECT INTO tname REGEXP_REPLACE(
+    REPLACE($1, '.', '_'), -- replace dots
+    '"(")?',
+    '\1',
+    'g'
+  );
+
   -- Assumes max_identifier_length is 63
   -- Because even if not, we'll still abbreviate for consistency and portability
   SELECT INTO newname SUBSTRING(tname FROM 1 FOR 57);
