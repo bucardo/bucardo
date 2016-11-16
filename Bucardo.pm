@@ -7177,6 +7177,9 @@ sub validate_sync {
                         s/\A\(//;
                         s/\)\z//;
                         s/\)::/::/;
+
+                        ## Also make exceptions for DEFAULT casting text to integers/numerics
+                        s/^'(-?\d+(?:\.\d+)?)'\s*::\s*(?:integer|numeric).*$/\$1/i;
                     }
                     my $msg;
                     if ($scol_def eq $fcol_def) {
