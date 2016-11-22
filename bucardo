@@ -4486,7 +4486,7 @@ sub add_sync {
         $dbgroup_name = create_dbgroup( $newname, 'noreload' );
     }
 
-    ## Give a courtesy message is we created a new dbgroup
+    ## Give a courtesy message if we created a new dbgroup
     ## Also associate our dbs with this new group
     if (! exists $DBGROUP->{ $dbgroup_name }) {
         push @message => qq{Created a new dbgroup named "$dbgroup_name"\n};
@@ -4584,7 +4584,7 @@ sub add_sync {
         $relgroup_name = create_herd( $newname, 'noreload' );
     }
 
-    ## Give a courtesy message is we created a new relgroup
+    ## Give a courtesy message if we created a new relgroup
     ## Also associate our tables with this new group
     if (! exists $HERD->{ $relgroup_name }) {
 
