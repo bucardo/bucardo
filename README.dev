@@ -178,7 +178,7 @@ no matter how simple the fix maybe, or how stupid the bug is.
 * If you do create a new test, keep the name short, start it with a number and a dash, 
 and use an existing test as a template.
 
-* Tests should be as "standalone" as possible. Most will call bucardo.test.pl to 
+* Tests should be as "standalone" as possible. Most will use BucardoTesting.pm to 
 automate setting up and tearing down supporting test infrastructure.
 
 * Don't call DBI->connect inside of your tests, but use connect_database() from the 
