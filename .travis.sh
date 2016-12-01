@@ -3,7 +3,8 @@
 set -eu
 
 client_configure() {
-
+    # noop
+    echo -n
 }
 
 pgdg_repository() {
