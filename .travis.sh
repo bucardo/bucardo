@@ -35,6 +35,7 @@ postgresql_configure() {
 postgresql_install() {
 	xargs sudo apt-get -y -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confnew' install <<-packages
 		postgresql-$PGVERSION
+		postgresql-server-$PGVERSION
 		postgresql-server-dev-$PGVERSION
 		postgresql-contrib-$PGVERSION
 	packages
