@@ -3,7 +3,7 @@
 set -eu
 
 client_configure() {
-	sudo chmod 600 $PQSSLCERTTEST_PATH/postgresql.key
+
 }
 
 pgdg_repository() {
