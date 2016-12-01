@@ -28,6 +28,7 @@ before_install:
   - ./.travis.sh postgresql_install
   - ./.travis.sh postgresql_configure
   - ./.travis.sh client_configure
+  - export PATH=$PATH:/usr/lib/postgresql/$PGVERSION/bin
 
 before_script:
   - createdb bucardo
