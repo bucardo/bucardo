@@ -32,6 +32,7 @@ before_install:
 
 before_script:
   - createdb bucardo
+  - createuser -rds postgres
 
 script:
   - perl Makefile.PL
