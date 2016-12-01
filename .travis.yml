@@ -1,0 +1,37 @@
+language: perl
+
+perl:
+  - 5.10
+  - 5.12
+  - 5.22
+  - 5.24
+
+sudo: true
+
+env:
+  global:
+    - PGUSER=postgres
+    - PGHOST=127.0.0.1
+  matrix:
+    - PGVERSION=9.6
+    - PGVERSION=9.5
+    - PGVERSION=9.4
+    - PGVERSION=9.3
+    - PGVERSION=9.2
+    - PGVERSION=9.1
+    - PGVERSION=9.0
+    - PGVERSION=8.4
+
+before_install:
+  - ./.travis.sh postgresql_uninstall
+  - ./.travis.sh pgdg_repository
+  - ./.travis.sh postgresql_install
+  - ./.travis.sh postgresql_configure
+  - ./.travis.sh client_configure
+
+before_script:
+  - createdb bucardo
+
+script:
+  - perl Makefile.PL
+  - make test
