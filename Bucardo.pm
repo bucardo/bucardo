@@ -5663,19 +5663,35 @@ sub connect_database {
             $dsn = "dbi:drizzle:database=$dbname";
         }
         elsif ('mongo' eq $dbtype) {
-            my $mongodsn = {};
-            for my $name (qw/ dbhost dbport dbuser dbpass /) {
-                defined $d->{$name} and length $d->{$name} and $mongodsn->{$name} = $d->{$name};
-            }
+
             ## For now, we simply require it
             require MongoDB;
+
             my $mongoURI = 'mongodb://';
-            if (exists $mongodsn->{dbuser}) {
-                my $pass = $mongodsn->{dbpass} || '';
-                $mongoURI .= "$mongodsn->{dbuser}:$pass\@";
+            my $dbdsn = $d->{dbdsn} || '';
+
+            if ($dbdsn =~ s/^DSN://) {
+                ## Just in case:
+                if ($dbdsn !~ /^mongodb:/) {
+                    $mongoURI .= $dbdsn;
+                }
+                else {
+                    $mongoURI = $dbdsn;
+                }
             }
-            $mongoURI .= $mongodsn->{dbhost} || 'localhost';
-            $mongoURI .= ":$mongodsn->{dbport}" if exists $mongodsn->{dbport};
+            else {
+                my $mongodsn = {};
+                for my $name (qw/ dbhost dbport dbuser dbpass /) {
+                    defined $d->{$name} and length $d->{$name} and $mongodsn->{$name} = $d->{$name};
+                }
+                if (exists $mongodsn->{dbuser}) {
+                    my $pass = $mongodsn->{dbpass} || '';
+                    $mongoURI .= "$mongodsn->{dbuser}:$pass\@";
+                }
+                $mongoURI .= $mongodsn->{dbhost} || 'localhost';
+                $mongoURI .= ":$mongodsn->{dbport}" if exists $mongodsn->{dbport};
+            }
+
             my $conn = MongoDB->connect($mongoURI); ## no critic
             $dbh = $conn->get_database($dbname);
             my $backend = 0;
@@ -5723,9 +5739,14 @@ sub connect_database {
             die qq{Cannot handle databases of type "$dbtype"\n};
         }
 
-        defined $d->{dbport} and length $d->{dbport} and $dsn .= ";port=$d->{dbport}";
-        defined $d->{dbhost} and length $d->{dbhost} and $dsn .= ";host=$d->{dbhost}";
-        length $d->{dbconn} and $dsn .= ";$d->{dbconn}";
+        if (defined $d->{dbdsn} and length $d->{dbdsn}) {
+            $dsn = $d->{dbdsn};
+        }
+        else {
+            defined $d->{dbport} and length $d->{dbport} and $dsn .= ";port=$d->{dbport}";
+            defined $d->{dbhost} and length $d->{dbhost} and $dsn .= ";host=$d->{dbhost}";
+            length $d->{dbconn} and $dsn .= ";$d->{dbconn}";
+        }
         $user = $d->{dbuser};
         $pass = $d->{dbpass} || '';
         $ssp = $d->{server_side_prepares};

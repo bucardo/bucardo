@@ -194,6 +194,7 @@ autosync_ddl|newcol|Which DDL changing conditions do we try to remedy automatica
 CREATE TABLE bucardo.db (
   name                 TEXT        NOT NULL,  -- local name for convenience, not necessarily database name
                          CONSTRAINT db_name_pk PRIMARY KEY (name),
+  dbdsn                TEXT        NOT NULL DEFAULT '',
   dbtype               TEXT        NOT NULL DEFAULT 'postgres',
   dbhost               TEXT            NULL DEFAULT '',
   dbport               TEXT            NULL DEFAULT '',
@@ -682,6 +683,7 @@ SECURITY DEFINER
 AS $bc$
 
 ## Given the name of a db, return the type, plus type-specific connection information
+## ALL: the string 'DSN', a colon, and the value of the dbdsn field, if set
 ## Postgres: a connection string, username, password, and attribs
 ## Drizzle: a connection string, username, and password
 ## Firebird: a connection string, username, and password
@@ -707,6 +709,14 @@ if (!$rv->{processed}) {
 }
 $row = $rv->{rows}[0];
 
+my $dbtype = $row->{dbtype} || 'postgres';
+
+## If we have a DSN, it trumps everything else
+if (exists $row->{dbdsn} and length $row->{dbdsn}) {
+    return "$dbtype\nDSN:$row->{dbdsn}\n\n\n";
+}
+
+
 for (qw(host port name user pass conn service)) {
     $db{$_} = exists $row->{"db$_"} ? $row->{"db$_"} : '';
 }
@@ -715,8 +725,6 @@ for (qw(host port name user pass conn service)) {
 if (defined $db{port} and length $db{port} and $db{port} !~ /^\d+$/) {
     elog(ERROR, qq{Database port must be numeric, but got "$db{port}"\n});
 }
-
-my $dbtype = $row->{dbtype} || 'postgres';
 
 if ($dbtype eq 'postgres') {
     ## If there is a dbfile and it exists, it overrides the rest
@@ -779,7 +787,7 @@ if ($dbtype eq 'drizzle') {
 if ($dbtype eq 'mongo') {
    my $connstring = "$dbtype\n";
    for my $name (qw/ host port user pass /) {
-     defined $db{$name} and length $db{$name} and $connstring .= "$name: $db{$name}\n";
+       defined $db{$name} and length $db{$name} and $connstring .= "$name: $db{$name}\n";
    }
    chomp $connstring;
    return $connstring;
@@ -886,10 +894,11 @@ if (!$rv->{processed}) {
 $row = $rv->{rows}[0]{bob};
 ($db{type},$db{dsn},$db{user},$db{pass}) = split /\n/ => $row;
 
+$db{dsn} =~ s/^DSN://;
+
 if ($db{type} ne 'postgres') {
   return '';
 }
-
 
 my $safeconn = "$db{dsn} user=$db{user}"; ## No password for now
 $safeconn =~ s/'/''/go;
@@ -1017,6 +1026,7 @@ if (!$rv->{processed}) {
 }
 $row = $rv->{rows}[0]{apple};
 ($db{type},$db{dsn},$db{user},$db{pass},$db{ssp}) = split /\n/ => $row;
+$db{dsn} =~ s/^DSN://;
 
 if ($db{type} ne 'postgres') {
   elog(INFO, qq{Not checking database of type $db{type}});
@@ -1332,6 +1342,7 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
     my $rv = spi_exec_query("SELECT bucardo.db_getconn('$dbname') AS conn");
     $rv->{processed} or elog(ERROR, qq{Error: Could not find a database named "$dbname"\n});
     my ($dbtype,$dsn,$user,$pass,$ssp) = split /\n/ => $rv->{rows}[0]{conn};
+    $dsn =~ s/^DSN://;
     elog(DEBUG, "Connecting to $dsn as $user inside bucardo_validate_sync for language check");
     my $dbh;
     eval {

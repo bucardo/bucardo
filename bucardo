@@ -350,6 +350,7 @@ our %alias = (
     'pass'                => 'dbpass',
     'password'            => 'dbpass',
     'service'             => 'dbservice',
+    'dsn'                 => 'dbdsn',
 );
 
 ## Columns that cannot be changed: used in the update_* subroutines
@@ -1757,6 +1758,7 @@ sub add_database {
         port|dbport|pgport       dbport               0                ENV:PGPORT
         conn|dbconn|pgconn       dbconn               0                null
         service|dbservice        dbservice            0                null
+        dsn|dbdsn                dbdsn                0                null
         stat|status              status               =active|inactive null
         group|dbgroup            dbgroup              0                null
         addalltables             none                 0                null
@@ -1765,11 +1767,11 @@ sub add_database {
         makedelta                makedelta            TF               null
     };
 
-    ## Include the value for the dbuser only if a service is not specified, or
+    ## Include the value for the dbuser only if a service or dsn is not specified, or
     ## a user was explicitly included. In other words, don't default the user
     ## name when there's a service.
     $validcols .= "user|username|dbuser     dbuser               0                bucardo\n"
-        if ((! grep { /^(db)?service=/ } @nouns) || grep { /^(db)?user(name)?=/ } @nouns);
+        if ((! grep { /^(db)?service=/ or /dsn/ } @nouns) || grep { /^(db)?user(name)?=/ } @nouns);
 
     my ($dbcols) = process_simple_args({
         cols        => $validcols,
@@ -1777,8 +1779,8 @@ sub add_database {
         doc_section => $doc_section,
     });
 
-    ## Must have a database name unless using a service
-    if (! exists $dbcols->{dbname} && ! exists $dbcols->{dbservice}) {
+    ## Must have a database name unless using a service or dsn
+    if (! exists $dbcols->{dbname} && ! exists $dbcols->{dbservice} && ! exists $dbcols->{dbdsn}) {
         print qq{Cannot add database: must supply a database name to connect to\n};
         exit 1;
     }
@@ -1794,8 +1796,8 @@ sub add_database {
     ## Clean up and standardize the type name
     my $dbtype = $dbcols->{dbtype} = standardize_rdbms_name($dbcols->{dbtype});
 
-    ## If we have a service, strip the host and port as they may have been set via ENV
-    if (exists $dbcols->{dbservice}) {
+    ## If we have a service or DSN, strip the host and port as they may have been set via ENV
+    if (exists $dbcols->{dbservice} or exists $dbcols->{dbdsn}) {
         delete $dbcols->{dbport};
         delete $dbcols->{dbhost};
     }
@@ -1907,19 +1909,32 @@ sub add_database {
 
             if ('mongo' eq $dbtype) {
 
-                my $mongodsn = {};
-                for my $line (split /\n/ => $dbconn) {
-                    next if $line !~ /(\w+):\s+(.+)/;
-                    $mongodsn->{$1} = $2;
-                }
-
                 my $mongoURI = 'mongodb://';
-                if (exists $mongodsn->{dbuser}) {
-                    my $pass = $mongodsn->{dbpass} || '';
-                    $mongoURI .= "$mongodsn->{dbuser}:$pass\@";
+
+                if ($dsn =~ s/^DSN://) {
+                    ## Just in case:
+                    if ($dsn !~ /^mongodb:/) {
+                        $mongoURI .= $dsn;
+                    }
+                    else {
+                        $mongoURI = $dsn;
+                    }
                 }
-                $mongoURI .= $mongodsn->{host} || 'localhost';
-                $mongoURI .= ":$mongodsn->{port}" if exists $mongodsn->{port};
+                else {
+
+                    my $mongodsn = {};
+                    for my $line (split /\n/ => $dbconn) {
+                        next if $line !~ /(\w+):\s+(.+)/;
+                        $mongodsn->{$1} = $2;
+                    }
+
+                    if (exists $mongodsn->{dbuser}) {
+                        my $pass = $mongodsn->{dbpass} || '';
+                        $mongoURI .= "$mongodsn->{dbuser}:$pass\@";
+                    }
+                    $mongoURI .= $mongodsn->{host} || 'localhost';
+                    $mongoURI .= ":$mongodsn->{port}" if exists $mongodsn->{port};
+                }
 
                 eval {
                     $testdbh = MongoDB->connect($mongoURI);
@@ -1955,6 +1970,7 @@ sub add_database {
 
             ## Anything else must be something with a standard DBI driver
             else {
+                $dsn =~ s/^DSN://;
                 eval {
                     $testdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
                     $evalok = 1;
@@ -2436,7 +2452,9 @@ sub list_databases {
             my $showdb = defined $info->{dbname} ? " -d $info->{dbname}" : '';
             my $showservice = (defined $info->{dbservice} and length $info->{dbservice})
                 ? qq{ "service=$info->{dbservice}"} : '';
-            print "Conn: psql$showport $showuser$showdb$showhost$showservice";
+            my $showdsn = (defined $info->{dbdsn} and length $info->{dbdsn})
+                ? qq{ (DSN=$info->{dbdsn})} : '';
+            print "Conn: psql$showport $showuser$showdb$showhost$showservice$showdsn";
             if (! $info->{server_side_prepares}) {
                 print ' (SSP is off)';
             }
@@ -8632,6 +8650,7 @@ sub connect_database {
             die "Cannot return a handle for database type $type\n";
         }
 
+        $dsn =~ s/DSN://;
         eval {
             $dbh2 = DBI->connect_cached($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
         };
@@ -10429,7 +10448,7 @@ The supported named parameters are:
 
 =item C<dbname>
 
-The actual name of the database. Required unless using a service file.
+The actual name of the database. Required unless using a service file or setting it via dbdsn.
 
 =item C<type>
 
@@ -10454,6 +10473,10 @@ The type of the database. Defaults to C<postgres>. Currently supported values ar
 =item * C<sqlite>
 
 =back
+
+=item C<dbdsn>
+
+A direct DSN to connect to a database. Will override all other connection options if set.
 
 =item C<user>
 
@@ -11298,6 +11321,10 @@ The type of the database. Currently supported values are:
 =item C<username>
 
 =item C<dbuser>
+
+=item C<dbdsn>
+
+A direct DSN to connect to a database. Will override all other connection options if set.
 
 =item C<user>
 

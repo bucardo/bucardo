@@ -7,6 +7,9 @@ Bucardo version ???
   - Allow one-character schema names to work.
     [David Christensen]
 
+  - Allow a direct DSN via the "dbdsn" attribute for the "add db" command.
+    [Greg Sabino Mullane] ( https://github.com/bucardo/bucardo/issues/129 )
+
   - Rewrite code to support the new version of the Perl MongoDB driver.
     The minimum supported version of MongoDB is now 1.2.1
     [Greg Sabino Mullane]
