@@ -2798,14 +2798,14 @@ sub start_kid {
                 if ($d->{dbtype} eq 'mongo') {
                     my $collection = $d->{dbh}->get_collection($tname);
                     my $object = {
-                        '$.sync' => $syncname,
-                        '$.status' => 'failed',
-                        '$.endtime' => scalar gmtime,
+                        'sync' => $syncname,
+                        'status' => 'failed',
+                        'endtime' => scalar gmtime,
                     };
                     $collection->update_one
                         (
-                            {sync => $syncname},
-                            $object,
+                            { sync => $syncname },
+                            { '$set' => $object },
                             { upsert => 1, safe => 1 }
                         );
                 }
@@ -4118,14 +4118,14 @@ sub start_kid {
                         if ($d->{dbtype} eq 'mongo') {
                             my $collection = $d->{dbh}->get_collection($tname);
                             my $object = {
-                                '$.sync' => $syncname,
-                                '$.status' => 'started',
-                                '$.starttime' => scalar gmtime
+                                'sync' => $syncname,
+                                'status' => 'started',
+                                'starttime' => scalar gmtime
                                 };
                             $collection->update_one
                                 (
-                                    {sync => $syncname},
-                                    $object,
+                                    { sync => $syncname },
+                                    { '$set' => $object },
                                     { upsert => 1, safe => 1 }
                                 );
                         }
@@ -4710,14 +4710,14 @@ sub start_kid {
                 if ($d->{dbtype} eq 'mongo') {
                     my $collection = $d->{dbh}->get_collection($tname);
                     my $object = {
-                        '$.sync' => $syncname,
-                        '$.status' => 'complete',
-                        '$.endtime' => scalar gmtime,
+                        'sync' => $syncname,
+                        'status' => 'complete',
+                        'endtime' => scalar gmtime,
                     };
                     $collection->update_one
                         (
-                            {sync => $syncname},
-                            $object,
+                            { sync => $syncname },
+                            { '$set' => $object },
                             { upsert => 1, safe => 1 }
                         );
                 }
