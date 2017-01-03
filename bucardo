@@ -3,7 +3,7 @@
 
 ## Script to control Bucardo
 ##
-## Copyright 2006-2016 Greg Sabino Mullane <greg@endpoint.com>
+## Copyright 2006-2017 Greg Sabino Mullane <greg@endpoint.com>
 ##
 ## Please see http://bucardo.org/ for full documentation
 ##
@@ -12216,7 +12216,7 @@ Bucardo
 
 =head1 COPYRIGHT
 
-Copyright 2006-2016 Greg Sabino Mullane <greg@endpoint.com>
+Copyright 2006-2017 Greg Sabino Mullane <greg@endpoint.com>
 
 This program is free to use, subject to the limitations in the LICENSE file.
 

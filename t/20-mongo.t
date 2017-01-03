@@ -92,7 +92,7 @@ for my $name (qw/ A B C /) {
 
 $t = 'Adding mongo database M works';
 $command =
-"bucardo add db M dbname=$dbname type=mongo";
+"bucardo add db M dbname=$dbname dbuser=bucardo dbpass=bucardo type=mongo";
 $res = $bct->ctl($command);
 like ($res, qr/Added database "M"/, $t);
 
