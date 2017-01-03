@@ -5667,6 +5667,10 @@ sub connect_database {
             ## For now, we simply require it
             require MongoDB;
 
+            ## Are we using the old "point-zero" version?
+            my $mongoversion = $MongoDB::VERSION;
+            $self->{oldmongo} = $mongoversion =~ /^0\./ ? 1 : 0;
+
             my $mongoURI = 'mongodb://';
             my $dbdsn = $d->{dbdsn} || '';
 
@@ -5692,7 +5696,9 @@ sub connect_database {
                 $mongoURI .= ":$mongodsn->{dbport}" if exists $mongodsn->{dbport};
             }
 
-            my $conn = MongoDB->connect($mongoURI); ## no critic
+            my $conn = $self->{oldmongo} ? MongoDB::MongoClient->new(host => $mongoURI)
+                : MongoDB->connect($mongoURI); ## no critic
+
             $dbh = $conn->get_database($dbname);
             my $backend = 0;
             if (! $self->{show_mongodb_version}++) {

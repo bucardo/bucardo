@@ -1936,8 +1936,11 @@ sub add_database {
                     $mongoURI .= ":$mongodsn->{port}" if exists $mongodsn->{port};
                 }
 
+                my $mongoversion = $MongoDB::VERSION;
+                my $oldversion = $mongoversion =~ /^0\./ ? 1 : 0;
+
                 eval {
-                    $testdbh = MongoDB->connect($mongoURI);
+                    $testdbh = $oldversion ? MongoDB::MongoClient->new(host => $mongoURI) : MongoDB->connect($mongoURI);
                     $evalok = 1;
                 };
             }

@@ -16,7 +16,6 @@ use vars qw/ $bct $dbhX $dbhA $dbhB $dbhC $dbhD $res $command $t %pkey $SQL %sth
 
 
 ## Must have the MongoDB module
-## Ideally we check for version 1.2.1 or better, but use_ok is horribly broken
 my $evalok = 0;
 eval {
     require MongoDB;
@@ -26,11 +25,15 @@ if (!$evalok) {
     plan (skip_all =>  'Cannot test mongo unless the Perl module MongoDB is installed');
 }
 
+## Are we using an older version?
+my $mongoversion = $MongoDB::VERSION;
+my $oldversion = $mongoversion =~ /^0\./ ? 1 : 0;
+
 ## MongoDB must be up and running
 $evalok = 0;
 my $conn;
 eval {
-    $conn = MongoDB->connect();
+    $conn = $oldversion ? MongoDB::MongoClient->new() : MongoDB->connect();
     $evalok = 1;
 };
 if (!$evalok) {
