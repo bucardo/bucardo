@@ -2802,12 +2802,22 @@ sub start_kid {
                         'status' => 'failed',
                         'endtime' => scalar gmtime,
                     };
-                    $collection->update_one
-                        (
-                            { sync => $syncname },
-                            { '$set' => $object },
-                            { upsert => 1, safe => 1 }
+                    if ($self->{oldmongo}) {
+                        $collection->update
+                            (
+                                { sync => $syncname },
+                                { '$set' => $object },
+                                { upsert => 1, safe => 1 }
                         );
+                    }
+                    else {
+                        $collection->update_one
+                            (
+                                { sync => $syncname },
+                                { '$set' => $object },
+                                { upsert => 1, safe => 1 }
+                        );
+                    }
                 }
             }
         }
@@ -4122,12 +4132,23 @@ sub start_kid {
                                 'status' => 'started',
                                 'starttime' => scalar gmtime
                                 };
-                            $collection->update_one
-                                (
-                                    { sync => $syncname },
-                                    { '$set' => $object },
-                                    { upsert => 1, safe => 1 }
-                                );
+                            if ($self->{oldmongo}) {
+                                ##AUTOLOADed collection method names are deprecated and will be removed in a future release. Use $collection->get_collection( 'update_one' ) instead. at Bucardo.pm line 4125.
+                                $collection->update
+                                    (
+                                        { sync => $syncname },
+                                        { '$set' => $object },
+                                        { upsert => 1, safe => 1 }
+                                    );
+                            }
+                            else {
+                                $collection->update_one
+                                    (
+                                        { sync => $syncname },
+                                        { '$set' => $object },
+                                        { upsert => 1, safe => 1 }
+                                    );
+                            }
                         }
                     }
                 }
@@ -4714,12 +4735,23 @@ sub start_kid {
                         'status' => 'complete',
                         'endtime' => scalar gmtime,
                     };
-                    $collection->update_one
-                        (
-                            { sync => $syncname },
-                            { '$set' => $object },
-                            { upsert => 1, safe => 1 }
+
+                    if ($self->{oldmongo}) {
+                        $collection->update
+                            (
+                                { sync => $syncname },
+                                { '$set' => $object },
+                                { upsert => 1, safe => 1 }
                         );
+                    }
+                    else {
+                        $collection->update_one
+                            (
+                                { sync => $syncname },
+                                { '$set' => $object },
+                                { upsert => 1, safe => 1 }
+                        );
+                    }
                 }
             }
         }
@@ -5696,6 +5728,7 @@ sub connect_database {
                 $mongoURI .= ":$mongodsn->{dbport}" if exists $mongodsn->{dbport};
             }
 
+            $self->glog("MongoDB connection URI to database $dbname: $mongoURI", LOG_DEBUG);
             my $conn = $self->{oldmongo} ? MongoDB::MongoClient->new(host => $mongoURI)
                 : MongoDB->connect($mongoURI); ## no critic
 
@@ -5746,7 +5779,7 @@ sub connect_database {
         }
 
         if (defined $d->{dbdsn} and length $d->{dbdsn}) {
-            $dsn = $d->{dbdsn};
+            $dsn = "TEST$d->{dbdsn}";
         }
         else {
             defined $d->{dbport} and length $d->{dbport} and $dsn .= ";port=$d->{dbport}";
@@ -6653,6 +6686,7 @@ sub validate_sync {
                 ($d->{backend}, $d->{dbh}) = $self->connect_database($dbname);
             };
             if (!defined $d->{backend}) {
+                $self->glog("Connection failed: $@", LOG_TERSE);
                 ## If this was already stalled, we can simply reject the validation
                 if ($d->{status} eq 'stalled') {
                     $self->glog("Stalled db $dbname failed again: $@", LOG_VERBOSE);
