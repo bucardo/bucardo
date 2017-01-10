@@ -14,6 +14,8 @@ use MIME::Base64;
 
 use vars qw/ $bct $dbhX $dbhA $dbhB $dbhC $dbhD $res $command $t %pkey $SQL %sth %sql/;
 
+my @mongoport = (00000,11111,22222);
+my @mongos = (1,2);
 
 ## Must have the MongoDB module
 my $evalok = 0;
@@ -29,15 +31,18 @@ if (!$evalok) {
 my $mongoversion = $MongoDB::VERSION;
 my $oldversion = $mongoversion =~ /^0\./ ? 1 : 0;
 
-## MongoDB must be up and running
-$evalok = 0;
-my $conn;
-eval {
-    $conn = $oldversion ? MongoDB::MongoClient->new() : MongoDB->connect();
-    $evalok = 1;
-};
-if (!$evalok) {
-    plan (skip_all =>  "Cannot test mongo as we cannot connect to a running Mongo db: $@");
+## All MongoDB databases must be up and running
+my @conn;
+for my $mdb (@mongos) {
+    $evalok = 0;
+    my $dsn = "localhost:$mongoport[$mdb]";
+    eval {
+        $conn[$mdb] = $oldversion ? MongoDB::MongoClient->new(host => $dsn) : MongoDB->connect($dsn);
+        $evalok = 1;
+    };
+    if (!$evalok) {
+        plan (skip_all =>  "Cannot test mongo as we cannot connect to a running Mongo on $dsn $@");
+    }
 }
 
 use BucardoTesting;
@@ -48,18 +53,24 @@ delete $tabletype{bucardo_test8};
 ## Also cannot handle multi-column primary keys
 delete $tabletype{bucardo_test2};
 
+for my $key (keys %tabletype) {
+    next if $key !~ /test1/;
+    delete $tabletype{$key};
+}
+
 
 my $numtabletypes = keys %tabletype;
-plan tests => 148;
 
-## Make sure we start clean by dropping the test database
-my $dbname = 'bucardotest';
-my $db = $conn->get_database($dbname);
-$db->drop;
-
-$t = qq{Test database "$dbname" has no collections};
-my @names = $db->collection_names;
-is_deeply (\@names, [], $t);
+## Make sure we start clean by dropping the test databases
+my (@names,@db);
+for my $mdb (@mongos) {
+    my $dbname = "btest$mdb";
+    my $db = $db[$mdb] = $conn[$mdb]->get_database($dbname);
+    $db->drop;
+    $t = qq{Test database "$dbname" has no collections};
+    @names = $db->collection_names;
+    is_deeply (\@names, [], $t);
+}
 
 $bct = BucardoTesting->new() or BAIL_OUT "Creation of BucardoTesting object failed\n";
 $location = 'mongo';
@@ -95,9 +106,15 @@ for my $name (qw/ A B C /) {
 
 $t = 'Adding mongo database M works';
 $command =
-"bucardo add db M dbname=$dbname dbuser=bucardo dbpass=bucardo type=mongo";
+"bucardo add db M dbname=btest1 dbuser=bucardo dbpass=bucardo dbport=$mongoport[1] type=mongo";
 $res = $bct->ctl($command);
 like ($res, qr/Added database "M"/, $t);
+
+$t = 'Adding mongo database N works';
+$command = qq{bucardo add db N dbname=btest2 dbdsn="mongodb://localhost:$mongoport[2]" type=mongo};
+#$command .= ' status=inactive --force';
+$res = $bct->ctl($command);
+like ($res, qr/Added database "N"/, $t);
 
 ## Teach Bucardo about all pushable tables, adding them to a new relgroup named "therd"
 $t = q{Adding all tables on the master works};
@@ -121,7 +138,7 @@ like ($res, qr/New sequences added: \d/, $t);
 ## Create a new dbgroup
 $t = q{Created a new dbgroup};
 $command =
-"bucardo add dbgroup md A:source B:source C M";
+"bucardo add dbgroup md A:source B:source C M N";
 $res = $bct->ctl($command);
 like ($res, qr/Created dbgroup "md"/, $t);
 
@@ -207,14 +224,6 @@ for my $table (sort keys %tabletype) {
 $dbhB->commit();
 $dbhC->commit();
 
-
-## Check that mongo has the new collection names
-my %col;
-@names = $db->collection_names;
-for (@names) {
-    $col{$_} = 1;
-}
-
 ## Set the modified table names
 my %tabletype2;
 for my $table (keys %tabletype) {
@@ -222,72 +231,94 @@ for my $table (keys %tabletype) {
     $tabletype2{$newname} = $tabletype{$table};
 }
 
-for my $table (sort keys %tabletype2) {
-    $t = "Table $table has a mongodb collection";
-    ok(exists $col{$table}, $t);
-}
+## Check that all mongo databases have the new collection information
+for my $mdb (@mongos) {
+    my %col;
+    my $db = $db[$mdb];
+    @names = $db->collection_names;
+    for (@names) {
+        $col{$_} = 1;
+    }
 
-## Check that mongo has the new rows
-for my $table (sort keys %tabletype2) {
-    $t = "Mongo collection $table has correct number of rows after insert";
-    my $col = $db->get_collection($table);
-    my @rows = $col->find->all;
-    my $count = @rows;
-    is ($count, 1, $t);
+    for my $table (sort keys %tabletype2) {
+        $table =~ s/_pg// if $mdb eq '2';
+        $t = "Table $table has a mongodb collection in db $mdb";
+        ok(exists $col{$table}, $t);
+    }
 
-    ## Remove the mongo internal id column
-    delete $rows[0]->{_id};
+    ## Check that mongo has the new rows
+    for my $table (sort keys %tabletype2) {
+        my $original_table = $table;
+        $table =~ s/_pg// if $mdb eq '2';
+        $t = "Mongo db $mdb collection $table has correct number of rows after insert";
+        my $col = $db->get_collection($table);
+        my @rows = $col->find->all;
+        my $count = @rows;
+        is ($count, 1, $t) or die;
 
-    $t = "Mongo collection $table has correct entries";
-    my $type = $tabletype2{$table};
-    my $id = $val{$type}{1};
-    my $pkeyname = $table =~ /test5/ ? 'id space' : 'id';
+        ## Remove the mongo internal id column
+        delete $rows[0]->{_id};
 
-    ## For now, binary is stored in escaped form, so we skip this one
-    next if $table =~ /test8/;
+        $t = "Mongo db $mdb collection $table has correct entries";
+        my $type = $tabletype2{$original_table};
+        my $id = $val{$type}{1};
+        my $pkeyname = $table =~ /test5/ ? 'id space' : 'id';
 
-    is_deeply(
-        $rows[0],
-        {
-            $pkeyname => $id,
-            inty  => 1,
-            data1 => 'foo',
-        },
+        ## For now, binary is stored in escaped form, so we skip this one
+        next if $table =~ /test8/;
 
-        $t);
-}
+        is_deeply(
+            $rows[0],
+            {
+                $pkeyname => $id,
+                inty  => 1,
+                data1 => 'foo',
+            },
+            $t) or die;
+    }
 
-## Update each row
+} ## end each mongo db
+
+
+## Update each row, make sure it gets replicated to mongo
 for my $table (keys %tabletype) {
     $sth{update}{$table}{A}->execute(42);
 }
 $dbhA->commit();
 $bct->ctl('bucardo kick mongo 0');
 
-for my $table (keys %tabletype2) {
-    $t = "Mongo collection $table has correct number of rows after update";
-    my $col = $db->get_collection($table);
-    my @rows = $col->find->all;
-    my $count = @rows;
-    is ($count, 1, $t);
+for my $mdb (@mongos) {
+    my $db = $db[$mdb];
+    for my $table (keys %tabletype2) {
+        $table =~ s/_pg// if $mdb eq '2';
+        $t = "Mongo db $mdb collection $table has correct number of rows after update";
+        my $col = $db->get_collection($table);
+        my @rows = $col->find->all;
+        my $count = @rows;
+        is ($count, 1, $t);
 
-    $t = "Mongo collection $table has updated value";
-    is ($rows[0]->{inty}, 42, $t);
+        $t = "Mongo db $mdb collection $table has updated value";
+        is ($rows[0]->{inty}, 42, $t);
+    }
 }
 
-## Delete each row
+## Delete each row, make sure it gets replicated to mongo
 for my $table (keys %tabletype) {
     $sth{deleteall}{$table}{A}->execute();
 }
 $dbhA->commit();
 $bct->ctl('bucardo kick mongo 0');
 
-for my $table (keys %tabletype2) {
-    $t = "Mongo collection $table has correct number of rows after delete";
-    my $col = $db->get_collection($table);
-    my @rows = $col->find->all;
-    my $count = @rows;
-    is ($count, 0, $t);
+for my $mdb (@mongos) {
+    my $db = $db[$mdb];
+    for my $table (keys %tabletype2) {
+        $table =~ s/_pg// if $mdb eq '2';
+        $t = "Mongo db $mdb collection $table has correct number of rows after delete";
+        my $col = $db->get_collection($table);
+        my @rows = $col->find->all;
+        my $count = @rows;
+        is ($count, 0, $t);
+    }
 }
 
 ## Insert two rows, then delete one of them
@@ -302,12 +333,16 @@ for my $table (keys %tabletype) {
 $dbhA->commit();
 $bct->ctl('bucardo kick mongo 0');
 
-for my $table (keys %tabletype2) {
-    $t = "Mongo collection $table has correct number of rows after double insert";
-    my $col = $db->get_collection($table);
-    my @rows = $col->find->all;
-    my $count = @rows;
-    is ($count, 2, $t);
+for my $mdb (@mongos) {
+    my $db = $db[$mdb];
+    for my $table (keys %tabletype2) {
+        $table =~ s/_pg// if $mdb eq '2';
+        $t = "Mongo db $mdb collection $table has correct number of rows after double insert";
+        my $col = $db->get_collection($table);
+        my @rows = $col->find->all;
+        my $count = @rows;
+        is ($count, 2, $t);
+    }
 }
 
 ## Delete one of the rows
@@ -317,12 +352,16 @@ for my $table (keys %tabletype) {
 $dbhA->commit();
 $bct->ctl('bucardo kick mongo 0');
 
-for my $table (keys %tabletype2) {
-    $t = "Mongo collection $table has correct number of rows after single deletion";
-    my $col = $db->get_collection($table);
-    my @rows = $col->find->all;
-    my $count = @rows;
-    is ($count, 1, $t);
+for my $mdb (@mongos) {
+    my $db = $db[$mdb];
+    for my $table (keys %tabletype2) {
+        $table =~ s/_pg// if $mdb eq '2';
+        $t = "Mongo db $mdb collection $table has correct number of rows after single deletion";
+        my $col = $db->get_collection($table);
+        my @rows = $col->find->all;
+        my $count = @rows;
+        is ($count, 1, $t);
+    }
 }
 
 ## Insert two more rows, then truncate
@@ -336,12 +375,16 @@ for my $table (keys %tabletype) {
 $dbhA->commit();
 $bct->ctl('bucardo kick mongo 0');
 
-for my $table (keys %tabletype2) {
-    $t = "Mongo collection $table has correct number of rows after more inserts";
-    my $col = $db->get_collection($table);
-    my @rows = $col->find->all;
-    my $count = @rows;
-    is ($count, 3, $t);
+for my $mdb (@mongos) {
+    my $db = $db[$mdb];
+    for my $table (keys %tabletype2) {
+        $table =~ s/_pg// if $mdb eq '2';
+        $t = "Mongo db $mdb collection $table has correct number of rows after more inserts";
+        my $col = $db->get_collection($table);
+        my @rows = $col->find->all;
+        my $count = @rows;
+        is ($count, 3, $t);
+    }
 }
 
 for my $table (keys %tabletype) {
@@ -350,18 +393,21 @@ for my $table (keys %tabletype) {
 $dbhA->commit();
 $bct->ctl('bucardo kick mongo 0');
 
-for my $table (keys %tabletype2) {
-    $t = "Mongo collection $table has correct number of rows after truncate";
-    my $col = $db->get_collection($table);
-    my @rows = $col->find->all;
-    my $count = @rows;
-    is ($count, 0, $t);
+for my $mdb (@mongos) {
+    my $db = $db[$mdb];
+    for my $table (keys %tabletype2) {
+        $t = "Mongo db $mdb collection $table has correct number of rows after truncate";
+        my $col = $db->get_collection($table);
+        my @rows = $col->find->all;
+        my $count = @rows;
+        is ($count, 0, $t);
+    }
 }
 
 ## Test customname again
 undef %tabletype2;
 for my $table (keys %tabletype) {
-    my $newname = $table.'_pg2';
+    my $newname = $table.'_pg';
     $tabletype2{$newname} = $tabletype{$table};
 }
 
@@ -371,7 +417,7 @@ $dbhX->do('DELETE FROM bucardo.customname');
 
 ## Add a new suffix to the end of each table in this sync for mongo
 $SQL = q{INSERT INTO bucardo.customname(goat,newname,db,sync)
-SELECT id,tablename||'_pg2','M','mongo' FROM goat};
+SELECT id,tablename||'_pg','M','mongo' FROM goat};
 $dbhX->do($SQL);
 $dbhX->commit();
 
@@ -388,12 +434,16 @@ for my $table (keys %tabletype) {
 $dbhA->commit();
 $bct->ctl('bucardo kick mongo 0');
 
-for my $table (keys %tabletype2) {
-    $t = "Mongo collection $table has correct number of rows after insert";
-    my $col = $db->get_collection($table);
-    my @rows = $col->find->all;
-    my $count = @rows;
-    is ($count, 2, $t);
+for my $mdb (@mongos) {
+    my $db = $db[$mdb];
+    for my $table (keys %tabletype2) {
+        $table =~ s/_pg// if $mdb eq '2';
+        $t = "Mongo db $mdb collection $table has correct number of rows after insert";
+        my $col = $db->get_collection($table);
+        my @rows = $col->find->all;
+        my $count = @rows;
+        is ($count, 2, $t);
+    }
 }
 
 
@@ -407,7 +457,6 @@ $t=q{Using customname, we can restrict the columns sent};
 $t=q{Using customname, we can add new columns and modify others};
 ## Set this one for all syncs
 
-pass('Done with mongo testing');
+done_testing();
 
 exit;
-
