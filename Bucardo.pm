@@ -2120,7 +2120,7 @@ sub start_controller {
                 $g->{newname}{$syncname}{$dbname} = "$S.$T";
             }
             ## Some always get the raw table name
-            elsif ($d->{dbtype} eq 'redis') {
+            elsif ($d->{dbtype} eq 'redis' or $d->{dbtype} eq 'mongo') {
                 $g->{newname}{$syncname}{$dbname} = $g->{tablename};
             }
             else {
@@ -4133,7 +4133,6 @@ sub start_kid {
                                 'starttime' => scalar gmtime
                                 };
                             if ($self->{oldmongo}) {
-                                ##AUTOLOADed collection method names are deprecated and will be removed in a future release. Use $collection->get_collection( 'update_one' ) instead. at Bucardo.pm line 4125.
                                 $collection->update
                                     (
                                         { sync => $syncname },
@@ -5706,8 +5705,8 @@ sub connect_database {
             my $mongoURI = 'mongodb://';
             my $dbdsn = $d->{dbdsn} || '';
 
-            if ($dbdsn =~ s/^DSN://) {
-                ## Just in case:
+            if (length $dbdsn) {
+                $dbdsn =~ s/^DSN://;
                 if ($dbdsn !~ /^mongodb:/) {
                     $mongoURI .= $dbdsn;
                 }
@@ -9261,8 +9260,8 @@ sub delete_rows {
             ## For MongoDB, we simply remove everything from the collection
             ## This keeps the indexes around (which is why we don't "drop")
             elsif ('mongo' eq $type) {
-                $self->{collection} = $Target->{dbh}->get_collection($target_tablename);
-                $self->{collection}->remove({}, { safe => 1 } );
+                my $collection = $Target->{dbh}->get_collection($target_tablename);
+                $collection->remove({}, { safe => 1 } );
             }
             ## For flatfiles, write out a basic truncate statement
             elsif ($type =~ /flat/o) {
@@ -9504,8 +9503,8 @@ sub delete_rows {
 
             if ('mongo' eq $type) {
 
-                ## Grab the collection name and store it
-                $self->{collection} = $Target->{dbh}->get_collection($target_tablename);
+                ## Set the collection
+                $Target->{collection} = $Target->{dbh}->get_collection($target_tablename);
 
                 ## Because we may have multi-column primary keys, and each key may need modifying,
                 ## we have to put everything into an array of arrays.
@@ -9573,7 +9572,7 @@ sub delete_rows {
                     ## If we have a single key, we can use the '$in' syntax
                     if ($numpks <= 1) {
                         my @newarray = @{ $delkeys[0] }[$bottom..$top];
-                        my $result = $self->{collection}->remove(
+                        my $result = $Target->{collection}->remove(
                         {$pkcolsraw => { '$in' => \@newarray }}, { safe => 1 });
                         $Target->{deleted_rows} += $result->{n};
                     }
@@ -9594,7 +9593,7 @@ sub delete_rows {
                             }
                         }
 
-                        my $result = $self->{collection}->remove(
+                        my $result = $Target->{collection}->remove(
                         { '$and' => \@find }, { safe => 1 });
 
                         $Target->{deleted_rows} += $result->{n};
@@ -9818,7 +9817,6 @@ sub push_rows {
                 print {$Target->{filehandle}} "INSERT INTO $target_tablename$columnlist VALUES\n";
             }
             elsif ('mongo' eq $type) {
-                $self->{collection} = $Target->{dbh}->get_collection($target_tablename);
             }
             elsif ('redis' eq $type) {
                 ## No setup needed
@@ -9948,7 +9946,7 @@ sub push_rows {
                                 $object->{$key} = strtod($object->{$key});
                             }
                         }
-                        $self->{collection}->insert($object, { safe => 1 });
+                        $Target->{collection}->insert($object, { safe => 1 });
                     }
                     elsif ('redis' eq $type) {
 
