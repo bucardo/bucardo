@@ -521,7 +521,7 @@ CREATE TABLE bucardo.customname (
 );
 
 ALTER TABLE bucardo.customname ADD CONSTRAINT customname_sane_name
-  CHECK (newname ~ E'^[a-zA-Z 0-9_.~]+$');
+  CHECK (newname ~ E'^["a-zA-Z 0-9_.~]+$');
 
 ALTER TABLE bucardo.customname
   ADD CONSTRAINT customname_db_fk
