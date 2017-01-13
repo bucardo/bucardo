@@ -2796,28 +2796,7 @@ sub start_kid {
                 my $d = $sync->{db}{$dbname};
 
                 if ($d->{dbtype} eq 'mongo') {
-                    my $collection = $d->{dbh}->get_collection($tname);
-                    my $object = {
-                        'sync' => $syncname,
-                        'status' => 'failed',
-                        'endtime' => scalar gmtime,
-                    };
-                    if ($self->{oldmongo}) {
-                        $collection->update
-                            (
-                                { sync => $syncname },
-                                { '$set' => $object },
-                                { upsert => 1, safe => 1 }
-                        );
-                    }
-                    else {
-                        $collection->update_one
-                            (
-                                { sync => $syncname },
-                                { '$set' => $object },
-                                { upsert => 1, safe => 1 }
-                        );
-                    }
+                    $self->update_mongo_status( $d, $syncname, $tname, 'failed' );
                 }
             }
         }
@@ -4126,28 +4105,7 @@ sub start_kid {
                         my $d = $sync->{db}{$dbname};
 
                         if ($d->{dbtype} eq 'mongo') {
-                            my $collection = $d->{dbh}->get_collection($tname);
-                            my $object = {
-                                'sync' => $syncname,
-                                'status' => 'started',
-                                'starttime' => scalar gmtime
-                                };
-                            if ($self->{oldmongo}) {
-                                $collection->update
-                                    (
-                                        { sync => $syncname },
-                                        { '$set' => $object },
-                                        { upsert => 1, safe => 1 }
-                                    );
-                            }
-                            else {
-                                $collection->update_one
-                                    (
-                                        { sync => $syncname },
-                                        { '$set' => $object },
-                                        { upsert => 1, safe => 1 }
-                                    );
-                            }
+                            $self->update_mongo_status( $d, $syncname, $tname, 'started' );
                         }
                     }
                 }
@@ -4728,29 +4686,7 @@ sub start_kid {
                 my $d = $sync->{db}{$dbname};
 
                 if ($d->{dbtype} eq 'mongo') {
-                    my $collection = $d->{dbh}->get_collection($tname);
-                    my $object = {
-                        'sync' => $syncname,
-                        'status' => 'complete',
-                        'endtime' => scalar gmtime,
-                    };
-
-                    if ($self->{oldmongo}) {
-                        $collection->update
-                            (
-                                { sync => $syncname },
-                                { '$set' => $object },
-                                { upsert => 1, safe => 1 }
-                        );
-                    }
-                    else {
-                        $collection->update_one
-                            (
-                                { sync => $syncname },
-                                { '$set' => $object },
-                                { upsert => 1, safe => 1 }
-                        );
-                    }
+                    $self->update_mongo_status( $d, $syncname, $tname, 'complete' );
                 }
             }
         }
@@ -5339,6 +5275,39 @@ sub remove_lock_file {
     return undef;
 
 } ## end of remove_lock_file
+
+
+sub update_mongo_status {
+
+    ## Update the Mongo semaphore table
+    ## Arguments: four
+    ## 1. Database object
+    ## 2. Name of the sync
+    ## 3. Name of the table
+    ## 3. New status
+
+    my ($self, $d, $syncname, $tablename, $status) = @_;
+
+    my $collection = $d->{dbh}->get_collection($tablename);
+
+    my @args = (
+        { sync => $syncname },
+        { '$set' => {
+                        sync => $syncname,
+                        status => $status,
+                        endtime => scalar gmtime,
+                    }
+        },
+        { upsert => 1, safe => 1 }
+    );
+
+    $self->{oldmongo} ? $collection->update(@args) : $collection->update_one(@args);
+
+    return;
+
+
+} ## end of update_mongo_status
+
 
 
 sub disable_triggers {
