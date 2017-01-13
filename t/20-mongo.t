@@ -3,6 +3,8 @@
 
 ## Test using MongoDB as a database target
 
+## See the bottom of this file for notes on testing
+
 use 5.008003;
 use strict;
 use warnings;
@@ -11,10 +13,12 @@ use lib 't','.';
 use DBD::Pg;
 use Test::More;
 use MIME::Base64;
+use File::Spec::Functions;
+use File::Temp qw/ tempfile /;
 
 use vars qw/ $bct $dbhX $dbhA $dbhB $dbhC $dbhD $res $command $t %pkey $SQL %sth %sql/;
 
-my @mongoport = (00000,11111,22222);
+my @mongoport = (00000,11111,22222,33333);
 my @mongos = (1,2);
 
 ## Must have the MongoDB module
@@ -31,9 +35,48 @@ if (!$evalok) {
 my $mongoversion = $MongoDB::VERSION;
 my $oldversion = $mongoversion =~ /^0\./ ? 1 : 0;
 
+## For creating the bucardo user on the mongo databases
+my ($newuserfh, $newuserfilename) = tempfile( UNLINK => 1, SUFFIX => '.js');
+print {$newuserfh} qq{
+db.createUser(
+  {
+    user: "bucardo",
+    pwd: "bucardo",
+    roles: [ { role: "userAdminAnyDatabase", db: "admin" } ]
+  }
+)
+};
+close $newuserfh;
+
 ## All MongoDB databases must be up and running
 my @conn;
+my $mongotestdir = 'mongotest';
+-e $mongotestdir or mkdir $mongotestdir;
 for my $mdb (@mongos) {
+    my $port = $mongoport[$mdb];
+    my $mongodir = catfile($mongotestdir, "testmongo$port");
+    my $restart = 0;
+    if (! -e $mongodir) {
+        mkdir $mongodir;
+        $restart = 1;
+    }
+    else {
+        ## Need to restart if not running
+        my $lockfile = catfile($mongodir, 'mongod.lock');
+        if (! -e $lockfile or ! -s $lockfile) {
+            $restart = 1;
+        }
+    }
+    if ($restart) {
+        my $logfile = catfile($mongodir, 'mongod.log');
+        my $COM = "mongod --dbpath $mongodir --port $port --logpath $logfile --fork";
+        ## This will hang if more than one called: fixme!
+        ## system $COM;
+    }
+    ## Create the bucardo user, just in case:
+    my $COM = "mongo --quiet --port $port admin $newuserfilename 2>/dev/null";
+    system $COM;
+
     $evalok = 0;
     my $dsn = "localhost:$mongoport[$mdb]";
     eval {
@@ -112,9 +155,13 @@ like ($res, qr/Added database "M"/, $t);
 
 $t = 'Adding mongo database N works';
 $command = qq{bucardo add db N dbname=btest2 dbdsn="mongodb://localhost:$mongoport[2]" type=mongo};
-#$command .= ' status=inactive --force';
 $res = $bct->ctl($command);
 like ($res, qr/Added database "N"/, $t);
+
+$t = 'Adding mongo database O works';
+$command = qq{bucardo add db O dbname=btest3 dbdsn="mongodb://localhost:$mongoport[3]" type=mongo};
+$res = $bct->ctl($command);
+like ($res, qr/Added database "O"/, $t);
 
 ## Teach Bucardo about all pushable tables, adding them to a new relgroup named "therd"
 $t = q{Adding all tables on the master works};
@@ -123,7 +170,7 @@ $command =
 $res = $bct->ctl($command);
 like ($res, qr/Creating relgroup: therd.*New tables added: \d/s, $t);
 
-## Add a suffix to the end of each mongo target table
+## Add a suffix to the end of each mongo target table on M
 $SQL = q{INSERT INTO bucardo.customname(goat,newname,db)
 SELECT id,tablename||'_pg','M' FROM goat};
 $dbhX->do($SQL);
@@ -138,7 +185,7 @@ like ($res, qr/New sequences added: \d/, $t);
 ## Create a new dbgroup
 $t = q{Created a new dbgroup};
 $command =
-"bucardo add dbgroup md A:source B:source C M N";
+"bucardo add dbgroup md A:source B:source C M N O:fullcopy";
 $res = $bct->ctl($command);
 like ($res, qr/Created dbgroup "md"/, $t);
 
@@ -208,7 +255,6 @@ $dbhC->commit();
 
 ## Commit, then kick off the sync
 $dbhA->commit();
-$bct->ctl('bucardo kick mongo 0');
 $bct->ctl('bucardo kick mongo 0');
 
 ## Check B and C for the new rows
@@ -446,7 +492,6 @@ for my $mdb (@mongos) {
     }
 }
 
-
 $t=q{Using customname, we can force a text string to an int};
 my $CS = 'SELECT id, data1 AS data2inty::INTEGER, inty, email FROM bucardo.bucardo_test2';
 ## Set this one for this db and this sync
@@ -460,3 +505,17 @@ $t=q{Using customname, we can add new columns and modify others};
 done_testing();
 
 exit;
+
+__END__
+This can be handy to generate some test MongoDB databases:
+
+mongod --dbpath mongotest/testmongo11111 --shutdown
+mongod --dbpath mongotest/testmongo22222 --shutdown
+mongod --dbpath mongotest/testmongo33333 --shutdown
+sleep 2
+rm -fr mongotest
+mkdir -p mongotest/testmongo11111 mongotest/testmongo22222 mongotest/testmongo33333
+sync
+nohup mongod --dbpath mongotest/testmongo11111 --port 11111 --fork --logpath mongotest/mongod.11111.log --smallfiles --noprealloc --nojournal &
+nohup mongod --dbpath mongotest/testmongo22222 --port 22222 --fork --logpath mongotest/mongod.22222.log --smallfiles --noprealloc --nojournal &
+nohup mongod --dbpath mongotest/testmongo33333 --port 33333 --fork --logpath mongotest/mongod.33333.log --smallfiles --noprealloc --nojournal &
