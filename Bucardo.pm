@@ -1564,7 +1564,7 @@ sub check_sync_health {
                     next DB;
                 }
             }
-            elsif (! $dbh->ping()) {
+            elsif (ref $dbh =~ /DBI/ and ! $dbh->ping() ) {
                 $isbad = 1;
                 $self->glog("Database $dbname failed ping", LOG_NORMAL);
             }
@@ -9190,8 +9190,8 @@ sub delete_table {
     elsif ('mongo' eq $d->{dbtype}) {
         ## Same as truncate, really, except we return the number of rows
         my $collection = $d->{dbh}->get_collection($tablename);
-        my $res = $collection->remove({}, { safe => 1} );
-        $count = $res->{n};
+        my $res = $collection->delete_many({}, { safe => 1} );
+        $count = $res->{deleted_count};
     }
     elsif ('redis' eq $d->{dbtype}) {
         ## Nothing relevant here, as the table is only part of the key name
@@ -9917,6 +9917,10 @@ sub push_rows {
                     ## For Mongo, do some mongomagic
                     elsif ('mongo' eq $type) {
 
+                        ## The actual target name
+                        my $target_tablename = $customname->{$Target->{name}};
+                        $Target->{collection} = $Target->{dbh}->get_collection($target_tablename);
+
                         ## Have to map these values back to their names
                         chomp $buffer;
                         my @cols = map { $_ = undef if $_ eq '\\N'; $_; } split /\t/, $buffer, -1;
@@ -9946,7 +9950,7 @@ sub push_rows {
                                 $object->{$key} = strtod($object->{$key});
                             }
                         }
-                        $Target->{collection}->insert($object, { safe => 1 });
+                        $Target->{collection}->insert_one($object, { safe => 1 });
                     }
                     elsif ('redis' eq $type) {
 
