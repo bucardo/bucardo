@@ -9154,7 +9154,7 @@ sub truncate_table {
 
     if ('mongo' eq $Database->{dbtype}) {
         my $collection = $Database->{dbh}->get_collection($tablename);
-        $collection->delete_many({}, { safe => 1} );
+        $self->{oldmongo} ? $collection->remove({}, { safe => 1} ): $collection->delete_many({}, { safe => 1} );
         return 1;
     }
 
@@ -9190,8 +9190,14 @@ sub delete_table {
     elsif ('mongo' eq $d->{dbtype}) {
         ## Same as truncate, really, except we return the number of rows
         my $collection = $d->{dbh}->get_collection($tablename);
-        my $res = $collection->delete_many({}, { safe => 1} );
-        $count = $res->{deleted_count};
+        if ($self->{oldmongo}) {
+            my $res = $collection->remove({}, { safe => 1} );
+            $count = $res->{n};
+        }
+        else {
+            my $res = $collection->delete_many({}, { safe => 1} );
+            $count = $res->{deleted_count};
+        }
     }
     elsif ('redis' eq $d->{dbtype}) {
         ## Nothing relevant here, as the table is only part of the key name
@@ -9572,9 +9578,14 @@ sub delete_rows {
                     ## If we have a single key, we can use the '$in' syntax
                     if ($numpks <= 1) {
                         my @newarray = @{ $delkeys[0] }[$bottom..$top];
-                        my $result = $Target->{collection}->delete_many(
-                        {$pkcolsraw => { '$in' => \@newarray }}, { safe => 1 });
-                        $Target->{deleted_rows} += $result->{deleted_count};
+                        if ($self->{oldmongo}) {
+                            my $res = $Target->{collection}->remove( {$pkcolsraw => { '$in' => \@newarray }}, { safe => 1 });
+                            $Target->{deleted_rows} += $res->{n};
+                        }
+                        else {
+                            my $res = $Target->{collection}->delete_many( {$pkcolsraw => { '$in' => \@newarray }}, { safe => 1 });
+                            $Target->{deleted_rows} += $res->{deleted_count};
+                        }
                     }
                     else {
                         ## For multi-column primary keys, we cannot use '$in', sadly.
@@ -9593,10 +9604,14 @@ sub delete_rows {
                             }
                         }
 
-                        my $result = $Target->{collection}->delete_many(
-                        { '$and' => \@find }, { safe => 1 });
-
-                        $Target->{deleted_rows} += $result->{deleted_count};
+                        if ($self->{oldmongo}) {
+                            my $res = $Target->{collection}->remove( { '$and' => \@find }, { safe => 1 });
+                            $Target->{deleted_rows} += $res->{n};
+                        }
+                        else {
+                            my $res = $Target->{collection}->delete_many( { '$and' => \@find }, { safe => 1 });
+                            $Target->{deleted_rows} += $res->{deleted_count};
+                        }
 
                         ## We do not need to loop, as we just went 1 by 1 through the whole list
                         last MONGODEL;
@@ -9950,7 +9965,9 @@ sub push_rows {
                                 $object->{$key} = strtod($object->{$key});
                             }
                         }
-                        $Target->{collection}->insert_one($object, { safe => 1 });
+                        $self->{oldmongo} ? 
+                            $Target->{collection}->insert($object, { safe => 1 }) :
+                                $Target->{collection}->insert_one($object, { safe => 1 });
                     }
                     elsif ('redis' eq $type) {
 
