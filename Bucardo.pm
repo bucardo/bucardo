@@ -9154,7 +9154,7 @@ sub truncate_table {
 
     if ('mongo' eq $Database->{dbtype}) {
         my $collection = $Database->{dbh}->get_collection($tablename);
-        $collection->remove({}, { safe => 1} );
+        $collection->delete_many({}, { safe => 1} );
         return 1;
     }
 
@@ -9572,9 +9572,9 @@ sub delete_rows {
                     ## If we have a single key, we can use the '$in' syntax
                     if ($numpks <= 1) {
                         my @newarray = @{ $delkeys[0] }[$bottom..$top];
-                        my $result = $Target->{collection}->remove(
+                        my $result = $Target->{collection}->delete_many(
                         {$pkcolsraw => { '$in' => \@newarray }}, { safe => 1 });
-                        $Target->{deleted_rows} += $result->{n};
+                        $Target->{deleted_rows} += $result->{deleted_count};
                     }
                     else {
                         ## For multi-column primary keys, we cannot use '$in', sadly.
@@ -9593,10 +9593,10 @@ sub delete_rows {
                             }
                         }
 
-                        my $result = $Target->{collection}->remove(
+                        my $result = $Target->{collection}->delete_many(
                         { '$and' => \@find }, { safe => 1 });
 
-                        $Target->{deleted_rows} += $result->{n};
+                        $Target->{deleted_rows} += $result->{deleted_count};
 
                         ## We do not need to loop, as we just went 1 by 1 through the whole list
                         last MONGODEL;
