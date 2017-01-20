@@ -9026,7 +9026,8 @@ sub install {
         }
     }
 
-    if ($res !~ /(\d+)\.(\d+)(\S+)/) {
+    ## Find a version -- the first number in the line after delimiter (5 or more of symbols '-')
+    if ($res !~ /-{5,}\n[^d]*(\d+)\.(\d+)(\S+)/) {
         print "-->Sorry, unable to connect to the database\n\n";
         warn $delayed_warning;
         exit 1 if $bcargs->{batch};
