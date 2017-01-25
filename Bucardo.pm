@@ -233,6 +233,7 @@ sub new {
         logseparate  => 0,
         logextension => '',
         logclean     => 0,
+        foreground   => 0,
         dryrun       => 0,
         sendmail     => 1,
         extraname    => '',
@@ -470,13 +471,15 @@ sub start_mcp {
     };
     $disconnect_ok or $self->glog("Warning! Disconnect failed $@", LOG_WARN);
 
-    my $seeya = fork;
-    if (! defined $seeya) {
-        die q{Could not fork mcp!};
-    }
-    ## Immediately close the child process (one side of the fork)
-    if ($seeya) {
-        exit 0;
+    unless ($self->{foreground}) {
+        my $seeya = fork;
+        if (! defined $seeya) {
+            die q{Could not fork mcp!};
+        }
+        ## Immediately close the child process (one side of the fork)
+        if ($seeya) {
+            exit 0;
+        }
     }
 
     ## Now that we've forked, overwrite the PID file with our new value

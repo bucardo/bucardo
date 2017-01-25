@@ -1,6 +1,9 @@
 
 Bucardo version ???
 
+  - Add foreground flag
+    [Chris Barbour]
+
   - Fix bug in onetimecopy=2 mode
     [Greg Sabino Mullane]
 
