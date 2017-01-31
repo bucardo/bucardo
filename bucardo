@@ -178,7 +178,7 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'cleandebugs=i', # legacy
 
 
-     'logdest|log-dest|log-destination=s@', # stderr, syslog, or file path
+     'logdest|log-dest|log-destination=s@', # stderr, syslog, none, or file path
      'logseparate|log-sep|log-separate|debugfilesep!',
      'logextension|log-extension|log-ext|debugname=s',
      'logclean|log-clean!',
