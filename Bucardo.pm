@@ -4271,7 +4271,7 @@ sub start_kid {
                                         $err =~ /serialize|deadlock/ ? LOG_VERBOSE : LOG_WARN);
                             ## If this was a serialization error, we will not need to use pg_cancel
                             if ($err =~ /serialize/) {
-                                $g->{aync_active} = 0;
+                                $g->{async_active} = 0;
                             }
                             die "$err\n";
                         }
