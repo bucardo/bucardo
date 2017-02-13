@@ -45,7 +45,7 @@ $Data::Dumper::Varname = 'BUCARDO';
 $Data::Dumper::Indent = 1;
 
 ## Common variables we don't want to declare over and over:
-use vars qw($SQL %SQL $sth %sth $count $info);
+use vars qw(%SQL $sth %sth $count $info);
 
 ## Logging verbosity control
 ## See also the 'log_level_number' inside the config hash
@@ -875,6 +875,8 @@ sub mcp_main {
     my $maindbh = $self->{masterdbh};
     my $sync = $self->{sync};
 
+    my $SQL;
+
     ## Used to gather up and handle any notices received via the listen/notify system
     my $notice;
 
@@ -1511,6 +1513,8 @@ sub check_sync_health {
     my $self = shift;
     my $dbnamematch = shift || '';
 
+    my $SQL;
+
     $self->glog('Starting check_sync_health', LOG_NORMAL);
 
     ## How many bad databases did we find?
@@ -1631,6 +1635,8 @@ sub restore_syncs {
 
     my $self = shift;
 
+    my $SQL;
+
     $self->glog('Starting restore_syncs', LOG_DEBUG);
 
     ## How many syncs did we restore?
@@ -1711,6 +1717,8 @@ sub start_controller {
     ## Returns: never
 
     our ($self,$sync) = @_;
+
+    my $SQL;
 
     $self->{ctlpid} = $$;
     $self->{syncname} = $sync->{name};
@@ -2431,6 +2439,8 @@ sub start_kid {
     ## Returns: never (exits)
 
     my ($self,$sync) = @_;
+
+    my $SQL;
 
     ## Prefix all log lines with this TLA
     $self->{logprefix} = 'KID';
@@ -5321,6 +5331,8 @@ sub disable_triggers {
 
     my ($self, $sync, $db) = @_;
 
+    my $SQL;
+
     ## Are triggers already disabled for this database? Return and do nothing
     return undef if ! $db->{triggers_enabled};
 
@@ -5387,6 +5399,8 @@ sub enable_triggers {
     ## Returns: undef
 
     my ($self, $sync) = @_;
+
+    my $SQL;
 
     ## Walk through each database in this sync and enable triggers as needed
     for my $dbname (sort keys %{ $sync->{db} }) {
@@ -5476,6 +5490,8 @@ sub disable_indexes {
 
     my ($self, $sync, $db, $table) = @_;
 
+    my $SQL;
+
     ## Do nothing unless rebuild_index has been set for this table
     return undef if ! $table->{rebuild_index};
 
@@ -5529,6 +5545,8 @@ sub enable_indexes {
     ## Returns: undef
 
     my ($self, $sync, $table) = @_;
+
+    my $SQL;
 
     ## Walk through each database in this sync and reapply indexes as needed
     for my $dbname (sort keys %{ $sync->{db} }) {
@@ -5622,7 +5640,7 @@ sub connect_database {
 
     my $id = shift || 0;
 
-    my ($dsn,$dbh,$user,$pass,$ssp,$dbname);
+    my ($dsn,$dbh,$user,$pass,$ssp,$dbname,$SQL);
 
     my $dbtype = 'postgres';
 
@@ -5838,6 +5856,8 @@ sub reload_config_database {
     ## Returns: undef
 
     my $self = shift;
+
+    my $SQL;
 
     undef %config;
     undef %config_about;
@@ -6099,6 +6119,8 @@ sub show_db_version_and_time {
 
     my ($self,$ldbh,$backend,$prefix) = @_;
 
+    my $SQL;
+
     return if ! defined $ldbh;
 
     return if ref $ldbh ne 'DBI::db';
@@ -6141,7 +6163,7 @@ sub get_dbs {
 
     my $self = shift;
 
-    $SQL = 'SELECT * FROM bucardo.db';
+    my $SQL = 'SELECT * FROM bucardo.db';
     $sth = $self->{masterdbh}->prepare($SQL);
     $sth->execute();
     my $info = $sth->fetchall_hashref('name');
@@ -6162,7 +6184,7 @@ sub get_goats {
 
     my $self = shift;
 
-    $SQL = 'SELECT * FROM bucardo.goat';
+    my $SQL = 'SELECT * FROM bucardo.goat';
     $sth = $self->{masterdbh}->prepare($SQL);
     $sth->execute();
     my $info = $sth->fetchall_hashref('id');
@@ -6184,7 +6206,7 @@ sub find_goats {
     my ($self,$herd) = @_;
 
     my $goats = $self->get_goats();
-    $SQL = q{
+    my $SQL = q{
         SELECT   goat
         FROM     bucardo.herdmap
         WHERE    herd = ?
@@ -6214,7 +6236,7 @@ sub get_syncs {
     my $self = shift;
 
     ## Grab all fields plus some computed ones from the sync table
-    $SQL = q{
+    my $SQL = q{
         SELECT *,
             COALESCE(EXTRACT(epoch FROM checktime),0) AS checksecs,
             COALESCE(EXTRACT(epoch FROM lifetime),0) AS lifetimesecs
@@ -6586,6 +6608,7 @@ sub validate_sync {
     my ($self,$s) = @_;
 
     my $syncname = $s->{name};
+    my $SQL;
 
     $self->glog(qq{Running validate_sync on "$s->{name}"}, LOG_NORMAL);
 
@@ -7602,6 +7625,7 @@ sub fork_vac {
     ## Returns: undef
 
     my $self = shift;
+    my $SQL;
 
     ## Fork it off
     my $newpid = $self->fork_and_inactivate('VAC');
@@ -7908,6 +7932,8 @@ sub reload_mcp {
 
     my $self = shift;
 
+    my $SQL;
+
     ## Grab a list of all the current syncs from the database and store as objects
     $self->{sync} = $self->get_syncs();
 
@@ -8091,6 +8117,8 @@ sub terminate_old_goats {
 
     my $maindbh = $self->{masterdbh};
 
+    my $SQL;
+
     ## Grab all backends in the tbale
     $SQL = 'SELECT * FROM bucardo.dbrun WHERE pgpid IS NOT NULL';
 
@@ -8128,7 +8156,6 @@ sub terminate_old_goats {
             if (! defined $d->{dbh}) {
                 $self->glog("Existing database connection gone: reconnecting to $dbname", LOG_VERBOSE);
                 eval {
-                    local $SQL; # prevent stompage in ->connect_database
                     ($d->{backend}, $d->{dbh}) = $self->connect_database($dbname);
                 };
                 if (! defined $d->{dbh}) {
@@ -8467,6 +8494,8 @@ sub end_syncrun {
 
     my ($self, $ldbh, $exitmode, $syncname, $status) = @_;
 
+    my $SQL;
+
     ## Which column are we changing?
     my $lastcol =
         $exitmode eq 'good'  ? 'lastgood' :
@@ -8783,6 +8812,8 @@ sub table_has_rows {
 
     my ($self,$d,$tname) = @_;
 
+    my $SQL;
+
     ## Some types do not have a count
     return 0 if $d->{does_append_only};
 
@@ -8839,6 +8870,8 @@ sub get_sequence_info {
 
     my ($self,$ldbh,$schemaname,$seqname,$syncname,$targetname) = @_;
 
+    my $SQL;
+
     if (defined $syncname) {
         ## Pull "old" sequence information. May be empty.
         $SQL = "SELECT $sequence_columns FROM bucardo.bucardo_sequences "
@@ -8871,6 +8904,8 @@ sub adjust_sequence {
     ## Returns: number of changes made for this sequence
 
     my ($self,$g,$sync,$S,$T,$syncname) = @_;
+
+    my $SQL;
 
     ## Total changes made across all databases
     my $changes = 0;
@@ -9104,6 +9139,8 @@ sub truncate_table {
     ## Returns: true if the truncate succeeded without error, false otherwise
 
     my ($self, $Database, $Table, $does_cascade) = @_;
+
+    my $SQL;
 
     ## Override any existing handlers so we can cleanly catch the eval
     local $SIG{__DIE__} = sub {};
@@ -9700,6 +9737,8 @@ sub push_rows {
     ## Returns: number of rows copied (to each target, not the total)
 
     my ($self,$rows,$Table,$Sync,$SourceDB,$TargetDB,$mode) = @_;
+
+    my $SQL;
 
     ## This will be zero for fullcopy of course
     my $total_rows = keys %$rows;
