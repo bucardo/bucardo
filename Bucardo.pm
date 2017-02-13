@@ -8119,7 +8119,7 @@ sub terminate_old_goats {
 
     my $SQL;
 
-    ## Grab all backends in the tbale
+    ## Grab all backends in the table
     $SQL = 'SELECT * FROM bucardo.dbrun WHERE pgpid IS NOT NULL';
 
     ## Just for one sync if that was passed in
