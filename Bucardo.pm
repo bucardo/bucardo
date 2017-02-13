@@ -8122,8 +8122,21 @@ sub terminate_old_goats {
         next if $d->{dbtype} ne 'postgres';
 
         ## Loop through each backend PID found for this database
-        for my $pid (sort keys %{ $dbpid{$dbname} }) {
+      EPID: for my $pid (sort keys %{ $dbpid{$dbname} }) {
             my $time = $dbpid{$dbname}{$pid};
+
+            if (! defined $d->{dbh}) {
+                $self->glog("Existing database connection gone: reconnecting to $dbname", LOG_VERBOSE);
+                eval {
+                    local $SQL; # prevent stompage in ->connect_database
+                    ($d->{backend}, $d->{dbh}) = $self->connect_database($dbname);
+                };
+                if (! defined $d->{dbh}) {
+                    $self->glog("Database $dbname unreachable, skipping cleanup of pid $pid", LOG_NORMAL);
+                    next EPID;
+                }
+            }
+
             $sth = $d->{dbh}->prepare($SQL);
 
             ## See if the process is still around by matching PID and query_start time
