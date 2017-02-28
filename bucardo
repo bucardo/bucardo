@@ -10607,12 +10607,12 @@ Turns makedelta magic on or off. Value is a list of databases which need makedel
 for this table. Value can also be "on" to enable makedelta for all databases.
 Defaults to "off".
 
-=item C<strict_check>
+=item C<strict_checking>
 
 Boolean indicating whether or not to be strict when comparing the table
 between syncs. If the columns have different names or data types, the
 validation will fail. But perhaps the columns are allowed to have different
-names or data types. If so, disable C<strict_check> and column differences will
+names or data types. If so, disable C<strict_checking> and column differences will
 result in warnings rather than failing the validation. Defaults to true.
 
 =back
@@ -10903,12 +10903,12 @@ Boolean indicating whether or not to track synchronization rates.
 Boolean indicating whether or not to rebuild indexes after every sync. Off by
 default. Optional.
 
-=item C<strict_check>
+=item C<strict_checking>
 
 Boolean indicating whether or not to be strict when comparing tables in the
 sync. If the columns have different names or data types, the validation will
 fail. But perhaps the columns are allowed to have different names or data
-types. If so, disable C<strict_check> and column differences will result in
+types. If so, disable C<strict_checking> and column differences will result in
 warnings rather than failing the validation. Defaults to true.
 
 =back
@@ -11543,12 +11543,12 @@ Boolean indicating whether or not to track synchronization rates.
 
 Boolean indicating whether or not to rebuild indexes after every sync.
 
-=item C<strict_check>
+=item C<strict_checking>
 
 Boolean indicating whether or not to be strict when comparing tables in the
 sync. If the columns have different names or data types, the validation will
 fail. But perhaps the columns are allowed to have different names or data
-types. If so, disable C<strict_check> and column differences will result in
+types. If so, disable C<strict_checking> and column differences will result in
 warnings rather than failing the validation. Defaults to true.
 
 =back
@@ -11602,12 +11602,12 @@ The table will be removed from any other relgroups.
 
 Specifies which databases need makedelta enabled for this table.
 
-=item C<strict_check>
+=item C<strict_checking>
 
 Boolean indicating whether or not to be strict when comparing the table
 between syncs. If the columns have different names or data types, the
 validation will fail. But perhaps the columns are allowed to have different
-names or data types. If so, disable C<strict_check> and column differences will
+names or data types. If so, disable C<strict_checking> and column differences will
 result in warnings rather than failing the validation. Defaults to true.
 
 =back
