@@ -51,7 +51,7 @@ push @q, [$db,$query] if defined $query and length $query;
 for (@q) {
   my ($db,$sql) = @$_;
   chomp $sql;
-  $sql =~ s/ARG{(\w+)}/$ARG->{$1}/ge;
+  $sql =~ s/ARG\{(\w+)\}/$ARG->{$1}/ge;
   $verbose and warn "SQL: -->$sql<--\n";
   my $sth = $dbh->{$db}->prepare($sql);
   $sth->execute();
