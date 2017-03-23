@@ -21,6 +21,7 @@ Future
 
 These range the gamut from wildly speculative ideas to must-have features.
 
+- Look into error when sources have different column orders
 - Write tests for the "dbdsn" feature
 - Disable constraints on large data loads
 - Allow 'bucardo update relgroup' to work
