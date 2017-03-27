@@ -10315,6 +10315,7 @@ sub pretty_time {
     if ($sec < 60*60 or $tweak =~ /m/) {
         my $min = int $sec / 60;
         $sec %= 60;
+        $sec = int $sec;
         my $ret = sprintf "$min %s", $min==1 ? msg('time-minute') : msg('time-minutes');
         $sec and $tweak !~ /S/ and $ret .= sprintf " $sec %s", $sec==1 ? msg('time-second') : msg('time-seconds');
         return $ret;
@@ -10326,6 +10327,7 @@ sub pretty_time {
         $sec -= ($hour*60*60);
         my $min = int $sec / 60;
         $sec -= ($min*60);
+        $sec = int $sec;
         my $ret = sprintf "$hour %s", $hour==1 ? msg('time-hour') : msg('time-hours');
         $min and $tweak !~ /M/ and $ret .= sprintf " $min %s", $min==1 ? msg('time-minute') : msg('time-minutes');
         $sec and $tweak !~ /[SM]/ and $ret .= sprintf " $sec %s", $sec==1 ? msg('time-second') : msg('time-seconds');
@@ -10340,6 +10342,7 @@ sub pretty_time {
         $sec -= ($our*60*60);
         my $min = int $sec / 60;
         $sec -= ($min*60);
+        $sec = int $sec;
         my $ret = sprintf "$day %s", $day==1 ? msg('time-day') : msg('time-days');
         $our and $tweak !~ /H/     and $ret .= sprintf " $our %s", $our==1 ? msg('time-hour')   : msg('time-hours');
         $min and $tweak !~ /[HM]/  and $ret .= sprintf " $min %s", $min==1 ? msg('time-minute') : msg('time-minutes');
@@ -10356,6 +10359,7 @@ sub pretty_time {
     $sec -= ($our*60*60);
     my $min = int $sec / 60;
     $sec -= ($min*60);
+    $sec = int $sec;
     my $ret = sprintf "$week %s", $week==1 ? msg('time-week') : msg('time-weeks');
     $day and $tweak !~ /D/      and $ret .= sprintf " $day %s", $day==1 ? msg('time-day')    : msg('time-days');
     $our and $tweak !~ /[DH]/   and $ret .= sprintf " $our %s", $our==1 ? msg('time-hour')   : msg('time-hours');
