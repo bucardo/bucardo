@@ -7183,10 +7183,13 @@ sub validate_sync {
                     ## Carve out some known exceptions (but still warn about them)
                     ## Allowed: varchar == text
                     ## Allowed: timestamp* == timestamp*
+                    ## Allowed: int == bigint
                     if (
                         ($scol->{ftype} eq 'character varying' and $fcol->{ftype} eq 'text')
                         or
                         ($scol->{ftype} eq 'text' and $fcol->{ftype} eq 'character varying')
+                        or
+                        ($scol->{ftype} eq 'integer' and $fcol->{ftype} eq 'bigint')
                         or
                         ($scol->{ftype} =~ /^timestamp/ and $fcol->{ftype} =~ /^timestamp/)
                 ) {
