@@ -10,7 +10,6 @@ dynamic_config      : 1
 distribution_type   : module
 
 requires:
-  boolean             : 0
   DBD::Pg             : 2.0
   DBI                 : 1.51
   DBIx::Safe          : 1.2.4

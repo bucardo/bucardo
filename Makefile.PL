@@ -13,7 +13,6 @@ WriteMakefile(
     AUTHOR       => 'Greg Sabino Mullane <greg@endpoint.com>',
     LICENSE      => 'BSD',
     PREREQ_PM    => {
-                     'boolean'             => '0',
                      'DBD::Pg'             => '2.0',
                      'DBI'                 => '1.51',
                      'DBIx::Safe'          => '1.2.4',

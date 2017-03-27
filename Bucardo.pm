@@ -31,7 +31,6 @@ use Sys::Hostname qw( hostname           ); ## Used for host safety check, and d
 use IO::Handle    qw( autoflush          ); ## Used to prevent stdout/stderr buffering
 use Sys::Syslog   qw( openlog syslog     ); ## In case we are logging via syslog()
 use Net::SMTP     qw(                    ); ## Used to send out email alerts
-use boolean       qw( true false         ); ## Used to send truthiness to MongoDB
 use List::Util    qw( first              ); ## Better than grep
 use MIME::Base64  qw( encode_base64
                       decode_base64      ); ## For making text versions of bytea primary keys
@@ -5685,6 +5684,17 @@ sub connect_database {
             ## For now, we simply require it
             require MongoDB;
 
+            ## We also need the Perl 'boolean' module
+            ## In this case, we want to generate our own error message:
+            my $gotboolean = 0;
+            eval {
+                require boolean;
+                $gotboolean = 1;
+            };
+            if (! $gotboolean) {
+                die qq{Unable to load the Perl 'boolean' module: needed for MongoDB support\n};
+            }
+
             ## Are we using the old "point-zero" version?
             my $mongoversion = $MongoDB::VERSION;
             $self->{oldmongo} = $mongoversion =~ /^0\./ ? 1 : 0;
@@ -9569,7 +9579,7 @@ sub delete_rows {
                         }
                         ## Boolean becomes true Perlish booleans via the 'boolean' module
                         elsif ($ctype eq 'boolean') {
-                            @{ $delkeys[$pknum] } = map { $_->[$pknum] eq 't' ? true : false } @fullrow;
+                            @{ $delkeys[$pknum] } = map { $_->[$pknum] eq 't' ? boolean->true : boolean->false } @fullrow;
                         }
                         ## Everything else gets a direct mapping
                         else {
@@ -9979,7 +9989,7 @@ sub push_rows {
                             }
                             elsif ($Table->{columnhash}{$key}{ftype} eq 'boolean') {
                                 if (defined $object->{$key}) {
-                                    $object->{$key} = $object->{$key} eq 't' ? true : false;
+                                    $object->{$key} = $object->{$key} eq 't' ? boolean->true : boolean->false;
                                 }
                             }
                             elsif ($Table->{columnhash}{$key}{ftype} =~ /real|double|numeric/o) {
@@ -10499,7 +10509,7 @@ this distribution. See also the documentation for the bucardo program.
 
 =item * DBIx::Safe ## Try 'yum install perl-DBIx-Safe' or visit bucardo.org
 
-=item * boolean
+=item * boolean (only if using MongoDB)
 
 =back
 

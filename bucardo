@@ -1909,6 +1909,16 @@ sub add_database {
 
             if ('mongo' eq $dbtype) {
 
+                ## Catch this nice and early - but also have a check in Bucardo.pm
+                my $gotboolean = 0;
+                eval {
+                    require boolean;
+                    $gotboolean = 1;
+                };
+                if (! $gotboolean) {
+                    warn qq{Unable to load the Perl 'boolean' module: needed for MongoDB support\n};
+                }
+
                 my $mongoURI = 'mongodb://';
 
                 if ($dsn =~ s/^DSN://) {

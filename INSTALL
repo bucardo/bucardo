@@ -27,6 +27,9 @@ Note that 'make test' is a rather long and involved process.
 However, because Bucardo is fairly complex, testing is highly 
 recommended before installing.
 
+If you are using a MongoDB target, you will also need to install the 'boolean' 
+Perl module.
+
 Once the above has been run, you will need to create a Bucardo database. 
 This can be done by running:
 
