@@ -3209,6 +3209,7 @@ sub start_kid {
         ## Reset the numbers to track total bucardo_delta matches
         undef %deltacount;
         $deltacount{all} = 0;
+        $deltacount{alltables} = 0;
         $deltacount{table} = {};
 
         ## Reset our counts of total inserts, deletes, truncates, and conflicts
@@ -4217,6 +4218,7 @@ sub start_kid {
                                 $self->glog("Rows to push from $dbname1.$S.$T: $rows", LOG_VERBOSE);
                                 ## This also exits us if we are a truncate with no source rows
                                 next if ! $rows;
+                                $deltacount{alltables}++;
 
                                 ## Build the list of target databases we are pushing to
                                 my @pushdbs;
@@ -4846,8 +4848,8 @@ sub start_kid {
                     $syncname,
                     $dmlcount{inserts},
                     (1==$dmlcount{inserts} ? 'row' : 'rows'),
-                    scalar keys %{$deltacount{table}},
-                    (1== keys %{$deltacount{table}} ? 'table' : 'tables'),
+                    $deltacount{alltables},
+                    (1== $deltacount{alltables} ? 'table' : 'tables'),
                     pretty_time($synctime),
                     $synctime < 120 ? '' : " ($synctime seconds)",), LOG_VERBOSE);
 
