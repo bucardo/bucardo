@@ -21,6 +21,7 @@ Future
 
 These range the gamut from wildly speculative ideas to must-have features.
 
+- Troubleshoot sync.onetimecopy=2: there are reports of it not working
 - Look into error when sources have different column orders
 - Write tests for the "dbdsn" feature
 - Disable constraints on large data loads
