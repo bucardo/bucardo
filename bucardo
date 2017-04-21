@@ -603,12 +603,12 @@ sub check_version {
 
     my $dbh = shift;
     my $res = $dbh->selectall_arrayref('SELECT version()')->[0][0];
-    if ($res !~ /(\d+)\.(\d+)/) {
+    if ($res !~ /\D+(\d+)(.+?)\s/) {
         die "Sorry, unable to determine the database version\n";
     }
-    my ($maj,$min) = ($1,$2);
-    if ($maj < 8 or (8 == $maj and $min < 1)) {
-        die "Sorry, Bucardo requires Postgres version 8.1 or higher. This is only $maj.$min\n";
+    my ($maj,$extra) = ($1,$2);
+    if ($maj < 8 or (8 == $maj and $extra =~ /\.0/)) {
+        die "Sorry, Bucardo requires Postgres version 8.1 or higher.\n";
     }
 
     return;
@@ -9036,7 +9036,7 @@ sub install {
         }
     }
 
-    if ($res !~ /(\d+)\.(\d+)(\S+)/) {
+    if ($res !~ /\D+(\d+)(.+?)\s/) {
         print "-->Sorry, unable to connect to the database\n\n";
         warn $delayed_warning;
         exit 1 if $bcargs->{batch};
@@ -9044,17 +9044,10 @@ sub install {
     }
 
     ## At this point, we assume a good connection
-    ## Assign the version variables
-    my ($maj,$min,$rev) = ($1,$2,$3);
-    ## We need to be able to handle things such as 9.2devel
-    $rev =~ s/^\.//;
-    $rev =~ s/(\d+)\.\d+/$1/;
-
-    $QUIET or print "Postgres version is: $maj.$min\n";
-
-    ## Bare minimum for the install is 8.1
-    if ($maj < 8 or (8 == $maj and $min < 1)) {
-        die "Sorry, Bucardo requires Postgres version 8.1 or higher. This is only $maj.$min\n";
+    ## The version check is really just to see if we are 8.1 or higher
+    my ($maj,$extra) = ($1,$2);
+    if ($maj < 8 or (8 == $maj and $extra =~ /\.0/)) {
+        die "Sorry, Bucardo requires Postgres version 8.1 or higher.\n";
     }
 
     ## Determine if we need to create the bucardo user
