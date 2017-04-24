@@ -2003,7 +2003,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         ## Delete any tables that are no longer in the database.
         $dbh->do(q{
             DELETE FROM bucardo.bucardo_delta_targets
-             WHERE tablename NOT IN (select oid from pg_class)
+             WHERE NOT EXISTS (SELECT oid FROM pg_class WHERE oid = tablename)
         });
 
         ## Create the bucardo_truncate_trigger table as needed
