@@ -12,6 +12,7 @@ use charnames ':full';
 use lib 't','.';
 use DBD::Pg;
 use Test::More;
+use Encode qw/encode_utf8/;
 
 my $dbdpgversion = $DBD::Pg::VERSION;
 (my $majorversion = $dbdpgversion) =~ s/^(\d+).*/$1/;
@@ -62,8 +63,7 @@ like $bct->ctl('bucardo remove table public.bucardo_test1 db=C'),
 ## XXX Probably ought to test non-ASCII schemas as well, as well as different client_encoding values
 
 for my $dbh (($dbhA, $dbhB)) {
-    $dbh->{pg_enable_utf8} = -1;
-    $dbh->do(qq/CREATE TABLE test_büçárđo ( pkey_\x{2695} INTEGER PRIMARY KEY, data TEXT );/);
+    $dbh->do(encode_utf8(qq/CREATE TABLE test_büçárđo ( pkey_\x{2695} INTEGER PRIMARY KEY, data TEXT );/));
     $dbh->commit;
 }
 
@@ -74,7 +74,7 @@ like($bct->ctl("bucardo add sync test_unicode relgroup=unicode dbs=A:source,B:ta
     qr/Added sync "test_unicode"/, "Create sync from A to B")
     or BAIL_OUT "Failed to add test_unicode sync";
 
-$dbhA->do("INSERT INTO test_büçárđo (pkey_\x{2695}, data) VALUES (1, 'Something')");
+$dbhA->do(encode_utf8("INSERT INTO test_büçárđo (pkey_\x{2695}, data) VALUES (1, 'Something')"));
 $dbhA->commit;
 
 ## Get Bucardo going
