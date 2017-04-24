@@ -572,7 +572,7 @@ sub start_cluster {
     }
 
     ## Keep attempting to get a database connection until we get one or timeout
-    $maxwaitseconds = 10;
+    $maxwaitseconds = 20;
 
     my $dbhost = getcwd;
     $dbhost .= "/$dirname/socket";
