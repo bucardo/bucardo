@@ -63,6 +63,7 @@ like $bct->ctl('bucardo remove table public.bucardo_test1 db=C'),
 ## XXX Probably ought to test non-ASCII schemas as well, as well as different client_encoding values
 
 for my $dbh (($dbhA, $dbhB)) {
+    $dbh->{pg_enable_utf8} = 0;
     $dbh->do(encode_utf8(qq/CREATE TABLE test_büçárđo ( pkey_\x{2695} INTEGER PRIMARY KEY, data TEXT );/));
     $dbh->commit;
 }
