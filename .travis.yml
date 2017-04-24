@@ -10,7 +10,6 @@ sudo: true
 
 env:
   global:
-    - PGUSER=postgres
     - PGHOST=127.0.0.1
   matrix:
     - PGVERSION=9.6
