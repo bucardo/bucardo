@@ -27,6 +27,5 @@ before_install:
   - ./.travis.sh postgresql_install
 
 script:
-  - perlbrew use $TRAVIS_PERL_VERSION
   - perl Makefile.PL
   - PATH=$PATH:/usr/lib/postgresql/$PGVERSION/bin make test
