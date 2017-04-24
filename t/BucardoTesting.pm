@@ -566,6 +566,7 @@ sub start_cluster {
         last if -e $pidfile;
         sleep 0.1;
         if ($loops++ > ($maxwaitseconds * 10)) {
+            Test::More::BAIL_OUT ( 'Failed to connect to database' );
             die "Failed to startup cluster $clustername, command was $COM\n";
         }
         redo;
