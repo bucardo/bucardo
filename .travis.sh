@@ -38,6 +38,7 @@ postgresql_install() {
 		postgresql-server-dev-$PGVERSION
 		postgresql-contrib-$PGVERSION
 		postgresql-plperl-$PGVERSION
+		libdbd-pg-perl
 	packages
 }
 
