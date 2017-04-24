@@ -25,11 +25,6 @@ before_install:
   - ./.travis.sh postgresql_uninstall
   - ./.travis.sh pgdg_repository
   - ./.travis.sh postgresql_install
-  - ./.travis.sh postgresql_configure
-  - ./.travis.sh client_configure
-
-before_script:
-  - createdb bucardo
 
 script:
   - perl Makefile.PL
