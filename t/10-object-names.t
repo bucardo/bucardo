@@ -68,7 +68,7 @@ for my $dbh (($dbhA, $dbhB)) {
 }
 
 ## XXX TODO: Make sync names and relgroup names with non-ASCII characters work
-like $bct->ctl('bucardo add table test_büçárđo db=A relgroup=unicode'),
+like $bct->ctl(encode_utf8('bucardo add table test_büçárđo db=A relgroup=unicode')),
     qr/Added the following tables/, "Added table in db A";
 like($bct->ctl("bucardo add sync test_unicode relgroup=unicode dbs=A:source,B:target"),
     qr/Added sync "test_unicode"/, "Create sync from A to B")
@@ -86,7 +86,7 @@ like $bct->ctl('kick sync test_unicode 0'),
     qr/^Kick\s+test_unicode:\s+${timer_regex}DONE!/,
     'Kick test_unicode' or die 'Sync failed, no point continuing';
 
-my $res = $dbhB->selectall_arrayref('SELECT * FROM test_büçárđo');
+my $res = $dbhB->selectall_arrayref(encode_utf8('SELECT * FROM test_büçárđo'));
 ok($#$res == 0 && $res->[0][0] == 1 && $res->[0][1] eq 'Something', 'Replication worked');
 
 END {
