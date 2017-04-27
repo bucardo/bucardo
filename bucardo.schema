@@ -348,44 +348,21 @@ CREATE UNIQUE INDEX bucardo_herdmap_unique ON bucardo.herdmap(herd,goat);
 
 CREATE FUNCTION bucardo.herdcheck()
 RETURNS TRIGGER
-LANGUAGE plperlu
+LANGUAGE plpgsql
 AS
 $bc$
-    use strict; use warnings;
-    ## Make sure that all goats in a herd are from the same database
-    my $new = $_TD->{new};
-    my $herdname = $new->{herd};
-    $herdname =~ s/'/''/go;
-    my $SQL = qq{
-        SELECT 1
-        FROM   bucardo.herdmap h, bucardo.goat g
-        WHERE  h.goat = g.id
-        AND    h.herd='$herdname'
-        AND    g.db != (SELECT db FROM bucardo.goat WHERE id = $new->{goat})
-    };
-    elog(DEBUG, "Running $SQL");
-    my $count = spi_exec_query($SQL)->{processed};
-    if ($count >= 1) {
-        elog(ERROR, "Cannot have relations from different databases in the same relgroup ($count)");
-    }
+BEGIN
 
-    ## Make sure that a herd contains at most one schemaname/tablename combination
-    $SQL = qq{
-        SELECT count(*) AS goats
-        FROM   bucardo.herdmap h, bucardo.goat g
-        WHERE  h.goat = g.id
-        AND    g.id != $new->{goat}
-        AND    h.herd = '$herdname'
-        AND    g.tablename = (SELECT tablename FROM bucardo.goat WHERE id = $new->{goat})
-        AND    g.schemaname = (SELECT schemaname FROM bucardo.goat WHERE id = $new->{goat})
-    };
-    elog(DEBUG, "Running $SQL");
-    $count = spi_exec_query($SQL)->{rows}[0]{goats};
-    if ($count >= 1) {
-        elog(ERROR, "Cannot have two relations with the same schema and table inside a relgroup (relgroup=$herdname) (relation=$new->{goat}) (count=$count)");
-    }
+-- All goats in a herd must be from the same database
+PERFORM herd FROM herdmap h, goat g WHERE h.goat=g.id GROUP BY 1 HAVING COUNT(DISTINCT db) > 1;
 
-    return;
+IF FOUND THEN
+  RAISE EXCEPTION 'All tables must within a relgroup must be from the same database';
+END IF;
+
+RETURN NEW;
+
+END;
 $bc$;
 
 CREATE TRIGGER herdcheck
