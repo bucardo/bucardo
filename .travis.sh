@@ -39,6 +39,7 @@ postgresql_install() {
 		postgresql-contrib-$PGVERSION
 		postgresql-plperl-$PGVERSION
 		libdbd-pg-perl
+		libdbd-sqlite
 	packages
 }
 
