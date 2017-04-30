@@ -84,7 +84,7 @@ like ($res, qr/Added sync "fctest"/, $t);
 
 ## Create a new sync for the sequences only
 $t = q{Created a new sync};
-$res = $bct->ctl('bucardo add sync seqtest herd=seqonly dbs=A:source,B:Source,C:target');
+$res = $bct->ctl('bucardo add sync seqtest herd=seqonly dbs=A:source,B:Source,C:target,D:target');
 like ($res, qr/Added sync "seqtest"/, $t);
 
 ## Start up Bucardo with this new sync.
@@ -109,7 +109,7 @@ $dbhA->do('alter sequence bucardo_test_seq1 start 20 restart 25 minvalue 10 maxv
 $dbhA->commit();
 
 ## Kick off the sync, then check that everything was replaced
-$bct->ctl('bucardo kick fctest 0');
+$bct->ctl('bucardo kick fctest seqtest 0');
 sleep(3);
 $bct->check_for_row([[2]], [qw/ B C D/]);
 
