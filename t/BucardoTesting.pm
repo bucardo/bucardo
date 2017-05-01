@@ -1161,16 +1161,19 @@ sub setup_bucardo {
     $self->create_cluster($clustername);
     my $dbh = $self->connect_database($clustername, 'postgres');
     if (database_exists($dbh,'bucardo')) {
-        ## Kick off all other people
+        my $retries = 5;
         my $pidcol = $dbh->{pg_server_version} >= 90200 ? 'pid' : 'procpid';
-        $SQL = qq{SELECT $pidcol FROM pg_stat_activity WHERE datname = 'bucardo' and $pidcol <> pg_backend_pid()};
-        for my $row (@{$dbh->selectall_arrayref($SQL)}) {
-            my $pid = $row->[0];
-            $SQL = 'SELECT pg_terminate_backend(?)';
-            $sth = $dbh->prepare($SQL);
-            $sth->execute($pid);
-        }
-        $dbh->commit();
+        do {
+            ## Kick off all other people
+            $SQL = qq{SELECT $pidcol FROM pg_stat_activity WHERE datname = 'bucardo' and $pidcol <> pg_backend_pid()};
+            for my $row (@{$dbh->selectall_arrayref($SQL)}) {
+                my $pid = $row->[0];
+                $SQL = 'SELECT pg_terminate_backend(?)';
+                $sth = $dbh->prepare($SQL);
+                $sth->execute($pid);
+            }
+            $dbh->commit();
+        } while ($dbh->selectrow_array(qq{SELECT count(*) FROM pg_stat_activity WHERE datname = 'bucardo' and $pidcol <> pg_backend_pid()}))[0] && $retries--;
         debug(qq{Dropping database bucardo from cluster $clustername});
         local $dbh->{AutoCommit} = 1;
         $dbh->do('DROP DATABASE bucardo');
