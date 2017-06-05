@@ -26,6 +26,7 @@ REQUIREMENTS:
 
 INSTALLATION:
 -------------
+
 To install this module type the following:
 
    perl Makefile.PL
@@ -50,3 +51,13 @@ To follow or participate in the development of Bucardo, use:
 
 git clone git://github.com/bucardo/bucardo
 
+GETTING HELP:
+-------------
+
+For general questions and troubleshooting, please use the bucardo-general@bucardo.org
+mailing list.  GitHub issues which are support-oriented will be closed and referred to
+the mailing list anyway, so help save time for everyone by posting there directly.
+
+Post, subscribe, and see previous archives here:
+
+https://mail.endcrypt.com/mailman/listinfo/bucardo-general
