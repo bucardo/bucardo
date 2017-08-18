@@ -11460,15 +11460,6 @@ Bucardo copies rows from source to target.
 
 The rows on the "target" database always win.
 
-=item C<bucardo_skip>
-
-Any conflicting rows are simply not replicated. Not recommended for most
-cases.
-
-=item C<bucardo_random>
-
-Each database has an equal chance of winning each time.
-
 =item C<bucardo_latest>
 
 The row that was most recently changed wins.
