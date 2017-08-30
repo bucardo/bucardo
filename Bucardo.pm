@@ -963,8 +963,17 @@ sub mcp_main {
                     }
                     if (defined $d->{backend}) {
                         $self->show_db_version_and_time($d->{dbh}, $d->{backend}, qq{Database "$dbname" });
-                        $d->{status} = 'active'; ## In case it was stalled
+			## $d->{status} = 'active'; ## If the db is stalled, it will be marked active in
+			## restore_syncs();
 			## Use 'validate_syncs' or similar to mark them as active again
+			for my $syncname (sort keys %{ $self->{sync} }) {
+				my $sync = $self->{sync}{$syncname};
+				for my $dbname (sort keys %{ $sync->{db} }){
+					$self->glog("ReconnectDBs: Still have $sync - $dbname");
+				}
+			}
+			$self->restore_syncs();
+			$self->reset_mcp_listeners();
                     }
                     else {
                         $self->glog("Unable to reconnect to database $dbname!", LOG_WARN);
