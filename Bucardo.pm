@@ -973,7 +973,6 @@ sub mcp_main {
 				}
 			}
 			$self->restore_syncs();
-			$self->reset_mcp_listeners();
                     }
                     else {
                         $self->glog("Unable to reconnect to database $dbname!", LOG_WARN);
