@@ -963,15 +963,7 @@ sub mcp_main {
                     }
                     if (defined $d->{backend}) {
                         $self->show_db_version_and_time($d->{dbh}, $d->{backend}, qq{Database "$dbname" });
-			## $d->{status} = 'active'; ## If the db is stalled, it will be marked active in
-			## restore_syncs();
-			## Use 'validate_syncs' or similar to mark them as active again
-			for my $syncname (sort keys %{ $self->{sync} }) {
-				my $sync = $self->{sync}{$syncname};
-				for my $dbname (sort keys %{ $sync->{db} }){
-					$self->glog("ReconnectDBs: Still have $sync - $dbname");
-				}
-			}
+			## If the db is stalled, it will be marked active in restore_syncs()
 			$self->restore_syncs();
                     }
                     else {
@@ -1656,14 +1648,11 @@ sub restore_syncs {
         ## Number of databases restored for this sync only
         my $restored_dbs = 0;
 
-	$self->glog("Preparing to check $sync->{db} for sync $syncname", LOG_DEBUG);
-
         ## Walk through each database used by this sync
-	## This is guaranteed to never loop because $sync->{db} is always empty here
+	## This is guaranteed to never loop because $sync->{db} in reload_mcp is always empty here
 	## becuase it is always called after get_syncs which rewrites $self->{sync}
       DB: for my $dbname (sort keys %{ $sync->{db} }) {
 
-	    $self->glog("restore_syncs: Detected database $dbname for sync $syncname", LOG_DEBUG);
             ## Only check each database (by name) once
             next if $db_checked->{$dbname}++;
 
