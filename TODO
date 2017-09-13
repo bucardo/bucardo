@@ -21,6 +21,8 @@ Future
 
 These range the gamut from wildly speculative ideas to must-have features.
 
+- During the initial validate_sync check, gather the list of errors and throw a single exception,
+  rather than aborting on the (for example) first table not found on the target.
 - Make "bucardo remote table public.some_sequence" work or at least throw good error message
 - Add a GUC to disable truncate triggers (or perhaps just application of truncations)
 - Troubleshoot sync.onetimecopy=2: there are reports of it not working
