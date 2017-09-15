@@ -1045,6 +1045,7 @@ sub ctl {
     my $dirname = $pgver{A}{dirname};
     $dbhost .= "/$dirname/socket";
     $connopts .= " --dbhost=$dbhost";
+    $connopts .= " --no-bucardorc";
 
     ## Whitespace cleanup
     $args =~ s/^\s+//s;
