@@ -220,8 +220,8 @@ sub check_hash_names {
     $. = 0;
 
     while (<$fh>) {
-        next if /[mq]{/;
-        next if /(?:map|grep|first|eval) *{/;
+        next if /[mq]\{/;
+        next if /(?:map|grep|first|eval) *\{/;
         while (m/(?<!q[wqrx])\{(.+?)\}/g) {
             my $word = $1;
             next if $word =~ /^q[wr]/;
