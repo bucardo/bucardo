@@ -30,6 +30,7 @@ fullstopbucardo
 test.*
 bucardo_pgservice.tmp.*
 pid/*
+bucardo.debug.dsns.txt
 
 ## Temporary files:
 tmp/
