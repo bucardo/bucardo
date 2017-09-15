@@ -17,6 +17,7 @@ use DBD::Pg;
 use Time::HiRes qw/sleep gettimeofday tv_interval/;
 use Cwd;
 use Data::Dumper;
+require Test::More;
 
 use vars qw/$SQL $sth $count $COM %dbh/;
 
