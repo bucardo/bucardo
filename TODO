@@ -21,6 +21,8 @@ Future
 
 These range the gamut from wildly speculative ideas to must-have features.
 
+- When a serialization error is presented, provide more details such as last table updated.
+- Optimize bucardo_purge_delta to handle case of a single expected target (thus no group by)
 - During the initial validate_sync check, gather the list of errors and throw a single exception,
   rather than aborting on the (for example) first table not found on the target.
 - Make "bucardo remote table public.some_sequence" work or at least throw good error message
