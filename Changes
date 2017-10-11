@@ -16,6 +16,9 @@ Bucardo version ???
   - Improve the push_rows() function, and use ANY(?) whenever possible.
     [Greg Sabino Mullane]
 
+  - Write things out more often, making 'bucardo status' more useful.
+    [Greg Sabino Mullane]
+
   - Log the version of all loaded modules.
     [Greg Sabino Mullane]
 
