@@ -1919,19 +1919,6 @@ sub start_controller {
         $sth->finish();
     }
 
-    ## Count the number of gangs in use by this sync
-    my %gang;
-    for my $dbname (sort keys %{ $sync->{db} }) {
-
-        my $d = $sync->{db}{$dbname};
-
-        ## Makes no sense to specify gangs for source databases!
-        next if $d->{role} eq 'source';
-
-        $gang{$d->{gang}}++;
-    }
-    $sync->{numgangs} = keys %gang;
-
     ## Listen for a kid letting us know the sync has finished
     my $syncdone = "syncdone_$syncname";
     $self->db_listen($maindbh, "ctl_$syncdone");
@@ -6638,7 +6625,7 @@ sub validate_sync {
     $self->glog(qq{Running validate_sync on "$s->{name}"}, LOG_NORMAL);
 
     ## Populate $s->{db} with all databases in this sync
-    $SQL = 'SELECT db.*, m.role, m.priority, m.gang FROM dbmap m JOIN db ON (db.name = m.db) WHERE m.dbgroup = ?';
+    $SQL = 'SELECT db.*, m.role, m.priority FROM dbmap m JOIN db ON (db.name = m.db) WHERE m.dbgroup = ?';
     $sth = $self->{masterdbh}->prepare($SQL);
     $count = $sth->execute($s->{dbs});
     $s->{db} = $sth->fetchall_hashref('name');
