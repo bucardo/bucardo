@@ -3412,6 +3412,9 @@ sub start_kid {
 
                     my $d = $sync->{db}{$dbname};
 
+                    $sth{kid_syncrun_update_status}->execute("delta_check on db $dbname",$syncname);
+                    $maindbh->commit();
+
                     $SQL = 'SELECT * FROM bucardo.bucardo_delta_check(?,?)';
                     $sth = $d->{dbh}->prepare($SQL);
                     $sth->execute($syncname, $d->{DBGROUPNAME});
@@ -3445,6 +3448,9 @@ sub start_kid {
 
                 ## Populate the global vars
                 ($S,$T) = ($g->{safeschema},$g->{safetable});
+
+                $sth{kid_syncrun_update_status}->execute('Counting all deltas',$syncname);
+                $maindbh->commit();
 
                 ## This is the meat of Bucardo:
                 for my $dbname (@dbs_source) {
@@ -3749,6 +3755,9 @@ sub start_kid {
 
                     ## Create an empty hash to hold the primary key information
                     $deltabin{$dbname} = {};
+
+                    $sth{kid_syncrun_update_status}->execute("Get deltas from db $dbname",$syncname);
+                    $maindbh->commit();
 
                     while (my $y = $sth{getdelta}{$dbname}{$g}->fetchrow_arrayref()) {
                         ## Join all primary keys together with \0, put into hash as key
@@ -4237,10 +4246,14 @@ sub start_kid {
                                 ## Here's the real action: delete/truncate from target, then copy from source to target
 
                                 ## For this table, delete all rows that may exist on the target(s)
+                                $sth{kid_syncrun_update_status}->execute("Deleting based on $dbname1.$S.$T",$syncname);
+                                $maindbh->commit();
                                 $dmlcount{deletes} += $self->delete_rows(
                                     $deltabin{$dbname1}, $g, $sync, \@pushdbs);
 
                                 ## For this table, copy all rows from source to target(s)
+                                $sth{kid_syncrun_update_status}->execute("Copying from $dbname1.$S.$T",$syncname);
+                                $maindbh->commit();
                                 $dmlcount{inserts} += $self->push_rows(
                                     $deltabin{$dbname1}, $g, $sync, $sourcedb, \@pushdbs, 'copy');
 
