@@ -4,7 +4,7 @@ use warnings;
 use 5.008003;
 
 ## No version.pm for this one, as the prereqs are not loaded yet.
-my $VERSION = '5.4.1';
+my $VERSION = '5.5.0';
 
 WriteMakefile(
     NAME         => 'Bucardo',

@@ -1,5 +1,5 @@
 
-Bucardo version ???
+Bucardo version 5.5.0
 
   - Fix bug in onetimecopy=2 mode
     [Greg Sabino Mullane]
