@@ -149,7 +149,7 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'quickstart',
      'notimer',
      'help|?',
-     'debug!',
+     'debug+',
      'version',
      'sort=i',
      'showdays|show-days',
