@@ -233,7 +233,6 @@ CREATE TABLE bucardo.dbmap (
               CONSTRAINT  dbmap_dbgroup_fk FOREIGN KEY (dbgroup) REFERENCES bucardo.dbgroup(name) ON UPDATE CASCADE ON DELETE CASCADE,
   priority  SMALLINT    NOT NULL DEFAULT 0,
   role      TEXT        NOT NULL DEFAULT 'target',
-  gang      SMALLINT    NOT NULL DEFAULT 1,
   cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE bucardo.dbmap IS $$Associates a database with one or more groups$$;
