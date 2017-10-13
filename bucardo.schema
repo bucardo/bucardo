@@ -51,6 +51,7 @@ $bc$;
 CREATE TABLE bucardo.bucardo_config (
   name     TEXT        NOT NULL, -- short unique name, maps to %config inside Bucardo
   setting  TEXT        NOT NULL,
+  defval   TEXT            NULL, -- the default value for this setting, per initial config
   about    TEXT            NULL, -- long description
   type     TEXT            NULL, -- sync or goat
   item     TEXT            NULL, -- which specific sync or goat
@@ -187,6 +188,9 @@ FROM STDIN
 WITH DELIMITER '|';
 autosync_ddl|newcol|Which DDL changing conditions do we try to remedy automatically?
 \.
+
+-- This needs to run after all population of bucardo.config
+UPDATE bucardo.bucardo_config SET defval = setting;
 
 --
 -- Keep track of every database we need to connect to

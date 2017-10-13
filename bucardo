@@ -8543,6 +8543,16 @@ sub upgrade {
         }
     }
 
+    ## Update default config settings per the parsed config
+    $dbh->do('CREATE TEMPORARY TABLE stage_bucardo_config (name text primary key, setting text)');
+    $dbh->do('COPY stage_bucardo_config (name,setting) FROM STDIN');
+    while (my ($name,$rec) = each %config) {
+        my $set = $rec->[0];
+        $dbh->pg_putcopydata("$name\t$set\n");
+    }
+    $dbh->pg_putcopyend;
+    $dbh->do('UPDATE bucardo_config c SET defval = s.setting FROM stage_bucardo_config s WHERE c.name = s.name');
+
     ## Run the magic updater
     $SQL = 'SELECT bucardo.magic_update()';
     $sth = $dbh->prepare($SQL);
