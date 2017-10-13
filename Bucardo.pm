@@ -3436,9 +3436,6 @@ sub start_kid {
                 ## Populate the global vars
                 ($S,$T) = ($g->{safeschema},$g->{safetable});
 
-                $sth{kid_syncrun_update_status}->execute('Counting all deltas',$syncname);
-                $maindbh->commit();
-
                 ## This is the meat of Bucardo:
                 for my $dbname (@dbs_source) {
 
@@ -3452,6 +3449,9 @@ sub start_kid {
                     if ($config{quick_delta_check}) {
                         next if ! $d->{deltaquick}{"$S.$T"};
                     }
+
+                    $sth{kid_syncrun_update_status}->execute("Counting all deltas on db $dbname",$syncname);
+                    $maindbh->commit();
 
                     ## Gets all relevant rows from bucardo_deltas: runs asynchronously
                     $d->{async_active} = time;
