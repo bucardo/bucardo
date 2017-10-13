@@ -99,3 +99,4 @@ validate_sync check if B is only a target
   likely be accomplished through use of triggers. There should be a simple
   interface to toggle the read-only on and off per database, and perhaps per
   sync. Need to consider making non-tracked tables read-only as well.
+- display only non-default settings with `bucardo show changed` or similar
