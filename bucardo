@@ -2538,7 +2538,6 @@ sub list_databases {
                 for my $group (sort keys %{ $info->{group} }) {
                     my $i = $info->{group}{$group};
                     my $role = $i->{role};
-                    my $gang = $i->{gang};
                     my $pri = $i->{priority};
                     print "  Belongs to dbgroup $group ($role)";
                     $pri and print "  Priority:$pri";
@@ -2840,10 +2839,6 @@ sub list_dbgroups {
             for my $dbname (sort keys %{ $DBGROUP->{$name}{db} }) {
                 my $i = $DBGROUP->{$name}{db}{$dbname};
                 $dbs .= " $dbname:$i->{role}";
-                ## Only show the gang if this group is using multiple gangs
-                if ($DBGROUP->{$name}{gangs} >= 2) {
-                    $dbs .= ":gang=$i->{gang}";
-                }
                 ## Only show the priority if <> 0
                 if ($i->{priority} != 0) {
                     $dbs .= ":pri=$i->{priority}";
@@ -9461,7 +9456,7 @@ sub check_recurse {
 sub extract_name_and_role {
 
     ## Given a group or db name with optional role information, return both
-    ## Also returns optional list of other items, e.g. ABC:target:pri=2:gangs=2
+    ## Also returns optional list of other items, e.g. ABC:target:pri=2
     ## Arguments: one
     ## 1. Group or database name: 'foo' or 'foo:master'
     ## Returns: name, role name, and hashref of 'extra' info
@@ -9487,14 +9482,11 @@ sub extract_name_and_role {
         if ($lname =~ /make?delta/i) {
             $extra{'makedelta'} = make_boolean($val);
         }
-        elsif ($lname =~ /gang/i) {
-            $extra{'gang'} = $val;
-        }
         elsif ($lname =~ /pri/i) {
             $extra{'priority'} = $val;
         }
         else {
-            die qq{Unknown value "$lname": must be priority, gang, or makedelta\n};
+            die qq{Unknown value "$lname": must be priority or makedelta\n};
         }
     }
 
@@ -9540,9 +9532,6 @@ sub load_bucardo_info {
     $sth->execute();
     my $dbgroup = $sth->fetchall_hashref('name');
 
-    ## Figure out if each dbgroup is using multiple gangs
-    my %gang;
-
     ## Map databases to their groups
     $SQL = 'SELECT * FROM bucardo.dbmap';
     $sth = $dbh->prepare($SQL);
@@ -9557,12 +9546,6 @@ sub load_bucardo_info {
         $db->{$row->{db}}{issource}++ if $row->{role} eq 'source';
 
         $dbgroup->{$row->{dbgroup}}{db}{$row->{db}} = $row;
-        ## Figure out how many gangs each group has
-        $gang{$row->{dbgroup}}{$row->{gang}}++;
-    }
-
-    for my $group (keys %$dbgroup) {
-        $dbgroup->{$group}{gangs} = keys %{ $gang{$group} };
     }
 
     ## Grab all goat information
