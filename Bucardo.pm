@@ -7589,12 +7589,12 @@ sub fork_and_inactivate {
         ## Clear the 'sdb' structure of any existing database handles
         if (exists $self->{sdb}) {
             for my $dbname (keys %{ $self->{sdb} }) {
-                if (exists $self->{sync}{sdb}{$dbname}{dbh}) {
-                    if (ref $self->{sync}{sdb}{$dbname}{dbh}) {
+                if (exists $self->{sdb}{$dbname}{dbh}) {
+                    if (ref $self->{sdb}{$dbname}{dbh}) {
                         $self->glog("Removing sdb reference to database $dbname", LOG_DEBUG);
-                        $self->{sync}{sdb}{$dbname}{dbh}->{InactiveDestroy} = 1;
+                        $self->{sdb}{$dbname}{dbh}->{InactiveDestroy} = 1;
                     }
-                    delete $self->{sync}{sdb}{$dbname}{dbh};
+                    delete $self->{sdb}{$dbname}{dbh};
                 }
             }
         }

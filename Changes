@@ -1,6 +1,9 @@
 
 Bucardo version 5.5.0
 
+  - Fix bug in fork/cleanup code that may prevent a killed CTL from restarting.
+    [Greg Sabino Mullane]
+
   - Fix bug in onetimecopy=2 mode
     [Greg Sabino Mullane]
 
