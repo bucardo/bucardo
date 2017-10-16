@@ -5770,7 +5770,6 @@ ORDER BY started DESC LIMIT 1
     $whydie =~ s/ (at .+ line \d+\.)/\n      $1/g;
     $whydie =~ s/\t/<tab>/g;
     my $message = sprintf "  Started: %s\n  Ended: %s\n    %s",
-        $result->{pid} || '?',
         $result->{started} || '?',
         $result->{ended} || '?',
         $whydie;
