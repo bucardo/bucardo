@@ -8719,14 +8719,20 @@ sub config {
     $sth->execute();
     my $config = $sth->fetchall_hashref('name');
     if ($verb eq 'show') {
-        my $all = $nouns[0] =~ /\ball\b/i ? 1 : 0;
+        my $all     = $nouns[0] =~ /\ball\b/i     ? 1 : 0;
+        my $changed = $nouns[0] =~ /\bchanged\b/i ? 1 : 0;
         my $maxsize = 3;
         for my $s (keys %$config) {
-            next if ! $all and ! grep { $s =~ /$_/i } @nouns;
+            next if
+              ($changed && $config->{$s}{setting} eq $config->{$s}{defval})
+              || (! $all and ! $changed and ! grep { $s =~ /$_/i } @nouns);
+
             $maxsize = length $s if length $s > $maxsize;
         }
         for my $s (sort keys %$config) {
-            next if ! $all and ! grep { $s =~ /$_/i } @nouns;
+            next if
+              ($changed && $config->{$s}{setting} eq $config->{$s}{defval})
+              || (! $all and ! $changed and ! grep { $s =~ /$_/i } @nouns);
             printf "%-*s = %s\n", $maxsize, $s, $config->{$s}{setting};
         }
         exit 1;
@@ -11926,11 +11932,12 @@ File containing all log lines starting with "Warning". Default: C<bucardo.warnin
 
 =head2 show
 
-  bucardo show all|<setting> [<setting>...]
+  bucardo show all|changed|<setting> [<setting>...]
 
 Shows the current Bucardo settings. Use the keyword "all" to see all the
-settings, or specify one or more search terms. See L</set> for complete
-details on the configuration settings.
+settings, "changed" to see settings different than the installed defaults,
+or specify one or more search terms. See L</set> for complete details on the
+configuration settings.
 
 =head2 config
 

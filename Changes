@@ -1,6 +1,13 @@
 
 Bucardo version 5.5.0
 
+  - Teach bucardo about `show changed` to display any config settings different
+    than the default.
+    [David Christensen]
+
+  - Add initial values for settings in bucardo_config.
+    [David Christensen]
+
   - Fix bug in fork/cleanup code that may prevent a killed CTL from restarting.
     [Greg Sabino Mullane]
 
