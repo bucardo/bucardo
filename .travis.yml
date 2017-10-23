@@ -12,6 +12,7 @@ env:
   global:
     - PGHOST=127.0.0.1
   matrix:
+    - PGVERSION=10
     - PGVERSION=9.6
     - PGVERSION=9.5
     - PGVERSION=9.4
