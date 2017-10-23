@@ -30,3 +30,10 @@ before_install:
 script:
   - perl Makefile.PL
   - PATH=$PATH:/usr/lib/postgresql/$PGVERSION/bin make test
+
+after_failure:
+  - echo FAILURE!!!
+  - echo DATABASE LOGS
+  - tail -100 bucardo_database_*/pg_log/*
+  - echo BUCARDO LOGS
+  - tail -1000 log.bucardo
