@@ -81,6 +81,8 @@ $bct->add_row_to_database('C', 25);
 $bct->ctl('bucardo kick sync cts1 0');
 $bct->ctl('bucardo kick sync cts2 0');
 
+sleep 2;
+
 ## Make sure the new rows are on the targets
 $bct->check_for_row([[22]], [qw/ B /]);
 $bct->check_for_row([[25]], [qw/ D /]);
@@ -96,6 +98,8 @@ $bct->add_row_to_database('A', 26);
 $bct->add_row_to_database('C', 27);
 $bct->ctl('bucardo kick sync cts1 0');
 $bct->ctl('bucardo kick sync cts2 0');
+
+sleep 2;
 
 ## D should have the new row
 $bct->check_for_row([[25],[27]], [qw/ D/]);
