@@ -249,10 +249,9 @@ $bct->add_row_to_database('A', 3);
 $bct->add_row_to_database('B', 4);
 
 ## Kick off the sync.
-my $timer_regex = qr/\[\d+\s*s\]\s+(?:[\b]{6}\[\d+\s*s\]\s+)*/;
-like $bct->ctl('bucardo kick sync pgtest5 0'),
-    qr/^Kick\s+pgtest5:\s+${timer_regex}DONE!/,
-    'Kick pgtest5' or die 'Sync failed, no point continuing';
+my $timer_regex = qr/Kick pgtest.*DONE/;
+like ($bct->ctl('bucardo kick sync pgtest5 0'), $timer_regex, 'Kick pgtest5')
+  or die 'Sync failed, no point continuing';
 
 ## All rows should be on A and B.
 my $expected = [[1],[3],[4]];
@@ -276,9 +275,8 @@ is $bct->ctl('bucardo activate sync pgtest2 0'), "Activating sync pgtest2...OK\n
     'Activate pgtest2';
 
 ## Clear the deleted rows above so we have a clean test below
-like $bct->ctl('bucardo kick sync pgtest2 0'),
-    qr/^Kick\s+pgtest2:\s+${timer_regex}DONE!/,
-    'Kick pgtest2' or die 'Sync failed, no point continuing';
+like ($bct->ctl('bucardo kick sync pgtest2 0'), $timer_regex, 'Kick pgtest2')
+  or die 'Sync failed, no point continuing';
 
 ## Add some rows to both masters, make sure it goes everywhere
 for my $num (2..4) {
@@ -289,9 +287,8 @@ for my $num (5..10) {
 }
 
 ## Kick off the sync. Everything should go to A, B, C, and D
-like $bct->ctl('bucardo kick sync pgtest2 0'),
-    qr/^Kick\s+pgtest2:\s+${timer_regex}DONE!/,
-    'Kick pgtest2 again' or die 'Sync failed, no point continuing';
+like ($bct->ctl('bucardo kick sync pgtest2 0'), $timer_regex, 'Kick pgtest2')
+  or die 'Sync failed, no point continuing';
 
 ## Kick off old sync. Should fail, as the sync is inactive
 $t = q{Inactive sync pgtest3 should not reject kick};
@@ -316,9 +313,8 @@ is $bct->ctl('bucardo activate sync pgtest3 0'),
     'Activate pgtest3';
 
 ## Kick off the sync to pick up the deltas from the previous runs
-like $bct->ctl('bucardo kick sync pgtest3 0'),
-    qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
-    'Kick pgtest3' or die 'Sync failed, no point continuing';
+like ($bct->ctl('bucardo kick sync pgtest3 0'), $timer_regex, 'Kick pgtest3')
+  or die 'Sync failed, no point continuing';
 
 ## This one has three sources: A, B, and C. Remove rows from each
 $bct->remove_row_from_database('A', 10);
@@ -331,9 +327,8 @@ $bct->remove_row_from_database('C', 2);
 $bct->remove_row_from_database('C', 1);
 
 ## Kick it off
-like $bct->ctl('bucardo kick sync pgtest3 0'),
-    qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
-    'Kick pgtest3 again' or die 'Sync failed, no point continuing';
+like ($bct->ctl('bucardo kick sync pgtest3 0'), $timer_regex, 'Kick pgtest3')
+  or die 'Sync failed, no point continuing';
 
 ## Only rows left everywhere should be 3 and 7
 $bct->check_for_row([[3],[7]], [qw/A B C D/]);
@@ -347,9 +342,8 @@ $bct->add_row_to_database('B', 2);
 $bct->add_row_to_database('C', 2);
 
 ## Kick and check everyone is the same
-like $bct->ctl('bucardo kick sync pgtest3 0'),
-    qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
-    'Kick pgtest3 yet again' or die 'Sync failed, no point continuing';
+like ($bct->ctl('bucardo kick sync pgtest3 0'), $timer_regex, 'Kick pgtest3')
+  or die 'Sync failed, no point continuing';
 $bct->check_for_row([[1],[2],[3],[7]], [qw/A B C D/]);
 
 ## Change sequence information, make sure it gets out to everyone
@@ -365,9 +359,8 @@ $dbhB->commit();
 $dbhC->do(q{SELECT setval('"Bucardo_test_seq3"', 12345)});
 $dbhC->commit();
 
-like $bct->ctl('bucardo kick sync pgtest3 0'),
-    qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
-    'Kick pgtest3 once more' or die 'Sync failed, no point continuing';
+like ($bct->ctl('bucardo kick sync pgtest3 0'), $timer_regex, 'Kick pgtest3')
+  or die 'Sync failed, no point continuing';
 
 $bct->check_sequences_same([qw/A B C D/]);
 
@@ -384,9 +377,8 @@ $dbhA->commit();
 ## Just in case, make sure 'bucardo upgrade' does not mess anything up
 $bct->ctl('bucardo upgrade');
 
-like $bct->ctl('bucardo kick sync pgtest3 0'),
-    qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
-    'Kick pgtest3 LIKE A BOSS' or die 'Sync failed, no point continuing';
+like ($bct->ctl('bucardo kick sync pgtest3 0'), $timer_regex, 'Kick pgtest3')
+  or die 'Sync failed, no point continuing';
 $bct->check_for_row([[1],[2],[3],[7]], [qw/A B C D/]);
 
 $SQL = 'SELECT data1 FROM bucardo_test1 WHERE id = ?';
@@ -413,9 +405,8 @@ else {
     $dbhX->commit(); $dbhA->commit(); $dbhB->commit(); $dbhC->commit(); $dbhD->commit();
 }
 
-like $bct->ctl('bucardo kick sync pgtest3 0'),
-    qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
-    'Kick pgtest3 like a mofo' or die 'Sync failed, no point continuing';
+like ($bct->ctl('bucardo kick sync pgtest3 0'), $timer_regex, 'Kick pgtest3')
+  or die 'Sync failed, no point continuing';
 $bct->check_for_row([], [qw/A B C D/], 'truncate A');
 
 if ($dbhA->{pg_server_version} < 80400) {
@@ -446,10 +437,8 @@ else {
     $bct->add_row_to_database('C', 7);
     $bct->add_row_to_database('D', 8);
     ## Kick off the sync. C should win (D is target), truncate the others, then propagate '7'
-    like $bct->ctl('bucardo kick sync pgtest3 0'),
-        qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
-        'Kick pgtest3 like a it\'s going out of style'
-        or die 'Sync failed, no point continuing';
+    like ($bct->ctl('bucardo kick sync pgtest3 0'), $timer_regex, 'Kick pgtest3')
+      or die 'Sync failed, no point continuing';
     $bct->check_for_row([[7]], [qw/A B C D/], 'truncate D');
 
 }
@@ -458,9 +447,8 @@ else {
 $bct->add_row_to_database('A', 2);
 $bct->add_row_to_database('B', 3);
 
-like $bct->ctl('bucardo kick sync pgtest3 0'),
-    qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
-    'Kick pgtest3 like it hurts' or die 'Sync failed, no point continuing';
+like ($bct->ctl('bucardo kick sync pgtest3 0'), $timer_regex, 'Kick pgtest3')
+  or die 'Sync failed, no point continuing';
 $bct->check_for_row([[2],[3],[7]], [qw/A B C D/]);
 
 ## Tests of customcols
@@ -475,9 +463,8 @@ $res = $bct->ctl('bucardo update sync pgtest3 rebuild_index=1');
 $bct->restart_bucardo($dbhX);
 
 $bct->add_row_to_database('A', 1);
-like $bct->ctl('bucardo kick sync pgtest3 0'),
-    qr/^Kick\s+pgtest3:\s+${timer_regex}DONE!/,
-    'Kick pgtest3 again for the road' or die 'Sync failed, no point continuing';
+like ($bct->ctl('bucardo kick sync pgtest3 0'), $timer_regex, 'Kick pgtest3')
+  or die 'Sync failed, no point continuing';
 $bct->check_for_row([[1],[2],[3],[7]], [qw/A B C/]);
 $bct->check_for_row([[1],[2],[3],[7]], [qw/D/], 'customcols', '!test1');
 $bct->check_for_row([[2],[3],[7],[30]], [qw/D/], 'customcols', 'test1');
