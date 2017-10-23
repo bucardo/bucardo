@@ -1,6 +1,10 @@
 
 Bucardo version 5.5.0
 
+  - Framework for reporting PostgreSQL and Bucardo logs when encountering test
+    errors.
+    [David Christensen]
+
   - Teach bucardo about `show changed` to display any config settings different
     than the default.
     [David Christensen]

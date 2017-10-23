@@ -17,6 +17,7 @@ use DBD::Pg;
 use Time::HiRes qw/sleep gettimeofday tv_interval/;
 use Cwd;
 use Data::Dumper;
+use Symbol;
 require Test::More;
 
 use vars qw/$SQL $sth $count $COM %dbh/;
@@ -69,6 +70,39 @@ if ($FRESHLOG) {
 my $piddir = 'pid';
 if (! -e $piddir) {
     mkdir $piddir;
+}
+
+if ($ENV{BUCARDO_LOG_ERROR_CONTEXT}) {
+    no strict 'refs';
+    no warnings qw/prototype redefine/;
+    my ($package) = caller();
+
+    # wrap these routines
+    for my $subname ( qw(ok is like) ) {
+
+        my $glob = qualify_to_ref($subname,$package);
+
+        if (my $sub = *$glob{CODE}) {
+            *$glob = sub {
+                # get result; this is not a general wrapper, since most of
+                # the testing ignores return values here, we aren't worried
+                # about wantarray, etc; we need the return value to decide
+                # if we're going to output a bunch of additional debugging
+                # information.
+                my $res = $sub->( @_ );
+                if (!$res) {
+                    _log_context();
+                }
+                $res;
+            }
+        }
+    }
+    # setup die handler
+    my $die = $SIG{__DIE__};
+    $SIG{__DIE__} = sub {
+        _log_context();
+        $die && $die->();
+    };
 }
 
 ## Test databases are labelled as A, B, C, etc.
@@ -1214,6 +1248,14 @@ sub setup_bucardo {
     return $dbh;
 
 } ## end of setup_bucardo
+
+# utility sub called on test error to output pg and bucardo logs to a single
+# output file with context; mainly useful for CI debugging/output
+sub _log_context {
+    return unless $ENV{BUCARDO_LOG_ERROR_CONTEXT};
+
+    # do something here
+}
 
 ## Utility functions for object existences:
 sub thing_exists {
