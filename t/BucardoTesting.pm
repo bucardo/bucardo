@@ -1904,7 +1904,7 @@ sub check_for_row {
             $dbh->commit();
             if (!$result) {
                 my $line = (caller)[2];
-                Test::More::BAIL_OUT "Stopping on a failed 'check_for_row' test from line $line";
+                Test::More::BAIL_OUT("Stopping on a failed 'check_for_row' test from line $line");
             }
         }
     }
@@ -1993,7 +1993,7 @@ sub is_deeply {
         my $time = time;
         diag("GOT: ".Dumper $_[0]);
         diag("EXPECTED: ".Dumper $_[1]);
-        Test::More::BAIL_OUT "Stopping on a failed 'is_deeply' test from line $line. Time: $time";
+        Test::More::BAIL_OUT("Stopping on a failed 'is_deeply' test from line $line. Time: $time");
     }
 } ## end of is_deeply
 sub like($$;$) {
@@ -2006,7 +2006,7 @@ sub like($$;$) {
         my $time = time;
 #        Test::More::diag("GOT: ".Dumper $_[0]);
 #        Test::More::diag("EXPECTED: ".Dumper $_[1]);
-        Test::More::BAIL_OUT "Stopping on a failed 'like' test from line $line. Time: $time";
+        Test::More::BAIL_OUT("Stopping on a failed 'like' test from line $line. Time: $time");
     }
 } ## end of like
 sub pass(;$) {
@@ -2043,7 +2043,7 @@ sub is($$;$) {
     if ($bail_on_error and ++$total_errors => $bail_on_error) {
         my $line = (caller)[2];
         my $time = time;
-        Test::More::BAIL_OUT "Stopping on a failed 'is' test from line $line. Time: $time";
+        Test::More::BAIL_OUT("Stopping on a failed 'is' test from line $line. Time: $time");
     }
 } ## end of is
 sub isa_ok($$;$) {
@@ -2055,7 +2055,7 @@ sub isa_ok($$;$) {
         return;
     }
     if ($bail_on_error and ++$total_errors => $bail_on_error) {
-        Test::More::BAIL_OUT "Stopping on a failed test";
+        Test::More::BAIL_OUT("Stopping on a failed test");
     }
 } ## end of isa_ok
 sub ok($;$) {
@@ -2066,7 +2066,7 @@ sub ok($;$) {
     if ($bail_on_error and ++$total_errors => $bail_on_error) {
         my $line = (caller)[2];
         my $time = time;
-        Test::More::BAIL_OUT "Stopping on a failed 'ok' test from line $line. Time: $time";
+        Test::More::BAIL_OUT("Stopping on a failed 'ok' test from line $line. Time: $time");
     }
 } ## end of ok
 
