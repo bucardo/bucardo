@@ -1254,6 +1254,7 @@ sub setup_bucardo {
 sub _log_context {
     return unless $ENV{BUCARDO_LOG_ERROR_CONTEXT};
 
+    warn "Logging context for @_; dir=$ENV{PWD}\n";
     system("echo '====================' >> log.context");
     system("date >> log.context");
     system(sprintf "echo '%s' >> log.context", quotemeta($_[0])) if $_[0];
