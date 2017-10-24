@@ -1252,7 +1252,7 @@ sub _log_context {
     system("echo '====================' >> log.context");
     system("date >> log.context");
     system(sprintf "echo '%s' >> log.context", quotemeta($_[0])) if $_[0];
-    system("tail -n 100 log.bucardo bucardo_database_*/pg.log 2>/dev/null >> log.context");
+    system("tail -n 100 log.bucardo bucardo_test_database_*/pg.log 2>/dev/null >> log.context");
 }
 
 ## Utility functions for object existences:
