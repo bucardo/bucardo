@@ -97,12 +97,6 @@ if ($ENV{BUCARDO_LOG_ERROR_CONTEXT}) {
             }
         }
     }
-    # setup die handler
-    my $die = $SIG{__DIE__};
-    $SIG{__DIE__} = sub {
-        _log_context("Died somehow");
-        $die && $die->();
-    };
 }
 
 ## Test databases are labelled as A, B, C, etc.
