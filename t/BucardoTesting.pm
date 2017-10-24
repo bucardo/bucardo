@@ -91,7 +91,7 @@ if ($ENV{BUCARDO_LOG_ERROR_CONTEXT}) {
                 # information.
                 my $res = $sub->( @_ );
                 if (!$res) {
-                    _log_context();
+                    _log_context("@_");
                 }
                 $res;
             }
@@ -100,7 +100,7 @@ if ($ENV{BUCARDO_LOG_ERROR_CONTEXT}) {
     # setup die handler
     my $die = $SIG{__DIE__};
     $SIG{__DIE__} = sub {
-        _log_context();
+        _log_context("Died somehow");
         $die && $die->();
     };
 }
@@ -1254,7 +1254,10 @@ sub setup_bucardo {
 sub _log_context {
     return unless $ENV{BUCARDO_LOG_ERROR_CONTEXT};
 
-    # do something here
+    system("echo '====================' >> log.context");
+    system("date >> log.context");
+    system(sprintf "echo '%s' >> log.context", quotemeta($_[0])) if $_[0];
+    system("tail -100 log.bucardo bucardo_database_*/pg_log/* >> log.context");
 }
 
 ## Utility functions for object existences:
