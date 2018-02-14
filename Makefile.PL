@@ -38,6 +38,11 @@ WriteMakefile(
     EXE_FILES    => ['bucardo'],
     MAN1PODS     => { 'bucardo' => 'blib/man1/bucardo.1pm' },
     NORECURS     => 1,
+    META_MERGE   => {
+        resources => {
+            repository => 'https://github.com/bucardo/bucardo',
+        },
+    },
 );
 
 package MY;
