@@ -2152,7 +2152,7 @@ sub start_controller {
             $saved_sourcedbh->rollback();
 
             ## Make sure none of them are un-named, which Postgres outputs as ?column?
-            if (grep { /\?/ } @{ $g->{tcolumns}{$SELECT} }) {
+            if (grep { /^\?.*\?$/ } @{ $g->{tcolumns}{$SELECT} }) {
                 die "Invalid customcols given: must give an alias to all columns! ($g->{tcolumns}{$SELECT}) for $SELECT\n";
             }
 
