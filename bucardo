@@ -10156,7 +10156,7 @@ Activates one or more named syncs.
 
 Deactivates one or more named syncs.
 
-=item C<< message <body> >>
+=item C<< message '<body>' >>
 
 Sends a message to the running Bucardo logs.
 
