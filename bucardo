@@ -954,8 +954,8 @@ sub reload {
 
     ## We want to wait to hear from the MCP that it is done
     my $done = 'bucardo_reloaded_mcp';
-    $dbh->do('NOTIFY bucardo_mcp_reload');
     $dbh->do("LISTEN $done");
+    $dbh->do('NOTIFY bucardo_mcp_reload');
     $dbh->commit();
 
     ## Wait a little bit, then scan for the confirmation message
@@ -1005,8 +1005,8 @@ sub reload_config {
 
     ## We want to wait to hear from the MCP that it is done
     my $done = 'bucardo_reload_config_finished';
-    $dbh->do('NOTIFY bucardo_reload_config');
     $dbh->do("LISTEN $done");
+    $dbh->do('NOTIFY bucardo_reload_config');
     $dbh->commit();
 
     ## Wait a little bit, then scan for the confirmation message
