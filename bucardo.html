@@ -2,12 +2,12 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-<title></title>
+<title>bucardo - utility script for controlling the Bucardo program</title>
 <meta http-equiv="content-type" content="text/html; charset=utf-8" />
 
 </head>
 
-<body style="background-color: white">
+<body>
 
 
 
@@ -84,7 +84,7 @@
 
 <h1 id="VERSION">VERSION</h1>
 
-<p>This document describes version 5.5.0 of bucardo</p>
+<p>This document describes version 5.5.1 of bucardo</p>
 
 <h1 id="USAGE">USAGE</h1>
 
@@ -208,7 +208,7 @@
 <p>Deactivates one or more named syncs.</p>
 
 </dd>
-<dt id="message-body"><code>message '&lt;body&gt;'</code></dt>
+<dt id="message-body"><code>message &#39;&lt;body&gt;&#39;</code></dt>
 <dd>
 
 <p>Sends a message to the running Bucardo logs.</p>
@@ -539,7 +539,7 @@
 <dt id="dbname1"><code>dbname</code></dt>
 <dd>
 
-<p>The actual name of the database. Required unless using a service file.</p>
+<p>The actual name of the database. Required unless using a service file or setting it via dbdsn.</p>
 
 </dd>
 <dt id="type"><code>type</code></dt>
@@ -574,6 +574,12 @@
 
 </li>
 </ul>
+
+</dd>
+<dt id="dbdsn"><code>dbdsn</code></dt>
+<dd>
+
+<p>A direct DSN to connect to a database. Will override all other connection options if set.</p>
 
 </dd>
 <dt id="user"><code>user</code></dt>
@@ -728,6 +734,8 @@
 <dd>
 
 <p>Boolean indicating whether or not to be strict when comparing the table between syncs. If the columns have different names or data types, the validation will fail. But perhaps the columns are allowed to have different names or data types. If so, disable <code>strict_checking</code> and column differences will result in warnings rather than failing the validation. Defaults to true.</p>
+
+<p>Note that if the environment variable <code>BUCARD_INT_TO_BIGINT_OK</code> is set, then the code that checks the column types will allow synchronization from <code>bigint</code> to <code>integer</code>, which _can_ work if the values do not exceed 32-bit integer values.</p>
 
 </dd>
 </dl>
@@ -1624,6 +1632,12 @@
 <dd>
 
 </dd>
+<dt id="dbdsn1"><code>dbdsn</code></dt>
+<dd>
+
+<p>A direct DSN to connect to a database. Will override all other connection options if set.</p>
+
+</dd>
 <dt id="user1"><code>user</code></dt>
 <dd>
 
@@ -1803,18 +1817,6 @@
 <dd>
 
 <p>The rows on the &quot;target&quot; database always win.</p>
-
-</dd>
-<dt id="bucardo_skip1"><code>bucardo_skip</code></dt>
-<dd>
-
-<p>Any conflicting rows are simply not replicated. Not recommended for most cases.</p>
-
-</dd>
-<dt id="bucardo_random1"><code>bucardo_random</code></dt>
-<dd>
-
-<p>Each database has an equal chance of winning each time.</p>
 
 </dd>
 <dt id="bucardo_latest1"><code>bucardo_latest</code></dt>
@@ -2122,7 +2124,7 @@
 <dt id="bucardo_version"><code>bucardo_version</code></dt>
 <dd>
 
-<p>Current version of Bucardo. Default: <code>5.5.0</code>.</p>
+<p>Current version of Bucardo. Default: <code>5.5.1</code>.</p>
 
 </dd>
 <dt id="bucardo_vac"><code>bucardo_vac</code></dt>
@@ -2134,7 +2136,7 @@
 <dt id="bucardo_initial_version"><code>bucardo_initial_version</code></dt>
 <dd>
 
-<p>Bucardo version this schema was created with. Default: <code>5.5.0</code>.</p>
+<p>Bucardo version this schema was created with. Default: <code>5.5.1</code>.</p>
 
 </dd>
 <dt id="ctl_checkonkids_time"><code>ctl_checkonkids_time</code></dt>
@@ -2399,9 +2401,9 @@
 
 <h2 id="show">show</h2>
 
-<pre><code>  bucardo show all|&lt;setting&gt; [&lt;setting&gt;...]</code></pre>
+<pre><code>  bucardo show all|changed|&lt;setting&gt; [&lt;setting&gt;...]</code></pre>
 
-<p>Shows the current Bucardo settings. Use the keyword &quot;all&quot; to see all the settings, or specify one or more search terms. See <a href="#set">&quot;set&quot;</a> for complete details on the configuration settings.</p>
+<p>Shows the current Bucardo settings. Use the keyword &quot;all&quot; to see all the settings, &quot;changed&quot; to see settings different than the installed defaults, or specify one or more search terms. See <a href="#set">&quot;set&quot;</a> for complete details on the configuration settings.</p>
 
 <h2 id="config">config</h2>
 

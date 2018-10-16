@@ -1,3 +1,7 @@
+Bucardo version 5.5.1
+  - added BUCARD_BIGINT_TO_INT_OK to allow replication from integer columns back
+    to bigint columns.  It is up to PG and the user to ensure the FKs aren't
+    larger than 32 bits.
 
 Bucardo version 5.5.0
 
