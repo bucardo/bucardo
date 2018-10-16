@@ -16,7 +16,7 @@ use warnings;
 use utf8;
 use open qw( :std :utf8 );
 
-our $VERSION = '5.5.0';
+our $VERSION = '5.5.1';
 
 use DBI 1.51;                               ## How Perl talks to databases
 use DBD::Pg 2.0   qw( :async             ); ## How Perl talks to Postgres databases
@@ -7193,6 +7193,8 @@ sub validate_sync {
                         or
                         ($scol->{ftype} eq 'integer' and $fcol->{ftype} eq 'bigint')
                         or
+                        ($scol->{$ftype} eq 'bigint' and $fcol->{ftype} eq 'integer' and $ENV{BUCARDO_BIGINT_TO_INT_OK})
+                        or
                         ($scol->{ftype} =~ /^timestamp/ and $fcol->{ftype} =~ /^timestamp/)
                 ) {
                         my $msg = qq{Source database for sync "$syncname" has column "$colname" of table "$t" as type "$scol->{ftype}", but target database "$dbname" has a type of "$fcol->{ftype}". You should really fix that.};
@@ -10486,7 +10488,7 @@ Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This document describes version 5.5.0 of Bucardo
+This document describes version 5.5.1 of Bucardo
 
 =head1 WEBSITE
 
