@@ -5750,15 +5750,29 @@ sub connect_database {
         elsif ('redis' eq $dbtype) {
             my @dsn;
             my $server = '';
-            if (defined $d->{host} and length $d->{host}) {
-                $server = $d->{host};
+            if (defined $d->{dbhost} and length $d->{dbhost}) {
+                $server = $d->{dbhost};
             }
-            if (defined $d->{port} and length $d->{port}) {
-                $server = ":$d->{port}";
+            if (defined $d->{dbport} and length $d->{dbport}) {
+                $server = ":$d->{dbport}";
             }
             if ($server) {
                 push @dsn => 'server', $server;
             }
+
+            my ($pass, $index);
+            if (defined $d->{dbpass} and length $d->{dbpass}) {
+                $pass = $d->{dbpass};
+            }
+            if (defined $d->{dbname} and length $d->{dbname} and $d->{dbname} !~ /\D/) {
+                $index = $d->{dbname};
+            }
+
+            push @dsn => 'on_connect', sub {
+                $_[0]->client_setname('bucardo');
+                $_[0]->auth($pass) if $pass;
+                $_[0]->select($index) if $index;
+            };
 
             ## For now, we simply require it
             require Redis;
