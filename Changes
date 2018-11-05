@@ -1,5 +1,17 @@
 
-Bucardo version 5.5.0
+Bucardo version 5.5.0, released November 5, 2018
+
+  - PostgreSQL 11 support
+    [David Christensen]
+
+  - Fix race condition in reload/reload_config
+    [Christoph Berg]
+
+  - Fix detection of unnamed columns
+    [Ross Lafferty]
+
+  - Some increased portability fixes
+    [David Christensen]
 
   - Framework for reporting PostgreSQL and Bucardo logs when encountering test
     errors.
