@@ -3,7 +3,7 @@
 
 ## Grab a bunch of Bucardo stats for cacti
 ##
-## Copyright 2007 Greg Sabino Mullane <greg@endpoint.com>
+## Copyright 2007 Greg Sabino Mullane <greg@turnstep.com>
 
 use strict;
 use warnings;

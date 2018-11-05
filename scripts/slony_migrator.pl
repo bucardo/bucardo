@@ -3,7 +3,7 @@
 
 ## Slony migrator
 ##
-## Greg Sabino Mullane <greg@endpoint.com>, Joshua Tolley <josh@endpoint.com>
+## Greg Sabino Mullane <greg@turnstep.com>, Joshua Tolley <josh@endpoint.com>
 ## End Point Corporation http://www.endpoint.com/
 ## BSD licensed, see complete license at bottom of this script
 ## The latest version can be found in the Bucardo distribution at:
@@ -1255,13 +1255,13 @@ Please report any problems to josh@endpoint.com.
 
 =head1 AUTHORS
 
- Greg Sabino Mullane <greg@endpoint.com>
+ Greg Sabino Mullane <greg@turnstep.com>
  Selena Decklemann <selena@endpoint.com>
  Joshua Tolley <josh@endpoint.com>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2007-2009 Greg Sabino Mullane <greg@endpoint.com>.
+Copyright (c) 2007-2009 Greg Sabino Mullane <greg@turnstep.com>.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:

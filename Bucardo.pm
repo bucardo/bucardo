@@ -5,7 +5,7 @@
 ##
 ## This script should only be called via the 'bucardo' program
 ##
-## Copyright 2006-2017 Greg Sabino Mullane <greg@endpoint.com>
+## Copyright 2006-2018 Greg Sabino Mullane <greg@turnstep.com>
 ##
 ## Please visit http://bucardo.org for more information
 
@@ -10548,11 +10548,11 @@ of it in production since 2002. Jon Jensen <jon@endpoint.com> wrote the original
 
 =head1 AUTHOR
 
-Greg Sabino Mullane <greg@endpoint.com>
+Greg Sabino Mullane <greg@turnstep.com>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2005-2017 Greg Sabino Mullane <greg@endpoint.com>.
+Copyright (c) 2005-2018 Greg Sabino Mullane <greg@turnstep.com>.
 
 This software is free to use: see the LICENSE file for details.
 

@@ -3,7 +3,7 @@ name                : Bucardo
 version             : 5.5.0
 abstract            : Postgres multi-master replication system
 author:              
-  - Greg Sabino Mullane <greg@endpoint.com>
+  - Greg Sabino Mullane <greg@turnstep.com>
 
 license             : bsd
 dynamic_config      : 1
