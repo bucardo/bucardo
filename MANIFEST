@@ -6,11 +6,6 @@ Bucardo.pm
 Bucardo.pm.html
 bucardo.schema
 Changes
-dist/bucardo-logfiles.patch
-dist/bucardo.init
-dist/bucardo.rc
-dist/bucardo.spec
-dist/README
 INSTALL
 LICENSE
 Makefile.PL
@@ -34,10 +29,10 @@ t/02-bctl-herd.t
 t/02-bctl-sync.t
 t/02-bctl-table.t
 t/10-fullcopy.t
+t/10-makedelta.t
 t/10-object-names.t
 t/20-drizzle.t
 t/20-firebird.t
-t/10-makedelta.t
 t/20-mariadb.t
 t/20-mongo.t
 t/20-mysql.t
@@ -54,10 +49,9 @@ t/50-star.t
 t/98-cleanup.t
 t/99-signature.t
 t/BucardoTesting.pm
-t/customcode.exception.bucardotest.pl
 t/ctest1.pl
 t/ctest2.pl
 t/ctest3.pl
-dev/test_setup.sh
+t/customcode.exception.bucardotest.pl
 TODO
 UPGRADE

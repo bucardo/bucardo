@@ -30,3 +30,9 @@ notes.*
 MYMETA.*
 dev/
 dist/
+.travis*
+^test_*
+.vagrant
+boxA
+boxB
+Vagrantfile

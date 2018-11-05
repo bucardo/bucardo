@@ -7,7 +7,7 @@
 
 </head>
 
-<body style="background-color: white">
+<body>
 
 
 
@@ -208,7 +208,7 @@
 <p>Deactivates one or more named syncs.</p>
 
 </dd>
-<dt id="message-body"><code>message '&lt;body&gt;'</code></dt>
+<dt id="message-body"><code>message &#39;&lt;body&gt;&#39;</code></dt>
 <dd>
 
 <p>Sends a message to the running Bucardo logs.</p>
@@ -539,7 +539,7 @@
 <dt id="dbname1"><code>dbname</code></dt>
 <dd>
 
-<p>The actual name of the database. Required unless using a service file.</p>
+<p>The actual name of the database. Required unless using a service file or setting it via dbdsn.</p>
 
 </dd>
 <dt id="type"><code>type</code></dt>
@@ -574,6 +574,12 @@
 
 </li>
 </ul>
+
+</dd>
+<dt id="dbdsn"><code>dbdsn</code></dt>
+<dd>
+
+<p>A direct DSN to connect to a database. Will override all other connection options if set.</p>
 
 </dd>
 <dt id="user"><code>user</code></dt>
@@ -1624,6 +1630,12 @@
 <dd>
 
 </dd>
+<dt id="dbdsn1"><code>dbdsn</code></dt>
+<dd>
+
+<p>A direct DSN to connect to a database. Will override all other connection options if set.</p>
+
+</dd>
 <dt id="user1"><code>user</code></dt>
 <dd>
 
@@ -1803,18 +1815,6 @@
 <dd>
 
 <p>The rows on the &quot;target&quot; database always win.</p>
-
-</dd>
-<dt id="bucardo_skip1"><code>bucardo_skip</code></dt>
-<dd>
-
-<p>Any conflicting rows are simply not replicated. Not recommended for most cases.</p>
-
-</dd>
-<dt id="bucardo_random1"><code>bucardo_random</code></dt>
-<dd>
-
-<p>Each database has an equal chance of winning each time.</p>
 
 </dd>
 <dt id="bucardo_latest1"><code>bucardo_latest</code></dt>
@@ -2399,9 +2399,9 @@
 
 <h2 id="show">show</h2>
 
-<pre><code>  bucardo show all|&lt;setting&gt; [&lt;setting&gt;...]</code></pre>
+<pre><code>  bucardo show all|changed|&lt;setting&gt; [&lt;setting&gt;...]</code></pre>
 
-<p>Shows the current Bucardo settings. Use the keyword &quot;all&quot; to see all the settings, or specify one or more search terms. See <a href="#set">&quot;set&quot;</a> for complete details on the configuration settings.</p>
+<p>Shows the current Bucardo settings. Use the keyword &quot;all&quot; to see all the settings, &quot;changed&quot; to see settings different than the installed defaults, or specify one or more search terms. See <a href="#set">&quot;set&quot;</a> for complete details on the configuration settings.</p>
 
 <h2 id="config">config</h2>
 
