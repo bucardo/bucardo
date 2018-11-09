@@ -26,6 +26,7 @@ env:
 
 before_install:
   - ./.travis.sh postgresql_uninstall
+  - ./.travis.sh remove_old_pgdg
   - ./.travis.sh pgdg_repository
   - ./.travis.sh postgresql_install
 

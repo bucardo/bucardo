@@ -7,6 +7,10 @@ client_configure() {
     echo -n
 }
 
+remove_old_pgdg() {
+	sudo rm /etc/apt/sources.list.d/pgdg.list
+}
+
 pgdg_repository() {
 	local sourcelist='sources.list.d/postgresql.list'
 
