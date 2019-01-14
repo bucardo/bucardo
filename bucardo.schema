@@ -142,6 +142,7 @@ log_showpid|1|Show PID in the log output?
 log_showlevel|0|Show log level in the log output?
 log_showline|0|Show line number in the log output?
 log_showtime|3|Show timestamp in the log output?  0=off  1=seconds since epoch  2=scalar gmtime  3=scalar localtime
+log_timer_format||Show timestamps in specific format; default/empty to show time from scalar
 log_conflict_file|bucardo_conflict.log|Name of the conflict detail log file
 log_showsyncname|1|Show the name of the sync next to the 'KID' prefix
 log_level|NORMAL|How verbose to make the logging. Higher is more verbose.
