@@ -6068,11 +6068,11 @@ sub glog { ## no critic (RequireArgUnpacking)
         my ($sec,$msec) = gettimeofday;
         $showtime =
             1 == $config{log_showtime} ? $sec
-            : 2 == $config{log_showtime} ? ($config->{log_timer_format} ?
-                                            strftime($config->{log_timer_format}, gmtime($sec))
+            : 2 == $config{log_showtime} ? ($config{log_timer_format} ?
+                                            strftime($config{log_timer_format}, gmtime($sec))
                                             : scalar gmtime($sec))
-            : 3 == $config{log_showtime} ? ($config->{log_timer_format} ?
-                                            strftime($config->{log_timer_format}, localtime($sec))
+            : 3 == $config{log_showtime} ? ($config{log_timer_format} ?
+                                            strftime($config{log_timer_format}, localtime($sec))
                                             : scalar localtime($sec))
             : '';
         if ($config{log_microsecond}) {
