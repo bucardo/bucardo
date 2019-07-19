@@ -1,15 +1,18 @@
 #! perl
 
 ## Sample exception handler
-## For this example, we will fix unique violations on an email column
-
-#! perl
+## For this example, we will resolve unique violations by keeping the most
+## recent record with the conflicting value.
 
 use strict;
 use warnings;
 
 ##############################################################################
-# Set these variables to speciy the unique constraint conflict to resolve.
+# Set these variables to speciy the unique constraint conflict to resolve. Quote
+# properly for inclusion in queries, including ident quoting where appropriate.
+# The value of $columns should be a the exact query expression used to create
+# the unique constraint, generally a comma-delimited list of one or more
+# columns, but may also use a function, such as `LOWER(email)`.
 my $schema   = 'public';
 my $table    = 'employee';
 my $pk_col   = 'id';
@@ -26,13 +29,11 @@ my @cascade  = (
 ##############################################################################
 
 my $info = shift;
-
 return if $info->{schemaname} ne $schema || $info->{tablename} ne $table;
 
 # Do nothing unless it a unique constraint violation for the columns.
 return if $info->{error_string} !~ /violates unique constraint/
-       || $info->{error_string} !~ /DETAIL:\s+Key \($columns\)/;
-
+       || $info->{error_string} !~ /DETAIL:\s+Key\s+\Q($columns)\E/;
 
 # Grab all the primary keys involved in the sync
 my %pks = map { $_ => 1 } map { keys %{ $_ } } values %{ $info->{deltabin} };
