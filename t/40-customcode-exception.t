@@ -63,6 +63,12 @@ $SQL = q{
     updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
 CREATE UNIQUE INDEX sub_email_key ON employee(subid, LOWER(email));
+CREATE TABLE supplies(
+    employee_id INT  NOT NULL REFERENCES employee(id),
+    object      TEXT NOT NULL,
+    count       INT  NOT NULL,
+    PRIMARY KEY (employee_id, object)
+);
 };
 $dbhA->do($SQL); $dbhB->do($SQL); $dbhC->do($SQL);
 
@@ -75,6 +81,8 @@ $dbhA->commit();$dbhB->commit();$dbhC->commit();
 $t = q{Adding tables to new herd 'exherd' works};
 $res = $bct->ctl(q{bucardo add table employee herd=exherd});
 like ($res, qr/Created the relgroup named "exherd".*are now part of/s, $t);
+$res = $bct->ctl(q{bucardo add table supplies herd=exherd});
+like ($res, qr/The following tables or sequences are now part of the relgroup "exherd":/s, $t);
 
 ## Create a new dbgroup going from A to B to C
 $t = q{Created a new dbgroup exabc for A <=> B <=> C};
@@ -98,27 +106,43 @@ $SQL = 'INSERT INTO employee (id,subid,fullname,email) VALUES (?,?,?,?)';
 my $insert_ea = $dbhA->prepare($SQL);
 my $insert_eb = $dbhB->prepare($SQL);
 my $insert_ec = $dbhC->prepare($SQL);
+$SQL = 'INSERT INTO supplies (employee_id,object,count) VALUES (?,?,?)';
+my $supply_ea = $dbhA->prepare($SQL);
+my $supply_eb = $dbhB->prepare($SQL);
+my $supply_ec = $dbhC->prepare($SQL);
 
 $insert_ea->execute(100, 10, 'Alice',   'alice@acme'   );
+$supply_ea->execute(100, 'staples', 1024);
+$supply_ea->execute(100, 'pens', 3);
 $insert_eb->execute(101, 10, 'Bob',     'bob@acme'     );
+$supply_eb->execute(101, 'phone', 1);
 
 $dbhA->commit(); $dbhB->commit(); $dbhC->commit();
 
 $bct->ctl('bucardo kick sync exabc 0');
 
 ## We cool?
-$SQL = 'SELECT id FROM employee ORDER BY id';
 for my $db (qw/ A B C /) {
     my $dbh = $dbh{$db};
-    my $result = $dbh->selectall_arrayref($SQL);
-    $t = qq{Database $db has expected rows};
+    my $result = $dbh->selectall_arrayref(
+        'SELECT id FROM employee ORDER BY id'
+    );
+    $t = qq{Database $db has expected employee rows};
     is_deeply ($result, [[100],[101]], $t);
+    $result = $dbh->selectall_arrayref(
+        'SELECT employee_id,count FROM supplies ORDER BY employee_id, count'
+    );
+    $t = qq{Database $db has expected supply rows};
+    is_deeply ($result, [[100,3],[100,1024],[101,1]], $t);
 }
 
 ## Cause a unique index violation and confirm the sync dies
 $insert_ec->execute(103, 10, 'Mallory2', 'MALLORY@ACME' );
+$supply_ec->execute(103, 'staples', 42);
 $insert_eb->execute(102, 10, 'Mallory1', 'mallory@acme' );
+$supply_eb->execute(102, 'staples', 41);
 $insert_ea->execute(104, 11, 'Mallory1', 'mallory@acme' );
+$supply_ea->execute(104, 'staples', 10000);
 
 $dbhA->commit(); $dbhB->commit(); $dbhC->commit();
 
@@ -166,6 +190,11 @@ for my $db (qw/ A B C /) {
                [102,10,'mallory@acme','Mallory1'],
                [104,11,'mallory@acme','Mallory1'],
        ],$t);
+    $result = $dbh->selectall_arrayref(
+        'SELECT employee_id,count FROM supplies ORDER BY employee_id, count'
+    );
+    $t = qq{Database $db has expected supply rows};
+    is_deeply ($result, [[100,3],[100,1024],[101,1],[102,41],[104,10000]], $t);
 }
 
 ## Make sure all the rows are as we expect inside employee_conflict

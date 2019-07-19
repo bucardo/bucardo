@@ -2,7 +2,11 @@
 
 ## Sample exception handler
 ## For this example, we will resolve unique violations by keeping the most
-## recent record with the conflicting value.
+## recent record with the conflicting value and deleting the other values
+## and any records that references them. It uses a general purpose design,
+## requiring only a single-column primary key and a single column
+## timestamp so as to keep the record with the latest time. Feel free to
+## adapt to your use cases.
 
 use strict;
 use warnings;
@@ -24,7 +28,7 @@ my $time_col = 'updated_at';
 # deleted, list them here and the script will delete them, first. List in
 # the order to be deleted. Format as arryays: [$schema, $table, $fk_column].
 my @cascade  = (
-    # qw(log employee id)],
+    [qw(public supplies employee_id)],
 );
 
 ##############################################################################
