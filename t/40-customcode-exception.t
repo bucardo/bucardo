@@ -58,7 +58,8 @@ $SQL = q{
   CREATE TABLE employee (
     id SERIAL PRIMARY KEY,
     fullname TEXT,
-    email TEXT UNIQUE
+    email TEXT UNIQUE,
+    updated_at timestamptz DEFAULT clock_timestamp()
 );
 };
 $dbhA->do($SQL); $dbhB->do($SQL); $dbhC->do($SQL);
@@ -113,8 +114,8 @@ for my $db (qw/ A B C /) {
 }
 
 ## Cause a unique index violation and confirm the sync dies
-$insert_eb->execute(102, 'Mallory1', 'mallory@acme' );
 $insert_ec->execute(103, 'Mallory2', 'mallory@acme' );
+$insert_eb->execute(102, 'Mallory1', 'mallory@acme' );
 
 $dbhA->commit(); $dbhB->commit(); $dbhC->commit();
 
