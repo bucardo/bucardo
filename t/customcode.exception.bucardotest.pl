@@ -49,7 +49,8 @@ unless (%pks) {
     return;
 }
 
-# Query each database for the PKs, hashed unique key, and update time.
+# Query each database for the PKs, unique expression value as a JSON array,
+# that same array hashed, and update time.
 my $query = qq{
     SELECT $pk_col                               AS pkey,
            json_build_array($columns)            AS val,
