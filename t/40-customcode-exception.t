@@ -118,6 +118,7 @@ for my $db (qw/ A B C /) {
 ## Cause a unique index violation and confirm the sync dies
 $insert_ec->execute(103, 10, 'Mallory2', 'mallory@acme' );
 $insert_eb->execute(102, 10, 'Mallory1', 'mallory@acme' );
+$insert_ea->execute(104, 11, 'Mallory1', 'mallory@acme' );
 
 $dbhA->commit(); $dbhB->commit(); $dbhC->commit();
 
@@ -162,7 +163,8 @@ for my $db (qw/ A B C /) {
     is_deeply ($result,[
                [100,10,'alice@acme','Alice'],
                [101,10,'bob@acme','Bob'],
-               [102,10,'mallory@acme','Mallory1']
+               [102,10,'mallory@acme','Mallory1'],
+               [104,11,'mallory@acme','Mallory1'],
        ],$t);
 }
 
