@@ -8,15 +8,16 @@ use strict;
 use warnings;
 
 ##############################################################################
-# Set these variables to speciy the unique constraint conflict to resolve. Quote
-# properly for inclusion in queries, including ident quoting where appropriate.
-# The value of $columns should be a the exact query expression used to create
-# the unique constraint, generally a comma-delimited list of one or more
-# columns, but may also use a function, such as `LOWER(email)`.
+# Set these variables to specify the unique constraint conflict to resolve.
+# Quote identifiers properly for inclusion in queries. The value of $columns
+# should be a the exact query expression used to create the unique constraint
+# or index, generally a comma-delimited list of one or more columns or function
+# calls, function, such as `lower(email)`. Check the constrait expression as
+# shown by Postgres itself to ensure an exact match.
 my $schema   = 'public';
 my $table    = 'employee';
 my $pk_col   = 'id';
-my $columns  = 'subid, email';
+my $columns  = 'subid, lower(email)';
 my $time_col = 'updated_at';
 
 # If there are any tables with FK constraints pointint to records to be

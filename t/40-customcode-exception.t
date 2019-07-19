@@ -60,9 +60,9 @@ $SQL = q{
     subid INT NOT NULL,
     fullname TEXT,
     email TEXT NOT NULL,
-    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    UNIQUE (subid, email)
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
+CREATE UNIQUE INDEX sub_email_key ON employee(subid, LOWER(email));
 };
 $dbhA->do($SQL); $dbhB->do($SQL); $dbhC->do($SQL);
 
@@ -116,7 +116,7 @@ for my $db (qw/ A B C /) {
 }
 
 ## Cause a unique index violation and confirm the sync dies
-$insert_ec->execute(103, 10, 'Mallory2', 'mallory@acme' );
+$insert_ec->execute(103, 10, 'Mallory2', 'MALLORY@ACME' );
 $insert_eb->execute(102, 10, 'Mallory1', 'mallory@acme' );
 $insert_ea->execute(104, 11, 'Mallory1', 'mallory@acme' );
 
@@ -131,7 +131,7 @@ $t = q{Sync exabc is marked as bad after a failed run};
 like ($res, qr{Current state\s+:\s+Bad}, $t);
 
 $t = q{Sync exabc shows a duplicate key violation};
-like ($res, qr{ERROR.*employee_subid_email_key}, $t);
+like ($res, qr{ERROR.*sub_email_key}, $t);
 
 ## Add in a customcode exception handler
 $res = $bct->ctl('bucardo add customcode email_exception whenrun=exception src_code=t/customcode.exception.bucardotest.pl sync=exabc getdbh=1');
@@ -175,7 +175,7 @@ for my $db (qw/ C /) {
     my $result = $dbh->selectall_arrayref($SQL);
     $t = qq{Database $db has expected rows in employee_conflict};
     is_deeply ($result,[
-               [103,10,'mallory@acme','Mallory2']
+               [103,10,'MALLORY@ACME','Mallory2']
        ],$t);
 }
 
