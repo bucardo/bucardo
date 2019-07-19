@@ -57,9 +57,11 @@ $dbhA->do($SQL); $dbhB->do($SQL); $dbhC->do($SQL);
 $SQL = q{
   CREATE TABLE employee (
     id SERIAL PRIMARY KEY,
+    subid INT NOT NULL,
     fullname TEXT,
-    email TEXT UNIQUE,
-    updated_at timestamptz DEFAULT clock_timestamp()
+    email TEXT NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    UNIQUE (subid, email)
 );
 };
 $dbhA->do($SQL); $dbhB->do($SQL); $dbhC->do($SQL);
@@ -92,13 +94,13 @@ $dbhX->commit();
 $bct->restart_bucardo($dbhX);
 
 ## Add some rows and verify that basic replication is working
-$SQL = 'INSERT INTO employee (id,fullname,email) VALUES (?,?,?)';
+$SQL = 'INSERT INTO employee (id,subid,fullname,email) VALUES (?,?,?,?)';
 my $insert_ea = $dbhA->prepare($SQL);
 my $insert_eb = $dbhB->prepare($SQL);
 my $insert_ec = $dbhC->prepare($SQL);
 
-$insert_ea->execute(100, 'Alice',   'alice@acme'   );
-$insert_eb->execute(101, 'Bob',     'bob@acme'     );
+$insert_ea->execute(100, 10, 'Alice',   'alice@acme'   );
+$insert_eb->execute(101, 10, 'Bob',     'bob@acme'     );
 
 $dbhA->commit(); $dbhB->commit(); $dbhC->commit();
 
@@ -114,8 +116,8 @@ for my $db (qw/ A B C /) {
 }
 
 ## Cause a unique index violation and confirm the sync dies
-$insert_ec->execute(103, 'Mallory2', 'mallory@acme' );
-$insert_eb->execute(102, 'Mallory1', 'mallory@acme' );
+$insert_ec->execute(103, 10, 'Mallory2', 'mallory@acme' );
+$insert_eb->execute(102, 10, 'Mallory1', 'mallory@acme' );
 
 $dbhA->commit(); $dbhB->commit(); $dbhC->commit();
 
@@ -128,7 +130,7 @@ $t = q{Sync exabc is marked as bad after a failed run};
 like ($res, qr{Current state\s+:\s+Bad}, $t);
 
 $t = q{Sync exabc shows a duplicate key violation};
-like ($res, qr{ERROR.*employee_email_key}, $t);
+like ($res, qr{ERROR.*employee_subid_email_key}, $t);
 
 ## Add in a customcode exception handler
 $res = $bct->ctl('bucardo add customcode email_exception whenrun=exception src_code=t/customcode.exception.bucardotest.pl sync=exabc getdbh=1');
@@ -152,26 +154,26 @@ like ($res, qr{Current state\s+:\s+Good}, $t);
 
 ## Make sure all the rows are as we expect inside employee
 ## We cool?
-$SQL = 'SELECT id,email,fullname FROM employee ORDER BY id';
+$SQL = 'SELECT id,subid,email,fullname FROM employee ORDER BY id';
 for my $db (qw/ A B C /) {
     my $dbh = $dbh{$db};
     my $result = $dbh->selectall_arrayref($SQL);
     $t = qq{Database $db has expected rows in employee};
     is_deeply ($result,[
-               [100,'alice@acme','Alice'],
-               [101,'bob@acme','Bob'],
-               [102,'mallory@acme','Mallory1']
+               [100,10,'alice@acme','Alice'],
+               [101,10,'bob@acme','Bob'],
+               [102,10,'mallory@acme','Mallory1']
        ],$t);
 }
 
 ## Make sure all the rows are as we expect inside employee_conflict
-$SQL = 'SELECT id,email,fullname FROM employee_conflict';
+$SQL = 'SELECT id,subid,email,fullname FROM employee_conflict';
 for my $db (qw/ C /) {
     my $dbh = $dbh{$db};
     my $result = $dbh->selectall_arrayref($SQL);
     $t = qq{Database $db has expected rows in employee_conflict};
     is_deeply ($result,[
-               [103,'mallory@acme','Mallory2']
+               [103,10,'mallory@acme','Mallory2']
        ],$t);
 }
 

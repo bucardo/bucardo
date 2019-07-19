@@ -16,7 +16,7 @@ use warnings;
 my $schema   = 'public';
 my $table    = 'employee';
 my $pk_col   = 'id';
-my $columns  = 'email';
+my $columns  = 'subid, email';
 my $time_col = 'updated_at';
 
 # If there are any tables with FK constraints pointint to records to be
