@@ -7,10 +7,23 @@
 ## requiring only a single-column primary key and a single column
 ## timestamp so as to keep the record with the latest time. Feel free to
 ## adapt to your use cases.
+##
+## To add this script to a sync, assuming the setting of the variables in the
+## next section, run this command, replacing `{sync}` with the name of the
+## sync it applies to.
+##
+##     bucardo add customcode employee_subid_email_conflict \
+##            whenrun=exception \
+##            src_code=bucardo_unique_conflict_resolution.pl \
+##            sync={sync} \
+##            getdbh=1 \
+##            relation=public.employee
 
 use strict;
 use warnings;
 
+##############################################################################
+# Configuration
 ##############################################################################
 # Set these variables to specify the unique constraint conflict to resolve.
 # Quote identifiers properly for inclusion in queries. The value of $columns
@@ -34,7 +47,8 @@ my @cascade  = (
 # Optionaly set $copy_to to table with idencial columns to $table to store away
 # deleted records for later evaluation or recovery.
 my $copy_to  = 'employee_conflict';
-
+##############################################################################
+# End of Configuration
 ##############################################################################
 
 my $info = shift;
