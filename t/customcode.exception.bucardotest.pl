@@ -31,6 +31,10 @@ my @cascade  = (
     [qw(public supplies employee_id)],
 );
 
+# Optionaly set $copy_to to table with idencial columns to $table to store away
+# deleted records for later evaluation or recovery.
+my $copy_to  = 'employee_conflict';
+
 ##############################################################################
 
 my $info = shift;
@@ -87,11 +91,12 @@ for my $db (sort keys %{ $dbhs }) {
             : ($prev_rec, $curr_rec);
         $rec_for{ $keep->{ukey} } = $keep;
 
-        # Store away the older record in a separate table
+        # Store away the older record in a separate table if we want to manually
+        # check or recover deleted records later.
         $dbhs->{ $lose->{db} }->do(
-            'INSERT INTO employee_conflict SELECT * FROM employee WHERE id = ?',
+            "INSERT INTO $copy_to SELECT * FROM employee WHERE id = ?",
             $lose->{pkey},
-        );
+        ) if $copy_to;
 
         # Cascade delete the older record.
         $dbhs->{ $lose->{db} }->do(
