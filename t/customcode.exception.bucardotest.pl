@@ -37,15 +37,16 @@ my $pk_col   = 'id';
 my $columns  = 'subid, lower(email)';
 my $time_col = 'updated_at';
 
-# If there are any tables with FK constraints pointint to records to be
+# If there are any tables with FK constraints pointing to records to be
 # deleted, list them here and the script will delete them, first. List in
-# the order to be deleted. Format as arryays: [$schema, $table, $fk_column].
+# the order to be deleted, account for additional foreign key constraints
+# if necessary. Format as arrays: [$schema, $table, $fk_column].
 my @cascade  = (
     [qw(public supplies employee_id)],
 );
 
-# Optionaly set $copy_to to table with idencial columns to $table to store away
-# deleted records for later evaluation or recovery.
+# Optionaly set $copy_to to table with identical columns to $table to store
+# away deleted records for later evaluation or recovery.
 my $copy_to  = 'employee_conflict';
 ##############################################################################
 # End of Configuration
@@ -54,25 +55,24 @@ my $copy_to  = 'employee_conflict';
 my $info = shift;
 return if $info->{schemaname} ne $schema || $info->{tablename} ne $table;
 
-# Do nothing unless it a unique constraint violation for the columns.
+# Do nothing unless it's a unique constraint violation for the columns.
 return if $info->{error_string} !~ /violates unique constraint/
        || $info->{error_string} !~ /DETAIL:\s+Key\s+\Q($columns)\E/;
 
-# Grab all the primary keys involved in the sync
+# Grab all the primary keys involved in the sync.
 my %pks = map { $_ => 1 } map { keys %{ $_ } } values %{ $info->{deltabin} };
 
-# Very unlikely to happen, but we will check anyway:
+# Very unlikely to happen, but check anyway.
 unless (%pks) {
     $info->{warning} = 'No database records found!';
     return;
 }
 
 # Query each database for the PKs, unique expression value as a JSON array,
-# that same array hashed, and update time.
+# and update time.
 my $query = qq{
     SELECT $pk_col                               AS pkey,
-           json_build_array($columns)            AS val,
-           md5(json_build_array($columns)::TEXT) AS ukey,
+           json_build_array($columns)            AS ukey,
            extract(epoch FROM $time_col)         AS utime,
            ?::TEXT                               AS db
       FROM $schema.$table
@@ -90,13 +90,13 @@ for my $db (sort keys %{ $dbhs }) {
     $sth->execute($db, [keys %pks]);
 
     while (my $curr_rec = $sth->fetchrow_hashref) {
-        # This a new unique key? All is good, just move on
+        # First time seeing this key? All good, record and move on.
         my $prev_rec = $rec_for{ $curr_rec->{ukey} } || do {
             $rec_for{ $curr_rec->{ukey} } = $curr_rec;
             next;
         };
 
-        # This unique key already exists. If the same PK, no problem
+        # Unique key seen already. No conflict if the PK is the same.
         next if $curr_rec->{pkey} eq $prev_rec->{pkey};
 
         # Keep the record with the latest update time.
@@ -119,9 +119,9 @@ for my $db (sort keys %{ $dbhs }) {
         ) for @cascade, [$schema, $table, $pk_col];
 
         # Log the resolution.
-        $info->{message} .= qq{Unique conflict on $schema.$table($columns) for value \`$keep->{val}\` resolved by deleting $pk_col \`$lose->{pkey}\` from database $lose->{db} and keeping $pk_col \`$keep->{pkey}\` from database $keep->{db}};
+        $info->{message} .= qq{Unique conflict on $schema.$table($columns) for value \`$keep->{ukey}\` resolved by deleting $pk_col \`$lose->{pkey}\` from database $lose->{db} and keeping $pk_col \`$keep->{pkey}\` from database $keep->{db}};
 
-        # Note: we do not want to commit (and it is disallowed by DBIx::Safe)
+        # Note: Don't commit, Bucard handles transactions.
     }
 }
 
