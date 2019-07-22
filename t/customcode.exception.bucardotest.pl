@@ -64,7 +64,7 @@ my %pks = map { $_ => 1 } map { keys %{ $_ } } values %{ $info->{deltabin} };
 
 # Very unlikely to happen, but check anyway.
 unless (%pks) {
-    $info->{warning} = 'No database records found!';
+    $info->{warning} = "Conflict detected on $schema.$table($columns) but no records found!";
     return;
 }
 
