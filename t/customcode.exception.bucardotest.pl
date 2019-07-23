@@ -73,20 +73,23 @@ unless ($dbh) {
 
 # Retrieve the index expression and predicate.
 my ($expr, $pred) = $dbh->selectrow_array(q{
-    SELECT string_agg(pg_catalog.pg_get_indexdef( ci.oid, s.i + 1, false), ', ') AS expr,
-           pg_catalog.pg_get_expr(x.indpred, ct.oid) AS pred
-      FROM pg_catalog.pg_index x
-      JOIN pg_catalog.pg_class ct    ON ct.oid = x.indrelid
-      JOIN pg_catalog.pg_class ci    ON ci.oid = x.indexrelid
-      JOIN pg_catalog.pg_namespace n ON n.oid = ct.relnamespace
-      JOIN generate_series(0, current_setting('max_index_keys')::int - 1) s(i)
-        ON x.indkey[s.i] IS NOT NULL
-     WHERE n.nspname  = ?
-       AND ct.relname = ?
-       AND ci.relname = ?
-       AND x.indisunique
-       AND NOT x.indisprimary
-     GROUP BY x.indpred, ct.oid
+    SELECT string_agg(expr, ', '), pred FROM (
+        SELECT pg_catalog.pg_get_indexdef( ci.oid, s.i + 1, false) AS expr,
+               pg_catalog.pg_get_expr(x.indpred, ct.oid) AS pred
+          FROM pg_catalog.pg_index x
+          JOIN pg_catalog.pg_class ct    ON ct.oid = x.indrelid
+          JOIN pg_catalog.pg_class ci    ON ci.oid = x.indexrelid
+          JOIN pg_catalog.pg_namespace n ON n.oid = ct.relnamespace
+          JOIN generate_series(0, current_setting('max_index_keys')::int - 1) s(i)
+              ON x.indkey[s.i] IS NOT NULL
+          WHERE n.nspname  = ?
+          AND ct.relname = ?
+          AND ci.relname = ?
+          AND x.indisunique
+          AND NOT x.indisprimary
+        ORDER BY s.i
+    ) AS tab
+    GROUP BY pred
 }, undef, undef, $schema, $table, $index);
 
 unless ($expr) {
