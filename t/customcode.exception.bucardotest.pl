@@ -12,7 +12,7 @@
 ## next section, run this command, replacing `{sync}` with the name of the
 ## sync it applies to.
 ##
-##     bucardo add customcode employee_subid_email_conflict \
+##     bucardo add customcode employee_sub_email_key_conflict \
 ##            whenrun=exception \
 ##            src_code=bucardo_unique_conflict_resolution.pl \
 ##            sync={sync} \
@@ -26,16 +26,12 @@ use warnings;
 # Configuration
 ##############################################################################
 # Set these variables to specify the unique constraint conflict to resolve.
-# Quote identifiers properly for inclusion in queries. The value of $columns
-# should be a the exact query expression used to create the unique constraint
-# or index, generally a comma-delimited list of one or more columns or function
-# calls, function, such as `lower(email)`. Check the constrait expression as
-# shown by Postgres itself to ensure an exact match.
-my $schema   = 'public';
-my $table    = 'employee';
-my $pk_col   = 'id';
-my $columns  = 'subid, lower(email)';
-my $time_col = 'updated_at';
+# Quote identifiers properly for inclusion in queries.
+my $schema   = 'public';          # index schema
+my $table    = 'employee';        # index table
+my $index    = 'sub_email_key';   # index name
+my $pk_col   = 'id';              # index table primary key column
+my $time_col = 'updated_at';      # last update time column
 
 # If there are any tables with FK constraints pointing to records to be
 # deleted, list them here and the script will delete them, first. List in
@@ -55,35 +51,66 @@ my $copy_to  = 'employee_conflict';
 my $info = shift;
 return if $info->{schemaname} ne $schema || $info->{tablename} ne $table;
 
-# Do nothing unless it's a unique constraint violation for the columns.
-return if $info->{error_string} !~ /violates unique constraint/
-       || $info->{error_string} !~ /DETAIL:\s+Key\s+\Q($columns)\E/;
+# Do nothing unless it's a unique violation for the specified index.
+return if $info->{error_string} !~ /violates unique constraint "\Q$index\E"/;
 
 # Grab all the primary keys involved in the sync.
 my %pks = map { $_ => 1 } map { keys %{ $_ } } values %{ $info->{deltabin} };
 
 # Very unlikely to happen, but check anyway.
 unless (%pks) {
-    $info->{warning} = "Conflict detected on $schema.$table($columns) but no records found!";
+    $info->{warning} = "Conflict detected on $schema.$table but no records found!";
     return;
 }
 
-# Query each database for the PKs, unique expression value as a JSON array,
-# and update time.
+# Grab one of the database handles.
+my $dbhs = $info->{dbh};
+my ($dbh) = values %{ $dbhs };
+unless ($dbh) {
+    $info->{warning} = "No database handles found when trying to resolve $table.$schema conflict. Did you specify `getdbh=1` when adding the custom code?";
+    return;
+}
+
+# Retrieve the index expression and predicate.
+my ($expr, $pred) = $dbh->selectrow_array(q{
+    SELECT string_agg(pg_catalog.pg_get_indexdef( ci.oid, s.i + 1, false), ', ') AS expr,
+           pg_catalog.pg_get_expr(x.indpred, ct.oid) AS pred
+      FROM pg_catalog.pg_index x
+      JOIN pg_catalog.pg_class ct    ON ct.oid = x.indrelid
+      JOIN pg_catalog.pg_class ci    ON ci.oid = x.indexrelid
+      JOIN pg_catalog.pg_namespace n ON n.oid = ct.relnamespace
+      JOIN generate_series(0, current_setting('max_index_keys')::int - 1) s(i)
+        ON x.indkey[s.i] IS NOT NULL
+     WHERE n.nspname  = ?
+       AND ct.relname = ?
+       AND ci.relname = ?
+       AND x.indisunique
+       AND NOT x.indisprimary
+     GROUP BY x.indpred, ct.oid
+}, undef, undef, $schema, $table, $index);
+
+unless ($expr) {
+    # Should not happen, but just to be safe.
+    $info->{warning} = "Conflict detected on $schema.$table but index $index not found!";
+    return;
+}
+
+# Assemble the query for the PKs, unique expression value as a JSON array, and
+# update time.
 my $query = qq{
     SELECT $pk_col                               AS pkey,
-           json_build_array($columns)            AS ukey,
+           json_build_array($expr)               AS ukey,
            extract(epoch FROM $time_col)         AS utime,
            ?::TEXT                               AS db
       FROM $schema.$table
      WHERE $pk_col = ANY(?)
 };
+$query .= "       AND $pred" if $pred;
 
 # We'll want one instance of each unique key.
 my %rec_for;
 
 # Always work the databases in the same order.
-my $dbhs = $info->{dbh};
 for my $db (sort keys %{ $dbhs }) {
     my $dbh = $dbhs->{$db};
     my $sth = $dbh->prepare($query);
@@ -119,7 +146,7 @@ for my $db (sort keys %{ $dbhs }) {
         ) for @cascade, [$schema, $table, $pk_col];
 
         # Log the resolution.
-        $info->{message} .= qq{Unique conflict on $schema.$table($columns) for value \`$keep->{ukey}\` resolved by deleting $pk_col \`$lose->{pkey}\` from database $lose->{db} and keeping $pk_col \`$keep->{pkey}\` from database $keep->{db}};
+        $info->{message} .= qq{Unique conflict on $schema.$table($expr) for value \`$keep->{ukey}\` resolved by deleting $pk_col \`$lose->{pkey}\` from database $lose->{db} and keeping $pk_col \`$keep->{pkey}\` from database $keep->{db}};
 
         # Note: Don't commit, Bucard handles transactions.
     }

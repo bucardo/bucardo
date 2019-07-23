@@ -63,9 +63,10 @@ $SQL = q{
     subid INT NOT NULL,
     fullname TEXT,
     email TEXT NOT NULL,
+    active BOOL DEFAULT TRUE,
     updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
-CREATE UNIQUE INDEX sub_email_key ON employee(subid, LOWER(email));
+CREATE UNIQUE INDEX sub_email_key ON employee(subid, LOWER(email)) WHERE active;
 CREATE TABLE supplies(
     employee_id INT  NOT NULL REFERENCES employee(id),
     object      TEXT NOT NULL,
@@ -147,6 +148,13 @@ $supply_eb->execute(102, 'staples', 41);
 $insert_ea->execute(104, 11, 'Mallory1', 'mallory@acme' );
 $supply_ea->execute(104, 'staples', 10000);
 
+# Add an inactive record.
+$dbhB->do(
+    'INSERT INTO employee (id,subid,fullname,email,active) VALUES (?,?,?,?,?)',
+    undef, 105, 10, 'Mallory3', 'mallory@acme', 0,
+);
+$supply_eb->execute(105, 'pens', 3);
+
 $dbhA->commit(); $dbhB->commit(); $dbhC->commit();
 
 $bct->ctl('bucardo kick sync exabc 0');
@@ -192,12 +200,13 @@ for my $db (qw/ A B C /) {
                [101,10,'bob@acme','Bob'],
                [102,10,'mallory@acme','Mallory1'],
                [104,11,'mallory@acme','Mallory1'],
+               [105,10,'mallory@acme','Mallory3'],
        ],$t);
     $result = $dbh->selectall_arrayref(
         'SELECT employee_id,count FROM supplies ORDER BY employee_id, count'
     );
     $t = qq{Database $db has expected supply rows};
-    is_deeply ($result, [[100,3],[100,1024],[101,1],[102,41],[104,10000]], $t);
+    is_deeply ($result, [[100,3],[100,1024],[101,1],[102,41],[104,10000],[105,3]], $t);
 }
 
 ## Make sure all the rows are as we expect inside employee_conflict
