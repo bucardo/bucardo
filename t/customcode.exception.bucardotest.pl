@@ -27,8 +27,7 @@ use warnings;
 ##############################################################################
 # Set these variables to specify the unique constraint conflict to resolve.
 # Quote identifiers properly for inclusion in queries.
-my $schema   = 'public';          # index schema
-my $table    = 'employee';        # index table
+my $relation = 'public.employee'; # index schema
 my $index    = 'sub_email_key';   # index name
 my $pk_col   = 'id';              # index table primary key column
 my $time_col = 'updated_at';      # last update time column
@@ -38,7 +37,7 @@ my $time_col = 'updated_at';      # last update time column
 # the order to be deleted, account for additional foreign key constraints
 # if necessary. Format as arrays: [$schema, $table, $fk_column].
 my @cascade  = (
-    [qw(public supplies employee_id)],
+    [qw(public.supplies employee_id)],
 );
 
 # Optionaly set $copy_to to table with identical columns to $table to store
@@ -49,7 +48,7 @@ my $copy_to  = 'employee_conflict';
 ##############################################################################
 
 my $info = shift;
-return if $info->{schemaname} ne $schema || $info->{tablename} ne $table;
+return if "$info->{schemaname}.$info->{tablename}" ne $relation;
 
 # Do nothing unless it's a unique violation for the specified index.
 return if $info->{error_string} !~ /violates unique constraint "\Q$index\E"/;
@@ -59,7 +58,7 @@ my %pks = map { $_ => 1 } map { keys %{ $_ } } values %{ $info->{deltabin} };
 
 # Very unlikely to happen, but check anyway.
 unless (%pks) {
-    $info->{warning} = "Conflict detected on $schema.$table but no records found!";
+    $info->{warning} = "Conflict detected on $relation but no records found!";
     return;
 }
 
@@ -67,7 +66,7 @@ unless (%pks) {
 my $dbhs = $info->{dbh};
 my ($dbh) = values %{ $dbhs };
 unless ($dbh) {
-    $info->{warning} = "No database handles found when trying to resolve $table.$schema conflict. Did you specify `getdbh=1` when adding the custom code?";
+    $info->{warning} = "No database handles found when trying to resolve $relation conflict. Did you specify `getdbh=1` when adding the custom code?";
     return;
 }
 
@@ -79,22 +78,20 @@ my ($expr, $pred) = $dbh->selectrow_array(q{
           FROM pg_catalog.pg_index x
           JOIN pg_catalog.pg_class ct    ON ct.oid = x.indrelid
           JOIN pg_catalog.pg_class ci    ON ci.oid = x.indexrelid
-          JOIN pg_catalog.pg_namespace n ON n.oid = ct.relnamespace
           JOIN generate_series(0, current_setting('max_index_keys')::int - 1) s(i)
-              ON x.indkey[s.i] IS NOT NULL
-          WHERE n.nspname  = ?
-          AND ct.relname = ?
-          AND ci.relname = ?
-          AND x.indisunique
-          AND NOT x.indisprimary
-        ORDER BY s.i
+            ON x.indkey[s.i] IS NOT NULL
+         WHERE ct.oid     = ?::regclass
+           AND ci.relname = ?
+           AND x.indisunique
+           AND NOT x.indisprimary
+         ORDER BY s.i
     ) AS tab
     GROUP BY pred
-}, undef, undef, $schema, $table, $index);
+}, undef, undef, $relation, $index);
 
 unless ($expr) {
     # Should not happen, but just to be safe.
-    $info->{warning} = "Conflict detected on $schema.$table but index $index not found!";
+    $info->{warning} = "Conflict detected on $relation but index $index not found!";
     return;
 }
 
@@ -105,7 +102,7 @@ my $query = qq{
            json_build_array($expr)               AS ukey,
            extract(epoch FROM $time_col)         AS utime,
            ?::TEXT                               AS db
-      FROM $schema.$table
+      FROM $relation
      WHERE $pk_col = ANY(?)
 };
 $query .= "       AND $pred" if $pred;
@@ -138,18 +135,18 @@ for my $db (sort keys %{ $dbhs }) {
         # Store away the older record in a separate table if we want to manually
         # check or recover deleted records later.
         $dbhs->{ $lose->{db} }->do(
-            "INSERT INTO $copy_to SELECT * FROM employee WHERE id = ?",
+            "INSERT INTO $copy_to SELECT * FROM $relation WHERE id = ?",
             $lose->{pkey},
         ) if $copy_to;
 
         # Cascade delete the older record.
         $dbhs->{ $lose->{db} }->do(
-            "DELETE FROM $_->[0].$_->[1] WHERE $_->[2] = ?",
+            "DELETE FROM $_->[0] WHERE $_->[1] = ?",
             $lose->{pkey},
-        ) for @cascade, [$schema, $table, $pk_col];
+        ) for @cascade, [$relation, $pk_col];
 
         # Log the resolution.
-        $info->{message} .= qq{Unique conflict on $schema.$table($expr) for value \`$keep->{ukey}\` resolved by deleting $pk_col \`$lose->{pkey}\` from database $lose->{db} and keeping $pk_col \`$keep->{pkey}\` from database $keep->{db}};
+        $info->{message} .= qq{Unique conflict on $relation($expr) for value \`$keep->{ukey}\` resolved by deleting $pk_col \`$lose->{pkey}\` from database $lose->{db} and keeping $pk_col \`$keep->{pkey}\` from database $keep->{db}};
 
         # Note: Don't commit, Bucard handles transactions.
     }
