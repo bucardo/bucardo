@@ -169,7 +169,7 @@ $t = q{Sync exabc shows a duplicate key violation};
 like ($res, qr{ERROR.*sub_email_key}, $t);
 
 ## Add in a customcode exception handler
-$res = $bct->ctl('bucardo add customcode email_exception whenrun=exception src_code=t/customcode.exception.bucardotest.pl sync=exabc getdbh=1');
+$res = $bct->ctl('bucardo add customcode email_exception whenrun=exception src_code=t/customcode.exception.bucardotest.pl relation=public.employee getdbh=1');
 
 $t = q{Customcode exception handler was added for sync exabc};
 like ($res, qr{Added customcode "email_exception"}, $t);
