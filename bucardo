@@ -11047,11 +11047,13 @@ their respective handles.
 
 =item C<sync>
 
-Name of the sync with which to associate the custom code.
+Name of the sync with which to associate the custom code. Cannot be used in
+combination with C<relation>.
 
 =item C<relation>
 
-Name of the table or sequence with which to associate the custom code.
+Name of the table or sequence with which to associate the custom code. Cannot
+be used in combination with C<sync>.
 
 =item C<status>
 
