@@ -3,6 +3,14 @@ Bucardo version 5.5.1, unreleased
   - Add config option log_timer_format to glog() to customize timestamp output
     [David Christensen, suggested by David Wheeler]
 
+  - Change handling of file-path config settings so that they are no longer
+    lower-cased. The new log_timer_format config will also be case-preserved.
+    [David Christensen and David Wheeler]
+
+  - Fixed the relation parameter to the add customcode command to support
+    schema-qualified relation names.
+    [David Wheeler]
+
 Bucardo version 5.5.0, released November 5, 2018
 
   - PostgreSQL 11 support
