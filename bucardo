@@ -8037,7 +8037,6 @@ sub upgrade {
     );
 
     my @row_values = (
-
         ['bucardo_config','about',q{name = 'log_showtime'}, 1,
          'Show timestamp in the log output?  0=off  1=seconds since epoch  2=scalar gmtime  3=scalar localtime'],
         ['bucardo_config', 'about', q{name = 'default_conflict_strategy'}, 1, 'Default conflict strategy for all syncs'],
@@ -8753,14 +8752,21 @@ sub config {
     $SQL = 'UPDATE bucardo.bucardo_config SET setting = ? WHERE name = ?';
     $sth = $dbh->prepare($SQL);
 
-    my $allow_mixed_case_config = {
-        log_timer_format => 1,
-    };
+    my %allow_mixed_case_config = map { $_ => 1 } qw(
+        log_conflict_file
+        warning_file
+        email_debug_file
+        flatfile_dir
+        reason_file
+        stats_script_url
+        stopfile
+        log_timer_format
+    );
 
     for my $noun (@nouns) {
         $noun =~ /(\w+)=(.+)/ or die $setusage;
         my $setting = lc $1;
-        my $val = $allow_mixed_case_config->{$setting} ? $2 : lc $2;
+        my $val = $allow_mixed_case_config{$setting} ? $2 : lc $2;
 
         if (! exists $config->{$setting}) {
             die qq{Unknown setting "$setting"\n};
