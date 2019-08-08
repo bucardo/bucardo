@@ -8752,7 +8752,7 @@ sub config {
     $SQL = 'UPDATE bucardo.bucardo_config SET setting = ? WHERE name = ?';
     $sth = $dbh->prepare($SQL);
 
-    my %allow_mixed_case_config map { $_ => 1 } qw(
+    my %allow_mixed_case_config = map { $_ => 1 } qw(
         log_conflict_file
         warning_file
         email_debug_file
