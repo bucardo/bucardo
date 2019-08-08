@@ -7016,7 +7016,8 @@ sub add_customcode {
 
     ## Is this a valid gaot?
     if ($extras->{relation} and ! exists $GOAT->{by_name}{$extras->{relation}}
-        and ! exists $GOAT->{by_table}{$extras->{relation}}) {
+        and ! exists $GOAT->{by_table}{$extras->{relation}}
+        and ! exists $GOAT->{by_fullname}{$extras->{relation}} ) {
         die qq{Unknown relation: $extras->{relation}\n};
     }
 
@@ -7034,7 +7035,9 @@ sub add_customcode {
             $SQL .= 'goat,';
             push @vals => exists $GOAT->{by_name}{$extras->{relation}}
                 ? $GOAT->{by_name}{$extras->{relation}}->[0]{id}
-                    : $GOAT->{by_table}{$extras->{relation}}->[0]{id};
+                : exists $GOAT->{by_table}{$extras->{relation}}->[0]{id}
+                ? $GOAT->{by_table}{$extras->{relation}}->[0]{id}
+                : $GOAT->{by_fullname}{$extras->{relation}}->[0]{id}
         }
         my $phs2 = '?,' x @vals;
         $SQL .= ") VALUES ((SELECT currval('customcode_id_seq')),$phs2)";
@@ -11247,6 +11250,10 @@ The name of the custom code object.
 Number indicating the priority in which order to execute custom codes. Lower numbers
 are higher priority. Useful for subroutines that set C<lastcode> in order to
 cancel the execution of subsequent custom codes for the same C<when_run>.
+
+=item C<src_code>
+
+File from which to read the custom code Perl source.
 
 =item C<status>
 
