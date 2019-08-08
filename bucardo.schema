@@ -73,8 +73,9 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $bc$
 BEGIN
-
-  NEW.setting = LOWER(NEW.setting);
+  IF NEW.name <> ALL('{log_conflict_file,warning_file,email_debug_file,flatfile_dir,reason_file,stats_script_url,stopfile,log_timer_format}') THEN
+    NEW.setting = LOWER(NEW.setting);
+  END IF;
 
   IF (NEW.type IS NOT NULL and NEW.item IS NULL) THEN
     RAISE EXCEPTION 'Must provide a specific %', NEW.type;
