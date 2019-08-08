@@ -11,9 +11,13 @@ use lib 't','.';
 use DBD::Pg;
 use Test::More;
 
+
 use vars qw/ $dbhX $dbhA $dbhB $dbhC $res $command $t $SQL %pkey %sth %sql $sth $count $val /;
 
 use BucardoTesting;
+
+plan (skip_all =>  'Conflict resolution script requires Postgres 9.4 or later')
+if BucardoTesting::pg_major_version() < 9.4;
 my $bct = BucardoTesting->new({location => 'postgres'})
     or BAIL_OUT "Creation of BucardoTesting object failed\n";
 
@@ -31,9 +35,6 @@ END {
 $dbhA = $bct->repopulate_cluster('A');
 $dbhB = $bct->repopulate_cluster('B');
 $dbhC = $bct->repopulate_cluster('C');
-
-plan (skip_all =>  'Conflict resolution script requires Postgres 9.4 or later')
-    if $dbhA->{pg_server_version} < 90400;
 
 ## Store into hashes for convenience
 
