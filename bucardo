@@ -11884,6 +11884,11 @@ Show PID in the log output? Default: C<1>.
 
 Show timestamp in the log output?  0=off  1=seconds since epoch  2=scalar gmtime  3=scalar localtime. Default: C<3>.
 
+=item C<log_timer_format>
+
+The C<strftime> format to use to format the log timestamp when C<log_showtime> is set to 2 or 3.
+Defaults to simply the scalar output of the time.
+
 =item C<mcp_dbproblem_sleep>
 
 How many seconds to sleep before trying to respawn. Default: C<15>.
