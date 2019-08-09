@@ -38,11 +38,11 @@ provides:
     version         : 5.5.0
 
 resources:
-  homepage          : http://bucardo.org/index.html
-  MailingList       : http://bucardo.org/list.html
+  homepage          : https://bucardo.org/index.html
+  MailingList       : https://bucardo.org/list.html
   bugtracker        : https://github.com/bucardo/bucardo/issues
-  repository        : http://bucardo.org/repo.html
-  license           : http://bucardo.org/license.html
+  repository        : https://bucardo.org/repo.html
+  license           : https://bucardo.org/license.html
 meta-spec:
   version           : 1.3
   url               : http://module-build.sourceforge.net/META-spec-v1.3.html

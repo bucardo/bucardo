@@ -53,6 +53,6 @@ table.
 Once this is done, make sure you restart your syslog daemon so it rereads the 
 new configuration file.
 
-Please see the documentation at http://bucardo.org for information on how to 
+Please see the documentation at https://bucardo.org for information on how to 
 start using Bucardo once it is installed.
 

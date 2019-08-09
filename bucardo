@@ -5,7 +5,7 @@
 ##
 ## Copyright 2006-2018 Greg Sabino Mullane <greg@turnstep.com>
 ##
-## Please see http://bucardo.org/ for full documentation
+## Please see https://bucardo.org/ for full documentation
 ##
 ## Run with a --help argument for some basic instructions
 
@@ -10097,7 +10097,7 @@ This document describes version 5.5.0 of bucardo
 The bucardo script is the main interaction to a running Bucardo instance. It
 can be used to start and stop Bucardo, add new items, kick syncs, and even
 install and upgrade Bucardo itself. For more complete documentation, please
-view L<the wiki|http://bucardo.org/>.
+view L<the wiki|https://bucardo.org/>.
 
 =head1 COMMANDS
 
@@ -12236,7 +12236,7 @@ The bucardo script uses I<$ENV{HOME}> to look for a F<.bucardorc> file.
 =head1 BUGS
 
 Bug reports and feature requests are always welcome, please visit
-L<bucardo.org|http://bucardo.org>, file L<GitHub
+L<bucardo.org|https://bucardo.org>, file L<GitHub
 Issues|http://github.com/bucardo/bucardo/issues>, or post to our
 L<email list|https://bucardo.org/mailman/listinfo/bucardo-general>.
 

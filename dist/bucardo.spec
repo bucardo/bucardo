@@ -7,8 +7,8 @@ Summary:        Postgres replication system for both multi-master and multi-slav
 
 Group:          Applications/Databases
 License:        BSD
-URL:            http://bucardo.org/
-Source0:        http://bucardo.org/downloads/Bucardo-%{version}.tar.gz
+URL:            https://bucardo.org/
+Source0:        https://bucardo.org/downloads/Bucardo-%{version}.tar.gz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 Source1: master-master-replication-example.txt

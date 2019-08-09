@@ -129,7 +129,7 @@ For a complete list of options and full documentation, please view the POD for t
 Two ways to do this is to run:
 pod2text $ME | less
 pod2man $ME | man -l -
-Or simply visit: http://bucardo.org/
+Or simply visit: https://bucardo.org/
 
 
 };
@@ -1236,7 +1236,7 @@ default.
 
 Development happens using the git system. You can clone the latest version by doing:
 
- git clone http://bucardo.org/bucardo.git/
+ git clone https://bucardo.org/bucardo.git/
 
 =head1 HISTORY
 

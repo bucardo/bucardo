@@ -7,7 +7,7 @@
 ##
 ## Copyright 2006-2018 Greg Sabino Mullane <greg@turnstep.com>
 ##
-## Please visit http://bucardo.org for more information
+## Please visit https://bucardo.org for more information
 
 package Bucardo;
 use 5.008003;
@@ -10510,7 +10510,7 @@ This document describes version 5.5.0 of Bucardo
 
 The latest news and documentation can always be found at:
 
-http://bucardo.org/
+https://bucardo.org/
 
 =head1 DESCRIPTION
 
@@ -10543,7 +10543,7 @@ this distribution. See also the documentation for the bucardo program.
 =head1 BUGS
 
 Bugs should be reported to bucardo-general@bucardo.org. A list of bugs can be found at
-http://bucardo.org/bugs.html
+https://bucardo.org/bugs.html
 
 =head1 CREDITS
 
