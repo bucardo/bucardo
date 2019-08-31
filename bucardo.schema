@@ -893,7 +893,7 @@ eval {
         {AutoCommit=>1, RaiseError=>1, PrintError=>0});
 };
 if ($@ or !$dbh) {
-    $SQL = "INSERT INTO db_connlog (db,connstring,status) VALUES ('$safename','$safeconn','unknown')";
+    $SQL = "INSERT INTO bucardo.db_connlog (db,connstring,status) VALUES ('$safename','$safeconn','unknown')";
     spi_exec_query($SQL);
     return "Failed to make database connection: $@";
 }
@@ -914,7 +914,7 @@ if ($count < 1) {
 
 $dbh->disconnect();
 
-$SQL = "INSERT INTO db_connlog (db,connstring,status,version) VALUES ('$safename','$safeconn','good',$version)";
+$SQL = "INSERT INTO bucardo.db_connlog (db,connstring,status,version) VALUES ('$safename','$safeconn','good',$version)";
 spi_exec_query($SQL);
 
 return "Database connection successful";
