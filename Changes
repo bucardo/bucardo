@@ -12,6 +12,11 @@ Bucardo version 5.5.1, unreleased
     schema-qualified relation names.
     [David Wheeler]
 
+  - Cache to avoid access on remote databases to inspect each table
+    Avoid trying to purge "toast" tables
+    Avoid purging inexistent old delta tables
+    [Gustavo Tonini] (https://github.com/bucardo/bucardo/pull/182)
+
   - Safer system for determining Postgres version on install
     [Greg Sabino Mullane] ( inspired by https://github.com/bucardo/bucardo/issues/131 )
 
