@@ -13,8 +13,6 @@ package Bucardo;
 use 5.008003;
 use strict;
 use warnings;
-use Date::Parse;
-use DateTime;
 use utf8;
 use open qw( :std :utf8 );
 
@@ -5688,16 +5686,19 @@ sub connect_database {
             ## For now, we simply require it
             require MongoDB;
 
-            ## We also need the Perl 'boolean' module
+            ## We also need some specific Perl modules we do not want all of Bucardo to require
             ## In this case, we want to generate our own error message:
-            my $gotboolean = 0;
-            eval {
-                require boolean;
-                $gotboolean = 1;
-            };
-            if (! $gotboolean) {
-                die qq{Unable to load the Perl 'boolean' module: needed for MongoDB support\n};
-            }
+            my $module_loaded_ok = 0;
+            eval { require boolean; $module_loaded_ok = 1; };
+            $module_loaded_ok or die qq{Unable to load the Perl 'boolean' module: needed for MongoDB support\n};
+
+            $module_loaded_ok = 0;
+            eval { require Date::Parse; $module_loaded_ok = 1; };
+            $module_loaded_ok or die qq{Unable to load the Perl 'Date::Parse' module: needed for MongoDB support\n};
+
+            $module_loaded_ok = 0;
+            eval { require DateTime; $module_loaded_ok = 1; };
+            $module_loaded_ok or die qq{Unable to load the Perl 'DateTime' module: needed for MongoDB support\n};
 
             ## Are we using the old "point-zero" version?
             my $mongoversion = $MongoDB::VERSION;
