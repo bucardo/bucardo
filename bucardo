@@ -9031,7 +9031,7 @@ sub install {
     $host !~ /</ and $PSQL .= " --host=$host";
 
     ## We also want the version, so we grab that as the initial connection test
-    my $COM = "$PSQL -Xc 'SELECT version()'";
+    my $COM = qq{$PSQL -AXtc "SELECT 'pg version: ' || version()"};
 
     my $res = qx{$COM 2>&1};
 
@@ -9069,7 +9069,7 @@ sub install {
         }
     }
 
-    if ($res !~ /\D+(\d+)(.+?)\s/) {
+    if ($res !~ /pg version: \D+(\d+)(.+?)\s/) {
         print "-->Sorry, unable to connect to the database\n\n";
         warn $delayed_warning;
         exit 1 if $bcargs->{batch};
