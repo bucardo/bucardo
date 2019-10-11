@@ -1759,7 +1759,7 @@ BEGIN
   SET LOCAL search_path = pg_catalog;
 
   -- Grab all potential tables to be vacuumed by looking at bucardo_delta_targets
-  FOR myrec IN SELECT DISTINCT tablename FROM bucardo.bucardo_delta_targets LOOP
+  FOR myrec IN SELECT DISTINCT tablename FROM bucardo.bucardo_delta_targets where tablename in (select oid from pg_class where relkind='r') LOOP
     SELECT INTO myrez
       bucardo.bucardo_purge_delta_oid($1, myrec.tablename);
     RAISE NOTICE '%', myrez;

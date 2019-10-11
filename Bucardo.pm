@@ -6929,27 +6929,44 @@ sub validate_sync {
         $customname{$row->{goat}}{$row->{db}} = $row->{newname};
     }
 
-    ## Go through each table and make sure it exists and matches everywhere
-    for my $g (@{$s->{goatlist}}) {
+	#Table cache
+    $SQL{checktableonce} = q{
+            SELECT n.nspname, c.relname, c.oid,quote_ident(n.nspname) as safeschema, quote_ident(c.relname) as safetable, quote_literal(n.nspname) as safeschemaliteral, quote_literal(c.relname) as safetableliteral
+            FROM   pg_class c, pg_namespace n
+            WHERE  c.relnamespace = n.oid
+        };
+    $sth{checktableonce} = $srcdbh->prepare($SQL{checktableonce});	
+	$sth = $sth{checktableonce};
+	$sth->execute();
+    my %tablescache;
+	for my $row (@{$sth->fetchall_arrayref({})}) {
+		$tablescache{$row->{nspname}.$row->{relname}}{oid}=$row->{oid};
+		$tablescache{$row->{nspname}.$row->{relname}}{safeschema}=$row->{safeschema};
+		$tablescache{$row->{nspname}.$row->{relname}}{safetable}=$row->{safetable};
+		$tablescache{$row->{nspname}.$row->{relname}}{safeschemaliteral}=$row->{safeschemaliteral};
+		$tablescache{$row->{nspname}.$row->{relname}}{safetableliteral}=$row->{safetableliteral};
+    }
+	$sth->finish();
+	
+    GOAT: for my $g (@{$s->{goatlist}}) {
 
         ## TODO: refactor with work in validate_sync()
 
         $self->glog(qq{  Inspecting source $g->{reltype} "$g->{schemaname}.$g->{tablename}" on database "$sourcename"}, LOG_NORMAL);
         ## Check the source table, save escaped versions of the names
 
-        $sth = $sth{checktable};
-        $count = $sth->execute(qq{"$g->{schemaname}"."$g->{tablename}"});
-        if ($count != 1) {
-            $sth->finish();
+        if (!exists ($tablescache{$g->{schemaname}.$g->{tablename}})) {
             my $msg = qq{Could not find $g->{reltype} "$g->{schemaname}"."$g->{tablename}"\n};
             $self->glog($msg, LOG_WARN);
             warn $msg;
             return 0;
         }
 
-        ## Store oid and quoted names for this relation
-        ($g->{oid},$g->{safeschema},$g->{safetable},$g->{safeschemaliteral},$g->{safetableliteral})
-            = @{$sth->fetchall_arrayref()->[0]};
+		$g->{oid}=$tablescache{$g->{schemaname}.$g->{tablename}}{oid};
+		$g->{safeschema}= $tablescache{$g->{schemaname}.$g->{tablename}}{safeschema}; 
+		$g->{safetable}= $tablescache{$g->{schemaname}.$g->{tablename}}{safetable}; 
+		$g->{safeschemaliteral}= $tablescache{$g->{schemaname}.$g->{tablename}}{safeschemaliteral}; 
+		$g->{safetableliteral}= $tablescache{$g->{schemaname}.$g->{tablename}}{safetableliteral}; 
 
         my ($S,$T) = ($g->{safeschema},$g->{safetable});
 
