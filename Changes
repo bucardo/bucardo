@@ -1,3 +1,4 @@
+
 Bucardo version 5.5.1, unreleased
 
   - Add config option log_timer_format to glog() to customize timestamp output
@@ -13,6 +14,9 @@ Bucardo version 5.5.1, unreleased
 
   - Safer system for determining Postgres version on install
     [Greg Sabino Mullane] ( inspired by https://github.com/bucardo/bucardo/issues/131 )
+
+  - Correction that array_agg was introduced in Postgres 8.4, not 8.3
+    [Jaroslav Crhonek] (https://github.com/bucardo/bucardo/pull/103)
 
 
 Bucardo version 5.5.0, released November 5, 2018
