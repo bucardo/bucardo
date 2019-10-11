@@ -11,6 +11,10 @@ Bucardo version 5.5.1, unreleased
     schema-qualified relation names.
     [David Wheeler]
 
+  - Safer system for determining Postgres version on install
+    [Greg Sabino Mullane] ( inspired by https://github.com/bucardo/bucardo/issues/131 )
+
+
 Bucardo version 5.5.0, released November 5, 2018
 
   - PostgreSQL 11 support
