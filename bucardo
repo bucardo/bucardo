@@ -9031,7 +9031,7 @@ sub install {
     $host !~ /</ and $PSQL .= " --host=$host";
 
     ## We also want the version, so we grab that as the initial connection test
-    my $COM = "$PSQL -c 'SELECT version()'";
+    my $COM = "$PSQL -Xc 'SELECT version()'";
 
     my $res = qx{$COM 2>&1};
 
