@@ -17,6 +17,9 @@ Bucardo version 5.5.1, unreleased
     Avoid purging inexistent old delta tables
     [Gustavo Tonini] (https://github.com/bucardo/bucardo/pull/182)
 
+  - Improve the unique conflict exception handler sample code and test
+    [David E. Wheeler] (https://github.com/bucardo/bucardo/pull/194)
+
   - Map timestamp from PostgreSQL to MongoDB datetime
     [Github user redsysman] (https://github.com/bucardo/bucardo/pull/114)
 
