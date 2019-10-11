@@ -17,6 +17,9 @@ Bucardo version 5.5.1, unreleased
     Avoid purging inexistent old delta tables
     [Gustavo Tonini] (https://github.com/bucardo/bucardo/pull/182)
 
+  - Map timestamp from PostgreSQL to MongoDB datetime
+    [Github user redsysman] (https://github.com/bucardo/bucardo/pull/114)
+
   - Safer system for determining Postgres version on install
     [Greg Sabino Mullane] ( inspired by https://github.com/bucardo/bucardo/issues/131 )
 
