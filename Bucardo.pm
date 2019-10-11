@@ -13,6 +13,8 @@ package Bucardo;
 use 5.008003;
 use strict;
 use warnings;
+use Date::Parse;
+use DateTime;
 use utf8;
 use open qw( :std :utf8 );
 
@@ -10031,6 +10033,9 @@ sub push_rows {
                             }
                             elsif ($Table->{columnhash}{$key}{ftype} =~ /real|double|numeric/o) {
                                 $object->{$key} = strtod($object->{$key});
+                            }
+                            elsif ($Table->{columnhash}{$key}{ftype} =~ /timestamp with time zone|date|abstime/o) {
+                                $object->{$key} = DateTime->from_epoch(epoch => str2time($object->{$key}));
                             }
                         }
                         $self->{oldmongo} ? 
