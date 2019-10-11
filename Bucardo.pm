@@ -6929,14 +6929,13 @@ sub validate_sync {
         $customname{$row->{goat}}{$row->{db}} = $row->{newname};
     }
 
-	#Table cache
+	# Table cache
     $SQL{checktableonce} = q{
             SELECT n.nspname, c.relname, c.oid,quote_ident(n.nspname) as safeschema, quote_ident(c.relname) as safetable, quote_literal(n.nspname) as safeschemaliteral, quote_literal(c.relname) as safetableliteral
             FROM   pg_class c, pg_namespace n
             WHERE  c.relnamespace = n.oid
         };
-    $sth{checktableonce} = $srcdbh->prepare($SQL{checktableonce});	
-	$sth = $sth{checktableonce};
+    $sth = $srcdbh->prepare($SQL{checktableonce});
 	$sth->execute();
     my %tablescache;
 	for my $row (@{$sth->fetchall_arrayref({})}) {
@@ -6947,7 +6946,7 @@ sub validate_sync {
 		$tablescache{$row->{nspname}.$row->{relname}}{safetableliteral}=$row->{safetableliteral};
     }
 	$sth->finish();
-	
+
     GOAT: for my $g (@{$s->{goatlist}}) {
 
         ## TODO: refactor with work in validate_sync()
@@ -6962,11 +6961,9 @@ sub validate_sync {
             return 0;
         }
 
-		$g->{oid}=$tablescache{$g->{schemaname}.$g->{tablename}}{oid};
-		$g->{safeschema}= $tablescache{$g->{schemaname}.$g->{tablename}}{safeschema}; 
-		$g->{safetable}= $tablescache{$g->{schemaname}.$g->{tablename}}{safetable}; 
-		$g->{safeschemaliteral}= $tablescache{$g->{schemaname}.$g->{tablename}}{safeschemaliteral}; 
-		$g->{safetableliteral}= $tablescache{$g->{schemaname}.$g->{tablename}}{safetableliteral}; 
+        for my $key (keys %{ $tablescache{ "$g->{schemaname}.$g->{tablename}" } }) {
+            $g->{$key} = $tablescache{$g->{schemaname}.$g->{tablename}}{$key};
+        }
 
         my ($S,$T) = ($g->{safeschema},$g->{safetable});
 
