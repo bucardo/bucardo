@@ -238,6 +238,7 @@ else {
     die qq{Could not determine initdb version information from running "$initdb -V"\n};
 }
 
+sub pg_major_version { join '.', $pg_major_version, $pg_minor_version }
 
 ## Each database can also have a custom version
 ## We do this by setting PGBINDIR[A-Z]
