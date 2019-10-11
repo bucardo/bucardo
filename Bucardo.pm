@@ -5,7 +5,7 @@
 ##
 ## This script should only be called via the 'bucardo' program
 ##
-## Copyright 2006-2018 Greg Sabino Mullane <greg@turnstep.com>
+## Copyright 2006-2019 Greg Sabino Mullane <greg@turnstep.com>
 ##
 ## Please visit https://bucardo.org for more information
 
@@ -10556,7 +10556,7 @@ Greg Sabino Mullane <greg@turnstep.com>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2005-2018 Greg Sabino Mullane <greg@turnstep.com>.
+Copyright (c) 2005-2019 Greg Sabino Mullane <greg@turnstep.com>.
 
 This software is free to use: see the LICENSE file for details.
 
