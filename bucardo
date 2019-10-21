@@ -375,7 +375,7 @@ upgrade() if $verb =~ /^upgr/ or $verb eq 'uprgade' or $verb eq 'ugprade';
 ## Thus, we load everything right now
 load_bucardo_info();
 
-## View the status of one or more syncs
+## View the status of one or more syncs and the output could be like json or zabbix
 status_all()    if $verb eq 'status' or $verb eq 'statuszabbix' or $verb eq 'statusjson' and ! @nouns;
 status_detail() if $verb eq 'status';
 
@@ -5807,14 +5807,17 @@ sub status_all {
             my $pid = <$fh>;
             chomp $pid;
             close $fh or warn qq{Could not close $PIDFILE: $!\n};
+            # Validating to not print when json or zabbix output
             if ($pid =~ /^\d+$/ and $verb ne 'statusjson' and $verb ne 'statuszabbix') {
                 print "PID of Bucardo MCP: $pid";
             }
             elsif (! $pid =~ /^\d+$/) {
+                # Validating to not print when json or zabbix output
                 print "\nERROR: $PIDFILE contained: $pid";
             }
         }
     }
+    # Validating to not print when json or zabbix output
     if ($verb ne 'statusjson' and $verb ne 'statuszabbix') {
         print "\n";
     }
@@ -5858,6 +5861,7 @@ sub status_all {
         $var += 2;
     }
 
+    # Validating to not print when json or zabbix output
     if ($verb ne 'statusjson' and $verb ne 'statuszabbix') {
         ## Print the column headers
         printf qq{%-*s %-*s %-*s %-*s %-*s %-*s %-*s\n},
@@ -5948,7 +5952,7 @@ sub status_all {
                 $s->{$name} = '';
             }
         }
-
+        # Validating to not print when json or zabbix output
         if ($verb ne 'statusjson' and $verb ne 'statuszabbix') {
             my $X = '|';
             printf qq{%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s\n},
@@ -5960,6 +5964,7 @@ sub status_all {
                 $max->{lastbad}, " $s->{lastbad} ",
                 $max->{timebad}, " $s->{timebad} ";
         } else {
+            #Building hash to print json or zabbix structured data
             my $jsonItem = {
                 "$keyPrefix"."name$keySufix" => "$sync",
                 "$keyPrefix"."state$keySufix" => "$s->{state}",
@@ -5972,6 +5977,7 @@ sub status_all {
             push @jsonArray, $jsonItem;
         }
     }
+    # Validating output type
     if ($verb eq 'statusjson') {
         my $encondedJsonArray = encode_json \@jsonArray;
         print encode_json \@jsonArray;
