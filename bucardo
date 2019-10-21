@@ -376,7 +376,7 @@ upgrade() if $verb =~ /^upgr/ or $verb eq 'uprgade' or $verb eq 'ugprade';
 load_bucardo_info();
 
 ## View the status of one or more syncs
-status_all()    if $verb eq 'status' and ! @nouns;
+status_all()    if $verb eq 'status' or $verb eq 'statuszabbix' or $verb eq 'statusjson' and ! @nouns;
 status_detail() if $verb eq 'status';
 
 ## Stop, start, or restart the main Bucardo daemon
@@ -5807,15 +5807,17 @@ sub status_all {
             my $pid = <$fh>;
             chomp $pid;
             close $fh or warn qq{Could not close $PIDFILE: $!\n};
-            if ($pid =~ /^\d+$/) {
+            if ($pid =~ /^\d+$/ and $verb ne 'statusjson' and $verb ne 'statuszabbix') {
                 print "PID of Bucardo MCP: $pid";
             }
-            else {
+            elsif (! $pid =~ /^\d+$/) {
                 print "\nERROR: $PIDFILE contained: $pid";
             }
         }
     }
-    print "\n";
+    if ($verb ne 'statusjson' and $verb ne 'statuszabbix') {
+        print "\n";
+    }
 
     if (! keys %$SYNC) {
         print "No syncs have been created yet.\n";
@@ -5856,26 +5858,27 @@ sub status_all {
         $var += 2;
     }
 
-    ## Print the column headers
-    printf qq{%-*s %-*s %-*s %-*s %-*s %-*s %-*s\n},
-        $max->{name},     $title{name},
-        $max->{state},    $title{state},
-        $max->{lastgood}, $title{lastgood},
-        $max->{timegood}, $title{timegood},
-        $max->{dit},      $title{dit},
-        $max->{lastbad},  $title{lastbad},
-        $max->{timebad},  $title{timebad};
+    if ($verb ne 'statusjson' and $verb ne 'statuszabbix') {
+        ## Print the column headers
+        printf qq{%-*s %-*s %-*s %-*s %-*s %-*s %-*s\n},
+            $max->{name},     $title{name},
+            $max->{state},    $title{state},
+            $max->{lastgood}, $title{lastgood},
+            $max->{timegood}, $title{timegood},
+            $max->{dit},      $title{dit},
+            $max->{lastbad},  $title{lastbad},
+            $max->{timebad},  $title{timebad};
 
-    ## Print a fancy dividing line
-    printf qq{%s+%s+%s+%s+%s+%s+%s\n},
-        '=' x $max->{name},
-        '=' x $max->{state},
-        '=' x $max->{lastgood},
-        '=' x $max->{timegood},
-        '=' x $max->{dit},
-        '=' x $max->{lastbad},
-        '=' x $max->{timebad};
-
+        ## Print a fancy dividing line
+        printf qq{%s+%s+%s+%s+%s+%s+%s\n},
+            '=' x $max->{name},
+            '=' x $max->{state},
+            '=' x $max->{lastgood},
+            '=' x $max->{timegood},
+            '=' x $max->{dit},
+            '=' x $max->{lastbad},
+            '=' x $max->{timebad};
+    }
     ## If fancy sorting desired, call the list ourself to sort
     sub sortme {
         my $sortcol = $bcargs->{sort} || 1;
@@ -5924,6 +5927,14 @@ sub status_all {
 
     }
 
+    my @jsonArray;
+    my $zabbixJsonArray;
+    my $keyPrefix = '';
+    my $keySufix = '';
+    if ($verb eq 'statuszabbix') {
+        $keyPrefix = '{#';
+        $keySufix = '}';
+    }
     for my $sync (sort sortme keys %$SYNC) {
 
         my $s = $SYNC->{$sync};
@@ -5938,17 +5949,39 @@ sub status_all {
             }
         }
 
-        my $X = '|';
-        printf qq{%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s\n},
-            $max->{name}," $sync ",
-            $max->{state}, " $s->{state} ",
-            $max->{lastgood}, " $s->{lastgood} ",
-            $max->{timegood}, " $s->{timegood} ",
-            $max->{dit}, " $s->{dit} ",
-            $max->{lastbad}, " $s->{lastbad} ",
-            $max->{timebad}, " $s->{timebad} ";
+        if ($verb ne 'statusjson' and $verb ne 'statuszabbix') {
+            my $X = '|';
+            printf qq{%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s\n},
+                $max->{name}," $sync ",
+                $max->{state}, " $s->{state} ",
+                $max->{lastgood}, " $s->{lastgood} ",
+                $max->{timegood}, " $s->{timegood} ",
+                $max->{dit}, " $s->{dit} ",
+                $max->{lastbad}, " $s->{lastbad} ",
+                $max->{timebad}, " $s->{timebad} ";
+        } else {
+            my $jsonItem = {
+                "$keyPrefix"."name$keySufix" => "$sync",
+                "$keyPrefix"."state$keySufix" => "$s->{state}",
+                "$keyPrefix"."lastgood$keySufix" => "$s->{lastgood}",
+                "$keyPrefix"."timegood$keySufix" => "$s->{timegood}",
+                "$keyPrefix"."dit$keySufix" => "$s->{dit}",
+                "$keyPrefix"."lastbad$keySufix" => "$s->{lastbad}",
+                "$keyPrefix"."timebad$keySufix" => "$s->{timebad}"
+            };
+            push @jsonArray, $jsonItem;
+        }
     }
-
+    if ($verb eq 'statusjson') {
+        my $encondedJsonArray = encode_json \@jsonArray;
+        print encode_json \@jsonArray;
+    } elsif ($verb eq 'statuszabbix') {
+        my $zabbixJsonArray = {
+            data => \@jsonArray
+        };
+        print encode_json $zabbixJsonArray;
+    }
+    
     exit 0;
 
 } ## end of status_all
