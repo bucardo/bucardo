@@ -376,7 +376,7 @@ upgrade() if $verb =~ /^upgr/ or $verb eq 'uprgade' or $verb eq 'ugprade';
 load_bucardo_info();
 
 ## View the status of one or more syncs and the output could be like json or zabbix
-status_all()    if $verb eq 'status' or $verb eq 'statuszabbix' or $verb eq 'statusjson' and ! @nouns;
+status_all()    if (($verb eq 'status' or $verb eq 'statuszabbix' or $verb eq 'statusjson') and ! @nouns);
 status_detail() if $verb eq 'status';
 
 ## Stop, start, or restart the main Bucardo daemon
@@ -5832,8 +5832,13 @@ sub status_all {
         die "Invalid sort option, must be +- 1 through 9\n";
     }
 
-    ## Set the status for each sync if possible
-    my $max = set_sync_status();
+    ## Set the status for each sync if possible and disable pretty print when json or zabbix output
+    my $arg = shift || {};
+    my $disablePretty = 1;
+    if ($verb ne 'statusjson' and $verb ne 'statuszabbix') {
+        $disablePretty = 0;
+    }
+    my $max = set_sync_status($arg, {'disablePretty' => $disablePretty});
 
     ## The titles
     my %title = (
@@ -6301,9 +6306,9 @@ AND (   lastgood  IS TRUE
             }
         }
         $s->{lastgood} = exists $s->{rowgood} ? $s->{rowgood}{ended_time} : 'none';
-        $s->{timegood} = exists $s->{rowgood} ? pretty_time($s->{rowgood}{total_time_ended}) : '';
+        $s->{timegood} = exists $s->{rowgood} ? (exists $_[0]{disablePretty} && $_[0]{disablePretty} == 1) ? $s->{rowgood}{total_time_ended} :pretty_time($s->{rowgood}{total_time_ended}) : '';
         $s->{lastbad} = exists $s->{rowbad} ? $s->{rowbad}{ended_time} : 'none';
-        $s->{timebad} = exists $s->{rowbad} ? pretty_time($s->{rowbad}{total_time_ended}) : '';
+        $s->{timebad} = exists $s->{rowbad} ? (exists $_[0]{disablePretty} && $_[0]{disablePretty} == 1) ? $s->{rowbad}{total_time_ended} : pretty_time($s->{rowbad}{total_time_ended}) : '';
 
         for my $var (qw/ state dit lastgood timegood lastbad timebad /) {
             $max{$var} = length($s->{$var}) if length($s->{$var}) > $max{$var};
