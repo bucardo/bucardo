@@ -25,6 +25,7 @@ use Config          qw/ %Config /;
 use Encode          qw/ decode /;
 use File::Spec;
 use Data::Dumper    qw/ Dumper /;
+use JSON::PP;
 $Data::Dumper::Indent = 1;
 use Getopt::Long;
 Getopt::Long::Configure(qw/ no_ignore_case pass_through no_autoabbrev /);
