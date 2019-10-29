@@ -6968,10 +6968,10 @@ sub validate_sync {
             $g->{$key} = $tablescache{$g->{schemaname}.$g->{tablename}}{$key};
         }
 
-        my ($S,$T) = ($g->{safeschema},$g->{safetable});
+        my ($S,$T) = ($tablescache{$g->{schemaname}.$g->{tablename}}{safeschema},$tablescache{$g->{schemaname}.$g->{tablename}}{safetable});
 
         ## Plunk the oid into a hash for easy lookup below when saving FK information
-        $s->{tableoid}{$g->{oid}}{name} = "$S.$T";
+        $s->{tableoid}{$tablescache{$g->{schemaname}.$g->{tablename}}{oid}}{name} = "$S.$T";
 
         ## Makedelta for this table starts empty
         $g->{makedelta} ||= '';
