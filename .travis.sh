@@ -48,6 +48,8 @@ postgresql_install() {
 		clang
 		llvm-6.0-dev
 		libencode-locale-perl
+		libcgi-pm-perl
+		libdbix-safe-perl
 	packages
 }
 
