@@ -6964,11 +6964,11 @@ sub validate_sync {
             return 0;
         }
 
-        for my $key (keys %{ $tablescache{ "$g->{schemaname}.$g->{tablename}" } }) {
+        for my $key (keys %{ $tablescache{$g->{schemaname}.$g->{tablename}} }) {
             $g->{$key} = $tablescache{$g->{schemaname}.$g->{tablename}}{$key};
         }
 
-        my ($S,$T) = ($tablescache{$g->{schemaname}.$g->{tablename}}{safeschema},$tablescache{$g->{schemaname}.$g->{tablename}}{safetable});
+        my ($S,$T) = ($g->{safeschema},$g->{safetable});
 
         ## Plunk the oid into a hash for easy lookup below when saving FK information
         $s->{tableoid}{$tablescache{$g->{schemaname}.$g->{tablename}}{oid}}{name} = "$S.$T";
