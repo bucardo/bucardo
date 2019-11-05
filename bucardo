@@ -25,6 +25,7 @@ use Config          qw/ %Config /;
 use Encode          qw/ decode /;
 use File::Spec;
 use Data::Dumper    qw/ Dumper /;
+use JSON::PP;
 $Data::Dumper::Indent = 1;
 use Getopt::Long;
 Getopt::Long::Configure(qw/ no_ignore_case pass_through no_autoabbrev /);
@@ -375,8 +376,8 @@ upgrade() if $verb =~ /^upgr/ or $verb eq 'uprgade' or $verb eq 'ugprade';
 ## Thus, we load everything right now
 load_bucardo_info();
 
-## View the status of one or more syncs
-status_all()    if $verb eq 'status' and ! @nouns;
+## View the status of one or more syncs and the output could be like json or zabbix
+status_all()    if (($verb eq 'status' or $verb eq 'statuszabbix' or $verb eq 'statusjson') and ! @nouns);
 status_detail() if $verb eq 'status';
 
 ## Stop, start, or restart the main Bucardo daemon
@@ -5807,15 +5808,20 @@ sub status_all {
             my $pid = <$fh>;
             chomp $pid;
             close $fh or warn qq{Could not close $PIDFILE: $!\n};
-            if ($pid =~ /^\d+$/) {
+            # Validating to not print when json or zabbix output
+            if ($pid =~ /^\d+$/ and $verb ne 'statusjson' and $verb ne 'statuszabbix') {
                 print "PID of Bucardo MCP: $pid";
             }
-            else {
+            elsif (! $pid =~ /^\d+$/) {
+                # Validating to not print when json or zabbix output
                 print "\nERROR: $PIDFILE contained: $pid";
             }
         }
     }
-    print "\n";
+    # Validating to not print when json or zabbix output
+    if ($verb ne 'statusjson' and $verb ne 'statuszabbix') {
+        print "\n";
+    }
 
     if (! keys %$SYNC) {
         print "No syncs have been created yet.\n";
@@ -5827,8 +5833,13 @@ sub status_all {
         die "Invalid sort option, must be +- 1 through 9\n";
     }
 
-    ## Set the status for each sync if possible
-    my $max = set_sync_status();
+    ## Set the status for each sync if possible and disable pretty print when json or zabbix output
+    my $arg = shift || {};
+    my $disablePretty = 1;
+    if ($verb ne 'statusjson' and $verb ne 'statuszabbix') {
+        $disablePretty = 0;
+    }
+    my $max = set_sync_status($arg, {'disablePretty' => $disablePretty});
 
     ## The titles
     my %title = (
@@ -5856,26 +5867,28 @@ sub status_all {
         $var += 2;
     }
 
-    ## Print the column headers
-    printf qq{%-*s %-*s %-*s %-*s %-*s %-*s %-*s\n},
-        $max->{name},     $title{name},
-        $max->{state},    $title{state},
-        $max->{lastgood}, $title{lastgood},
-        $max->{timegood}, $title{timegood},
-        $max->{dit},      $title{dit},
-        $max->{lastbad},  $title{lastbad},
-        $max->{timebad},  $title{timebad};
+    # Validating to not print when json or zabbix output
+    if ($verb ne 'statusjson' and $verb ne 'statuszabbix') {
+        ## Print the column headers
+        printf qq{%-*s %-*s %-*s %-*s %-*s %-*s %-*s\n},
+            $max->{name},     $title{name},
+            $max->{state},    $title{state},
+            $max->{lastgood}, $title{lastgood},
+            $max->{timegood}, $title{timegood},
+            $max->{dit},      $title{dit},
+            $max->{lastbad},  $title{lastbad},
+            $max->{timebad},  $title{timebad};
 
-    ## Print a fancy dividing line
-    printf qq{%s+%s+%s+%s+%s+%s+%s\n},
-        '=' x $max->{name},
-        '=' x $max->{state},
-        '=' x $max->{lastgood},
-        '=' x $max->{timegood},
-        '=' x $max->{dit},
-        '=' x $max->{lastbad},
-        '=' x $max->{timebad};
-
+        ## Print a fancy dividing line
+        printf qq{%s+%s+%s+%s+%s+%s+%s\n},
+            '=' x $max->{name},
+            '=' x $max->{state},
+            '=' x $max->{lastgood},
+            '=' x $max->{timegood},
+            '=' x $max->{dit},
+            '=' x $max->{lastbad},
+            '=' x $max->{timebad};
+    }
     ## If fancy sorting desired, call the list ourself to sort
     sub sortme {
         my $sortcol = $bcargs->{sort} || 1;
@@ -5924,6 +5937,14 @@ sub status_all {
 
     }
 
+    my @jsonArray;
+    my $zabbixJsonArray;
+    my $keyPrefix = '';
+    my $keySufix = '';
+    if ($verb eq 'statuszabbix') {
+        $keyPrefix = '{#';
+        $keySufix = '}';
+    }
     for my $sync (sort sortme keys %$SYNC) {
 
         my $s = $SYNC->{$sync};
@@ -5937,18 +5958,42 @@ sub status_all {
                 $s->{$name} = '';
             }
         }
-
-        my $X = '|';
-        printf qq{%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s\n},
-            $max->{name}," $sync ",
-            $max->{state}, " $s->{state} ",
-            $max->{lastgood}, " $s->{lastgood} ",
-            $max->{timegood}, " $s->{timegood} ",
-            $max->{dit}, " $s->{dit} ",
-            $max->{lastbad}, " $s->{lastbad} ",
-            $max->{timebad}, " $s->{timebad} ";
+        # Validating to not print when json or zabbix output
+        if ($verb ne 'statusjson' and $verb ne 'statuszabbix') {
+            my $X = '|';
+            printf qq{%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s$X%-*s\n},
+                $max->{name}," $sync ",
+                $max->{state}, " $s->{state} ",
+                $max->{lastgood}, " $s->{lastgood} ",
+                $max->{timegood}, " $s->{timegood} ",
+                $max->{dit}, " $s->{dit} ",
+                $max->{lastbad}, " $s->{lastbad} ",
+                $max->{timebad}, " $s->{timebad} ";
+        } else {
+            #Building hash to print json or zabbix structured data
+            my $jsonItem = {
+                uc "$keyPrefix"."name$keySufix" => "$sync",
+                uc "$keyPrefix"."state$keySufix" => "$s->{state}",
+                uc "$keyPrefix"."lastgood$keySufix" => "$s->{lastgood}",
+                uc "$keyPrefix"."timegood$keySufix" => "$s->{timegood}",
+                uc "$keyPrefix"."dit$keySufix" => "$s->{dit}",
+                uc "$keyPrefix"."lastbad$keySufix" => "$s->{lastbad}",
+                uc "$keyPrefix"."timebad$keySufix" => "$s->{timebad}"
+            };
+            push @jsonArray, $jsonItem;
+        }
     }
-
+    # Validating output type
+    if ($verb eq 'statusjson') {
+        my $encondedJsonArray = encode_json \@jsonArray;
+        print encode_json \@jsonArray;
+    } elsif ($verb eq 'statuszabbix') {
+        my $zabbixJsonArray = {
+            data => \@jsonArray
+        };
+        print encode_json $zabbixJsonArray;
+    }
+    
     exit 0;
 
 } ## end of status_all
@@ -6262,9 +6307,9 @@ AND (   lastgood  IS TRUE
             }
         }
         $s->{lastgood} = exists $s->{rowgood} ? $s->{rowgood}{ended_time} : 'none';
-        $s->{timegood} = exists $s->{rowgood} ? pretty_time($s->{rowgood}{total_time_ended}) : '';
+        $s->{timegood} = exists $s->{rowgood} ? (exists $_[0]{disablePretty} && $_[0]{disablePretty} == 1) ? $s->{rowgood}{total_time_ended} :pretty_time($s->{rowgood}{total_time_ended}) : '';
         $s->{lastbad} = exists $s->{rowbad} ? $s->{rowbad}{ended_time} : 'none';
-        $s->{timebad} = exists $s->{rowbad} ? pretty_time($s->{rowbad}{total_time_ended}) : '';
+        $s->{timebad} = exists $s->{rowbad} ? (exists $_[0]{disablePretty} && $_[0]{disablePretty} == 1) ? $s->{rowbad}{total_time_ended} : pretty_time($s->{rowbad}{total_time_ended}) : '';
 
         for my $var (qw/ state dit lastgood timegood lastbad timebad /) {
             $max{$var} = length($s->{$var}) if length($s->{$var}) > $max{$var};

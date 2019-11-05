@@ -43,6 +43,13 @@ postgresql_install() {
 		postgresql-contrib-$PGVERSION
 		postgresql-plperl-$PGVERSION
 		libdbd-pg-perl
+		perl-dbdabi-94
+		libdbi-perl
+		clang
+		llvm-6.0-dev
+		libencode-locale-perl
+		libcgi-pm-perl
+		libdbix-safe-perl
 	packages
 }
 

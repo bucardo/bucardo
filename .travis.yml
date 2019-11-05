@@ -24,6 +24,7 @@ env:
     - PGVERSION=8.4
 
 before_install:
+  - sudo apt -o Acquire::https::No-Cache=True -o Acquire::http::No-Cache=True update
   - ./.travis.sh postgresql_uninstall
   - ./.travis.sh remove_old_pgdg
   - ./.travis.sh pgdg_repository
