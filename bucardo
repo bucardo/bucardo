@@ -5972,13 +5972,13 @@ sub status_all {
         } else {
             #Building hash to print json or zabbix structured data
             my $jsonItem = {
-                "$keyPrefix"."name$keySufix" => "$sync",
-                "$keyPrefix"."state$keySufix" => "$s->{state}",
-                "$keyPrefix"."lastgood$keySufix" => "$s->{lastgood}",
-                "$keyPrefix"."timegood$keySufix" => "$s->{timegood}",
-                "$keyPrefix"."dit$keySufix" => "$s->{dit}",
-                "$keyPrefix"."lastbad$keySufix" => "$s->{lastbad}",
-                "$keyPrefix"."timebad$keySufix" => "$s->{timebad}"
+                uc "$keyPrefix"."name$keySufix" => "$sync",
+                uc "$keyPrefix"."state$keySufix" => "$s->{state}",
+                uc "$keyPrefix"."lastgood$keySufix" => "$s->{lastgood}",
+                uc "$keyPrefix"."timegood$keySufix" => "$s->{timegood}",
+                uc "$keyPrefix"."dit$keySufix" => "$s->{dit}",
+                uc "$keyPrefix"."lastbad$keySufix" => "$s->{lastbad}",
+                uc "$keyPrefix"."timebad$keySufix" => "$s->{timebad}"
             };
             push @jsonArray, $jsonItem;
         }
