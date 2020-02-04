@@ -1,5 +1,5 @@
 
-Bucardo version 5.5.1, unreleased
+Bucardo version 5.6.0, unreleased
 
   - Add config option log_timer_format to glog() to customize timestamp output
     [David Christensen, suggested by David Wheeler]

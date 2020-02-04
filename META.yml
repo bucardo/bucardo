@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name                : Bucardo
-version             : 5.5.0
+version             : 5.6.0
 abstract            : Postgres multi-master replication system
 author:              
   - Greg Sabino Mullane <greg@turnstep.com>
@@ -32,10 +32,10 @@ build_requires:
 provides:
   Bucardo:
     file            : Bucardo.pm
-    version         : 5.5.0
+    version         : 5.6.0
   bucardo:
     file            : bucardo
-    version         : 5.5.0
+    version         : 5.6.0
 
 resources:
   homepage          : https://bucardo.org/index.html
