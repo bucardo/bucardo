@@ -1258,13 +1258,13 @@
 <dt id="sync3"><code>sync</code></dt>
 <dd>
 
-<p>Name of the sync with which to associate the custom code.</p>
+<p>Name of the sync with which to associate the custom code. Cannot be used in combination with <code>relation</code>.</p>
 
 </dd>
 <dt id="relation"><code>relation</code></dt>
 <dd>
 
-<p>Name of the table or sequence with which to associate the custom code.</p>
+<p>Name of the table or sequence with which to associate the custom code. Cannot be used in combination with <code>sync</code>.</p>
 
 </dd>
 <dt id="status2"><code>status</code></dt>
@@ -1496,6 +1496,12 @@
 <dd>
 
 <p>Number indicating the priority in which order to execute custom codes. Lower numbers are higher priority. Useful for subroutines that set <code>lastcode</code> in order to cancel the execution of subsequent custom codes for the same <code>when_run</code>.</p>
+
+</dd>
+<dt id="src_code1"><code>src_code</code></dt>
+<dd>
+
+<p>File from which to read the custom code Perl source.</p>
 
 </dd>
 <dt id="status3"><code>status</code></dt>
@@ -2285,6 +2291,12 @@
 <dd>
 
 <p>Show timestamp in the log output? 0=off 1=seconds since epoch 2=scalar gmtime 3=scalar localtime. Default: <code>3</code>.</p>
+
+</dd>
+<dt id="log_timer_format"><code>log_timer_format</code></dt>
+<dd>
+
+<p>The <code>strftime</code> format to use to format the log timestamp when <code>log_showtime</code> is set to 2 or 3. Defaults to simply the scalar output of the time.</p>
 
 </dd>
 <dt id="mcp_dbproblem_sleep"><code>mcp_dbproblem_sleep</code></dt>
