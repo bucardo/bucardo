@@ -6934,7 +6934,7 @@ sub validate_sync {
 
 	# Table cache
     $SQL{checktableonce} = q{
-            SELECT n.nspname, c.relname, c.oid,quote_ident(n.nspname) as safeschema, quote_ident(c.relname) as safetable, quote_literal(n.nspname) as safeschemaliteral, quote_literal(c.relname) as safetableliteral
+            SELECT n.nspname, c.relname, c.oid, quote_ident(n.nspname) as safeschema, quote_ident(c.relname) as safetable, quote_literal(n.nspname) as safeschemaliteral, quote_literal(c.relname) as safetableliteral
             FROM   pg_class c, pg_namespace n
             WHERE  c.relnamespace = n.oid
         };
@@ -6942,11 +6942,9 @@ sub validate_sync {
 	$sth->execute();
     my %tablescache;
 	for my $row (@{$sth->fetchall_arrayref({})}) {
-		$tablescache{$row->{nspname}.$row->{relname}}{oid}=$row->{oid};
-		$tablescache{$row->{nspname}.$row->{relname}}{safeschema}=$row->{safeschema};
-		$tablescache{$row->{nspname}.$row->{relname}}{safetable}=$row->{safetable};
-		$tablescache{$row->{nspname}.$row->{relname}}{safeschemaliteral}=$row->{safeschemaliteral};
-		$tablescache{$row->{nspname}.$row->{relname}}{safetableliteral}=$row->{safetableliteral};
+        $tablescache{"$row->{nspname}.$row->{relname}"} = {
+            map { $_ => $row->{$_} } qw(oid safeschema safetable safeschemaliteral safetableliteral)
+        };
     }
 	$sth->finish();
 
@@ -6954,18 +6952,19 @@ sub validate_sync {
 
         ## TODO: refactor with work in validate_sync()
 
-        $self->glog(qq{  Inspecting source $g->{reltype} "$g->{schemaname}.$g->{tablename}" on database "$sourcename"}, LOG_NORMAL);
+        my $t = "$g->{schemaname}.$g->{tablename}";
+        $self->glog(qq{  Inspecting source $g->{reltype} "$t" on database "$sourcename"}, LOG_NORMAL);
         ## Check the source table, save escaped versions of the names
 
-        if (!exists ($tablescache{$g->{schemaname}.$g->{tablename}})) {
-            my $msg = qq{Could not find $g->{reltype} "$g->{schemaname}"."$g->{tablename}"\n};
+        if (!exists ($tablescache{$t})) {
+            my $msg = qq{Could not find $g->{reltype} "$t"\n};
             $self->glog($msg, LOG_WARN);
             warn $msg;
             return 0;
         }
 
-        for my $key (keys %{ $tablescache{ "$g->{schemaname}.$g->{tablename}" } }) {
-            $g->{$key} = $tablescache{$g->{schemaname}.$g->{tablename}}{$key};
+        for my $key (keys %{ $tablescache{ $t } }) {
+            $g->{$key} = $tablescache{$t}{$key};
         }
 
         my ($S,$T) = ($g->{safeschema},$g->{safetable});
@@ -7192,8 +7191,6 @@ sub validate_sync {
 
             $dbh->do('RESET search_path');
             $dbh->rollback();
-
-            my $t = "$g->{schemaname}.$g->{tablename}";
 
             ## We'll state no problems until we are proved wrong
             my $column_problems = 0;
