@@ -12,9 +12,9 @@ Bucardo version 5.6.0, unreleased
     schema-qualified relation names.
     [David Wheeler]
 
-  - Cache to avoid access on remote databases to inspect each table
-    Avoid trying to purge "toast" tables
-    Avoid purging inexistent old delta tables
+  - Optimized table lookup when validating syncs to a single query, rather than
+    separate queries for each table. Also added checks to avoid purging "toast"
+    tables and old delta tables
     [Gustavo Tonini] (https://github.com/bucardo/bucardo/pull/182)
 
   - Improve the unique conflict exception handler sample code and test
