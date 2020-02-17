@@ -9,16 +9,18 @@
 -- bucardo upgrade
 
 \set ON_ERROR_STOP off
+\echo NOTE: Creating bucardo prerequisites: user, database, plperl; can ignore any errors
 
 -- Create the bucardo user and database if they don't already exist
-SET client_min_messages = 'FATAL';
+SET client_min_messages = 'ERROR';
+
 CREATE USER bucardo SUPERUSER;
 CREATE DATABASE bucardo OWNER bucardo;
 
 \c bucardo bucardo
 
 -- Create the base bucardo schema and languages
-SET client_min_messages = 'FATAL';
+SET client_min_messages = 'ERROR';
 CREATE LANGUAGE plpgsql;
 CREATE LANGUAGE plperlu;
 CREATE SCHEMA bucardo;
@@ -27,6 +29,8 @@ SET standard_conforming_strings = 'ON';
 
 -- The above were allowed to fail, because there is no harm if the objects
 -- already existed. From this point forward however, we suffer no errors
+
+\echo NOTE: Done with prerequisite setup; errors no longer ignored
 
 \set ON_ERROR_STOP on
 
