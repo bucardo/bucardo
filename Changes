@@ -1,5 +1,8 @@
 
-Bucardo version 5.6.0, unreleased
+Bucardo version 5.6.0, released February 28, 2020
+
+  - Minor PostgreSQL 11/12 tweaks in `bucardo install`
+    [David Christensen]
 
   - Add config option log_timer_format to glog() to customize timestamp output
     [David Christensen, suggested by David Wheeler]
