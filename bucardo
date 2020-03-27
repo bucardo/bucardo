@@ -19,6 +19,7 @@ use open qw( :std :utf8 );
 use DBI;
 use IO::Handle      qw/ autoflush /;
 use File::Basename  qw/ dirname /;
+use FindBin         qw/$Bin/;
 use Time::HiRes     qw/ sleep gettimeofday tv_interval /;
 use POSIX           qw/ ceil setsid localeconv /;
 use Config          qw/ %Config /;
@@ -7787,6 +7788,10 @@ sub find_bucardo_schema {
         $schema_file = File::Spec->catfile( $dir, 'bucardo.schema' );
         return ($fh, $schema_file) if open $fh, '<', $schema_file;
     }
+
+    ## Try ../usr/local/share/bucardo/bucardo.schema
+    $schema_file = "$Bin/../usr/local/share/bucardo/bucardo.schema";
+    return ($fh, $schema_file) if open $fh, '<', $schema_file;
 
     ## Try /usr/local/share/bucardo
     $schema_file = '/usr/local/share/bucardo/bucardo.schema';
