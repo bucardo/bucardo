@@ -35,10 +35,6 @@ before_install:
   # Set PATH as postgresql-server-dev-all pretends version is 11
   - export PATH=/usr/lib/postgresql/${PGVERSION}/bin:${PATH}
 
-before_script:
-  - sudo -u postgres createuser -s "$USER"
-  - sudo -u postgres createuser -s root
-
 script:
   - perl Makefile.PL
   - BUCARDO_LOG_ERROR_CONTEXT=1 PATH=$PATH:/usr/lib/postgresql/${PGVERSION}/bin make test
