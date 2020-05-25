@@ -81,7 +81,7 @@ ok my $runs = $dbhX->selectall_arrayref(
     'SELECT * FROM syncrun ORDER BY started',
     { Slice => {} },
 ), 'Get list of syncruns';
-is @{ $runs }, 1, 'Should have one syncrun';
+is(scalar @{ $runs }, 1, 'Should have one syncrun');
 ok $runs->[0]{ended}, 'It should have an "ended" value';
 ok $runs->[0]{lastempty}, 'It should be marked "last empty"';
 like $runs->[0]{status}, qr/^No delta rows found/,
@@ -106,7 +106,7 @@ ok $runs = $dbhX->selectall_arrayref(
     'SELECT * FROM syncrun ORDER BY started',
     { Slice => {} },
 ), 'Get list of syncruns';
-is @{ $runs }, 2, 'Should have two syncruns';
+is(scalar @{ $runs }, 2, 'Should have two syncruns');
 ok $runs->[1]{ended}, 'New run should have an "ended" value';
 ok $runs->[1]{lastgood}, 'It should be marked "last good"';
 like $runs->[1]{status}, qr/^Complete/, 'Its status should be "Complete"';
@@ -132,7 +132,7 @@ ok $runs = $dbhX->selectall_arrayref(
     'SELECT * FROM syncrun ORDER BY started',
     { Slice => {} },
 ), 'Get list of syncruns';
-is @{ $runs }, 4, 'Should have four syncruns';
+is(scalar @{ $runs }, 4, 'Should have four syncruns');
 ok $runs->[2]{ended}, 'Third run should have an "ended" value';
 ok $runs->[2]{lastbad}, 'Third run should be marked "last bad"';
 like $runs->[2]{status}, qr/^Failed/, 'Third run status should be "Bad"';
