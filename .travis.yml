@@ -30,7 +30,7 @@ before_install:
     postgresql-server-dev-${PGVERSION}
     postgresql-server-dev-all
     postgresql-plperl-${PGVERSION}
-    debhelper fakeroot
+    debhelper fakeroot libdbd-pg-perl
     libtap-parser-sourcehandler-pgtap-perl
   # Set PATH as postgresql-server-dev-all pretends version is 11
   - export PATH=/usr/lib/postgresql/${PGVERSION}/bin:${PATH}
