@@ -18,6 +18,8 @@ use BucardoTesting;
 my $bct = BucardoTesting->new({location => 'star', bail => 1})
     or BAIL_OUT "Creation of BucardoTesting object failed\n";
 
+plan test => 61;
+
 pass("*** Beginning star tests");
 
 END {
