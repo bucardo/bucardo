@@ -15,13 +15,13 @@ REQUIREMENTS:
 -------------
 
     build, test, and install Perl 5                (at least 5.8.3)
-    build, test, and install Postgres              (at least 8.2)
+    build, test, and install PostgreSQL            (at least 8.2)
     build, test, and install the DBI module        (at least 1.51)
     build, test, and install the DBD::Pg module    (at least 2.0.0)
     build, test, and install the DBIx::Safe module (at least 1.2.4)
     
-    You must have at least one database that has Pl/Pgsql and Pl/Perl installed.
-    Target databases may need Pl/Pgsql.
+    You must have at least one database that has PL/pgSQL and PL/Perl installed.
+    Target databases may need PL/pgSQL.
 
 
 INSTALLATION:
@@ -40,7 +40,7 @@ EXAMPLES:
 See the test suite in the t/ subdirectory for some examples.
 
 WEBSITE:
--------
+--------
 
 Please visit https://bucardo.org for complete documentation.
 
@@ -49,7 +49,7 @@ DEVELOPMENT:
 
 To follow or participate in the development of Bucardo, use:
 
-git clone git://github.com/bucardo/bucardo
+git clone git@github.com:bucardo/bucardo.git
 
 GETTING HELP:
 -------------

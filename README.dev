@@ -44,7 +44,7 @@ UPGRADE - Basic upgrade instructions
 
 * Build files:
 
-Makefile.PL - Standard Perl file that creates the makefile via "perl Makefile.PL"
+Makefile.PL - Standard Perl file that creates the Makefile via "perl Makefile.PL"
   Note that this file also creates the html files. Contains a version number.
 
 Makefile - Generated automatically by Makefile.PL
@@ -150,7 +150,7 @@ t/99-yaml.t - Uses Test::YAML::Meta to verify the META.yml file.
 == Editing ==
 =============
 
-All the perl files should have a cperl pragma at the top of the file, for easy use in emacs. 
+All the Perl files should have a cperl pragma at the top of the file, for easy use in emacs. 
 Please use tabs and not spaces everywhere, and keep the indenting to the cperl standard.
 When in doubt, use the guidelines from the Perl Best Practices book, with the following 
 exceptions:
@@ -168,7 +168,7 @@ guidelines when developing:
 * Whenever you add a new feature, no matter how minor, add a test. Better yet, add 
 many tests to make sure that it not only works correctly, but that it breaks when 
 it is supposed to (e.g. when it is fed the wrong output). Try to conceive of every 
-possible way your feature will be used and mis-used.
+possible way your feature will be used and misused.
 
 * If someone files a bug report that is not revealed by a test, please add one in, 
 no matter how simple the fix maybe, or how stupid the bug is.
@@ -332,9 +332,9 @@ https://wiki.postgresql.org/wiki/Bucardo (may be other pages too)
 The maintainers of the weekly news are usually pretty good about catching the update 
 and adding it in. If not, bug them.
 
-http://www.postgresql.org/community/weeklynews/
+https://postgresweekly.com/
 
-* Tell Greg to post on PlanetPostgresql.
+* Tell Greg to post on Planet PostgreSQL: https://planet.postgresql.org/
 
 * On the bucardo.org server:
 
