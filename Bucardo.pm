@@ -4658,7 +4658,7 @@ sub start_kid {
                 ## Restore the indexes and run REINDEX where needed
                 $self->enable_indexes($sync, $g);
 
-                ## TODO: logic to clean out delta rows is this was a onetimecopy
+                ## TODO: logic to clean out delta rows if this was a onetimecopy
 
             } ## end each goat
 

@@ -910,7 +910,7 @@ sub stop_bucardo {
     ## Returns: undef
 
     ## Create the file, and write some quick debug information into it
-    ## The only thing the processe care about is if the file exists
+    ## The only thing the processes care about is if the file exists
     open my $stop, '>', $STOPFILE or die qq{Could not create "$STOPFILE": $!\n};
     print {$stop} "Stopped by $progname on " . (scalar localtime) . "\n";
     close $stop or warn qq{Could not close "$STOPFILE": $!\n};
@@ -10390,7 +10390,7 @@ as the the C<reason_file> but ends in F<.log>.
   bucardo restart "Reason"
 
 Stops bucardo, waits for the stop to complete, and then starts it again.
-Supports the same options as <C<start>/start>. Useful for start scripts. For
+Supports the same options as C<start>. Useful for start scripts. For
 getting just CTL and KID processes to recognize newly added, updated, or
 removed objects, use the C<reload> command, instead.
 
@@ -11314,7 +11314,7 @@ A string indicating when the custom code should be run. Supported values include
 
 =head3 update db
 
-  bucardo udpate db <name> port=xxx host=xxx user=xxx pass=xxx
+  bucardo update db <name> port=xxx host=xxx user=xxx pass=xxx
 
 Updates a database. The C<name> is the name by which the database is known to
 Bucardo. This may vary from the actual database name, as multiple hosts might
@@ -11654,7 +11654,7 @@ The name of the schema in which the sequence is found.
 
 =item C<relgroup>
 
-Adds the sequence to the named relgroup. May be speci<fied more than
+Adds the sequence to the named relgroup. May be specified more than
 once. The sequence will be removed from any other relgroups.
 
 =back
