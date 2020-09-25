@@ -5897,6 +5897,7 @@ sub reload_config_database {
         NORMAL  => 2,
         VERBOSE => 3,
         DEBUG   => 4,
+        DEBUG2  => 5,
     );
 
     $SQL = 'SELECT name,setting,about,type,name FROM bucardo_config';
