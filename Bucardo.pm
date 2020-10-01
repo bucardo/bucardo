@@ -6933,21 +6933,21 @@ sub validate_sync {
         $customname{$row->{goat}}{$row->{db}} = $row->{newname};
     }
 
-	# Table cache
+    # Table cache
     $SQL{checktableonce} = q{
             SELECT n.nspname, c.relname, c.oid, quote_ident(n.nspname) as safeschema, quote_ident(c.relname) as safetable, quote_literal(n.nspname) as safeschemaliteral, quote_literal(c.relname) as safetableliteral
             FROM   pg_class c, pg_namespace n
             WHERE  c.relnamespace = n.oid
         };
     $sth = $srcdbh->prepare($SQL{checktableonce});
-	$sth->execute();
+    $sth->execute();
     my %tablescache;
-	for my $row (@{$sth->fetchall_arrayref({})}) {
+    for my $row (@{$sth->fetchall_arrayref({})}) {
         $tablescache{"$row->{nspname}.$row->{relname}"} = {
             map { $_ => $row->{$_} } qw(oid safeschema safetable safeschemaliteral safetableliteral)
         };
     }
-	$sth->finish();
+    $sth->finish();
 
     GOAT: for my $g (@{$s->{goatlist}}) {
 
