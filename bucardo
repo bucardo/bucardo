@@ -7198,7 +7198,7 @@ sub add_all_goats {
         . qq{WHERE relkind = '$kind' };
 
     ## We always exclude information_schema, system, and bucardo schemas
-    $SQL .= q{AND n.nspname <> 'information_schema' AND nspname !~ '^pg' AND nspname !~ '^bucardo'};
+    $SQL .= q{AND n.nspname <> 'information_schema' AND nspname !~ '^pg_' AND nspname !~ '^bucardo'};
 
     my @clause;
 
