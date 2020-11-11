@@ -823,7 +823,7 @@ sub add_test_schema {
                 LANGUAGE plpgsql
                 AS $_$ BEGIN
                 INSERT INTO droptest_bucardo(name,type)
-                    VALUES (TG_RELNAME, 'trigger');
+                    VALUES (TG_TABLE_NAME, 'trigger');
                 RETURN NULL;
                 END;
                 $_$
@@ -837,7 +837,7 @@ sub add_test_schema {
                 LANGUAGE plpgsql
                 AS $_$ BEGIN
                 INSERT INTO droptest_bucardo(name,type)
-                    VALUES (TG_RELNAME, 'trigger');
+                    VALUES (TG_TABLE_NAME, 'trigger');
                 RETURN NULL;
                 END;
                 $_$;
