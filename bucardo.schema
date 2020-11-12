@@ -2133,17 +2133,22 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
     }
    
     ## Get column information about all of our tables
-    $SQL = q{
-            SELECT   attrelid, attname, quote_ident(attname) AS qattname, atttypid, format_type(atttypid, atttypmod) AS ftype,
-                     attnotnull, atthasdef, attnum,
-                     (SELECT pg_get_expr(adbin, adrelid) FROM pg_attrdef WHERE adrelid=attrelid
-                      AND adnum=attnum AND atthasdef) AS def
+    my $columninfo;
+    if (@tableoids) {
+        $SQL = q{
+            SELECT   attrelid, attname, quote_ident(attname) AS qattname, atttypid,
+                     format_type(atttypid, atttypmod) AS ftype, attnotnull, atthasdef, attnum,
+                     (
+                         SELECT pg_get_expr(adbin, adrelid)
+                         FROM pg_attrdef
+                         WHERE adrelid = attrelid
+                             AND adnum = attnum
+                             AND atthasdef
+                     ) AS def
             FROM     pg_attribute
             WHERE    attrelid IN (COLIST) AND attnum > 0 AND NOT attisdropped
             ORDER BY attnum
         };
-    my $columninfo;
-    if (@tableoids) {
         $SQL =~ s/COLIST/join ',' => @tableoids/e;
         $sth = $dbh->prepare($SQL);
         $sth->execute();
