@@ -1234,9 +1234,7 @@ default.
 
 =head1 DEVELOPMENT
 
-Development happens using the git system. You can clone the latest version by doing:
-
- git clone https://bucardo.org/bucardo.git/
+Development happens using Git. See: https://github.com/bucardo/bucardo
 
 =head1 HISTORY
 
@@ -1256,7 +1254,7 @@ Please report any problems to josh@endpoint.com.
 =head1 AUTHORS
 
  Greg Sabino Mullane <greg@turnstep.com>
- Selena Decklemann <selena@endpoint.com>
+ Selena Deckelmann <selena@endpoint.com>
  Joshua Tolley <josh@endpoint.com>
 
 =head1 LICENSE AND COPYRIGHT
