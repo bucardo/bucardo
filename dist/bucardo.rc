@@ -27,6 +27,7 @@ restart_cmd="${name}_restart"
 kick_cmd="${name}_kick"
 status_cmd="${name}_status"
 
+PATH="$PATH":/usr/local/bin
 
 bucardo_start()
 {
