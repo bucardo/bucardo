@@ -35,15 +35,10 @@ before_install:
   - sudo apt-get update -qq
   - if [[ $TRAVIS_CPU_ARCH =~ arm64* ]] && [[ $TRAVIS_PERL_VERSION =~ ^([0-9]+\.){1}([0-9]+)$ ]]; then
         INSTALL_PERL_VERSION=$TRAVIS_PERL_VERSION.0 ;
-        echo "yes" | sudo cpan App::perlbrew ;
-        perlbrew init ;
-        source ~/perl5/perlbrew/etc/bashrc ;
-        cat ~/perl5/perlbrew/etc/bashrc >> ~/.bashrc ;
-        travis_wait 20 perlbrew install -j 4 $INSTALL_PERL_VERSION -n ;
+        perlbrew install -j 4 $INSTALL_PERL_VERSION -n ;
         perlbrew switch $INSTALL_PERL_VERSION ;
         perl --version ;
         echo "y" | perlbrew install-cpanm ;
-        cpanm -V ;
     fi
   - sudo apt-get install -y
     postgresql-${PGVERSION}
