@@ -1,4 +1,8 @@
 language: perl
+arch:
+  - arm64
+  - amd64
+dist: bionic
 
 perl:
   - 5.24
@@ -22,7 +26,25 @@ before_install:
   - sudo apt-get -y --purge remove postgresql libpq-dev libpq5
     postgresql-client-common postgresql-common
   - sudo rm -rf /var/lib/postgresql
+  - if [[ $TRAVIS_CPU_ARCH =~ arm64* ]]; then
+        source /etc/lsb-release ;
+        echo "deb http://apt.postgresql.org/pub/repos/apt/ $DISTRIB_CODENAME-pgdg main ${PGVERSION}" > pgdg.list ;
+        sudo mv pgdg.list /etc/apt/sources.list.d/;
+        wget --quiet -O - https://apt.postgresql.org/pub/repos/apt/ACCC4CF8.asc | sudo apt-key add - ;
+    fi
   - sudo apt-get update -qq
+  - if [ $TRAVIS_CPU_ARCH =~ arm64* ] && [ $TRAVIS_PERL_VERSION =~ ^([0-9]+\.){1}([0-9]+)$ ]; then
+        INSTALL_PERL_VERSION=$TRAVIS_PERL_VERSION.0 ;
+        echo "yes" | sudo cpan App::perlbrew ;
+        perlbrew init ;
+        source ~/perl5/perlbrew/etc/bashrc ;
+        cat ~/perl5/perlbrew/etc/bashrc >> ~/.bashrc ;
+        travis_wait 20 perlbrew install -j 4 $INSTALL_PERL_VERSION -n ;
+        perlbrew switch $INSTALL_PERL_VERSION ;
+        perl --version ;
+        echo "y" | perlbrew install-cpanm ;
+        cpanm -V ;
+    fi
   - sudo apt-get install -y
     postgresql-${PGVERSION}
     postgresql-client-${PGVERSION}
@@ -32,6 +54,9 @@ before_install:
     postgresql-plperl-${PGVERSION}
     debhelper fakeroot libdbd-pg-perl
     libtap-parser-sourcehandler-pgtap-perl
+  - if [[ $TRAVIS_CPU_ARCH =~ arm64* ]]; then
+        cpanm DBIx::Safe CGI DBD::Pg DBI -n ;
+    fi
   # Set PATH as postgresql-server-dev-all pretends version is 11
   - export PATH=/usr/lib/postgresql/${PGVERSION}/bin:${PATH}
 
