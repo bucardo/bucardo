@@ -33,7 +33,7 @@ before_install:
         wget --quiet -O - https://apt.postgresql.org/pub/repos/apt/ACCC4CF8.asc | sudo apt-key add - ;
     fi
   - sudo apt-get update -qq
-  - if [ $TRAVIS_CPU_ARCH =~ arm64* ] && [ $TRAVIS_PERL_VERSION =~ ^([0-9]+\.){1}([0-9]+)$ ]; then
+  - if [[ $TRAVIS_CPU_ARCH =~ arm64* ]] && [[ $TRAVIS_PERL_VERSION =~ ^([0-9]+\.){1}([0-9]+)$ ]]; then
         INSTALL_PERL_VERSION=$TRAVIS_PERL_VERSION.0 ;
         echo "yes" | sudo cpan App::perlbrew ;
         perlbrew init ;
