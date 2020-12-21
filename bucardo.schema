@@ -2693,55 +2693,6 @@ CREATE TRIGGER validate_sync
   AFTER INSERT OR UPDATE ON bucardo.sync
   FOR EACH ROW EXECUTE PROCEDURE bucardo.validate_sync();
 
-CREATE FUNCTION bucardo.bucardo_delete_sync()
-RETURNS TRIGGER
-LANGUAGE plperlu
-SECURITY DEFINER
-AS $bc$
-
-    use strict; use warnings;
-
-    elog(DEBUG, "Starting delete_sync trigger");
-
-    my $old = $_TD->{old};
-
-    my ($SQL, $rv, $sth, $count);
-
-    ## Gather up a list of tables used in this sync, as well as the source database handle
-
-    (my $herd = $old->{herd}) =~ s/'/''/go;
-
-    ## Does this herd exist?
-    $SQL = qq{SELECT 1 FROM herd WHERE name = '$herd'};
-    $rv = spi_exec_query($SQL);
-    if (!$rv->{processed}) {
-       #elog(ERROR, "Cannot delete: sync refers to an invalid relgroup: $herd");
-    }
-
-    $SQL = qq{
-        SELECT db, pg_catalog.quote_ident(schemaname) AS safeschema,
-                   pg_catalog.quote_ident(tablename)  AS safetable
-        FROM   goat g, herdmap h
-        WHERE  g.id = h.goat
-        AND    h.herd = '$herd'
-    };
-    $rv = spi_exec_query($SQL);
-    if (!$rv->{processed}) {
-      elog(DEBUG, 'Relgroup has no members, so no further work needed');
-      return;
-    }
-
-    ## TODO: Reach out and clean up remote databases as before if needed
-
-    return;
-
-$bc$;
-
-CREATE TRIGGER bucardo_delete_sync
-  AFTER DELETE ON bucardo.sync
-  FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delete_sync();
-
-
 CREATE OR REPLACE FUNCTION bucardo.find_unused_goats()
 RETURNS SETOF text
 LANGUAGE plpgsql
