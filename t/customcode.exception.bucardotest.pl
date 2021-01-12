@@ -40,7 +40,7 @@ my @cascade  = (
     [qw(public.supplies employee_id)],
 );
 
-# Optionaly set $copy_to to table with identical columns to $table to store
+# Optionally set $copy_to to table with identical columns to $table to store
 # away deleted records for later evaluation or recovery.
 my $copy_to  = 'employee_conflict';
 ##############################################################################
