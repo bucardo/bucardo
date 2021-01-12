@@ -191,6 +191,7 @@ SQL
 SQLite
 syncdone
 syncrun
+turnstep
 unlisten
 wget
 whitespace
@@ -200,17 +201,21 @@ whitespace
 bucardo
 DBD
 greg
+listinfo
 Makefile
-Pgsql
+pgSQL
 subdirectory
 
 ## Changes
 
 addallsequences
 addalltables
+Alexandre
+Andrey
 Aolmezov
 Asad
 attnums
+auth
 autokick
 Backcountry
 Bahlai
@@ -218,14 +223,19 @@ Boes
 boolean
 BSD's
 BUCARDODIR
+Busquets
 bytea
 checktime
+Christoph
 chunking
 cnt
 config
+Crhonek
 ctl
 customcode
 customselect
+datetime
+dbconn
 dbhost
 dbi
 dbproblem
@@ -236,22 +246,29 @@ debugstdout
 Deckelmann
 DESTDIR
 Devrim
+dryrun
 dsn
+Dürr
 evals
 Farmawan
 FreeBSD
 getconn
+Github
 Goran
 goto
 GSM
 Gugic
+GÜNDÜZ
+hashref
 ident
 inactivedestroy
 intra
+Jaroslav
 Kaveh
 Kebrt
 kidsalive
 Kiriakos
+Lafferty
 localtime
 Lotia
 Machado
@@ -278,8 +295,10 @@ pidfile
 pids
 PIDs
 ppid
+PRAGMA
 rc
 Recktenwald
+redsysman
 Refactor
 relgroup
 relgroups
@@ -287,6 +306,7 @@ respawn
 Rosser
 rowid
 rr
+SASL
 schemas
 Schwarz
 Sendmail
@@ -294,8 +314,10 @@ serializable
 slony
 smallint
 SMTP
+Solovjov
 sourcedbh
 sourcelimit
+sqlite
 sqlstate
 src
 stayalive
@@ -305,10 +327,12 @@ tcp
 timestamp
 timestamptz
 Tolley
+Tonini
 triggerkick
 trigrules
 Tsourapas
 UNLISTEN
+unparseable
 upsert
 UTC
 Vilem
@@ -333,10 +357,12 @@ TODO
 async
 cronjobs
 ctl
+dbdsn
 failover
 Flatfiles
 github
 gotos
+GUC
 https
 intra
 Mongo
@@ -353,6 +379,8 @@ symlinks
 synctype
 synctypes
 timeslices
+truncations
+txntime
 wildcard
 
 ## bucardo
@@ -372,6 +400,7 @@ debugfilesep
 debugname
 debugsyslog
 dir
+DSN
 endsync
 erroring
 flatfile
@@ -383,6 +412,7 @@ MCP
 msg
 notimer
 piddir
+pgpass
 pkonly
 qquote
 retrysleep
@@ -447,6 +477,7 @@ nosetup
 perlcritic
 perlcriticrc
 postgresql
+postgresweekly
 pragma
 quickstart
 realclean
@@ -609,6 +640,24 @@ targetdbname
 
 deltatest
 
+## t/20-mongo.t
+
+dbpath
+logpath
+mkdir
+mongod
+mongotest
+nohup
+nojournal
+noprealloc
+smallfiles
+testmongo
+
+## t/20-firebird.t
+
+Firebird
+firebird
+
 ## t/20-postgres.t
 
 mtest
@@ -626,3 +675,12 @@ xabc
 ## t/20-sqlite.t
 
 trelgroup
+
+## t/customcode.exception.bucardotest.pl
+
+FK
+JSON
+PKs
+fk
+getdbh
+whenrun
