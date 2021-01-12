@@ -5,9 +5,11 @@
 ## Make sure you have Text::Hunspell installed or you will get false positives
 ## Requires environment variable RELEASE_TESTING to be true
 
-use 5.006;
+use 5.010_001;
 use strict;
 use warnings;
+use utf8;
+use open qw( :std :utf8 );
 use Test::More;
 select(($|=1,select(STDERR),$|=1)[1]);
 
