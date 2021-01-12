@@ -3,7 +3,7 @@
 
 ## Spellcheck as much as we can
 ## Make sure you have Text::Hunspell installed or you will get false positives
-## Requires TEST_SPELL to be set
+## Requires environment variable RELEASE_TESTING to be true
 
 use 5.006;
 use strict;
