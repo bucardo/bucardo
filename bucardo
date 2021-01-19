@@ -10224,6 +10224,7 @@ Shows help.
   -p --db-port       PORT  Database server port number.
      --bucardorc     FILE  Use specified .bucardorc file.
      --no-bucardorc        Do not use .bucardorc file.
+     --batch               Enable batch mode: don't ask questions or validate inputs
      --quiet               Incremental quiet.
      --verbose             Incremental verbose mode.
   -? --help                Output basic help and exit.

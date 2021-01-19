@@ -2,7 +2,7 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-<title></title>
+<title>bucardo - utility script for controlling the Bucardo program</title>
 <meta http-equiv="content-type" content="text/html; charset=utf-8" />
 
 </head>
@@ -261,6 +261,7 @@
   -p --db-port       PORT  Database server port number.
      --bucardorc     FILE  Use specified .bucardorc file.
      --no-bucardorc        Do not use .bucardorc file.
+     --batch               Enable batch mode: don&#39;t ask questions or validate inputs
      --quiet               Incremental quiet.
      --verbose             Incremental verbose mode.
   -? --help                Output basic help and exit.
@@ -428,7 +429,7 @@
 
 <pre><code>  bucardo restart &quot;Reason&quot;</code></pre>
 
-<p>Stops bucardo, waits for the stop to complete, and then starts it again. Supports the same options as &lt;<code>start</code>/start&gt;. Useful for start scripts. For getting just CTL and KID processes to recognize newly added, updated, or removed objects, use the <code>reload</code> command, instead.</p>
+<p>Stops bucardo, waits for the stop to complete, and then starts it again. Supports the same options as <code>start</code>. Useful for start scripts. For getting just CTL and KID processes to recognize newly added, updated, or removed objects, use the <code>reload</code> command, instead.</p>
 
 <h2 id="list">list</h2>
 
@@ -1572,7 +1573,7 @@
 
 <h3 id="update-db">update db</h3>
 
-<pre><code>  bucardo udpate db &lt;name&gt; port=xxx host=xxx user=xxx pass=xxx</code></pre>
+<pre><code>  bucardo update db &lt;name&gt; port=xxx host=xxx user=xxx pass=xxx</code></pre>
 
 <p>Updates a database. The <code>name</code> is the name by which the database is known to Bucardo. This may vary from the actual database name, as multiple hosts might have databases with the same name.</p>
 
@@ -2019,7 +2020,7 @@
 <dt id="relgroup10"><code>relgroup</code></dt>
 <dd>
 
-<p>Adds the sequence to the named relgroup. May be speci&lt;fied more than once. The sequence will be removed from any other relgroups.</p>
+<p>Adds the sequence to the named relgroup. May be specified more than once. The sequence will be removed from any other relgroups.</p>
 
 </dd>
 </dl>
