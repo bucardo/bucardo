@@ -1,8 +1,8 @@
 %define         realname Bucardo
 %define         sysuser postgres
 Name:           bucardo
-Version:        5.4.1
-Release:        2%{?dist}
+Version:        5.6.0
+Release:        1%{?dist}
 Summary:        Postgres replication system for both multi-master and multi-slave operations
 
 Group:          Applications/Databases
@@ -11,7 +11,6 @@ URL:            https://bucardo.org/
 Source0:        https://bucardo.org/downloads/Bucardo-%{version}.tar.gz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
-Source1: master-master-replication-example.txt
 Source2: bucardo.init
 Patch0:  bucardo-logfiles.patch
 
@@ -26,7 +25,6 @@ BuildRequires:  perl(Sys::Syslog)
 BuildRequires:  perl(Net::SMTP)
 BuildRequires:  perl(List::Util)
 BuildRequires:  perl(Pod::Usage)
-# available from fedora 10
 BuildRequires:  perl(DBIx::Safe)
 BuildRequires:  perl(boolean)
 
@@ -81,8 +79,6 @@ sed -i -e '1d;2i#!/usr/bin/perl' bucardo
 rm -f %{buildroot}/%{_bindir}/bucardo
 install -Dp -m 755 bucardo %{buildroot}/%{_sbindir}/bucardo
 
-install -Dp -m 644 %{SOURCE1} .
-
 # install init script
 install -d %{buildroot}/etc/rc.d/init.d
 install -m 755 %{SOURCE2} %{buildroot}/etc/rc.d/init.d/%{name}
@@ -96,7 +92,6 @@ rm -rf %{buildroot}
 %defattr(-,root,root,-)
 %doc bucardo.html Bucardo.pm.html Changes
 %doc INSTALL LICENSE README SIGNATURE TODO
-%doc master-master-replication-example.txt
 %{perl_vendorlib}/*
 %{_mandir}/man1/*
 %{_mandir}/man3/*
@@ -105,6 +100,12 @@ rm -rf %{buildroot}
 %{_initrddir}/%{name}
 
 %changelog
+* Tue Jan 19 2021 Jon Jensen <jon@endpoint.com> - 5.6.0-1
+- Remove references to nonexistent master-master-replication-example.txt
+  documentation file, a relic of the spec file this was started from.
+  (Fixes GitHub issue #149.)
+- Update to 5.6.0.
+
 * Tue Nov 1 2016 David Christensen <david@endpoint.com> - 5.4.1-1
 - Update to 5.4.1
 
