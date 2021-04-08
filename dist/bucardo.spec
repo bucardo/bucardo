@@ -1,7 +1,7 @@
 %define         realname Bucardo
 %define         sysuser postgres
 Name:           bucardo
-Version:        5.6.0
+Version:        5.7.0
 Release:        1%{?dist}
 Summary:        Postgres replication system for both multi-master and multi-slave operations
 
@@ -100,6 +100,9 @@ rm -rf %{buildroot}
 %{_initrddir}/%{name}
 
 %changelog
+* Thu Apr 8 2021 Jon Jensen <jon@endpoint.com> - 5.7.0-1
+- Update to 5.7.0.
+
 * Tue Jan 19 2021 Jon Jensen <jon@endpoint.com> - 5.6.0-1
 - Remove references to nonexistent master-master-replication-example.txt
   documentation file, a relic of the spec file this was started from.
