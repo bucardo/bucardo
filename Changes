@@ -1,3 +1,38 @@
+Bucardo version 5.7.0, not yet released
+
+  - Match pg_* schema names rather than looser pg*
+    [Valentina Glagoleva]
+
+  - Document --batch option
+    [Jon Jensen, suggested by Mark Stewart]
+
+  - Support UTF-8 in spellcheck used by release tests
+    [Jon Jensen]
+
+  - Update RPM building
+    [Jon Jensen]
+
+  - Remove the bucardo_delete_sync trigger on the bucardo.sync table
+    [Greg Sabino Mullane]
+
+  - Add path to standard FreeBSD perl
+    [Jon Jensen, suggested by Teetoow]
+
+  - Replace deprecated TG_RELNAME with TG_TABLE_NAME
+    [Andreas Karlsson]
+
+  - Support DEBUG2 log level via command-line option --loglevel=debug2
+    [Jon Jensen]
+
+  - Documentation updates
+    [Jon Jensen]
+
+  - Fix tests for serializable transactions
+    [David Christensen]
+
+  - Look for bucardo.schema relative to install directory
+    [David Christensen]
+
 
 Bucardo version 5.6.0, released February 28, 2020
 
