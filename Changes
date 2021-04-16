@@ -1,5 +1,8 @@
 Bucardo version 5.7.0, not yet released
 
+  - Remove support for long-abandoned Drizzle database
+    [Jon Jensen]
+
   - Match pg_* schema names rather than looser pg*
     [Valentina Glagoleva]
 

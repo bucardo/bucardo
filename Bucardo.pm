@@ -2465,7 +2465,7 @@ sub start_kid {
     ## Also setup common attributes
     my (@dbs, @dbs_source, @dbs_target, @dbs_delta, @dbs_fullcopy,
         @dbs_connectable, @dbs_dbi, @dbs_write, @dbs_non_fullcopy,
-        @dbs_postgres, @dbs_drizzle, @dbs_firebird, @dbs_mongo, @dbs_mysql, @dbs_oracle,
+        @dbs_postgres, @dbs_firebird, @dbs_mongo, @dbs_mysql, @dbs_oracle,
         @dbs_redis, @dbs_sqlite);
 
     ## Used to weed out all but one source if in onetimecopy mode
@@ -2545,16 +2545,6 @@ sub start_kid {
             $d->{does_limit}      = 1;
             $d->{does_async}      = 1;
             $d->{does_ANY_clause} = 1;
-        }
-
-        ## Drizzle
-        if ('drizzle' eq $d->{dbtype}) {
-            push @dbs_drizzle => $dbname;
-            $d->{does_sql}        = 1;
-            $d->{does_truncate}   = 1;
-            $d->{does_savepoints} = 1;
-            $d->{does_limit}      = 1;
-            $d->{has_mysql_timestamp_issue} = 1;
         }
 
         ## MongoDB
@@ -2648,7 +2638,6 @@ sub start_kid {
 
         ## Databases with Perl DBI support
         if ($d->{dbtype} eq 'postgres'
-                or $d->{dbtype} eq 'drizzle'
                 or $d->{dbtype} eq 'firebird'
                 or $d->{dbtype} eq 'mariadb'
                 or $d->{dbtype} eq 'mysql'
@@ -5162,10 +5151,6 @@ sub start_main_transaction {
             $self->glog(qq{Set database "$dbname" to serializable}, LOG_DEBUG);
         }
 
-        if ('drizzle' eq $d->{dbtype}) {
-            ## Drizzle does not appear to have anything to control this yet
-        }
-
         if ('oracle' eq $d->{dbtype}) {
             $dbh->do('SET TRANSACTION READ WRITE');
             $dbh->do(q{SET TRANSACTION ISOLATION LEVEL SERIALIZABLE NAME 'bucardo'});
@@ -5248,7 +5233,7 @@ sub lock_all_tables {
                 $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
                 $d->{dbh}->do("LOCK TABLE $com");
             }
-            elsif ('mysql' eq $d->{dbtype } or 'drizzle' eq $d->{dbtype} or 'mariadb' eq $d->{dbtype}) {
+            elsif ('mysql' eq $d->{dbtype } or 'mariadb' eq $d->{dbtype}) {
                 my $com = "$tname WRITE";
                 $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
                 $d->{dbh}->do("LOCK TABLE $com");
@@ -5677,9 +5662,6 @@ sub connect_database {
             $dsn .= join ';', map {
                 ($_ eq 'dbservice' ? 'service' : $_ ) . "=$d->{$_}";
             } grep { defined $d->{$_} and length $d->{$_} } qw/dbname dbservice/;
-        }
-        elsif ('drizzle' eq $dbtype) {
-            $dsn = "dbi:drizzle:database=$dbname";
         }
         elsif ('mongo' eq $dbtype) {
 
@@ -7108,8 +7090,8 @@ sub validate_sync {
             ## Redis is skipped because we can create keys on the fly
             next if $d->{dbtype} =~ /redis/o;
 
-            ## MySQL/MariaDB/Drizzle/Oracle/SQLite is skipped for now, but should be added later
-            next if $d->{dbtype} =~ /mysql|mariadb|drizzle|oracle|sqlite/o;
+            ## MySQL/MariaDB/Oracle/SQLite is skipped for now, but should be added later
+            next if $d->{dbtype} =~ /mysql|mariadb|oracle|sqlite/o;
 
             if ($self->{quickstart}) {
                 $self->glog("  quickstart: Skipping table check for $dbname.$S.$T", LOG_VERBOSE);
@@ -9696,7 +9678,7 @@ sub delete_rows {
 
                 $self->glog("Mongo objects removed from $target_tablename: $Target->{deleted_rows}", LOG_VERBOSE);
             }
-            elsif ('mysql' eq $type or 'drizzle' eq $type or 'mariadb' eq $type
+            elsif ('mysql' eq $type or 'mariadb' eq $type
                        or 'oracle' eq $type or 'sqlite' eq $type or 'firebird' eq $type) {
                 my $tdbh = $Target->{dbh};
                 for (@{ $SQL{IN}{$target_tablename} }) {
@@ -9906,7 +9888,7 @@ sub push_rows {
                 ## No setup needed
             }
             elsif ('sqlite' eq $type or 'oracle' eq $type or
-                   'mysql' eq $type or 'mariadb' eq $type or 'drizzle' eq $type) {
+                   'mysql' eq $type or 'mariadb' eq $type) {
                 my $tgtcmd = "INSERT INTO $target_tablename$columnlist VALUES (";
                 $tgtcmd .= '?,' x @$cols;
                 $tgtcmd =~ s/,$/)/o;
@@ -10064,12 +10046,11 @@ sub push_rows {
                         my $target_tablename = $customname->{$Target->{name}};
                         $Target->{dbh}->hmset("$target_tablename:$pkeyval", @add);
                     }
-                    ## For SQLite, MySQL, MariaDB, Firebird, Drizzle, and Oracle, do some basic INSERTs
+                    ## For SQLite, MySQL, MariaDB, Firebird, and Oracle, do some basic INSERTs
                     elsif ('sqlite' eq $type
                             or 'oracle' eq $type
                             or 'mysql' eq $type
                             or 'mariadb' eq $type
-                            or 'drizzle' eq $type
                             or 'firebird' eq $type) {
 
                         chomp $buffer;
@@ -10223,7 +10204,7 @@ sub vacuum_table {
         my $total_time = sprintf '%.2f', tv_interval($start_time);
         $self->glog("Vacuum complete. Time: $total_time", LOG_VERBOSE);
     }
-    elsif ('mysql' eq $dbtype or 'drizzle' eq $dbtype or 'mariadb' eq $dbtype) {
+    elsif ('mysql' eq $dbtype or 'mariadb' eq $dbtype) {
         ## Optimize the table
         $self->glog("Optimizing $tablename", LOG_VERBOSE);
 
@@ -10284,7 +10265,7 @@ sub analyze_table {
         $self->glog("Analyze complete for $dbname.$tablename. Time: $total_time", LOG_VERBOSE);
         $ldbh->commit();
     }
-    elsif ('mysql' eq $dbtype or 'drizzle' eq $dbtype or 'mariadb' eq $dbtype) {
+    elsif ('mysql' eq $dbtype or 'mariadb' eq $dbtype) {
         $ldbh->do("ANALYZE TABLE $tablename");
         my $total_time = sprintf '%.2f', tv_interval($start_time);
         $self->glog("Analyze complete for $tablename. Time: $total_time", LOG_VERBOSE);

@@ -1867,7 +1867,6 @@ sub add_database {
         ## Get the module name, the way to refer to its database
         ## This also makes sure we have a valid type
         my %dbtypeinfo = (
-            drizzle  => ['DBD::drizzle',  'Drizzle database'],
             firebird => ['DBD::Firebird', 'Firebird database'],
             mongo    => ['MongoDB',       'MongoDB'],
             mysql    => ['DBD::mysql',    'MySQL database'],
@@ -2489,15 +2488,6 @@ sub list_databases {
             if ($info->{makedelta}) {
                 print ' (makedelta on)';
             }
-        }
-        if ($dbtype eq 'drizzle') {
-            $showport = (length $info->{dbport} and $info->{dbport} != 3306)
-                ? " --port $info->{dbport}" : '';
-            printf 'Conn: drizzle -u %s -D %s%s%s',
-                $info->{dbuser},
-                $info->{dbname},
-                $showhost,
-                $showport;
         }
         if ($dbtype eq 'flatfile') {
             print "Prefix: $info->{dbname}";
@@ -9855,7 +9845,6 @@ sub standardize_rdbms_name {
 
     $name =~ s/postgres.*/postgres/io;
     $name =~ s/pg.*/postgres/io;
-    $name =~ s/driz?zle.*/drizzle/io;
     $name =~ s/firebird/firebird/io;
     $name =~ s/mongo.*/mongo/io;
     $name =~ s/mysql.*/mysql/io;
@@ -10490,8 +10479,6 @@ The type of the database. Defaults to C<postgres>. Currently supported values ar
 =over
 
 =item * C<postgres>
-
-=item * C<drizzle>
 
 =item * C<mongo>
 
@@ -11340,8 +11327,6 @@ The type of the database. Currently supported values are:
 =over
 
 =item * C<postgres>
-
-=item * C<drizzle>
 
 =item * C<mongo>
 

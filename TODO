@@ -10,9 +10,6 @@ Version 5
 Version 5.1
 -----------
 
-* Get Drizzle tests verified as working
-  https://github.com/bucardo/bucardo/issues/16
-
 * Get bucardo-report working again
   https://github.com/bucardo/bucardo/issues/17
 

@@ -671,7 +671,6 @@ AS $bc$
 ## Given the name of a db, return the type, plus type-specific connection information
 ## ALL: the string 'DSN', a colon, and the value of the dbdsn field, if set
 ## Postgres: a connection string, username, password, and attribs
-## Drizzle: a connection string, username, and password
 ## Firebird: a connection string, username, and password
 ## Mongo: "foo: bar" style connection information, one per line
 ## MariaDB: a connection string, username, and password
@@ -754,21 +753,6 @@ if ($dbtype eq 'postgres') {
     return "$dbtype\n$connstring\n$db{user}\n$db{pass}\n$ssp";
 
 } ## end postgres
-
-if ($dbtype eq 'drizzle') {
-
-    length $db{name} or elog(ERROR, qq{Database name is mandatory\n});
-    length $db{user} or elog(ERROR, qq{Database username is mandatory\n});
-
-    my $connstring = "dbi:drizzle:database=$db{name}";
-    $db{host} ||= ''; $db{port} ||= ''; $db{pass} ||= '';
-    length $db{host} and $connstring .= ";host=$db{host}";
-    length $db{port} and $connstring .= ";port=$db{port}";
-    length $db{conn} and $connstring .= ";$db{conn}";
-
-    return "$dbtype\n$connstring\n$db{user}\n$db{pass}";
-
-} ## end drizzle
 
 if ($dbtype eq 'mongo') {
    my $connstring = "$dbtype\n";
@@ -1322,7 +1306,7 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
     next if $db{$dbname}{dbtype} =~ /flat/;
 
     ## Skip if this is a non-supported database
-    next if $db{$dbname}{dbtype} =~ /drizzle|mariadb|mongo|mysql|oracle|redis|sqlite|firebird/;
+    next if $db{$dbname}{dbtype} =~ /mariadb|mongo|mysql|oracle|redis|sqlite|firebird/;
 
     ## Figure out how to connect to this database
     my $rv = spi_exec_query("SELECT bucardo.db_getconn('$dbname') AS conn");

@@ -31,7 +31,6 @@ t/02-bctl-table.t
 t/10-fullcopy.t
 t/10-makedelta.t
 t/10-object-names.t
-t/20-drizzle.t
 t/20-firebird.t
 t/20-mariadb.t
 t/20-mongo.t
