@@ -10136,13 +10136,17 @@ sub create_herd {
 
 __END__
 
+=pod
+
+=encoding utf8
+
 =head1 NAME
 
-bucardo - utility script for controlling the Bucardo program
+bucardo - utility program for controlling the Bucardo service
 
 =head1 VERSION
 
-This document describes version 5.7.0 of bucardo
+This document describes version 5.7.0 of bucardo.
 
 =head1 USAGE
 
@@ -10150,14 +10154,14 @@ This document describes version 5.7.0 of bucardo
 
 =head1 DESCRIPTION
 
-The bucardo script is the main interaction to a running Bucardo instance. It
+The bucardo program is the main interaction to a running Bucardo service. It
 can be used to start and stop Bucardo, add new items, kick syncs, and even
 install and upgrade Bucardo itself. For more complete documentation, please
-view L<the wiki|https://bucardo.org/>.
+view L<the Bucardo website|https://bucardo.org/>.
 
 =head1 COMMANDS
 
-Run C<< bucardo help <command> >> for additional details
+Run C<< bucardo help <command> >> for additional details.
 
 =over
 
@@ -10217,7 +10221,7 @@ Shows the current Bucardo settings.
 
 =item C<<set <setting=value> [<setting=value>...] >>
 
-Sets one or more configuration setting..
+Sets one or more configuration setting.
 
 =item C<< ping [<timeout>] >>
 
@@ -12300,16 +12304,20 @@ The bucardo script uses I<$ENV{HOME}> to look for a F<.bucardorc> file.
 
 Bug reports and feature requests are always welcome, please visit
 L<bucardo.org|https://bucardo.org>, file L<GitHub
-Issues|http://github.com/bucardo/bucardo/issues>, or post to our
+Issues|https://github.com/bucardo/bucardo/issues>, or post to our
 L<email list|https://bucardo.org/mailman/listinfo/bucardo-general>.
 
 =head1 SEE ALSO
 
 Bucardo
 
+=head1 AUTHOR
+
+Greg Sabino Mullane <greg@turnstep.com>
+
 =head1 COPYRIGHT
 
-Copyright 2006-2021 Greg Sabino Mullane <greg@turnstep.com>
+Copyright © 2006-2021 Greg Sabino Mullane <greg@turnstep.com>.
 
 This program is free to use, subject to the limitations in the LICENSE file.
 

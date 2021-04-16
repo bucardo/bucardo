@@ -10498,13 +10498,15 @@ __END__
 
 =pod
 
+=encoding utf8
+
 =head1 NAME
 
 Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This document describes version 5.7.0 of Bucardo
+This document describes version 5.7.0 of Bucardo.
 
 =head1 WEBSITE
 
@@ -10515,7 +10517,7 @@ https://bucardo.org/
 =head1 DESCRIPTION
 
 Bucardo is a Perl module that replicates Postgres databases using a combination
-of Perl, a custom database schema, Pl/Perlu, and Pl/Pgsql.
+of Perl, a custom database schema, PL/PerlU, and PL/pgSQL.
 
 Bucardo is unapologetically extremely verbose in its logging.
 
@@ -10544,8 +10546,14 @@ this distribution. See also the documentation for the bucardo program.
 
 =head1 BUGS
 
-Bugs should be reported to bucardo-general@bucardo.org. A list of bugs can be found at
-https://bucardo.org/bugs.html
+Bug reports and feature requests are always welcome, please visit
+L<bucardo.org|https://bucardo.org>, file L<GitHub
+Issues|https://github.com/bucardo/bucardo/issues>, or post to our
+L<email list|https://bucardo.org/mailman/listinfo/bucardo-general>.
+
+=head1 SEE ALSO
+
+Bucardo
 
 =head1 CREDITS
 
@@ -10556,10 +10564,10 @@ of it in production since 2002. Jon Jensen <jon@endpoint.com> wrote the original
 
 Greg Sabino Mullane <greg@turnstep.com>
 
-=head1 LICENSE AND COPYRIGHT
+=head1 COPYRIGHT
 
-Copyright (c) 2005-2021 Greg Sabino Mullane <greg@turnstep.com>.
+Copyright © 2005-2021 Greg Sabino Mullane <greg@turnstep.com>.
 
-This software is free to use: see the LICENSE file for details.
+This program is free to use, subject to the limitations in the LICENSE file.
 
 =cut
