@@ -7059,8 +7059,6 @@ sub validate_sync {
                     }
                     $i++;
                 }
-                ## This is used to bind_param these as binary during inserts and updates
-                push @{$g->{binarycols}}, $colinfo->{$colname}{order};
             }
 
             $srcdbh->do('RESET search_path');
