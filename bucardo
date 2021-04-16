@@ -4069,9 +4069,10 @@ sub add_herd {
     ## May also insert to the bucardo.herdmap and bucardo.goat tables
     ## Arguments: one or more
     ## 1. Name of the herd
-    ## 2+ Names of tables or sequences to add. Can have wildcards
+    ## 2. Name of the source database
+    ## 3+ Names of tables or sequences to add. Can have wildcards
     ## Returns: undef
-    ## Example: bucardo add herd foobar tab1 tab2
+    ## Example: bucardo add herd foobar source_db tab1 tab2
 
     my $doc_section = 'add/add relgroup';
 
@@ -4089,6 +4090,9 @@ sub add_herd {
         $QUIET or print qq{Created relgroup "$herdname"\n};
     }
 
+    ## Set correct source database for herd
+    my $source_database = shift @nouns;
+
     ## Everything else is tables or sequences to add to this herd
 
     ## How many arguments were we given?
@@ -4101,7 +4105,7 @@ sub add_herd {
     }
 
     ## Get the list of all requested tables, adding as needed
-    my $goatlist = get_goat_ids(args => \@nouns, noherd => $herdname);
+    my $goatlist = get_goat_ids(args => \@nouns, dbcols => { db => $source_database }, noherd => $herdname);
 
     ## The final output. Store it up all at once for a single QUIET check
     my $message = '';
@@ -4146,6 +4150,7 @@ sub add_herd {
         for my $tmpgoat (@a) {
             next if exists $doneit->{$tmpgoat->{id}};
             my $db = $tmpgoat->{db};
+            next if $db ne $source_database;
             my $pri = 0;
 
             $count = $sth->execute($herdname,$pri,$name,$db);
