@@ -1,17 +1,10 @@
 TODO list for Bucardo
 =====================
 
-Version 5
+Near-term
 ---------
 
-* Fix 'error loop' escaping bug from mailing list
-  https://github.com/bucardo/bucardo/issues/13
-
-Version 5.1
------------
-
-* Get bucardo-report working again
-  https://github.com/bucardo/bucardo/issues/17
+See GitHub issues: https://github.com/bucardo/bucardo/issues
 
 Future
 ------
@@ -68,11 +61,11 @@ validate_sync check if B is only a target
 - I8n all messages/docs/etc.
 - Allow targets to be hard-linked: nobody goes on until everyone has finished
 - Support large objects
-- Support system tables (Postgres 12.0?)
+- Support system tables
 - Check for superuser on startup, to prevent errors that only show when a KID tries something.
 - Add a flag that allows for table structure checking before each sync
 - Make a Bucardo bundle for CPAN-like fun
-- Readonly slaves: trigger/rule to prevent with good message
+- Readonly targets: trigger/rule to prevent with good message
 - bucardo_help() function to explain all
 - Handle non-orderable data types such as polygons
 - Put this list into a bug tracker
@@ -80,7 +73,7 @@ validate_sync check if B is only a target
 - Log validate_sync changes somewhere, add rollback statements
 - Add support for manual DDL changes
 - Add support for automatic DDL changes
-- Cascading slaves: makedelta should create infrastructure as necessary
+- Cascading targets: makedelta should create infrastructure as necessary
 - Use polling not sleep for loop notifications
 - Remove large src_code sections from the kid output when they die
 - Force to C locale until we get i18n in place
@@ -91,8 +84,8 @@ validate_sync check if B is only a target
 - Mongo: fix escaped data from COPY TO STDOUT
 - Flatfiles: same escaped data as above for non-PG output
 
-- Add readonly slaves:
-  Need to design a system to make slaves optionally "readonly". This will most
+- Add readonly targets:
+  Need to design a system to make targets optionally "readonly". This will most
   likely be accomplished through use of triggers. There should be a simple
   interface to toggle the read-only on and off per database, and perhaps per
   sync. Need to consider making non-tracked tables read-only as well.
