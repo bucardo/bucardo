@@ -12,7 +12,6 @@ Makefile.PL
 MANIFEST
 MANIFEST.SKIP
 META.yml
-patches/Bucardo.4.4.0.fix.search.path.patch.txt
 README
 README.dev
 scripts/bucardo-report
