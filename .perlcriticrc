@@ -12,7 +12,7 @@ profile-strictness = quiet
 
 [-BuiltinFunctions::ProhibitStringyEval]
 [-ControlStructures::ProhibitMutatingListFunctions]
-[-Subroutines::ProhibitNestedSubs] 
+[-Subroutines::ProhibitNestedSubs]
 [-ValuesAndExpressions::ProhibitAccessOfPrivateData]
 [-Subroutines::ProhibitExplicitReturnUndef]
 

@@ -19,7 +19,7 @@ REQUIREMENTS:
     build, test, and install the DBI module        (at least 1.51)
     build, test, and install the DBD::Pg module    (at least 2.0.0)
     build, test, and install the DBIx::Safe module (at least 1.2.4)
-    
+
     You must have at least one database that has PL/pgSQL and PL/Perl installed.
     Target databases may need PL/pgSQL.
 
@@ -61,3 +61,4 @@ the mailing list anyway, so help save time for everyone by posting there directl
 Post, subscribe, and see previous archives here:
 
 https://bucardo.org/mailman/listinfo/bucardo-general
+

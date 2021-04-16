@@ -1,5 +1,5 @@
 These directions are for upgrading an existing Bucardo installation.
-If you encounter any problems, please email the mailing list at 
+If you encounter any problems, please email the mailing list at
 bucardo-general@bucardo.org.
 
 Ideally, upgrading Bucardo takes just five steps:
@@ -21,18 +21,18 @@ make
 make test
 make install
 
-The first three steps should be done as a non-superuser. Thus, the final 
+The first three steps should be done as a non-superuser. Thus, the final
 step should be done on some systems as:
 
 sudo make install
 
-This will replace the existing Bucardo.pm file, the bucardo script, the 
+This will replace the existing Bucardo.pm file, the bucardo script, the
 bucardo.schema file, and the associated man pages.
 
 
 2. Stop Bucardo
 
-Because we may be making schema changes, it is safest to stop Bucardo while 
+Because we may be making schema changes, it is safest to stop Bucardo while
 the upgrade is performed. This can be done by running:
 
 bucardo stop
@@ -40,16 +40,16 @@ bucardo stop
 
 3. Upgrade the Bucardo database
 
-The bucardo script has an 'upgrade' command that connects to the 
-existing Bucardo database and upgrades the schema as needed. 
+The bucardo script has an 'upgrade' command that connects to the
+existing Bucardo database and upgrades the schema as needed.
 
 bucardo upgrade
 
 Note:
 * This must be run on every Bucardo instance you have (most sites only use one)
 
-You should see a summary of any changes made, and then given a chance to 
-accept or reject the changes. You may want to run it again after, to double 
+You should see a summary of any changes made, and then given a chance to
+accept or reject the changes. You may want to run it again after, to double
 check that the upgrade worked and no further changes are needed.
 
 A summary of all changes is stored in the bucardo.upgrade_log table.
@@ -57,10 +57,10 @@ A summary of all changes is stored in the bucardo.upgrade_log table.
 
 4. Re-validate all syncs
 
-Because there may have been schema changes on the remote databases, you may 
-have to run the validate_sync() function against each of your syncs. This command 
-will connect to each remote database and do things like verify that all 
-bucardo-related functions and tables are installed correctly. The easiest way to 
+Because there may have been schema changes on the remote databases, you may
+have to run the validate_sync() function against each of your syncs. This command
+will connect to each remote database and do things like verify that all
+bucardo-related functions and tables are installed correctly. The easiest way to
 do this is by running:
 
 bucardo validate all
@@ -76,6 +76,5 @@ The final step is to restart Bucardo:
 
 bucardo start "Upgrade"
 
-It's probably a good idea to check out the Bucardo log at this point and make 
+It's probably a good idea to check out the Bucardo log at this point and make
 sure everything is working properly.
-

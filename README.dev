@@ -1,7 +1,7 @@
 
 This file is for those interested in developing Bucardo.
 
-It is hoped that it will be a good introduction as well as a continual 
+It is hoped that it will be a good introduction as well as a continual
 reference. Suggestions are always welcome.
 
 Sections:
@@ -23,14 +23,14 @@ Here is what each file in the distribution does:
 
 * Text files:
 
-Changes - lists changes made to each version. Please be consistent and use 
-  tabs, not spaces, to indent. Try to list who found the bug, and who 
-  fixed it (if not the same person). Put the person who made the actual 
+Changes - lists changes made to each version. Please be consistent and use
+  tabs, not spaces, to indent. Try to list who found the bug, and who
+  fixed it (if not the same person). Put the person who made the actual
   changes in brackets. This file contains a version number.
 
 README.dev - you are reading it.
 
-README - the main file that explains the module, where to get it, and guides 
+README - the main file that explains the module, where to get it, and guides
   people in installing it. This file contain a version number.
 
 TODO - Rough list of ideas on improving Bucardo.
@@ -49,21 +49,21 @@ Makefile.PL - Standard Perl file that creates the Makefile via "perl Makefile.PL
 
 Makefile - Generated automatically by Makefile.PL
 
-META.yml - YAML description file. Updated by hand and contains version 
+META.yml - YAML description file. Updated by hand and contains version
   number in two places.
 
 
 * Distribution files:
 
-MANIFEST - lists which files should be included in the release tarball. 
+MANIFEST - lists which files should be included in the release tarball.
   Used by the "make dist*" set of commands.
 
-MANIFEST.SKIP - files that are known to be safe to exclude from the release 
+MANIFEST.SKIP - files that are known to be safe to exclude from the release
   tarball. Used by the "make dist", "make distcheck" and "make skipcheck" commands.
 
 * Program files:
 
-Bucardo.pm - The main program. This is the core of Bucardo - everything else supports 
+Bucardo.pm - The main program. This is the core of Bucardo - everything else supports
   this file. Contains a version number in two places.
 
 bucardo - The main command-line interface to Bucardo. Contains a version number.
@@ -130,14 +130,14 @@ t/50-star.t - Test of star replication scheme
 
 t/98-cleanup.t - Shuts down test databases. Called by "make distclean"
 
-t/99-perlcritic.t - Uses Perl::Critic to check Bucardo.pm, bucardo, and all the 
-  test files (including itself). Requires that TEST_CRITIC is set. It is recommended 
+t/99-perlcritic.t - Uses Perl::Critic to check Bucardo.pm, bucardo, and all the
+  test files (including itself). Requires that TEST_CRITIC is set. It is recommended
   that you get all the Perl::Critic policies via Bundle::Perl::Critic::IncludingOptionalDependencies.
 
-t/99-pod.t - Verifies the POD of Pg.pm. Requires Test::POD version 0.95, and 
+t/99-pod.t - Verifies the POD of Pg.pm. Requires Test::POD version 0.95, and
   Test::Pod::Coverage 1.04.
 
-t/99-signature.t - Uses Module::Signature to verify SIGNATURE file. All tests are skipped 
+t/99-signature.t - Uses Module::Signature to verify SIGNATURE file. All tests are skipped
   if the environment variable TEST_SIGNATURE is not set.
 
 t/99-spellcheck.t - Spell checks all files and comments
@@ -150,9 +150,9 @@ t/99-yaml.t - Uses Test::YAML::Meta to verify the META.yml file.
 == Editing ==
 =============
 
-All the Perl files should have a cperl pragma at the top of the file, for easy use in emacs. 
+All the Perl files should have a cperl pragma at the top of the file, for easy use in emacs.
 Please use tabs and not spaces everywhere, and keep the indenting to the cperl standard.
-When in doubt, use the guidelines from the Perl Best Practices book, with the following 
+When in doubt, use the guidelines from the Perl Best Practices book, with the following
 exceptions:
 
 * Use tabs, not spaces. When using spaces, make them 4 characters wide.
@@ -161,35 +161,35 @@ exceptions:
 == Test Files ==
 ================
 
-The test files are an important part of the module. Much work has gone into making 
-the tests as complete, thorough, and clean as possible. Please try to follow these 
+The test files are an important part of the module. Much work has gone into making
+the tests as complete, thorough, and clean as possible. Please try to follow these
 guidelines when developing:
 
-* Whenever you add a new feature, no matter how minor, add a test. Better yet, add 
-many tests to make sure that it not only works correctly, but that it breaks when 
-it is supposed to (e.g. when it is fed the wrong output). Try to conceive of every 
+* Whenever you add a new feature, no matter how minor, add a test. Better yet, add
+many tests to make sure that it not only works correctly, but that it breaks when
+it is supposed to (e.g. when it is fed the wrong output). Try to conceive of every
 possible way your feature will be used and misused.
 
-* If someone files a bug report that is not revealed by a test, please add one in, 
+* If someone files a bug report that is not revealed by a test, please add one in,
 no matter how simple the fix maybe, or how stupid the bug is.
 
-* Don't create a new test file unless necessary - use the existing ones whenever possible. 
+* Don't create a new test file unless necessary - use the existing ones whenever possible.
 
-* If you do create a new test, keep the name short, start it with a number and a dash, 
+* If you do create a new test, keep the name short, start it with a number and a dash,
 and use an existing test as a template.
 
-* Tests should be as "standalone" as possible. Most will use BucardoTesting.pm to 
+* Tests should be as "standalone" as possible. Most will use BucardoTesting.pm to
 automate setting up and tearing down supporting test infrastructure.
 
-* Don't call DBI->connect inside of your tests, but use connect_database() from the 
-dbdpg_test_setup.pl file instead. If you don't want it to blow away and recreate the 
+* Don't call DBI->connect inside of your tests, but use connect_database() from the
+dbdpg_test_setup.pl file instead. If you don't want it to blow away and recreate the
 current test table and other objects, use connect_database({nosetup => 1}).
 
-* Use the standard format for tests, and always provide an appropriate output text. 
+* Use the standard format for tests, and always provide an appropriate output text.
 Abbreviations are encouraged, but be consistent throughout the file.
 
-* Make sure to test on different versions of PostgreSQL, DBI, and Perl. Use the SKIP 
-tag with an appropriate message if a test does not work on a particular version of 
+* Make sure to test on different versions of PostgreSQL, DBI, and Perl. Use the SKIP
+tag with an appropriate message if a test does not work on a particular version of
 something.
 
 * To run a single test, use: prove --blib . -v t/testname.t
@@ -199,10 +199,10 @@ something.
 == Version Numbers ==
 =====================
 
-Version numbers follow the Postgres convention: major, minor, and revision. 
-The major number should very, very rarely change, and is saved for the truly major changes 
-(e.g. those that may cause backwards compatibility problems). The minor revision is used to 
-indicate a change in functionality, new features, etc. The revision number is used for small 
+Version numbers follow the Postgres convention: major, minor, and revision.
+The major number should very, very rarely change, and is saved for the truly major changes
+(e.g. those that may cause backwards compatibility problems). The minor revision is used to
+indicate a change in functionality, new features, etc. The revision number is used for small
 tweaks and bug fixes, and must be completely compatible with the version before it.
 
 Version numbers are currently set in nine files:
@@ -222,7 +222,7 @@ META.yml (three places)
 == New Files ==
 ===============
 
-If you are adding a new file to the distribution (and this should be a rare event), 
+If you are adding a new file to the distribution (and this should be a rare event),
 please check that you have done the following items:
 
 * Added it to via 'git add filename' and 'git commit'
@@ -240,8 +240,8 @@ please check that you have done the following items:
 == Making a New Release ==
 ==========================
 
-This is a comprehensive checklist of all the steps required to release a 
-new version, whether beta or regular. It is assumed you are very familiar with the 
+This is a comprehensive checklist of all the steps required to release a
+new version, whether beta or regular. It is assumed you are very familiar with the
 other sections referenced herein.
 
 * Test on variety of versions of Postgres
@@ -257,8 +257,8 @@ other sections referenced herein.
 ===================================================
 WARNING!!
 
-THIS IS A TEST VERSION (1.9.1_2) AND SHOULD BE USED 
-FOR TESTING PURPOSES ONLY. PLEASE USE A STABLE 
+THIS IS A TEST VERSION (1.9.1_2) AND SHOULD BE USED
+FOR TESTING PURPOSES ONLY. PLEASE USE A STABLE
 VERSION (no underscore) BY VISITING:
 
 https://bucardo.org
@@ -273,31 +273,31 @@ The best way to do this (other than doing it as you go along) is to check the gi
 * Update the documentation
 
 Make sure that anything new has been documented properly, usually as pod inside of Bucardo.pm
-A good way to do this is to use the tests in 99-pod.t - they will run automatically as 
+A good way to do this is to use the tests in 99-pod.t - they will run automatically as
 part of the test suite if the right modules are installed.
 
 * Make sure the wiki is updated as well.
 
 * Run "perl Makefile.PL"
 
-* Run "make html". This will create the html docs for Bucardo.pm and bucardo. Make sure you 
+* Run "make html". This will create the html docs for Bucardo.pm and bucardo. Make sure you
 git commit them if anything has changed.
 
 * Run "make dist". Double check that the tarball created has the correct version name.
 
-* Run "make distcheck". This will show you a list of all files that are in the current directory 
-but not inside the MANIFEST file (or the MANIFEST.SKIP file). If there are any new files here 
-that should be part of the distribution, add them to the MANIFEST file, commit your changes, 
-and then re-run. Note that files ending in ".tmp" are currently skipped, so this is a good 
+* Run "make distcheck". This will show you a list of all files that are in the current directory
+but not inside the MANIFEST file (or the MANIFEST.SKIP file). If there are any new files here
+that should be part of the distribution, add them to the MANIFEST file, commit your changes,
+and then re-run. Note that files ending in ".tmp" are currently skipped, so this is a good
 extension for any miscellaneous files you have that use often.
 
-* Run "make skipcheck". This will show you a list of files that will not be packed into the 
+* Run "make skipcheck". This will show you a list of files that will not be packed into the
 release tarball. Make sure there is nothing important here.
 
 * Run "make disttest". This unpacks the tarball, then runs "make" and "make test" on it.
 You may also want to remove the directory it creates later by using "make realclean"
 
-* Update the SIGNATURE file with Module::Signature. This should be done as the 
+* Update the SIGNATURE file with Module::Signature. This should be done as the
 very last step. Running "make signature" will do the signing for you.
 
 * Create a tag for the new version with "git tag".
@@ -329,7 +329,7 @@ https://wiki.postgresql.org/wiki/Bucardo (may be other pages too)
 
 * PostgreSQL weekly news summary
 
-The maintainers of the weekly news are usually pretty good about catching the update 
+The maintainers of the weekly news are usually pretty good about catching the update
 and adding it in. If not, bug them.
 
 https://postgresweekly.com/
@@ -351,17 +351,17 @@ Update the latest_release.txt file
 == Tips and Tricks ==
 =====================
 
-Also known as, the section to put things that don't fit anywhere else. Anything 
+Also known as, the section to put things that don't fit anywhere else. Anything
 that may make life easier for other developers can go here.
 
-To test different versions of Bucardo, set two environment variables 
+To test different versions of Bucardo, set two environment variables
 before running the tests:
 
-PGBINDIR: Should be a directory holding Postgres binaries for the version you want, 
+PGBINDIR: Should be a directory holding Postgres binaries for the version you want,
 especially initdb and pg_config.
 
-LD_LIBRARY_PATH: Should point to the "lib" directory of the Postgres version you 
-want. May not be needed if the currently installed version is close enough 
+LD_LIBRARY_PATH: Should point to the "lib" directory of the Postgres version you
+want. May not be needed if the currently installed version is close enough
 to the one you want to test.
 
 Example:
@@ -370,4 +370,3 @@ make clean
 export PGBINDIR=/home/greg/code/pg/8.0.26/bin/
 export LD_LIBRARY_PATH=/home/greg/code/pg/8.0.26/lib/
 prove --blib . t/20-postgres.t
-

@@ -1247,7 +1247,7 @@ Development happens using Git. See: https://github.com/bucardo/bucardo
 =head1 BUGS AND LIMITATIONS
 
 Slony paths aren't all captured, so --slonik output might need some tweaking to
-work correctly 
+work correctly
 
 Please report any problems to josh@endpoint.com.
 
@@ -1282,3 +1282,4 @@ IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
 OF SUCH DAMAGE.
 
 =cut
+

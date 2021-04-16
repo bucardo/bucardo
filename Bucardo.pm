@@ -10020,7 +10020,7 @@ sub push_rows {
                                 $object->{$key} = DateTime->from_epoch(epoch => str2time($object->{$key}));
                             }
                         }
-                        $self->{oldmongo} ? 
+                        $self->{oldmongo} ?
                             $Target->{collection}->insert($object, { safe => 1 }) :
                                 $Target->{collection}->insert_one($object, { safe => 1 });
                     }

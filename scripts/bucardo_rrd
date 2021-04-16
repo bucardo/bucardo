@@ -9,7 +9,7 @@ use strict;
 use warnings;
 use DBI;
 
-our $VERSION = '1.0.1'; 
+our $VERSION = '1.0.1';
 
 my $DBUSER = 'bucardo_readonly';
 my $DBOPT = {AutoCommit=>0,RaiseError=>1,PrintError=>0};
@@ -141,28 +141,28 @@ DB:bucardo
 SELECT coalesce(qi,0)+coalesce(fi,0) AS swap_inserts,
        coalesce(qd,0)+coalesce(fd,0) AS swap_deletes,
        coalesce(qu,0)+coalesce(fu,0) AS swap_updates
-FROM 
+FROM
   (SELECT sum(inserts) AS qi, sum(updates) AS qu, sum(deletes) AS qd FROM bucardo.q
    WHERE cdate >= 'ARG{TS}' AND synctype = 'swap') AS a,
-  (SELECT sum(inserts) AS fi, sum(updates) AS fu, sum(deletes) AS fd FROM freezer.master_q 
+  (SELECT sum(inserts) AS fi, sum(updates) AS fu, sum(deletes) AS fd FROM freezer.master_q
    WHERE cdate >= 'ARG{TS}' AND synctype = 'swap') AS b;
 
 ## Number of fullcopy rows (always inserts) in last 5 minutes
 DB:bucardo
 SELECT coalesce(x,0)+coalesce(y,0) AS fullcopy_rows
-FROM 
+FROM
   (SELECT sum(inserts) AS x FROM bucardo.q
    WHERE cdate >= 'ARG{TS}' AND synctype = 'fullcopy') AS a,
-  (SELECT sum(inserts) AS y FROM freezer.master_q 
+  (SELECT sum(inserts) AS y FROM freezer.master_q
    WHERE cdate >= 'ARG{TS}' AND synctype = 'fullcopy') AS b;
 
 ## Number of pushdelta rows (always inserts) in last 5 minutes
 DB:bucardo
 SELECT coalesce(x,0)+coalesce(y,0) AS pushdelta_rows
-FROM 
+FROM
   (SELECT sum(inserts) AS x FROM bucardo.q
    WHERE cdate >= 'ARG{TS}' AND synctype = 'pushdelta') AS a,
-  (SELECT sum(inserts) AS y FROM freezer.master_q 
+  (SELECT sum(inserts) AS y FROM freezer.master_q
    WHERE cdate >= 'ARG{TS}' AND synctype = 'pushdelta') AS b;
 
 ## Number of swap syncs run in the last 5 minutes

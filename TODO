@@ -27,13 +27,13 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Allow bucardo add table ... --relgroup=foo to work, or at least throw an error.
 - Remove the need for PL/Perl entirely: put all logic into the bucardo executable
 - Allow a new type of trigger that only indicates if a table has changed or not.
-  Rather than storing a PK, we only note "changed". This would allow fullcopy tables 
+  Rather than storing a PK, we only note "changed". This would allow fullcopy tables
   inside of a sync to run or just get skipped.
 - Make the listen/notify system cleaner, maybe break into mcp/ctl/kid streams rather than generic 'bucardo'
 - Create a new "sourceonly" type what can issue deltas but not receive them
 - Make sure pkonly and makedelta=xx work everywhere, e.g. add/update relation/relgroup
 - Allow syncs to be grouped together to allow for a single kicksync notification
-- Allow columns A.varchar(x) and B.varchar(x+y) to be equivalent in the initial 
+- Allow columns A.varchar(x) and B.varchar(x+y) to be equivalent in the initial
 validate_sync check if B is only a target
 - Allow skipping of some or all of the initial schema checks; currently
   necessary but time consuming for large numbers of tables/servers
@@ -89,3 +89,4 @@ validate_sync check if B is only a target
   likely be accomplished through use of triggers. There should be a simple
   interface to toggle the read-only on and off per database, and perhaps per
   sync. Need to consider making non-tracked tables read-only as well.
+

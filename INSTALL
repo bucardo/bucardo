@@ -9,7 +9,7 @@ Please visit:
 
 https://bucardo.org/wiki/Bucardo
 
-It is recommended that you create a 'bucardo' user on your system 
+It is recommended that you create a 'bucardo' user on your system
 that will be responsible for running Bucardo.
 
 Install Bucardo like any other Perl module:
@@ -24,35 +24,34 @@ The last step must be done as root. You may be able to do this by running:
 sudo make install
 
 Note that 'make test' is a rather long and involved process.
-However, because Bucardo is fairly complex, testing is highly 
+However, because Bucardo is fairly complex, testing is highly
 recommended before installing.
 
-If you are using a MongoDB target, you will also need to install the 'boolean' 
+If you are using a MongoDB target, you will also need to install the 'boolean'
 Perl module.
 
-Once the above has been run, you will need to create a Bucardo database. 
+Once the above has been run, you will need to create a Bucardo database.
 This can be done by running:
 
 bucardo install
 
-There should be no errors: if there are, please report them to 
+There should be no errors: if there are, please report them to
 bucardo-general@bucardo.org or ask on IRC for help.
 
 IRC: #bucardo irc.freenode.net
 
-Bucardo by default logs to syslog, and does so very verbosely. It is 
-recommended that you reroute your bucardo syslog traffic to another file. 
+Bucardo by default logs to syslog, and does so very verbosely. It is
+recommended that you reroute your bucardo syslog traffic to another file.
 This can be done by adding this line to your /etc/syslog.conf file:
 
 local1.*      -/var/log/bucardo.log
 
-Of course, if "local1" is already being used for something else, you will 
-need to change it - see the "syslog_facility" entry in the bucardo_config 
+Of course, if "local1" is already being used for something else, you will
+need to change it - see the "syslog_facility" entry in the bucardo_config
 table.
 
-Once this is done, make sure you restart your syslog daemon so it rereads the 
+Once this is done, make sure you restart your syslog daemon so it rereads the
 new configuration file.
 
-Please see the documentation at https://bucardo.org for information on how to 
+Please see the documentation at https://bucardo.org for information on how to
 start using Bucardo once it is installed.
-
