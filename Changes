@@ -1,5 +1,8 @@
 Bucardo version 5.7.0, not yet released
 
+  - Add runuser option
+    [Jon Jensen]
+
   - Add foreground flag
     [Chris Barbour]
 

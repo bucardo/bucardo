@@ -25,6 +25,8 @@ use POSIX           qw/ ceil setsid localeconv /;
 use Config          qw/ %Config /;
 use Encode          qw/ decode /;
 use File::Spec;
+use Cwd;
+use User::pwent     qw/ /;
 use Data::Dumper    qw/ Dumper /;
 $Data::Dumper::Indent = 1;
 use Getopt::Long;
@@ -98,6 +100,7 @@ GetOptions(
     $bcargs,
     'no-bucardorc',
     'bucardorc=s',
+    'runuser=s',
 );
 
 ## Values are first read from a .bucardorc, either in the current dir, or the home dir.
@@ -110,7 +113,22 @@ if (! $bcargs->{'no-bucardorc'}) {
         $file = $bcargs->{bucardorc};
     }
     elsif (-e '.bucardorc') {
-        $file = '.bucardorc';
+        if ($> == 0) {
+            my @stat = stat('.bucardorc');
+            if (!@stat) {
+                warn qq{Running as root, so ignoring .bucardorc in current directory due to stat error\n};
+            }
+            elsif ($stat[4] == 0 and $stat[5] == 0) {
+                $file = '.bucardorc';
+            }
+            else {
+                my $cwd = getcwd();
+                warn qq{Running as root, so ignoring .bucardorc not owned by root:root in current directory; change ownership or use --bucardorc=$cwd/.bucardorc\n};
+            }
+        }
+        else {
+            $file = '.bucardorc';
+        }
     }
     elsif (defined $ENV{HOME} && -e "$ENV{HOME}/.bucardorc") {
         $file = "$ENV{HOME}/.bucardorc";
@@ -139,6 +157,43 @@ if (defined $file) {
     close $rc or die;
 }
 
+if (defined($bcargs->{runuser}) and length($bcargs->{runuser})) {
+    my $user = $bcargs->{runuser};
+
+    die "The runuser option requires a user name, not numeric uid; aborting\n"
+        if $user !~ /\D/;
+
+    my $pw = User::pwent::getpwnam($user);
+    die qq{Unknown user "$user" in runuser option; aborting\n} if !$pw;
+
+    my $orig_uid = $>;
+    my $orig_gid = POSIX::getgid();
+    my $some_id_changed;
+
+    my $want_gid = $pw->gid;
+    my $new_gid;
+    die "The runuser option led to gid 0; aborting\n" if !$want_gid;
+    if ($want_gid != $orig_gid) {
+        POSIX::setgid($want_gid);
+        $new_gid = POSIX::getgid();
+        die "Unable to change running group for runuser option; aborting\n"
+            if $new_gid != $want_gid;
+        $some_id_changed = 1;
+    }
+
+    my $want_uid = $pw->uid;
+    die "The runuser option led to uid 0; aborting\n" if !$want_uid;
+    if ($want_uid != $orig_uid) {
+        POSIX::setuid($want_uid);
+        die "Unable to change running group for runuser option; aborting\n"
+            if $< != $want_uid;
+        $some_id_changed = 1;
+    }
+
+    print qq{Running as user "$user" (uid $<, gid $new_gid)\n\n}
+        if $some_id_changed;
+}
+
 Getopt::Long::Configure(qw(no_pass_through autoabbrev));
 GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
     ($bcargs,
@@ -163,6 +218,7 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'confirm',
      'tsep=s',
      'exit-on-nosync!',
+     'runuser=s',
 
      ## These are sent to the constructor:
      'dbport|db-port|p=i',
@@ -10346,16 +10402,21 @@ F<log.bucardo>. A dot is added before the name as well, so a log extension of
 
 Forces removal of all old log files before running.
 
-=item C<--foreground>
-
-Run Bucardo in the foreground; do not daemonize. Useful for running Bucardo
-inside a container or from systemd.
-
 =item C<--debug>
 
 =item C<--no-debug>
 
 Enable or disable debugging output. Disabled by default.
+
+=item C<--foreground>
+
+Run Bucardo in the foreground; do not daemonize. Useful for running Bucardo
+inside a container or from systemd.
+
+=item C<--runuser>
+
+Name of a local operating system user that Bucardo should run as if started as
+another user. This typically only is useful when invoking C<bucardo> as root.
 
 =item C<--exit-on-nosync>
 
