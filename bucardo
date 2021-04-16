@@ -80,7 +80,6 @@ my $bcargs = {
               quiet        => 0,
               verbose      => 0,
               quickstart   => 0,
-              bcverbose    => 1,
               dbname       => 'bucardo',
               dbuser       => 'bucardo',
               dbpass       => undef,
@@ -166,7 +165,6 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'exit-on-nosync!',
 
      ## These are sent to the constructor:
-     'bcverbose',
      'dbport|db-port|p=i',
      'dbhost|db-host|h=s',
      'dbname|db-name|d=s',
