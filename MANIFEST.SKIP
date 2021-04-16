@@ -36,3 +36,4 @@ dist/
 boxA
 boxB
 Vagrantfile
+pid/*
