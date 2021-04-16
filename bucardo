@@ -9182,7 +9182,7 @@ sub install {
     $QUIET or print "Installation is now complete.\n";
     ## A little less verbose if in batch mode
     if (! $bcargs->{batch}) {
-        print "If you see errors or need help, please email bucardo-general\@bucardo.org\n\n";
+        print "If you see errors or need help, please see https://bucardo.org/Bucardo/\n\n";
 
         print "You may want to check over the configuration variables next, by running:\n";
         print "$progname show all\n";
