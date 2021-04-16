@@ -10533,7 +10533,9 @@ this distribution. See also the documentation for the bucardo program.
 
 =item * Sys::Syslog
 
-=item * DBIx::Safe ## Try 'yum install perl-DBIx-Safe' or visit bucardo.org
+=item * DBIx::Safe
+
+=item * Pod::Parser (for C<bucardo help [subcommand]>)
 
 =item * boolean (only if using MongoDB)
 
