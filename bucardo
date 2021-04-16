@@ -5408,10 +5408,10 @@ sub clone {
     usage_exit($doc_section) unless @nouns;
 
     ## Examples:
-    ## ./bucardo clone dbs=A:source,B,C relgroup=foo
-    ## ./bucardo clone sync=foobar
-    ## ./bucardo clone sync=foobar prime=A
-    ## ./bucardo clone dbs=A,B,C,D relgroup=foo notruncate=B,C
+    ## bucardo clone dbs=A:source,B,C relgroup=foo
+    ## bucardo clone sync=foobar
+    ## bucardo clone sync=foobar prime=A
+    ## bucardo clone dbs=A,B,C,D relgroup=foo notruncate=B,C
 
     ## Optional sync to associate with:
     my $sync;

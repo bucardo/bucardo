@@ -975,7 +975,7 @@ sub make_bucardo_init {
             name => $name,
             conninfo => $conninfo,
         };
-        print "./bucardo add db $name dbname=$dbname $conn\n";
+        print "bucardo add db $name dbname=$dbname $conn\n";
     }
 
     for my $set (@{ get_ordered_subscribes($info->{sub}, $info->{set}, $info->{node}) }) {
@@ -988,20 +988,20 @@ sub make_bucardo_init {
                 map {
                     my $name = $info->{table}{$_}{FQN};
                     if ($info->{table}{$_}{set} == $set_num) {
-                        print "./bucardo add table $name db=$db autokick=true conflict_strategy=source herd=$herd\n";
+                        print "bucardo add table $name db=$db autokick=true conflict_strategy=source herd=$herd\n";
                     }
                 } keys %{$info->{table}};
                 map {
                     my $name = $info->{sequence}{$_}{FQN};
                     if ($info->{sequence}{$_}{set} == $set_num) {
-                        print "./bucardo add sequence $name db=$db autokick=true conflict_strategy=source herd=$herd\n";
+                        print "bucardo add sequence $name db=$db autokick=true conflict_strategy=source herd=$herd\n";
                     }
                 } keys %{$info->{sequence}};
                 for my $child (@{$node->{children}}) {
                     my $targetdbname = $cluster_name . '_' . $child;
                     my $syncname = $cluster_name . '_set' . $set_num . '_node' . $node->{num} . '_to_node' . $child;
                     my $childnode = $set->{$child};
-                    print "./bucardo add sync $syncname source=$herd targetdb=$targetdbname type=pushdelta";
+                    print "bucardo add sync $syncname source=$herd targetdb=$targetdbname type=pushdelta";
                     print " target_makedelta=on"
                         if (exists $childnode->{children} and $#{$childnode->{children}} > -1);
                     print "\n";
