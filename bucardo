@@ -871,8 +871,9 @@ sub start {
 
     ## Check if we should daemonize
     if ($bcargs->{'foreground'}) {
-	$bc->start_mcp( \@opts );
-    } else {
+        $bc->start_mcp( \@opts );
+    }
+    else {
         ## Fork and setsid to disassociate ourselves from the daemon
         if (fork) {
             ## We are the kid, do nothing
@@ -10349,7 +10350,7 @@ Forces removal of all old log files before running.
 
 =item C<--foreground>
 
-Run bucardo in the foreground; do not daemonize. Useful for running bucardo
+Run Bucardo in the foreground; do not daemonize. Useful for running Bucardo
 inside a container or from systemd.
 
 =item C<--debug>

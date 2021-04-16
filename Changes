@@ -1,5 +1,8 @@
 Bucardo version 5.7.0, not yet released
 
+  - Add foreground flag
+    [Chris Barbour]
+
   - Remove support for long-abandoned Drizzle database
     [Jon Jensen]
 
@@ -98,9 +101,6 @@ Bucardo version 5.5.0, released November 5, 2018
 
   - Fix bug in fork/cleanup code that may prevent a killed CTL from restarting.
     [Greg Sabino Mullane]
-
-  - Add foreground flag
-    [Chris Barbour]
 
   - Fix bug in onetimecopy=2 mode
     [Greg Sabino Mullane]
