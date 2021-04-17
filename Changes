@@ -1,5 +1,8 @@
 Bucardo version 5.7.0, not yet released
 
+  - Add support for replicating large objects (lo) in swap syncs
+    [Jon Jensen]
+
   - Add runuser option
     [Jon Jensen]
 
