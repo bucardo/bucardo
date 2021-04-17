@@ -1,60 +1,82 @@
-%define         realname Bucardo
-%define         sysuser postgres
-Name:           bucardo
-Version:        5.7.0
-Release:        1%{?dist}
-Summary:        Postgres replication system for both multi-master and multi-slave operations
+%define realname Bucardo
+%define sysuser bucardo
+%define sysgroup %sysuser
+%define servicename %{name}.service
 
-Group:          Applications/Databases
-License:        BSD
-URL:            https://bucardo.org/
-Source0:        https://bucardo.org/downloads/Bucardo-%{version}.tar.gz
-BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
+Name:      bucardo
+Version:   5.7.0
+Release:   1%{?dist}
+Summary:   PostgreSQL replication system for multi-master and multi-replica operations
 
-Source2: bucardo.init
-Patch0:  bucardo-logfiles.patch
+Group:     Applications/Databases
+License:   BSD
+URL:       https://bucardo.org/
+Source0:   https://bucardo.org/downloads/Bucardo-%{version}.tar.gz
+BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
-BuildArch:     noarch
+Source1:   bucardo.service
+Source2:   bucardorc
+Patch0:    bucardo-logfiles.patch
 
-BuildRequires:  perl(ExtUtils::MakeMaker)
-BuildRequires:  perl(DBI)
-BuildRequires:  perl(DBD::Pg)
-BuildRequires:  perl(IO::Handle)
-BuildRequires:  perl(Sys::Hostname)
-BuildRequires:  perl(Sys::Syslog)
-BuildRequires:  perl(Net::SMTP)
-BuildRequires:  perl(List::Util)
-BuildRequires:  perl(Pod::Usage)
-BuildRequires:  perl(DBIx::Safe)
-BuildRequires:  perl(boolean)
+BuildArch: noarch
 
-Requires:  postgresql
-Requires:  perl(ExtUtils::MakeMaker)
-Requires:  perl(DBI)
-Requires:  perl(DBD::Pg)
-Requires:  perl(DBIx::Safe)
-Requires:  perl(IO::Handle)
-Requires:  perl(Sys::Hostname)
-Requires:  perl(Sys::Syslog)
-Requires:  perl(Net::SMTP)
-Requires:  perl(List::Util)
-Requires:  perl(Pod::Usage)
-Requires:  perl(boolean)
+%systemd_requires
 
-#testsuite
-Requires:  perl(Test::Simple)
-Requires:  perl(Test::Harness)
+BuildRequires: make
+BuildRequires: perl(base)
+BuildRequires: perl(Cwd)
+BuildRequires: perl(Exporter)
+BuildRequires: perl(ExtUtils::MakeMaker) >= 6.68
+BuildRequires: perl-generators
+BuildRequires: perl(lib)
+BuildRequires: perl(Test::Harness)
+BuildRequires: perl(Test::More)
+
+Requires(pre): shadow-utils
+
+Requires: perl(:MODULE_COMPAT_%(eval "$(perl -V:version)"; echo $version))
+Requires: perl(base)
+Requires: perl(boolean)
+Requires: perl(DBD::Pg)
+Requires: perl(DBI)
+Requires: perl(DBIx::Safe)
+Requires: perl(IO::Handle)
+Requires: perl(List::Util)
+Requires: perl(Net::SMTP)
+Requires: perl(open)
+Requires: perl(Pod::PlainText)
+Requires: perl(Pod::Usage)
+Requires: perl(Sys::Hostname)
+Requires: perl(Sys::Syslog)
+Requires: postgresql-libs
+
+# These aren't required to be on the same server as Bucardo, but most will want them
+%if 0%{?fedora} || 0%{?rhel} > 7
+Recommends: postgresql
+Recommends: postgresql-plperl
+%else
+Requires: postgresql
+Requires: postgresql-plperl
+%endif
+
+# Optional and less commonly used, so disable because they would be installed
+# by default unless using `dnf --setopt=install_weak_deps=False`
+#Recommends: perl(DBD::mysql)
+#Recommends: perl(DBD::SQLite)
+#Recommends: perl(MongoDB)
+#Recommends: perl(Redis)
 
 %description
-Bucardo is an asynchronous PostgreSQL replication system, allowing for both
-multi-master and multi-slave operations. It was developed at Backcountry.com
+Bucardo is an asynchronous PostgreSQL replication system, allowing for
+multi-master and multi-replica operations. It was developed at Backcountry.com
 primarily by Greg Sabino Mullane of End Point Corporation.
 
 %pre
-mkdir -p /var/run/bucardo
+getent group %sysgroup >/dev/null || groupadd -r %sysgroup
+getent passwd %sysuser >/dev/null || useradd -r -g %sysgroup -d /var/lib/bucardo -m -k /dev/null -s /sbin/nologin -c "Bucardo replication" %sysuser
 mkdir -p /var/log/bucardo
-chown -R %{sysuser}:%{sysuser} /var/run/bucardo
-chown -R %{sysuser}:%{sysuser} /var/log/bucardo
+chown -R %{sysuser}:%{sysgroup} /var/log/bucardo
+chmod o= /var/log/bucardo
 
 %prep
 %setup -q -n %{realname}-%{version}
@@ -62,7 +84,7 @@ chown -R %{sysuser}:%{sysuser} /var/log/bucardo
 
 %build
 
-%{__perl} Makefile.PL INSTALLDIRS=vendor
+%{__perl} Makefile.PL INSTALLDIRS=vendor NO_PACKLIST=1
 
 make %{?_smp_mflags}
 
@@ -72,16 +94,17 @@ rm -rf %{buildroot}
 make pure_install PERL_INSTALL_ROOT=%{buildroot}
 
 find %{buildroot} -type f -name .packlist -exec rm -f {} +
-find %{buildroot} -depth -type d -exec rmdir {} 2>/dev/null \;
 
-sed -i -e '1d;2i#!/usr/bin/perl' bucardo
+sed -i -e '1d;2i#!%{__perl}' bucardo
 
 rm -f %{buildroot}/%{_bindir}/bucardo
-install -Dp -m 755 bucardo %{buildroot}/%{_sbindir}/bucardo
+install -Dp -m 755 bucardo %{buildroot}%{_sbindir}/%{name}
 
-# install init script
-install -d %{buildroot}/etc/rc.d/init.d
-install -m 755 %{SOURCE2} %{buildroot}/etc/rc.d/init.d/%{name}
+install -d %{buildroot}/%{_unitdir}
+install -m 755 %{SOURCE1} %{buildroot}%{_unitdir}/%{servicename}
+
+install -d %{buildroot}/%{_sysconfdir}
+install -m 750 %{SOURCE2} %{buildroot}%{_sysconfdir}/bucardorc
 
 %{_fixperms} %{buildroot}
 
@@ -90,18 +113,24 @@ rm -rf %{buildroot}
 
 %files
 %defattr(-,root,root,-)
-%doc bucardo.html Bucardo.pm.html Changes
-%doc INSTALL LICENSE README SIGNATURE TODO
+%license LICENSE
+%doc *.html Changes INSTALL README TODO
+%config %{_sysconfdir}/bucardorc
+%{_unitdir}/%{servicename}
 %{perl_vendorlib}/*
 %{_mandir}/man1/*
 %{_mandir}/man3/*
-%{_sbindir}/bucardo
-%{_datadir}/bucardo/bucardo.schema
-%{_initrddir}/%{name}
+%{_sbindir}/%{name}
+%{_datadir}/%{name}/bucardo.schema
 
 %changelog
-* Thu Apr 8 2021 Jon Jensen <jon@endpoint.com> - 5.7.0-1
+* Fri Apr 16 2021 Jon Jensen <jon@endpoint.com> - 5.7.0-1
 - Update to 5.7.0.
+- Adapt for RHEL 7/8.
+- Use some improvements from Fedora specfile.
+- Replace SysV init script with a new systemd unit file that uses Bucardo's new foreground mode.
+- Leave creating /var/run/bucardo to systemd unit file, since /var/run -> /run is now ephemeral.
+- Create a bucardo user to run under and install /etc/bucardorc config file to use new runuser option by default.
 
 * Tue Jan 19 2021 Jon Jensen <jon@endpoint.com> - 5.6.0-1
 - Remove references to nonexistent master-master-replication-example.txt

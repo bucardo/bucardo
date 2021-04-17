@@ -1,18 +1,26 @@
 This directory contains various distribution configuration files,
-patches, and start scripts.
+patches, and start scripts:
 
 * bucardo.rc
 
-Sample BSD rc file for controlling Bucardo
-
-* bucardo.init
-
-Sample chkconfig-style start script for controlling Bucardo
+Sample BSD rc file for controlling Bucardo.
 
 * bucardo.spec
 
-RPM spec file.
+RPM spec file for RHEL 7/8 and Fedora.
+
+* bucardo.service
+
+systemd unit file for using with systemctl, used by the RPM.
+
+* bucardorc
+
+Sample /etc/bucardorc file installed by the RPM.
 
 * bucardo-logfiles.patch
 
-Patch to set the default directory for log files to /var/log/bucardo.
+Patch to set the default directory for log files to /var/log/bucardo, used by the RPM.
+
+* bucardo.init
+
+Sample SysV chkconfig-style start script for controlling Bucardo on non-systemd Linux distributions.
