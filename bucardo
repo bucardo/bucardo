@@ -10589,7 +10589,15 @@ an authentication failure.
 
 Adds one or more databases to the named dbgroup. If the dbgroup
 doesn't exist, it will be created. The database parameters should specify
-their roles, either "source" or "target".
+their roles, either "source", "target", or "fullcopy".
+
+"fullcopy" role allows entire tables from the "source" to be copied.
+Any rows on the "fullcopy" databases are removed first, and the tables
+are populated using the COPY command.  This mode is useful for tables
+that have no primary key or unique index.  Because it copies the entire
+tables every time, it is not efficient and should not be used for large
+tables.  It is better in most cases to a unique index to the table and
+use the "target" role.
 
 =head3 add table
 
