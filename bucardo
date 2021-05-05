@@ -4070,8 +4070,10 @@ sub add_herd {
     ## Arguments: one or more
     ## 1. Name of the herd
     ## 2+ Names of tables or sequences to add. Can have wildcards
+    ##    To specify a source database, use a "db=xxx" argument
     ## Returns: undef
     ## Example: bucardo add herd foobar tab1 tab2
+    ## Example: bucardo add herd foobar db=source_db tab1 tab2
 
     my $doc_section = 'add/add relgroup';
 
@@ -4089,6 +4091,12 @@ sub add_herd {
         $QUIET or print qq{Created relgroup "$herdname"\n};
     }
 
+    ## Allow for the first arg to specify the source database
+    my $source_database = '';
+    if (@nouns and $nouns[0] =~ s/^db=//) {
+        $source_database = shift @nouns;
+    }
+
     ## Everything else is tables or sequences to add to this herd
 
     ## How many arguments were we given?
@@ -4101,7 +4109,7 @@ sub add_herd {
     }
 
     ## Get the list of all requested tables, adding as needed
-    my $goatlist = get_goat_ids(args => \@nouns, noherd => $herdname);
+    my $goatlist = get_goat_ids(args => \@nouns, dbcols => { db => $source_database }, noherd => $herdname);
 
     ## The final output. Store it up all at once for a single QUIET check
     my $message = '';
@@ -4146,6 +4154,7 @@ sub add_herd {
         for my $tmpgoat (@a) {
             next if exists $doneit->{$tmpgoat->{id}};
             my $db = $tmpgoat->{db};
+            next if $source_database and $db ne $source_database;
             my $pri = 0;
 
             $count = $sth->execute($herdname,$pri,$name,$db);
@@ -5020,7 +5029,7 @@ sub get_goat_ids {
     my %new;
 
     ## Figure out which database to search in, unless already given
-    my $bestdb = (exists $dbcols->{db} and defined $dbcols->{db})
+    my $bestdb = (exists $dbcols->{db} and defined $dbcols->{db} and length $dbcols->{db})
     ? $dbcols->{db} : find_best_db_for_searching();
 
     ## This check still makes sense: if no databases, there should be nothing in $GOAT!
