@@ -366,7 +366,7 @@ BEGIN
 PERFORM herd FROM herdmap h, goat g WHERE h.goat=g.id GROUP BY 1 HAVING COUNT(DISTINCT db) > 1;
 
 IF FOUND THEN
-  RAISE EXCEPTION 'All tables must within a relgroup must be from the same database';
+  RAISE EXCEPTION 'All tables within a relgroup must be from the same database';
 END IF;
 
 RETURN NEW;

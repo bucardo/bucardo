@@ -9025,7 +9025,7 @@ sub install {
             ## Check on the PID directory before going any further
             ## This is the only item that can be easily checked here
             if (! -d $piddir) {
-                print "-->Sorry, that is not a valid PID directory\n";
+                print "-->Sorry, that is not a dddddddddddddddvalid PID directory\n";
                 redo GOOEY;
             }
             last GOOEY;
