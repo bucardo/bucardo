@@ -1,4 +1,13 @@
 
+Bucardo version ??, unreleased
+
+  - Allow "bucardo add herd" to take an optional "db=xx" argument,
+    to force use of a specific source database.
+    [d064289 <mario.schlereth@sap.com> with help from Greg Sabino Mullane]
+    (https://github.com/bucardo/bucardo/pull/229)
+
+
+
 Bucardo version 5.6.0, released February 28, 2020
 
   - Minor PostgreSQL 11/12 tweaks in `bucardo install`
