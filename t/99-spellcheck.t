@@ -437,6 +437,7 @@ Checksum
 DBIx
 Facebook
 IncludingOptionalDependencies
+libera
 LD
 PGP
 PlanetPostgresql
@@ -511,6 +512,7 @@ freenode
 http
 IRC
 irc
+libera
 syslog
 wiki
 

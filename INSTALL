@@ -38,7 +38,7 @@ bucardo install
 There should be no errors: if there are, please report them to 
 bucardo-general@bucardo.org or ask on IRC for help.
 
-IRC: #bucardo irc.freenode.net
+IRC: #bucardo irc.libera.chat
 
 Bucardo by default logs to syslog, and does so very verbosely. It is 
 recommended that you reroute your bucardo syslog traffic to another file. 
