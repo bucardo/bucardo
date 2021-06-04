@@ -86,7 +86,7 @@ fi
 
 ./bucardo add db source_lg dbname=mtest3 --quiet
 ./bucardo add db target_lg dbname=mtest4 --quiet
-./bucardo add table foobar2 relgroup=lgherd db=source_lg 
+./bucardo add table foobar2 relgroup=lgherd db=source_lg
 ./bucardo add dbgroup lggroup source_lg:source target_lg:target
 ./bucardo add sync lg_sync herd=lgherd dbs=lggroup
 
@@ -97,13 +97,13 @@ sleep 2
 ./bucardo activate sync sg_sync
 ./bucardo activate sync lg_sync
 
-./bucardo stop 
+./bucardo stop
 sleep 2
 
 echo Restarting
 ./bucardo start --logdest=.  --no-exit-on-nosync
 sleep 3
-./bucardo stop 
+./bucardo stop
 sleep 2
 
 exit
@@ -193,4 +193,5 @@ psql -At mtest4 -c "select 'D:', * from foobar"
 
 echo Stopping Bucardo
 ./bucardo stop --quiet
+
 

@@ -1,0 +1,28 @@
+# It's not recommended to modify this file in-place, because it will be
+# overwritten during package upgrades. It is recommended to use systemd
+# "dropin" feature; i.e. create file with suffix .conf under
+# /etc/systemd/system/bucardo.service.d directory overriding the
+# unit's defaults. You can also use "systemctl edit bucardo".
+# Look at systemd.unit(5) manual page for more info.
+
+[Unit]
+Description=Bucardo database replication service
+Documentation=man:bucardo(1pm) man:Bucardo(3pm) https://bucardo.org/Bucardo/
+After=network.target syslog.target
+
+[Service]
+User=bucardo
+Group=bucardo
+Type=simple
+StandardError=syslog
+RuntimeDirectory=bucardo
+ExecStart=/usr/sbin/bucardo --foreground start "Starting by systemd unit"
+ExecReload=/usr/sbin/bucardo reload config
+KillMode=mixed
+Restart=on-failure
+RestartSec=30s
+OOMScoreAdjust=-1000
+TimeoutSec=0
+
+[Install]
+WantedBy=multi-user.target

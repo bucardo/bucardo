@@ -1,6 +1,6 @@
 
 -- Schema for the main Bucardo database
--- Version 5.6.0
+-- Version 5.7.0
 
 -- Should be run as a superuser
 -- This should not need to be run directly: use either
@@ -158,8 +158,8 @@ warning_file|bucardo.warning.log|File containing all log lines starting with "Wa
 COPY bucardo.bucardo_config(name,setting,about)
 FROM STDIN
 WITH DELIMITER '|';
-bucardo_initial_version|5.6.0|Bucardo version this schema was created with
-bucardo_version|5.6.0|Current version of Bucardo
+bucardo_initial_version|5.7.0|Bucardo version this schema was created with
+bucardo_version|5.7.0|Current version of Bucardo
 \.
 
 -- Other settings:
@@ -340,7 +340,7 @@ CREATE TABLE bucardo.herd (
 COMMENT ON TABLE bucardo.herd IS $$Named group of tables or sequences from the goat table: used as the 'source' for syncs$$;
 
 --
--- Goats belong to zero or more herds. In most cases, they will 
+-- Goats belong to zero or more herds. In most cases, they will
 -- belong to a single herd if they are being replicated.
 --
 CREATE TABLE bucardo.herdmap (
@@ -454,7 +454,7 @@ CREATE TABLE bucardo.customcode (
   getdbh    BOOLEAN     NOT NULL DEFAULT true,
   src_code  TEXT        NOT NULL,
   status    TEXT        NOT NULL DEFAULT 'active',
-  priority  SMALLINT    NOT NULL DEFAULT 0,    
+  priority  SMALLINT    NOT NULL DEFAULT 0,
   cdate     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE bucardo.customcode IS $$Holds Perl subroutines that run via hooks in the replication process$$;
@@ -671,7 +671,6 @@ AS $bc$
 ## Given the name of a db, return the type, plus type-specific connection information
 ## ALL: the string 'DSN', a colon, and the value of the dbdsn field, if set
 ## Postgres: a connection string, username, password, and attribs
-## Drizzle: a connection string, username, and password
 ## Firebird: a connection string, username, and password
 ## Mongo: "foo: bar" style connection information, one per line
 ## MariaDB: a connection string, username, and password
@@ -754,21 +753,6 @@ if ($dbtype eq 'postgres') {
     return "$dbtype\n$connstring\n$db{user}\n$db{pass}\n$ssp";
 
 } ## end postgres
-
-if ($dbtype eq 'drizzle') {
-
-    length $db{name} or elog(ERROR, qq{Database name is mandatory\n});
-    length $db{user} or elog(ERROR, qq{Database username is mandatory\n});
-
-    my $connstring = "dbi:drizzle:database=$db{name}";
-    $db{host} ||= ''; $db{port} ||= ''; $db{pass} ||= '';
-    length $db{host} and $connstring .= ";host=$db{host}";
-    length $db{port} and $connstring .= ";port=$db{port}";
-    length $db{conn} and $connstring .= ";$db{conn}";
-
-    return "$dbtype\n$connstring\n$db{user}\n$db{pass}";
-
-} ## end drizzle
 
 if ($dbtype eq 'mongo') {
    my $connstring = "$dbtype\n";
@@ -863,7 +847,7 @@ SECURITY DEFINER
 AS
 $bc$
 
-## Given the name of a db connection, construct the connection 
+## Given the name of a db connection, construct the connection
 ## string for it and then connect to it and log the attempt
 
 use strict; use warnings; use DBI;
@@ -1195,7 +1179,7 @@ if (!$rv->{processed}) {
 
 ## Grab information on all members of this herd
 $SQL = qq{
-        SELECT id, db, schemaname, tablename, pkey, pkeytype, reltype, 
+        SELECT id, db, schemaname, tablename, pkey, pkeytype, reltype,
                autokick AS goatkick,
                pg_catalog.quote_ident(db)         AS safedb,
                pg_catalog.quote_ident(schemaname) AS safeschema,
@@ -1322,7 +1306,7 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
     next if $db{$dbname}{dbtype} =~ /flat/;
 
     ## Skip if this is a non-supported database
-    next if $db{$dbname}{dbtype} =~ /drizzle|mariadb|mongo|mysql|oracle|redis|sqlite|firebird/;
+    next if $db{$dbname}{dbtype} =~ /mariadb|mongo|mysql|oracle|redis|sqlite|firebird/;
 
     ## Figure out how to connect to this database
     my $rv = spi_exec_query("SELECT bucardo.db_getconn('$dbname') AS conn");
@@ -1398,7 +1382,7 @@ for my $dbname (sort { ($db{$b}{role} eq 'source') <=> ($db{$a}{role} eq 'source
     $sth = $dbh->prepare(q{SELECT count(*) FROM pg_class WHERE relkind IN ('r','S')});
     $sth->execute();
     my $relation_count = $sth->fetchall_arrayref()->[0][0];
- 
+
     ## Get a list of all functions in the bucardo schema
     $SQL = q{SELECT p.oid,proname FROM pg_proc p JOIN pg_namespace n ON (n.oid=p.pronamespace) WHERE nspname='bucardo'};
     $sth = $dbh->prepare($SQL);
@@ -1508,7 +1492,7 @@ DECLARE
 BEGIN
   FOR myrec IN
     SELECT * FROM bucardo.bucardo_delta_names
-      WHERE sync = $1 
+      WHERE sync = $1
       ORDER BY tablename
   LOOP
 
@@ -1613,8 +1597,8 @@ BEGIN
     rnames = COALESCE(rnames || ' ', '') || rname ;
     SELECT INTO idnum SUBSTRING(rname FROM '[[:digit:]]+');
     IF idnum IS NOT NULL THEN
-      ids_where = ids_where 
-      || ' AND (' 
+      ids_where = ids_where
+      || ' AND ('
       || rname
       || ' = id'
       || idnum
@@ -1634,7 +1618,7 @@ BEGIN
     END IF;
   END LOOP;
 
-  myst = 'DELETE FROM bucardo.bucardo_delta 
+  myst = 'DELETE FROM bucardo.bucardo_delta
     USING (SELECT MAX(txntime) AS maxt, '||ids_sel||'
     FROM bucardo.bucardo_delta
     WHERE tablename = '||myoid||'
@@ -1690,7 +1674,7 @@ BEGIN
     WHERE c.oid = $2;
 
   -- See how many dbgroups are being used by this table
-  SELECT INTO drows 
+  SELECT INTO drows
     COUNT(DISTINCT target)
     FROM bucardo.bucardo_delta_targets
     WHERE tablename = $2;
@@ -1714,7 +1698,7 @@ BEGIN
   myst = 'DELETE FROM bucardo.'
   || deltatable
   || ' USING (SELECT txntime AS tt FROM bucardo.'
-  || tracktable 
+  || tracktable
   || ' GROUP BY 1 HAVING COUNT(*) = '
   || drows
   || ') AS foo'
@@ -1955,7 +1939,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
             $sth = $dbh->prepare($SQL);
             $sth->execute(@args);
         }
- 
+
         my %tableoid;
         my %sequenceoid;
         for my $row (@{$sth->fetchall_arrayref()}) {
@@ -2131,7 +2115,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         $sth = $dbh->prepare($SQL);
         $sth->execute(@tablelist);
     }
-   
+
     ## Get column information about all of our tables
     my $columninfo;
     if (@tableoids) {
@@ -2452,9 +2436,9 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
             }
 
             ## Check if the bucardo_delta is a custom function, and create if needed
-            $SQL = qq{SELECT trigger_language,trigger_body FROM bucardo_custom_trigger 
-              WHERE goat=$tinfo->{id} 
-              AND status='active' 
+            $SQL = qq{SELECT trigger_language,trigger_body FROM bucardo_custom_trigger
+              WHERE goat=$tinfo->{id}
+              AND status='active'
               AND trigger_type='delta'
     };
             elog(DEBUG, "Running $SQL");
@@ -2539,7 +2523,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
                     my $custom_trigger_level = $rv->{rows}[0]{trigger_level};
                     $SQL = qq{
                CREATE OR REPLACE FUNCTION bucardo."$custom_function_name"()
-               RETURNS TRIGGER 
+               RETURNS TRIGGER
                LANGUAGE $rv->{rows}[0]{trigger_language}
                AS \$notify\$
         };
@@ -2700,7 +2684,7 @@ AS $bc$
 DECLARE
   myrec RECORD;
 BEGIN
-  FOR myrec IN 
+  FOR myrec IN
     SELECT quote_ident(db) || '.' || quote_ident(schemaname) || '.' || quote_ident(tablename) AS t
       FROM goat g
       WHERE NOT EXISTS (SELECT 1 FROM herdmap h WHERE h.goat = g.id)
@@ -2709,7 +2693,7 @@ BEGIN
       RETURN NEXT 'Not used in any herds: ' || myrec.t;
   END LOOP;
 
-  FOR myrec IN 
+  FOR myrec IN
     SELECT quote_ident(db) || '.' || quote_ident(schemaname) || '.' || quote_ident(tablename) AS t
       FROM goat g
       JOIN herdmap h ON h.goat = g.id
@@ -2719,7 +2703,7 @@ BEGIN
       RETURN NEXT 'Not used in source herd: ' || myrec.t;
   END LOOP;
 
-  FOR myrec IN 
+  FOR myrec IN
     SELECT quote_ident(db) || '.' || quote_ident(schemaname) || '.' || quote_ident(tablename) AS t
       FROM goat g
       JOIN herdmap h ON h.goat = g.id

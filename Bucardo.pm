@@ -16,7 +16,7 @@ use warnings;
 use utf8;
 use open qw( :std :utf8 );
 
-our $VERSION = '5.6.0';
+our $VERSION = '5.7.0';
 
 use DBI 1.51;                               ## How Perl talks to databases
 use DBD::Pg 2.0   qw( :async             ); ## How Perl talks to Postgres databases
@@ -25,6 +25,7 @@ use DBIx::Safe '1.2.4';                     ## Filter out what DB calls customco
 use sigtrap       qw( die normal-signals ); ## Call die() on HUP, INT, PIPE, or TERM
 use Config        qw( %Config            ); ## Used to map signal names
 use File::Spec    qw(                    ); ## For portable file operations
+use File::Temp    qw(                    ); ## For creating and using temporary files
 use Data::Dumper  qw( Dumper             ); ## Used to dump information in email alerts
 use POSIX         qw( strftime strtod    ); ## For grabbing the local timezone, and forcing to NV
 use Sys::Hostname qw( hostname           ); ## Used for host safety check, and debugging/mail sending
@@ -232,6 +233,7 @@ sub new {
         logseparate  => 0,
         logextension => '',
         logclean     => 0,
+        foreground   => 0,
         dryrun       => 0,
         sendmail     => 1,
         extraname    => '',
@@ -469,13 +471,15 @@ sub start_mcp {
     };
     $disconnect_ok or $self->glog("Warning! Disconnect failed $@", LOG_WARN);
 
-    my $seeya = fork;
-    if (! defined $seeya) {
-        die q{Could not fork mcp!};
-    }
-    ## Immediately close the child process (one side of the fork)
-    if ($seeya) {
-        exit 0;
+    unless ($self->{foreground}) {
+        my $seeya = fork;
+        if (! defined $seeya) {
+            die q{Could not fork mcp!};
+        }
+        ## Immediately close the child process (one side of the fork)
+        if ($seeya) {
+            exit 0;
+        }
     }
 
     ## Now that we've forked, overwrite the PID file with our new value
@@ -2465,7 +2469,7 @@ sub start_kid {
     ## Also setup common attributes
     my (@dbs, @dbs_source, @dbs_target, @dbs_delta, @dbs_fullcopy,
         @dbs_connectable, @dbs_dbi, @dbs_write, @dbs_non_fullcopy,
-        @dbs_postgres, @dbs_drizzle, @dbs_firebird, @dbs_mongo, @dbs_mysql, @dbs_oracle,
+        @dbs_postgres, @dbs_firebird, @dbs_mongo, @dbs_mysql, @dbs_oracle,
         @dbs_redis, @dbs_sqlite);
 
     ## Used to weed out all but one source if in onetimecopy mode
@@ -2545,16 +2549,6 @@ sub start_kid {
             $d->{does_limit}      = 1;
             $d->{does_async}      = 1;
             $d->{does_ANY_clause} = 1;
-        }
-
-        ## Drizzle
-        if ('drizzle' eq $d->{dbtype}) {
-            push @dbs_drizzle => $dbname;
-            $d->{does_sql}        = 1;
-            $d->{does_truncate}   = 1;
-            $d->{does_savepoints} = 1;
-            $d->{does_limit}      = 1;
-            $d->{has_mysql_timestamp_issue} = 1;
         }
 
         ## MongoDB
@@ -2648,7 +2642,6 @@ sub start_kid {
 
         ## Databases with Perl DBI support
         if ($d->{dbtype} eq 'postgres'
-                or $d->{dbtype} eq 'drizzle'
                 or $d->{dbtype} eq 'firebird'
                 or $d->{dbtype} eq 'mariadb'
                 or $d->{dbtype} eq 'mysql'
@@ -5162,10 +5155,6 @@ sub start_main_transaction {
             $self->glog(qq{Set database "$dbname" to serializable}, LOG_DEBUG);
         }
 
-        if ('drizzle' eq $d->{dbtype}) {
-            ## Drizzle does not appear to have anything to control this yet
-        }
-
         if ('oracle' eq $d->{dbtype}) {
             $dbh->do('SET TRANSACTION READ WRITE');
             $dbh->do(q{SET TRANSACTION ISOLATION LEVEL SERIALIZABLE NAME 'bucardo'});
@@ -5248,7 +5237,7 @@ sub lock_all_tables {
                 $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
                 $d->{dbh}->do("LOCK TABLE $com");
             }
-            elsif ('mysql' eq $d->{dbtype } or 'drizzle' eq $d->{dbtype} or 'mariadb' eq $d->{dbtype}) {
+            elsif ('mysql' eq $d->{dbtype } or 'mariadb' eq $d->{dbtype}) {
                 my $com = "$tname WRITE";
                 $self->glog("Database $dbname: Locking table $com", LOG_TERSE);
                 $d->{dbh}->do("LOCK TABLE $com");
@@ -5677,9 +5666,6 @@ sub connect_database {
             $dsn .= join ';', map {
                 ($_ eq 'dbservice' ? 'service' : $_ ) . "=$d->{$_}";
             } grep { defined $d->{$_} and length $d->{$_} } qw/dbname dbservice/;
-        }
-        elsif ('drizzle' eq $dbtype) {
-            $dsn = "dbi:drizzle:database=$dbname";
         }
         elsif ('mongo' eq $dbtype) {
 
@@ -6964,6 +6950,7 @@ sub validate_sync {
             return 0;
         }
 
+        #$self->glog("\%tablescache=" . Dumper(\%tablescache), LOG_DEBUG2);
         for my $key (keys %{ $tablescache{ $t } }) {
             $g->{$key} = $tablescache{$t}{$key};
         }
@@ -7061,9 +7048,12 @@ sub validate_sync {
             $g->{columnlist} = join ',' => @{$g->{cols}};
             $g->{safecolumnlist} = join ',' => @{$g->{safecols}};
 
-            ## Note which columns are bytea
+            ## Note which columns are bytea or lo
           BCOL: for my $colname (keys %$colinfo) {
                 my $c = $colinfo->{$colname};
+
+                $g->{locols}{$colname} = $c->{attnum} - 1 if $c->{ftype} eq 'public.lo';
+
                 next if $c->{atttypid} != 17; ## Yes, it's hardcoded, no sweat
                 $i = 0;
                 for my $pk (@{$g->{pkey}}) {
@@ -7074,9 +7064,8 @@ sub validate_sync {
                     }
                     $i++;
                 }
-                ## This is used to bind_param these as binary during inserts and updates
-                push @{$g->{binarycols}}, $colinfo->{$colname}{order};
             }
+            #$self->glog("after checking for bytea & lo columns, \$g=" . Dumper($g), LOG_DEBUG2);
 
             $srcdbh->do('RESET search_path');
 
@@ -7108,8 +7097,8 @@ sub validate_sync {
             ## Redis is skipped because we can create keys on the fly
             next if $d->{dbtype} =~ /redis/o;
 
-            ## MySQL/MariaDB/Drizzle/Oracle/SQLite is skipped for now, but should be added later
-            next if $d->{dbtype} =~ /mysql|mariadb|drizzle|oracle|sqlite/o;
+            ## MySQL/MariaDB/Oracle/SQLite is skipped for now, but should be added later
+            next if $d->{dbtype} =~ /mysql|mariadb|oracle|sqlite/o;
 
             if ($self->{quickstart}) {
                 $self->glog("  quickstart: Skipping table check for $dbname.$S.$T", LOG_VERBOSE);
@@ -9696,7 +9685,7 @@ sub delete_rows {
 
                 $self->glog("Mongo objects removed from $target_tablename: $Target->{deleted_rows}", LOG_VERBOSE);
             }
-            elsif ('mysql' eq $type or 'drizzle' eq $type or 'mariadb' eq $type
+            elsif ('mysql' eq $type or 'mariadb' eq $type
                        or 'oracle' eq $type or 'sqlite' eq $type or 'firebird' eq $type) {
                 my $tdbh = $Target->{dbh};
                 for (@{ $SQL{IN}{$target_tablename} }) {
@@ -9850,9 +9839,10 @@ sub push_rows {
     ## It is up to the caller to populate these, even if the syncname is ''
     my $customname = $Table->{newname}{$syncname} || {};
 
-     ## Name of the table to copy. Only Postgres can be used as a source
+    ## Name of the table to copy. Only Postgres can be used as a source
     my $source_tablename = "$Table->{safeschema}.$Table->{safetable}";
     my $sourcedbh = $SourceDB->{dbh};
+    #$self->glog("\$SourceDB=" . Dumper($SourceDB), LOG_DEBUG2);
 
     ## Actual number of source rows read and copied. May be less than $total_rows
     my $source_rows_read = 0;
@@ -9862,6 +9852,29 @@ sub push_rows {
 
         ## Build the clause (cache) and kick it off
         my $SELECT = $select_clause || 'SELECT *';
+
+        ## Set up for large object copying and oid translation
+
+        # count of how many lo columns we are dealing with right now
+        my $lo_cols_count = keys %{ $Table->{locols} ||= {} };
+        $self->glog("lo_cols_count=$lo_cols_count", LOG_DEBUG2);
+
+        # keys of source oids for which to export lobs; values are undef
+        my %source_lo_oids;
+
+        # map each source large object oid to a File::Temp filehandle of its exported
+        # large object file, or to undef if the large object didn't exist on the source
+        my %source_lo_oid_to_fh;
+
+        # for each target, ref to an array of unused available oids to use for lobs
+        my %target_lo_oids;
+
+        # map each target to a map of source oids to that target's oids
+        my %lo_oid_map;
+
+        # map each target to a flag for whether real large object placeholders
+        # were created, not just oids reserved
+        my %target_create_lo;
 
         ## Prepare each target that is using this select clause
         for my $Target (@{ $srccmd{$select_clause} }) {
@@ -9883,6 +9896,37 @@ sub push_rows {
             ## Using columnlist avoids worrying about the order of columns
 
             if ('postgres' eq $type) {
+                if ($lo_cols_count) {
+                    # TODO: support fullcopy
+                    if ($mode eq 'fullcopy') {
+                        my $msg = "Warning! Unable to handle columns of lo datatype with fullcopy";
+                        $self->glog($msg, LOG_WARN);
+                        die $msg;
+                    }
+
+                    if ($total_rows) {
+                        my $tgtcmd = $self->{sqlprefix} . "SELECT ";
+                        my $dbh = $Target->{dbh};
+                        if ($target_create_lo{$targetname} = ($dbh->{pg_server_version} < 120000)) {
+                            # Internal function pg_nextoid() first appeared in Postgres 12,
+                            # so we have to create real large objects to allocate oids.
+                            $tgtcmd .= "lo_from_bytea(0, '')";
+                            $self->glog(qq{Creating large objects on target "$targetname" as placeholders}, LOG_DEBUG2);
+                        }
+                        else {
+                            # Since we can, wait to create large objects till we actually
+                            # import them, to avoid leaving unused ones to be cleaned up.
+                            $tgtcmd .= "pg_nextoid('pg_catalog.pg_largeobject_metadata', 'oid', 'pg_catalog.pg_largeobject_metadata_oid_index')";
+                        }
+                        $tgtcmd .= " FROM generate_series(1, ?)";
+                        my $sth = $dbh->prepare($tgtcmd);
+                        $sth->execute($total_rows * $lo_cols_count);
+                        my $bucket = $target_lo_oids{$targetname} ||= [];
+                        push @$bucket, map { $_->[0] } @{ $sth->fetchall_arrayref };
+                        $sth->finish;
+                    }
+                }
+
                 my $tgtcmd = "$self->{sqlprefix}COPY $target_tablename$columnlist FROM STDIN";
                 $Target->{dbh}->do($tgtcmd);
             }
@@ -9906,7 +9950,7 @@ sub push_rows {
                 ## No setup needed
             }
             elsif ('sqlite' eq $type or 'oracle' eq $type or
-                   'mysql' eq $type or 'mariadb' eq $type or 'drizzle' eq $type) {
+                   'mysql' eq $type or 'mariadb' eq $type) {
                 my $tgtcmd = "INSERT INTO $target_tablename$columnlist VALUES (";
                 $tgtcmd .= '?,' x @$cols;
                 $tgtcmd =~ s/,$/)/o;
@@ -9976,14 +10020,51 @@ sub push_rows {
 
                 $source_rows_read++;
 
+                # Split COPY row into columns to translate large object oids
+                my @buffer_vals_if_lo;
+                if ($lo_cols_count) {
+                    @buffer_vals_if_lo = split /\t/, $buffer, -1;
+                    chomp $buffer_vals_if_lo[-1];
+                }
+
                 ## For each target using this particular SELECT clause
                 for my $Target (@{ $srccmd{$select_clause} }) {
 
+                    my $targetname = $Target->{name};
                     my $type = $Target->{dbtype};
 
                     ## For Postgres, we simply do COPY to COPY
                     if ('postgres' eq $type) {
-                        $Target->{dbh}->pg_putcopydata($buffer);
+                        # Translate any large object oids for this target
+                        my $new_buffer;
+                        if ($lo_cols_count) {
+                            # Copy the source row's values before modifying the oids
+                            # so they can be used again for the next target
+                            my @vals = @buffer_vals_if_lo;
+
+                            my $locols = $Table->{locols};
+                            #$self->glog("locols=" . Dumper($locols), LOG_DEBUG2);
+                            for my $name (keys %$locols) {
+                                my $idx = $locols->{$name};
+                                my $source_oid = $vals[$idx];
+                                next if $source_oid eq '\N';
+
+                                # Store the source row's lo oids as part of the first target we see,
+                                # since we're already looping over the columns here.
+                                $source_lo_oids{$source_oid} = undef;
+
+                                my $target_oid = shift @{ $target_lo_oids{$targetname} } or do {
+                                    my $msg = qq{Error getting new lo oid on target "$targetname"};
+                                    $self->glog($msg, LOG_WARN);
+                                    die $msg;
+                                };
+                                $vals[$idx] = $lo_oid_map{$targetname}{$source_oid} = $target_oid;
+                            }
+
+                            $new_buffer = join("\t", @vals) . "\n";
+                        }
+
+                        $Target->{dbh}->pg_putcopydata($new_buffer || $buffer);
                     }
                     ## For flat files destined for Postgres, just do a tab-delimited dump
                     elsif ('flatpg' eq $type) {
@@ -10037,7 +10118,7 @@ sub push_rows {
                                 $object->{$key} = DateTime->from_epoch(epoch => str2time($object->{$key}));
                             }
                         }
-                        $self->{oldmongo} ? 
+                        $self->{oldmongo} ?
                             $Target->{collection}->insert($object, { safe => 1 }) :
                                 $Target->{collection}->insert_one($object, { safe => 1 });
                     }
@@ -10064,12 +10145,11 @@ sub push_rows {
                         my $target_tablename = $customname->{$Target->{name}};
                         $Target->{dbh}->hmset("$target_tablename:$pkeyval", @add);
                     }
-                    ## For SQLite, MySQL, MariaDB, Firebird, Drizzle, and Oracle, do some basic INSERTs
+                    ## For SQLite, MySQL, MariaDB, Firebird, and Oracle, do some basic INSERTs
                     elsif ('sqlite' eq $type
                             or 'oracle' eq $type
                             or 'mysql' eq $type
                             or 'mariadb' eq $type
-                            or 'drizzle' eq $type
                             or 'firebird' eq $type) {
 
                         chomp $buffer;
@@ -10103,6 +10183,49 @@ sub push_rows {
             $sourcedbh->do('SELECT 1');
         }
 
+        ## Export large objects to be replicated
+
+        if ($lo_cols_count) {
+            my @source_lo_oids = sort { $a <=> $b } keys %source_lo_oids;
+
+            # Check whether the oids actually exist as large objects since we
+            # want their absence to be non-fatal just as it is on the source.
+            # We can't just call pg_lo_export() and let it fail because the
+            # result of pg_lo_export() is unspecific: it could fail due to full
+            # filesystem, invalid path, insufficient permissions, etc., and
+            # those are fatal errors.
+            my $sql = q{
+                SELECT oids.oid
+                FROM (SELECT unnest(?::oid[]) AS oid) oids
+                LEFT JOIN pg_largeobject_metadata m
+                    ON m.oid = oids.oid
+                WHERE m.oid IS NULL
+            };
+            my $sth = $sourcedbh->prepare($sql);
+            $sth->execute(\@source_lo_oids);
+            @source_lo_oid_to_fh{ map { $_->[0] } @{$sth->fetchall_arrayref} } = ();
+            $sth->finish;
+
+            for my $oid (
+                grep { not exists $source_lo_oid_to_fh{$_} }
+                @source_lo_oids
+            ) {
+                my $fh = File::Temp->new;
+                my $filename = $fh->filename;
+                my $msg_end = qq{from source lo oid $oid to "$filename"};
+                if ($sourcedbh->pg_lo_export($oid, $filename)) {
+                    $source_lo_oid_to_fh{$oid} = $fh;
+                    $self->glog(qq{Large object exported $msg_end}, LOG_VERBOSE);
+                }
+                else {
+                    my $msg = qq{Error exporting large object $msg_end};
+                    $self->glog($msg, LOG_WARN);
+                    die $msg;
+                }
+            }
+            #$self->glog("source_lo_oid_to_fh=" . Dumper(\%source_lo_oid_to_fh), LOG_DEBUG2);
+        }
+
         ## Perform final cleanups for each target
         for my $Target (@{ $srccmd{$select_clause} }) {
 
@@ -10121,6 +10244,74 @@ sub push_rows {
                 if ($self->{dbdpgversion} < 21801) {
                     $dbh->do('SELECT 1');
                 }
+
+                if ($lo_cols_count) {
+                    # Do we have an existing lo because Postgres version < 12?
+                    my $lo_exists = $target_create_lo{$tname};
+
+                    for my $source_oid (sort { $a <=> $b } keys %source_lo_oid_to_fh) {
+                        my $target_oid = $lo_oid_map{$tname}{$source_oid};
+
+                        my $lo_fh = $source_lo_oid_to_fh{$source_oid};
+                        if ($lo_fh) {
+                            my $success;
+                            my $lo_file = $lo_fh->filename;
+                            my $size = -s $lo_file;
+
+                            # Must write to an existing lo because Postgres version < 12?
+                            if ($lo_exists) {
+                                if ($size == 0) {
+                                    # Nothing to do since the pre-created lo is empty and thus already matches the source!
+                                    $success = 1;
+                                }
+                                else {
+                                    my $lo_fd = $dbh->pg_lo_open($target_oid, $dbh->{pg_INV_WRITE});
+                                    my $nbytes = $dbh->pg_lo_write(
+                                        $lo_fd,
+                                        do {
+                                            open my $fh, '<', $lo_file
+                                                or die qq{Error opening file "$lo_file": $!};
+                                            binmode $fh
+                                                or die qq{Error setting binmode on file "$lo_file": $!};
+                                            local $/;
+                                            <$fh>
+                                        },
+                                        $size
+                                    );
+                                    $success = $dbh->pg_lo_close($lo_fd);
+                                    $success = 0 if $nbytes != $size;
+                                }
+                            }
+                            else {
+                                $success = $dbh->pg_lo_import_with_oid($lo_file, $target_oid);
+                            }
+
+                            my $msg_end = "from source oid $source_oid to target oid $target_oid ($size bytes)";
+                            if ($success) {
+                                $self->glog("Large object replicated $msg_end", LOG_VERBOSE);
+                            }
+                            else {
+                                my $msg = "Error writing large object $msg_end";
+                                $self->glog($msg, LOG_WARN);
+                                die $msg;
+                            }
+                        }
+                        else {
+                            $self->glog("Large object source oid $source_oid is invalid; stored unused oid $target_oid on target", LOG_NORMAL);
+                            # Unlink any existing lo with this oid to make it invalid
+                            # like on the source, not a valid 0-byte lo.
+                            $lo_exists and $dbh->pg_lo_unlink($target_oid);
+                        }
+                    }
+
+                    # If large objects were actually created and any were unused because
+                    # of NULL lo fields, delete them now to clean up after ourselves.
+                    if ($lo_exists) {
+                        $self->glog("Cleaning up unused large objects with oids=" . join(',', @{ $target_lo_oids{$tname} }), LOG_DEBUG2);
+                        $dbh->pg_lo_unlink($_) for @{ $target_lo_oids{$tname} };
+                    }
+                }
+
                 ## If this table is set to makedelta, add rows to bucardo.delta to simulate the
                 ##   normal action of a trigger and add a row to bucardo.track to indicate that
                 ##   it has already been replicated here.
@@ -10223,7 +10414,7 @@ sub vacuum_table {
         my $total_time = sprintf '%.2f', tv_interval($start_time);
         $self->glog("Vacuum complete. Time: $total_time", LOG_VERBOSE);
     }
-    elsif ('mysql' eq $dbtype or 'drizzle' eq $dbtype or 'mariadb' eq $dbtype) {
+    elsif ('mysql' eq $dbtype or 'mariadb' eq $dbtype) {
         ## Optimize the table
         $self->glog("Optimizing $tablename", LOG_VERBOSE);
 
@@ -10284,7 +10475,7 @@ sub analyze_table {
         $self->glog("Analyze complete for $dbname.$tablename. Time: $total_time", LOG_VERBOSE);
         $ldbh->commit();
     }
-    elsif ('mysql' eq $dbtype or 'drizzle' eq $dbtype or 'mariadb' eq $dbtype) {
+    elsif ('mysql' eq $dbtype or 'mariadb' eq $dbtype) {
         $ldbh->do("ANALYZE TABLE $tablename");
         my $total_time = sprintf '%.2f', tv_interval($start_time);
         $self->glog("Analyze complete for $tablename. Time: $total_time", LOG_VERBOSE);
@@ -10516,13 +10707,15 @@ __END__
 
 =pod
 
+=encoding utf8
+
 =head1 NAME
 
 Bucardo - Postgres multi-master replication system
 
 =head1 VERSION
 
-This document describes version 5.6.0 of Bucardo
+This document describes version 5.7.0 of Bucardo.
 
 =head1 WEBSITE
 
@@ -10533,7 +10726,7 @@ https://bucardo.org/
 =head1 DESCRIPTION
 
 Bucardo is a Perl module that replicates Postgres databases using a combination
-of Perl, a custom database schema, Pl/Perlu, and Pl/Pgsql.
+of Perl, a custom database schema, PL/PerlU, and PL/pgSQL.
 
 Bucardo is unapologetically extremely verbose in its logging.
 
@@ -10552,7 +10745,9 @@ this distribution. See also the documentation for the bucardo program.
 
 =item * Sys::Syslog
 
-=item * DBIx::Safe ## Try 'yum install perl-DBIx-Safe' or visit bucardo.org
+=item * DBIx::Safe
+
+=item * Pod::Parser (for C<bucardo help [subcommand]>)
 
 =item * boolean (only if using MongoDB)
 
@@ -10560,8 +10755,14 @@ this distribution. See also the documentation for the bucardo program.
 
 =head1 BUGS
 
-Bugs should be reported to bucardo-general@bucardo.org. A list of bugs can be found at
-https://bucardo.org/bugs.html
+Bug reports and feature requests are always welcome, please visit
+L<bucardo.org|https://bucardo.org>, file L<GitHub
+Issues|https://github.com/bucardo/bucardo/issues>, or post to our
+L<email list|https://bucardo.org/mailman/listinfo/bucardo-general>.
+
+=head1 SEE ALSO
+
+Bucardo
 
 =head1 CREDITS
 
@@ -10572,10 +10773,10 @@ of it in production since 2002. Jon Jensen <jon@endpoint.com> wrote the original
 
 Greg Sabino Mullane <greg@turnstep.com>
 
-=head1 LICENSE AND COPYRIGHT
+=head1 COPYRIGHT
 
-Copyright (c) 2005-2021 Greg Sabino Mullane <greg@turnstep.com>.
+Copyright © 2005-2021 Greg Sabino Mullane <greg@turnstep.com>.
 
-This software is free to use: see the LICENSE file for details.
+This program is free to use, subject to the limitations in the LICENSE file.
 
 =cut

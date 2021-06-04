@@ -25,6 +25,8 @@ use POSIX           qw/ ceil setsid localeconv /;
 use Config          qw/ %Config /;
 use Encode          qw/ decode /;
 use File::Spec;
+use Cwd;
+use User::pwent     qw/ /;
 use Data::Dumper    qw/ Dumper /;
 $Data::Dumper::Indent = 1;
 use Getopt::Long;
@@ -32,7 +34,7 @@ Getopt::Long::Configure(qw/ no_ignore_case pass_through no_autoabbrev /);
 
 require I18N::Langinfo;
 
-our $VERSION = '5.6.0';
+our $VERSION = '5.7.0';
 
 ## For the tests, we want to check that it compiles without actually doing anything
 return 1 if $ENV{BUCARDO_TEST};
@@ -80,7 +82,6 @@ my $bcargs = {
               quiet        => 0,
               verbose      => 0,
               quickstart   => 0,
-              bcverbose    => 1,
               dbname       => 'bucardo',
               dbuser       => 'bucardo',
               dbpass       => undef,
@@ -90,6 +91,7 @@ my $bcargs = {
               logextension => '',
               logclean     => 0,
               batch        => 0,
+              foreground   => 0,
           };
 
 ## These options must come before the main GetOptions call
@@ -98,6 +100,7 @@ GetOptions(
     $bcargs,
     'no-bucardorc',
     'bucardorc=s',
+    'runuser=s',
 );
 
 ## Values are first read from a .bucardorc, either in the current dir, or the home dir.
@@ -110,7 +113,22 @@ if (! $bcargs->{'no-bucardorc'}) {
         $file = $bcargs->{bucardorc};
     }
     elsif (-e '.bucardorc') {
-        $file = '.bucardorc';
+        if ($> == 0) {
+            my @stat = stat('.bucardorc');
+            if (!@stat) {
+                warn qq{Running as root, so ignoring .bucardorc in current directory due to stat error\n};
+            }
+            elsif ($stat[4] == 0 and $stat[5] == 0) {
+                $file = '.bucardorc';
+            }
+            else {
+                my $cwd = getcwd();
+                warn qq{Running as root, so ignoring .bucardorc not owned by root:root in current directory; change ownership or use --bucardorc=$cwd/.bucardorc\n};
+            }
+        }
+        else {
+            $file = '.bucardorc';
+        }
     }
     elsif (defined $ENV{HOME} && -e "$ENV{HOME}/.bucardorc") {
         $file = "$ENV{HOME}/.bucardorc";
@@ -139,6 +157,43 @@ if (defined $file) {
     close $rc or die;
 }
 
+if (defined($bcargs->{runuser}) and length($bcargs->{runuser})) {
+    my $user = $bcargs->{runuser};
+
+    die "The runuser option requires a user name, not numeric uid; aborting\n"
+        if $user !~ /\D/;
+
+    my $pw = User::pwent::getpwnam($user);
+    die qq{Unknown user "$user" in runuser option; aborting\n} if !$pw;
+
+    my $orig_uid = $>;
+    my $orig_gid = POSIX::getgid();
+    my $some_id_changed;
+
+    my $want_gid = $pw->gid;
+    my $new_gid;
+    die "The runuser option led to gid 0; aborting\n" if !$want_gid;
+    if ($want_gid != $orig_gid) {
+        POSIX::setgid($want_gid);
+        $new_gid = POSIX::getgid();
+        die "Unable to change running group for runuser option; aborting\n"
+            if $new_gid != $want_gid;
+        $some_id_changed = 1;
+    }
+
+    my $want_uid = $pw->uid;
+    die "The runuser option led to uid 0; aborting\n" if !$want_uid;
+    if ($want_uid != $orig_uid) {
+        POSIX::setuid($want_uid);
+        die "Unable to change running group for runuser option; aborting\n"
+            if $< != $want_uid;
+        $some_id_changed = 1;
+    }
+
+    print qq{Running as user "$user" (uid $<, gid $new_gid)\n\n}
+        if $some_id_changed;
+}
+
 Getopt::Long::Configure(qw(no_pass_through autoabbrev));
 GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
     ($bcargs,
@@ -158,13 +213,14 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'retry=i',
      'retrysleep|retry-sleep=i',
      'batch',
+     'foreground',
      'dryrun|dry-run',
      'confirm',
      'tsep=s',
      'exit-on-nosync!',
+     'runuser=s',
 
      ## These are sent to the constructor:
-     'bcverbose',
      'dbport|db-port|p=i',
      'dbhost|db-host|h=s',
      'dbname|db-name|d=s',
@@ -867,14 +923,20 @@ sub start {
     my %remove = map { $_ => undef } @nouns;
     @opts = grep { ! exists $remove{$_} } @opts;
 
-    ## Fork and setsid to disassociate ourselves from the daemon
-    if (fork) {
-        ## We are the kid, do nothing
+    ## Check if we should daemonize
+    if ($bcargs->{'foreground'}) {
+        $bc->start_mcp( \@opts );
     }
     else {
-        setsid() or die;
-        ## Here we go!
-        $bc->start_mcp( \@opts );
+        ## Fork and setsid to disassociate ourselves from the daemon
+        if (fork) {
+            ## We are the kid, do nothing
+        }
+        else {
+            setsid() or die;
+            ## Here we go!
+            $bc->start_mcp( \@opts );
+        }
     }
 
     exit 0;
@@ -1867,7 +1929,6 @@ sub add_database {
         ## Get the module name, the way to refer to its database
         ## This also makes sure we have a valid type
         my %dbtypeinfo = (
-            drizzle  => ['DBD::drizzle',  'Drizzle database'],
             firebird => ['DBD::Firebird', 'Firebird database'],
             mongo    => ['MongoDB',       'MongoDB'],
             mysql    => ['DBD::mysql',    'MySQL database'],
@@ -2489,15 +2550,6 @@ sub list_databases {
             if ($info->{makedelta}) {
                 print ' (makedelta on)';
             }
-        }
-        if ($dbtype eq 'drizzle') {
-            $showport = (length $info->{dbport} and $info->{dbport} != 3306)
-                ? " --port $info->{dbport}" : '';
-            printf 'Conn: drizzle -u %s -D %s%s%s',
-                $info->{dbuser},
-                $info->{dbname},
-                $showhost,
-                $showport;
         }
         if ($dbtype eq 'flatfile') {
             print "Prefix: $info->{dbname}";
@@ -5421,10 +5473,10 @@ sub clone {
     usage_exit($doc_section) unless @nouns;
 
     ## Examples:
-    ## ./bucardo clone dbs=A:source,B,C relgroup=foo
-    ## ./bucardo clone sync=foobar
-    ## ./bucardo clone sync=foobar prime=A
-    ## ./bucardo clone dbs=A,B,C,D relgroup=foo notruncate=B,C
+    ## bucardo clone dbs=A:source,B,C relgroup=foo
+    ## bucardo clone sync=foobar
+    ## bucardo clone sync=foobar prime=A
+    ## bucardo clone dbs=A,B,C,D relgroup=foo notruncate=B,C
 
     ## Optional sync to associate with:
     my $sync;
@@ -9193,7 +9245,7 @@ sub install {
     $QUIET or print "Installation is now complete.\n";
     ## A little less verbose if in batch mode
     if (! $bcargs->{batch}) {
-        print "If you see errors or need help, please email bucardo-general\@bucardo.org\n\n";
+        print "If you see errors or need help, please see https://bucardo.org/Bucardo/\n\n";
 
         print "You may want to check over the configuration variables next, by running:\n";
         print "$progname show all\n";
@@ -9864,7 +9916,6 @@ sub standardize_rdbms_name {
 
     $name =~ s/postgres.*/postgres/io;
     $name =~ s/pg.*/postgres/io;
-    $name =~ s/driz?zle.*/drizzle/io;
     $name =~ s/firebird/firebird/io;
     $name =~ s/mongo.*/mongo/io;
     $name =~ s/mysql.*/mysql/io;
@@ -10094,13 +10145,17 @@ sub create_herd {
 
 __END__
 
+=pod
+
+=encoding utf8
+
 =head1 NAME
 
-bucardo - utility script for controlling the Bucardo program
+bucardo - utility program for controlling the Bucardo service
 
 =head1 VERSION
 
-This document describes version 5.6.0 of bucardo
+This document describes version 5.7.0 of bucardo.
 
 =head1 USAGE
 
@@ -10108,14 +10163,14 @@ This document describes version 5.6.0 of bucardo
 
 =head1 DESCRIPTION
 
-The bucardo script is the main interaction to a running Bucardo instance. It
+The bucardo program is the main interaction to a running Bucardo service. It
 can be used to start and stop Bucardo, add new items, kick syncs, and even
 install and upgrade Bucardo itself. For more complete documentation, please
-view L<the wiki|https://bucardo.org/>.
+view L<the Bucardo website|https://bucardo.org/>.
 
 =head1 COMMANDS
 
-Run C<< bucardo help <command> >> for additional details
+Run C<< bucardo help <command> >> for additional details.
 
 =over
 
@@ -10175,7 +10230,7 @@ Shows the current Bucardo settings.
 
 =item C<<set <setting=value> [<setting=value>...] >>
 
-Sets one or more configuration setting..
+Sets one or more configuration setting.
 
 =item C<< ping [<timeout>] >>
 
@@ -10366,6 +10421,16 @@ Forces removal of all old log files before running.
 
 Enable or disable debugging output. Disabled by default.
 
+=item C<--foreground>
+
+Run Bucardo in the foreground; do not daemonize. Useful for running Bucardo
+inside a container or from systemd.
+
+=item C<--runuser>
+
+Name of a local operating system user that Bucardo should run as if started as
+another user. This typically only is useful when invoking C<bucardo> as root.
+
 =item C<--exit-on-nosync>
 
 =item C<--no-exit-on-nosync>
@@ -10499,8 +10564,6 @@ The type of the database. Defaults to C<postgres>. Currently supported values ar
 =over
 
 =item * C<postgres>
-
-=item * C<drizzle>
 
 =item * C<mongo>
 
@@ -11358,8 +11421,6 @@ The type of the database. Currently supported values are:
 
 =item * C<postgres>
 
-=item * C<drizzle>
-
 =item * C<mongo>
 
 =item * C<mysql>
@@ -11794,7 +11855,7 @@ Which DDL changing conditions do we try to remedy automatically? Default: C<newc
 
 =item C<bucardo_version>
 
-Current version of Bucardo. Default: C<5.6.0>.
+Current version of Bucardo. Default: C<5.7.0>.
 
 =item C<bucardo_vac>
 
@@ -11802,7 +11863,7 @@ Do we want the automatic VAC daemon to run? Default: C<1>.
 
 =item C<bucardo_initial_version>
 
-Bucardo version this schema was created with. Default: C<5.6.0>.
+Bucardo version this schema was created with. Default: C<5.7.0>.
 
 =item C<ctl_checkonkids_time>
 
@@ -12260,16 +12321,20 @@ The bucardo script uses I<$ENV{HOME}> to look for a F<.bucardorc> file.
 
 Bug reports and feature requests are always welcome, please visit
 L<bucardo.org|https://bucardo.org>, file L<GitHub
-Issues|http://github.com/bucardo/bucardo/issues>, or post to our
+Issues|https://github.com/bucardo/bucardo/issues>, or post to our
 L<email list|https://bucardo.org/mailman/listinfo/bucardo-general>.
 
 =head1 SEE ALSO
 
 Bucardo
 
+=head1 AUTHOR
+
+Greg Sabino Mullane <greg@turnstep.com>
+
 =head1 COPYRIGHT
 
-Copyright 2006-2021 Greg Sabino Mullane <greg@turnstep.com>
+Copyright © 2006-2021 Greg Sabino Mullane <greg@turnstep.com>.
 
 This program is free to use, subject to the limitations in the LICENSE file.
 

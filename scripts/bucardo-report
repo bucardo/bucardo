@@ -184,7 +184,7 @@ if (exists $q{limit} and $q{limit} =~ /^\d+$/) {
     push @adjust, ['Maximum rows to pull' => $q{limit}];
 }
 
-my $SQLSTART = 
+my $SQLSTART =
 qq{  sync,targetdb,
   COALESCE(to_char(started, 'DDMon HH24:MI:SS'::text), '???'::text) AS started2,
   COALESCE(to_char(ended, 'HH24:MI:SS'::text), '???'::text) AS ended2,
@@ -482,7 +482,7 @@ sub showhost {
         my (@odetail,@edetail,@death);
         for my $s (sort keys %$sync) {
             next if $sync->{$s}{expiredsecs} == 0;
-            for my $t (sort { 
+            for my $t (sort {
                 $sync->{$s}{dblist}{$a}{order} <=> $sync->{$s}{dblist}{$b}{order}
             } keys %{$sync->{$s}{dblist}}) {
                 my $x = $sync->{$s}{dblist}{$t};
@@ -578,7 +578,7 @@ sub showhost {
     undef %row;
     $order=1;
     for my $s (sort keys %$sync) {
-        for my $t (sort { 
+        for my $t (sort {
             $sync->{$s}{dblist}{$a}{order} <=> $sync->{$s}{dblist}{$b}{order}
         } keys %{$sync->{$s}{dblist}}) {
             my $x = $sync->{$s}{dblist}{$t};
@@ -610,7 +610,7 @@ sub showhost {
 
             ## May be undef: pid, whydie, deletes, updates, inserts, ppid
             my $safe = {};
-            my $info = $x->{success} || $x->{aborted} || 
+            my $info = $x->{success} || $x->{aborted} ||
                 {
                  started2 => '???',
                  ended2 => '???',
@@ -646,8 +646,7 @@ sub showhost {
 <th align="right">$safe->{updates}</th>
 <th align="right">$safe->{deletes}</th>
 <th align="left"><pre>$whydie</pre></th>
-<th align="right" class="ts"><div class="overdue" id="o$z">Sync: $s<br />Overdue time: $sync->{$s}{overdue}<br />Expire time: $sync->{$s}{expired}</div><span 
- onmouseover="showdue('o$z')" onmouseout="hidegoat('o$z')">$safe->{minutes}</span></th>
+<th align="right" class="ts"><div class="overdue" id="o$z">Sync: $s<br />Overdue time: $sync->{$s}{overdue}<br />Expire time: $sync->{$s}{expired}</div><span onmouseover="showdue('o$z')" onmouseout="hidegoat('o$z')">$safe->{minutes}</span></th>
 </tr>\n};
     $z++;
     }
@@ -810,7 +809,7 @@ sub showhost {
                     or $row{$a}{target} cmp $row{$b}{target}
                     );
         }
-    
+
         ## updates, sync name, target database
         if (10 == $OCOL) {
             return -1 if exists $row{$a}{tinfo}{updates} and ! exists $row{$b}{tinfo}{updates};
@@ -1023,7 +1022,7 @@ sub showdatabase {
     $OCOL2 = "ended" if 3 == $OCOL;
     $OCOL2 = "aborted" if 4 == $OCOL;
 
-    $SQL = 
+    $SQL =
 qq{SELECT
   sync,
 $SQLSTART
@@ -1151,7 +1150,7 @@ sub showsync {
     my $earliest = $dbh->selectall_arrayref($SQL)->[0][0];
     my $oldwhere = " WHERE sync=\$1 AND cdate >= '$earliest'";
 
-    $SQL = $d->{SINGLE} ? 
+    $SQL = $d->{SINGLE} ?
 qq{SELECT
   synctype,
 $SQLSTART
@@ -1491,7 +1490,7 @@ div.showsql {
 }
 span.showtime { font-weight: bolder; }
 span.relname { color: #cc0000; }
-span.parrow { color: #000000; font-weight: bold; } 
+span.parrow { color: #000000; font-weight: bold; }
 span.pword { font-weight: bold; }
 span.pword2 { font-weight: bold; color: #330033; }
 span.actualtime { color: #000000; font-weight: bold; }

@@ -2,7 +2,7 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-<title>bucardo - utility script for controlling the Bucardo program</title>
+<title>bucardo - utility program for controlling the Bucardo service</title>
 <meta http-equiv="content-type" content="text/html; charset=utf-8" />
 
 </head>
@@ -75,16 +75,17 @@
   <li><a href="#ENVIRONMENT-VARIABLES">ENVIRONMENT VARIABLES</a></li>
   <li><a href="#BUGS">BUGS</a></li>
   <li><a href="#SEE-ALSO">SEE ALSO</a></li>
+  <li><a href="#AUTHOR">AUTHOR</a></li>
   <li><a href="#COPYRIGHT">COPYRIGHT</a></li>
 </ul>
 
 <h1 id="NAME">NAME</h1>
 
-<p>bucardo - utility script for controlling the Bucardo program</p>
+<p>bucardo - utility program for controlling the Bucardo service</p>
 
 <h1 id="VERSION">VERSION</h1>
 
-<p>This document describes version 5.6.0 of bucardo</p>
+<p>This document describes version 5.7.0 of bucardo.</p>
 
 <h1 id="USAGE">USAGE</h1>
 
@@ -92,11 +93,11 @@
 
 <h1 id="DESCRIPTION">DESCRIPTION</h1>
 
-<p>The bucardo script is the main interaction to a running Bucardo instance. It can be used to start and stop Bucardo, add new items, kick syncs, and even install and upgrade Bucardo itself. For more complete documentation, please view <a href="https://bucardo.org/">the wiki</a>.</p>
+<p>The bucardo program is the main interaction to a running Bucardo service. It can be used to start and stop Bucardo, add new items, kick syncs, and even install and upgrade Bucardo itself. For more complete documentation, please view <a href="https://bucardo.org/">the Bucardo website</a>.</p>
 
 <h1 id="COMMANDS">COMMANDS</h1>
 
-<p>Run <code>bucardo help &lt;command&gt;</code> for additional details</p>
+<p>Run <code>bucardo help &lt;command&gt;</code> for additional details.</p>
 
 <dl>
 
@@ -181,7 +182,7 @@
 <dt id="set-setting-value-setting-value"><code>&lt;set &lt;setting=value</code> [&lt;setting=value&gt;...] &gt;&gt;</dt>
 <dd>
 
-<p>Sets one or more configuration setting..</p>
+<p>Sets one or more configuration setting.</p>
 
 </dd>
 <dt id="ping-timeout"><code>ping [&lt;timeout&gt;]</code></dt>
@@ -395,6 +396,12 @@
 <p>Forces removal of all old log files before running.</p>
 
 </dd>
+<dt id="foreground"><code>--foreground</code></dt>
+<dd>
+
+<p>Run Bucardo in the foreground; do not daemonize. Useful for running Bucardo inside a container or from systemd.</p>
+
+</dd>
 <dt id="debug"><code>--debug</code></dt>
 <dd>
 
@@ -551,9 +558,6 @@
 <ul>
 
 <li><p><code>postgres</code></p>
-
-</li>
-<li><p><code>drizzle</code></p>
 
 </li>
 <li><p><code>mongo</code></p>
@@ -1605,9 +1609,6 @@
 <li><p><code>postgres</code></p>
 
 </li>
-<li><p><code>drizzle</code></p>
-
-</li>
 <li><p><code>mongo</code></p>
 
 </li>
@@ -2129,7 +2130,7 @@
 <dt id="bucardo_version"><code>bucardo_version</code></dt>
 <dd>
 
-<p>Current version of Bucardo. Default: <code>5.6.0</code>.</p>
+<p>Current version of Bucardo. Default: <code>5.7.0</code>.</p>
 
 </dd>
 <dt id="bucardo_vac"><code>bucardo_vac</code></dt>
@@ -2141,7 +2142,7 @@
 <dt id="bucardo_initial_version"><code>bucardo_initial_version</code></dt>
 <dd>
 
-<p>Bucardo version this schema was created with. Default: <code>5.6.0</code>.</p>
+<p>Bucardo version this schema was created with. Default: <code>5.7.0</code>.</p>
 
 </dd>
 <dt id="ctl_checkonkids_time"><code>ctl_checkonkids_time</code></dt>
@@ -2700,15 +2701,19 @@
 
 <h1 id="BUGS">BUGS</h1>
 
-<p>Bug reports and feature requests are always welcome, please visit <a href="https://bucardo.org">bucardo.org</a>, file <a href="http://github.com/bucardo/bucardo/issues">GitHub Issues</a>, or post to our <a href="https://bucardo.org/mailman/listinfo/bucardo-general">email list</a>.</p>
+<p>Bug reports and feature requests are always welcome, please visit <a href="https://bucardo.org">bucardo.org</a>, file <a href="https://github.com/bucardo/bucardo/issues">GitHub Issues</a>, or post to our <a href="https://bucardo.org/mailman/listinfo/bucardo-general">email list</a>.</p>
 
 <h1 id="SEE-ALSO">SEE ALSO</h1>
 
 <p>Bucardo</p>
 
+<h1 id="AUTHOR">AUTHOR</h1>
+
+<p>Greg Sabino Mullane &lt;greg@turnstep.com&gt;</p>
+
 <h1 id="COPYRIGHT">COPYRIGHT</h1>
 
-<p>Copyright 2006-2021 Greg Sabino Mullane &lt;greg@turnstep.com&gt;</p>
+<p>Copyright &copy; 2006-2021 Greg Sabino Mullane &lt;greg@turnstep.com&gt;.</p>
 
 <p>This program is free to use, subject to the limitations in the LICENSE file.</p>
 

@@ -1,20 +1,10 @@
 TODO list for Bucardo
 =====================
 
-Version 5
+Near-term
 ---------
 
-* Fix 'error loop' escaping bug from mailing list
-  https://github.com/bucardo/bucardo/issues/13
-
-Version 5.1
------------
-
-* Get Drizzle tests verified as working
-  https://github.com/bucardo/bucardo/issues/16
-
-* Get bucardo-report working again
-  https://github.com/bucardo/bucardo/issues/17
+See GitHub issues: https://github.com/bucardo/bucardo/issues
 
 Future
 ------
@@ -34,15 +24,15 @@ These range the gamut from wildly speculative ideas to must-have features.
 - Allow 'bucardo update relgroup' to work
 - Use something more specific than txntime, which is not unique enough
 - Allow bucardo add table ... --relgroup=foo to work, or at least throw an error.
-- Remove the need for pl/perl entirely: put all logic into ./bucardo
+- Remove the need for PL/Perl entirely: put all logic into the bucardo executable
 - Allow a new type of trigger that only indicates if a table has changed or not.
-  Rather than storing a PK, we only note "changed". This would allow fullcopy tables 
+  Rather than storing a PK, we only note "changed". This would allow fullcopy tables
   inside of a sync to run or just get skipped.
 - Make the listen/notify system cleaner, maybe break into mcp/ctl/kid streams rather than generic 'bucardo'
 - Create a new "sourceonly" type what can issue deltas but not receive them
 - Make sure pkonly and makedelta=xx work everywhere, e.g. add/update relation/relgroup
 - Allow syncs to be grouped together to allow for a single kicksync notification
-- Allow columns A.varchar(x) and B.varchar(x+y) to be equivalent in the initial 
+- Allow columns A.varchar(x) and B.varchar(x+y) to be equivalent in the initial
 validate_sync check if B is only a target
 - Allow skipping of some or all of the initial schema checks; currently
   necessary but time consuming for large numbers of tables/servers
@@ -70,11 +60,11 @@ validate_sync check if B is only a target
 - I8n all messages/docs/etc.
 - Allow targets to be hard-linked: nobody goes on until everyone has finished
 - Support large objects
-- Support system tables (Postgres 12.0?)
+- Support system tables
 - Check for superuser on startup, to prevent errors that only show when a KID tries something.
 - Add a flag that allows for table structure checking before each sync
 - Make a Bucardo bundle for CPAN-like fun
-- Readonly slaves: trigger/rule to prevent with good message
+- Readonly targets: trigger/rule to prevent with good message
 - bucardo_help() function to explain all
 - Handle non-orderable data types such as polygons
 - Put this list into a bug tracker
@@ -82,7 +72,7 @@ validate_sync check if B is only a target
 - Log validate_sync changes somewhere, add rollback statements
 - Add support for manual DDL changes
 - Add support for automatic DDL changes
-- Cascading slaves: makedelta should create infrastructure as necessary
+- Cascading targets: makedelta should create infrastructure as necessary
 - Use polling not sleep for loop notifications
 - Remove large src_code sections from the kid output when they die
 - Force to C locale until we get i18n in place
@@ -93,8 +83,9 @@ validate_sync check if B is only a target
 - Mongo: fix escaped data from COPY TO STDOUT
 - Flatfiles: same escaped data as above for non-PG output
 
-- Add readonly slaves:
-  Need to design a system to make slaves optionally "readonly". This will most
+- Add readonly targets:
+  Need to design a system to make targets optionally "readonly". This will most
   likely be accomplished through use of triggers. There should be a simple
   interface to toggle the read-only on and off per database, and perhaps per
   sync. Need to consider making non-tracked tables read-only as well.
+

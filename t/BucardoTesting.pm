@@ -1166,8 +1166,8 @@ sub restart_bucardo {
     ## If the caller of this function makes changes right away and then kicks,
     ## Bucardo may see them on the "startup kick" and thus the caller will
     ## get a "syncdone" message that was not initiated by *their* kick.
-    ## One way around this is to make sure your caller immediately does a 
-    ## kick 0, which will flush out the startup kick. If it arrives after the 
+    ## One way around this is to make sure your caller immediately does a
+    ## kick 0, which will flush out the startup kick. If it arrives after the
     ## startup kick, then it simply returns as a sync with no activity
 
     return 1;
