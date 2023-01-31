@@ -4574,6 +4574,7 @@ sub start_kid {
                         }
                         else {
                             $have_targets = 1;
+                            delete $sync->{otc}{skip}{$dbname};
                         }
                     }
 
