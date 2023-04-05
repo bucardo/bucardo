@@ -90,6 +90,7 @@ my $bcargs = {
               logextension => '',
               logclean     => 0,
               batch        => 0,
+              foreground   => 0,
           };
 
 ## These options must come before the main GetOptions call
@@ -158,6 +159,7 @@ GetOptions ## no critic (ProhibitCallsToUndeclaredSubs)
      'retry=i',
      'retrysleep|retry-sleep=i',
      'batch',
+     'foreground',
      'dryrun|dry-run',
      'confirm',
      'tsep=s',
@@ -867,14 +869,19 @@ sub start {
     my %remove = map { $_ => undef } @nouns;
     @opts = grep { ! exists $remove{$_} } @opts;
 
-    ## Fork and setsid to disassociate ourselves from the daemon
-    if (fork) {
-        ## We are the kid, do nothing
-    }
-    else {
-        setsid() or die;
-        ## Here we go!
-        $bc->start_mcp( \@opts );
+    ## Check if we should daemonize
+    if ($bcargs->{'foreground'}) {
+	$bc->start_mcp( \@opts );
+    } else {
+        ## Fork and setsid to disassociate ourselves from the daemon
+        if (fork) {
+            ## We are the kid, do nothing
+        }
+        else {
+            setsid() or die;
+            ## Here we go!
+            $bc->start_mcp( \@opts );
+        }
     }
 
     exit 0;
@@ -10359,6 +10366,11 @@ F<log.bucardo>. A dot is added before the name as well, so a log extension of
 =item C<--log-clean>
 
 Forces removal of all old log files before running.
+
+=item C<--foreground>
+
+Run bucardo in the foreground; do not daemonize. Useful for running bucardo
+inside a container or from systemd.
 
 =item C<--debug>
 
