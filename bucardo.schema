@@ -2421,6 +2421,9 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
             my @pkeys = split (/\|/ => $tinfo->{pkey});
 
+            ## Migration project id variable declaration !!!
+            my $project_id_var = 16074;
+
          if (! exists $bfunctionoid{$noquote_deltafunc}) {
                  my $new = join ',' => map { qq{NEW."$_"} } @pkeys;
                  my $old = join ',' => map { qq{OLD."$_"} } @pkeys;
@@ -2435,7 +2438,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         AS
         \$clone\$
         BEGIN
-        IF(NEW.project_id = OR OLD.project_id = ) THEN
+        IF(NEW.project_id = $project_id_var OR OLD.project_id = $project_id_var) THEN
           IF (TG_OP = 'INSERT') THEN
             INSERT INTO bucardo.$delta_table VALUES ($new);
           ELSIF (TG_OP = 'UPDATE') THEN
