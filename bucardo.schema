@@ -2425,6 +2425,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
                  my $new = join ',' => map { qq{NEW."$_"} } @pkeys;
                  my $old = join ',' => map { qq{OLD."$_"} } @pkeys;
                  my $clause = join ' OR ' => map { qq{OLD."$_" <> NEW."$_"} } @pkeys;
+        ## SINGLE LEVEL LOGIC
                 $SQL = qq{
         CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
         RETURNS TRIGGER
@@ -2434,16 +2435,17 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         AS
         \$clone\$
         BEGIN
-        RAISE NOTICE 'THIS IS CREATE TRIGGER FUNCTION';
-        IF (TG_OP = 'INSERT') THEN
-          INSERT INTO bucardo.$delta_table VALUES ($new);
-        ELSIF (TG_OP = 'UPDATE') THEN
-          INSERT INTO bucardo.$delta_table VALUES ($old);
-          IF ($clause) THEN
+        IF(NEW.project_id = OR OLD.project_id = ) THEN
+          IF (TG_OP = 'INSERT') THEN
             INSERT INTO bucardo.$delta_table VALUES ($new);
+          ELSIF (TG_OP = 'UPDATE') THEN
+            INSERT INTO bucardo.$delta_table VALUES ($old);
+            IF ($clause) THEN
+              INSERT INTO bucardo.$delta_table VALUES ($new);
+            END IF;
+          ELSE
+            INSERT INTO bucardo.$delta_table VALUES ($old);
           END IF;
-        ELSE
-          INSERT INTO bucardo.$delta_table VALUES ($old);
         END IF;
         RETURN NULL;
         END;
