@@ -2434,6 +2434,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         AS
         \$clone\$
         BEGIN
+        RAISE NOTICE 'THIS IS CREATE TRIGGER FUNCTION';
         IF (TG_OP = 'INSERT') THEN
           INSERT INTO bucardo.$delta_table VALUES ($new);
         ELSIF (TG_OP = 'UPDATE') THEN
