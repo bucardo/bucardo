@@ -2422,7 +2422,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
             my @pkeys = split (/\|/ => $tinfo->{pkey});
 
             ## Migration project id variable declaration !!!
-            my $project_id_var = 16074;
+            my $project_id_var = 1597;
 
          if (! exists $bfunctionoid{$noquote_deltafunc}) {
                  my $new = join ',' => map { qq{NEW."$_"} } @pkeys;
