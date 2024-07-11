@@ -2423,37 +2423,1138 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
             ## Migration project id variable declaration !!!
             my $project_id_var = 1597;
+            ## Definition of single level join table list
+
+            my @single_table_list = ('addon_coupons', 'ahoy_messages', 'app_credentials', 'article_feedbacks', 'articles', 'articles_copy', 'assignment_rule_triggers', 'assignment_rules', 'automation_coupons', 'automation_rules', 'billings', 'blacklisted_emails', 'blocked_ips', 'blocked_people', 'bot_components', 'bot_priorities', 'bot_templates', 'bots', 'bounced_emails', 'bulk_imports', 'campaigns', 'cards_projects', 'categories', 'charges', 'chat_tags', 'companies', 'company_properties', 'conversation_metrics', 'conversation_properties', 'conversation_replies_metrics', 'conversations', 'coupons', 'custom_email_templates', 'custom_invoices', 'custom_team_mates', 'deal_properties', 'deals', 'default_settings', 'deleted_people', 'domains', 'ecommerce_carts', 'ecommerce_categories', 'ecommerce_checkouts', 'ecommerce_customers', 'ecommerce_orders', 'ecommerce_products', 'ecommerce_stores', 'email_blocking_histories', 'email_coupons', 'embedding_vectors', 'emma_raw_sources', 'emma_source_items', 'event_categories', 'events', 'exports', 'fb_integrations', 'feature_tags', 'folders', 'form_data', 'forms', 'gist_webhooks', 'imports', 'inbound_email_addresses', 'inbox_views', 'integrated_apps', 'integration_data', 'invites', 'kb_themes', 'knowledgebase_migrations', 'knowledgebase_settings', 'launch_urls', 'live_people', 'mail_filters', 'mail_subscriptions', 'meeting_links', 'meetings', 'message_goals', 'open_ai_data', 'page_visit_urls', 'people', 'people_keys', 'people_notes', 'pipelines', 'project_low_priorities', 'project_roles', 'project_subscription_histories', 'project_subscription_plans', 'projects_developer_apps', 'property_categories', 'satisfaction_ratings', 'saved_replies', 'segments', 'settings', 'setup_guides', 'snippet_categories', 'soft_bounced_emails', 'spam_emails', 'subscription_bills', 'support_bot_analytics', 'survey_themes', 'surveys', 'tags', 'tasks', 'teams', 'temp_embedding_vectors', 'tours', 'triggered_chats', 'triggers', 'ultimate_plan_coupons', 'unanswered_questions', 'users', 'users_profiles', 'users_projects', 'users_projects_roles', 'webhook_subscriptions', 'webhooks', 'workflow_templates', 'workflow_templates_users', 'workflows', 'scheduled_meetings');
+
+            ## Convert each list to a hash for fast lookup
+
+            my %hash1 = map { $_ => 1 } @single_table_list;
 
          if (! exists $bfunctionoid{$noquote_deltafunc}) {
                  my $new = join ',' => map { qq{NEW."$_"} } @pkeys;
                  my $old = join ',' => map { qq{OLD."$_"} } @pkeys;
                  my $clause = join ' OR ' => map { qq{OLD."$_" <> NEW."$_"} } @pkeys;
         ## SINGLE LEVEL LOGIC
-                $SQL = qq{
-        CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
-        RETURNS TRIGGER
-        LANGUAGE plpgsql
-        SECURITY DEFINER
-        VOLATILE
-        AS
-        \$clone\$
-        BEGIN
-        IF(NEW.project_id = $project_id_var OR OLD.project_id = $project_id_var) THEN
-          IF (TG_OP = 'INSERT') THEN
-            INSERT INTO bucardo.$delta_table VALUES ($new);
-          ELSIF (TG_OP = 'UPDATE') THEN
-            INSERT INTO bucardo.$delta_table VALUES ($old);
-            IF ($clause) THEN
+        if (exists $hash1{$table}) {
+                  ## CREATE TRIGGER STATEMENT LOGIC FOR SINGLE LEVEL TABLE
+                  $SQL = qq{
+          CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+          RETURNS TRIGGER
+          LANGUAGE plpgsql
+          SECURITY DEFINER
+          VOLATILE
+          AS
+          \$clone\$
+          BEGIN
+          IF(NEW.project_id = $project_id_var OR OLD.project_id = $project_id_var) THEN
+            IF (TG_OP = 'INSERT') THEN
               INSERT INTO bucardo.$delta_table VALUES ($new);
+            ELSIF (TG_OP = 'UPDATE') THEN
+              INSERT INTO bucardo.$delta_table VALUES ($old);
+              IF ($clause) THEN
+                INSERT INTO bucardo.$delta_table VALUES ($new);
+              END IF;
+            ELSE
+              INSERT INTO bucardo.$delta_table VALUES ($old);
             END IF;
-          ELSE
-            INSERT INTO bucardo.$delta_table VALUES ($old);
           END IF;
-        END IF;
-        RETURN NULL;
-        END;
-        \$clone\$;
-      };
+          RETURN NULL;
+          END;
+          \$clone\$;
+          };
+        }
+
+        ## Double level joins table if condition (where the association is with scheduled_meetings table)
+
+        elsif($tablename == 'scheduled_meetings_users') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.scheduled_meetings WHERE id IN (NEW.scheduled_meeting_id, OLD.scheduled_meeting_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with people table)
+
+        elsif($tablename == 'activities' or $tablename == 'people_identifiers' or $tablename == 'people_scheduled_meetings' or $tablename == 'workflow_component_people') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.people WHERE id IN (NEW.person_id, OLD.person_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with articles table)
+
+        elsif($tablename == 'article_page_visits') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.articles WHERE id IN (NEW.article_id, OLD.article_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with categories table)
+
+        elsif($tablename == 'articles_categories') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.categories WHERE id IN (NEW.category_id, OLD.category_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with assignment_rules table)
+
+        elsif($tablename == 'assignment_rule_actions' or $tablename == 'assignment_rule_conditions') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.assignment_rules WHERE id IN (NEW.assignment_rule_id, OLD.assignment_rule_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with automation_rules table)
+
+        elsif($tablename == 'automation_rule_actions' or $tablename == 'automation_rule_people' or $tablename == 'automation_rule_triggers') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.automation_rules WHERE id IN (NEW.automation_rule_id, OLD.automation_rule_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with bot_components table)
+
+        elsif($tablename == 'bot_component_people' or $tablename == 'bot_sub_components' or $tablename == 'bot_delay_component_details') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.bot_components WHERE id IN (NEW.bot_component_id, OLD.bot_component_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with campaigns table)
+
+        elsif($tablename == 'campaigns_people') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.campaigns WHERE id IN (NEW.campaign_id, OLD.campaign_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with chat_tags table)
+
+        elsif($tablename == 'chat_tags_messages' or $tablename == 'conversation_message_tags') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.chat_tags WHERE id IN (NEW.chat_tag_id, OLD.chat_tag_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with companies table)
+
+        elsif($tablename == 'company_notes') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.companies WHERE id IN (NEW.company_id, OLD.company_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with conversation_properties table)
+
+        elsif($tablename == 'conversation_property_options') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.conversation_properties WHERE id IN (NEW.conversation_property_id, OLD.conversation_property_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with users_projects table)
+
+        elsif($tablename == 'crm_emails' or $tablename == 'deal_and_company_activities' or $tablename == 'messages_users' or $tablename == 'billing_details') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.users_projects WHERE user_id IN (NEW.user_id, OLD.user_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+        
+        ## Double level joins table if condition (where the association is with deals table)
+
+        elsif($tablename == 'deal_notes' or $tablename == 'deals_people') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.deals WHERE id IN (NEW.deal_id, OLD.deal_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with users_projects table)
+
+        elsif($tablename == 'email_accounts') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.users_projects WHERE id IN (NEW.users_project_id, OLD.users_project_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with settings table)
+
+        elsif($tablename == 'enabled_paths') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.settings WHERE id IN (NEW.id, OLD.id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with events table)
+
+        elsif($tablename == 'event_data_events') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.events WHERE id IN (NEW.event_id, OLD.event_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with mail_filters table)
+
+        elsif($tablename == 'failed_messages' or $tablename == 'mail_filters_links' or $tablename == 'mail_filters_people' or $tablename == 'person_email_opens') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.mail_filters WHERE id IN (NEW.mail_filter_id, OLD.mail_filter_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with feature_tags table)
+
+        elsif($tablename == 'features_tags') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.feature_tags WHERE id IN (NEW.feature_tag_id, OLD.feature_tag_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with tags table)
+
+        elsif($tablename == 'goal_tags' or $tablename == 'people_tags') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.tags WHERE id IN (NEW.tag_id, OLD.tag_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with bots table)
+
+        elsif($tablename == 'goals' or $tablename == 'questions') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.bots WHERE id IN (NEW.bot_id, OLD.bot_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with mail_subscriptions table)
+
+        elsif($tablename == 'mail_subscriptions_entities' or $tablename == 'mail_subscriptions_people') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.mail_subscriptions WHERE id IN (NEW.mail_subscription_id, OLD.mail_subscription_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with message_goals table)
+
+        elsif($tablename == 'message_goals_people') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.message_goals WHERE id IN (NEW.message_goal_id, OLD.message_goal_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with conversations table)
+
+        elsif($tablename == 'messages') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.conversations WHERE conversation_identifier IN (NEW.conversation_identifier, OLD.conversation_identifier) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with segments table)
+
+        elsif($tablename == 'people_segments') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.segments WHERE id IN (NEW.segment_id, OLD.segment_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with articles table special case)
+
+        elsif($tablename == 'pg_search_documents') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.articles WHERE id IN (NEW.searchable_id, OLD.searchable_id) AND  LIMIT 1;
+                IF((proj_id_var = $project_id_var) AND (NEW.searchable_type = 'Article' OR OLD.searchable_type = 'Article')) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with ecommerce_categories table)
+
+        elsif($tablename == 'product_categories') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.ecommerce_categories WHERE id IN (NEW.ecommerce_category_id, OLD.ecommerce_category_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with pipelines table)
+
+        elsif($tablename == 'stages') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.pipelines WHERE id IN (NEW.pipeline_id, OLD.pipeline_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with support_bot_analytics table)
+
+        elsif($tablename == 'support_bot_analytics_sources') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.support_bot_analytics WHERE id IN (NEW.support_bot_analytics_id, OLD.support_bot_analytics_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with surveys table)
+
+        elsif($tablename == 'survey_responses') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.surveys WHERE id IN (NEW.survey_id, OLD.survey_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with teams table)
+
+        elsif($tablename == 'teams_users') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.teams WHERE id IN (NEW.team_id, OLD.team_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with tours table)
+
+        elsif($tablename == 'tour_views') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.tours WHERE id IN (NEW.tour_id, OLD.tour_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with triggered_chats table)
+
+        elsif($tablename == 'triggered_chat_pending_people') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.triggered_chats WHERE id IN (NEW.triggered_chat_id, OLD.triggered_chat_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        ## Double level joins table if condition (where the association is with workflows table)
+
+        elsif($tablename == 'workflow_components' or $tablename == 'workflow_people') {
+        	$SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+        	DECLARE
+        		proj_id_var int;
+                BEGIN
+        	SELECT project_id INTO proj_id_var FROM public.workflows WHERE id IN (NEW.workflow_id, OLD.workflow_id) LIMIT 1;
+                IF(proj_id_var = $project_id_var) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
+        
                 $run_sql->($SQL,$dbh);
             }
 
