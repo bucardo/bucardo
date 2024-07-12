@@ -3833,6 +3833,35 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
               \$clone\$;
             };
         }
+
+        #default 
+
+        else {
+        $SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+                BEGIN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };	
+
+        } 
         
                 $run_sql->($SQL,$dbh);
             }
