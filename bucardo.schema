@@ -2467,7 +2467,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with scheduled_meetings table)
 
-        elsif($table == 'scheduled_meetings_users') {
+        elsif($table eq 'scheduled_meetings_users') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -2500,7 +2500,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with people table)
 
-        elsif($table == 'activities' or $table == 'people_identifiers' or $table == 'people_scheduled_meetings' or $table == 'workflow_component_people') {
+        elsif($table eq 'activities' or $table eq 'people_identifiers' or $table eq 'people_scheduled_meetings' or $table eq 'workflow_component_people') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -2533,7 +2533,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with articles table)
 
-        elsif($table == 'article_page_visits') {
+        elsif($table eq 'article_page_visits') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -2566,7 +2566,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with categories table)
 
-        elsif($table == 'articles_categories') {
+        elsif($table eq 'articles_categories') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -2599,7 +2599,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with assignment_rules table)
 
-        elsif($table == 'assignment_rule_actions' or $table == 'assignment_rule_conditions') {
+        elsif($table eq 'assignment_rule_actions' or $table eq 'assignment_rule_conditions') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -2632,7 +2632,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with automation_rules table)
 
-        elsif($table == 'automation_rule_actions' or $table == 'automation_rule_people' or $table == 'automation_rule_triggers') {
+        elsif($table eq 'automation_rule_actions' or $table eq 'automation_rule_people' or $table eq 'automation_rule_triggers') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -2665,7 +2665,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with bot_components table)
 
-        elsif($table == 'bot_component_people' or $table == 'bot_sub_components' or $table == 'bot_delay_component_details') {
+        elsif($table eq 'bot_component_people' or $table eq 'bot_sub_components' or $table eq 'bot_delay_component_details') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -2698,7 +2698,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with campaigns table)
 
-        elsif($table == 'campaigns_people') {
+        elsif($table eq 'campaigns_people') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -2731,7 +2731,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with chat_tags table)
 
-        elsif($table == 'chat_tags_messages' or $table == 'conversation_message_tags') {
+        elsif($table eq 'chat_tags_messages' or $table eq 'conversation_message_tags') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -2764,7 +2764,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with companies table)
 
-        elsif($table == 'company_notes') {
+        elsif($table eq 'company_notes') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -2797,7 +2797,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with conversation_properties table)
 
-        elsif($table == 'conversation_property_options') {
+        elsif($table eq 'conversation_property_options') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -2830,7 +2830,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with users_projects table)
 
-        elsif($table == 'crm_emails' or $table == 'deal_and_company_activities' or $table == 'messages_users' or $table == 'billing_details') {
+        elsif($table eq 'crm_emails' or $table eq 'deal_and_company_activities' or $table eq 'messages_users' or $table eq 'billing_details') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -2863,7 +2863,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         
         ## Double level joins table if condition (where the association is with deals table)
 
-        elsif($table == 'deal_notes' or $table == 'deals_people') {
+        elsif($table eq 'deal_notes' or $table eq 'deals_people') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -2896,7 +2896,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with users_projects table)
 
-        elsif($table == 'email_accounts') {
+        elsif($table eq 'email_accounts') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -2929,7 +2929,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with settings table)
 
-        elsif($table == 'enabled_paths') {
+        elsif($table eq 'enabled_paths') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -2962,7 +2962,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with events table)
 
-        elsif($table == 'event_data_events') {
+        elsif($table eq 'event_data_events') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -2995,7 +2995,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with mail_filters table)
 
-        elsif($table == 'failed_messages' or $table == 'mail_filters_links' or $table == 'mail_filters_people' or $table == 'person_email_opens') {
+        elsif($table eq 'failed_messages' or $table eq 'mail_filters_links' or $table eq 'mail_filters_people' or $table eq 'person_email_opens') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3028,7 +3028,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with feature_tags table)
 
-        elsif($table == 'features_tags') {
+        elsif($table eq 'features_tags') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3061,7 +3061,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with tags table)
 
-        elsif($table == 'goal_tags' or $table == 'people_tags') {
+        elsif($table eq 'goal_tags' or $table eq 'people_tags') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3094,7 +3094,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with bots table)
 
-        elsif($table == 'goals' or $table == 'questions') {
+        elsif($table eq 'goals' or $table eq 'questions') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3127,7 +3127,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with mail_subscriptions table)
 
-        elsif($table == 'mail_subscriptions_entities' or $table == 'mail_subscriptions_people') {
+        elsif($table eq 'mail_subscriptions_entities' or $table eq 'mail_subscriptions_people') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3160,7 +3160,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with message_goals table)
 
-        elsif($table == 'message_goals_people') {
+        elsif($table eq 'message_goals_people') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3193,7 +3193,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with conversations table)
 
-        elsif($table == 'messages') {
+        elsif($table eq 'messages') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3226,7 +3226,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with segments table)
 
-        elsif($table == 'people_segments') {
+        elsif($table eq 'people_segments') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3259,7 +3259,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with articles table special case)
 
-        elsif($table == 'pg_search_documents') {
+        elsif($table eq 'pg_search_documents') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3292,7 +3292,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with ecommerce_categories table)
 
-        elsif($table == 'product_categories') {
+        elsif($table eq 'product_categories') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3325,7 +3325,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with pipelines table)
 
-        elsif($table == 'stages') {
+        elsif($table eq 'stages') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3358,7 +3358,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with support_bot_analytics table)
 
-        elsif($table == 'support_bot_analytics_sources') {
+        elsif($table eq 'support_bot_analytics_sources') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3391,7 +3391,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with surveys table)
 
-        elsif($table == 'survey_responses') {
+        elsif($table eq 'survey_responses') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3424,7 +3424,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with teams table)
 
-        elsif($table == 'teams_users') {
+        elsif($table eq 'teams_users') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3457,7 +3457,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with tours table)
 
-        elsif($table == 'tour_views') {
+        elsif($table eq 'tour_views') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3490,7 +3490,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with triggered_chats table)
 
-        elsif($table == 'triggered_chat_pending_people') {
+        elsif($table eq 'triggered_chat_pending_people') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3523,7 +3523,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Double level joins table if condition (where the association is with workflows table)
 
-        elsif($table == 'workflow_components' or $table == 'workflow_people') {
+        elsif($table eq 'workflow_components' or $table eq 'workflow_people') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3556,7 +3556,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Three level joins table if condition (where the association is with questions, bots table)
 
-        elsif($table == 'choices') {
+        elsif($table eq 'choices') {
           $SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3591,7 +3591,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Three level joins table if condition (where the association is with company_notes, companies  table)
 
-        elsif($table == 'company_notes_people') {
+        elsif($table eq 'company_notes_people') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3626,7 +3626,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Three level joins table if condition (where the association is with crm_emails, users_projects  table)
 
-        elsif($table == 'crm_emails_people') {
+        elsif($table eq 'crm_emails_people') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3661,7 +3661,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Three level joins table if condition (where the association is with deal_notes, deals  table)
 
-        elsif($table == 'deal_notes_people') {
+        elsif($table eq 'deal_notes_people') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3696,7 +3696,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Three level joins table if condition (where the association is with charges, users_projects  table)
 
-        elsif($table == 'invoice_refund_histories') {
+        elsif($table eq 'invoice_refund_histories') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3731,7 +3731,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Three level joins table if condition (where the association is with messages, conversations table)
 
-        elsif($table == 'message_embeddings') {
+        elsif($table eq 'message_embeddings') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3766,7 +3766,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Three level joins table if condition (where the association is with questions, bots table)
 
-        elsif($table == 'responses') {
+        elsif($table eq 'responses') {
         	$SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
@@ -3801,7 +3801,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## Three level joins table if condition (where the association is with people_identifiers, people table)
 
-        elsif($table == 'sessions') {
+        elsif($table eq 'sessions') {
         $SQL = qq{
               CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
               RETURNS TRIGGER
