@@ -9942,22 +9942,16 @@ sub push_rows {
                     $source_tablename,
                     $mode eq 'fullcopy' ? '' : " WHERE $Table->{pklist} = ANY(?)",
                     $Sync->{copyextra} ? " $Sync->{copyextra}" : '';
+                    
+                #custom full copy Overriding the srccmd command according to the tables
                 if($source_tablename eq 'public.ahoy_messages') {
-                    my $srccmd = sprintf '%sCOPY (%s FROM ONLY %s WHERE project_id=1597 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s WHERE project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
-                    $mode eq 'fullcopy' ? '' : " WHERE $Table->{pklist} = ANY(?)",
+                    $mode eq 'fullcopy' ? '' : " AND $Table->{pklist} = ANY(?)",
                     $Sync->{copyextra} ? " $Sync->{copyextra}" : '';
 
-                }
-                else {
-                    my $srccmd = sprintf '%sCOPY (%s FROM ONLY %s %s) TO STDOUT%s',
-                    $self->{sqlprefix},
-                    $SELECT,
-                    $source_tablename,
-                    $mode eq 'fullcopy' ? '' : " WHERE $Table->{pklist} = ANY(?)",
-                    $Sync->{copyextra} ? " $Sync->{copyextra}" : '';
                 }
                 my $srcsth = $sourcedbh->prepare($srccmd);
                 $mode eq 'fullcopy' ? $srcsth->execute() : $srcsth->execute( [ keys %$rows ]);
