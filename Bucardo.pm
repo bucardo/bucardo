@@ -9936,8 +9936,14 @@ sub push_rows {
             ## For a fullcopy mode, leave the WHERE clause out completely
             if ($mode eq 'fullcopy' or $mode eq 'anyclause') {
             #custom full copy
-                if(source_tablename eq 'public.ahoy_messages') {
-                    my $srccmd = sprintf '%sCOPY (%s FROM ONLY %s %s) TO STDOUT%s',
+                my $srccmd = sprintf '%sCOPY (%s FROM ONLY %s %s) TO STDOUT%s',
+                    $self->{sqlprefix},
+                    $SELECT,
+                    $source_tablename,
+                    $mode eq 'fullcopy' ? '' : " WHERE $Table->{pklist} = ANY(?)",
+                    $Sync->{copyextra} ? " $Sync->{copyextra}" : '';
+                if($source_tablename eq 'public.ahoy_messages') {
+                    my $srccmd = sprintf '%sCOPY (%s FROM ONLY %s WHERE project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
