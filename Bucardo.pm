@@ -9935,13 +9935,24 @@ sub push_rows {
             ## If we are doing a small batch of single primary keys, use ANY
             ## For a fullcopy mode, leave the WHERE clause out completely
             if ($mode eq 'fullcopy' or $mode eq 'anyclause') {
-                my $srccmd = sprintf '%sCOPY (%s FROM ONLY %s %s) TO STDOUT%s',
+            #custom full copy
+                if(source_tablename eq 'public.ahoy_messages') {
+                    my $srccmd = sprintf '%sCOPY (%s FROM ONLY %s %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
                     $mode eq 'fullcopy' ? '' : " WHERE $Table->{pklist} = ANY(?)",
                     $Sync->{copyextra} ? " $Sync->{copyextra}" : '';
 
+                }
+                else {
+                    my $srccmd = sprintf '%sCOPY (%s FROM ONLY %s %s) TO STDOUT%s',
+                    $self->{sqlprefix},
+                    $SELECT,
+                    $source_tablename,
+                    $mode eq 'fullcopy' ? '' : " WHERE $Table->{pklist} = ANY(?)",
+                    $Sync->{copyextra} ? " $Sync->{copyextra}" : '';
+                }
                 my $srcsth = $sourcedbh->prepare($srccmd);
                 $mode eq 'fullcopy' ? $srcsth->execute() : $srcsth->execute( [ keys %$rows ]);
             }
