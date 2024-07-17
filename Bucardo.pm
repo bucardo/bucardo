@@ -9950,7 +9950,7 @@ sub push_rows {
 
                 #modifiying the select statement according to the first table t1
 
-                $SELECT = 'SELECT t1.*'
+                $SELECT = 'SELECT t1.*';
                     
                 ##custom full copy Overriding the srccmd command according to the tables
                 if(exists $hash1{$source_tablename}) {
