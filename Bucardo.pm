@@ -10006,7 +10006,7 @@ sub push_rows {
                     $Sync->{copyextra} ? " $Sync->{copyextra}" : '';
                 }
 
-                elsif($source_tablename eq 'public.billing_details' or $source_tablename eq 'public.crm_emails' or $source_tablename eq 'public.deal_and_company_activities' or or $source_tablename eq 'public.messages_users') {
+                elsif($source_tablename eq 'public.billing_details' or $source_tablename eq 'public.crm_emails' or $source_tablename eq 'public.deal_and_company_activities' or $source_tablename eq 'public.messages_users') {
                     $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.users_projects t2 ON t1.user_id = t2.user_id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
