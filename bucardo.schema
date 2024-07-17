@@ -3834,6 +3834,39 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
             };
         }
 
+        ## special case secret key
+
+        elsif($tablename == 'rollups') {
+          $SQL = qq{
+                CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
+                RETURNS TRIGGER
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                VOLATILE
+                AS
+                \$clone\$
+          DECLARE
+            secretkey_match bool;
+                BEGIN
+          SELECT NEW.name ILIKE '%project_#{project_secret_key}%' INTO secretkey_match;
+                IF(secretkey_match) THEN
+                  IF (TG_OP = 'INSERT') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($new);
+                  ELSIF (TG_OP = 'UPDATE') THEN
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                    IF ($clause) THEN
+                      INSERT INTO bucardo.$delta_table VALUES ($new);
+                    END IF;
+                  ELSE
+                    INSERT INTO bucardo.$delta_table VALUES ($old);
+                  END IF;
+                END IF;
+                RETURN NULL;
+                END;
+                \$clone\$;
+              };
+        }
+
         #default 
 
         else {
