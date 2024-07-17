@@ -9949,7 +9949,7 @@ sub push_rows {
                     $Sync->{copyextra} ? " $Sync->{copyextra}" : '';
                     
                 ##custom full copy Overriding the srccmd command according to the tables
-                if(exists $hash1{$source_table}) {
+                if(exists $hash1{$source_tablename}) {
                     $srccmd = sprintf '%sCOPY (%s FROM ONLY %s WHERE project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
