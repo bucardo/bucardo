@@ -2578,7 +2578,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.categories WHERE id IN (NEW.category_id, OLD.category_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.categories WHERE id IN (NEW.category_id, OLD.category_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -2611,7 +2611,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.assignment_rules WHERE id IN (NEW.assignment_rule_id, OLD.assignment_rule_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.assignment_rules WHERE id IN (NEW.assignment_rule_id, OLD.assignment_rule_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -2644,7 +2644,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.automation_rules WHERE id IN (NEW.automation_rule_id, OLD.automation_rule_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.automation_rules WHERE id IN (NEW.automation_rule_id, OLD.automation_rule_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -2677,7 +2677,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.bot_components WHERE id IN (NEW.bot_component_id, OLD.bot_component_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.bot_components WHERE id IN (NEW.bot_component_id, OLD.bot_component_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -2710,7 +2710,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.campaigns WHERE id IN (NEW.campaign_id, OLD.campaign_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.campaigns WHERE id IN (NEW.campaign_id, OLD.campaign_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -2743,7 +2743,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	SELECT project_id INTO proj_id_var FROM public.chat_tags WHERE id IN (NEW.chat_tag_id, OLD.chat_tag_id) AND project_id = $proj_id_var LIMIT 1;
+        	SELECT project_id INTO proj_id_var FROM public.chat_tags WHERE id IN (NEW.chat_tag_id, OLD.chat_tag_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -2776,7 +2776,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.companies WHERE id IN (NEW.company_id, OLD.company_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.companies WHERE id IN (NEW.company_id, OLD.company_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -2809,7 +2809,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.conversation_properties WHERE id IN (NEW.conversation_property_id, OLD.conversation_property_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.conversation_properties WHERE id IN (NEW.conversation_property_id, OLD.conversation_property_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -2842,7 +2842,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.users_projects WHERE user_id IN (NEW.user_id, OLD.user_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.users_projects WHERE user_id IN (NEW.user_id, OLD.user_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -2875,7 +2875,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.deals WHERE id IN (NEW.deal_id, OLD.deal_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.deals WHERE id IN (NEW.deal_id, OLD.deal_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -2908,7 +2908,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.users_projects WHERE id IN (NEW.users_project_id, OLD.users_project_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.users_projects WHERE id IN (NEW.users_project_id, OLD.users_project_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -2941,7 +2941,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.settings WHERE id IN (NEW.id, OLD.id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.settings WHERE id IN (NEW.id, OLD.id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -2974,7 +2974,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.events WHERE id IN (NEW.event_id, OLD.event_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.events WHERE id IN (NEW.event_id, OLD.event_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -3007,7 +3007,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.mail_filters WHERE id IN (NEW.mail_filter_id, OLD.mail_filter_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.mail_filters WHERE id IN (NEW.mail_filter_id, OLD.mail_filter_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -3040,7 +3040,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.feature_tags WHERE id IN (NEW.feature_tag_id, OLD.feature_tag_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.feature_tags WHERE id IN (NEW.feature_tag_id, OLD.feature_tag_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -3073,7 +3073,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.tags WHERE id IN (NEW.tag_id, OLD.tag_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.tags WHERE id IN (NEW.tag_id, OLD.tag_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -3106,7 +3106,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.bots WHERE id IN (NEW.bot_id, OLD.bot_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.bots WHERE id IN (NEW.bot_id, OLD.bot_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -3139,7 +3139,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.mail_subscriptions WHERE id IN (NEW.mail_subscription_id, OLD.mail_subscription_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.mail_subscriptions WHERE id IN (NEW.mail_subscription_id, OLD.mail_subscription_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -3172,7 +3172,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.message_goals WHERE id IN (NEW.message_goal_id, OLD.message_goal_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.message_goals WHERE id IN (NEW.message_goal_id, OLD.message_goal_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -3205,7 +3205,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.conversations WHERE conversation_identifier IN (NEW.conversation_identifier, OLD.conversation_identifier) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.conversations WHERE conversation_identifier IN (NEW.conversation_identifier, OLD.conversation_identifier) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -3238,7 +3238,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.segments WHERE id IN (NEW.segment_id, OLD.segment_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.segments WHERE id IN (NEW.segment_id, OLD.segment_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -3271,7 +3271,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.articles WHERE id IN (NEW.searchable_id, OLD.searchable_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.articles WHERE id IN (NEW.searchable_id, OLD.searchable_id) AND project_id = $project_id_var LIMIT 1;
                 IF((proj_id_var IS NOT NULL) AND (proj_id_var = $project_id_var) AND (NEW.searchable_type = 'Article' OR OLD.searchable_type = 'Article')) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -3304,7 +3304,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.ecommerce_categories WHERE id IN (NEW.ecommerce_category_id, OLD.ecommerce_category_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.ecommerce_categories WHERE id IN (NEW.ecommerce_category_id, OLD.ecommerce_category_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -3337,7 +3337,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.pipelines WHERE id IN (NEW.pipeline_id, OLD.pipeline_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.pipelines WHERE id IN (NEW.pipeline_id, OLD.pipeline_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -3370,7 +3370,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.support_bot_analytics WHERE id IN (NEW.support_bot_analytics_id, OLD.support_bot_analytics_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.support_bot_analytics WHERE id IN (NEW.support_bot_analytics_id, OLD.support_bot_analytics_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -3403,7 +3403,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.surveys WHERE id IN (NEW.survey_id, OLD.survey_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.surveys WHERE id IN (NEW.survey_id, OLD.survey_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -3436,7 +3436,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.teams WHERE id IN (NEW.team_id, OLD.team_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.teams WHERE id IN (NEW.team_id, OLD.team_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -3469,7 +3469,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.tours WHERE id IN (NEW.tour_id, OLD.tour_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.tours WHERE id IN (NEW.tour_id, OLD.tour_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -3502,7 +3502,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.triggered_chats WHERE id IN (NEW.triggered_chat_id, OLD.triggered_chat_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.triggered_chats WHERE id IN (NEW.triggered_chat_id, OLD.triggered_chat_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
@@ -3535,7 +3535,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
         	DECLARE
         		proj_id_var int;
                 BEGIN
-        	      SELECT project_id INTO proj_id_var FROM public.workflows WHERE id IN (NEW.workflow_id, OLD.workflow_id) AND project_id = $proj_id_var LIMIT 1;
+        	      SELECT project_id INTO proj_id_var FROM public.workflows WHERE id IN (NEW.workflow_id, OLD.workflow_id) AND project_id = $project_id_var LIMIT 1;
                 IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
