@@ -3568,8 +3568,8 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
           DECLARE
             proj_id_var int;
                 BEGIN
-                SELECT t2.project_id INTO proj_id_var FROM public.questions t1 INNER JOIN public.bots t2 ON t2.id = t1.bot_id WHERE t1.id IN (NEW.question_id, OLD.question_id) LIMIT 1; 
-                IF(proj_id_var = $project_id_var) THEN
+                SELECT t2.project_id INTO proj_id_var FROM public.questions t1 INNER JOIN public.bots t2 ON t2.id = t1.bot_id WHERE t1.id IN (NEW.question_id, OLD.question_id) AND t3.project_id = $project_id_var LIMIT 1; 
+                IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
                   ELSIF (TG_OP = 'UPDATE') THEN
@@ -3600,10 +3600,9 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
                 \$clone\$
         	DECLARE
         		proj_id_var int;
-        		intermediate_id_var int;
                 BEGIN
-          SELECT t2.project_id INTO proj_id_var FROM public.company_notes t1 INNER JOIN public.companies t2 ON t2.id = t1.company_id WHERE t1.id IN (NEW.company_note_id, OLD.company_note_id) LIMIT 1;
-                IF(proj_id_var = $project_id_var) THEN
+          SELECT t2.project_id INTO proj_id_var FROM public.company_notes t1 INNER JOIN public.companies t2 ON t2.id = t1.company_id WHERE t1.id IN (NEW.company_note_id, OLD.company_note_id) AND t3.project_id = $project_id_var LIMIT 1;
+                IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
                   ELSIF (TG_OP = 'UPDATE') THEN
@@ -3634,10 +3633,9 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
                 \$clone\$
         	DECLARE
         		proj_id_var int;
-        		intermediate_id_var int;
                 BEGIN
-          SELECT t2.project_id INTO proj_id_var FROM public.crm_emails t1 INNER JOIN public.users_projects t2 ON t2.user_id = t1.user_id WHERE t1.id IN (NEW.crm_email_id, OLD.crm_email_id) LIMIT 1;
-                IF(proj_id_var = $project_id_var) THEN
+          SELECT t2.project_id INTO proj_id_var FROM public.crm_emails t1 INNER JOIN public.users_projects t2 ON t2.user_id = t1.user_id WHERE t1.id IN (NEW.crm_email_id, OLD.crm_email_id) AND t3.project_id = $project_id_var LIMIT 1;
+                IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
                   ELSIF (TG_OP = 'UPDATE') THEN
@@ -3668,10 +3666,9 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
                 \$clone\$
         	DECLARE
         		proj_id_var int;
-        		intermediate_id_var int;
                 BEGIN
-          SELECT t2.project_id INTO proj_id_var FROM public.deal_notes t1 INNER JOIN public.deals t2 ON t2.id = t1.deal_id WHERE t1.id IN (NEW.deal_note_id, OLD.deal_note_id) LIMIT 1;
-                IF(proj_id_var = $project_id_var) THEN
+          SELECT t2.project_id INTO proj_id_var FROM public.deal_notes t1 INNER JOIN public.deals t2 ON t2.id = t1.deal_id WHERE t1.id IN (NEW.deal_note_id, OLD.deal_note_id) AND t3.project_id = $project_id_var LIMIT 1;
+                IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
                   ELSIF (TG_OP = 'UPDATE') THEN
@@ -3702,10 +3699,9 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
                 \$clone\$
         	DECLARE
         		proj_id_var int;
-        		intermediate_id_var int;
                 BEGIN
-          SELECT t2.project_id INTO proj_id_var FROM public.charges t1 INNER JOIN public.users_projects t2 ON t2.user_id = t1.user_id WHERE t1.id IN (NEW.charge_id, OLD.charge_id) LIMIT 1;
-                IF(proj_id_var = $project_id_var) THEN
+          SELECT t2.project_id INTO proj_id_var FROM public.charges t1 INNER JOIN public.users_projects t2 ON t2.user_id = t1.user_id WHERE t1.id IN (NEW.charge_id, OLD.charge_id) AND t3.project_id = $project_id_var LIMIT 1;
+                IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
                   ELSIF (TG_OP = 'UPDATE') THEN
@@ -3736,10 +3732,9 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
                 \$clone\$
         	DECLARE
         		proj_id_var int;
-        		intermediate_id_var int;
                 BEGIN
-          SELECT t2.project_id INTO proj_id_var FROM public.messages t1 INNER JOIN public.conversations t2 ON t2.conversation_identifier = t1.conversation_identifier WHERE t1.id IN (NEW.message_id, OLD.message_id) LIMIT 1;
-                IF(proj_id_var = $project_id_var) THEN
+          SELECT t2.project_id INTO proj_id_var FROM public.messages t1 INNER JOIN public.conversations t2 ON t2.conversation_identifier = t1.conversation_identifier WHERE t1.id IN (NEW.message_id, OLD.message_id) AND t3.project_id = $project_id_var LIMIT 1;
+                IF(proj_id_var is NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
                   ELSIF (TG_OP = 'UPDATE') THEN
@@ -3770,10 +3765,9 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
                 \$clone\$
         	DECLARE
         		proj_id_var int;
-        		intermediate_id_var int;
                 BEGIN
-          SELECT t2.project_id INTO proj_id_var FROM public.questions t1 INNER JOIN public.bots t2 ON t2.id = t1.bot_id WHERE t1.id IN (NEW.question_id, OLD.question_id) LIMIT 1;
-                IF(proj_id_var = $project_id_var) THEN
+          SELECT t2.project_id INTO proj_id_var FROM public.questions t1 INNER JOIN public.bots t2 ON t2.id = t1.bot_id WHERE t1.id IN (NEW.question_id, OLD.question_id) AND t3.project_id = $project_id_var LIMIT 1;
+                IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
                   ELSIF (TG_OP = 'UPDATE') THEN
@@ -3804,10 +3798,9 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
               \$clone\$
         DECLARE
           proj_id_var int;
-          intermediate_id_var int;
               BEGIN
-        SELECT t2.project_id INTO proj_id_var FROM public.people_identifiers t1 INNER JOIN public.people t2 ON t2.id = t1.person_id WHERE t1.id IN (NEW.people_identifier_id, OLD.people_identifier_id) LIMIT 1;
-              IF(proj_id_var = $project_id_var) THEN
+        SELECT t2.project_id INTO proj_id_var FROM public.people_identifiers t1 INNER JOIN public.people t2 ON t2.id = t1.person_id WHERE t1.id IN (NEW.people_identifier_id, OLD.people_identifier_id) AND t3.project_id = $project_id_var LIMIT 1;
+              IF(proj_id_var IS NOT NULL AND proj_id_var = $project_id_var) THEN
                 IF (TG_OP = 'INSERT') THEN
                   INSERT INTO bucardo.$delta_table VALUES ($new);
                 ELSIF (TG_OP = 'UPDATE') THEN
