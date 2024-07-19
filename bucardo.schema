@@ -3820,7 +3820,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
 
         ## special case secret key
 
-        elsif($table == 'rollups') {
+        elsif($table eq 'rollups') {
           $SQL = qq{
                 CREATE OR REPLACE FUNCTION bucardo.$deltafunc()
                 RETURNS TRIGGER
