@@ -9785,7 +9785,7 @@ sub transform_name {
     my $name = shift;
 
     ## Complain right away if these are not standard characters
-    if ($name !~ /^[\w "]+$/) {
+    if ($name !~ /^[\w ]+$/) {
         die "Invalid name: $name\n";
     }
 
