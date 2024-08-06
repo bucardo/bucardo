@@ -9894,6 +9894,14 @@ sub push_rows {
 
             my $type = $Target->{dbtype};
 
+            ## adding double quotes
+
+            my ($new_schema, $new_table) = split(/\./, $target_tablename);
+
+            $new_schema = qq("$new_schema");
+
+            $target_tablename = "$new_schema.$new_table";
+
             ## Using columnlist avoids worrying about the order of columns
 
             if ('postgres' eq $type) {
