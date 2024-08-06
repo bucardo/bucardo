@@ -1037,9 +1037,6 @@ AND    a.attrelid = c.oid
 AND    a.atttypid = t.oid
 AND    attnum > 0
 };
-#checking
-$schema =~ s/"//g;
-$schema = qq($schema);
 
 $sth = $dbh->prepare($SQL);
 $count = $sth->execute($schema,$table);
