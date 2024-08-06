@@ -5051,7 +5051,7 @@ sub get_goat_ids {
             ## Assume we're talking about tables unless we say "sequence" explicitly
         my $type = ( $arg eq 'sequence' ? 'S' : 'r' );
         return qq{
-SELECT concat('"',nspname,'"') ||'.'||relname AS name, relkind, c.oid, coalesce(i.indisprimary, false) as relhaspkey, nspname, relname
+SELECT nspname ||'.'||relname AS name, relkind, c.oid, coalesce(i.indisprimary, false) as relhaspkey, nspname, relname
 FROM pg_class c
 JOIN pg_namespace n ON (n.oid = c.relnamespace)
 LEFT JOIN pg_index i ON (indrelid = c.oid AND indisprimary)
@@ -5266,6 +5266,9 @@ sub add_items_to_goat_table {
 
         ## Adjust the SQL as necessary for this goat
         $SQL = $NEWGOATSQL;
+        #added the doble quotes for $schema variable
+        $schema = qq($schema);
+
         my @args = ($schema, $table, $reltype, $db);
         if (exists $rel->{dbcols}) {
             for my $newcol (sort keys %{ $rel->{dbcols} }) {
