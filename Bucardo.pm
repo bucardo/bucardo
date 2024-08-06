@@ -8865,6 +8865,12 @@ sub table_has_rows {
     ## Some types do not have a count
     return 0 if $d->{does_append_only};
 
+    my ($new_schema, $new_table) = split(/\./, $tname);
+
+    $new_schema = qq("$new_schema");
+
+    $tname = "$new_schema.$new_table";
+
     if ($d->{does_limit}) {
         $SQL = "SELECT 1 FROM $tname LIMIT 1";
         $sth = $d->{dbh}->prepare($SQL);
