@@ -5051,7 +5051,7 @@ sub get_goat_ids {
             ## Assume we're talking about tables unless we say "sequence" explicitly
         my $type = ( $arg eq 'sequence' ? 'S' : 'r' );
         return qq{
-SELECT nspname||'.'||relname AS name, relkind, c.oid, coalesce(i.indisprimary, false) as relhaspkey, nspname, relname
+SELECT concat('"',nspname,'"') ||'.'||relname AS name, relkind, c.oid, coalesce(i.indisprimary, false) as relhaspkey, nspname, relname
 FROM pg_class c
 JOIN pg_namespace n ON (n.oid = c.relnamespace)
 LEFT JOIN pg_index i ON (indrelid = c.oid AND indisprimary)
