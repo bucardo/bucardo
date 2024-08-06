@@ -5267,7 +5267,7 @@ sub add_items_to_goat_table {
         ## Adjust the SQL as necessary for this goat
         $SQL = $NEWGOATSQL;
         #added the doble quotes along with single quotes for $schema variable
-        $schema = "'\"$schema\"'";
+        $schema = "\"$schema\"";
 
         my @args = ($schema, $table, $reltype, $db);
         if (exists $rel->{dbcols}) {
