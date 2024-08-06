@@ -9257,6 +9257,14 @@ sub delete_table {
 
     my $count = 0;
 
+    #adding double quotes into schema name
+
+    my ($new_schema, $new_table) = split(/\./, $tablename);
+
+    $new_schema = qq("$new_schema");
+
+    $tablename = "$new_schema.$new_table";
+
     if ($d->{does_sql}) {
         ($count = $d->{dbh}->do("DELETE FROM $tablename")) =~ s/0E0/0/o;
     }
