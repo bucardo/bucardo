@@ -9976,7 +9976,7 @@ sub push_rows {
                     
                 ##custom full copy Overriding the srccmd command according to the tables
                 if(exists $hash1{$source_tablename}) {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 WHERE t1.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 WHERE t1.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -9988,7 +9988,7 @@ sub push_rows {
                 ##Two Level joins initial copy logics
 
                 elsif($source_tablename eq 'public.activities' or $source_tablename eq 'public.people_identifiers' or $source_tablename eq 'public.people_scheduled_meetings' or $source_tablename eq 'public.workflow_component_people') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.people t2 ON t1.person_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.people t2 ON t1.person_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -9997,7 +9997,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.article_page_visits') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.articles t2 ON t1.article_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.articles t2 ON t1.article_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10006,7 +10006,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.articles_categories') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.categories t2 ON t1.category_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.categories t2 ON t1.category_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10015,7 +10015,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.assignment_rule_actions' or $source_tablename eq 'public.assignment_rule_conditions') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.assignment_rules t2 ON t1.assignment_rule_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.assignment_rules t2 ON t1.assignment_rule_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10024,7 +10024,7 @@ sub push_rows {
                 }
                 
                 elsif($source_tablename eq 'public.automation_rule_actions' or $source_tablename eq 'public.automation_rule_people' or $source_tablename eq 'public.automation_rule_triggers') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.automation_rules t2 ON t1.automation_rule_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.automation_rules t2 ON t1.automation_rule_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10033,7 +10033,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.billing_details' or $source_tablename eq 'public.crm_emails' or $source_tablename eq 'public.deal_and_company_activities' or $source_tablename eq 'public.messages_users') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.users_projects t2 ON t1.user_id = t2.user_id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.users_projects t2 ON t1.user_id = t2.user_id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10042,7 +10042,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.bot_component_people' or $source_tablename eq 'public.bot_sub_components') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.bot_components t2 ON t1.bot_component_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.bot_components t2 ON t1.bot_component_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10051,7 +10051,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.bot_delay_component_details') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.bot_components t2 ON t1.component_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.bot_components t2 ON t1.component_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10060,7 +10060,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.campaigns_people') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.campaigns t2 ON t1.campaign_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.campaigns t2 ON t1.campaign_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10069,7 +10069,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.chat_tags_messages' or $source_tablename eq 'public.conversation_message_tags') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.chat_tags t2 ON t1.chat_tag_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.chat_tags t2 ON t1.chat_tag_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10078,7 +10078,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.company_notes') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.companies t2 ON t1.company_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.companies t2 ON t1.company_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10087,7 +10087,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.conversation_property_options') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.conversation_properties t2 ON t1.conversation_property_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.conversation_properties t2 ON t1.conversation_property_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10096,7 +10096,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.conversation_property_options') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.conversation_properties t2 ON t1.conversation_property_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.conversation_properties t2 ON t1.conversation_property_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10105,7 +10105,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.deal_notes') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.deals t2 ON t1.deal_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.deals t2 ON t1.deal_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10114,7 +10114,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.deal_notes' or $source_tablename eq 'public.deals_people') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.deals t2 ON t1.deal_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.deals t2 ON t1.deal_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10123,7 +10123,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.email_accounts') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.users_projects t2 ON t1.users_project_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.users_projects t2 ON t1.users_project_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10132,7 +10132,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.enabled_paths') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.settings t2 ON t1.id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.settings t2 ON t1.id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10141,7 +10141,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.event_data_events') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.events t2 ON t1.event_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.events t2 ON t1.event_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10150,7 +10150,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.failed_messages' or $source_tablename eq 'public.mail_filters_links' or $source_tablename eq 'public.mail_filters_people' or $source_tablename eq 'public.person_email_opens') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.mail_filters t2 ON t1.mail_filter_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.mail_filters t2 ON t1.mail_filter_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10159,7 +10159,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.features_tags') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.feature_tags t2 ON t1.feature_tag_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.feature_tags t2 ON t1.feature_tag_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10168,7 +10168,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.goal_tags' or $source_tablename eq 'public.people_tags') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.tags t2 ON t1.tag_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.tags t2 ON t1.tag_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10177,7 +10177,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.goals' or $source_tablename eq 'public.questions') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.bots t2 ON t1.bot_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.bots t2 ON t1.bot_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10186,7 +10186,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.mail_subscriptions_entities' or $source_tablename eq 'public.mail_subscriptions_people') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.mail_subscriptions t2 ON t1.mail_subscription_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.mail_subscriptions t2 ON t1.mail_subscription_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10195,7 +10195,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.message_goals_people') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.message_goals t2 ON t1.message_goal_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.message_goals t2 ON t1.message_goal_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10204,7 +10204,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.messages') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.conversations t2 ON t1.conversation_identifier = t2.conversation_identifier WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.conversations t2 ON t1.conversation_identifier = t2.conversation_identifier WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10213,7 +10213,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.people_segments') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.segments t2 ON t1.segment_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.segments t2 ON t1.segment_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10222,7 +10222,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.pg_search_documents') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.articles t2 ON t1.searchable_id = t2.id AND t1.searchable_type = \'Article\' WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.articles t2 ON t1.searchable_id = t2.id AND t1.searchable_type = \'Article\' WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10231,7 +10231,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.product_categories') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.ecommerce_categories t2 ON t1.ecommerce_category_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.ecommerce_categories t2 ON t1.ecommerce_category_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10240,7 +10240,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.rollups') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 WHERE name ILIKE \'%project_#nmjk%\' %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 WHERE name ILIKE \'%project_#9bipx36y%\' %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10249,7 +10249,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.scheduled_meetings_users') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.scheduled_meetings t2 ON t1.scheduled_meeting_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.scheduled_meetings t2 ON t1.scheduled_meeting_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10258,7 +10258,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.stages') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.pipelines t2 ON t1.pipeline_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.pipelines t2 ON t1.pipeline_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10267,7 +10267,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.support_bot_analytics_sources') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.support_bot_analytics t2 ON t1.support_bot_analytics_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.support_bot_analytics t2 ON t1.support_bot_analytics_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10276,7 +10276,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.support_bot_analytics_sources') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.support_bot_analytics t2 ON t1.support_bot_analytics_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.support_bot_analytics t2 ON t1.support_bot_analytics_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10285,7 +10285,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.survey_responses') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.surveys t2 ON t1.survey_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.surveys t2 ON t1.survey_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10294,7 +10294,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.teams_users') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.teams t2 ON t1.team_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.teams t2 ON t1.team_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10303,7 +10303,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.tour_views') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.tours t2 ON t1.tour_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.tours t2 ON t1.tour_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10312,7 +10312,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.triggered_chat_pending_people') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.triggered_chats t2 ON t1.triggered_chat_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.triggered_chats t2 ON t1.triggered_chat_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10321,7 +10321,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.workflow_components' or $source_tablename eq 'public.workflow_people') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.workflows t2 ON t1.workflow_id = t2.id WHERE t2.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.workflows t2 ON t1.workflow_id = t2.id WHERE t2.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10332,7 +10332,7 @@ sub push_rows {
                 ## Three Level copy logics
 
                 elsif($source_tablename eq 'public.choices') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.questions t2 ON t1.question_id = t2.id INNER JOIN public.bots t3 ON t2.bot_id = t3.id WHERE t3.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.questions t2 ON t1.question_id = t2.id INNER JOIN public.bots t3 ON t2.bot_id = t3.id WHERE t3.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10341,7 +10341,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.company_notes_people') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.company_notes t2 ON t1.company_note_id = t2.id INNER JOIN public.companies t3 ON t2.company_id = t3.id WHERE t3.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.company_notes t2 ON t1.company_note_id = t2.id INNER JOIN public.companies t3 ON t2.company_id = t3.id WHERE t3.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10350,7 +10350,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.crm_emails_people') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.crm_emails t2 ON t1.crm_email_id = t2.id INNER JOIN public.users_projects t3 ON t2.user_id = t3.user_id WHERE t3.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.crm_emails t2 ON t1.crm_email_id = t2.id INNER JOIN public.users_projects t3 ON t2.user_id = t3.user_id WHERE t3.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10359,7 +10359,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.deal_notes_people') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.deal_notes t2 ON t1.deal_note_id = t2.id INNER JOIN public.deals t3 ON t2.deal_id = t3.id WHERE t3.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.deal_notes t2 ON t1.deal_note_id = t2.id INNER JOIN public.deals t3 ON t2.deal_id = t3.id WHERE t3.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10368,7 +10368,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.invoice_refund_histories') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.charges t2 ON t1.charge_id = t2.id INNER JOIN public.users_projects t3 ON t2.user_id = t3.user_id WHERE t3.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.charges t2 ON t1.charge_id = t2.id INNER JOIN public.users_projects t3 ON t2.user_id = t3.user_id WHERE t3.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10377,7 +10377,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.message_embeddings') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.messages t2 ON t1.message_id = t2.id INNER JOIN public.conversations t3 ON t2.conversation_identifier = t3.conversation_identifier WHERE t3.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.messages t2 ON t1.message_id = t2.id INNER JOIN public.conversations t3 ON t2.conversation_identifier = t3.conversation_identifier WHERE t3.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10386,7 +10386,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.responses') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.questions t2 ON t1.question_id = t2.id INNER JOIN public.bots t3 ON t2.bot_id = t3.id WHERE t3.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.questions t2 ON t1.question_id = t2.id INNER JOIN public.bots t3 ON t2.bot_id = t3.id WHERE t3.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10395,7 +10395,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.sessions') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.people_identifiers t2 ON t1.people_identifier_id = t2.id INNER JOIN public.people t3 ON t2.person_id = t3.id WHERE t3.project_id=1 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.people_identifiers t2 ON t1.people_identifier_id = t2.id INNER JOIN public.people t3 ON t2.person_id = t3.id WHERE t3.project_id=1597 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
