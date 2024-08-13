@@ -3864,7 +3864,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
           DECLARE
             secretkey_match bool;
                 BEGIN
-          SELECT NEW.name ILIKE '%project_#9bipx36y%' INTO secretkey_match;
+          SELECT NEW.name ILIKE '%project_9bipx36y%' INTO secretkey_match;
                 IF(secretkey_match) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
