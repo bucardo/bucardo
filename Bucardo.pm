@@ -10240,7 +10240,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.rollups') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 WHERE name ILIKE \'%project_4uowcpnl%\' %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 WHERE name ILIKE '%%project_4uowcpnl%%' %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
