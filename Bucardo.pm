@@ -9544,6 +9544,13 @@ sub delete_rows {
             ## The actual target name
             my $target_tablename = $customname->{$Target->{name}};
 
+            my ($new_schema, $new_table) = split(/\./, $target_tablename);
+
+            $new_schema = qq("$new_schema");
+
+            $target_tablename = "$new_schema.$new_table";
+
+
             if ('postgres' eq $Target->{dbtype}) {
 
                 ## Which chunk we are processing.
