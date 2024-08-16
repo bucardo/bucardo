@@ -3863,9 +3863,11 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
                 \$clone\$
           DECLARE
             secretkey_match bool;
+            secretkey_match_del bool;
                 BEGIN
           SELECT NEW.name ILIKE '%project_4uowcpnl%' INTO secretkey_match;
-                IF(secretkey_match) THEN
+          SELECT OLD.name ILIKE '%project_4uowcpnl%' INTO secretkey_match_del;
+                IF(secretkey_match OR secretkey_match_del) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
                   ELSIF (TG_OP = 'UPDATE') THEN
