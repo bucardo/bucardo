@@ -2423,7 +2423,7 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
             my @pkeys = split (/\|/ => $tinfo->{pkey});
 
             ## Migration project id variable declaration !!!
-            my $project_id_var = 35;
+            my $project_id_var = 1597;
             ## Definition of single level join table list
 
             my @single_table_list = ('addon_coupons', 'ahoy_messages', 'app_credentials', 'article_feedbacks', 'articles', 'articles_copy', 'assignment_rule_triggers', 'assignment_rules', 'automation_coupons', 'automation_rules', 'billings', 'blacklisted_emails', 'blocked_ips', 'blocked_people', 'bot_components', 'bot_priorities', 'bot_templates', 'bots', 'bounced_emails', 'bulk_imports', 'campaigns', 'cards_projects', 'categories', 'charges', 'chat_tags', 'companies', 'company_properties', 'conversation_metrics', 'conversation_properties', 'conversation_replies_metrics', 'conversations', 'coupons', 'custom_email_templates', 'custom_invoices', 'custom_team_mates', 'deal_properties', 'deals', 'default_settings', 'deleted_people', 'domains', 'ecommerce_carts', 'ecommerce_categories', 'ecommerce_checkouts', 'ecommerce_customers', 'ecommerce_orders', 'ecommerce_products', 'ecommerce_stores', 'email_blocking_histories', 'email_coupons', 'embedding_vectors', 'emma_raw_sources', 'emma_source_items', 'event_categories', 'events', 'exports', 'fb_integrations', 'feature_tags', 'folders', 'form_data', 'forms', 'gist_webhooks', 'imports', 'inbound_email_addresses', 'inbox_views', 'integrated_apps', 'integration_data', 'invites', 'kb_themes', 'knowledgebase_migrations', 'knowledgebase_settings', 'launch_urls', 'live_people', 'mail_filters', 'mail_subscriptions', 'meeting_links', 'meetings', 'message_goals', 'open_ai_data', 'page_visit_urls', 'people', 'people_keys', 'people_notes', 'pipelines', 'project_low_priorities', 'project_roles', 'project_subscription_histories', 'project_subscription_plans', 'projects_developer_apps', 'property_categories', 'satisfaction_ratings', 'saved_replies', 'segments', 'settings', 'setup_guides', 'snippet_categories', 'soft_bounced_emails', 'spam_emails', 'subscription_bills', 'support_bot_analytics', 'survey_themes', 'surveys', 'tags', 'tasks', 'teams', 'temp_embedding_vectors', 'tours', 'triggered_chats', 'triggers', 'ultimate_plan_coupons', 'unanswered_questions', 'users', 'users_profiles', 'users_projects', 'users_projects_roles', 'webhook_subscriptions', 'webhooks', 'workflow_templates', 'workflow_templates_users', 'workflows', 'scheduled_meetings');
@@ -3865,8 +3865,8 @@ FOR EACH ROW EXECUTE PROCEDURE bucardo.bucardo_delta_names_helper();
             secretkey_match bool;
             secretkey_match_del bool;
                 BEGIN
-          SELECT NEW.name ILIKE '%project_4uowcpnl%' INTO secretkey_match;
-          SELECT OLD.name ILIKE '%project_4uowcpnl%' INTO secretkey_match_del;
+          SELECT NEW.name ILIKE '%project_9bipx36y%' INTO secretkey_match;
+          SELECT OLD.name ILIKE '%project_9bipx36y%' INTO secretkey_match_del;
                 IF(secretkey_match OR secretkey_match_del) THEN
                   IF (TG_OP = 'INSERT') THEN
                     INSERT INTO bucardo.$delta_table VALUES ($new);
