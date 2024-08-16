@@ -10719,7 +10719,7 @@ sub vacuum_table {
 
     ## XXX Return output from vacuum/optimize as a LOG_VERBOSE or LOG_DEBUG?
 
-    ##handling numeric schema senario
+    ##handling quotes numeric schema senario
 
     my ($new_schema, $new_table) = split(/\./, $tablename);
 
