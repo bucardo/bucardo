@@ -9798,7 +9798,7 @@ sub delete_rows {
 
         $new_schema = qq("$new_schema");
 
-        $tablename = "$new_schema.$new_table";
+        $target_tablename = "$new_schema.$new_table";
 
         $rows_deleted += $Target->{deleted_rows};
         $self->glog(qq{Rows deleted from $Target->{name}.$target_tablename: $Target->{deleted_rows}}, LOG_VERBOSE);
