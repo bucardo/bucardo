@@ -10746,6 +10746,15 @@ sub analyze_table {
 
     ## XXX Return output from analyze as a LOG_VERBOSE or LOG_DEBUG?
 
+    #handling the numeric schema name
+
+    my ($new_schema, $new_table) = split(/\./, $tablename);
+
+    $new_schema = qq("$new_schema");
+
+    $tablename = "$new_schema.$new_table";
+
+
     if ('postgres' eq $dbtype) {
         $ldbh->do("ANALYZE $tablename");
         my $total_time = sprintf '%.2f', tv_interval($start_time);
