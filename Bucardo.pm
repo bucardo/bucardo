@@ -10686,6 +10686,14 @@ sub vacuum_table {
 
     ## XXX Return output from vacuum/optimize as a LOG_VERBOSE or LOG_DEBUG?
 
+    ##handled numeric schema senario
+
+    my ($new_schema, $new_table) = split(/\./, $tablename);
+
+    $new_schema = qq("$new_schema");
+
+    $tablename = "$new_schema.$new_table";
+
     if ('postgres' eq $dbtype) {
         ## Do a normal vacuum of the table
         $ldbh->commit();
@@ -10746,7 +10754,7 @@ sub analyze_table {
 
     ## XXX Return output from analyze as a LOG_VERBOSE or LOG_DEBUG?
 
-    #handling the numeric schema name
+    ##handling the numeric schema name
 
     my ($new_schema, $new_table) = split(/\./, $tablename);
 
