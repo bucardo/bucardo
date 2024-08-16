@@ -9420,6 +9420,16 @@ sub delete_rows {
         ## Array to store each chunk of SQL
         my @chunk;
         ## Optimization for a single primary key using ANY(?)
+        
+        #handling quotes for schema name
+
+        my ($new_schema, $new_table) = split(/\./, $target_tablename);
+
+        $new_schema = qq("$new_schema");
+
+        $target_tablename = "$new_schema.$new_table";
+
+
         if ('ANY' eq $sqltype and ! exists $SQL{ANY}{$target_tablename}) {
             $SQL{ANY}{$target_tablename} = "$self->{sqlprefix}DELETE FROM $target_tablename WHERE $pkcols = ANY(?)";
             for my $key (keys %$rows) {
@@ -9581,6 +9591,14 @@ sub delete_rows {
 
             ## The actual target name
             my $target_tablename = $customname->{$Target->{name}};
+
+            #handling the quotes
+
+            my ($new_schema, $new_table) = split(/\./, $target_tablename);
+
+            $new_schema = qq("$new_schema");
+
+            $target_tablename = "$new_schema.$new_table";
 
             $self->glog("Deleting from target $target_tablename (type=$type)", LOG_DEBUG);
 
@@ -9775,6 +9793,12 @@ sub delete_rows {
         next if $Target->{dbtype} =~ /mongo|flat|redis/o;
 
         my $target_tablename = $customname->{$Target->{name}};
+
+        my ($new_schema, $new_table) = split(/\./, $target_tablename);
+
+        $new_schema = qq("$new_schema");
+
+        $tablename = "$new_schema.$new_table";
 
         $rows_deleted += $Target->{deleted_rows};
         $self->glog(qq{Rows deleted from $Target->{name}.$target_tablename: $Target->{deleted_rows}}, LOG_VERBOSE);
