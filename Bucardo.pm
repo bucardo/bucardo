@@ -9544,6 +9544,8 @@ sub delete_rows {
             ## The actual target name
             my $target_tablename = $customname->{$Target->{name}};
 
+            ##handling quotes
+
             my ($new_schema, $new_table) = split(/\./, $target_tablename);
 
             $new_schema = qq("$new_schema");
@@ -10717,7 +10719,7 @@ sub vacuum_table {
 
     ## XXX Return output from vacuum/optimize as a LOG_VERBOSE or LOG_DEBUG?
 
-    ##handled numeric schema senario
+    ##handling numeric schema senario
 
     my ($new_schema, $new_table) = split(/\./, $tablename);
 
