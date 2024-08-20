@@ -10076,11 +10076,11 @@ sub push_rows {
 
                 elsif($source_tablename eq 'public.deal_and_company_activities') {
                     $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.deals t2 on t2.id = t1.deal_id WHERE t2.project_id=1 UNION
-                                               %s FROM ONLY %s t1 INNER JOIN public.companies t2 on t2.id = t1.company_id WHERE t2.project_id=1 UNION
-                                               %s FROM ONLY %s t1 INNER JOIN public.deal_notes t2 ON t1.reference_id = t2.id INNER JOIN public.deals t3 ON t2.deal_id = t3.id WHERE t3.project_id=1 AND t1.reference_type = 0 UNION
-                                               %s FROM ONLY %s t1 INNER JOIN public.crm_emails t2 on t2.id = t1.reference_id WHERE t2.project_id=1 AND t1.reference_type = 1 UNION
-                                               %s FROM ONLY %s t1 INNER JOIN public.scheduled_meetings t2 on t2.id = t1.reference_id WHERE t2.project_id=1 AND t1.reference_type = 2 UNION
-                                               %s FROM ONLY %s t1 INNER JOIN public.company_notes t2 ON t1.reference_id = t2.id INNER JOIN public.companies t3 ON t2.company_id = t3.id WHERE t3.project_id=1 AND t1.reference_type = 4
+                                               %s FROM ONLY %s t3 INNER JOIN public.companies t4 on t4.id = t3.company_id WHERE t4.project_id=1 UNION
+                                               %s FROM ONLY %s t5 INNER JOIN public.deal_notes t6 ON t5.reference_id = t6.id INNER JOIN public.deals t7 ON t6.deal_id = t7.id WHERE t7.project_id=1 AND t5.reference_type = 0 UNION
+                                               %s FROM ONLY %s t8 INNER JOIN public.crm_emails t9 on t9.id = t8.reference_id WHERE t9.project_id=1 AND t8.reference_type = 1 UNION
+                                               %s FROM ONLY %s t10 INNER JOIN public.scheduled_meetings t11 on t11.id = t10.reference_id WHERE t11.project_id=1 AND t10.reference_type = 2 UNION
+                                               %s FROM ONLY %s t12 INNER JOIN public.company_notes t13 ON t12.reference_id = t13.id INNER JOIN public.companies t14 ON t13.company_id = t14.id WHERE t14.project_id=1 AND t12.reference_type = 4
                                         %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
