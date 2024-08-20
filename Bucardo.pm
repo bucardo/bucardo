@@ -10085,6 +10085,16 @@ sub push_rows {
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
+                    $SELECT,
+                    $source_tablename,
+                    $SELECT,
+                    $source_tablename,
+                    $SELECT,
+                    $source_tablename,
+                    $SELECT,
+                    $source_tablename,
+                    $SELECT,
+                    $source_tablename,
                     $mode eq 'fullcopy' ? '' : " AND t1.$Table->{pklist} = ANY(?)",
                     $Sync->{copyextra} ? " $Sync->{copyextra}" : '';
                 }
