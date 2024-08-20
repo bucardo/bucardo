@@ -10075,12 +10075,12 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.deal_and_company_activities') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.deals t2 on t2.id = t1.deal_id WHERE t2.project_id=1 UNION
+                    $srccmd = sprintf '%sCOPY (SELECT * FROM (%s FROM ONLY %s t1 INNER JOIN public.deals t2 on t2.id = t1.deal_id WHERE t2.project_id=1 UNION
                                                %s FROM ONLY %s t1 INNER JOIN public.companies t2 on t2.id = t1.company_id WHERE t2.project_id=1 UNION
                                                %s FROM ONLY %s t1 INNER JOIN public.deal_notes t2 ON t1.reference_id = t2.id INNER JOIN public.deals t3 ON t2.deal_id = t3.id WHERE t3.project_id=1 AND t1.reference_type = 0 UNION
                                                %s FROM ONLY %s t1 INNER JOIN public.crm_emails t2 on t2.id = t1.reference_id WHERE t2.project_id=1 AND t1.reference_type = 1 UNION
                                                %s FROM ONLY %s t1 INNER JOIN public.scheduled_meetings t2 on t2.id = t1.reference_id WHERE t2.project_id=1 AND t1.reference_type = 2 UNION
-                                               %s FROM ONLY %s t1 INNER JOIN public.company_notes t2 ON t1.reference_id = t2.id INNER JOIN public.companies t3 ON t2.company_id = t3.id WHERE t3.project_id=1 AND t1.reference_type = 4
+                                               %s FROM ONLY %s t1 INNER JOIN public.company_notes t2 ON t1.reference_id = t2.id INNER JOIN public.companies t3 ON t2.company_id = t3.id WHERE t3.project_id=1 AND t1.reference_type = 4) AS dca
                                         %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
@@ -10095,7 +10095,7 @@ sub push_rows {
                     $source_tablename,
                     $SELECT,
                     $source_tablename,
-                    $mode eq 'fullcopy' ? '' : " AND public.deal_and_company_activities.$Table->{pklist} = ANY(?)",
+                    $mode eq 'fullcopy' ? '' : " AND dca.$Table->{pklist} = ANY(?)",
                     $Sync->{copyextra} ? " $Sync->{copyextra}" : '';
                 }
 
