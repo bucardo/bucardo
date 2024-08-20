@@ -9989,7 +9989,7 @@ sub push_rows {
 
             ## If we are doing a small batch of single primary keys, use ANY
             ## For a fullcopy mode, leave the WHERE clause out completely
-            my @single_table_list = ('public.addon_coupons', 'public.ahoy_messages', 'public.app_credentials', 'public.article_feedbacks', 'public.articles', 'public.articles_copy', 'public.assignment_rule_triggers', 'public.assignment_rules', 'public.automation_coupons', 'public.automation_rules', 'public.billings', 'public.blacklisted_emails', 'public.blocked_ips', 'public.blocked_people', 'public.bot_components', 'public.bot_priorities', 'public.bot_templates', 'public.bots', 'public.bounced_emails', 'public.bulk_imports', 'public.campaigns', 'public.cards_projects', 'public.categories', 'public.charges', 'public.chat_tags', 'public.companies', 'public.company_properties', 'public.conversation_metrics', 'public.conversation_properties', 'public.conversation_replies_metrics', 'public.conversations', 'public.coupons', 'public.custom_email_templates', 'public.custom_invoices', 'public.custom_team_mates', 'public.deal_properties', 'public.deals', 'public.default_settings', 'public.deleted_people', 'public.domains', 'public.ecommerce_carts', 'public.ecommerce_categories', 'public.ecommerce_checkouts', 'public.ecommerce_customers', 'public.ecommerce_orders', 'public.ecommerce_products', 'public.ecommerce_stores', 'public.email_blocking_histories', 'public.email_coupons', 'public.embedding_vectors', 'public.emma_raw_sources', 'public.emma_source_items', 'public.event_categories', 'public.events', 'public.exports', 'public.fb_integrations', 'public.feature_tags', 'public.folders', 'public.form_data', 'public.forms', 'public.gist_webhooks', 'public.imports', 'public.inbound_email_addresses', 'public.inbox_views', 'public.integrated_apps', 'public.integration_data', 'public.invites', 'public.kb_themes', 'public.knowledgebase_migrations', 'public.knowledgebase_settings', 'public.launch_urls', 'public.live_people', 'public.mail_filters', 'public.mail_subscriptions', 'public.meeting_links', 'public.meetings', 'public.message_goals', 'public.open_ai_data', 'public.page_visit_urls', 'public.people', 'public.people_keys', 'public.people_notes', 'public.pipelines', 'public.project_low_priorities', 'public.project_roles', 'public.project_subscription_histories', 'public.project_subscription_plans', 'public.projects_developer_apps', 'public.property_categories', 'public.satisfaction_ratings', 'public.saved_replies', 'public.segments', 'public.settings', 'public.setup_guides', 'public.snippet_categories', 'public.soft_bounced_emails', 'public.spam_emails', 'public.subscription_bills', 'public.support_bot_analytics', 'public.survey_themes', 'public.surveys', 'public.tags', 'public.tasks', 'public.teams', 'public.temp_embedding_vectors', 'public.tours', 'public.triggered_chats', 'public.triggers', 'public.ultimate_plan_coupons', 'public.unanswered_questions', 'public.users', 'public.users_profiles', 'public.users_projects', 'public.users_projects_roles', 'public.webhook_subscriptions', 'public.webhooks', 'public.workflow_templates', 'public.workflow_templates_users', 'public.workflows', 'public.scheduled_meetings');
+            my @single_table_list = ('public.addon_coupons', 'public.ahoy_messages', 'public.app_credentials', 'public.article_feedbacks', 'public.articles', 'public.articles_copy', 'public.assignment_rule_triggers', 'public.assignment_rules', 'public.automation_coupons', 'public.automation_rules', 'public.billings', 'public.blacklisted_emails', 'public.blocked_ips', 'public.blocked_people', 'public.bot_components', 'public.bot_priorities', 'public.bot_templates', 'public.bots', 'public.bounced_emails', 'public.bulk_imports', 'public.campaigns', 'public.cards_projects', 'public.categories', 'public.charges', 'public.chat_tags', 'public.companies', 'public.company_properties', 'public.conversation_metrics', 'public.conversation_properties', 'public.conversation_replies_metrics', 'public.conversations', 'public.coupons', 'public.custom_email_templates', 'public.custom_invoices', 'public.custom_team_mates', 'public.deal_properties', 'public.deals', 'public.default_settings', 'public.deleted_people', 'public.domains', 'public.ecommerce_carts', 'public.ecommerce_categories', 'public.ecommerce_checkouts', 'public.ecommerce_customers', 'public.ecommerce_orders', 'public.ecommerce_products', 'public.ecommerce_stores', 'public.email_blocking_histories', 'public.email_coupons', 'public.embedding_vectors', 'public.emma_raw_sources', 'public.emma_source_items', 'public.event_categories', 'public.events', 'public.exports', 'public.fb_integrations', 'public.feature_tags', 'public.folders', 'public.form_data', 'public.forms', 'public.gist_webhooks', 'public.imports', 'public.inbound_email_addresses', 'public.inbox_views', 'public.integrated_apps', 'public.integration_data', 'public.invites', 'public.kb_themes', 'public.knowledgebase_migrations', 'public.knowledgebase_settings', 'public.launch_urls', 'public.live_people', 'public.mail_filters', 'public.mail_subscriptions', 'public.meeting_links', 'public.meetings', 'public.message_goals', 'public.open_ai_data', 'public.page_visit_urls', 'public.people', 'public.people_keys', 'public.people_notes', 'public.pipelines', 'public.project_low_priorities', 'public.project_roles', 'public.project_subscription_histories', 'public.project_subscription_plans', 'public.projects_developer_apps', 'public.property_categories', 'public.satisfaction_ratings', 'public.saved_replies', 'public.segments', 'public.settings', 'public.setup_guides', 'public.snippet_categories', 'public.soft_bounced_emails', 'public.spam_emails', 'public.subscription_bills', 'public.support_bot_analytics', 'public.survey_themes', 'public.surveys', 'public.tags', 'public.tasks', 'public.teams', 'public.temp_embedding_vectors', 'public.tours', 'public.triggered_chats', 'public.triggers', 'public.ultimate_plan_coupons', 'public.unanswered_questions', 'public.users', 'public.users_profiles', 'public.users_projects', 'public.users_projects_roles', 'public.webhook_subscriptions', 'public.webhooks', 'public.workflow_templates', 'public.workflow_templates_users', 'public.workflows', 'public.scheduled_meetings','public.crm_emails');
 
             my %hash1 = map { $_ => 1 } @single_table_list;
 
@@ -10065,8 +10065,32 @@ sub push_rows {
                     $Sync->{copyextra} ? " $Sync->{copyextra}" : '';
                 }
 
-                elsif($source_tablename eq 'public.billing_details' or $source_tablename eq 'public.crm_emails' or $source_tablename eq 'public.deal_and_company_activities' or $source_tablename eq 'public.messages_users') {
+                elsif($source_tablename eq 'public.billing_details') {
                     $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.users_projects t2 ON t1.user_id = t2.user_id WHERE t2.project_id=10687 %s) TO STDOUT%s',
+                    $self->{sqlprefix},
+                    $SELECT,
+                    $source_tablename,
+                    $mode eq 'fullcopy' ? '' : " AND t1.$Table->{pklist} = ANY(?)",
+                    $Sync->{copyextra} ? " $Sync->{copyextra}" : '';
+                }
+
+                elsif($source_tablename eq 'public.deal_and_company_activities') {
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.deals t2 on t2.id = t1.deal_id WHERE t2.project_id=10687 UNION
+                                               %s FROM ONLY %s t1 INNER JOIN public.companies t2 on t2.id = t1.company_id WHERE t2.project_id=10687 UNION
+                                               %s FROM ONLY %s t1 INNER JOIN public.deal_notes t2 ON t1.reference_id = t2.id INNER JOIN public.deals t3 ON t2.deal_id = t3.id WHERE t3.project_id=10687 AND t1.reference_type = 0 UNION
+                                               %s FROM ONLY %s t1 INNER JOIN public.crm_emails t2 on t2.id = t1.reference_id WHERE t2.project_id=10687 AND t1.reference_type = 1 UNION
+                                               %s FROM ONLY %s t1 INNER JOIN public.scheduled_meetings t2 on t2.id = t1.reference_id WHERE t2.project_id=10687 AND t1.reference_type = 2 UNION
+                                               %s FROM ONLY %s t1 INNER JOIN public.company_notes t2 ON t1.reference_id = t2.id INNER JOIN public.companies t3 ON t2.company_id = t3.id WHERE t3.project_id=10687 AND t1.reference_type = 4
+                                        %s) TO STDOUT%s',
+                    $self->{sqlprefix},
+                    $SELECT,
+                    $source_tablename,
+                    $mode eq 'fullcopy' ? '' : " AND t1.$Table->{pklist} = ANY(?)",
+                    $Sync->{copyextra} ? " $Sync->{copyextra}" : '';
+                }
+
+                elsif($source_tablename eq 'public.messages_users') {
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.messages t2 ON t1.message_id = t2.id INNER JOIN public.conversations t3 ON t2.conversation_identifier = t3.conversation_identifier WHERE t3.project_id=10687 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10382,8 +10406,10 @@ sub push_rows {
                     $Sync->{copyextra} ? " $Sync->{copyextra}" : '';
                 }
 
+                ## Two Level logic 
+
                 elsif($source_tablename eq 'public.crm_emails_people') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.crm_emails t2 ON t1.crm_email_id = t2.id INNER JOIN public.users_projects t3 ON t2.user_id = t3.user_id WHERE t3.project_id=10687 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.crm_emails t2 ON t1.crm_email_id = t2.id WHERE t2.project_id=10687 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
@@ -10401,7 +10427,7 @@ sub push_rows {
                 }
 
                 elsif($source_tablename eq 'public.invoice_refund_histories') {
-                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.charges t2 ON t1.charge_id = t2.id INNER JOIN public.users_projects t3 ON t2.user_id = t3.user_id WHERE t3.project_id=10687 %s) TO STDOUT%s',
+                    $srccmd = sprintf '%sCOPY (%s FROM ONLY %s t1 INNER JOIN public.charges t2 ON t1.charge_id = t2.id WHERE t2.project_id=10687 %s) TO STDOUT%s',
                     $self->{sqlprefix},
                     $SELECT,
                     $source_tablename,
