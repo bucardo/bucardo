@@ -243,7 +243,7 @@ bucardo add database source host=<primary_db_ip> user=postgres db=ConvertFox_pro
 ```
 4.2 Adding Target Database
 ```bash
-bucardo add database target host=<primary_db_ip> user=postgres db= ConvertFox_production dbpass=<password>
+bucardo add database target host=<primary_db_ip> user=postgres db=ConvertFox_production dbpass=<password>
 ```
 
 4.3 Adding Source Tables
@@ -589,7 +589,8 @@ DROP SCHEAMA bucardo CASCADE;
 > 
 >!!NOTE: change the appropriate secret key for both SQL commands
 ```SQL
-SET search_path = '<secret_key>'
+\dn
+SET search_path = '<secret_key>';
 ```
 
 ```SQL
