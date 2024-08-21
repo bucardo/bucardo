@@ -22,7 +22,7 @@ This document outlines the necessary steps to perform schema migration using Buc
     ```bash
     usermod -aG sudo postgres
 
-1.2.1    **Set the password for the postgres user as "postgres":**
+1.2.1 **Set the password for the postgres user as "postgres":**
     ```bash
     passwd postgres
 
