@@ -18,16 +18,18 @@ This document outlines the necessary steps to perform schema migration using Buc
     ```bash
     sudo apt update
     sudo apt install postgresql libpq-dev postgresql-server-dev-16 postgresql-client-16
+    ```
 
     ### Set up the PostgreSQL user as sudo User:
 
     ```bash
     usermod -aG sudo postgres
-    
+    ```
+
     ### Set the password for the postgres user as "postgres":
     ```bash
     passwd postgres
-
+    ```
 
 
 
