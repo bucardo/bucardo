@@ -16,3 +16,10 @@ This document outlines the necessary steps to perform schema migration using Buc
 1. **Clone the Bucardo repository from GitHub:**
    ```bash
    git clone https://github.com/srinivasanmohankumar/bucardo.git --branch schema-migration-v3
+
+2. **Modify the bucardo.schema file:**
+
+    **Locate and change the project ID at line 2426:**
+
+    '''perl
+    my $project_id_var = 1597; # Change this to your desired project ID that Needs to be Migrated
