@@ -198,7 +198,23 @@ change %%project_<secretkey>%%
 ```
 
 ## 3. Custom Bucardo Installation
+3.0.1 Incase of Reinstallation of bucardo
+
+>login to psql and drop database , user bucardo in bucardo machine and follow the rest of the commands
+
+```SQL
+    psql
+    DROP DATABASE bucardo;
+    DROP SCHEMA bucardo;
+```
+
 3.1 Clone the custom bucardo code
+> remove the existing bucardo file(old code) in case it is present in your current directory(/home/postgres)
+```bash
+    cd /home/postgres
+    rm -rf bucardo
+```
+
 ```bash
 git clone https://github.com/srinivasanmohankumar/bucardo.git --branch schema-migration-v3
 ```
