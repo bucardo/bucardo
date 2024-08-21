@@ -1,0 +1,63 @@
+
+Bucardo - a table-based replication system
+
+DESCRIPTION:
+------------
+
+This is version 5.6.0 of Bucardo.
+
+COPYRIGHT:
+----------
+
+    Copyright (c) 2005-2023 Greg Sabino Mullane <greg@turnstep.com>
+
+REQUIREMENTS:
+-------------
+
+    build, test, and install Perl 5                (at least 5.8.3)
+    build, test, and install PostgreSQL            (at least 8.2)
+    build, test, and install the DBI module        (at least 1.51)
+    build, test, and install the DBD::Pg module    (at least 2.0.0)
+    build, test, and install the DBIx::Safe module (at least 1.2.4)
+    
+    You must have at least one database that has PL/pgSQL and PL/Perl installed.
+    Target databases may need PL/pgSQL.
+
+
+INSTALLATION:
+-------------
+
+To install this module type the following:
+
+   perl Makefile.PL
+   make
+   make test (but see below first)
+   make install
+
+EXAMPLES:
+---------
+
+See the test suite in the t/ subdirectory for some examples.
+
+WEBSITE:
+--------
+
+Please visit https://bucardo.org for complete documentation.
+
+DEVELOPMENT:
+------------
+
+To follow or participate in the development of Bucardo, use:
+
+git clone git@github.com:bucardo/bucardo.git
+
+GETTING HELP:
+-------------
+
+For general questions and troubleshooting, please use the bucardo-general@bucardo.org
+mailing list.  GitHub issues which are support-oriented will be closed and referred to
+the mailing list anyway, so help save time for everyone by posting there directly.
+
+Post, subscribe, and see previous archives here:
+
+https://bucardo.org/mailman/listinfo/bucardo-general
