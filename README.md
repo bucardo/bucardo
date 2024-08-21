@@ -13,18 +13,21 @@ This document outlines the necessary steps to perform schema migration using Buc
 
 ## 1. Bucardo Installation Prerequisites
 
-1.1 **Install PostgreSQL and its development tools:**
+    **Install PostgreSQL and its development tools:**
     ```bash
     sudo apt update
     sudo apt install postgresql libpq-dev postgresql-server-dev-16 postgresql-client-16
+    ```
 
-1.2 **Set up the PostgreSQL user as sudo User**
+    **Set up the PostgreSQL user as sudo User**
     ```bash
     usermod -aG sudo postgres
+    ```
 
-1.2.1 **Set the password for the postgres user as "postgres":**
+    **Set the password for the postgres user as "postgres":**
     ```bash
     passwd postgres
+    ```
 
 
 
