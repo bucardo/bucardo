@@ -143,7 +143,7 @@ CREATE EXTENSION plperlu;
   ```bash
 sudo apt-get install libdbix-safe-perl
 
-sudo apt-get install libdbd-pg-perl  libencode-locale-perl  libpod-parser-perl
+sudo apt-get install libdbd-pg-perl libencode-locale-perl libpod-parser-perl
   ```
 
 Create the below Directories for bucardo
