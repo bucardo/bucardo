@@ -57,17 +57,17 @@ passwd postgres
 1.4 Then create a home directory for postgres  and update it’s ownership to postgres
 
 ```bash
-	sudo mkdir /home/postgres
-	cd /home
-	chown postgres:postgres postgres
+sudo mkdir /home/postgres
+cd /home
+chown postgres:postgres postgres
 ```
 
 1.5 Change the Authentication method for bucardo Postgres DB
 
 switch to postgres user & go to pg_hba file directory
 ```bash
-	su postgres
-	cd /etc/postgresql/16/main
+su postgres
+cd /etc/postgresql/16/main
 ```
   Edit the pg_hba.conf file on the above directory
   >Change all the values under & above method column to trust
@@ -141,7 +141,7 @@ CREATE EXTENSION plperlu;
 ```
   Install perl libraries which are needed for bucardo installation
   ```bash
-  sudo apt-get install libdbix-safe-perl
+sudo apt-get install libdbix-safe-perl
 
 sudo apt-get install libdbd-pg-perl  libencode-locale-perl  libpod-parser-perl
   ```
@@ -203,16 +203,16 @@ change %%project_<secretkey>%%
 >login to psql and drop database , user bucardo in bucardo machine and follow the rest of the commands
 
 ```SQL
-    psql
-    DROP DATABASE bucardo;
-    DROP SCHEMA bucardo;
+psql
+DROP DATABASE bucardo;
+DROP SCHEMA bucardo;
 ```
 
 3.1 Clone the custom bucardo code
 > remove the existing bucardo file(old code) in case it is present in your current directory(/home/postgres)
 ```bash
-    cd /home/postgres
-    rm -rf bucardo
+cd /home/postgres
+rm -rf bucardo
 ```
 
 ```bash
@@ -555,13 +555,13 @@ bucardo add sync project_<secret_key>_sync relgroup=first_group  dbs=source,targ
 
 4.7 Restart Bucardo
 ```bash
-	sudo bucardo stop
-	sudo bucardo start
+sudo bucardo stop
+sudo bucardo start
 ```
 
 4.8 Check the status
 ```bash
-	bucardo status project_<secret_key>_sync
+bucardo status project_<secret_key>_sync
 ```
 >If the status is good sync is completed and it is ready for migration 
 
@@ -580,7 +580,7 @@ sudo bucardo stop
 5.2 Remove Triggers
 >Log in to the production primary db(as postgres User) and execute the following
 ```SQL
-	DROP SCHEAMA bucardo CASCADE;
+DROP SCHEAMA bucardo CASCADE;
 ```
 >Ensure the triggers are Removed
 
