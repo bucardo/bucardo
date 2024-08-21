@@ -21,5 +21,6 @@ This document outlines the necessary steps to perform schema migration using Buc
 
     **Locate and change the project ID at line 2426:**
 
-    '''perl
-    my $project_id_var = 1597; # Change this to your desired project ID that Needs to be Migrated
+    ```perl
+    my $project_id_var = 1597; 
+    # Change this to your desired project ID that Needs to be Migrated This will be applied to all triggers
