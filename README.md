@@ -16,9 +16,9 @@ This document outlines the necessary steps to perform schema migration using Buc
 
 3. [Custom Bucardo Installation](#3-custom-bucardo-installation)
 
-4. [Bucardo Sync Setup](#4-bucardo-sync-setup)
+4. [Bucardo Sync Setup](#4bucardo-sync-setup)
 
-5. [Tenant Switching](#5-tenant-switching)
+5. [Tenant Switching](#5tenant-switching)
 
   
 
@@ -220,6 +220,7 @@ bucardo install
 >This should give database creation is successful message 
 
 ## 4.Bucardo Sync Setup
+
 4.1 Adding Source Database
 ```bash
 bucardo add database source host=<primary_db_ip> user=postgres  db=ConvertFox_production  dbpass=<password>
