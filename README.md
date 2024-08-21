@@ -31,9 +31,9 @@ This document outlines the necessary steps to perform schema migration using Buc
   
 
 ```bash
-sudo  apt  update
+sudo apt update
 
-sudo  apt  install  postgresql  libpq-dev  postgresql-server-dev-16  postgresql-client-16
+sudo apt install postgresql libpq-dev postgresql-server-dev-16 postgresql-client-16
 ```
 
   
@@ -43,7 +43,7 @@ sudo  apt  install  postgresql  libpq-dev  postgresql-server-dev-16  postgresql-
   
 
 ```bash
-usermod  -aG  sudo  postgres
+usermod -aG sudo postgres
 ```
 
   
@@ -57,16 +57,16 @@ passwd postgres
 1.4 Then create a home directory for postgres  and update it’s ownership to postgres
 
 ```bash
-	sudo  mkdir /home/postgres
+	sudo mkdir /home/postgres
 	cd /home
-	chown  postgres:postgres  postgres
+	chown postgres:postgres postgres
 ```
 
 1.5 Change the Authentication method for bucardo Postgres DB
 
 switch to postgres user & go to pg_hba file directory
 ```bash
-	su  postgres
+	su postgres
 	cd /etc/postgresql/16/main
 ```
   Edit the pg_hba.conf file on the above directory
@@ -172,7 +172,7 @@ Create the below Directories for bucardo
 
 ```perl
 
-my  $project_id_var = 1597;
+my $project_id_var = 1597;
 
 ```
 
