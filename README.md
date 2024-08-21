@@ -239,11 +239,11 @@ bucardo install
 
 4.1 Adding Source Database
 ```bash
-bucardo add database source host=<primary_db_ip> user=postgres  db=ConvertFox_production  dbpass=<password>
+bucardo add database source host=<primary_db_ip> user=postgres db=ConvertFox_production dbpass=<password>
 ```
 4.2 Adding Target Database
 ```bash
-bucardo add database target host=<primary_db_ip> user=postgres  db= ConvertFox_production  dbpass=<password>
+bucardo add database target host=<primary_db_ip> user=postgres db= ConvertFox_production dbpass=<password>
 ```
 
 4.3 Adding Source Tables
@@ -550,7 +550,7 @@ bucardo add customname public.workflow_people <secret_key>.workflow_people
 4.6 Adding Sync
 >Change the appropriate project secret key
 ```bash
-bucardo add sync project_<secret_key>_sync relgroup=first_group  dbs=source,target  onetimecopy=2
+bucardo add sync project_<secret_key>_sync relgroup=first_group dbs=source,target  onetimecopy=2
 ```
 
 4.7 Restart Bucardo
