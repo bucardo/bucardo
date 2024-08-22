@@ -205,7 +205,8 @@ change %%project_<secretkey>%%
 ```SQL
 psql
 DROP DATABASE bucardo;
-DROP SCHEMA bucardo;
+DROP USER bucardo;
+\q
 ```
 
 3.1 Clone the custom bucardo code
