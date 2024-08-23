@@ -150,11 +150,11 @@ Create the below Directories for bucardo
 > first one is for logging and another one is for PID file
 ```bash
  cd /var/log/     
- sudo  mkdir bucardo    
- chown  postgres:postgres bucardo   
+ sudo mkdir bucardo    
+ chown postgres:postgres bucardo   
  cd /var/run   
  sudo mkdir bucardo
- chown  postgres:postgres bucardo
+ chown postgres:postgres bucardo
 ```
   
 
@@ -551,7 +551,7 @@ bucardo add customname public.workflow_people <secret_key>.workflow_people
 4.6 Adding Sync
 >Change the appropriate project secret key
 ```bash
-bucardo add sync project_<secret_key>_sync relgroup=first_group dbs=source,target  onetimecopy=2
+bucardo add sync project_<secret_key>_sync relgroup=first_group dbs=source,target onetimecopy=2
 ```
 
 4.7 Restart Bucardo
