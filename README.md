@@ -1,14 +1,14 @@
 # Schema Migration Steps
 
-  
+
 
 This document outlines the necessary steps to perform schema migration using Bucardo. It includes steps for preparing the code, installing and configuring Bucardo, and adding databases and tables.
 
-  
+
 
 ## Table of Contents
 
-  
+
 
 1. [Bucardo Installation Prerequisites](#1-bucardo-installation-prerequisites)
 
@@ -20,15 +20,15 @@ This document outlines the necessary steps to perform schema migration using Buc
 
 5. [Tenant Switching](#5tenant-switching)
 
-  
+
 
 ## 1. Bucardo Installation Prerequisites
 
-  
+
 
 1.1 Install PostgreSQL and its development tools:
 
-  
+
 
 ```bash
 sudo apt update
@@ -36,17 +36,17 @@ sudo apt update
 sudo apt install postgresql libpq-dev postgresql-server-dev-16 postgresql-client-16
 ```
 
-  
+
 
 1.2 Set up the PostgreSQL user as sudo User:
 
-  
+
 
 ```bash
 usermod -aG sudo postgres
 ```
 
-  
+
 
 1.3 Set the password for the postgres user as "postgres":
 
@@ -69,8 +69,8 @@ switch to postgres user & go to pg_hba file directory
 su postgres
 cd /etc/postgresql/16/main
 ```
-  Edit the pg_hba.conf file on the above directory
-  >Change all the values under & above method column to trust
+Edit the pg_hba.conf file on the above directory
+>Change all the values under & above method column to trust
   ``` bash
   sudo nano pg_hba.conf
   ```
@@ -106,7 +106,7 @@ host replication all 127.0.0.1/32 trust
 host replication all ::1/128 trust
 ```
 
-Restart the database to apply this configuration 
+Restart the database to apply this configuration
 >It will ask password use the "postgres" password
 ```bash
 systemctl restart postgresql
@@ -139,7 +139,7 @@ CREATE EXTENSION plperlu;
 
 \q
 ```
-  Install perl libraries which are needed for bucardo installation
+Install perl libraries which are needed for bucardo installation
   ```bash
 sudo apt-get install libdbix-safe-perl
 
@@ -156,19 +156,19 @@ Create the below Directories for bucardo
  sudo mkdir bucardo
  chown postgres:postgres bucardo
 ```
-  
+
 
 ## 2. Preparing the Bucardo Code
 
-  
+
 
 2.1 Modify the bucardo.schema file:
 
- > Use your own code editor or git hub's editor to change the following things
+> Use your own code editor or git hub's editor to change the following things
 
 > Locate and change the project ID at line 2426: Change this to your desired project ID that Needs to be Migrated This will be applied to all triggers
 
-  
+
 
 ```perl
 
@@ -178,7 +178,7 @@ my $project_id_var = 1597;
 
 >Changing the rollups logic since it requires the secret key pattern
 >Search for “rollups” using “cmd + f”
->And change the secret key with respect to the project id 
+>And change the secret key with respect to the project id
 >Eg : SELECT NEW.name ILIKE '%project_6icg2uge%' INTO secretkey_match;
 
 ```
@@ -192,7 +192,7 @@ change %project_<secretkey>%
 ```
 project_id=<desired_project_id>
 ```
->Changing the rollups table logic And change the secret key with respect to the project id 
+>Changing the rollups table logic And change the secret key with respect to the project id
 ```
 change %%project_<secretkey>%%
 ```
@@ -234,7 +234,7 @@ bucardo install
 >press 3 Enter 'postgres'
 >press 4 Enter 'postgres'
 >press 'P' Enter
->This should give database creation is successful message 
+>This should give database creation is successful message
 
 ## 4.Bucardo Sync Setup
 
@@ -564,30 +564,33 @@ sudo bucardo start
 ```bash
 bucardo status project_<secret_key>_sync
 ```
->If the status is good sync is completed and it is ready for migration 
+>If the status is good sync is completed and it is ready for migration
 
 4.9 Run Rake Task
 >Ask Application Team to check the count to ensure the data is migrated for all tables
 
 ## 5.Tenant Switching
+5.1 Stop the service for the project.
+> tenant_name =  project_secret_key
+>
+> Project.find_by(secret_key: tenant_name).halt_project_service
 
->Ask Application team to halt the service for that project
 
-5.1 Stop the sync
+5.2 Stop the sync
 ```bash
 sudo bucardo stop
 ```
 
-5.2 Remove Triggers
+5.3 Remove Triggers
 >Log in to the production primary db(as postgres User) and execute the following
 ```SQL
 DROP SCHEAMA bucardo CASCADE;
 ```
 >Ensure the triggers are Removed
 
-5.3 Set Sequence
+5.4 Set Sequence
 > Set the sequence by running the following SQL script in the appropriate project schema search path
-> 
+>
 >!!NOTE: change the appropriate secret key for both SQL commands
 ```SQL
 \dn
@@ -638,8 +641,17 @@ BEGIN
     END LOOP;
 END $$;
 ```
+5.5 Validating the migrated data
+> rake "apartment:validate_tenant_migrated_data[tenant_name]"
 
-5.4 Enable Tenant 
->Ask the application team to enable the tenant which is migrated
+## 6.Procedure to enable tenant
+6.1 Enable Tenant
+> Project.find_by(secret_key: tenant_name).enable_tenant
+>
+6.1 Start the project Service
+> Project.find_by(secret_key: tenant_name).resume_project_service
+>
+
+ 
  
  
