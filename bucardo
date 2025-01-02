@@ -3,7 +3,7 @@
 
 ## Script to control Bucardo
 ##
-## Copyright 2006-2023 Greg Sabino Mullane <greg@turnstep.com>
+## Copyright 2006-2025 Greg Sabino Mullane <greg@turnstep.com>
 ##
 ## Please see https://bucardo.org/ for full documentation
 ##
@@ -12269,7 +12269,7 @@ Bucardo
 
 =head1 COPYRIGHT
 
-Copyright 2006-2023 Greg Sabino Mullane <greg@turnstep.com>
+Copyright 2006-2025 Greg Sabino Mullane <greg@turnstep.com>
 
 This program is free to use, subject to the limitations in the LICENSE file.
 
