@@ -952,6 +952,7 @@ sub mcp_main {
                 }
                 elsif (! $d->{dbh}->ping) {
                     $self->glog("Ping failed for database $dbname, trying to reconnect", LOG_NORMAL);
+		    $try_reconnect = 1;
                 }
 
                 if ($try_reconnect) {
@@ -967,7 +968,8 @@ sub mcp_main {
                     }
                     if (defined $d->{backend}) {
                         $self->show_db_version_and_time($d->{dbh}, $d->{backend}, qq{Database "$dbname" });
-                        $d->{status} = 'active'; ## In case it was stalled
+			## If the db is stalled, it will be marked active in restore_syncs()
+			$self->restore_syncs();
                     }
                     else {
                         $self->glog("Unable to reconnect to database $dbname!", LOG_WARN);
@@ -1644,6 +1646,8 @@ sub restore_syncs {
     ## No need to check databases more than once, as they can span across syncs
     my $db_checked = {};
 
+    $self->glog("restor_syncs: Checking syncs $self->{sync}", LOG_DEBUG);
+
     ## If a sync is stalled, check its databases
   SYNC: for my $syncname (sort keys %{ $self->{sync} }) {
 
@@ -1657,6 +1661,8 @@ sub restore_syncs {
         my $restored_dbs = 0;
 
         ## Walk through each database used by this sync
+	## This is guaranteed to never loop because $sync->{db} in reload_mcp is always empty here
+	## becuase it is always called after get_syncs which rewrites $self->{sync}
       DB: for my $dbname (sort keys %{ $sync->{db} }) {
 
             ## Only check each database (by name) once
