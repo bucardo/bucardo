@@ -1498,7 +1498,7 @@ sub add_item {
         if ($do_all) {
             ## Add all the tables, and return the output
             print add_all_tables();
-            ## The above does not commit, so make sure we do it here
+            run_herdcheck();
             confirm_commit();
             exit 0;
         }
@@ -3647,6 +3647,7 @@ sub add_table {
     }
 
     ## If they requested a herd and it does not exist, create it
+    my $herdcheck_needed = 0;
     if (exists $extra->{relgroup}) {
         my $herdname = $extra->{relgroup};
         if (! exists $HERD->{$herdname}) {
@@ -3688,6 +3689,7 @@ sub add_table {
         }
 
         if (@newnames) {
+            $herdcheck_needed++;
             $message .= qq{The following tables or sequences are now part of the relgroup "$herdname":\n};
             for (sort numbered_relations @newnames) {
                 $message .= "  $_\n";
@@ -3700,6 +3702,7 @@ sub add_table {
         print $message;
     }
 
+    run_herdcheck() if $herdcheck_needed;
     confirm_commit();
 
     exit 0;
@@ -4180,7 +4183,7 @@ sub add_herd {
     if (!$QUIET) {
         print $message;
     }
-
+    run_herdcheck() if @newnames;
     confirm_commit();
 
     exit 0;
@@ -4631,6 +4634,7 @@ sub add_sync {
 
     ## Give a courtesy message if we created a new relgroup
     ## Also associate our tables with this new group
+    my $herdcheck_needed = 0;
     if (! exists $HERD->{ $relgroup_name }) {
 
         unshift @message => qq{Created a new relgroup named "$relgroup_name"\n};
@@ -4644,8 +4648,7 @@ sub add_sync {
                 die qq{Unable to add table "$t" to relgroup "$relgroup_name"\n};
             }
         }
-
-
+        $herdcheck_needed = 1;
     }
 
     ## Make sure we use relgroup but not tables for the SQL below
@@ -4690,7 +4693,7 @@ sub add_sync {
         chomp $msg;
         $QUIET or print "$msg\n";
     }
-
+    run_herdcheck() if $herdcheck_needed;
     confirm_commit();
 
     exit 0;
@@ -5441,6 +5444,7 @@ sub clone {
     ## Optional options :)
     my $options;
 
+    my $herdcheck_needed = 0;
     for my $word (@nouns) {
 
         ## Check for an optional sync name.
@@ -5516,6 +5520,7 @@ sub clone {
             for my $goat (values %{ $goatlist->{relations} }) {
                 $sth->execute($relgroupname, $goat->{goat}[0]{id});
             }
+            $herdcheck_needed = 1;
 
             next;
         }
@@ -5579,6 +5584,7 @@ sub clone {
     ## Tell the MCP there is a new clone
     $dbh->do('NOTIFY bucardo_clone_ready');
 
+    run_herdcheck() if $herdcheck_needed;
     confirm_commit();
 
     $QUIET or print qq{Clone $id has been started. Track progress with "bucardo status clone $id"\n};
@@ -8015,8 +8021,13 @@ sub upgrade {
         ['bucardo', 'sync',  'makedelta'],
     );
 
+    my @old_triggers = (
+        ['herdcheck', 'herdmap'],
+    );
+
     my @old_functions = (
         ['create_child_q', 'text'],
+        ['herdcheck', ''],
     );
 
     my @old_indexes = (
@@ -8343,6 +8354,15 @@ sub upgrade {
         next if !relation_exists($schema, $name);
         upgrade_and_log("DROP INDEX $name");
         clog "Dropped index $name";
+        $changes++;
+    }
+
+    ## Drop any old triggers
+    for my $row (@old_triggers) {
+        my ($trigger_name, $table_name) = @$row;
+        next if ! trigger_exists($trigger_name);
+        clog "Dropped trigger $trigger_name on table $table_name";
+        upgrade_and_log(qq{DROP TRIGGER "$trigger_name" ON bucardo."$table_name"});
         $changes++;
     }
 
@@ -9910,6 +9930,21 @@ sub find_best_db_for_searching {
     return undef;
 
 } ## end of find_best_db_for_searching
+
+
+sub run_herdcheck {
+
+    ## Quick sanity check if we have inserted to the herdmap table
+
+    $SQL = "SELECT herd FROM herdmap h, goat g WHERE h.goat=g.id GROUP BY 1 HAVING COUNT(DISTINCT db) > 1";
+    my $sth = $dbh->prepare($SQL);
+    my $count = $sth->execute();
+    if ($count > 0) {
+        die 'All tables within a relgroup must be from the same database';
+    }
+    return;
+
+} ## end of run_herdcheck
 
 
 ##
