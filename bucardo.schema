@@ -1715,7 +1715,7 @@ BEGIN
   || deltatable
   || ' USING (SELECT txntime AS tt FROM bucardo.'
   || tracktable 
-  || ' GROUP BY 1 HAVING COUNT(*) = '
+  || ' GROUP BY 1 HAVING COUNT(DISTINCT target) = '
   || drows
   || ') AS foo'
   || ' WHERE txntime = tt'
