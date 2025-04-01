@@ -1,0 +1,235 @@
+[1mdiff --git a/Bucardo.pm b/Bucardo.pm[m
+[1mindex 00805ca..60ef44a 100644[m
+[1m--- a/Bucardo.pm[m
+[1m+++ b/Bucardo.pm[m
+[36m@@ -641,12 +641,12 @@[m [msub start_mcp {[m
+             my $bad = 0;[m
+             for my $db (sort keys %{ $self->{sdb} }) { ## need a better name![m
+                 if (! exists $self->{sdb}{$db}{dbh} ) {[m
+[31m-                    $self->glog("Database $db has no database handle", LOG_NORMAL);[m
+[32m+[m[32m                    $self->glog("Database $db has no database handle", LOG_NORMAL);[m[41m                 [m
+                     $bad++;[m
+                 }[m
+                 elsif (! $self->{sdb}{$db}{dbh}->ping()) {[m
+                     $self->glog("Database $db failed ping check", LOG_NORMAL);[m
+[31m-                    $msg = 'Ping failed';[m
+[32m+[m[32m                    $msg = 'Ping failed';[m[41m            [m
+                     $bad++;[m
+                 }[m
+             }[m
+[36m@@ -968,6 +968,7 @@[m [msub mcp_main {[m
+                     if (defined $d->{backend}) {[m
+                         $self->show_db_version_and_time($d->{dbh}, $d->{backend}, qq{Database "$dbname" });[m
+                         $d->{status} = 'active'; ## In case it was stalled[m
+[32m+[m[32m                        $self->check_sync_health(); ## In case it was stalled, run the check to verify if it's back to active[m
+                     }[m
+                     else {[m
+                         $self->glog("Unable to reconnect to database $dbname!", LOG_WARN);[m
+[36m@@ -1501,130 +1502,107 @@[m [msub mcp_main {[m
+ [m
+ [m
+ sub check_sync_health {[m
+[31m-[m
+[31m-    ## Check every database used by a sync[m
+[31m-    ## Typically called on demand when we know something is wrong[m
+[31m-    ## Marks any unreachable databases, and their syncs, as stalled[m
+[31m-    ## Arguments: zero or one[m
+[31m-    ## 1. Optional name of database to hone in on[m
+[31m-    ## Returns: number of bad databases detected[m
+[31m-[m
+[31m-    my $self = shift;[m
+[31m-    my $dbnamematch = shift || '';[m
+[31m-[m
+[31m-    my $SQL;[m
+[31m-[m
+[32m+[m[32m    my ($self, $dbnamematch) = @_;[m
+[32m+[m[41m    [m
+     $self->glog('Starting check_sync_health', LOG_NORMAL);[m
+[31m-[m
+[31m-    ## How many bad databases did we find?[m
+[32m+[m[41m    [m
+     my $bad_dbs = 0;[m
+[31m-[m
+[31m-    ## No need to check databases more than once, as they can span across syncs[m
+     my $db_checked = {};[m
+[32m+[m[32m    my $all_dbs_active = 1;[m
+ [m
+[31m-    ## Do this at the sync level, rather than 'sdb', as we don't[m
+[31m-    ## want to check non-active syncs at all[m
+[31m-  SYNC: for my $syncname (sort keys %{ $self->{sync} }) {[m
+[31m-[m
+[32m+[m[32m    # First check all databases in all syncs[m
+[32m+[m[32m    for my $syncname (sort keys %{ $self->{sync} }) {[m
+         my $sync = $self->{sync}{$syncname};[m
+[31m-[m
+[31m-        if ($sync->{status} ne 'active') {[m
+[31m-            $self->glog("Skipping $sync->{status} sync $syncname", LOG_NORMAL);[m
+[31m-            next SYNC;[m
+[31m-        }[m
+[31m-[m
+[31m-        ## Walk through each database used by this sync[m
+[31m-      DB: for my $dbname (sort keys %{ $sync->{db} }) {[m
+[31m-[m
+[31m-            ## Only check each database (by name) once[m
+[32m+[m[41m        [m
+[32m+[m[32m        for my $dbname (sort keys %{ $sync->{db} }) {[m
+             next if $db_checked->{$dbname}++;[m
+[31m-[m
+[31m-            ## If limiting to a single database, only check that one[m
+             next if $dbnamematch and $dbnamematch ne $dbname;[m
+[31m-[m
+[31m-            $self->glog("Checking database $dbname for sync $syncname", LOG_DEBUG);[m
+[31m-[m
+[32m+[m[41m            [m
+             my $dbinfo = $sync->{db}{$dbname};[m
+[31m-[m
+[31m-            ## We only bother checking ones that are currently active[m
+[31m-            if ($dbinfo->{status} ne 'active') {[m
+[31m-                $self->glog("Skipping $dbinfo->{status} database $dbname for sync $syncname", LOG_NORMAL);[m
+[31m-                next DB;[m
+[31m-            }[m
+[31m-[m
+[31m-            ## Is this database valid or not?[m
+[32m+[m[32m            my $syncinfo = $self->{sync}{$syncname};[m
+[32m+[m[32m            $self->glog("Checking database $dbname for sync $syncname Status: $dbinfo->{status} sync status: $syncinfo->{status}: ", LOG_DEBUG);[m
+[32m+[m[41m            [m
+             my $isbad = 0;[m
+[31m-[m
+[31m-            my $dbh = $dbinfo->{dbh};[m
+[31m-[m
+[31m-            if (! ref $dbh) {[m
+[31m-                $self->glog("Database handle for database $dbname does not look valid", LOG_NORMAL);[m
+[31m-                if ($dbinfo->{dbtype} eq 'postgres') {[m
+[32m+[m[32m            if ($dbinfo->{status} eq 'stalled') {[m
+[32m+[m[32m                eval {[m
+[32m+[m[32m                    ($dbinfo->{backend}, $dbinfo->{dbh}) = $self->connect_database($dbname);[m
+[32m+[m[32m                };[m
+[32m+[m[41m                [m
+[32m+[m[32m                if (defined $dbinfo->{dbh} && $dbinfo->{dbh}->ping()) {[m
+[32m+[m[32m                    $self->glog("Database $dbname has recovered", LOG_WARN);[m
+[32m+[m[41m                    [m
+[32m+[m[32m                    my $update_sql = 'UPDATE bucardo.db SET status = ? WHERE name = ?';[m
+[32m+[m[32m                    my $sth = $self->{masterdbh}->prepare($update_sql);[m
+[32m+[m[32m                    $sth->execute('active', $dbname);[m
+[32m+[m[32m                    $self->{masterdbh}->commit();[m
+[32m+[m[41m                    [m
+[32m+[m[32m                    $dbinfo->{status} = 'active';[m
+[32m+[m[32m                } else {[m
+[32m+[m[32m                    $all_dbs_active = 0;[m
+                     $isbad = 1;[m
+                 }[m
+[31m-                else {[m
+[31m-                    ## TODO: Account for other non dbh types[m
+[31m-                    next DB;[m
+[31m-                }[m
+[31m-            }[m
+[31m-            elsif (ref $dbh =~ /DBI/ and ! $dbh->ping() ) {[m
+[32m+[m[32m            } elsif (!defined $dbinfo->{dbh} || !$dbinfo->{dbh}->ping()) {[m
+                 $isbad = 1;[m
+[31m-                $self->glog("Database $dbname failed ping", LOG_NORMAL);[m
+[32m+[m[32m                $all_dbs_active = 0;[m
+             }[m
+ [m
+[31m-            ## If not marked as bad, assume good and move on[m
+[31m-            next DB unless $isbad;[m
+[31m-[m
+[31m-            ## Retry connection afresh: wrap in eval as one of these is likely to fail![m
+[31m-            undef $dbinfo->{dbh};[m
+[31m-[m
+[31m-            eval {[m
+[31m-                ($dbinfo->{backend}, $dbinfo->{dbh}) = $self->connect_database($dbname);[m
+[31m-                $self->show_db_version_and_time($dbinfo->{dbh}, $dbinfo->{backend}, qq{Database "$dbname" });[m
+[31m-            };[m
+[31m-[m
+[31m-            ## If we cannot connect, mark the db (and the sync) as stalled[m
+[31m-            if (! defined $dbinfo->{dbh}) {[m
+[31m-                $self->glog("Database $dbname is unreachable, marking as stalled", LOG_NORMAL);[m
+[32m+[m[32m            if ($isbad) {[m
+                 $dbinfo->{status} = 'stalled';[m
+                 $bad_dbs++;[m
+[31m-                if ($sync->{status} ne 'stalled') {[m
+[31m-                    $self->glog("Marked sync $syncname as stalled", LOG_NORMAL);[m
+[31m-                    $sync->{status} = 'stalled';[m
+[31m-                    $SQL = 'UPDATE bucardo.sync SET status = ? WHERE name = ?';[m
+[31m-                    eval {[m
+[31m-                        my $sth = $self->{masterdbh}->prepare($SQL);[m
+[31m-                        $sth->execute('stalled',$syncname);[m
+[31m-                    };[m
+[31m-                    if ($@) {[m
+[31m-                        $self->glog("Failed to set sync $syncname as stalled: $@", LOG_WARN);[m
+[31m-                        $self->{masterdbh}->rollback();[m
+[31m-                    }[m
+[31m-                }[m
+[31m-                $SQL = 'UPDATE bucardo.db SET status = ? WHERE name = ?';[m
+[31m-                my $sth = $self->{masterdbh}->prepare($SQL);[m
+[32m+[m[41m                [m
+[32m+[m[32m                my $db_sql = 'UPDATE bucardo.db SET status = ? WHERE name = ?';[m
+                 eval {[m
+[31m-                    $sth->execute('stalled',$dbname);[m
+[32m+[m[32m                    my $sth = $self->{masterdbh}->prepare($db_sql);[m
+[32m+[m[32m                    $sth->execute('stalled', $dbname);[m
+                     $self->{masterdbh}->commit();[m
+                 };[m
+[31m-                if ($@) {[m
+[31m-                    $self->glog("Failed to set db $dbname as stalled: $@", LOG_WARN);[m
+[31m-                    $self->{masterdbh}->rollback();[m
+[31m-                }[m
+[31m-[m
+             }[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+ [m
+[31m-        } ## end each database in this sync[m
+[31m-[m
+[31m-    } ## end each sync[m
+[32m+[m[32m    # Now check syncs and reactivate if all their databases are active[m
+[32m+[m[32m    for my $syncname (sort keys %{ $self->{sync} }) {[m
+[32m+[m[32m        my $sync = $self->{sync}{$syncname};[m
+[32m+[m[32m        my $sync_dbs_active = 1;[m
+[32m+[m[41m        [m
+[32m+[m[32m        # Check if all databases in this sync are active[m
+[32m+[m[32m        for my $dbname (keys %{ $sync->{db} }) {[m
+[32m+[m[32m            if ($sync->{db}{$dbname}{status} ne 'active') {[m
+[32m+[m[32m                $sync_dbs_active = 0;[m
+[32m+[m[32m                last;[m
+[32m+[m[32m            }[m
+[32m+[m[32m        }[m
+ [m
+[31m-    ## If any databases were marked as bad, go ahead and stall other syncs that are using them[m
+[31m-    ## (todo)[m
+[32m+[m[32m        # If sync is stalled but all databases are active, reactivate it[m
+[32m+[m[32m        if ($sync->{status} eq 'stalled' && $sync_dbs_active) {[m
+[32m+[m[32m            $self->glog("All databases are active, reactivating sync $syncname", LOG_WARN);[m
+[32m+[m[41m            [m
+[32m+[m[32m            my $sync_sql = 'UPDATE bucardo.sync SET status = ? WHERE name = ?';[m
+[32m+[m[32m            my $sth = $self->{masterdbh}->prepare($sync_sql);[m
+[32m+[m[32m            $sth->execute('active', $syncname);[m
+[32m+[m[32m            $self->{masterdbh}->commit();[m
+[32m+[m[41m            [m
+[32m+[m[32m            if ($self->activate_sync($sync)) {[m
+[32m+[m[32m                $sync->{status} = 'active';[m
+[32m+[m[32m                $sync->{mcp_active} = 1;[m
+[32m+[m[32m                $sync->{kick_on_startup} = 1; # Force immediate sync[m
+[32m+[m[32m            }[m
+[32m+[m[32m        }[m
+[32m+[m[32m        # If sync is active but has stalled databases, mark it stalled[m
+[32m+[m[32m        elsif ($sync->{status} eq 'active' && !$sync_dbs_active) {[m
+[32m+[m[32m            $self->glog("Some databases are stalled, marking sync $syncname as stalled", LOG_WARN);[m
+[32m+[m[41m            [m
+[32m+[m[32m            my $sync_sql = 'UPDATE bucardo.sync SET status = ? WHERE name = ?';[m
+[32m+[m[32m            my $sth = $self->{masterdbh}->prepare($sync_sql);[m
+[32m+[m[32m            $sth->execute('stalled', $syncname);[m
+[32m+[m[32m            $self->{masterdbh}->commit();[m
+[32m+[m[41m            [m
+[32m+[m[32m            $sync->{status} = 'stalled';[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+ [m
+     return $bad_dbs;[m
+[31m-[m
+[31m-} ## end of check_sync_health[m
+[31m-[m
+[32m+[m[32m}[m
+ [m
+ sub restore_syncs {[m
+ [m
