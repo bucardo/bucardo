@@ -219,6 +219,9 @@ mkdir $PIDDIR if ! -e $PIDDIR;
 
 ## Let pg_config guide us to a likely initdb/pg_ctl location
 my $output = qx{pg_config --bindir};
+if (!defined $output) {
+    Test::More::BAIL_OUT('Call to pg_config failed: please ensure it is in your path');
+}
 chomp $output;
 my $bindir = $output =~ m{^/} ? $1 : '';
 
