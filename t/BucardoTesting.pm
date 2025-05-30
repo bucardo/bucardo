@@ -218,7 +218,10 @@ my $PIDDIR = "/tmp/bucardo_testing_$ENV{USER}";
 mkdir $PIDDIR if ! -e $PIDDIR;
 
 ## Let pg_config guide us to a likely initdb/pg_ctl location
-my $output = qx{pg_config --bindir};
+my $pgconfig = $ENV{PG_CONFIG} ? $ENV{PG_CONFIG}
+  : $ENV{PGBINDIR} ? "$ENV{PGBINDIR}/pg_config"
+  : 'pg_config';
+my $output = qx{$pgconfig --bindir};
 if (!defined $output) {
     Test::More::BAIL_OUT('Call to pg_config failed: please ensure it is in your path');
 }
