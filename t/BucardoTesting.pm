@@ -226,7 +226,7 @@ if (!defined $output) {
     Test::More::BAIL_OUT('Call to pg_config failed: please ensure it is in your path');
 }
 chomp $output;
-my $bindir = $output =~ m{^/} ? $1 : '';
+my $bindir = $output =~ m{^/} ? $output : '';
 
 ## Location of files
 my $initdb = $ENV{PGBINDIR} ? "$ENV{PGBINDIR}/initdb" : $bindir ? "$bindir/initdb" : 'initdb';
