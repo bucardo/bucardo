@@ -58,6 +58,9 @@ my $SHORTDATEFORMAT  = $ENV{BUCARDO_SHORTDATEFORMAT} || q{HH24:MI:SS};
 ## How long (in seconds) we hang out between checks after a kick - or when waiting for notices
 my $WAITSLEEP = 1;
 
+## Time period for average data stats
+my $STATS_INTERVAL = 5;
+
 ## Determine how we were called
 ## If we were called from a different directory, and the base directory is in our path,
 ## we strip out the directory part
@@ -6089,6 +6092,8 @@ sub status_detail {
         push @items => ['Rebuild index'        => $s->{rebuild_index} ? 'Yes' : 'No'];
         push @items => ['Autokick'             => $s->{autokick}];
         push @items => ['Onetimecopy'          => $s->{onetimecopy} ? 'Yes' : 'No'];
+        push @items => ['Data rate (per second)' => "insert: $s->{rates}->{inserts}, delete: $s->{rates}->{deletes}, truncate: $s->{rates}->{truncates}, conflict: $s->{rates}->{conflicts}"];
+        push @items => ['Lag seconds/deltas'   => "$s->{lag}->{seconds} / $s->{lag}->{deltas}"];
 
         ## Only show these if enabled
         if ($s->{analyze_after_copy} eq 'Yes') {
@@ -6276,6 +6281,13 @@ AND (   lastgood  IS TRUE
         $s->{lastbad} = exists $s->{rowbad} ? $s->{rowbad}{ended_time} : 'none';
         $s->{timebad} = exists $s->{rowbad} ? pretty_time($s->{rowbad}{total_time_ended}) : '';
 
+        # Check the replication Lag
+        $s->{lag} = get_replication_lag($s);
+
+        # Check the data rates
+        $s->{rates} = get_date_rates($sync);
+
+
         for my $var (qw/ state dit lastgood timegood lastbad timebad /) {
             $max{$var} = length($s->{$var}) if length($s->{$var}) > $max{$var};
         }
@@ -6284,6 +6296,90 @@ AND (   lastgood  IS TRUE
     return \%max;
 
 } ## end of set_sync_status
+
+sub get_replication_lag {
+    my $s = shift;
+
+    my $tables = [];
+    my $max_lag_seconds = 0;
+    my $total_lag_deltas = 0;
+
+    foreach my $table (sort keys %{$s->{herd}->{goat}}) {
+        if ($s->{herd}->{goat}->{$table}->{reltype} eq 'table') {
+            $table =~ s/^bucardo\.delta_//;
+            $table =~ s/\./_/;
+            push @$tables, $table;
+        }
+    }
+
+    foreach my $db (sort keys %{$s->{dblist}}) {
+        next unless $s->{dblist}->{$db}->{role} eq 'source';
+
+        my $rdbh = connect_database({name => $db}); # there could be a speed issue here if the db is offline
+
+        unless ($rdbh) {
+            warn "Failed to connect to database: $db";
+            next;
+        }
+
+        for my $table (@$tables) {
+            my ($lag_deltas, $lag_seconds) = get_replication_lag_per_table($rdbh, $table);
+            $max_lag_seconds = $lag_seconds if $lag_seconds > $max_lag_seconds;
+            $total_lag_deltas += $lag_deltas;
+        }
+    }
+    if ($total_lag_deltas == 0) {
+        # There are no outstanding deltas, so we can get the lag from the lastgood row in the syncrun table
+        $max_lag_seconds = sprintf("%.2f", $s->{rowgood}->{total_time});
+    }
+
+    return {
+        seconds => $max_lag_seconds,
+        deltas => $total_lag_deltas
+    };
+}
+
+sub get_replication_lag_per_table {
+    my ($rdbh, $table) = @_;
+
+    my $delta_table = "bucardo.delta_$table";
+    my $track_table = "bucardo.track_$table";
+
+    # do we have any delta / track rows?
+    my ($outstanding_deltas) = $rdbh->selectrow_array("select count(*) from $delta_table where txntime not in (select txntime from $track_table)");
+
+    my $lag_seconds = 0;
+
+    if ($outstanding_deltas) {
+        my $sql = "select round(extract(epoch from current_timestamp - (select min(txntime) AS delta_ts from $delta_table where txntime not in (select txntime from $track_table))))";
+        ($lag_seconds) = $rdbh->selectrow_array($sql);
+    }
+
+    return ($outstanding_deltas, $lag_seconds);
+}
+
+sub get_date_rates {
+    my $sync = shift;
+
+    my $SQL = qq{
+SELECT sum(inserts) as inserts, sum(deletes) as deletes,
+  sum(conflicts) as conflicts, sum(truncates) as truncates
+  FROM syncrun where sync = ? and ended > (current_timestamp - interval '$STATS_INTERVAL minutes')
+};
+    my $stats = $dbh->selectrow_hashref($SQL, {}, $sync);
+
+    # get rate per seconds
+    foreach my $key (qw/inserts deletes truncates conflicts/) {
+        if ($stats->{$key} && $stats->{$key} > 0) {
+            $stats->{$key} = sprintf("%.2f", $stats->{$key} / ($STATS_INTERVAL * 60));
+        }
+        else {
+            $stats->{$key} = 0;
+        }
+    }
+
+    return $stats;
+}
 
 
 sub inspect {
