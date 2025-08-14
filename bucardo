@@ -10266,7 +10266,7 @@ See the documentation for individual commands for their supported options.
 
 Installs the Bucardo schema from the file F<bucardo.schema> into an existing Postgres cluster.
 The user "bucardo" and database "bucardo" will be created first as needed. This is an
-interactive installer, but you can supply the following values from the command line:
+interactive installer, but you can supply the following values from the command line, if you add C<--batch>:
 
 =over
 
