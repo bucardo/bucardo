@@ -355,30 +355,6 @@ COMMENT ON TABLE bucardo.herdmap IS $$Associates a goat with one or more herds$$
 
 CREATE UNIQUE INDEX bucardo_herdmap_unique ON bucardo.herdmap(herd,goat);
 
-CREATE FUNCTION bucardo.herdcheck()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS
-$bc$
-BEGIN
-
--- All goats in a herd must be from the same database
-PERFORM herd FROM herdmap h, goat g WHERE h.goat=g.id GROUP BY 1 HAVING COUNT(DISTINCT db) > 1;
-
-IF FOUND THEN
-  RAISE EXCEPTION 'All tables within a relgroup must be from the same database';
-END IF;
-
-RETURN NEW;
-
-END;
-$bc$;
-
-CREATE TRIGGER herdcheck
-  AFTER INSERT OR UPDATE ON bucardo.herdmap
-  FOR EACH ROW EXECUTE PROCEDURE bucardo.herdcheck();
-
-
 --
 -- We need to know who is replicating to who, and how
 --
