@@ -6934,10 +6934,26 @@ sub validate_sync {
     }
 
     # Table cache
-    $SQL{checktableonce} = q{
+    # When possible, only cache tables in schemas we will be looking at
+    my %schemas;
+    for my $g (@{$s->{goatlist}}) {
+        $schemas{$g->{schemaname}} = 1;
+    }
+    my $schemas_list = join(",", map { $srcdbh->quote($_) } keys %schemas);
+    my $schema_constraint = "AND n.nspname IN ($schemas_list)";
+    if (length $schemas_list) {
+        $self->glog(qq{Caching relations in schemas: $schemas_list}, LOG_NORMAL);
+    }
+    else {
+        $self->glog("Caching all relations", LOG_NORMAL);
+        $schema_constraint = '';
+    }
+
+    $SQL{checktableonce} = qq{
             SELECT n.nspname, c.relname, c.oid, quote_ident(n.nspname) as safeschema, quote_ident(c.relname) as safetable, quote_literal(n.nspname) as safeschemaliteral, quote_literal(c.relname) as safetableliteral
             FROM   pg_class c, pg_namespace n
             WHERE  c.relnamespace = n.oid
+            $schema_constraint
         };
     $sth = $srcdbh->prepare($SQL{checktableonce});
     $sth->execute();
