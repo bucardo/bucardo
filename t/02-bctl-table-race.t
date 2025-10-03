@@ -9,22 +9,22 @@
 ##
 ## The race condition occurs because:
 ## 1. Each bucardo process loads the global $GOAT and $HERD hashes at startup
-## 2. Multiple processes check if a table is already in the herd (line 3669 in bucardo)
+## 2. Multiple processes check if a table is already in the herd
 ## 3. The check uses the in-memory hash, not the current database state
 ## 4. If two processes are adding different tables concurrently, both checks pass
 ## 5. Both processes insert their tables and call load_bucardo_info() before committing
 ## 6. The reload sees an incomplete state, causing hash corruption
 ## 7. Some tables fail to be added properly, resulting in missing entries
 ##
-## Expected behavior with current code: TEST FAILS
-## - Some tables will not be added to the herdmap (typically 50-70 missing out of 500)
+## Expected behavior with bucardo 5.6.0 (and presumably earlier): TEST FAILS
+## - Some tables will not be added to the herdmap
 ## - Errors about uninitialized values in the $GOAT hash
 ## - Exit codes are 0 but actual count doesn't match expected
 ##
 ## Expected behavior after fix: TEST PASSES
-## - All 500 tables should be successfully added to the herdmap
+## - All tables should be successfully added to the herdmap
 ## - No errors about uninitialized values
-## - Actual count matches expected count (500)
+## - Actual count matches expected count
 
 use 5.008003;
 use strict;
