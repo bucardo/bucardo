@@ -7,15 +7,24 @@
 ## can fail or produce inconsistent results when multiple processes add different tables
 ## to the same relgroup/herd simultaneously.
 ##
-## Expected behavior with 5.6.0 (and presumably earlier): TEST FAILS
-## - Some tables will not be added to the herdmap 
+## The race condition occurs because:
+## 1. Each bucardo process loads the global $GOAT and $HERD hashes at startup
+## 2. Multiple processes check if a table is already in the herd (line 3669 in bucardo)
+## 3. The check uses the in-memory hash, not the current database state
+## 4. If two processes are adding different tables concurrently, both checks pass
+## 5. Both processes insert their tables and call load_bucardo_info() before committing
+## 6. The reload sees an incomplete state, causing hash corruption
+## 7. Some tables fail to be added properly, resulting in missing entries
+##
+## Expected behavior with current code: TEST FAILS
+## - Some tables will not be added to the herdmap (typically 50-70 missing out of 500)
 ## - Errors about uninitialized values in the $GOAT hash
 ## - Exit codes are 0 but actual count doesn't match expected
 ##
 ## Expected behavior after fix: TEST PASSES
-## - All tables should be successfully added to the herdmap
+## - All 500 tables should be successfully added to the herdmap
 ## - No errors about uninitialized values
-## - Actual count matches expected count
+## - Actual count matches expected count (500)
 
 use 5.008003;
 use strict;
@@ -87,6 +96,44 @@ for (1..$NUM_THREADS) {
     close $err_fh;
     push @output_files, $out_file;
     push @error_files, $err_file;
+}
+
+## Create a completion flag file to signal when table-adding threads are done
+my ($done_fh, $done_file) = tempfile(UNLINK => 1);
+close $done_fh;
+
+## Fork a validation thread that runs "bucardo validate race_sync" every 5 seconds
+my $validator_pid = fork();
+if (!defined $validator_pid) {
+    die "Failed to fork validator: $!";
+}
+if ($validator_pid == 0) {
+    ## Validator child process
+    my ($val_out_fh, $val_out_file) = tempfile(UNLINK => 1);
+    my ($val_err_fh, $val_err_file) = tempfile(UNLINK => 1);
+    open STDOUT, '>', $val_out_file or die "Can't redirect STDOUT: $!";
+    open STDERR, '>', $val_err_file or die "Can't redirect STDERR: $!";
+
+    ## Wait for other threads to start
+    sleep 2;
+
+    ## Keep validating until done file is marked complete
+    while (1) {
+        ## Check if we're done
+        open my $dfh, '<', $done_file or die "Cannot open done file: $!";
+        my $done = <$dfh> || '';
+        close $dfh;
+        last if $done =~ /complete/;
+
+        ## Run validate
+        my $output = $bct->ctl("bucardo validate race_sync");
+        print STDOUT "Validate: $output\n";
+        STDOUT->flush();
+
+        sleep 5;
+    }
+
+    exit(0);
 }
 
 ## Fork threads - each adds different tables in parallel
@@ -176,6 +223,14 @@ for my $i (0..$#children) {
     close $err_fh;
 }
 
+## Signal validator thread to stop
+open my $dfh, '>', $done_file or die "Cannot open done file: $!";
+print $dfh "complete\n";
+close $dfh;
+
+## Wait for validator thread to finish
+waitpid($validator_pid, 0);
+
 ## Now output test results in order, one at a time
 ## Add small delay between results to show progress
 TESTLOOP: for my $table_num (1..$NUM_TABLES) {
@@ -208,6 +263,14 @@ TESTLOOP: for my $table_num (1..$NUM_TABLES) {
             diag("First failure at table race_table_$table_num");
             diag("Expected $NUM_TABLES tables in herdmap, but found $actual_count");
             diag("Missing: " . ($NUM_TABLES - $actual_count) . " tables");
+
+            ## Show error outputs from children
+            for my $thread_num (sort keys %child_errors) {
+                if ($child_errors{$thread_num}) {
+                    diag("Thread $thread_num errors:");
+                    diag($child_errors{$thread_num});
+                }
+            }
 
             ## Skip remaining tests
             my $remaining = $NUM_TABLES - $table_num;
