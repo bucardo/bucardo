@@ -46,7 +46,7 @@ like ($res, qr/must supply a database name/, $t);
 
 $t = q{Add database fails for an invalid port};
 $res = $bct->ctl('bucardo add database foo dbname=bar dbport=1');
-like ($res, qr/Connection .+ failed.*could not connect to server/s, $t);
+like ($res, qr/Connection .+ failed.*(could not connect to server|connection to server.+failed)/s, $t);
 
 $t = q{Add database fails for non-existent host};
 $res = $bct->ctl("bucardo add database bucardo_test dbname=bucardo_test user=$dbuserA port=$dbportA host=badbucardohost");
