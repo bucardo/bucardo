@@ -6949,7 +6949,7 @@ sub validate_sync {
         $schema_constraint = '';
     }
 
-    $SQL{checktableonce} = q{
+    $SQL{checktableonce} = qq{
             SELECT n.nspname, c.relname, c.oid, quote_ident(n.nspname) as safeschema, quote_ident(c.relname) as safetable, quote_literal(n.nspname) as safeschemaliteral, quote_literal(c.relname) as safetableliteral
             FROM   pg_class c, pg_namespace n
             WHERE  c.relnamespace = n.oid
