@@ -302,6 +302,8 @@ ALTER TABLE bucardo.goat ADD CONSTRAINT valid_reltype CHECK (reltype IN ('table'
 
 ALTER TABLE bucardo.goat ADD CONSTRAINT pkey_needs_type CHECK (pkey = '' OR pkeytype IS NOT NULL);
 
+CREATE UNIQUE INDEX bucardo_goat_unique ON bucardo.goat(schemaname, tablename, db);
+
 
 --
 -- Set of filters for each goat.

@@ -3623,6 +3623,9 @@ sub add_table {
         doc_section => $doc_section,
     });
 
+    ## With unique constraints on goat table, we can rely on database to prevent duplicates
+    ## No need for explicit locking which can cause deadlocks
+
     ## Loop through all the args and attempt to add the tables
     ## This returns a hash with the following keys: relations, match, nomatch
     my $goatlist = get_goat_ids(args => \@nouns, type => $reltype, dbcols => $dbcols);
@@ -3649,11 +3652,22 @@ sub add_table {
     ## If they requested a herd and it does not exist, create it
     if (exists $extra->{relgroup}) {
         my $herdname = $extra->{relgroup};
-        if (! exists $HERD->{$herdname}) {
+
+        ## Try to create the herd, using savepoint to handle concurrent creation
+        $dbh->do('SAVEPOINT herd_insert');
+        eval {
             $SQL = 'INSERT INTO bucardo.herd(name) VALUES(?)';
             $sth = $dbh->prepare($SQL);
             $sth->execute($herdname);
+            $dbh->do('RELEASE SAVEPOINT herd_insert');
             $message .= qq{Created the relgroup named "$herdname"\n};
+        };
+        if ($@) {
+            $dbh->do('ROLLBACK TO SAVEPOINT herd_insert');
+            ## If duplicate key error, another process created it - that's OK
+            if ($@ !~ /duplicate key value|already exists/) {
+                die $@;
+            }
         }
         ## Now load all of these tables into this herd
         $SQL = 'INSERT INTO bucardo.herdmap (herd,priority,goat) VALUES (?,?,'
@@ -3664,10 +3678,19 @@ sub add_table {
         ## Which tables were already in the herd, and which were just added
         my (@oldnames,@newnames);
 
+        ## Query the database to check if tables are already in herd
+        ## This avoids race conditions from stale in-memory cache
+        $SQL = q{SELECT g.schemaname||'.'||g.tablename AS name
+                 FROM bucardo.herdmap hm
+                 JOIN bucardo.goat g ON (hm.goat = g.id)
+                 WHERE hm.herd = ? AND g.reltype = ?};
+        my $sth_check = $dbh->prepare($SQL);
+        $sth_check->execute($herdname, $reltype);
+        my %tables_in_herd = map { $_->{name} => 1 } @{$sth_check->fetchall_arrayref({})};
+
         for my $name (sort keys %{ $goatlist->{relations} }) {
-            ## Is it already part of this herd?
-            if (exists $HERD->{$herdname}{goat}{$name} and
-                    $HERD->{$herdname}{goat}{$name}{reltype} eq $reltype) {
+            ## Is it already part of this herd? Check database, not memory
+            if (exists $tables_in_herd{$name}) {
                 push @oldnames => $name;
                 next;
             }
@@ -3675,7 +3698,29 @@ sub add_table {
 
             my $pri = 0;
 
-            $count = $sth->execute($herdname,$pri,$name, $db);
+            ## Try to insert, but handle race condition where another process
+            ## inserted the same table between our check and this insert
+            ## Use a savepoint so a duplicate key error doesn't abort the whole transaction
+            $dbh->do('SAVEPOINT herdmap_insert');
+            eval {
+                $count = $sth->execute($herdname,$pri,$name, $db);
+                $dbh->do('RELEASE SAVEPOINT herdmap_insert');
+            };
+            if ($@) {
+                ## Rollback to the savepoint
+                $dbh->do('ROLLBACK TO SAVEPOINT herdmap_insert');
+                ## Check if this is a duplicate key or foreign key constraint error
+                ## These indicate either the table is already in the herd, or there's
+                ## a transient issue with the goat not being found (race condition)
+                if ($@ =~ /duplicate key value violates unique constraint|violates foreign key constraint|null value in column/) {
+                    ## Treat as already in herd - likely added by concurrent process
+                    ## or goat not yet visible to this transaction
+                    push @oldnames => $name;
+                    next;
+                }
+                ## Some other error - re-throw it
+                die $@;
+            }
 
             push @newnames => $name;
         }
@@ -5083,11 +5128,37 @@ AND nspname !~ '^pg_'
         ## We may mutate the arg, so stow away the original
         my $original_item = $item;
 
-        ## We look for matches in the existing $GOAT hash
-        ## We may also check the live database afterwards
-        map {
-            push @matches, $_ if (! defined $reltype || $_->{reltype} eq $reltype);
-        } find_goat_by_item($item, \@nouns);
+        ## Query database for existing goats instead of using stale in-memory cache
+        ## This avoids race conditions from stale cache data
+        if ($item ne 'all') {
+            my $goat_search_sql;
+            my $sth_goat;
+            if ($hasstar) {
+                my $pattern = $item;
+                $pattern =~ s/\./\\./g;
+                $pattern =~ s/[*%]/\.\*/g;
+                $pattern = "^$pattern" unless $pattern =~ /^[\^\.\%]/;
+                $pattern .= '$' unless $pattern =~ /[\$\*]$/;
+                $goat_search_sql = q{SELECT * FROM bucardo.goat WHERE };
+                if ($hasadot) {
+                    $goat_search_sql .= q{schemaname||'.'||tablename ~ ? AND db = ?};
+                } else {
+                    $goat_search_sql .= q{tablename ~ ? AND db = ?};
+                }
+                $sth_goat = $dbh->prepare($goat_search_sql);
+                $sth_goat->execute($pattern, $bestdb);
+            } elsif ($hasadot && $item =~ /^(.+)\.(.+)$/) {
+                my ($schema, $table) = ($1, $2);
+                $goat_search_sql = q{SELECT * FROM bucardo.goat WHERE schemaname=? AND tablename=? AND db=?};
+                $sth_goat = $dbh->prepare($goat_search_sql);
+                $sth_goat->execute($schema, $table, $bestdb);
+            } else {
+                $goat_search_sql = q{SELECT * FROM bucardo.goat WHERE tablename=? AND db=?};
+                $sth_goat = $dbh->prepare($goat_search_sql);
+                $sth_goat->execute($item, $bestdb);
+            }
+            push @matches, @{$sth_goat->fetchall_arrayref({})};
+        }
 
         ## Wildcards?
         my $regex_item = $item;
@@ -5141,7 +5212,14 @@ AND nspname !~ '^pg_'
                 my $name = $row->{name};
 
                 ## Don't bother if we have already added this!
-                next if find_goat_by_item($name, [ "db=$bestdb" ]);
+                ## Query database directly instead of using stale in-memory cache
+                if ($name =~ /^(.+)\.(.+)$/) {
+                    my ($schema, $table) = ($1, $2);
+                    $SQL = 'SELECT 1 FROM bucardo.goat WHERE schemaname=? AND tablename=? AND db=?';
+                    my $sth_exists = $dbh->prepare($SQL);
+                    $sth_exists->execute($schema, $table, $bestdb);
+                    next if $sth_exists->fetchrow_array();
+                }
 
                 ## If we are doing 'all', exclude the bucardo schema, and insist on a primary key
                 if ('all' eq $item) {
@@ -5177,16 +5255,33 @@ AND nspname !~ '^pg_'
         if (@addtable) {
             $added_tables = add_items_to_goat_table(\@addtable);
         }
-        for my $tmp (@$added_tables) {
-            push @matches, $GOAT->{by_id}{$tmp};
+        ## Query database for the added goats instead of using in-memory cache
+        if ($added_tables && @$added_tables) {
+            for my $goat_id (@$added_tables) {
+                $SQL = 'SELECT * FROM bucardo.goat WHERE id = ?';
+                my $sth_goat = $dbh->prepare($SQL);
+                $sth_goat->execute($goat_id);
+                my $goat_row = $sth_goat->fetchrow_hashref();
+                push @matches, $goat_row if $goat_row;
+            }
         }
 
-        ## If we asked for "all", add in all of our known tables (not already in this herd)
+        ## If we asked for "all", query database for all tables in this db (not in specified herd)
         if ($names->[0] eq 'all') {
-            for (values %{ $GOAT->{by_db}{$bestdb} }) {
-                next if exists $_->{herd}{$noherd};
-                push @matches, $_;
+            $SQL = q{SELECT g.* FROM bucardo.goat g
+                     WHERE g.db = ? AND g.reltype = ?};
+            if ($noherd) {
+                $SQL .= q{ AND NOT EXISTS (
+                    SELECT 1 FROM bucardo.herdmap hm
+                    WHERE hm.goat = g.id AND hm.herd = ?)};
             }
+            my $sth_all = $dbh->prepare($SQL);
+            if ($noherd) {
+                $sth_all->execute($bestdb, $reltype, $noherd);
+            } else {
+                $sth_all->execute($bestdb, $reltype);
+            }
+            push @matches, @{$sth_all->fetchall_arrayref({})};
         }
 
         ## Populate the final hashes based on the match list
@@ -5242,7 +5337,7 @@ sub add_items_to_goat_table {
 
     my $info = shift or die;
 
-    ## Quick check if the entry is already there.
+    ## SQL to query for existing goat entry (used when handling duplicate key errors)
     $SQL = 'SELECT id FROM bucardo.goat WHERE schemaname=? AND tablename=? AND db=?';
     my $isthere = $dbh->prepare($SQL);
 
@@ -5275,16 +5370,33 @@ sub add_items_to_goat_table {
                 push @args => $rel->{dbcols}{$newcol};
             }
         }
+
+        ## Try to insert, but handle unique constraint violation from concurrent inserts
         $sth = $dbh->prepare($SQL);
-        ($count = $sth->execute(@args)) =~ s/0E0/0/;
+        my $goat_id;
+        eval {
+            ($count = $sth->execute(@args)) =~ s/0E0/0/;
+            $goat_id = $sth->fetchall_arrayref()->[0][0];
+            debug(qq{Added "$schema.$table" with db "$db", count was $count});
+        };
+        if ($@) {
+            ## If duplicate key error, query for the existing ID
+            if ($@ =~ /duplicate key value violates unique constraint/) {
+                $isthere->execute($schema, $table, $db);
+                $goat_id = $isthere->fetchall_arrayref()->[0][0];
+                debug(qq{Table "$schema.$table" with db "$db" already existed, using id $goat_id});
+            } else {
+                die $@;
+            }
+        }
 
-        debug(qq{Added "$schema.$table" with db "$db", count was $count});
-
-        push @newid => $sth->fetchall_arrayref()->[0][0];
+        push @newid => $goat_id if $goat_id;
     }
 
-    ## Update the global
-    load_bucardo_info('force_reload');
+    ## Don't reload here - it causes race conditions when multiple processes
+    ## are adding tables concurrently, as we may see uncommitted data from
+    ## other transactions. The global will be reloaded on next bucardo invocation.
+    ## load_bucardo_info('force_reload');
 
     ## Return a list of goat IDs we've just added
 #    my %newlist;
@@ -9601,6 +9713,11 @@ sub load_bucardo_info {
 
     for my $key (%{$goat->{by_id}}) {
         next if $key !~ /^\d/;
+        ## Skip entries with missing required fields (can happen during concurrent operations)
+        next unless defined $goat->{by_id}{$key}{tablename};
+        next unless defined $goat->{by_id}{$key}{schemaname};
+        next unless defined $goat->{by_id}{$key}{db};
+
         my $tname = $goat->{by_id}{$key}{tablename};
         my $name = "$goat->{by_id}{$key}{schemaname}.$tname";
         my $dbname = $goat->{by_id}{$key}{db};
@@ -9634,6 +9751,10 @@ sub load_bucardo_info {
     $sth->execute();
     for my $row (@{$sth->fetchall_arrayref({})}) {
         my ($g,$h,$p) = @$row{qw/goat herd priority/};
+        ## Skip if this goat doesn't exist in our loaded goat hash
+        ## This can happen during concurrent operations when another process
+        ## added a goat after we loaded our data
+        next unless exists $goat->{by_id}{$g} && $goat->{by_id}{$g}{schemaname};
         $goat->{by_id}{$g}{herd}{$h} = $p;
         $herd->{$h}{goat}{"$goat->{by_id}{$g}{schemaname}.$goat->{by_id}{$g}{tablename}"} = {
             id       => $g,
