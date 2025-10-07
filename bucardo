@@ -5132,6 +5132,7 @@ AND nspname !~ '^pg_'
         ## This avoids race conditions from stale cache data
         if ($item ne 'all') {
             my $goat_search_sql;
+            my $sth_goat;
             if ($hasstar) {
                 my $pattern = $item;
                 $pattern =~ s/\./\\./g;
@@ -5144,21 +5145,19 @@ AND nspname !~ '^pg_'
                 } else {
                     $goat_search_sql .= q{tablename ~ ? AND db = ?};
                 }
-                my $sth_goat = $dbh->prepare($goat_search_sql);
+                $sth_goat = $dbh->prepare($goat_search_sql);
                 $sth_goat->execute($pattern, $bestdb);
-                push @matches, @{$sth_goat->fetchall_arrayref({})};
             } elsif ($hasadot && $item =~ /^(.+)\.(.+)$/) {
                 my ($schema, $table) = ($1, $2);
                 $goat_search_sql = q{SELECT * FROM bucardo.goat WHERE schemaname=? AND tablename=? AND db=?};
-                my $sth_goat = $dbh->prepare($goat_search_sql);
+                $sth_goat = $dbh->prepare($goat_search_sql);
                 $sth_goat->execute($schema, $table, $bestdb);
-                push @matches, @{$sth_goat->fetchall_arrayref({})};
             } else {
                 $goat_search_sql = q{SELECT * FROM bucardo.goat WHERE tablename=? AND db=?};
-                my $sth_goat = $dbh->prepare($goat_search_sql);
+                $sth_goat = $dbh->prepare($goat_search_sql);
                 $sth_goat->execute($item, $bestdb);
-                push @matches, @{$sth_goat->fetchall_arrayref({})};
             }
+            push @matches, @{$sth_goat->fetchall_arrayref({})};
         }
 
         ## Wildcards?

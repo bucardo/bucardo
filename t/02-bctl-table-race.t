@@ -45,6 +45,7 @@ $location = 'setup';
 ## Configuration
 my $NUM_TABLES = 100;      ## Total tables to create and add
 my $NUM_THREADS = 10;      ## Parallel threads
+my $NUM_SYNCS = 3;         ## Number of syncs to create
 my $TABLES_PER_THREAD = int($NUM_TABLES / $NUM_THREADS);
 
 plan tests => $NUM_TABLES;
@@ -70,8 +71,14 @@ for my $i (1..$NUM_TABLES) {
 }
 $dbhA->commit();
 
-## Create a sync with a herd
-$bct->ctl("bucardo add sync race_sync relgroup=race_herd dbs=A:source,B:target");
+## Create multiple syncs, each with its own herd
+my @sync_names;
+for my $sync_num (1..$NUM_SYNCS) {
+    my $sync_name = "race_sync_$sync_num";
+    my $herd_name = "race_herd_$sync_num";
+    push @sync_names, $sync_name;
+    $bct->ctl("bucardo add sync $sync_name relgroup=$herd_name dbs=A:source,B:target");
+}
 
 ## Ensure test output is not buffered
 $| = 1;
@@ -102,7 +109,7 @@ for (1..$NUM_THREADS) {
 my ($done_fh, $done_file) = tempfile(UNLINK => 1);
 close $done_fh;
 
-## Fork a validation thread that runs "bucardo validate race_sync" every 5 seconds
+## Fork a validation thread that validates all syncs every 5 seconds
 my $validator_pid = fork();
 if (!defined $validator_pid) {
     die "Failed to fork validator: $!";
@@ -125,10 +132,12 @@ if ($validator_pid == 0) {
         close $dfh;
         last if $done =~ /complete/;
 
-        ## Run validate
-        my $output = $bct->ctl("bucardo validate race_sync");
-        print STDOUT "Validate: $output\n";
-        STDOUT->flush();
+        ## Run validate on all syncs
+        for my $sync_name (@sync_names) {
+            my $output = $bct->ctl("bucardo validate $sync_name");
+            print STDOUT "Validate $sync_name: $output\n";
+            STDOUT->flush();
+        }
 
         sleep 5;
     }
@@ -167,7 +176,7 @@ for my $thread_num (1..$NUM_THREADS) {
             sleep 0.001 unless $ready;
         }
 
-        ## Each thread adds its assigned tables
+        ## Each thread adds its assigned tables to different syncs in round-robin fashion
         my $start_table = ($thread_num - 1) * $TABLES_PER_THREAD + 1;
         my $end_table = $thread_num * $TABLES_PER_THREAD;
 
@@ -177,8 +186,12 @@ for my $thread_num (1..$NUM_THREADS) {
         for my $i ($start_table..$end_table) {
             my $table_name = "race_table_$i";
 
+            ## Pick which sync/herd to add this table to (round-robin)
+            my $sync_index = ($i - 1) % $NUM_SYNCS;
+            my $herd_name = "race_herd_" . ($sync_index + 1);
+
             ## Add table to the relgroup
-            my $output = $bct->ctl("bucardo add table $table_name relgroup=race_herd db=A");
+            my $output = $bct->ctl("bucardo add table $table_name relgroup=$herd_name db=A");
 
             if ($output =~ /Added the following tables/ || $output =~ /already in the relgroup/) {
                 print STDOUT "PASS $i\n";
@@ -249,20 +262,28 @@ TESTLOOP: for my $table_num (1..$NUM_TABLES) {
         if (!$first_failure) {
             $first_failure = $table_num;
 
-            ## Check database state
+            ## Check database state for all herds
             $dbhX = $bct->connect_database('A', 'bucardo');
-            my $sth = $dbhX->prepare(q{
-                SELECT COUNT(*) FROM bucardo.herdmap
-                WHERE herd = (SELECT name FROM bucardo.herd WHERE name='race_herd')
-            });
-            $sth->execute();
-            my ($actual_count) = $sth->fetchrow_array();
+            my $total_actual_count = 0;
 
             diag("");
             diag("=== RACE CONDITION DETECTED ===");
             diag("First failure at table race_table_$table_num");
-            diag("Expected $NUM_TABLES tables in herdmap, but found $actual_count");
-            diag("Missing: " . ($NUM_TABLES - $actual_count) . " tables");
+
+            for my $sync_num (1..$NUM_SYNCS) {
+                my $herd_name = "race_herd_$sync_num";
+                my $sth = $dbhX->prepare(q{
+                    SELECT COUNT(*) FROM bucardo.herdmap
+                    WHERE herd = ?
+                });
+                $sth->execute($herd_name);
+                my ($actual_count) = $sth->fetchrow_array();
+                $total_actual_count += $actual_count;
+                diag("Herd $herd_name has $actual_count tables");
+            }
+
+            diag("Expected $NUM_TABLES tables total across all herds, but found $total_actual_count");
+            diag("Missing: " . ($NUM_TABLES - $total_actual_count) . " tables");
 
             ## Show error outputs from children
             for my $thread_num (sort keys %child_errors) {
@@ -274,59 +295,64 @@ TESTLOOP: for my $table_num (1..$NUM_TABLES) {
 
             ## Skip remaining tests
             my $remaining = $NUM_TABLES - $table_num;
-            SKIP: {
-                skip("Skipping remaining tests due to race condition failure", $remaining);
-            }
+            skip("Skipping remaining tests due to race condition failure", $remaining);
 
             last TESTLOOP;
         }
     }
 }
 
-## Skip the final verification since we already handled it
-goto CLEANUP;
-
-CLEANUP:
-
 ## Reconnect to check final state (only if no failures were detected)
 if (!$first_failure) {
     $dbhX = $bct->connect_database('A', 'bucardo');
 
-    ## Get list of tables that were actually added to the herdmap
-    my $sth2 = $dbhX->prepare(q{
-        SELECT g.schemaname || '.' || g.tablename as tablename
-        FROM bucardo.herdmap hm
-        JOIN bucardo.goat g ON (hm.goat = g.id)
-        WHERE hm.herd = (SELECT name FROM bucardo.herd WHERE name='race_herd')
-        ORDER BY g.tablename
-    });
-    $sth2->execute();
-    my $added_tables_final = $sth2->fetchall_hashref('tablename');
+    my $total_tables_added = 0;
+    my @all_duplicates;
 
-    ## Check for duplicate entries in herdmap
-    $sth2 = $dbhX->prepare(q{
-        SELECT g.schemaname || '.' || g.tablename as tablename, COUNT(*) as cnt
-        FROM bucardo.herdmap hm
-        JOIN bucardo.goat g ON (hm.goat = g.id)
-        WHERE hm.herd = (SELECT name FROM bucardo.herd WHERE name='race_herd')
-        GROUP BY g.schemaname, g.tablename
-        HAVING COUNT(*) > 1
-    });
-    $sth2->execute();
-    my $duplicates_final = $sth2->fetchall_arrayref();
+    ## Check each herd
+    for my $sync_num (1..$NUM_SYNCS) {
+        my $herd_name = "race_herd_$sync_num";
 
+        ## Get list of tables that were actually added to this herdmap
+        my $sth2 = $dbhX->prepare(q{
+            SELECT g.schemaname || '.' || g.tablename as tablename
+            FROM bucardo.herdmap hm
+            JOIN bucardo.goat g ON (hm.goat = g.id)
+            WHERE hm.herd = ?
+            ORDER BY g.tablename
+        });
+        $sth2->execute($herd_name);
+        my $added_tables_final = $sth2->fetchall_hashref('tablename');
 
-    my $tables_added_count = scalar(keys %$added_tables_final);
+        ## Check for duplicate entries in this herdmap
+        $sth2 = $dbhX->prepare(q{
+            SELECT g.schemaname || '.' || g.tablename as tablename, COUNT(*) as cnt
+            FROM bucardo.herdmap hm
+            JOIN bucardo.goat g ON (hm.goat = g.id)
+            WHERE hm.herd = ?
+            GROUP BY g.schemaname, g.tablename
+            HAVING COUNT(*) > 1
+        });
+        $sth2->execute($herd_name);
+        my $duplicates_final = $sth2->fetchall_arrayref();
 
-    if ($tables_added_count != $NUM_TABLES) {
-        diag("");
-        diag("=== RACE CONDITION DETECTED (Final Verification) ===");
-        diag("Expected $NUM_TABLES tables in herdmap, but found $tables_added_count");
-        diag("Missing: " . ($NUM_TABLES - $tables_added_count) . " tables");
+        my $tables_in_herd = scalar(keys %$added_tables_final);
+        $total_tables_added += $tables_in_herd;
 
         if (@$duplicates_final) {
-            diag("Duplicate entries found: " . scalar(@$duplicates_final));
-            for my $dup (@$duplicates_final) {
+            push @all_duplicates, @$duplicates_final;
+        }
+    }
+
+    if ($total_tables_added != $NUM_TABLES) {
+        diag("");
+        diag("=== RACE CONDITION DETECTED (Final Verification) ===");
+        diag("Expected $NUM_TABLES tables total across all herds, but found $total_tables_added");
+        diag("Missing: " . ($NUM_TABLES - $total_tables_added) . " tables");
+
+        if (@all_duplicates) {
+            diag("Duplicate entries found: " . scalar(@all_duplicates));
+            for my $dup (@all_duplicates) {
                 diag("  " . $dup->[0] . " appears " . $dup->[1] . " times");
             }
         }
