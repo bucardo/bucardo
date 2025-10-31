@@ -1999,8 +1999,23 @@ sub add_database {
             ## Anything else must be something with a standard DBI driver
             else {
                 $dsn =~ s/^DSN://;
+
+                ## Check for PGSERVICE environment variable
+                my $env_service = $ENV{PGSERVICE} || '';
+                my $connect_user = $user;
+                my $connect_pass = $pass;
+                if (length $env_service && $type eq 'postgres') {
+                    $dsn = "dbi:Pg:service=$env_service";
+                    $connect_user = undef;
+                    $connect_pass = undef;
+                }
+                else {
+                    ## Pass undef for empty password to allow libpq to use PGSERVICE, .pgpass, etc.
+                    $connect_pass = (defined $pass and length $pass) ? $pass : undef;
+                }
+
                 eval {
-                    $testdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+                    $testdbh = DBI->connect($dsn, $connect_user, $connect_pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
                     $evalok = 1;
                 };
             }
@@ -2025,8 +2040,10 @@ sub add_database {
                     # Try connecting as postgres instead.
                     print qq{Connection to "$db" ($fullname) as user bucardo failed.\nError was: $DBI::errstr\n\n};
                     print qq{Will try to connect as user postgres and create superuser $user...\n\n};
+                    ## Pass undef for empty password
+                    my $postgres_pass = (defined $pass and length $pass) ? $pass : undef;
                     my $dbh = eval {
-                        DBI->connect($dsn, 'postgres', $pass, {AutoCommit=>1,RaiseError=>1,PrintError=>0});
+                        DBI->connect($dsn, 'postgres', $postgres_pass, {AutoCommit=>1,RaiseError=>1,PrintError=>0});
                     };
                     if ($dbh) {
                         ## Create the bucardo user now. We'll need a password;
@@ -8693,18 +8710,38 @@ sub connect_database {
         }
 
         $dsn =~ s/DSN://;
+
+        ## Check for PGSERVICE environment variable
+        ## If set, add/override the service parameter in the DSN
+        ## This allows CLI commands to use a different service than PL/Perl functions
+        ## The service file will override specific connection parameters (user, ssl*, etc.)
+        ## but preserve other DSN parameters like dbname
+         my $env_service = $ENV{PGSERVICE} || '';
+         if (length $env_service) {
+            ## Remove any existing service parameter from DSN
+            $dsn =~ s/;?service=[^;]*//g;
+            ## Add the environment service parameter
+            $dsn .= ";service=$env_service";
+            ## Let service file provide user/pass
+            $user = undef;
+            $pass = undef;
+        }
+
+        ## Pass undef for empty password to allow libpq to use PGSERVICE, .pgpass, etc.
+        my $password = (defined $pass and length $pass) ? $pass : undef;
+
         eval {
-            $dbh2 = DBI->connect_cached($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+            $dbh2 = DBI->connect_cached($dsn, $user, $password, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
         };
         if ($@) {
             ## The bucardo user may not exist yet.
             if ($user eq 'bucardo' and $@ =~ /FATAL/ and $@ =~ /bucardo/) {
                 $user = 'postgres';
-                $dbh2 = DBI->connect_cached($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+                $dbh2 = DBI->connect_cached($dsn, $user, $password, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
                 $dbh2->do('CREATE USER bucardo SUPERUSER');
                 $dbh2->commit();
                 $user = 'bucardo';
-                $dbh2 = DBI->connect_cached($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+                $dbh2 = DBI->connect_cached($dsn, $user, $password, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
             }
             else {
                 die $@;
