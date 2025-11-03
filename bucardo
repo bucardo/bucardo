@@ -1768,6 +1768,9 @@ sub add_database {
         makedelta                makedelta            TF               null
     };
 
+    ## Save a copy of the original nouns to check which params were explicitly provided
+    my @original_nouns = @nouns;
+
     ## Include the value for the dbuser only if a service or dsn is not specified, or
     ## a user was explicitly included. In other words, don't default the user
     ## name when there's a service.
@@ -1797,10 +1800,30 @@ sub add_database {
     ## Clean up and standardize the type name
     my $dbtype = $dbcols->{dbtype} = standardize_rdbms_name($dbcols->{dbtype});
 
-    ## If we have a service or DSN, strip the host and port as they may have been set via ENV
+    ## If we have a service or DSN, only strip connection parameters if they came from ENV
+    ## (not explicitly provided by the user). This allows users to store connection details
+    ## alongside service names for tracking/override purposes.
     if (exists $dbcols->{dbservice} or exists $dbcols->{dbdsn}) {
-        delete $dbcols->{dbport};
-        delete $dbcols->{dbhost};
+        ## Build a list of explicitly provided parameters using the saved original nouns
+        ## Need to account for all the aliases from validcols:
+        ## host|dbhost|pghost, port|dbport|pgport, db|dbname, user|username|dbuser, pass|password|dbpass, conn|dbconn|pgconn
+        my %explicit_params = map {
+            /^(host|dbhost|pghost)=/ ? ('host' => 1) :
+            /^(port|dbport|pgport)=/ ? ('port' => 1) :
+            /^(db|dbname)=/ ? ('name' => 1) :
+            /^(user|username|dbuser)=/ ? ('user' => 1) :
+            /^(pass|password|dbpass)=/ ? ('pass' => 1) :
+            /^(conn|dbconn|pgconn)=/ ? ('conn' => 1) :
+            ()
+        } @original_nouns;
+
+        ## Only delete ENV-derived values, not user-specified ones
+        delete $dbcols->{dbport} unless $explicit_params{port};
+        delete $dbcols->{dbhost} unless $explicit_params{host};
+        delete $dbcols->{dbname} unless $explicit_params{name};
+        delete $dbcols->{dbuser} unless $explicit_params{user};
+        delete $dbcols->{dbpass} unless $explicit_params{pass};
+        delete $dbcols->{dbconn} unless $explicit_params{conn};
     }
 
     ## We do not want some things to hang around in the dbcols hash
@@ -1999,8 +2022,23 @@ sub add_database {
             ## Anything else must be something with a standard DBI driver
             else {
                 $dsn =~ s/^DSN://;
+
+                ## Check for PGSERVICE environment variable
+                my $env_service = $ENV{PGSERVICE} || '';
+                my $connect_user = $user;
+                my $connect_pass = $pass;
+                if (length $env_service && $type eq 'postgres') {
+                    $dsn = "dbi:Pg:service=$env_service";
+                    $connect_user = undef;
+                    $connect_pass = undef;
+                }
+                else {
+                    ## Pass undef for empty password to allow libpq to use PGSERVICE, .pgpass, etc.
+                    $connect_pass = (defined $pass and length $pass) ? $pass : undef;
+                }
+
                 eval {
-                    $testdbh = DBI->connect($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+                    $testdbh = DBI->connect($dsn, $connect_user, $connect_pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
                     $evalok = 1;
                 };
             }
@@ -2025,8 +2063,10 @@ sub add_database {
                     # Try connecting as postgres instead.
                     print qq{Connection to "$db" ($fullname) as user bucardo failed.\nError was: $DBI::errstr\n\n};
                     print qq{Will try to connect as user postgres and create superuser $user...\n\n};
+                    ## Pass undef for empty password
+                    my $postgres_pass = (defined $pass and length $pass) ? $pass : undef;
                     my $dbh = eval {
-                        DBI->connect($dsn, 'postgres', $pass, {AutoCommit=>1,RaiseError=>1,PrintError=>0});
+                        DBI->connect($dsn, 'postgres', $postgres_pass, {AutoCommit=>1,RaiseError=>1,PrintError=>0});
                     };
                     if ($dbh) {
                         ## Create the bucardo user now. We'll need a password;
@@ -8693,18 +8733,38 @@ sub connect_database {
         }
 
         $dsn =~ s/DSN://;
+
+        ## Check for PGSERVICE environment variable
+        ## If set, add/override the service parameter in the DSN
+        ## This allows CLI commands to use a different service than PL/Perl functions
+        ## The service file will override specific connection parameters (user, ssl*, etc.)
+        ## but preserve other DSN parameters like dbname
+         my $env_service = $ENV{PGSERVICE} || '';
+         if (length $env_service) {
+            ## Remove any existing service parameter from DSN
+            $dsn =~ s/;?service=[^;]*//g;
+            ## Add the environment service parameter
+            $dsn .= ";service=$env_service";
+            ## Let service file provide user/pass
+            $user = undef;
+            $pass = undef;
+        }
+
+        ## Pass undef for empty password to allow libpq to use PGSERVICE, .pgpass, etc.
+        my $password = (defined $pass and length $pass) ? $pass : undef;
+
         eval {
-            $dbh2 = DBI->connect_cached($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+            $dbh2 = DBI->connect_cached($dsn, $user, $password, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
         };
         if ($@) {
             ## The bucardo user may not exist yet.
             if ($user eq 'bucardo' and $@ =~ /FATAL/ and $@ =~ /bucardo/) {
                 $user = 'postgres';
-                $dbh2 = DBI->connect_cached($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+                $dbh2 = DBI->connect_cached($dsn, $user, $password, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
                 $dbh2->do('CREATE USER bucardo SUPERUSER');
                 $dbh2->commit();
                 $user = 'bucardo';
-                $dbh2 = DBI->connect_cached($dsn, $user, $pass, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
+                $dbh2 = DBI->connect_cached($dsn, $user, $password, {AutoCommit=>0,RaiseError=>1,PrintError=>0});
             }
             else {
                 die $@;

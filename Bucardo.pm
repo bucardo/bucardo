@@ -5674,9 +5674,46 @@ sub connect_database {
 
         if ('postgres' eq $dbtype) {
             $dsn = 'dbi:Pg:';
+
+            ## Build the base DSN with dbname, host, port, and any existing service
+            ## Map bucardo.db column names to DSN parameter names
             $dsn .= join ';', map {
-                ($_ eq 'dbservice' ? 'service' : $_ ) . "=$d->{$_}";
-            } grep { defined $d->{$_} and length $d->{$_} } qw/dbname dbservice/;
+                my $key = $_;
+                my $dsnkey = $key eq 'dbname' ? 'dbname' :
+                             $key eq 'dbhost' ? 'host' :
+                             $key eq 'dbport' ? 'port' :
+                             $key eq 'dbservice' ? 'service' : $key;
+                "$dsnkey=$d->{$key}";
+            } grep { defined $d->{$_} and length $d->{$_} } qw/dbname dbhost dbport dbservice/;
+
+            ## Add dbconn if present (it's appended as-is, not as dbconn=value)
+            $dsn .= ";$d->{dbconn}" if defined $d->{dbconn} and length $d->{dbconn};
+
+            ## Check for PGSERVICE environment variable
+            ## This allows CLI commands to use a different service than PL/Perl functions
+            ## The service file will override specific connection parameters (user, ssl*, etc.)
+            ## but preserve other DSN parameters like dbname, host, port
+            my $env_service = $ENV{PGSERVICE} || '';
+            my $using_env_service = 0;
+            if (length $env_service) {
+                ## Remove any existing service parameter from DSN
+                $dsn =~ s/;?service=[^;]*//g;
+                ## Add the environment service parameter
+                $dsn .= ";service=$env_service";
+                $using_env_service = 1;
+            }
+
+            ## If using PGSERVICE env var, service file provides user/pass
+            ## Set them to undef so DBI->connect uses service file credentials
+            if ($using_env_service) {
+                $user = undef;
+                $pass = undef;
+                $ssp = $d->{server_side_prepares};
+
+                ## Skip the additional DSN building and user/pass assignment below
+                ## and jump straight to the DBI->connect call
+                goto SKIP_DSN_BUILDING;
+            }
         }
         elsif ('drizzle' eq $dbtype) {
             $dsn = "dbi:drizzle:database=$dbname";
@@ -5806,13 +5843,18 @@ sub connect_database {
         $ssp = $d->{server_side_prepares};
     }
 
+    SKIP_DSN_BUILDING:
+
     $self->glog("DSN: $dsn", LOG_VERBOSE) if exists $config{log_level};
+
+    ## Pass undef for empty password to allow libpq to use PGSERVICE, .pgpass, etc.
+    my $password = (defined $pass and length $pass) ? $pass : undef;
 
     $dbh = DBI->connect
         (
          $dsn,
          $user,
-         $pass,
+         $password,
          {AutoCommit=>0, RaiseError=>1, PrintError=>0}
     );
 
@@ -6934,10 +6976,26 @@ sub validate_sync {
     }
 
     # Table cache
-    $SQL{checktableonce} = q{
+    # When possible, only cache tables in schemas we will be looking at
+    my %schemas;
+    for my $g (@{$s->{goatlist}}) {
+        $schemas{$g->{schemaname}} = 1;
+    }
+    my $schemas_list = join(",", map { $srcdbh->quote($_) } keys %schemas);
+    my $schema_constraint = "AND n.nspname IN ($schemas_list)";
+    if (length $schemas_list) {
+        $self->glog(qq{Caching relations in schemas: $schemas_list}, LOG_NORMAL);
+    }
+    else {
+        $self->glog("Caching all relations", LOG_NORMAL);
+        $schema_constraint = '';
+    }
+
+    $SQL{checktableonce} = qq{
             SELECT n.nspname, c.relname, c.oid, quote_ident(n.nspname) as safeschema, quote_ident(c.relname) as safetable, quote_literal(n.nspname) as safeschemaliteral, quote_literal(c.relname) as safetableliteral
             FROM   pg_class c, pg_namespace n
             WHERE  c.relnamespace = n.oid
+            $schema_constraint
         };
     $sth = $srcdbh->prepare($SQL{checktableonce});
     $sth->execute();
