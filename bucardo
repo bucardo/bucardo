@@ -1768,6 +1768,9 @@ sub add_database {
         makedelta                makedelta            TF               null
     };
 
+    ## Save a copy of the original nouns to check which params were explicitly provided
+    my @original_nouns = @nouns;
+
     ## Include the value for the dbuser only if a service or dsn is not specified, or
     ## a user was explicitly included. In other words, don't default the user
     ## name when there's a service.
@@ -1797,10 +1800,30 @@ sub add_database {
     ## Clean up and standardize the type name
     my $dbtype = $dbcols->{dbtype} = standardize_rdbms_name($dbcols->{dbtype});
 
-    ## If we have a service or DSN, strip the host and port as they may have been set via ENV
+    ## If we have a service or DSN, only strip connection parameters if they came from ENV
+    ## (not explicitly provided by the user). This allows users to store connection details
+    ## alongside service names for tracking/override purposes.
     if (exists $dbcols->{dbservice} or exists $dbcols->{dbdsn}) {
-        delete $dbcols->{dbport};
-        delete $dbcols->{dbhost};
+        ## Build a list of explicitly provided parameters using the saved original nouns
+        ## Need to account for all the aliases from validcols:
+        ## host|dbhost|pghost, port|dbport|pgport, db|dbname, user|username|dbuser, pass|password|dbpass, conn|dbconn|pgconn
+        my %explicit_params = map {
+            /^(host|dbhost|pghost)=/ ? ('host' => 1) :
+            /^(port|dbport|pgport)=/ ? ('port' => 1) :
+            /^(db|dbname)=/ ? ('name' => 1) :
+            /^(user|username|dbuser)=/ ? ('user' => 1) :
+            /^(pass|password|dbpass)=/ ? ('pass' => 1) :
+            /^(conn|dbconn|pgconn)=/ ? ('conn' => 1) :
+            ()
+        } @original_nouns;
+
+        ## Only delete ENV-derived values, not user-specified ones
+        delete $dbcols->{dbport} unless $explicit_params{port};
+        delete $dbcols->{dbhost} unless $explicit_params{host};
+        delete $dbcols->{dbname} unless $explicit_params{name};
+        delete $dbcols->{dbuser} unless $explicit_params{user};
+        delete $dbcols->{dbpass} unless $explicit_params{pass};
+        delete $dbcols->{dbconn} unless $explicit_params{conn};
     }
 
     ## We do not want some things to hang around in the dbcols hash
