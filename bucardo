@@ -3752,7 +3752,7 @@ sub remove_relation {
 
         ## Bucardo won't fully support a table name that starts with "db=". Darn.
         for my $name (grep { ! /^db=/ } @nouns) {
-            if ($name =~ /^\w[\w\d]*\.\w[\w\d]*$/) {
+            if ($name =~ /^[\w][\w\d\-]*\.[\w][\w\d\-]*$/) {
                 if (! exists $GOAT->{by_fullname}{$name}) {
                     print qq{No such $reltype: $name\n};
                     next;
